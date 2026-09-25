@@ -1,9 +1,11 @@
+import { type Ref } from 'react';
 import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
+import { withAppFont } from '@/theme/typography';
 import { radius, space } from '@/theme/tokens';
 
 export function FormField({
@@ -16,6 +18,8 @@ export function FormField({
   accessibilityHint,
   ...props
 }: TextInputProps & {
+  /** Forwarded to the input, so a form can move focus field to field. */
+  ref?: Ref<TextInput>;
   label: string;
   hint?: string;
   error?: string;
@@ -62,7 +66,7 @@ export function FormField({
         {...validityProps}
         aria-required={required || undefined}
         placeholderTextColor={theme.textMuted}
-        style={[
+        style={withAppFont([
           {
             minHeight: 50,
             paddingHorizontal: space.lg - 2,
@@ -72,7 +76,9 @@ export function FormField({
             borderRadius: radius.tile,
             borderCurve: 'continuous',
             borderWidth: 1,
-            borderColor: error ? theme.negative : theme.border,
+            // Filled and borderless at rest; the border only appears to carry an
+            // error, so it means something when it shows up.
+            borderColor: error ? theme.negative : 'transparent',
             // Filled, not outlined. On a surface-colored card the old white fill
             // left the border doing all the work, so a column of fields looked
             // like ruled lines instead of things you can type into.
@@ -83,7 +89,7 @@ export function FormField({
             textAlign: isRtl ? 'right' : 'left',
           },
           style,
-        ]}
+        ])}
       />
       {description ? (
         <MotionView key={description} variant="up" exit animateLayout>

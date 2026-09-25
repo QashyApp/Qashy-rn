@@ -30,6 +30,7 @@ import { sha256, toHex, utf8Bytes } from '@/sync/crypto';
 export const ID_NAMESPACES = {
   budgetPeriod: 'qashy/id/v1/budget-period',
   occurrence: 'qashy/id/v1/occurrence',
+  fetchedRate: 'qashy/id/v1/fetched-rate',
 } as const;
 
 export type IdNamespace = (typeof ID_NAMESPACES)[keyof typeof ID_NAMESPACES];
@@ -69,3 +70,26 @@ export const occurrenceTransactionId = (occurrenceKey: string) =>
 /** The id every device gives the snapshot of one budget's one period. */
 export const budgetPeriodId = (budgetId: string, periodStart: string) =>
   deterministicId(ID_NAMESPACES.budgetPeriod, budgetId, periodStart);
+
+/**
+ * The id every device gives the automatically fetched rate for one currency pair and date.
+ *
+ * Two devices that fetch the same day's rate independently — the common case, since both
+ * refresh on every foreground — mint the *same* entity rather than two rows a merge then has
+ * to notice are duplicates. `local-finance-repository.ts` also uses this to answer "is this row
+ * one we fetched?": a row is a fetched rate exactly when its id equals
+ * `fetchedRateId(row.fromCurrency, row.toCurrency, row.effectiveDate)`. There is no separate
+ * model field for it.
+ */
+export const fetchedRateId = (from: string, to: string, effectiveDate: string) =>
+  deterministicId(ID_NAMESPACES.fetchedRate, from, to, effectiveDate);
+
+/**
+ * True exactly when `rate` is one `saveFetchedRates` wrote — its id is the deterministic hash
+ * of its own (from, to, effectiveDate), not a random one. There is no stored field for this;
+ * every caller that needs to tell an automatic row from a legacy manual one (the "Exchange
+ * rates" screen, `appliedRateFor`) checks it this way instead.
+ */
+export function isFetchedRate(rate: { readonly id: string; readonly fromCurrency: string; readonly toCurrency: string; readonly effectiveDate: string }): boolean {
+  return rate.id === fetchedRateId(rate.fromCurrency, rate.toCurrency, rate.effectiveDate);
+}

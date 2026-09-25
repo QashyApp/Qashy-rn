@@ -22,11 +22,9 @@ export function FloatingActionButton({
 }) {
   const theme = useQashyTheme();
   const isDisabled = Boolean(disabled);
-  // A near-black drop shadow disappears on dark surfaces, so deepen and spread
-  // it instead of tinting the button itself.
-  const shadow = theme.mode === 'dark'
-    ? '0 6px 18px rgba(0,0,0,0.58)'
-    : '0 4px 14px rgba(25,27,32,0.28)';
+  // Per-mode in the theme: a near-black shadow vanishes on dark surfaces, so
+  // the dark value is deeper and wider rather than tinting the button itself.
+  const shadow = theme.shadowFab;
   const visibilityStyle = useAnimatedStyle(() => {
     if (!visibility) return {};
     const shown = visibility.value;

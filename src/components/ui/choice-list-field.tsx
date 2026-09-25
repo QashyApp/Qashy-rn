@@ -15,7 +15,8 @@ import { IconButton } from '@/components/ui/icon-button';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius } from '@/theme/tokens';
+import { fontStyle } from '@/theme/typography';
+import { radius, space } from '@/theme/tokens';
 
 export type ChoiceListOption = {
   value: string;
@@ -86,13 +87,16 @@ export function ChoiceListField({
         onPress={() => setOpen(true)}
         style={({ pressed }) => ({
           minHeight: 50,
-          paddingHorizontal: 15,
-          paddingVertical: 10,
-          borderRadius: 16,
+          paddingHorizontal: space.lg - 2,
+          paddingVertical: space.md - 2,
+          // Same filled, borderless silhouette as FormField, so a picker and a
+          // text field in one form read as the same kind of control.
+          borderRadius: radius.tile,
           borderCurve: 'continuous',
           borderWidth: 1,
-          borderColor: open ? theme.accent : theme.border,
-          backgroundColor: pressed ? theme.surfaceMuted : theme.surface,
+          borderColor: open ? theme.accent : 'transparent',
+          backgroundColor: theme.surfaceMuted,
+          opacity: pressed ? 0.8 : 1,
             flexDirection: isRtl ? 'row-reverse' : 'row',
           alignItems: 'center',
           gap: 12,
@@ -122,7 +126,7 @@ export function ChoiceListField({
             accessibilityLabel={t(`Close ${label.toLocaleLowerCase()} choices`)}
             accessibilityRole="button"
             onPress={close}
-            style={{ position: 'absolute', inset: 0, backgroundColor: 'rgba(0,0,0,0.46)' }}
+            style={{ position: 'absolute', inset: 0, backgroundColor: theme.scrim }}
           />
           <MotionView
             accessibilityViewIsModal
@@ -140,7 +144,7 @@ export function ChoiceListField({
               borderWidth: 1,
               borderColor: theme.border,
               backgroundColor: theme.surface,
-              boxShadow: '0 14px 48px rgba(0,0,0,0.24)',
+              boxShadow: theme.shadowOverlay,
             }}>
             <View style={{ minHeight: 44, flexDirection: isRtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -170,13 +174,12 @@ export function ChoiceListField({
                     minHeight: 48,
                     paddingLeft: 42,
                     paddingRight: 14,
-                    borderRadius: 15,
+                    borderRadius: radius.tile,
                     borderCurve: 'continuous',
-                    borderWidth: 1,
-                    borderColor: theme.border,
                     backgroundColor: theme.surfaceMuted,
                     color: theme.text,
                     fontSize: 16,
+                    ...fontStyle('regular'),
                     writingDirection: isRtl ? 'rtl' : 'ltr',
                     textAlign: isRtl ? 'right' : 'left',
                   }}

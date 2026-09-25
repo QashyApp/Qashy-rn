@@ -90,6 +90,15 @@ const IONICON_BY_SF_NAME: Record<string, IoniconName> = {
   iphone: 'phone-portrait-outline',
   desktopcomputer: 'desktop-outline',
   globe: 'globe-outline',
+  'qrcode.viewfinder': 'scan-outline',
+  'arrow.right': 'arrow-forward',
+  'building.columns': 'business-outline',
+  creditcard: 'card-outline',
+  leaf: 'leaf-outline',
+  'sun.max': 'sunny-outline',
+  moon: 'moon-outline',
+  'circle.lefthalf.filled': 'contrast-outline',
+  'chart.line.uptrend.xyaxis': 'trending-up-outline',
 };
 
 export function AppIcon({ name, color, size = 20 }: { name: string; color: ColorValue; size?: number }) {

@@ -4,14 +4,14 @@ import { StyleSheet, View, type ColorValue, type ViewProps, type ViewStyle } fro
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 
-export type CardVariant = 'default' | 'hero' | 'list';
+export type CardVariant = 'default' | 'list' | 'inset';
 
 export interface CardProps extends ViewProps {
   /**
-   * `default` — a resting panel. Border, no shadow.
-   * `hero` — the one card on a screen that outranks the others. Lifted, never
-   *   bordered; it is the top of the elevation ladder, not a louder box.
+   * `default` — a section of the page. A surface fill, nothing else.
    * `list` — a container for rows. Flush padding, hairlines between children.
+   * `inset` — a quieter well *inside* a section (a summary, a preview, a
+   *   callout). Muted fill, so it never competes with the section around it.
    */
   variant?: CardVariant;
   /** `list` only: pull the hairlines in from the start edge, past a row's icon. */
@@ -19,31 +19,23 @@ export interface CardProps extends ViewProps {
 }
 
 /**
- * Elevation is expressed by exactly one mechanism per mode, never two.
+ * Sections are planes, not boxes.
  *
- * The old card set a surface, a 1px border, *and* a shadow simultaneously, in
- * both modes. That reads as an outline rather than as depth, and it left the app
- * with no way to say "this card matters more than that one" — Overview's hero
- * asked for `surfaceElevated`, which in light mode is the same white as every
- * other card, so the request quietly did nothing.
- *
- * So: light mode lifts with shadow and by dropping the border (white can't get
- * lighter). Dark mode lifts with `surfaceElevated` and no shadow (a glow is
- * invisible against a near-black page). Same component, same intent, two honest
- * implementations.
+ * Every card used to carry a surface, a hairline border *and* a shadow, and
+ * Overview stacked seven of them at equal weight, so nothing on the page
+ * outranked anything else. A card is now only a tonal step off the page: no
+ * border, no resting shadow. Hierarchy comes from type and from what sits
+ * directly on the background — the screen's hero figure is not in a card at
+ * all (see `PageHero`). Shadows are reserved for things that genuinely float:
+ * sheets, menus, the floating action button.
  */
 export function Card({ variant = 'default', dividerInset = 0, style, children, ...props }: CardProps) {
   const theme = useQashyTheme();
-  const dark = theme.mode === 'dark';
-  const hero = variant === 'hero';
 
   const base: ViewStyle = {
-    backgroundColor: hero ? theme.surfaceElevated : theme.surface,
-    borderRadius: radius.card,
+    backgroundColor: variant === 'inset' ? theme.surfaceMuted : theme.surface,
+    borderRadius: variant === 'inset' ? radius.tile : radius.card,
     borderCurve: 'continuous',
-    borderWidth: hero && !dark ? 0 : StyleSheet.hairlineWidth,
-    borderColor: theme.border,
-    boxShadow: hero ? theme.shadowRaised : theme.shadowCard,
   };
 
   if (variant === 'list') {
@@ -51,7 +43,7 @@ export function Card({ variant = 'default', dividerInset = 0, style, children, .
     base.paddingHorizontal = space.lg;
     base.overflow = 'hidden';
   } else {
-    base.padding = hero ? space.xxl : space.lg;
+    base.padding = variant === 'inset' ? space.md : space.lg;
   }
 
   return (

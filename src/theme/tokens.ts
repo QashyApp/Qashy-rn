@@ -11,6 +11,34 @@ export const ACCENT_PRESETS = [
   '#6D7885',
 ] as const;
 
+/** Human names for the accent presets, used as swatch accessibility labels. */
+export const ACCENT_PRESET_NAMES: Record<(typeof ACCENT_PRESETS)[number], string> = {
+  '#5966E9': 'Indigo',
+  '#007AFF': 'Blue',
+  '#00A58E': 'Teal',
+  '#36A852': 'Green',
+  '#E7892C': 'Orange',
+  '#E0516B': 'Rose',
+  '#A95BCD': 'Purple',
+  '#6D7885': 'Slate',
+};
+
+/**
+ * Softer, lower-chroma colors for categories. Categories appear many times per
+ * screen, so they stay a notch quieter than the accent family; the starter
+ * categories in `domain/defaults.ts` are drawn from this same set.
+ */
+export const CATEGORY_PALETTE = [
+  '#5F9F78',
+  '#E08C5A',
+  '#5B8DEF',
+  '#8B76D8',
+  '#E16B75',
+  '#C47ED0',
+  '#4C9CB5',
+  '#6D7885',
+] as const;
+
 /**
  * The spacing scale. Every gap, padding, and inset in the app comes from here.
  *
@@ -46,8 +74,70 @@ export const radius = {
   card: 16,
   /** Floating overlays: the update prompt, the reload banner. */
   sheet: 22,
+  /** Navigation items: rail buttons, sidebar rows, the bottom-bar indicator. */
+  nav: 14,
   pill: 999,
 } as const;
+
+/**
+ * One size for every tinted icon tile (account, category, settings row, budget,
+ * goal). Before this there were 38pt and 44pt tiles with 17, 18, 20 and 21pt
+ * glyphs, so the same category looked like a different object on each screen.
+ */
+export const tile = {
+  size: 40,
+  icon: 20,
+  /** Dense lists: compact transaction rows, chips. */
+  compactSize: 32,
+  compactIcon: 16,
+} as const;
+
+/** Glyph sizes for standalone icons (buttons, empty states, inline markers). */
+export const iconSize = {
+  sm: 16,
+  md: 20,
+  lg: 24,
+  xl: 32,
+} as const;
+
+/**
+ * Rubik, bundled with the app. It covers Latin and Hebrew (the two shipped
+ * locales) in one family and carries a real `tnum` feature, so ledger figures
+ * line up in both scripts without a second numeric face.
+ *
+ * React Native cannot pick a static font file from `fontWeight` on Android,
+ * so each weight is its own family and `fontFamilyFor` maps a weight to it.
+ */
+export const fontFamilies = {
+  regular: 'Rubik_400Regular',
+  medium: 'Rubik_500Medium',
+  semibold: 'Rubik_600SemiBold',
+  bold: 'Rubik_700Bold',
+} as const;
+
+export type FontWeightName = keyof typeof fontFamilies;
+
+/**
+ * The type scale. Sizes step by at least ~25% at the top of the ramp so the
+ * hero figure, a screen title, an inline amount and a section heading never
+ * read as near-misses of each other (they used to be 34 / 30 / 28 / 20).
+ */
+export const typeScale = {
+  /** The single largest figure on a screen. Net worth, a month's net flow. */
+  display: { fontSize: 40, lineHeight: 46, weight: 'semibold', letterSpacing: -1 },
+  title: { fontSize: 28, lineHeight: 34, weight: 'semibold', letterSpacing: -0.6 },
+  /** A prominent amount inside a section: a budget's spend, a goal total. */
+  money: { fontSize: 22, lineHeight: 28, weight: 'semibold', letterSpacing: -0.4 },
+  headline: { fontSize: 18, lineHeight: 24, weight: 'semibold', letterSpacing: -0.2 },
+  body: { fontSize: 16, lineHeight: 22, weight: 'regular', letterSpacing: 0 },
+  /** A short piece of UI text with weight: a row title, a button, a stat value. */
+  label: { fontSize: 15, lineHeight: 20, weight: 'medium', letterSpacing: -0.1 },
+  caption: { fontSize: 13, lineHeight: 18, weight: 'regular', letterSpacing: 0 },
+  /** A sentence-case kicker above a heading, a hero figure or a group of rows. */
+  overline: { fontSize: 13, lineHeight: 18, weight: 'medium', letterSpacing: 0 },
+  /** Tiny all-caps status text inside a pill ("UPCOMING"). Not for headings. */
+  eyebrow: { fontSize: 11, lineHeight: 14, weight: 'semibold', letterSpacing: 0.6 },
+} as const satisfies Record<string, { fontSize: number; lineHeight: number; weight: FontWeightName; letterSpacing: number }>;
 
 export interface BaseTokens {
   background: string;
@@ -65,19 +155,21 @@ export interface BaseTokens {
 /**
  * Light surfaces.
  *
- * `surfaceElevated` is deliberately identical to `surface`: white is already the
- * top of the light ramp, so there is nowhere further up to go. Light-mode
- * elevation is therefore carried entirely by shadow and by the *absence* of a
- * border (see `shadowRaised` and the Card `hero` variant), never by lightness.
- * Dark mode inverts that — see `darkTokens`.
+ * Cards are borderless and shadowless at rest, so the page/surface step is
+ * the only thing separating a section from the page. `#F6F7F9` against white
+ * was too faint to carry that on its own; `#F1F2F5` is the lightest page tone
+ * that still reads as a distinct plane on a typical laptop panel.
+ *
+ * `surfaceElevated` stays white — it is the top of the light ramp — and
+ * floating layers (sheets, menus) add `shadowOverlay` instead.
  *
  * `background` is asserted by the web e2e suite as the address-bar theme color.
  */
 export const lightTokens: BaseTokens = {
-  background: '#F6F7F9',
+  background: '#F1F2F5',
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
-  surfaceMuted: '#EEF0F3',
+  surfaceMuted: '#E9EBEF',
   text: '#191B20',
   textMuted: '#5F6570',
   border: '#E3E5EA',

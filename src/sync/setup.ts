@@ -154,6 +154,11 @@ async function clearForgottenVaultState(tx: StorageTx): Promise<void> {
     if (rows.length) await table.delete(rows.map((row) => syncRowKey(name, row)));
   }
 
+  // `ratesAutoFetch` / `ratesLastRefreshAt` are deliberately absent from this list, for the
+  // same reason `relayUrl` and its neighbours are: they are this device's own preference, not
+  // part of the vault being left. A user who opted into automatic rates should not have that
+  // choice silently reset by an interrupted pairing or a `disableSync({ forget: true })` — and
+  // because absent already means "off", leaving it out never turns fetching on by surprise.
   await tx.table('syncMeta').delete([
     SYNC_META.deviceId,
     SYNC_META.deviceName,

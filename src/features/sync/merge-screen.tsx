@@ -134,7 +134,7 @@ export function MergeScreen() {
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
-      <Card variant="hero" style={{ gap: space.md }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="title">Review duplicates</AppText>
         <AppText muted>
           When two devices that both already had data are paired, anything you created on both

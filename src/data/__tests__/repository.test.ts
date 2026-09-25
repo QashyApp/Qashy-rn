@@ -11,6 +11,7 @@ import type {
 import { diffEntity, hlcFromTimestamp } from '@/sync/oplog';
 import type { StorageTx, TransactOptions } from '@/data/storage-adapter';
 import { parseCsvTable } from '@/utils/csv';
+import { fetchedRateId } from '@/utils/deterministic-id';
 
 async function createRepository(storage = new MemoryStorageAdapter(), locale = 'en-US') {
   const repository = new LocalFinanceRepository(storage);
@@ -29,6 +30,19 @@ async function createRepository(storage = new MemoryStorageAdapter(), locale = '
 }
 
 describe('FinanceRepository contract', () => {
+  it('bounds a transaction query to one calendar month, edges included', async () => {
+    const { repository } = await createRepository();
+    const accountId = repository.getSnapshot().accounts[0].id;
+    for (const localDate of ['2026-01-31', '2026-02-01', '2026-02-28', '2026-03-01']) {
+      await repository.saveTransaction({ kind: 'expense', title: localDate, localDate, accountId, amountMinor: 100 });
+    }
+    const february = repository.queryTransactions({ fromDate: '2026-02-01', toDate: '2026-02-28' });
+    expect(february.map((row) => row.localDate)).toEqual(['2026-02-28', '2026-02-01']);
+    // The month view's search stays inside the month unless it is widened explicitly.
+    expect(repository.queryTransactions({ search: '2026-03', fromDate: '2026-02-01', toDate: '2026-02-28' })).toEqual([]);
+    expect(repository.queryTransactions({ search: '2026-03' }).map((row) => row.title)).toEqual(['2026-03-01']);
+  });
+
   it('persists onboarding, derives balances, and excludes transfers from cash flow', async () => {
     const storage = new MemoryStorageAdapter();
     const repository = new LocalFinanceRepository(storage);
@@ -2597,5 +2611,180 @@ describe('applyRemoteOps', () => {
     await expect(
       repository.saveAccount({ ...savings, name: 'Savings' }, savings.id, savings.revision),
     ).resolves.toBeDefined();
+  });
+
+  it('saves a fetched rate with a deterministic id and is a no-op on an unchanged re-fetch', async () => {
+    const { repository } = await createRepository();
+    const result = await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ]);
+    expect(result).toEqual({ written: 1, skippedManual: 0, conflicts: [] });
+    const saved = repository.getSnapshot().exchangeRates[0];
+    // Two devices fetching the same day's rate independently must mint the same id, with
+    // nothing exchanged, so the merge converges into one entity by construction.
+    expect(saved.id).toBe(fetchedRateId('EUR', 'USD', '2026-01-01'));
+    expect(saved.revision).toBe(1);
+
+    // An unattended re-fetch of "latest" that happens to report the same value must not bump
+    // a revision or write anything — that would be a sync op for a value that did not change.
+    const second = await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ]);
+    expect(second).toEqual({ written: 0, skippedManual: 0, conflicts: [] });
+    expect(repository.getSnapshot().exchangeRates).toHaveLength(1);
+    expect(repository.getSnapshot().exchangeRates[0].revision).toBe(1);
+  });
+
+  it('updates an already-fetched rate in place when a later fetch reports a different value', async () => {
+    const { repository } = await createRepository();
+    await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ]);
+    const result = await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.2', effectiveDate: '2026-01-01' },
+    ]);
+    expect(result).toEqual({ written: 1, skippedManual: 0, conflicts: [] });
+    expect(repository.getSnapshot().exchangeRates).toEqual([
+      expect.objectContaining({ rate: '1.2', revision: 2 }),
+    ]);
+  });
+
+  it('lets an existing manual rate win over a fetched rate for the same key', async () => {
+    const { repository } = await createRepository();
+    const manual = await repository.saveExchangeRate({
+      fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.05', effectiveDate: '2026-01-01',
+    });
+    const result = await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ]);
+    expect(result).toEqual({ written: 0, skippedManual: 1, conflicts: [] });
+    expect(repository.getSnapshot().exchangeRates).toEqual([manual]);
+  });
+
+  it('never resurrects a fetched rate the user deleted', async () => {
+    const { repository, storage } = await createRepository();
+    await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ]);
+    const id = fetchedRateId('EUR', 'USD', '2026-01-01');
+    await repository.deleteEntities('exchangeRates', [id]);
+    // The live snapshot drops tombstones entirely; the stored row still carries one.
+    expect(repository.getSnapshot().exchangeRates.some((item) => item.id === id)).toBe(false);
+    expect((await storage.readAll('exchangeRates')).find((item) => item.id === id)?.deletedAt).not.toBeNull();
+
+    const result = await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ]);
+    expect(result).toEqual({ written: 0, skippedManual: 0, conflicts: [] });
+    expect(repository.getSnapshot().exchangeRates.some((item) => item.id === id)).toBe(false);
+    expect((await storage.readAll('exchangeRates')).find((item) => item.id === id)?.deletedAt).not.toBeNull();
+  });
+
+  it('reports a reciprocal conflict instead of throwing, without blocking the rest of the batch', async () => {
+    const { repository } = await createRepository();
+    // A legacy manual rate that a fetched EUR->USD rate of 3 (implying 0.5 the other way)
+    // would contradict: 1 USD = 2 EUR implies 1 EUR = 0.5 USD, not 3.
+    await repository.saveExchangeRate({
+      fromCurrency: 'USD', toCurrency: 'EUR', rate: '2', effectiveDate: '2026-01-01',
+    });
+
+    const result = await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '3', effectiveDate: '2026-01-01' },
+      { fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.3', effectiveDate: '2026-01-01' },
+    ]);
+
+    expect(result.written).toBe(1);
+    expect(result.skippedManual).toBe(0);
+    expect(result.conflicts).toEqual([
+      { fromCurrency: 'EUR', toCurrency: 'USD', effectiveDate: '2026-01-01', existingRate: '2' },
+    ]);
+    const rates = repository.getSnapshot().exchangeRates;
+    expect(rates.some((item) => item.fromCurrency === 'GBP' && item.toCurrency === 'USD')).toBe(true);
+    expect(rates.some((item) => item.fromCurrency === 'EUR' && item.toCurrency === 'USD')).toBe(false);
+  });
+
+  it('persists a whole batch of fetched rates through exactly one putMany call', async () => {
+    class CountingStorage extends MemoryStorageAdapter {
+      putManyCalls = 0;
+
+      override async putMany(records: Parameters<MemoryStorageAdapter['putMany']>[0], source?: object) {
+        this.putManyCalls += 1;
+        await super.putMany(records, source);
+      }
+    }
+    const storage = new CountingStorage();
+    const { repository } = await createRepository(storage);
+    storage.putManyCalls = 0; // Onboarding itself writes once; count only the batch under test.
+
+    const result = await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      { fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.3', effectiveDate: '2026-01-01' },
+      { fromCurrency: 'JPY', toCurrency: 'USD', rate: '0.0067', effectiveDate: '2026-01-01' },
+    ]);
+    expect(result.written).toBe(3);
+    expect(storage.putManyCalls).toBe(1);
+  });
+
+  it('leaves the snapshot unchanged when persisting a fetched-rate batch fails', async () => {
+    class FailingStorage extends MemoryStorageAdapter {
+      fail = false;
+
+      override async putMany(records: Parameters<MemoryStorageAdapter['putMany']>[0], source?: object) {
+        if (this.fail) throw new Error('simulated disk failure');
+        await super.putMany(records, source);
+      }
+    }
+    const storage = new FailingStorage();
+    const { repository } = await createRepository(storage);
+    storage.fail = true;
+
+    await expect(repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ])).rejects.toThrow('simulated disk failure');
+    expect(repository.getSnapshot().exchangeRates).toHaveLength(0);
+  });
+
+  it('validates every row before writing any of them', async () => {
+    const { repository } = await createRepository();
+    await expect(repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      { fromCurrency: 'GBP', toCurrency: 'EUR', rate: '1.3', effectiveDate: '2026-01-01' },
+    ])).rejects.toThrow('base currency');
+    expect(repository.getSnapshot().exchangeRates).toHaveLength(0);
+  });
+
+  it('refuses to create a manual rate whose key a live fetched rate already occupies', async () => {
+    const { repository } = await createRepository();
+    await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+    ]);
+    await expect(repository.saveExchangeRate({
+      fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.2', effectiveDate: '2026-01-01',
+    })).rejects.toThrow('An automatic rate already exists for this date.');
+    expect(repository.getSnapshot().exchangeRates).toHaveLength(1);
+  });
+
+  it('still allows editing an existing manual rate in place', async () => {
+    const { repository } = await createRepository();
+    const manual = await repository.saveExchangeRate({
+      fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.3', effectiveDate: '2026-01-01',
+    });
+    await expect(repository.saveExchangeRate({ ...manual, rate: '1.35' }, manual.id))
+      .resolves.toMatchObject({ id: manual.id, rate: '1.35' });
+  });
+
+  it('resolves a conversion from a fetched rate the same way it would a manual one', async () => {
+    const { repository } = await createRepository();
+    const eur = await repository.saveAccount({
+      name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+    });
+    await repository.saveFetchedRates([
+      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' },
+    ]);
+    const transaction = await repository.saveTransaction({
+      kind: 'expense', title: 'Coffee', localDate: '2026-07-15', accountId: eur.id, amountMinor: 500,
+    });
+    expect(transaction.exchangeRate).toBe('2');
+    expect(transaction.baseAmountMinor).toBe(1000);
   });
 });

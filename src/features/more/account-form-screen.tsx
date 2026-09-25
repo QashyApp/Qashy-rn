@@ -10,16 +10,20 @@ import { ChoiceChip } from '@/components/ui/choice-chip';
 import { ColorSwatch } from '@/components/ui/color-swatch';
 import { FormField } from '@/components/ui/form-field';
 import { FormScreen } from '@/components/ui/form-screen';
+import { FRANKFURTER_UNSUPPORTED } from '@/data/exchange-rates/frankfurter';
 import type { AccountType } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
+import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
+import { ACCENT_PRESETS } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { validateCurrencyCode, validateMoneyInput } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
 import { minorToLocalizedDecimalString, parseMoney } from '@/utils/money';
 
-const COLORS = ['#5966E9', '#007AFF', '#00A58E', '#36A852', '#E7892C', '#E0516B', '#A95BCD'];
+const COLORS = ACCENT_PRESETS.slice(0, 7);
+const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = { checking: 'building.columns', cash: 'banknote', savings: 'leaf', credit: 'creditcard', wallet: 'wallet' };
 
 export function AccountFormScreen() {
   const { id, returnTo } = useLocalSearchParams<{ id?: string; returnTo?: string }>();
@@ -36,6 +40,9 @@ export function AccountFormScreen() {
   const [openingTouched, setOpeningTouched] = useState(false);
   const [color, setColor] = useState(existing?.color ?? theme.staticAccent);
   const [busy, setBusy] = useState(false);
+  const exchangeRateService = useExchangeRateService();
+  const rateStatus = useExchangeRateStatus();
+  const [togglingRates, setTogglingRates] = useState(false);
   const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute: '/more',
     values: { name, type, currency, opening, color },
@@ -49,6 +56,24 @@ export function AccountFormScreen() {
     ? undefined
     : validateMoneyInput(opening, currency, state.settings.locale, { label: 'Opening balance' });
   const canSave = !currencyError && !openingError;
+  const currencyCode = currency.trim().toUpperCase();
+  const showRatesCard = !currencyError && !rateStatus.enabled && currencyCode !== state.settings.baseCurrency;
+  const currencyUnsupported = showRatesCard && FRANKFURTER_UNSUPPORTED.has(currencyCode);
+
+  const turnOnAutomaticRates = async () => {
+    if (togglingRates) return;
+    setTogglingRates(true);
+    try {
+      await exchangeRateService.setEnabled(true);
+      // Idempotent via occurrence keys: retries whatever rule generation skipped for lack of a
+      // rate, now that this account's currency may have just gotten one.
+      await repository.generateRecurring();
+    } catch (reason) {
+      showError('Couldn’t turn on automatic rates', errorMessage(reason, 'Try again.'));
+    } finally {
+      setTogglingRates(false);
+    }
+  };
 
   const changeCurrency = (value: string) => {
     setCurrency(value);
@@ -102,12 +127,24 @@ export function AccountFormScreen() {
       <Card style={{ gap: 16 }}>
         <FormField label="Account name" value={name} onChangeText={setName} placeholder="Everyday" autoFocus={!existing} />
         <AppText variant="label">Type</AppText>
-        <View accessibilityLabel={t('Account type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{(['checking', 'cash', 'savings', 'credit', 'wallet'] as AccountType[]).map((item) => <ChoiceChip key={item} label={item[0].toUpperCase() + item.slice(1)} selected={type === item} onPress={() => setType(item)} />)}</View>
+        <View accessibilityLabel={t('Account type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{(['checking', 'cash', 'savings', 'credit', 'wallet'] as AccountType[]).map((item) => <ChoiceChip key={item} icon={ACCOUNT_TYPE_ICONS[item]} label={item[0].toUpperCase() + item.slice(1)} selected={type === item} onPress={() => setType(item)} />)}</View>
         <FormField label="Currency" value={currency} onChangeText={changeCurrency} maxLength={3} autoCapitalize="characters" editable={!currencyLocked} error={currencyLocked ? undefined : currencyError} hint={currencyLocked ? 'Currency is locked because this account has transaction or schedule history.' : undefined} required />
         <FormField label="Opening balance" value={opening} onChangeText={(value) => { setOpeningTouched(true); setOpening(value); }} keyboardType="decimal-pad" error={openingError} hint="Changing this adjusts the derived account balance." required />
         <AppText variant="label">Color</AppText>
         <View accessibilityLabel={t('Account color')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>{COLORS.map((item) => <ColorSwatch key={item} color={item} selected={color === item} label={`Use ${item} account color`} onPress={() => setColor(item)} />)}</View>
       </Card>
+      {showRatesCard ? (
+        <Card variant="inset" style={{ gap: 12 }}>
+          {currencyUnsupported ? (
+            <AppText literal variant="caption" muted>{`Automatic rates aren’t available for ${currencyCode}; add rates manually.`}</AppText>
+          ) : (
+            <>
+              <AppText literal variant="caption" muted>{`Qashy can fetch ${currencyCode} rates automatically from frankfurter.dev. Only currency codes and dates are sent.`}</AppText>
+              <ActionButton title={togglingRates ? 'Turning on…' : 'Turn on'} variant="secondary" busy={togglingRates} disabled={togglingRates} onPress={turnOnAutomaticRates} />
+            </>
+          )}
+        </Card>
+      ) : null}
       <ActionButton title={busy ? 'Saving…' : existing ? 'Save account' : 'Create account'} icon="checkmark" onPress={save} disabled={busy || !canSave} busy={busy} />
       {existing && state.accounts.filter((item) => !item.archived).length > 1 ? <ActionButton title="Archive account" variant="danger" onPress={archive} disabled={busy} /> : null}
     </FormScreen>

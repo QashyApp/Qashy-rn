@@ -7,6 +7,7 @@ import { MotionView } from '@/components/ui/motion';
 import { TextButton } from '@/components/ui/text-button';
 import { useFinanceReload } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
+import { radius, space } from '@/theme/tokens';
 
 /**
  * Reports a resume-time reload failure without taking the app down with it.
@@ -41,7 +42,7 @@ export function ReloadErrorBanner() {
         maxWidth: 380,
         zIndex: 1000,
       }}>
-      <GlassSurface style={{ borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.negative, padding: 16 }}>
+      <GlassSurface style={{ borderRadius: radius.sheet, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.negative, padding: space.lg }}>
         <View style={{ gap: 10 }}>
           <AppText variant="label">Qashy couldn’t refresh</AppText>
           {/* Not `literal`: the repository's own message has a translation, and an

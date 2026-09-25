@@ -3,6 +3,7 @@ import { ActivityIndicator, AppState, Pressable, Text, View, useColorScheme } fr
 
 import type { FinanceRepository } from '@/data/repository';
 import { financeRepository } from '@/data/local-finance-repository';
+import { refreshRatesWithCap } from '@/providers/exchange-rate-provider';
 import { QASHY_ACCENT } from '@/domain/defaults';
 import type { FinanceState } from '@/domain/models';
 import { darkTokens, lightTokens, readableTextColor } from '@/theme/tokens';
@@ -46,14 +47,34 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const contextValue = useMemo(() => ({ repository: financeRepository, state }), [state]);
 
   useEffect(() => {
-    financeRepository.initialize().catch((reason: unknown) => {
-      setError(reason instanceof Error ? reason.message : 'Qashy could not open its local database.');
-    });
+    financeRepository.initialize()
+      // Best-effort and capped: a slow or failed rate fetch must never delay the app's first
+      // render. `refreshRatesWithCap` already swallows every failure into the service's own
+      // status, so nothing here needs a `.catch` of its own.
+      .then(() => refreshRatesWithCap())
+      // `initialize()` already generated recurring transactions before this refresh landed, so
+      // any rule that had no rate yet skipped that occurrence. Re-running it here is a no-op
+      // for everything that already posted (idempotent via occurrence keys) and retries only
+      // what was blocked on a missing rate. A failure here is reported the same way `reconcile`
+      // reports one below — in place, not as a fatal startup error — since the app has already
+      // rendered a usable snapshot by this point.
+      .then(() => financeRepository.generateRecurring())
+      .catch((reason: unknown) => {
+        if (financeRepository.getSnapshot().ready) {
+          setReloadError(reason instanceof Error ? reason.message : 'Qashy could not reload its local database.');
+          return;
+        }
+        setError(reason instanceof Error ? reason.message : 'Qashy could not open its local database.');
+      });
   }, []);
 
   const reconcile = useCallback(() => {
     if (!financeRepository.getSnapshot().ready) return;
     financeRepository.refresh()
+      // Refreshed before `generateRecurring()` so a rule that auto-posts today snapshots the
+      // rate this refresh just fetched, rather than yesterday's stored one. Capped the same way
+      // as the initial load, so a slow network on resume doesn't stall the reconcile either.
+      .then(() => refreshRatesWithCap())
       .then(() => financeRepository.generateRecurring())
       .then(() => setReloadError(null))
       .catch((reason: unknown) => {

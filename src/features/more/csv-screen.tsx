@@ -16,10 +16,11 @@ import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
 import { radius } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
-import { csvCategoryForRow, parseCsvTable } from '@/utils/csv';
+import { csvCategoryForRow, extractCsvRatePairs, parseCsvTable } from '@/utils/csv';
 import { todayLocal } from '@/utils/date';
 import { hapticSuccess } from '@/utils/haptics';
 import { MAX_CSV_IMPORT_BYTES, assertFileSize } from '@/utils/file-size';
+import { exchangeRateService } from '@/providers/exchange-rate-provider';
 
 type CsvField = Exclude<keyof CsvImportRow, 'rowNumber'>;
 
@@ -146,6 +147,12 @@ export function CsvScreen() {
       };
     });
     setRows(parsed);
+    // Best-effort: fills in whatever automatic rates it can before validation runs, so a row
+    // whose currency and date already have a fetched rate stops needing a manual one. A no-op
+    // when auto-fetch is off, and it never throws — a failure here falls through to the same
+    // "no rate for this date" rejection `importCsv` has always produced.
+    const ratePairs = extractCsvRatePairs(parsed, state.settings.baseCurrency);
+    if (ratePairs.length) await exchangeRateService.ensureRatesFor(ratePairs);
     setPreview(await repository.importCsv(parsed, false));
   };
 
@@ -233,14 +240,14 @@ export function CsvScreen() {
             <AppText variant="label">Default account</AppText>
             <View accessibilityLabel={t('Default account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
               {state.accounts.filter((item) => !item.archived).map((account) => (
-                <ChoiceChip key={account.id} literal label={account.name} selected={defaultAccountId === account.id} onPress={() => { setDefaultAccountId(account.id); setPreview(null); }} />
+                <ChoiceChip key={account.id} literal icon={account.icon} label={account.name} selected={defaultAccountId === account.id} onPress={() => { setDefaultAccountId(account.id); setPreview(null); }} />
               ))}
             </View>
             <AppText variant="label">Default category</AppText>
             <View accessibilityLabel={t('Default category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-              <ChoiceChip label="None" selected={!defaultCategoryId} onPress={() => { setDefaultCategoryId(''); setPreview(null); }} />
+              <ChoiceChip icon="xmark.circle" label="None" selected={!defaultCategoryId} onPress={() => { setDefaultCategoryId(''); setPreview(null); }} />
               {state.categories.filter((item) => !item.archived).map((category) => (
-                <ChoiceChip key={category.id} literal label={category.name} selected={defaultCategoryId === category.id} onPress={() => { setDefaultCategoryId(category.id); setPreview(null); }} />
+                <ChoiceChip key={category.id} literal icon={category.icon} label={category.name} selected={defaultCategoryId === category.id} onPress={() => { setDefaultCategoryId(category.id); setPreview(null); }} />
               ))}
             </View>
             <AppText variant="caption" muted>The default category is used only for rows with the same transaction type. Other rows stay uncategorized.</AppText>

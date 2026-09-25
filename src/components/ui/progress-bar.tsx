@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { type ColorValue } from 'react-native';
 import Animated, {
-  Easing,
   ReduceMotion,
   interpolateColor,
   useAnimatedStyle,
@@ -12,6 +11,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { motionCurves } from '@/components/ui/motion';
 import { useQashyTheme } from '@/theme/theme';
 import { QASHY_INDIGO, radius } from '@/theme/tokens';
 
@@ -78,7 +78,7 @@ export function ProgressBar({
     colorMix.set(0);
     colorMix.set(withTiming(1, {
       duration: 260,
-      easing: Easing.out(Easing.cubic),
+      easing: motionCurves.standard,
       reduceMotion: ReduceMotion.System,
     }));
   }, [colorMix, colorPair]);
@@ -90,7 +90,7 @@ export function ProgressBar({
       mountedRef.current = true;
       progress.set(withTiming(clamped, {
         duration: 420,
-        easing: Easing.out(Easing.cubic),
+        easing: motionCurves.standard,
         reduceMotion: ReduceMotion.System,
       }));
       return;
@@ -103,8 +103,8 @@ export function ProgressBar({
     milestoneRef.current.onMilestone?.(Math.max(...crossed));
     if (reduceMotion) return;
     pulse.set(withSequence(
-      withTiming(1.45, { duration: 150, easing: Easing.out(Easing.cubic) }),
-      withTiming(1, { duration: 240, easing: Easing.inOut(Easing.cubic) }),
+      withTiming(1.45, { duration: 150, easing: motionCurves.standard }),
+      withTiming(1, { duration: 240, easing: motionCurves.inOut }),
     ));
   }, [clamped, progress, pulse, reduceMotion, safeValue]);
 

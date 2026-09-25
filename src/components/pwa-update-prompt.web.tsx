@@ -7,6 +7,7 @@ import { GlassSurface } from '@/components/ui/glass-surface';
 import { MotionView } from '@/components/ui/motion';
 import { TextButton } from '@/components/ui/text-button';
 import { useQashyTheme } from '@/theme/theme';
+import { radius, space } from '@/theme/tokens';
 
 declare global {
   interface Window {
@@ -79,7 +80,7 @@ export function PwaUpdatePrompt() {
           maxWidth: 380,
           zIndex: 1000,
         }}>
-      <GlassSurface style={{ borderRadius: 22, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.border, padding: 16 }}>
+      <GlassSurface style={{ borderRadius: radius.sheet, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.border, padding: space.lg }}>
         <View style={{ gap: 10 }}>
           <AppText variant="label">A fresh version is ready</AppText>
           <AppText variant="caption" muted>Reload when you’re ready. Your finance data stays in IndexedDB.</AppText>

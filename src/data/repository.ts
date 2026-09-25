@@ -67,6 +67,23 @@ export interface TransactionInput {
   occurrenceKey?: string | null;
 }
 
+export interface FetchedRateConflict {
+  readonly fromCurrency: string;
+  readonly toCurrency: string;
+  readonly effectiveDate: string;
+  /** The live rate that blocked this one, so the caller can show what disagreed. */
+  readonly existingRate: string;
+}
+
+export interface FetchedRateResult {
+  /** Rows actually created or updated — an unchanged re-fetch of an already-stored rate is not counted. */
+  readonly written: number;
+  /** Rows skipped because a manual row already holds this exact (from, to, date) key. */
+  readonly skippedManual: number;
+  /** Rows skipped because they contradicted an existing reciprocal rate beyond tolerance. */
+  readonly conflicts: readonly FetchedRateConflict[];
+}
+
 export interface ApplyResult {
   /** Ops folded into the causal state. A batch applies whole or not at all. */
   readonly applied: number;
@@ -109,6 +126,18 @@ export interface FinanceRepository {
   saveContribution(input: ContributionInput, id?: string, expectedRevision?: number): Promise<GoalContribution>;
   saveRecurringRule(input: RecurringInput, id?: string, expectedRevision?: number): Promise<RecurringRule>;
   saveExchangeRate(input: RateInput, id?: string, expectedRevision?: number): Promise<ExchangeRate>;
+  /**
+   * Saves a batch of automatically fetched rates in one atomic write.
+   *
+   * Unlike `saveExchangeRate`, this never throws on a single bad row: a fetched rate that
+   * loses to a manual one, that would resurrect a tombstone, or that contradicts a reciprocal
+   * rate is skipped and reported rather than failing the whole batch, because one legacy
+   * manual row must not block every other currency's automatic refresh. It still throws on
+   * invalid input (a bad currency code, date, or rate) — that is a caller bug, not a data
+   * conflict — and it still validates the resulting rate set with `assertTransactionSetSafe`
+   * before writing anything.
+   */
+  saveFetchedRates(rates: readonly RateInput[]): Promise<FetchedRateResult>;
   queryTransactions(query?: TransactionQuery, snapshot?: TransactionRecord[]): TransactionRecord[];
   getDashboard(fromDate: string, toDate: string): DashboardSummary;
   getBudgetStatuses(onDate: string, options?: { includeInactiveCustom?: boolean }): BudgetStatus[];

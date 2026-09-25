@@ -17,8 +17,13 @@ import { useLocalization } from '@/localization/localization';
 import { useScreenMetrics } from '@/theme/layout';
 import { useQashyTheme } from '@/theme/theme';
 import { radius as radii, space } from '@/theme/tokens';
+import { fontStyle } from '@/theme/typography';
 import { shortDate } from '@/utils/date';
 import { formatMoney } from '@/utils/money';
+
+// SVG text does not inherit the app face, so charts name it explicitly.
+const CHART_FONT = fontStyle('medium').fontFamily;
+const CHART_FONT_BOLD = fontStyle('semibold').fontFamily;
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -162,8 +167,8 @@ export function SpendLineChart({ points, currency, locale }: { points: Dashboard
               />
             );
           })}
-          {firstDate ? <SvgText x="8" y={height - 4} fill={theme.textMuted as string} fontSize="11">{shortDate(firstDate, locale)}</SvgText> : null}
-          {lastDate ? <SvgText x={chartWidth - 8} y={height - 4} textAnchor="end" fill={theme.textMuted as string} fontSize="11">{shortDate(lastDate, locale)}</SvgText> : null}
+          {firstDate ? <SvgText x="8" y={height - 4} fill={theme.textMuted as string} fontSize="11" fontFamily={CHART_FONT}>{shortDate(firstDate, locale)}</SvgText> : null}
+          {lastDate ? <SvgText x={chartWidth - 8} y={height - 4} textAnchor="end" fill={theme.textMuted as string} fontSize="11" fontFamily={CHART_FONT}>{shortDate(lastDate, locale)}</SvgText> : null}
         </Svg>
       ) : (
         <View style={{ minHeight: height, alignItems: 'center', justifyContent: 'center', gap: space.xs + 2 }}>
@@ -295,8 +300,8 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
             strokeLinecap="butt"
             transform={RING_ROTATION}
           />
-          <SvgText x="63" y="59" textAnchor="middle" fill={theme.textMuted as string} fontSize="10">SPENT</SvgText>
-          <SvgText x="63" y="77" textAnchor="middle" fill={theme.text as string} fontSize="13" fontWeight="700">
+          <SvgText x="63" y="59" textAnchor="middle" fill={theme.textMuted as string} fontSize="11" fontFamily={CHART_FONT}>{t('Spent')}</SvgText>
+          <SvgText x="63" y="77" textAnchor="middle" fill={theme.text as string} fontSize="13" fontFamily={CHART_FONT_BOLD}>
             {formatMoney(animatedTotal, currency, locale, { compact: true })}
           </SvgText>
         </Svg>

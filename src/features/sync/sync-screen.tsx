@@ -137,7 +137,7 @@ export function SyncScreen() {
       <MotionView>
         {/* `accessibilityLiveRegion` is why the hero is one node: a state change here is the
             single thing on the screen worth interrupting a screen reader for. */}
-        <Card variant="hero" accessibilityLiveRegion="polite" style={{ gap: space.md }}>
+        <Card accessibilityLiveRegion="polite" style={{ gap: space.md }}>
           {/* The pill carries the short form — the same line the More row shows — so the two
               screens cannot drift, and so the hero is not saying the same words twice. */}
           <StatusPill label={summary.subtitle} icon={summary.icon} tone={summary.tone} />

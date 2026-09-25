@@ -15,19 +15,20 @@ import { space } from '@/theme/tokens';
 export function PageHeading({
   title,
   subtitle,
-  eyebrow,
+  overline,
 }: {
   title: string;
   subtitle?: string;
-  eyebrow?: string;
+  /** A short sentence-case kicker above the title. */
+  overline?: string;
 }) {
   const theme = useQashyTheme();
   if (process.env.EXPO_OS !== 'web') return null;
   const headingLevelProps = { 'aria-level': 1 } as object;
   return (
     <View style={{ gap: space.xxs }}>
-      {eyebrow ? (
-        <AppText variant="eyebrow" style={{ color: theme.textMuted, paddingBottom: space.xxs }}>{eyebrow}</AppText>
+      {overline ? (
+        <AppText variant="overline" style={{ color: theme.textMuted, paddingBottom: space.xxs }}>{overline}</AppText>
       ) : null}
       <AppText {...headingLevelProps} accessibilityRole="header" role="heading" variant="title">{title}</AppText>
       {subtitle ? <AppText muted>{subtitle}</AppText> : null}

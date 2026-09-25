@@ -15,8 +15,9 @@ import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { hapticSuccess } from '@/utils/haptics';
+import { CATEGORY_PALETTE } from '@/theme/tokens';
 
-const COLORS = ['#5F9F78', '#E08C5A', '#5B8DEF', '#8B76D8', '#E16B75', '#C47ED0', '#6D7885'];
+const COLORS = CATEGORY_PALETTE;
 const ICONS = {
   expense: [
     ['cart', 'Groceries'],
@@ -41,7 +42,7 @@ export function CategoryFormScreen() {
   const [expectedRevision] = useState(existing?.revision);
   const [name, setName] = useState(existing?.name ?? '');
   const [kind, setKind] = useState<CategoryKind>(existing?.kind ?? 'expense');
-  const [color, setColor] = useState(existing?.color ?? COLORS[0]);
+  const [color, setColor] = useState<string>(existing?.color ?? COLORS[0]);
   const [icon, setIcon] = useState(existing?.icon ?? ICONS[existing?.kind ?? 'expense'][0][0]);
   const [parentId, setParentId] = useState(existing?.parentId ?? '');
   const [busy, setBusy] = useState(false);
@@ -101,7 +102,7 @@ export function CategoryFormScreen() {
     <FormScreen contentContainerStyle={{ gap: 16 }}>
       <Card style={{ gap: 16 }}>
         <FormField label="Category name" value={name} onChangeText={setName} autoFocus={!existing} />
-        <View accessibilityLabel={t('Category kind')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>{(['expense', 'income'] as CategoryKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} disabled={kindLocked && kind !== item} onPress={() => {
+        <View accessibilityLabel={t('Category kind')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>{(['expense', 'income'] as CategoryKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "income" ? "arrow.down" : item === "expense" ? "arrow.up" : "arrow.left.arrow.right"} label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} disabled={kindLocked && kind !== item} onPress={() => {
           if (item === kind) return;
           setKind(item);
           setParentId('');
@@ -115,7 +116,7 @@ export function CategoryFormScreen() {
         <AppText variant="label">Color</AppText>
         <View accessibilityLabel={t('Category color')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>{COLORS.map((item) => <ColorSwatch key={item} color={item} selected={color === item} label={`Use ${item} category color`} onPress={() => setColor(item)} />)}</View>
         <AppText variant="label">Parent category</AppText>
-        <View accessibilityLabel={t('Parent category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip label="None" selected={!selectedParentId} onPress={() => setParentId('')} />{parentChoices.map((item) => <ChoiceChip key={item.id} literal label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived || hasChildren} selected={selectedParentId === item.id} onPress={() => setParentId(item.id)} />)}</View>
+        <View accessibilityLabel={t('Parent category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip icon="xmark.circle" label="None" selected={!selectedParentId} onPress={() => setParentId('')} />{parentChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived || hasChildren} selected={selectedParentId === item.id} onPress={() => setParentId(item.id)} />)}</View>
         {hasChildren ? <AppText variant="caption" muted>A category with child categories must stay at the top level.</AppText> : null}
       </Card>
       <ActionButton title={busy ? 'Saving…' : existing ? 'Save category' : 'Create category'} icon="checkmark" onPress={save} disabled={busy} busy={busy} />

@@ -3,43 +3,26 @@ import { Text, type TextProps, type TextStyle } from 'react-native';
 
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
+import { typeScale } from '@/theme/tokens';
+import { withAppFont } from '@/theme/typography';
 
-type Variant = 'display' | 'title' | 'headline' | 'body' | 'caption' | 'label' | 'eyebrow' | 'money';
+export type TextVariant = keyof typeof typeScale;
 
 // Not `as const`: TextStyle declares fontVariant as a mutable array, so a
 // readonly tuple is rejected where the style is actually consumed.
 const TABULAR: TextStyle['fontVariant'] = ['tabular-nums'];
 
-/**
- * The type scale.
- *
- * The ramp topped out at `title` (30) and `money` (28), so the largest figure on
- * the app's most important screen — net worth — was an inline `fontSize: 34`
- * override written at the call site. The one number the whole product is built
- * around had no name in the system. And every all-caps kicker ("CURRENT NET
- * WORTH", "LOCAL-FIRST FINANCE") was `caption` with the casing baked into the
- * string and no tracking, which is what makes small caps look cramped.
- *
- * `display` and `eyebrow` close both gaps. The mid-scale sizes are unchanged on
- * purpose: `label` at 15/600 against `body` at 16/400 reads as two distinct
- * roles because of the weight, and shrinking it would have taken every row title
- * and button label in the app down with it. What did change is optical tracking
- * — letter-spacing tightens as size grows, which is what stops large text from
- * looking loose beside small text.
- */
-const variants: Record<Variant, TextStyle> = {
-  /** The single largest figure on a screen. Net worth, a goal total. */
-  display: { fontSize: 34, lineHeight: 41, fontWeight: '700', letterSpacing: -0.6, fontVariant: TABULAR },
-  title: { fontSize: 30, lineHeight: 36, fontWeight: '700', letterSpacing: -0.5 },
-  headline: { fontSize: 20, lineHeight: 26, fontWeight: '700', letterSpacing: -0.3 },
-  body: { fontSize: 16, lineHeight: 22, fontWeight: '400' },
-  /** A short piece of UI text with weight: a row title, a button, a stat value. */
-  label: { fontSize: 15, lineHeight: 20, fontWeight: '600', letterSpacing: -0.1 },
-  caption: { fontSize: 13, lineHeight: 18, fontWeight: '500' },
-  /** A small all-caps kicker above a heading or a hero figure. */
-  eyebrow: { fontSize: 11, lineHeight: 14, fontWeight: '700', letterSpacing: 0.9 },
-  money: { fontSize: 28, lineHeight: 34, fontWeight: '700', fontVariant: TABULAR, letterSpacing: -0.5 },
-};
+/** Variants whose whole purpose is a figure, so digits are always tabular. */
+const NUMERIC_VARIANTS = new Set<TextVariant>(['display', 'money']);
+
+const variants = Object.fromEntries(
+  (Object.keys(typeScale) as TextVariant[]).map((name) => {
+    const { fontSize, lineHeight, weight, letterSpacing } = typeScale[name];
+    const style: TextStyle = { fontSize, lineHeight, letterSpacing, fontWeight: weight === 'regular' ? '400' : weight === 'medium' ? '500' : weight === 'semibold' ? '600' : '700' };
+    if (NUMERIC_VARIANTS.has(name)) style.fontVariant = TABULAR;
+    return [name, style];
+  }),
+) as Record<TextVariant, TextStyle>;
 
 /**
  * `literal` opts a run of text out of translation. Anything the user typed —
@@ -52,7 +35,7 @@ const variants: Record<Variant, TextStyle> = {
  * change in place — a balance that animates, a column of amounts, a countdown —
  * needs it, or the text jitters horizontally as digits swap.
  */
-export function AppText({ variant = 'body', muted, numeric, style, selectable = false, literal = false, children, ...props }: TextProps & { variant?: Variant; muted?: boolean; numeric?: boolean; literal?: boolean }) {
+export function AppText({ variant = 'body', muted, numeric, style, selectable = false, literal = false, children, ...props }: TextProps & { variant?: TextVariant; muted?: boolean; numeric?: boolean; literal?: boolean }) {
   const theme = useQashyTheme();
   const { isRtl, t } = useLocalization();
   const localizedChildren = literal
@@ -62,12 +45,12 @@ export function AppText({ variant = 'body', muted, numeric, style, selectable = 
     <Text
       {...props}
       selectable={selectable}
-      style={[
+      style={withAppFont([
         variants[variant],
         numeric ? { fontVariant: TABULAR } : null,
         { color: muted ? theme.textMuted : theme.text, writingDirection: isRtl ? 'rtl' : 'ltr', textAlign: isRtl ? 'right' : undefined },
         style,
-      ]}>
+      ])}>
       {localizedChildren}
     </Text>
   );

@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { useFonts } from 'expo-font';
 import { Pressable, Text, View, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useNavigationContainerRef, type ErrorBoundaryProps } from 'expo-router';
@@ -15,6 +16,7 @@ import { LocalizationProvider, useLocalization } from '@/localization/localizati
 import { QashyThemeProvider, useQashyTheme } from '@/theme/theme';
 import { QASHY_ACCENT } from '@/domain/defaults';
 import { darkTokens, lightTokens, readableTextColor } from '@/theme/tokens';
+import { FONT_ASSETS } from '@/theme/typography';
 
 // `index` redirects to onboarding or the tabs, so anchoring the root stack to it
 // gives every deep-linked route (a form sheet, /appearance, /csv, +not-found) a
@@ -139,17 +141,23 @@ function RootNavigator() {
           <Stack.Screen name="category" options={formSheetOptions(t('Category'), backTitle)} />
           <Stack.Screen name="recurring" options={formSheetOptions(t('Recurring transaction'), backTitle)} />
           <Stack.Screen name="exchange-rate" options={formSheetOptions(t('Exchange rate'), backTitle)} />
+          <Stack.Screen name="exchange-rates" options={{ headerShown: true, title: t('Exchange rates'), headerBackTitle: backTitle }} />
           <Stack.Screen name="appearance" options={{ headerShown: true, title: t('Appearance'), headerBackTitle: backTitle }} />
           <Stack.Screen name="csv" options={{ headerShown: true, title: t('Import & export'), headerBackTitle: backTitle }} />
           <Stack.Screen name="sync" options={{ headerShown: true, title: t('Sync'), headerBackTitle: backTitle }} />
-          {/* Full-screen pushes, not form sheets. Pairing puts a camera viewfinder and a
-              six-word code the user must read off two screens at once; a 0.72 detent that can
-              be swiped away mid-handshake is the wrong container for either. */}
-          <Stack.Screen name="sync-pair" options={{ headerShown: true, title: t('Add a device'), headerBackTitle: backTitle }} />
           <Stack.Screen name="sync-merge" options={{ headerShown: true, title: t('Review duplicates'), headerBackTitle: backTitle }} />
           <Stack.Screen name="sync-recovery" options={{ headerShown: true, title: t('Recovery phrase'), headerBackTitle: backTitle }} />
-          <Stack.Screen name="sync-transfer" options={{ headerShown: true, title: t('Backup & transfer'), headerBackTitle: backTitle }} />
         </Stack.Protected>
+        {/* Reachable before and after setup. Onboarding's "I already use Qashy" joins a vault
+            or restores a backup on a device that has nothing yet — both screens refuse to do
+            anything destructive on their own (joining is hidden on a paired device, restore
+            refuses over an existing vault), so the guard adds nothing but a dead end.
+
+            Full-screen pushes, not form sheets. Pairing puts a camera viewfinder and a
+            six-word code the user must read off two screens at once; a 0.72 detent that can
+            be swiped away mid-handshake is the wrong container for either. */}
+        <Stack.Screen name="sync-pair" options={{ headerShown: true, title: t(settings.onboardingComplete ? 'Add a device' : 'Join your other device'), headerBackTitle: backTitle }} />
+        <Stack.Screen name="sync-transfer" options={{ headerShown: true, title: t(settings.onboardingComplete ? 'Backup & transfer' : 'Restore a backup'), headerBackTitle: backTitle }} />
       </Stack>
       <PwaUpdatePrompt />
       <ReloadErrorBanner />
@@ -158,9 +166,20 @@ function RootNavigator() {
 }
 
 export default function RootLayout() {
-  // Runs on the first commit regardless of which branch FinanceProvider takes,
-  // so the splash never outlives the first renderable frame.
-  useEffect(hideSplashScreen, []);
+  // The fonts are local assets, so this resolves in a frame or two. Native waits
+  // behind the splash rather than flashing the system face; web renders at once
+  // (the static export must not be blank) and swaps via the CSS fallback stack.
+  // A load error falls through to the system font instead of hanging the splash.
+  const [fontsLoaded, fontError] = useFonts(FONT_ASSETS);
+  const ready = fontsLoaded || fontError != null || process.env.EXPO_OS === 'web';
+
+  // Runs on the first renderable commit regardless of which branch FinanceProvider
+  // takes, so the splash never outlives the first renderable frame.
+  useEffect(() => {
+    if (ready) hideSplashScreen();
+  }, [ready]);
+
+  if (!ready) return null;
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>

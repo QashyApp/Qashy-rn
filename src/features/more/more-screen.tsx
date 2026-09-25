@@ -10,6 +10,7 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { SettingsRow } from '@/components/ui/settings-row';
 import { useLocalization } from '@/localization/localization';
 import { summarizeSync } from '@/features/sync/sync-summary';
+import { useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useSyncState } from '@/providers/sync-provider';
 import { useScreenMetrics } from '@/theme/layout';
@@ -59,6 +60,7 @@ export function MoreScreen() {
   const sync = useSyncState();
   const now = useNow();
   const syncSummary = sync?.status ? summarizeSync(sync.status, { now }) : null;
+  const rateStatus = useExchangeRateStatus();
 
   const restore = async (entity: 'account' | 'category', id: string) => {
     if (restoringId) return;
@@ -131,11 +133,6 @@ export function MoreScreen() {
               }) : <View style={{ paddingVertical: space.md }}><AppText variant="caption" muted>Subscriptions and scheduled income will appear here.</AppText></View>}
             </Card>
 
-            <SectionHeader title="Exchange rates" action="Add rate" onAction={() => router.push('/exchange-rate')} />
-            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
-              {state.exchangeRates.length ? state.exchangeRates.map((rate) => <SettingsRow key={rate.id} literal title={`${rate.fromCurrency} → ${rate.toCurrency}`} subtitle={t(`Effective ${rate.effectiveDate}`)} value={rate.rate} icon="arrow.left.arrow.right" onPress={() => router.push({ pathname: '/exchange-rate', params: { id: rate.id } })} />) : <View style={{ paddingVertical: space.md }}><AppText variant="caption" muted>Add a manual rate when you create an account in another currency.</AppText></View>}
-            </Card>
-
             {archivedAccounts.length || archivedCategories.length ? (
               <>
                 <SectionHeader title="Archived" />
@@ -153,6 +150,12 @@ export function MoreScreen() {
                   `Relay unreachable` rather than a stale last-synced time whenever the drop-box
                   is the thing that broke. The row is not `literal`, so it translates itself. */}
               <SettingsRow title="Sync" subtitle={syncSummary?.subtitle ?? 'Checking…'} icon={syncSummary?.icon ?? 'arrow.triangle.2.circlepath'} onPress={() => router.push('/sync')} />
+              <SettingsRow
+                title="Exchange rates"
+                subtitle={rateStatus.enabled ? (rateStatus.fetching ? 'Fetching…' : 'Automatic') : 'Off · Manual rates only'}
+                icon="arrow.left.arrow.right"
+                onPress={() => router.push('/exchange-rates')}
+              />
               <SettingsRow title="Import & export" subtitle="CSV portability" icon="tray" onPress={() => router.push('/csv')} />
               <SettingsRow title="Reset all data" subtitle="Delete everything and return to first-time setup" icon="trash" tone="danger" value={resetting ? 'Resetting…' : undefined} disabled={resetting} onPress={resetAllData} />
               <SettingsRow title="Privacy" subtitle="Local-first · no account · no tracking" icon="checkmark" />

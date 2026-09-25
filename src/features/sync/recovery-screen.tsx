@@ -100,7 +100,7 @@ export function RecoveryScreen() {
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
-      <Card variant="hero" style={{ gap: space.md }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="title">Your recovery phrase</AppText>
         <AppText muted>
           Twenty-four words that encode this vault’s key. There is no account behind Qashy and no

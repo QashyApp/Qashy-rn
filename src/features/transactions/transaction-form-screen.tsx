@@ -1,5 +1,5 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { useFormSheet } from '@/components/navigation/use-form-sheet';
@@ -12,10 +12,11 @@ import { FormScreen } from '@/components/ui/form-screen';
 import { TextButton } from '@/components/ui/text-button';
 import type { TransactionKind } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
+import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
-import { todayLocal } from '@/utils/date';
+import { mediumDate, todayLocal, monthKey } from '@/utils/date';
 import { stashRecurringDraft } from '@/features/more/recurring-draft';
 import {
   validateDateInput,
@@ -29,6 +30,10 @@ import {
   normalizeDecimalString,
   parseMoney,
 } from '@/utils/money';
+import { appliedRateFor } from '@/utils/rates';
+
+/** How long the source/destination currencies must sit still before `ensureRatesFor` fires. */
+const RATE_LOOKUP_DEBOUNCE_MS = 400;
 
 export function TransactionFormScreen() {
   const { id, returnTo } = useLocalSearchParams<{ id?: string; returnTo?: string }>();
@@ -60,6 +65,14 @@ export function TransactionFormScreen() {
       : '',
   );
   const [busy, setBusy] = useState(false);
+  const exchangeRateService = useExchangeRateService();
+  const rateStatus = useExchangeRateStatus();
+  // Collapsed for a brand-new transaction; a saved one always carries a snapshotted rate (every
+  // needs-rate transaction stores one, override or resolved), so editing one starts expanded —
+  // the user is looking at a real historical value, not an empty control hiding a default.
+  const [rateOverrideOpen, setRateOverrideOpen] = useState(() => Boolean(existing?.exchangeRate?.trim()));
+  const [fetchingRate, setFetchingRate] = useState(false);
+  const [togglingRates, setTogglingRates] = useState(false);
   const account = state.accounts.find((item) => item.id === accountId) ?? defaultAccount;
   const destinationAccount = state.accounts.find((item) => item.id === destinationAccountId);
   const categories = useMemo(() => {
@@ -69,6 +82,12 @@ export function TransactionFormScreen() {
     return current && current.archived && current.kind === expectedKind ? [current, ...active] : active;
   }, [state.categories, kind, categoryId]);
   const needsRate = account && account.currency !== state.settings.baseCurrency;
+  // The rate that would apply to the source leg right now — same direct-or-inverse lookup the
+  // repository itself would resolve to at save time, computed here only to preview it.
+  const appliedRate = useMemo(
+    () => (needsRate && account ? appliedRateFor(state, account.currency, date) : null),
+    [needsRate, account, date, state],
+  );
   const destinationChoices = useMemo(() => {
     const active = state.accounts.filter((item) => !item.archived && item.id !== accountId);
     const current = state.accounts.find((item) => item.id === destinationAccountId);
@@ -103,6 +122,50 @@ export function TransactionFormScreen() {
   const destinationError = kind === 'transfer' && !destinationAccountId
     ? 'Choose a destination account.'
     : undefined;
+  // Debounced: an account or date settling triggers one `ensureRatesFor` for whatever this
+  // transaction's legs need, so a user still picking an account doesn't fire a request per
+  // keystroke. Entirely fire-and-forget — `save()` never awaits this, and a failure only ever
+  // shows up as "No rate for this date" below, never as a save error.
+  useEffect(() => {
+    if (!account || dateError) return;
+    const pairs: { currency: string; localDate: string }[] = [];
+    if (account.currency !== state.settings.baseCurrency) {
+      pairs.push({ currency: account.currency, localDate: date });
+    }
+    if (
+      kind === 'transfer' &&
+      destinationAccount &&
+      destinationAccount.currency !== state.settings.baseCurrency &&
+      destinationAccount.currency !== account.currency
+    ) {
+      pairs.push({ currency: destinationAccount.currency, localDate: date });
+    }
+    if (!pairs.length) return;
+    const timer = setTimeout(() => {
+      setFetchingRate(true);
+      exchangeRateService.ensureRatesFor(pairs)
+        .catch(() => undefined)
+        .finally(() => setFetchingRate(false));
+    }, RATE_LOOKUP_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [account, destinationAccount, date, dateError, kind, exchangeRateService, state.settings.baseCurrency]);
+  const turnOnRates = async () => {
+    if (togglingRates) return;
+    setTogglingRates(true);
+    try {
+      await exchangeRateService.setEnabled(true);
+      // Idempotent via occurrence keys: retries whatever rule generation skipped for lack of a
+      // rate, now that this may have just supplied one.
+      await repository.generateRecurring();
+      if (account) {
+        await exchangeRateService.ensureRatesFor([{ currency: account.currency, localDate: date }]).catch(() => undefined);
+      }
+    } catch (reason) {
+      showError('Couldn’t turn on automatic rates', errorMessage(reason, 'Try again.'));
+    } finally {
+      setTogglingRates(false);
+    }
+  };
   const canSave = Boolean(account)
     && !amountError
     && !dateError
@@ -148,7 +211,9 @@ export function TransactionFormScreen() {
         status: existing?.status ?? 'posted',
       }, existing?.id, expectedRevision);
       hapticSuccess();
-      closeToOwner();
+      // Land on the month the transaction was filed under, so a back-dated
+      // entry is visible the moment the sheet closes instead of "missing".
+      closeToOwner(ownerRoute === '/transactions' ? { month: monthKey(date) } : undefined);
     } catch (reason) {
       showError('Couldn’t save transaction', errorMessage(reason, 'Check the form and try again.'));
     } finally {
@@ -178,7 +243,7 @@ export function TransactionFormScreen() {
     <FormScreen>
       <View accessibilityLabel={t('Transaction kind')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
         {(['expense', 'income', 'transfer'] as TransactionKind[]).map((item) => (
-          <View key={item} style={{ flex: 1 }}><ChoiceChip label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} onPress={() => {
+          <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "income" ? "arrow.down" : item === "expense" ? "arrow.up" : "arrow.left.arrow.right"} label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} onPress={() => {
             if (item === kind) return;
             setKind(item);
             setCategoryId('');
@@ -205,10 +270,11 @@ export function TransactionFormScreen() {
       <Card style={{ gap: 14 }}>
         <AppText variant="label">From account</AppText>
         <View accessibilityLabel={t('From account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {accountChoices.map((item) => <ChoiceChip key={item.id} literal label={`${item.name} · ${item.currency}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={accountId === item.id} onPress={() => {
+          {accountChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name} · ${item.currency}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={accountId === item.id} onPress={() => {
             if (item.id === accountId) return;
             setAccountId(item.id);
             setExchangeRate('');
+            setRateOverrideOpen(false);
             setDestinationAmount('');
             if (destinationAccountId === item.id) setDestinationAccountId('');
           }} />)}
@@ -218,7 +284,7 @@ export function TransactionFormScreen() {
             <AppText variant="label">To account</AppText>
             {destinationChoices.length ? (
               <View accessibilityLabel={t('To account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                {destinationChoices.map((item) => <ChoiceChip key={item.id} literal label={`${item.name} · ${item.currency}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={destinationAccountId === item.id} onPress={() => {
+                {destinationChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name} · ${item.currency}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={destinationAccountId === item.id} onPress={() => {
                   if (item.id === destinationAccountId) return;
                   setDestinationAccountId(item.id);
                   setDestinationAmount('');
@@ -242,9 +308,9 @@ export function TransactionFormScreen() {
                 value={destinationAmount}
                 onChangeText={setDestinationAmount}
                 keyboardType="decimal-pad"
-                placeholder="Calculated from saved rates"
+                placeholder="Calculated automatically"
                 error={destinationAmountError}
-                hint="Leave blank to calculate through your effective exchange rates."
+                hint="Leave blank to calculate through your automatic or manual exchange rates."
               />
             ) : sameCurrencyTransfer ? (
               <AppText variant="caption" muted>The destination receives the same amount; same-currency transfers always conserve value.</AppText>
@@ -254,8 +320,8 @@ export function TransactionFormScreen() {
           <>
             <AppText variant="label">Category</AppText>
             <View accessibilityLabel={t('Category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-              <ChoiceChip label="Uncategorized" selected={!categoryId} onPress={() => setCategoryId('')} />
-              {categories.map((item) => <ChoiceChip key={item.id} literal label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={categoryId === item.id} onPress={() => setCategoryId(item.id)} />)}
+              <ChoiceChip icon="questionmark.circle" label="Uncategorized" selected={!categoryId} onPress={() => setCategoryId('')} />
+              {categories.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={categoryId === item.id} onPress={() => setCategoryId(item.id)} />)}
             </View>
           </>
         )}
@@ -270,8 +336,45 @@ export function TransactionFormScreen() {
         </Card>
       ) : null}
 
-      {needsRate ? (
-        <Card><FormField label={`1 ${account.currency} equals how many ${state.settings.baseCurrency}?`} value={exchangeRate} onChangeText={setExchangeRate} keyboardType="decimal-pad" placeholder="Use saved effective rate" error={exchangeRateError} hint="Leave blank to use the saved rate for this date. The applied rate is snapshotted." /></Card>
+      {needsRate && account ? (
+        <Card style={{ gap: 12 }}>
+          {appliedRate ? (
+            <AppText literal variant="caption" muted>
+              {`1 ${account.currency} = ${localizeDecimalString(appliedRate.rate, state.settings.locale)} ${state.settings.baseCurrency} · ${mediumDate(appliedRate.effectiveDate, state.settings.locale)} · ${appliedRate.automatic ? t('Automatic') : t('Manual')}`}
+            </AppText>
+          ) : fetchingRate ? (
+            <AppText variant="caption" muted>Fetching rate…</AppText>
+          ) : (
+            <View style={{ gap: 6 }}>
+              <AppText variant="caption" muted>No rate for this date.</AppText>
+              {!rateStatus.enabled ? (
+                <TextButton
+                  title={togglingRates ? 'Turning on…' : 'Turn on automatic rates'}
+                  disabled={togglingRates}
+                  onPress={turnOnRates}
+                  style={{ alignSelf: 'flex-start' }}
+                />
+              ) : null}
+            </View>
+          )}
+          <TextButton
+            title={rateOverrideOpen ? 'Hide rate override' : 'Use a different rate'}
+            tone="muted"
+            onPress={() => setRateOverrideOpen((open) => !open)}
+            style={{ alignSelf: 'flex-start' }}
+          />
+          {rateOverrideOpen ? (
+            <FormField
+              label={`1 ${account.currency} equals how many ${state.settings.baseCurrency}?`}
+              value={exchangeRate}
+              onChangeText={setExchangeRate}
+              keyboardType="decimal-pad"
+              placeholder="Use the applied rate above"
+              error={exchangeRateError}
+              hint="Leave blank to use the applied rate above. The applied rate is snapshotted."
+            />
+          ) : null}
+        </Card>
       ) : null}
 
       <Card style={{ gap: 14 }}>

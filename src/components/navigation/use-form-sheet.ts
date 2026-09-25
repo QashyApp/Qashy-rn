@@ -38,11 +38,14 @@ export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; v
   // the user already confirmed — so the guard does not prompt about its own exit.
   const leaving = useRef(false);
 
-  const closeToOwner = useCallback(() => {
+  // `params` carries view state for the owner, never finance data — for example
+  // the month the transaction list should open on after a save.
+  const closeToOwner = useCallback((params?: Record<string, string>) => {
     leaving.current = true;
-    router.dismissTo(ownerRoute);
+    const href = params ? { pathname: ownerRoute, params } : ownerRoute;
+    router.dismissTo(href);
     if (process.env.EXPO_OS === 'web' && typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => router.replace(ownerRoute));
+      window.requestAnimationFrame(() => router.replace(href));
     }
   }, [ownerRoute]);
 

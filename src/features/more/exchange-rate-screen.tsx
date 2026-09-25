@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams } from 'expo-router';
+import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 
 import { useFormSheet } from '@/components/navigation/use-form-sheet';
@@ -21,21 +21,34 @@ import {
 } from '@/utils/money';
 
 export function ExchangeRateScreen() {
-  const { id } = useLocalSearchParams<{ id?: string }>();
+  const { id, currency, returnTo } = useLocalSearchParams<{ id?: string; currency?: string; returnTo?: string }>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const existing = id ? state.exchangeRates.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
-  const [fromCurrency, setFromCurrency] = useState(existing?.fromCurrency ?? 'EUR');
+  // `currency` arrives from the "Needs a manual rate" list on the Exchange rates screen
+  // (an unsupported currency or a conflict) — a convenience prefill, not a lookup key.
+  const [fromCurrency, setFromCurrency] = useState(existing?.fromCurrency ?? currency?.toUpperCase() ?? 'EUR');
   const [rate, setRate] = useState(() => existing?.rate
     ? localizeDecimalString(existing.rate, state.settings.locale)
     : '1');
   const [effectiveDate, setEffectiveDate] = useState(existing?.effectiveDate ?? todayLocal());
   const [saving, setSaving] = useState(false);
-  const { closeToOwner } = useFormSheet({
+  const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute: '/more',
     values: { fromCurrency, rate, effectiveDate },
   });
+  // Reached from the Exchange rates screen's own lists, not only from More directly. Going
+  // back there instead of all the way to More keeps the list (and whatever else still needs a
+  // manual rate) in view after a save or delete.
+  const finish = () => {
+    if (returnTo === '/exchange-rates' && router.canGoBack()) {
+      allowLeave();
+      router.back();
+      return;
+    }
+    closeToOwner();
+  };
   const currencyError = validateCurrencyCode(fromCurrency)
     ?? (fromCurrency.toUpperCase() === state.settings.baseCurrency
       ? `Choose a currency other than ${state.settings.baseCurrency}.`
@@ -54,7 +67,7 @@ export function ExchangeRateScreen() {
         effectiveDate,
       }, existing?.id, expectedRevision);
       hapticSuccess();
-      closeToOwner();
+      finish();
     } catch (reason) {
       showError('Couldn’t save rate', errorMessage(reason, 'Check the form and try again.'));
     } finally {
@@ -67,14 +80,14 @@ export function ExchangeRateScreen() {
     setSaving(true);
     try {
       await repository.deleteEntities('exchangeRates', [existing.id]);
-      closeToOwner();
+      finish();
     } catch (reason) {
       showError('Couldn’t delete rate', errorMessage(reason, 'Try again.'));
     } finally {
       setSaving(false);
     }
   };
-  if (id && !existing) return <Redirect href="/more" />;
+  if (id && !existing) return <Redirect href={returnTo === '/exchange-rates' ? '/exchange-rates' : '/more'} />;
 
   return (
     <FormScreen maxWidth={620} contentContainerStyle={{ gap: 16 }}>

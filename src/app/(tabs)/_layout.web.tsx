@@ -170,7 +170,7 @@ function NavigationItem({
           minWidth: mobile ? 64 : compact ? RAIL_ITEM_SIZE : undefined,
           flex: mobile ? 1 : undefined,
           paddingHorizontal: mobile ? (narrow ? 2 : 4) : compact ? 12 : 16,
-          borderRadius: 16,
+          borderRadius: radius.nav,
           borderCurve: 'continuous',
           backgroundColor: 'transparent',
           position: 'relative',
@@ -185,7 +185,7 @@ function NavigationItem({
               right: 0,
               bottom: 0,
               left: 0,
-              borderRadius: 16,
+              borderRadius: radius.nav,
               borderCurve: 'continuous',
               backgroundColor: theme.surfaceMuted,
             },
@@ -205,13 +205,13 @@ function NavigationItem({
               // `flex-start` was pinning it to the top of a 48pt target — the
               // rail's selected pill sat visibly low around its own icon.
               justifyContent: mobile || compact ? 'center' : 'flex-start',
-              gap: mobile ? 3 : 10,
+              gap: mobile ? space.xxs : space.sm,
             },
             contentStyle,
           ]}>
           <AppIcon name={active ? activeIconName(item.icon) : item.icon} color={foreground as string} size={mobile ? 22 : 20} />
           {mobile || !compact ? (
-            <AppText selectable={false} variant="label" numberOfLines={1} style={{ color: foreground, fontSize: mobile ? (narrow ? 10 : 11) : 15, letterSpacing: mobile && narrow ? -0.2 : undefined }}>
+            <AppText selectable={false} variant="label" numberOfLines={1} style={{ color: foreground, fontSize: mobile ? (narrow ? 10 : 11) : undefined, letterSpacing: mobile && narrow ? -0.2 : undefined }}>
               {item.label}
             </AppText>
           ) : null}
@@ -324,7 +324,7 @@ function NavigationBar({
         flexDirection: mobile ? 'row' : 'column',
         alignItems: mobile ? 'center' : 'stretch',
         flex: mobile ? 1 : undefined,
-        gap: mobile ? 0 : 8,
+        gap: mobile ? 0 : space.sm,
         zIndex: mobile ? undefined : 10,
       }}>
       <Animated.View
@@ -334,7 +334,7 @@ function NavigationBar({
             position: 'absolute',
             top: 0,
             left: 0,
-            borderRadius: 16,
+            borderRadius: radius.nav,
             borderCurve: 'continuous',
             backgroundColor: theme.accentContainer,
           },
@@ -404,7 +404,7 @@ export default function WebTabsLayout() {
         {!mobile ? <NavigationBar mobile={false} compact={compact} narrow={narrow} pathname={pathname} /> : null}
         {!compact ? (
           <View style={{ marginTop: 'auto', gap: space.xs }}>
-            <AppText variant="eyebrow" muted>LOCAL-FIRST FINANCE</AppText>
+            <AppText variant="overline" muted>{t('Local-first finance')}</AppText>
             {/* Not "stays on this device" any more: with sync on, it also reaches the user's
                 other devices. What survived the change is the claim that actually matters —
                 nobody else, including any relay in the middle, can read it. */}

@@ -1,4 +1,4 @@
-import { csvCategoryForRow, escapeCsv, parseCsvTable, parseCsvText } from '@/utils/csv';
+import { csvCategoryForRow, escapeCsv, extractCsvRatePairs, parseCsvTable, parseCsvText } from '@/utils/csv';
 
 describe('CSV utilities', () => {
   it('parses quoted fields and aliases common headers', () => {
@@ -85,5 +85,54 @@ describe('CSV utilities', () => {
       const table = parseCsvTable(`title\n${escapeCsv(value)}`);
       expect(table.rows[0].title).toBe(value);
     }
+  });
+});
+
+describe('extractCsvRatePairs', () => {
+  const row = (overrides: Partial<{ date: string; currency: string; exchangeRate: string }> = {}) => ({
+    date: '2026-09-20',
+    currency: 'USD',
+    exchangeRate: '',
+    ...overrides,
+  });
+
+  it('collects a pair for a foreign-currency row with no explicit rate', () => {
+    expect(extractCsvRatePairs([row()], 'EUR')).toEqual([{ currency: 'USD', localDate: '2026-09-20' }]);
+  });
+
+  it('skips rows that already carry an exchange rate', () => {
+    expect(extractCsvRatePairs([row({ exchangeRate: '0.87' })], 'EUR')).toEqual([]);
+  });
+
+  it('skips rows already in the base currency', () => {
+    expect(extractCsvRatePairs([row({ currency: 'EUR' })], 'EUR')).toEqual([]);
+  });
+
+  it('skips rows whose date is not a real calendar date', () => {
+    expect(extractCsvRatePairs([row({ date: '2026-02-30' })], 'EUR')).toEqual([]);
+    expect(extractCsvRatePairs([row({ date: 'not-a-date' })], 'EUR')).toEqual([]);
+  });
+
+  it('deduplicates identical currency/date pairs', () => {
+    expect(extractCsvRatePairs([row(), row(), row({ currency: 'usd' })], 'EUR')).toEqual([
+      { currency: 'USD', localDate: '2026-09-20' },
+    ]);
+  });
+
+  it('normalizes currency codes to upper case and trims whitespace', () => {
+    expect(extractCsvRatePairs([row({ currency: ' gbp ' })], 'EUR')).toEqual([
+      { currency: 'GBP', localDate: '2026-09-20' },
+    ]);
+  });
+
+  it('keeps distinct pairs for different currencies or dates', () => {
+    expect(extractCsvRatePairs(
+      [row(), row({ currency: 'GBP' }), row({ date: '2026-09-21' })],
+      'EUR',
+    )).toEqual([
+      { currency: 'USD', localDate: '2026-09-20' },
+      { currency: 'GBP', localDate: '2026-09-20' },
+      { currency: 'USD', localDate: '2026-09-21' },
+    ]);
   });
 });

@@ -30,6 +30,8 @@ import type {
   BudgetInput,
   CategoryInput,
   ContributionInput,
+  FetchedRateConflict,
+  FetchedRateResult,
   FinanceRepository,
   GoalInput,
   GoalContributionInput,
@@ -63,7 +65,7 @@ import {
   parseLocalDate,
   todayLocal,
 } from '@/utils/date';
-import { budgetPeriodId, occurrenceTransactionId } from '@/utils/deterministic-id';
+import { budgetPeriodId, fetchedRateId, occurrenceTransactionId } from '@/utils/deterministic-id';
 import { createEntity, makeId, nowIso, updateEntity } from '@/utils/entity';
 import { disambiguateNames, normalizeName } from '@/utils/naming';
 import { escapeCsv } from '@/utils/csv';
@@ -834,7 +836,16 @@ export class LocalFinanceRepository implements FinanceRepository {
       item.id !== id && item.fromCurrency === fromCurrency && item.toCurrency === toCurrency &&
       item.effectiveDate === input.effectiveDate,
     );
-    if (duplicate) throw new Error('A rate already exists for this currency pair and date.');
+    if (duplicate) {
+      // A manual save landing on the exact key of a live automatic rate gets a more specific
+      // message than "a rate already exists" — the manual form is now reached only for
+      // currencies Frankfurter does not cover or for resolving a conflict, so the user is
+      // looking at a key they did not expect to be occupied.
+      if (!duplicate.deletedAt && duplicate.id === fetchedRateId(fromCurrency, toCurrency, input.effectiveDate)) {
+        throw new Error('An automatic rate already exists for this date.');
+      }
+      throw new Error('A rate already exists for this currency pair and date.');
+    }
     this.assertReciprocalRate(fromCurrency, toCurrency, rate, input.effectiveDate, id);
     const existing = this.findExisting(this.state.exchangeRates, id, 'exchange rate');
     this.assertExpectedRevision(existing, input, expectedRevision);
@@ -856,6 +867,103 @@ export class LocalFinanceRepository implements FinanceRepository {
     this.replaceInList('exchangeRates', exchangeRate);
     this.emit();
     return exchangeRate;
+  }
+
+  saveFetchedRates(rates: readonly RateInput[]) {
+    return this.enqueueMutation(() => this.saveFetchedRatesNow(rates));
+  }
+
+  private async saveFetchedRatesNow(rates: readonly RateInput[]): Promise<FetchedRateResult> {
+    // Validate every input before touching any state — a caller bug (a bad currency code, a
+    // malformed date, a rate that is not a positive number, or a pair converting into
+    // something other than the base currency) fails the whole call rather than silently
+    // dropping the row later where it would look like a conflict.
+    const normalized = rates.map((input) => {
+      const fromCurrency = this.normalizeCurrency(input.fromCurrency);
+      const toCurrency = this.normalizeCurrency(input.toCurrency);
+      if (fromCurrency === toCurrency) throw new Error('Exchange-rate currencies must be different.');
+      if (toCurrency !== this.state.settings.baseCurrency) {
+        throw new Error('A fetched rate must convert into the base currency.');
+      }
+      this.assertDate(input.effectiveDate);
+      return { fromCurrency, toCurrency, effectiveDate: input.effectiveDate, rate: this.normalizeRate(input.rate) };
+    });
+
+    // `this.state.exchangeRates` drops tombstones (see `hydrateFromStorage`), so a row this
+    // device deleted is simply absent from it — indistinguishable from a row that never
+    // existed. Reading storage directly is what lets "never resurrect a deleted fetched rate"
+    // tell those two apart.
+    const stored = (await this.storage.readAll('exchangeRates')) as ExchangeRate[];
+    const storedById = new Map(stored.map((item) => [item.id, item]));
+
+    // Builds up the working set as rows are accepted, so two rows in the same batch — and the
+    // reciprocal check for a later row — see rows this batch already decided to write, not just
+    // what was on disk when the call started. Tombstone-free throughout, like `this.state`.
+    let exchangeRates = this.state.exchangeRates;
+    const written: ExchangeRate[] = [];
+    const conflicts: FetchedRateConflict[] = [];
+    let skippedManual = 0;
+
+    for (const input of normalized) {
+      const id = fetchedRateId(input.fromCurrency, input.toCurrency, input.effectiveDate);
+      const liveSameKey = exchangeRates.find((item) =>
+        item.id !== id &&
+        item.fromCurrency === input.fromCurrency &&
+        item.toCurrency === input.toCurrency &&
+        item.effectiveDate === input.effectiveDate,
+      );
+      if (liveSameKey) {
+        // A manual row already holds this exact key. Writing our id alongside it would leave
+        // two live rows for the same (from, to, date), which the repair pass would then have
+        // to notice and tombstone — and it would pick one every time this refetches, forever.
+        // The manual row wins instead.
+        skippedManual += 1;
+        continue;
+      }
+      const existingById = storedById.get(id);
+      if (existingById?.deletedAt) {
+        // The user deleted this fetched rate. Resurrecting it fights both the repair pass and
+        // the user's own action.
+        continue;
+      }
+      if (existingById && this.normalizeRate(existingById.rate) === input.rate) {
+        // No-op: an unattended "latest" re-fetch that did not move. Skip so it does not bump a
+        // revision or emit a sync op for a value that did not change.
+        continue;
+      }
+      const reciprocal = this.findReciprocalConflict(
+        input.fromCurrency,
+        input.toCurrency,
+        input.rate,
+        input.effectiveDate,
+        existingById?.id,
+        exchangeRates,
+      );
+      if (reciprocal) {
+        // Reported, not thrown: one stale manual row on the opposite side must not block every
+        // other currency this batch would otherwise have written.
+        conflicts.push({
+          fromCurrency: input.fromCurrency,
+          toCurrency: input.toCurrency,
+          effectiveDate: input.effectiveDate,
+          existingRate: reciprocal.rate,
+        });
+        continue;
+      }
+      const entity = existingById
+        ? updateEntity(existingById, { rate: input.rate })
+        : createEntity({ id, ...input }) as ExchangeRate;
+      exchangeRates = this.withEntity(exchangeRates, entity);
+      written.push(entity);
+    }
+
+    if (!written.length) return { written: 0, skippedManual, conflicts };
+
+    this.assertTransactionSetSafe(this.state.transactions, this.state.accounts, exchangeRates);
+    await this.persist('exchangeRates', written);
+    this.state = { ...this.state, exchangeRates };
+    this.emit();
+    return { written: written.length, skippedManual, conflicts };
   }
 
   queryTransactions(query: TransactionQuery = {}, snapshot = this.state.transactions) {
@@ -1943,8 +2051,30 @@ export class LocalFinanceRepository implements FinanceRepository {
   // so the two legs no longer describe the same amount and the difference is
   // conjured into (or out of) the base-currency totals. Reject the contradiction
   // at entry rather than letting it silently corrupt every later conversion.
+  //
+  // Split into a non-throwing checker and this throwing wrapper because
+  // `saveFetchedRatesNow` needs the same drift logic but cannot let one stale manual
+  // row on the opposite side throw an entire batch away — it reports the row as a
+  // conflict and keeps going instead.
   private assertReciprocalRate(fromCurrency: string, toCurrency: string, rate: string, effectiveDate: string, id?: string) {
-    const rates = this.active(this.state.exchangeRates).filter((item) => item.id !== id);
+    const reciprocal = this.findReciprocalConflict(fromCurrency, toCurrency, rate, effectiveDate, id);
+    if (!reciprocal) return;
+    const implied = new Decimal(1).div(this.normalizeRate(reciprocal.rate));
+    throw new Error(
+      `This contradicts the existing ${toCurrency} → ${fromCurrency} rate of ${reciprocal.rate}, which implies ${implied.toSignificantDigits(8)}. Update or remove that rate first.`,
+    );
+  }
+
+  /** The reciprocal row that `rate` contradicts beyond tolerance, or `undefined` if none does. */
+  private findReciprocalConflict(
+    fromCurrency: string,
+    toCurrency: string,
+    rate: string,
+    effectiveDate: string,
+    id?: string,
+    exchangeRates = this.state.exchangeRates,
+  ): ExchangeRate | undefined {
+    const rates = this.active(exchangeRates).filter((item) => item.id !== id);
     const nextDirectDate = rates
       .filter((item) =>
         item.fromCurrency === fromCurrency &&
@@ -1971,10 +2101,9 @@ export class LocalFinanceRepository implements FinanceRepository {
       // tolerance instead of demanding an exact reciprocal.
       const drift = entered.minus(implied).abs().div(implied);
       if (drift.lessThanOrEqualTo(RECIPROCAL_RATE_TOLERANCE)) continue;
-      throw new Error(
-        `This contradicts the existing ${toCurrency} → ${fromCurrency} rate of ${reciprocal.rate}, which implies ${implied.toSignificantDigits(8)}. Update or remove that rate first.`,
-      );
+      return reciprocal;
     }
+    return undefined;
   }
 
   private directOrInverseRate(

@@ -4,8 +4,9 @@ import type { AppSettings, Category, FinanceState } from '@/domain/models';
 import { createEntity, makeId } from '@/utils/entity';
 import { validateLocale } from '@/utils/form-validation';
 import { isSupportedCurrencyCode } from '@/utils/money';
+import { QASHY_INDIGO } from '@/theme/tokens';
 
-export const QASHY_ACCENT = '#5966E9';
+export const QASHY_ACCENT: string = QASHY_INDIGO;
 
 export function initialLocalePreferences(
   saved?: Pick<AppSettings, 'locale' | 'baseCurrency'>,
@@ -61,6 +62,17 @@ const HEBREW_CATEGORY_NAMES: Record<(typeof CATEGORY_SEEDS)[number][0], string> 
 
 export function defaultAccountName(locale: string) {
   return locale.toLocaleLowerCase().startsWith('he') ? 'יומיומי' : 'Everyday';
+}
+
+/** The starter categories as they will be named, for showing before they exist. */
+export function defaultCategoryPreview(locale = 'en-US') {
+  const hebrew = locale.toLocaleLowerCase().startsWith('he');
+  return CATEGORY_SEEDS.map(([name, icon, color, kind]) => ({
+    name: hebrew ? HEBREW_CATEGORY_NAMES[name] : name,
+    icon,
+    color,
+    kind,
+  }));
 }
 
 export function createDefaultCategories(locale = 'en-US'): Category[] {

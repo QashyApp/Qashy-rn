@@ -52,6 +52,11 @@ const TRAVEL = 8;
 // and the worklet path and can be shared by every animation in the app.
 const EASE_STANDARD = Easing.bezier(0.2, 0, 0, 1);
 const EASE_EXIT = Easing.bezier(0.4, 0, 1, 1);
+// A symmetric curve for things that go out and come back (a pulse, a toggle).
+const EASE_IN_OUT = Easing.bezier(0.4, 0, 0.2, 1);
+
+/** The shared curves, for `withTiming` calls outside this file. */
+export const motionCurves = { standard: EASE_STANDARD, exit: EASE_EXIT, inOut: EASE_IN_OUT } as const;
 
 const springConfig = {
   damping: 20,
@@ -78,7 +83,7 @@ const REST_STATE: ExtendedPressableState = { pressed: false, hovered: false };
 const PRESSED_STATE: ExtendedPressableState = { pressed: true, hovered: false };
 const HOVERED_STATE: ExtendedPressableState = { pressed: false, hovered: true };
 
-type MotionVariant = 'fade' | 'up' | 'down' | 'left' | 'right' | 'zoom';
+export type MotionVariant = 'fade' | 'up' | 'down' | 'left' | 'right' | 'zoom';
 // Moved onto the animated wrapper: box-model and flex participation belong to
 // the outer element, otherwise the wrapper collapses to content size and a
 // `flex: 1` pressable has nothing to fill.

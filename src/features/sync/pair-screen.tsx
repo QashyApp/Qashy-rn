@@ -38,7 +38,7 @@
  * abandon the vault it was already part of, taking its peers with it.
  */
 
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 
@@ -54,6 +54,7 @@ import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { StatusPill } from '@/components/ui/status-pill';
 import { TextButton } from '@/components/ui/text-button';
 import { useLocalization } from '@/localization/localization';
+import { useFinanceState } from '@/providers/finance-provider';
 import { useSync } from '@/providers/sync-provider';
 import {
   createDeviceIdentity,
@@ -114,12 +115,16 @@ interface Session {
 }
 
 export function PairScreen() {
-  const { status, setup, refresh } = useSync();
+  const { status, setup, refresh, reconcile } = useSync();
+  const { settings } = useFinanceState();
   const theme = useQashyTheme();
+  // Reached from onboarding's "I already use Qashy". This device has nothing yet, so it can
+  // only join: hosting would mint a vault around an empty ledger.
+  const firstRun = useLocalSearchParams<{ onboarding?: string }>().onboarding === '1';
 
   const [stage, setStage] = useState<Stage>('role');
   const [direction, setDirection] = useState<'forward' | 'back'>('forward');
-  const [role, setRole] = useState<Role>('host');
+  const [role, setRole] = useState<Role>(firstRun ? 'join' : 'host');
   const [deviceName, setDeviceName] = useState(defaultDeviceName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -146,6 +151,13 @@ export function PairScreen() {
   // Unmount is a cancellation like any other: a socket left open on a rendezvous the user
   // navigated away from would keep a pairing window alive with nobody watching the words.
   useEffect(() => closeSession, []);
+
+  // First run ends when the vault's own settings arrive: they carry `onboardingComplete`, which
+  // is what opens the rest of the app. Until then the done step says it is still receiving.
+  const received = firstRun && stage === 'done' && settings.onboardingComplete;
+  useEffect(() => {
+    if (received) router.replace('/overview');
+  }, [received]);
 
   // Only while a code is on screen, and only to redraw the countdown. The pairing code is the
   // one thing in the sync stack with a wall-clock deadline the user has to act inside.
@@ -351,6 +363,10 @@ export function PairScreen() {
       session.current = null;
       accept.current = null;
       move('done');
+      // Pull the vault now rather than on the next scheduled pass, so a first-run device is not
+      // left on "receiving" for a timer's length. A failure here is advisory; the provider
+      // retries and reports it on its own.
+      if (firstRun) void reconcile().catch(() => undefined);
     } catch (reason) {
       setError(errorMessage(reason, 'Pairing could not be completed.'));
     } finally {
@@ -430,6 +446,7 @@ export function PairScreen() {
               onRole={setRole}
               canJoin={!status.deviceId}
               canHost={Boolean(status.endpoints.relayUrl)}
+              joinOnly={firstRun}
               deviceName={deviceName}
               onDeviceName={setDeviceName}
               busy={busy}
@@ -464,7 +481,7 @@ export function PairScreen() {
             <ConfirmStep sas={sas} busy={busy} onMatch={() => void confirmMatch()} onReject={rejectMatch} />
           ) : null}
 
-          {stage === 'done' ? <DoneStep outcome={outcome} /> : null}
+          {stage === 'done' ? <DoneStep outcome={outcome} firstRun={firstRun} /> : null}
         </MotionView>
       )}
     </ScrollView>
@@ -517,11 +534,13 @@ function RoleStep({
   onDeviceName,
   busy,
   onContinue,
+  joinOnly = false,
 }: {
   readonly role: Role;
   readonly onRole: (role: Role) => void;
   readonly canJoin: boolean;
   readonly canHost: boolean;
+  readonly joinOnly?: boolean;
   readonly deviceName: string;
   readonly onDeviceName: (name: string) => void;
   readonly busy: boolean;
@@ -532,13 +551,14 @@ function RoleStep({
 
   return (
     <>
-      <AppText variant="title">Add a device</AppText>
+      <AppText variant="title">{joinOnly ? 'Join your other device' : 'Add a device'}</AppText>
       <AppText muted>
-        Both devices end up holding the same key, and only those two can read anything. Start on
-        whichever one has the data you want to keep.
+        {joinOnly
+          ? 'On the device that already has your data, open More → Sync → Add device. It will show a code for this one to scan.'
+          : 'Both devices end up holding the same key, and only those two can read anything. Start on whichever one has the data you want to keep.'}
       </AppText>
 
-      <View style={{ gap: space.sm }}>
+      <View style={{ gap: space.sm, display: joinOnly ? 'none' : 'flex' }}>
         <RoleOption
           icon="iphone"
           title="This device has my data"
@@ -778,8 +798,27 @@ function ConfirmStep({
   );
 }
 
-function DoneStep({ outcome }: { readonly outcome: { headline: string; body: string } | null }) {
+function DoneStep({
+  outcome,
+  firstRun = false,
+}: {
+  readonly outcome: { headline: string; body: string } | null;
+  readonly firstRun?: boolean;
+}) {
   const theme = useQashyTheme();
+  if (firstRun) {
+    return (
+      <View accessibilityLiveRegion="polite" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>
+        <View style={{ width: 56, height: 56, borderRadius: radius.card, borderCurve: 'continuous', backgroundColor: theme.accentContainer, alignItems: 'center', justifyContent: 'center' }}>
+          <AppIcon name="arrow.triangle.2.circlepath" color={theme.onAccentContainer} size={24} />
+        </View>
+        <AppText variant="title" style={{ textAlign: 'center' }}>Receiving your data…</AppText>
+        <AppText muted style={{ textAlign: 'center', maxWidth: 420 }}>
+          This device joined your vault. Keep the other device open nearby — Qashy opens as soon as your accounts arrive.
+        </AppText>
+      </View>
+    );
+  }
   return (
     <>
       <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.lg }}>

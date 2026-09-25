@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "backgroundColor": "#F6F7F9",
+    "backgroundColor": "#F1F2F5",
     "scheme": "qashy",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -30,7 +30,7 @@
       "name": "Qashy — Calm Budgeting",
       "shortName": "Qashy",
       "themeColor": "#5966E9",
-      "backgroundColor": "#F6F7F9"
+      "backgroundColor": "#F1F2F5"
     },
     "plugins": [
       "expo-router",

@@ -163,9 +163,9 @@ export function DeviceCard({
       <Card style={{ gap: space.md }}>
         <AppText variant="label">Who can remove a device</AppText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-          <ChoiceChip label="Any device" selected={status.revocation.mode === 'any'} disabled={!isOwner} onPress={() => void changePolicy('any')} />
-          <ChoiceChip label="Majority vote" selected={status.revocation.mode === 'quorum'} disabled={!isOwner} onPress={() => void changePolicy('quorum')} />
-          <ChoiceChip label="Vault owner" selected={status.revocation.mode === 'owner'} disabled={!isOwner} onPress={() => void changePolicy('owner')} />
+          <ChoiceChip icon="iphone" label="Any device" selected={status.revocation.mode === 'any'} disabled={!isOwner} onPress={() => void changePolicy('any')} />
+          <ChoiceChip icon="person.2" label="Majority vote" selected={status.revocation.mode === 'quorum'} disabled={!isOwner} onPress={() => void changePolicy('quorum')} />
+          <ChoiceChip icon="key" label="Vault owner" selected={status.revocation.mode === 'owner'} disabled={!isOwner} onPress={() => void changePolicy('owner')} />
         </View>
         <AppText variant="caption" muted>
           {status.revocation.mode === 'any'

@@ -28,7 +28,7 @@
 
 import * as DocumentPicker from 'expo-document-picker';
 import { File as ExpoFile, Paths } from 'expo-file-system';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import * as Sharing from 'expo-sharing';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -99,6 +99,7 @@ interface PickedBackup {
 
 export function TransferScreen() {
   const { status, refresh, setup, runtime } = useSync();
+  const onboardingParam = useLocalSearchParams<{ onboarding?: string }>().onboarding;
   const repository = useFinanceRepository();
   // `t` is only for strings that leave React — the native share sheet's title. Everything
   // rendered through AppText, StatusPill, or the confirm helpers is translated by those.
@@ -139,6 +140,9 @@ export function TransferScreen() {
   }
 
   const paired = Boolean(status.deviceId);
+  // Reached from onboarding's "I already use Qashy": nothing exists here yet, so only the
+  // restore half of this screen applies.
+  const firstRun = onboardingParam === '1';
   const readable = status.keystore === 'unlocked';
   const passphraseReady =
     passphrase.length >= MIN_PASSPHRASE_LENGTH && passphrase === repeated;
@@ -259,7 +263,8 @@ export function TransferScreen() {
           'Backup restored',
           'Your data is back on this device. Your other devices already know it, so sync continues from where the backup left off.',
         );
-        router.replace('/sync');
+        // From onboarding the restored settings have just completed setup, so go straight in.
+        router.replace(firstRun ? '/overview' : '/sync');
       },
       'Couldn’t restore that backup',
     );
@@ -310,12 +315,12 @@ export function TransferScreen() {
 
   return (
     <FormScreen maxWidth={720} contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>
-      <Card variant="hero" style={{ gap: space.md }}>
-        <AppText variant="title">Backup &amp; transfer</AppText>
+      <Card style={{ gap: space.md }}>
+        <AppText variant="title">{firstRun ? 'Restore a backup' : 'Backup & transfer'}</AppText>
         <AppText muted>
-          A vault backup is a complete, encrypted copy of this device — its key, its records, and
-          its history — in one file you keep. It is the only thing that can put your data on a
-          replacement device when every device you had is gone.
+          {firstRun
+            ? 'Open the .qashyvault file you saved from your old device. Everything in it — accounts, history and your vault key — moves onto this one.'
+            : 'A vault backup is a complete, encrypted copy of this device — its key, its records, and its history — in one file you keep. It is the only thing that can put your data on a replacement device when every device you had is gone.'}
         </AppText>
       </Card>
 

@@ -178,7 +178,7 @@ export function GoalFormScreen() {
     <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
       <Card style={{ gap: 16 }}>
         <View accessibilityLabel={t('Goal type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
-          {(['saving', 'spending'] as GoalKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip label={item === 'saving' ? 'Savings goal' : 'Planned purchase'} selected={kind === item} onPress={() => {
+          {(['saving', 'spending'] as GoalKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "saving" ? "banknote" : "cart"} label={item === "saving" ? "Savings goal" : "Planned purchase"} selected={kind === item} onPress={() => {
             if (item === kind) return;
             setKind(item);
             setLinkedCategoryId('');
@@ -194,9 +194,9 @@ export function GoalFormScreen() {
         <AppText variant="headline">Automatic progress</AppText>
         <AppText muted>Optionally count matching posted transactions. You can still add progress manually.</AppText>
         <AppText variant="label">Linked account</AppText>
-        <View accessibilityLabel={t('Linked account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip label="None" selected={!linkedAccountId} onPress={() => setLinkedAccountId('')} />{accountChoices.map((item) => <ChoiceChip key={item.id} literal label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={linkedAccountId === item.id} onPress={() => setLinkedAccountId(item.id)} />)}</View>
+        <View accessibilityLabel={t('Linked account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip icon="xmark.circle" label="None" selected={!linkedAccountId} onPress={() => setLinkedAccountId('')} />{accountChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={linkedAccountId === item.id} onPress={() => setLinkedAccountId(item.id)} />)}</View>
         <AppText variant="label">Linked category</AppText>
-        <View accessibilityLabel={t('Linked category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip label="None" selected={!linkedCategoryId} onPress={() => setLinkedCategoryId('')} />{categoryChoices.map((item) => <ChoiceChip key={item.id} literal label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={linkedCategoryId === item.id} onPress={() => setLinkedCategoryId(item.id)} />)}</View>
+        <View accessibilityLabel={t('Linked category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip icon="xmark.circle" label="None" selected={!linkedCategoryId} onPress={() => setLinkedCategoryId('')} />{categoryChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived} selected={linkedCategoryId === item.id} onPress={() => setLinkedCategoryId(item.id)} />)}</View>
       </Card>
 
       {existing ? (

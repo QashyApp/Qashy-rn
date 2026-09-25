@@ -251,6 +251,37 @@ describe('merge scenarios — two devices generating the same record', () => {
       jest.useRealTimers();
     }
   });
+
+  it('produces one exchange rate when both devices fetch the same day independently', async () => {
+    const [alice, bob] = await populated();
+    const wire = alice.wireTo(bob);
+
+    // Both devices refresh on foreground with no connectivity between them — the same
+    // "no rare race" situation as the recurring-generation scenario above, since automatic
+    // rate refresh runs on the same schedule.
+    wire.partition();
+    const fetched = { fromCurrency: 'EUR', toCurrency: BASE_CURRENCY, rate: '1.1', effectiveDate: TODAY };
+    await alice.repository.saveFetchedRates([fetched]);
+    await bob.repository.saveFetchedRates([fetched]);
+    expect(alice.state.exchangeRates).toHaveLength(1);
+    expect(bob.state.exchangeRates).toHaveLength(1);
+    // Same key, same id — computed independently, with nothing exchanged.
+    expect(alice.state.exchangeRates[0].id).toBe(bob.state.exchangeRates[0].id);
+
+    wire.heal();
+    await settle();
+    await sync([alice, bob], 3);
+
+    const converged = expectConverged([alice, bob]);
+    expect(converged.exchangeRates).toHaveLength(1);
+
+    // The deterministic id means there was never a duplicate for the repair pass to notice —
+    // not "it noticed and fixed one", but nothing to fix at all.
+    const aliceRepair = await alice.repository.repairProjection();
+    const bobRepair = await bob.repository.repairProjection();
+    expect(aliceRepair.repairs.map((note) => note.code)).not.toContain('duplicateRate');
+    expect(bobRepair.repairs.map((note) => note.code)).not.toContain('duplicateRate');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -572,6 +603,29 @@ describe('merge scenarios — states that must not merge at all', () => {
     expect(creates).toHaveLength(1);
     expect(JSON.parse(creates[0].payload)).toMatchObject({ entity: { baseCurrency: 'ILS' } });
     expect(alice.state.settings.baseCurrency).toBe('ILS');
+  });
+
+  it('carries a never-onboarded device through first-run setup by syncing alone', async () => {
+    // The "I already use Qashy" path in onboarding pairs a brand-new install before it has
+    // created anything. It must come out of the first sync fully set up — the vault's currency,
+    // accounts, and a completed-onboarding flag that sends it straight past the first-run flow.
+    const devices = await makeVault({ count: 2 });
+    const [alice, fresh] = devices;
+    await onboard(alice, { baseCurrency: BASE_CURRENCY, accountName: 'Phone' });
+    expect(fresh.state.settings.onboardingComplete).toBe(false);
+    expect(fresh.state.accounts).toEqual([]);
+
+    await sync(devices, 3);
+
+    expect(fresh.state.settings.onboardingComplete).toBe(true);
+    expect(fresh.state.settings.baseCurrency).toBe(BASE_CURRENCY);
+    expect(fresh.state.accounts.map((row) => row.name)).toEqual(['Phone']);
+    expect(fresh.state.categories.length).toBe(alice.state.categories.length);
+    // And it never wrote a settings create of its own that could race the vault's.
+    const creates = (await opsOf(fresh)).filter(
+      (row) => row.entityType === 'settings' && row.kind === 'create' && row.deviceId === fresh.deviceId,
+    );
+    expect(creates).toEqual([]);
   });
 
   it('refuses a batch from a device set up in a different base currency', async () => {

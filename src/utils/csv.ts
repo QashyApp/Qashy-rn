@@ -1,3 +1,5 @@
+import { isLocalDate } from '@/utils/date';
+
 const HEADER_ALIASES: Record<string, string> = {
   date: 'date',
   type: 'type',
@@ -187,6 +189,48 @@ export function parseCsvTable(input: string) {
     return record;
   });
   return { headers, rows: records, rowErrors };
+}
+
+/** The fields `extractCsvRatePairs` needs, out of a mapped-but-not-yet-validated CSV row. */
+export interface CsvRateCandidate {
+  readonly date: string;
+  readonly currency: string;
+  readonly exchangeRate: string;
+}
+
+/**
+ * The (currency, date) pairs a CSV preview needs an automatic rate for, before validation runs.
+ *
+ * A row is a candidate when it has no explicit `exchangeRate` and its currency is not the base
+ * — exactly the rows that would otherwise fall through to `resolveRate`'s stored-rate lookup, or
+ * to a rejection when nothing is stored. Deduplicated, so a statement with fifty EUR rows on the
+ * same day produces one pair rather than fifty identical requests. A row whose date does not
+ * parse as a real calendar date is left out; `csvRowSchema` reports that rejection on its own
+ * once the row reaches `importCsv`, and guessing a rate for an invalid date would be worse than
+ * silence.
+ *
+ * Pure on purpose: it is called from the CSV screen before preview, where the goal is to keep
+ * `ensureRatesFor` out of the component and testable without React or a repository.
+ */
+export function extractCsvRatePairs(
+  rows: readonly CsvRateCandidate[],
+  baseCurrency: string,
+): { currency: string; localDate: string }[] {
+  const base = baseCurrency.trim().toUpperCase();
+  const seen = new Set<string>();
+  const pairs: { currency: string; localDate: string }[] = [];
+  for (const row of rows) {
+    if (row.exchangeRate.trim()) continue;
+    const currency = row.currency.trim().toUpperCase();
+    if (!currency || currency === base) continue;
+    const localDate = row.date.trim();
+    if (!isLocalDate(localDate)) continue;
+    const key = `${currency}|${localDate}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    pairs.push({ currency, localDate });
+  }
+  return pairs;
 }
 
 export function escapeCsv(value: unknown) {

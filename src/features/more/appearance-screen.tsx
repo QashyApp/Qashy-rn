@@ -15,6 +15,8 @@ import { previewAccentTokens, useQashyTheme } from '@/theme/theme';
 import { ACCENT_PRESETS, mixHex } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
 
+const THEME_MODE_ICONS: Record<ThemeMode, string> = { system: 'circle.lefthalf.filled', light: 'sun.max', dark: 'moon' };
+
 export function AppearanceScreen() {
   const repository = useFinanceRepository();
   const { settings } = useFinanceState();
@@ -64,7 +66,7 @@ export function AppearanceScreen() {
       <MotionView>
         <Card style={{ gap: 16 }}>
           <AppText variant="headline">Appearance</AppText>
-          <View accessibilityLabel={t('Appearance')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{(['system', 'light', 'dark'] as ThemeMode[]).map((item) => <ChoiceChip key={item} label={item[0].toUpperCase() + item.slice(1)} selected={mode === item} onPress={() => { setMode(item); setSaved(false); }} />)}</View>
+          <View accessibilityLabel={t('Appearance')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{(['system', 'light', 'dark'] as ThemeMode[]).map((item) => <ChoiceChip key={item} icon={THEME_MODE_ICONS[item]} label={item[0].toUpperCase() + item.slice(1)} selected={mode === item} onPress={() => { setMode(item); setSaved(false); }} />)}</View>
         </Card>
       </MotionView>
       <MotionView>

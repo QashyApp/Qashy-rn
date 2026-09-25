@@ -8,7 +8,7 @@ import type { TransactionRecord } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, toneColors } from '@/theme/tokens';
+import { radius, space, toneColors, tile as tileMetrics } from '@/theme/tokens';
 import { formatMoney } from '@/utils/money';
 
 export function TransactionRow({
@@ -99,8 +99,8 @@ export function TransactionRow({
           </View>
         </MotionView>
       ) : null}
-      <View style={{ width: compact ? 38 : 44, height: compact ? 38 : 44, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
-        <AppIcon name={isTransfer ? 'arrow.left.arrow.right' : category?.icon ?? (isIncome ? 'arrow.down' : 'arrow.up')} color={tile.onContainer} size={18} />
+      <View style={{ width: compact ? tileMetrics.compactSize : tileMetrics.size, height: compact ? tileMetrics.compactSize : tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
+        <AppIcon name={isTransfer ? 'arrow.left.arrow.right' : category?.icon ?? (isIncome ? 'arrow.down' : 'arrow.up')} color={tile.onContainer} size={compact ? tileMetrics.compactIcon : tileMetrics.icon} />
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: space.xxs }}>
         <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>

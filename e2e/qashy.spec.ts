@@ -2,35 +2,63 @@ import { expect, test, type Page } from '@playwright/test';
 
 async function completeOnboarding(page: Page) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Get started' }).click();
+  // Currency, then the first account.
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByLabel('Opening balance (USD)').fill('1000');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  // Appearance, then the review step.
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Start using Qashy' }).click();
   await expect(page).toHaveURL(/\/overview$/);
 }
 
+/** Adds an expense through the transaction sheet from wherever the page is. */
+async function addExpense(page: Page, title: string, date?: string) {
+  await page.getByLabel('Add transaction').first().click();
+  await page.getByLabel('Amount (USD)').fill('12');
+  await page.getByLabel('Title').fill(title);
+  if (date) await page.getByLabel('Date').fill(date);
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+}
+
+const TRANSACTIONS_URL = /\/transactions(\?month=\d{4}-\d{2})?$/;
+
 test('onboarding shell is responsive and branded', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByText('Money, made calmer.')).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Continue' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Get started' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'I already use Qashy' })).toBeVisible();
+});
+
+test('offers pairing and backup restore to someone who already uses Qashy', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'I already use Qashy' }).click();
+  await expect(page.getByText('Welcome back')).toBeVisible();
+  await page.getByRole('button', { name: 'Restore from a backup file' }).click();
+  await expect(page).toHaveURL(/\/sync-transfer\?onboarding=1$/);
+  await expect(page.getByText('Restore a backup').first()).toBeVisible();
+  // Creating a backup needs a vault this device does not have yet.
+  await expect(page.getByText('Create a vault backup')).toHaveCount(0);
+  await page.goBack();
+  await page.getByRole('button', { name: 'Pair with another device' }).click();
+  await expect(page).toHaveURL(/\/sync-pair\?onboarding=1$/);
+  await expect(page.getByText('Join your other device').first()).toBeVisible();
+  await expect(page.getByText('This device has my data')).toBeHidden();
 });
 
 test('chooses readable locale and currency options during onboarding', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'Continue' }).click();
 
-  // `exact` matters: the open list's radiogroup is labelled "Choose language",
-  // and the search box "Search base currency", so a substring match would pull
-  // in the dialog alongside the field it belongs to.
-  const localeField = page.getByLabel('Language', { exact: true });
-  await expect(localeField.getByText('English')).toBeVisible();
-  await localeField.click();
-  await page.getByRole('radio', { name: /Hebrew/ }).click();
-  const hebrewLocaleField = page.getByLabel('שפה', { exact: true });
-  await expect(hebrewLocaleField.getByText('עברית')).toBeVisible();
-  await expect(page.getByText('שפה ומטבע')).toBeVisible();
+  // Language comes first, on the welcome screen, so the rest of setup reads in it.
+  await expect(page.getByRole('radio', { name: 'English' })).toBeChecked();
+  await page.getByRole('radio', { name: 'עברית' }).click();
+  await expect(page.getByText('כסף, בצורה רגועה יותר.')).toBeVisible();
+  await page.getByRole('button', { name: 'בואו נתחיל' }).click();
+  await expect(page.getByText('המטבע הראשי שלכם')).toBeVisible();
 
+  // `exact` matters: the search box is "Search base currency", so a substring
+  // match would pull in the dialog alongside the field it belongs to.
   const currencyField = page.getByLabel('מטבע בסיס', { exact: true });
   await currencyField.click();
   await page.getByLabel('חיפוש מטבע בסיס').fill('ILS');
@@ -40,9 +68,11 @@ test('chooses readable locale and currency options during onboarding', async ({ 
   await page.getByRole('button', { name: 'המשך' }).click();
   await page.getByLabel('יתרת פתיחה (ILS)').fill('1000');
   await page.getByRole('button', { name: 'המשך' }).click();
+  await page.getByRole('button', { name: 'המשך' }).click();
+  await expect(page.getByText('קטגוריות התחלתיות')).toBeVisible();
   await page.getByRole('button', { name: 'התחילו להשתמש ב־Qashy' }).click();
   await expect(page).toHaveURL(/\/overview$/);
-  await expect(page.getByText('מבט רגוע יותר על הכספים שלכם.')).toBeVisible();
+  await expect(page.getByText('שווי נקי', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'סקירה' })).toBeVisible();
   await expect(page.locator('html')).toHaveAttribute('lang', 'he-IL');
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -79,7 +109,7 @@ test('chooses readable locale and currency options during onboarding', async ({ 
 test('applies an onboarding theme choice immediately', async ({ page }) => {
   await page.goto('/');
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Get started' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
 
@@ -110,7 +140,7 @@ test('exposes an installable web manifest', async ({ page }) => {
 
 test('completes onboarding and records an expense', async ({ page }) => {
   await completeOnboarding(page);
-  await expect(page.getByText('A quieter view of your finances.')).toBeVisible();
+  await expect(page.getByText('Net worth', { exact: true })).toBeVisible();
 
   await page.getByLabel('Add transaction').first().click();
   await page.getByLabel('Amount (USD)').fill('12.50');
@@ -166,7 +196,7 @@ test('preserves a selected transaction type and lets an edit clear its category'
   await expect(uncategorized).toBeChecked();
   await page.getByRole('button', { name: 'Save changes' }).click();
 
-  await expect(page).toHaveURL(/\/transactions$/);
+  await expect(page).toHaveURL(TRANSACTIONS_URL);
   await expect(page.getByText(/Uncategorized · Everyday/)).toBeVisible();
 });
 
@@ -413,13 +443,13 @@ test('gives keyboard focus a visible ring and themes browser chrome', async ({ p
   expect(chrome.ring).not.toBe('rgba(0, 0, 0, 0)');
   // The accent is not a surface the app ever paints, so it must not tint the
   // address bar behind a near-white page.
-  expect(chrome.themeColor).toBe('#F6F7F9');
+  expect(chrome.themeColor).toBe('#F1F2F5');
 });
 
 test('lays content out against the space the rail leaves, not the window', async ({ page }) => {
   await completeOnboarding(page);
   const rhythm = page.getByRole('heading', { name: 'Spending rhythm' });
-  const categories = page.getByRole('heading', { name: 'By category' });
+  const categories = page.getByRole('heading', { name: 'Budget pulse' });
   const stacked = async () => {
     const [first, second] = await Promise.all([rhythm.boundingBox(), categories.boundingBox()]);
     return (second?.y ?? 0) - (first?.y ?? 0) > 100;
@@ -455,6 +485,7 @@ test('keeps animated content in flow and fully visible once its entrance ends', 
   // to 5x the animation duration, and before it fires nothing is wrong yet, so
   // a shorter wait passes against the broken build too.
   await page.goto('/');
+  await page.getByRole('button', { name: 'Get started' }).click();
   const advance = page.getByRole('button', { name: 'Continue' });
   await expect(advance).toBeVisible();
   await advance.click();
@@ -481,7 +512,7 @@ test('keeps animated content in flow and fully visible once its entrance ends', 
   await page.getByLabel('Next month').click();
   await page.waitForTimeout(1500);
   const fadedAncestors = await page.evaluate(() => {
-    const label = [...document.querySelectorAll('div')].find((el) => el.textContent === 'CURRENT NET WORTH');
+    const label = [...document.querySelectorAll('div')].find((el) => el.textContent === 'Net worth');
     const faded: number[] = [];
     for (let el = label as HTMLElement | null; el; el = el.parentElement) {
       const opacity = parseFloat(el.style.opacity);
@@ -578,5 +609,182 @@ test('runs the exported app under its content security policy without a violatio
 
   // And that the app is genuinely running, not a blank page that violated nothing.
   await page.goto('/overview');
-  await expect(page.getByText('CURRENT NET WORTH')).toBeVisible();
+  await expect(page.getByText('Net worth', { exact: true })).toBeVisible();
+});
+
+test('pages the ledger by month and deep-links to one', async ({ page }) => {
+  await completeOnboarding(page);
+  const now = new Date();
+  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const lastMonthKey = `${lastMonth.getFullYear()}-${pad(lastMonth.getMonth() + 1)}`;
+
+  await addExpense(page, 'This month coffee');
+  await addExpense(page, 'Last month rent', `${lastMonthKey}-15`);
+
+  await page.getByRole('link', { name: /Transactions/ }).click();
+  const thisMonthKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  await page.goto(`/transactions?month=${thisMonthKey}`);
+  await expect(page.getByText('This month coffee')).toBeVisible();
+  await expect(page.getByText('Last month rent')).toHaveCount(0);
+
+  await page.getByLabel('Previous month').first().click();
+  await expect(page.getByText('Last month rent')).toBeVisible();
+  await expect(page.getByText('This month coffee')).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`month=${lastMonthKey}$`));
+
+  // A deep link lands on its month directly.
+  await page.goto(`/transactions?month=${thisMonthKey}`);
+  await expect(page.getByText('This month coffee')).toBeVisible();
+
+  // Search stays in the month until it is widened explicitly.
+  await page.getByLabel('Search transactions').fill('rent');
+  await expect(page.getByText('Nothing matches')).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Search all months' }).click();
+  await expect(page.getByText('Last month rent')).toBeVisible();
+});
+
+// --- Automatic exchange rates (Frankfurter) -------------------------------------------------
+//
+// These onboard with EUR as the base currency (rather than the default USD) so a USD account is
+// genuinely foreign and needs a rate. `https://api.frankfurter.dev/**` is always intercepted:
+// never left to hit the real network, and always counted, so "zero requests while the toggle is
+// off" is an assertion about the running app, not an assumption about the mock.
+
+/** Onboards with `currency` as the base currency instead of the default USD. */
+async function completeOnboardingWithCurrency(page: Page, currency: string) {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Get started' }).click();
+  await page.getByRole('radio', { name: currency, exact: true }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByLabel(`Opening balance (${currency})`).fill('1000');
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('button', { name: 'Start using Qashy' }).click();
+  await expect(page).toHaveURL(/\/overview$/);
+}
+
+/** Creates an account of `currency` from More → Accounts → Add, and returns to `/more`. */
+async function createAccount(page: Page, name: string, currency: string) {
+  await page.getByRole('link', { name: 'More' }).click();
+  await page.getByRole('button', { name: 'Add', exact: true }).first().click();
+  await page.getByLabel('Account name').fill(name);
+  await page.getByLabel('Currency').fill(currency);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page).toHaveURL(/\/more$/);
+}
+
+/** Today's local date as `YYYY-MM-DD`, matching `todayLocal()` in `src/utils/date.ts`. */
+function todayKey(): string {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+}
+
+test('never contacts frankfurter.dev while automatic rates are off', async ({ page }) => {
+  const requests: string[] = [];
+  await page.route('https://api.frankfurter.dev/**', async (route) => {
+    requests.push(route.request().url());
+    await route.fulfill({ status: 200, contentType: 'application/json', body: '[]' });
+  });
+
+  await completeOnboardingWithCurrency(page, 'EUR');
+  await createAccount(page, 'Card', 'USD');
+
+  // The floating "Add transaction" action lives on Overview/Transactions, not on More, where
+  // `createAccount` leaves the page.
+  await page.getByRole('link', { name: 'Overview' }).click();
+  // Opening the form for a genuinely foreign account is exactly the moment `ensureRatesFor`
+  // would fire if the flag were on.
+  await page.getByLabel('Add transaction').first().click();
+  await page.getByRole('radio', { name: 'Card · USD' }).click();
+  await expect(page.getByText('No rate for this date.')).toBeVisible();
+
+  // Background/foreground the page. `FinanceProvider` reconciles on `visibilitychange`,
+  // `focus`, and `pageshow`, and each reconcile races a capped `refreshRatesWithCap()` — the one
+  // path that could reach the network without the user touching anything.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'visible' });
+    document.dispatchEvent(new Event('visibilitychange'));
+    window.dispatchEvent(new Event('focus'));
+    window.dispatchEvent(new Event('pageshow'));
+  });
+  await page.waitForTimeout(800);
+
+  expect(requests).toEqual([]);
+});
+
+test('fetches automatic rates once enabled and applies them to a transaction', async ({ page }) => {
+  const today = todayKey();
+  const requests: string[] = [];
+  await page.route('https://api.frankfurter.dev/**', async (route) => {
+    requests.push(route.request().url());
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([{ date: today, base: 'EUR', quote: 'USD', rate: 1.25 }]),
+    });
+  });
+
+  await completeOnboardingWithCurrency(page, 'EUR');
+  await createAccount(page, 'Card', 'USD');
+
+  await page.getByRole('link', { name: 'More' }).click();
+  await page.getByRole('button', { name: /Exchange rates/ }).click();
+  await expect(page).toHaveURL(/\/exchange-rates$/);
+  await page.getByRole('switch', { name: 'Fetch rates automatically' }).click();
+
+  await expect.poll(() => requests.length).toBeGreaterThan(0);
+  const firstRequest = new URL(requests[0]!);
+  expect(firstRequest.searchParams.get('base')).toBe('EUR');
+  const allowedParams = new Set(['base', 'quotes', 'date', 'from', 'to']);
+  for (const key of firstRequest.searchParams.keys()) {
+    expect(allowedParams.has(key)).toBe(true);
+  }
+
+  // Back into the app (no reload) to open a fresh expense on the USD account. The rate this
+  // just fetched is already in the finance snapshot, so the applied-rate line needs no further
+  // network round trip.
+  await page.goBack();
+  await page.getByRole('link', { name: 'Overview' }).click();
+  await page.getByLabel('Add transaction').first().click();
+  await page.getByRole('radio', { name: 'Card · USD' }).click();
+  // 1 EUR = 1.25 USD, EUR is the base, so 1 USD = 1 / 1.25 = 0.8 EUR.
+  await expect(page.getByText(/1 USD = 0\.8 EUR.*Automatic/)).toBeVisible();
+
+  await page.getByLabel('Amount (USD)').fill('25');
+  await page.getByLabel('Title').fill('Coffee in USD');
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  // The ledger shows the transaction in its own account currency (USD); it does not additionally
+  // surface a base-converted amount per row, so there is nothing further to assert about that.
+  await expect(page.getByText('Coffee in USD')).toBeVisible();
+});
+
+test('shows a clear error when frankfurter fails, and the rest of the app keeps working', async ({ page }) => {
+  await page.route('https://api.frankfurter.dev/**', (route) =>
+    route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"boom"}' }));
+
+  await completeOnboardingWithCurrency(page, 'EUR');
+  // A foreign-currency account is required for `refreshLatest` to attempt a fetch at all — a
+  // vault with only base-currency accounts has nothing to fetch and never calls the network.
+  await createAccount(page, 'Card', 'USD');
+
+  await page.getByRole('link', { name: 'More' }).click();
+  await page.getByRole('button', { name: /Exchange rates/ }).click();
+  await page.getByRole('switch', { name: 'Fetch rates automatically' }).click();
+
+  await expect(page.getByRole('alert')).toContainText('frankfurter.dev returned an error.');
+
+  // The rest of the app still works: a base-currency transaction needs no rate and saves fine.
+  await page.goBack();
+  await page.getByRole('link', { name: 'Overview' }).click();
+  await page.getByLabel('Add transaction').first().click();
+  await page.getByLabel('Amount (EUR)').fill('5');
+  await page.getByLabel('Title').fill('Still works');
+  await page.getByRole('button', { name: 'Add transaction' }).click();
+  await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
+  await expect(page.getByText('Still works')).toBeVisible();
 });

@@ -17,6 +17,13 @@ cool app, THANK YOU FOR YOUR ATTENTION TO THIS MATTER
 <H3 div align="center"> Architecture </H3>
 Qashy is an Expo app backed by a local `FinanceRepository`. Native builds persist records in SQLite, while the PWA uses Dexie and IndexedDB. Open web tabs observe local database changes and reconcile their repository snapshots without sending finance data to a server.
 
+<H3 div align="center"> Design </H3>
+
+- **Type:** the app bundles [Rubik](https://fonts.google.com/specimen/Rubik) (OFL, via `@expo-google-fonts/rubik`). It covers both of the app's languages, English and Hebrew, and has tabular figures. The font files ship with the app and are precached for offline use, so it never fetches fonts from the network. The type scale and tokens are in `src/theme/tokens.ts`.
+- **Surfaces:** sections are borderless tonal planes rather than bordered cards. Each screen's hero figure sits directly on the page (`PageHero`), and shadows are kept for things that genuinely float.
+- **Onboarding** has five screens: welcome and language, base currency, first account, look, and review. Choosing **I already use Qashy** lets a new install pair with another device or restore a `.qashyvault` backup before anything is created.
+- **Transactions** shows one calendar month at a time, with that month's totals in the header. The month is in the URL (`/transactions?month=YYYY-MM`), so it can be deep-linked. Search stays within the month unless you choose **Search all months**.
+
 <H3 div align="center"> Sync </H3>
 Qashy can sync between your own devices. It is **off until you turn it on**, there is no account, and it is
 end-to-end encrypted with keys that never leave your devices.
@@ -34,6 +41,18 @@ Read [docs/sync-threat-model.md](docs/sync-threat-model.md) for the full model, 
 what sync deliberately does **not** protect against.
 
 Sync uses WebRTC through a native module, so **Expo Go cannot run it** — use a development build.
+
+<H3 div align="center"> Exchange rates </H3>
+Accounts in another currency can convert automatically. It is the app's second deliberate network
+exception, and it is **off until you turn it on**, per device.
+
+- When enabled, Qashy asks [frankfurter.dev](https://frankfurter.dev) for the day's rates, pivoted through
+  EUR for precision. Only currency codes and a date ever leave the device — never an amount, an account name,
+  or anything else. Frankfurter has no key and needs no account, but it can see the device's IP address.
+- The opt-in flag lives in local sync metadata, not in the settings that sync replicates to your other
+  devices — turning it on is a per-device choice, not a vault-wide one.
+- Turned off, or for a currency Frankfurter doesn't cover, exchange rates fall back to the manual rate you
+  enter yourself under **More → Exchange rates**.
 
 The exported web build ships a strict `Content-Security-Policy` (`src/utils/csp.ts`): `default-src 'none'`,
 `script-src 'self'` plus a hash for Expo Router's one inline script, and no `'unsafe-inline'` or

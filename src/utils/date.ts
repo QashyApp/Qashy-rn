@@ -27,6 +27,29 @@ export function endOfMonth(value = todayLocal()) {
   return toLocalDate(date);
 }
 
+/** The first day of the month `delta` months from `value`'s month. */
+export function moveMonth(value: string, delta: number) {
+  const date = parseLocalDate(value);
+  date.setMonth(date.getMonth() + delta, 1);
+  return toLocalDate(date);
+}
+
+/** `YYYY-MM` for a local date — the shape a month takes in a URL. */
+export function monthKey(value: string) {
+  return value.slice(0, 7);
+}
+
+/**
+ * The first day of the month a `YYYY-MM` key names, or `null` when the key is
+ * missing or malformed. Route params arrive untrusted, so anything that does
+ * not round-trip exactly is rejected rather than coerced.
+ */
+export function parseMonthKey(key: unknown): string | null {
+  if (typeof key !== 'string' || !/^\d{4}-\d{2}$/.test(key)) return null;
+  const first = `${key}-01`;
+  return isLocalDate(first) ? first : null;
+}
+
 export function isLocalDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const [year] = value.split('-').map(Number);
@@ -116,6 +139,13 @@ export function monthLabel(value: string, locale: string) {
 
 export function shortDate(value: string, locale: string) {
   return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(
+    parseLocalDate(value),
+  );
+}
+
+/** Adds the year to `shortDate` — for a rate or a rule that may be read back long after the fact. */
+export function mediumDate(value: string, locale: string) {
+  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(
     parseLocalDate(value),
   );
 }

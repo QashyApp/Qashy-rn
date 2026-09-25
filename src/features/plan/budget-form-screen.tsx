@@ -129,7 +129,7 @@ export function BudgetFormScreen() {
         <FormField label={`Total limit (${state.settings.baseCurrency})`} value={limit} onChangeText={setLimit} keyboardType="decimal-pad" error={limitError} required />
         <AppText variant="label">Period</AppText>
         <View accessibilityLabel={t('Budget period')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {(['day', 'week', 'month', 'year', 'custom'] as PeriodUnit[]).map((item) => <ChoiceChip key={item} label={item[0].toUpperCase() + item.slice(1)} selected={unit === item} onPress={() => setUnit(item)} />)}
+          {(['day', 'week', 'month', 'year', 'custom'] as PeriodUnit[]).map((item) => <ChoiceChip key={item} icon={item === "custom" ? "pencil" : "calendar"} label={item[0].toUpperCase() + item.slice(1)} selected={unit === item} onPress={() => setUnit(item)} />)}
         </View>
         {unit === 'custom' ? (
           <>
@@ -147,7 +147,7 @@ export function BudgetFormScreen() {
         <AppText variant="headline">Categories and caps</AppText>
         <AppText muted>Leave every category unselected to count all expenses.</AppText>
         <View accessibilityLabel={t('Included categories')} role="group" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {expenseCategories.map((category) => <ChoiceChip mode="checkbox" key={category.id} literal label={`${category.name}${category.archived ? ' (archived)' : ''}`} selected={selectedCategories.includes(category.id)} onPress={() => toggleCategory(category.id)} />)}
+          {expenseCategories.map((category) => <ChoiceChip mode="checkbox" key={category.id} literal icon={category.icon} label={`${category.name}${category.archived ? ' (archived)' : ''}`} selected={selectedCategories.includes(category.id)} onPress={() => toggleCategory(category.id)} />)}
         </View>
         {selectedCategories.map((categoryId) => {
           const category = expenseCategories.find((item) => item.id === categoryId);

@@ -5,7 +5,7 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, toneColors } from '@/theme/tokens';
+import { radius, space, toneColors, tile as tileMetrics } from '@/theme/tokens';
 
 export function SettingsRow({
   title,
@@ -61,8 +61,8 @@ export function SettingsRow({
       disabled={!onPress || disabled}
       pressedScale={0.985}
       style={({ pressed }) => ({ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: space.md, opacity: disabled ? 0.5 : pressed ? 0.62 : 1 })}>
-      <View style={{ width: 38, height: 38, borderRadius: radius.control, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
-        <AppIcon name={icon} color={tile.onContainer} size={18} />
+      <View style={{ width: tileMetrics.size, height: tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
+        <AppIcon name={icon} color={tile.onContainer} size={tileMetrics.icon} />
       </View>
       <View
         accessibilityElementsHidden

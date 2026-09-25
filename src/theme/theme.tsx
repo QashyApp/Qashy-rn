@@ -16,6 +16,7 @@ import {
   accessibleAccentColor,
   darkTokens,
   ensureContrast,
+  fontFamilies,
   lightTokens,
   mixHex,
   readableTextColor,
@@ -61,18 +62,26 @@ export interface ThemeTokens {
   shadowCard: string | undefined;
   shadowRaised: string;
   shadowOverlay: string;
+  /** The floating action button: tighter and darker than `shadowRaised`, so it reads as pressable. */
+  shadowFab: string;
+  /** The dimmed layer behind a modal picker or menu. */
+  scrim: string;
 }
 
 const lightShadows = {
   shadowCard: '0 1px 2px rgba(25, 27, 32, 0.05)',
   shadowRaised: '0 8px 24px rgba(25, 27, 32, 0.08)',
   shadowOverlay: '0 20px 48px rgba(25, 27, 32, 0.18)',
+  shadowFab: '0 4px 14px rgba(25, 27, 32, 0.28)',
+  scrim: 'rgba(12, 13, 17, 0.42)',
 } as const;
 
 const darkShadows = {
   shadowCard: undefined,
   shadowRaised: '0 8px 24px rgba(0, 0, 0, 0.45)',
   shadowOverlay: '0 22px 52px rgba(0, 0, 0, 0.6)',
+  shadowFab: '0 6px 18px rgba(0, 0, 0, 0.58)',
+  scrim: 'rgba(0, 0, 0, 0.56)',
 } as const;
 
 const ThemeContext = createContext<ThemeTokens | null>(null);
@@ -192,6 +201,13 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
   const baseNavigation = mode === 'dark' ? DarkTheme : DefaultTheme;
   const navigationTheme = {
     ...baseNavigation,
+    // Native stack headers (titles, large titles, back labels) use the app face too.
+    fonts: {
+      regular: { fontFamily: fontFamilies.regular, fontWeight: 'normal' as const },
+      medium: { fontFamily: fontFamilies.medium, fontWeight: 'normal' as const },
+      bold: { fontFamily: fontFamilies.semibold, fontWeight: 'normal' as const },
+      heavy: { fontFamily: fontFamilies.bold, fontWeight: 'normal' as const },
+    },
     colors: {
       ...baseNavigation.colors,
       primary: tokens.staticAccent,
