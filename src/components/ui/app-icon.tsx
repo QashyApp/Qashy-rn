@@ -99,6 +99,8 @@ const IONICON_BY_SF_NAME: Record<string, IoniconName> = {
   moon: 'moon-outline',
   'circle.lefthalf.filled': 'contrast-outline',
   'chart.line.uptrend.xyaxis': 'trending-up-outline',
+  // Overview edit toolbar's size-cycle control.
+  'arrow.up.left.and.arrow.down.right': 'resize-outline',
 };
 
 export function AppIcon({ name, color, size = 20 }: { name: string; color: ColorValue; size?: number }) {

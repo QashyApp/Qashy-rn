@@ -3,7 +3,7 @@ import { View, type ViewStyle } from 'react-native';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
+import { radius, space, toneColors } from '@/theme/tokens';
 
 /**
  * How a state reads at a glance.
@@ -12,7 +12,10 @@ import { radius, space } from '@/theme/tokens';
  * `tone="red"` for something that is merely informational and later have to
  * chase every site down when the palette changes.
  */
-export type StatusTone = 'neutral' | 'positive' | 'warning' | 'negative';
+export type StatusTone = 'neutral' | 'positive' | 'warning' | 'negative' | 'transfer';
+
+/** A subtle inner top highlight so a tone pill reads as a raised chip, not a flat label. */
+const INNER_HIGHLIGHT: ViewStyle['boxShadow'] = 'inset 0 1px 0 rgba(255,255,255,0.35)';
 
 /**
  * A small labelled state marker.
@@ -44,12 +47,26 @@ export function StatusPill({
   style?: ViewStyle;
 }) {
   const theme = useQashyTheme();
-  const color = {
-    neutral: theme.textMuted,
-    positive: theme.positive,
-    warning: theme.warning,
-    negative: theme.negative,
-  }[tone];
+  // `transfer` is tinted like a category/budget color rather than flat, so it
+  // needs its own container derived through `toneColors`. `theme.transfer` is
+  // always a static hex in practice (only surface-family colors map to opaque
+  // platform colors under Material You), but this guards the type anyway
+  // rather than assume it.
+  const transferSeed = typeof theme.transfer === 'string' ? theme.transfer : undefined;
+  const transferTone = transferSeed
+    ? toneColors(transferSeed, theme.staticSurface, theme.staticText, theme.mode === 'dark')
+    : undefined;
+  const color = tone === 'transfer'
+    ? (transferTone?.onContainer ?? theme.onAccentContainer)
+    : {
+      neutral: theme.textMuted,
+      positive: theme.positive,
+      warning: theme.warning,
+      negative: theme.negative,
+    }[tone];
+  const backgroundColor = tone === 'transfer'
+    ? (transferTone?.container ?? theme.accentContainer)
+    : theme.surfaceMuted;
 
   return (
     <View
@@ -68,7 +85,8 @@ export function StatusPill({
         borderRadius: radius.pill,
         borderWidth: 1,
         borderColor: theme.border,
-        backgroundColor: theme.surfaceMuted,
+        backgroundColor,
+        boxShadow: INNER_HIGHLIGHT,
         ...style,
       }}>
       <AppIcon name={icon} color={color} size={13} />

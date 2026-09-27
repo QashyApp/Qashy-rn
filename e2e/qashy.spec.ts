@@ -18,7 +18,12 @@ async function addExpense(page: Page, title: string, date?: string) {
   await page.getByLabel('Add transaction').first().click();
   await page.getByLabel('Amount (USD)').fill('12');
   await page.getByLabel('Title').fill(title);
-  if (date) await page.getByLabel('Date').fill(date);
+  if (date) {
+    // Date lives behind "More details" on a fresh transaction — collapsed by
+    // default since the fast-entry path (amount → category → save) never needs it.
+    await page.getByRole('button', { name: 'More details' }).click();
+    await page.getByLabel('Date').fill(date);
+  }
   await page.getByRole('button', { name: 'Add transaction' }).click();
 }
 
@@ -448,10 +453,15 @@ test('gives keyboard focus a visible ring and themes browser chrome', async ({ p
 
 test('lays content out against the space the rail leaves, not the window', async ({ page }) => {
   await completeOnboarding(page);
-  const rhythm = page.getByRole('heading', { name: 'Spending rhythm' });
-  const categories = page.getByRole('heading', { name: 'Budget pulse' });
+  // The Overview grid packs the default layout's "Budget pulse" and "Accounts" cards (both
+  // `regular` size, 3 of the grid's 6 columns each) side by side once the content area clears
+  // the 900px breakpoint, and stacks them into a single column below it. ("Spending insight" is
+  // `wide` and always spans the full row on its own, so it no longer distinguishes the two
+  // layouts the way it did before cards became independently sized.)
+  const budgetPulse = page.getByRole('heading', { name: 'Budget pulse' });
+  const accounts = page.getByRole('heading', { name: 'Accounts' });
   const stacked = async () => {
-    const [first, second] = await Promise.all([rhythm.boundingBox(), categories.boundingBox()]);
+    const [first, second] = await Promise.all([budgetPulse.boundingBox(), accounts.boundingBox()]);
     return (second?.y ?? 0) - (first?.y ?? 0) > 100;
   };
 
@@ -787,4 +797,32 @@ test('shows a clear error when frankfurter fails, and the rest of the app keeps 
   await page.getByRole('button', { name: 'Add transaction' }).click();
   await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
   await expect(page.getByText('Still works')).toBeVisible();
+});
+
+test('removes and re-adds an Overview card, and the layout survives a reload', async ({ page }) => {
+  await completeOnboarding(page);
+
+  await page.getByRole('button', { name: 'Customize' }).click();
+  await page.getByRole('button', { name: 'Remove Recent activity' }).click();
+  await page.getByRole('button', { name: 'Done' }).click();
+
+  await expect(page.getByRole('heading', { name: 'Recent activity' })).toHaveCount(0);
+  // The rest of the default layout is untouched by removing one card.
+  await expect(page.getByRole('heading', { name: 'Budget pulse' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Accounts' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Coming up' })).toBeVisible();
+
+  // The device-local layout preference persists like any other `sync_meta` value, so a reload
+  // must not resurrect the removed card.
+  await page.reload();
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(page.getByRole('heading', { name: 'Recent activity' })).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'Customize' }).click();
+  await page.getByRole('button', { name: 'Add card' }).click();
+  await expect(page).toHaveURL(/\/overview-cards$/);
+  await page.getByRole('button', { name: 'Add Recent activity card' }).click();
+
+  await expect(page).toHaveURL(/\/overview$/);
+  await expect(page.getByRole('heading', { name: 'Recent activity' })).toBeVisible();
 });

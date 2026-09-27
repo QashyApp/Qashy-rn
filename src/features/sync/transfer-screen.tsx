@@ -410,6 +410,7 @@ export function TransferScreen() {
             <ActionButton
               title={busy === 'backup' ? 'Working…' : 'Create backup'}
               icon="tray"
+              size="large"
               busy={busy === 'backup'}
               disabled={Boolean(busy) || !readable || (lock === 'passphrase' && !passphraseReady)}
               onPress={() => void backup()}
@@ -518,6 +519,7 @@ export function TransferScreen() {
               title={picked ? 'Choose a different file' : 'Choose a backup file'}
               icon="folder"
               variant={picked ? 'secondary' : 'primary'}
+              size="large"
               busy={busy === 'open' && !picked}
               disabled={Boolean(busy)}
               onPress={() => void choose()}
@@ -555,6 +557,7 @@ export function TransferScreen() {
                 <ActionButton
                   title={busy === 'open' ? 'Opening…' : 'Open backup'}
                   icon="lock.open"
+                  size="large"
                   busy={busy === 'open'}
                   disabled={Boolean(busy) || !secretReady}
                   onPress={() => void open()}
@@ -616,6 +619,7 @@ function Preview({
         title={busy === 'restore' ? 'Restoring…' : 'Replace this device with this backup'}
         icon="arrow.down.circle"
         variant="danger"
+        size="large"
         busy={busy === 'restore'}
         disabled={Boolean(busy)}
         onPress={onRestore}

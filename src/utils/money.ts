@@ -151,12 +151,22 @@ export function convertMinor(
   return converted;
 }
 
-export function formatMoney(
+type MoneyOptions = { compact?: boolean; sign?: boolean };
+
+/**
+ * The ordered `Intl.NumberFormatPart`-shaped pieces behind both `formatMoney`
+ * and `formatMoneyParts`. Kept as one function so the two can never drift:
+ * `formatMoney` joins every part's `value`, and `formatMoneyParts` classifies
+ * the same list into named fields. Do not inline this logic into either
+ * caller again — that was the previous shape, and it was how the two output
+ * paths quietly diverged.
+ */
+function moneyPartsList(
   minor: number,
   currency: CurrencyCode,
-  locale = 'en-US',
-  options?: { compact?: boolean; sign?: boolean },
-) {
+  locale: string,
+  options?: MoneyOptions,
+): { type: string; value: string }[] {
   const digits = currencyDigits(currency, locale);
   if (!isSafeMinor(minor)) throw new Error('Amount is outside the supported range.');
   // Compact notation only starts abbreviating at a thousand. Below that it would
@@ -184,16 +194,19 @@ export function formatMoney(
     let insertedInteger = false;
     return pattern.map((part) => {
       if (part.type === 'integer' || part.type === 'group') {
-        if (insertedInteger) return '';
+        if (insertedInteger) return { type: part.type, value: '' };
         insertedInteger = true;
-        return numberParts
-          .filter((numberPart) => numberPart.type === 'integer' || numberPart.type === 'group')
-          .map((numberPart) => numberPart.value)
-          .join('');
+        return {
+          type: 'integer',
+          value: numberParts
+            .filter((numberPart) => numberPart.type === 'integer' || numberPart.type === 'group')
+            .map((numberPart) => numberPart.value)
+            .join(''),
+        };
       }
-      if (part.type === 'fraction') return localizeAsciiDigits(fraction, locale);
-      return part.value;
-    }).join('');
+      if (part.type === 'fraction') return { type: 'fraction', value: localizeAsciiDigits(fraction, locale) };
+      return { type: part.type, value: part.value };
+    });
   }
   const value = new Decimal(minor).div(new Decimal(10).pow(digits)).toNumber();
   return new Intl.NumberFormat(locale, {
@@ -202,7 +215,79 @@ export function formatMoney(
     notation: 'compact',
     signDisplay: options?.sign ? 'exceptZero' : 'auto',
     maximumFractionDigits: 1,
-  }).format(value);
+  }).formatToParts(value);
+}
+
+export function formatMoney(
+  minor: number,
+  currency: CurrencyCode,
+  locale = 'en-US',
+  options?: MoneyOptions,
+) {
+  return moneyPartsList(minor, currency, locale, options).map((part) => part.value).join('');
+}
+
+export interface MoneyParts {
+  sign: string;
+  currency: string;
+  integer: string;
+  /** The decimal separator and the fractional digits, e.g. ".34" or ",34". Empty for zero-decimal currencies. */
+  fraction: string;
+  currencyPosition: 'before' | 'after';
+  /** Anything (bidi marks, a leading currency-adjacent space) that renders before the sign/currency/number cluster. */
+  literalBefore: string;
+  /** Anything (a compact suffix, a currency-adjacent space) that renders after the number, before a trailing currency. */
+  literalAfter: string;
+}
+
+/**
+ * The same value `formatMoney` renders, split into typed pieces so a caller
+ * can style the currency symbol and fractional digits differently from the
+ * integer part (see `AnimatedMoney`'s `split` prop). Built from
+ * `Intl.NumberFormat.formatToParts` on the identical configuration
+ * `moneyPartsList` uses for `formatMoney`, so the two can never disagree.
+ *
+ * Concatenating the fields back together as
+ * `literalBefore + sign + (currencyPosition === 'before' ? currency : '') + integer + fraction + literalAfter + (currencyPosition === 'after' ? currency : '')`
+ * reproduces `formatMoney(...)` exactly — this is asserted for every locale
+ * this function is tested against, including RTL (Hebrew) and zero-decimal
+ * (JPY) currencies, where bidi marks and a trailing currency respectively
+ * land in `literalBefore`/`literalAfter` rather than being dropped.
+ */
+export function formatMoneyParts(
+  minor: number,
+  currency: CurrencyCode,
+  locale = 'en-US',
+  options?: MoneyOptions,
+): MoneyParts {
+  const parts = moneyPartsList(minor, currency, locale, options);
+  let sign = '';
+  let currencyValue = '';
+  let integer = '';
+  let fraction = '';
+  let literalBefore = '';
+  let literalAfter = '';
+  let currencyPosition: 'before' | 'after' = 'before';
+  let numericStarted = false;
+  for (const part of parts) {
+    if (part.type === 'integer' || part.type === 'group') {
+      integer += part.value;
+      numericStarted = true;
+    } else if (part.type === 'decimal' || part.type === 'fraction') {
+      fraction += part.value;
+      numericStarted = true;
+    } else if (part.type === 'minusSign' || part.type === 'plusSign') {
+      sign += part.value;
+    } else if (part.type === 'currency') {
+      currencyValue += part.value;
+      currencyPosition = numericStarted ? 'after' : 'before';
+    } else if (!numericStarted) {
+      literalBefore += part.value;
+    } else {
+      literalAfter += part.value;
+    }
+  }
+  return { sign, currency: currencyValue, integer, fraction, currencyPosition, literalBefore, literalAfter };
 }
 
 export function minorToDecimalString(minor: number, currency: CurrencyCode, locale = 'en-US') {

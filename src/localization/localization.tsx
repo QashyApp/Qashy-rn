@@ -593,6 +593,84 @@ const HEBREW: Record<string, string> = {
   'This device joined your vault. Keep the other device open nearby — Qashy opens as soon as your accounts arrive.': 'המכשיר הצטרף לכספת. השאירו את המכשיר האחר פתוח בקרבת מקום — Qashy ייפתח ברגע שהחשבונות יגיעו.',
   'Restore a backup': 'שחזור גיבוי',
   'Open the .qashyvault file you saved from your old device. Everything in it — accounts, history and your vault key — moves onto this one.': 'פתחו את קובץ ה־‎.qashyvault ששמרתם מהמכשיר הקודם. כל מה שבו — חשבונות, היסטוריה ומפתח הכספת — יעבור למכשיר הזה.',
+
+  // Customizable Overview cards.
+  Customize: 'התאמה אישית', 'Add card': 'הוספת כרטיס', 'Add cards': 'הוספת כרטיסים',
+  'Choose what shows up on your overview.': 'בחרו מה יופיע בסקירה שלכם.',
+  'Your overview is empty': 'הסקירה שלכם ריקה',
+  'Add cards to see budgets, goals and activity here.': 'הוסיפו כרטיסים כדי לראות כאן תקציבים, יעדים ופעילות.',
+  'Nothing due yet': 'אין עדיין דבר שממתין',
+  'Recurring transactions due soon will show up here.': 'תנועות מחזוריות שיגיעו בקרוב יופיעו כאן.',
+  'Add an account to see its balance here.': 'הוסיפו חשבון כדי לראות כאן את היתרה שלו.',
+  'Every card is already on your overview': 'כל הכרטיסים כבר נמצאים בסקירה שלכם',
+  'Remove a card first to add it back, or add another instance where more than one is allowed.': 'הסירו כרטיס קודם כדי להוסיף אותו שוב, או הוסיפו עותק נוסף במקום שבו מותר יותר מאחד.',
+  'Reset to default layout': 'איפוס לפריסת ברירת המחדל',
+  'Reset to default layout?': 'לאפס לפריסת ברירת המחדל?',
+  'Your overview will go back to its original set of cards, order, and sizes.': 'הסקירה שלכם תחזור לכרטיסים, לסדר ולגדלים המקוריים שלה.',
+  Reset: 'איפוס',
+  'This budget is no longer available.': 'התקציב הזה כבר אינו זמין.',
+  'This goal is no longer available': 'היעד הזה כבר אינו זמין',
+  'All budgets': 'כל התקציבים', 'All goals': 'כל היעדים',
+  'Spending insight': 'תובנת הוצאות',
+  'A trend line or category breakdown of this month’s spending.': 'קו מגמה או פילוח לפי קטגוריה של ההוצאות החודש.',
+  'How much of a budget—or all of them—has been spent.': 'כמה הוצא מתקציב אחד — או מכולם.',
+  'Every account and its current balance.': 'כל חשבון והיתרה הנוכחית שלו.',
+  'Recurring transactions due soon, with quick skip or mark-paid actions.': 'תנועות מחזוריות שמגיעות בקרוב, עם פעולות מהירות לדילוג או סימון כשולם.',
+  'The latest transactions from this month.': 'התנועות האחרונות מהחודש הזה.',
+  'Progress toward savings targets and planned purchases.': 'התקדמות לעבר יעדי חיסכון ורכישות מתוכננות.',
+  'Top categories': 'קטגוריות מובילות',
+  'The categories driving this month’s spending.': 'הקטגוריות שמובילות את ההוצאות החודש.',
+  'Categorized expenses this month will rank here.': 'הוצאות מקוטלגות מהחודש הזה ידורגו כאן.',
+  'Couldn’t add this card': 'לא ניתן היה להוסיף את הכרטיס',
+  'Couldn’t restore this card': 'לא ניתן היה לשחזר את הכרטיס',
+  'Couldn’t update your overview': 'לא ניתן היה לעדכן את הסקירה שלכם',
+  'Couldn’t reset your overview': 'לא ניתן היה לאפס את הסקירה שלכם',
+  'Spending this month': 'הוצאות החודש',
+  'Spending insight removed': 'תובנת ההוצאות הוסרה',
+  'Budget pulse removed': 'מצב התקציב הוסר',
+  'Accounts removed': 'החשבונות הוסרו',
+  'Coming up removed': 'בהמשך הוסר',
+  'Recent activity removed': 'הפעילות האחרונה הוסרה',
+  'Goals removed': 'היעדים הוסרו',
+  'Top categories removed': 'הקטגוריות המובילות הוסרו',
+  'More details': 'פרטים נוספים',
+  'Show all': 'הצג הכול',
+
+  // Transactions: filter bar.
+  'Clear filters': 'ניקוי הסינון',
+
+  // Plan: budget pace status and projection.
+  'Under pace': 'מתחת לקצב', 'On track': 'בקצב', 'Over pace': 'מעל הקצב', 'Over budget': 'חריגה מהתקציב',
+  Projected: 'צפי', remaining: 'נותרו',
+
+  // Sync: pairing stepper and the Connections section's own advanced toggle.
+  'Pairing progress': 'התקדמות החיבור', Advanced: 'מתקדם',
+
+  // More → Appearance preview card.
+  'Preview · Net worth': 'תצוגה מקדימה · שווי נקי', 'Preview progress': 'התקדמות התצוגה המקדימה',
+  'Looks good': 'נראה טוב',
+
+  // More: top-level section headers.
+  App: 'אפליקציה', Data: 'נתונים',
+
+  // More → Exchange rates automation.
+  Automatic: 'אוטומטי', Manual: 'ידני',
+  'Fetch rates automatically': 'משיכת שערים אוטומטית',
+  'Off by default. Sends only currency codes and dates to frankfurter.dev — never amounts or account details. Frankfurter can see your IP address.': 'כבוי כברירת מחדל. נשלחים רק קודי מטבע ותאריכים אל frankfurter.dev — לעולם לא סכומים או פרטי חשבון. frankfurter יכול לראות את כתובת ה־IP שלכם.',
+  'Last updated': 'עודכן לאחרונה', 'Never updated': 'מעולם לא עודכן',
+  'Refreshing…': 'מרענן…', 'Refresh now': 'רענון עכשיו',
+  'Needs a manual rate': 'דורש שער ידני', 'Manual rates': 'שערים ידניים',
+  'This device looks offline. Automatic rates will try again the next time it is online.': 'נראה שהמכשיר הזה במצב לא מקוון. השערים האוטומטיים ינסו שוב בפעם הבאה שהוא יהיה מקוון.',
+  'The request to frankfurter.dev timed out.': 'הבקשה אל frankfurter.dev חרגה מזמן ההמתנה.',
+  'frankfurter.dev returned an error.': 'frankfurter.dev החזיר שגיאה.',
+  'frankfurter.dev returned a response Qashy did not understand.': 'frankfurter.dev החזיר תגובה ש־Qashy לא הצליח להבין.',
+  'Couldn’t update automatic rates': 'לא ניתן היה לעדכן את השערים האוטומטיים',
+  'Couldn’t turn on automatic rates': 'לא ניתן היה להפעיל שערים אוטומטיים',
+  'Turn on automatic rates': 'הפעלת שערים אוטומטיים', 'Add manually': 'הוספה ידנית',
+  'Add a manual rate': 'הוספת שער ידני', 'Couldn’t fetch rates — Retry': 'לא ניתן היה למשוך שערים — ניסיון חוזר',
+
+  // More → Import & export (CSV) stepper.
+  'Choose file': 'בחירת קובץ', 'Map columns': 'מיפוי עמודות', Preview: 'תצוגה מקדימה', Import: 'ייבוא',
 };
 
 function translateDynamic(message: string) {
@@ -716,6 +794,17 @@ function translateDynamic(message: string) {
     [/^Merge 1 group$/, () => 'מיזוג קבוצה אחת'],
     [/^Merge (\d+) groups$/, (count) => `מיזוג ${count} קבוצות`],
     [/^Keep this one, remove (\d+) copies$/, (count) => `להשאיר את זו ולהסיר ${count} עותקים`],
+    // Overview edit-mode card toolbar. `name` here is already a translated widget title (or a
+    // literal user-entered budget/goal name), so it is interpolated verbatim rather than routed
+    // back through `translateField`.
+    [/^Move (.+) up$/, (name) => `הזזת ${name} למעלה`],
+    [/^Move (.+) down$/, (name) => `הזזת ${name} למטה`],
+    [/^Change (.+) size$/, (name) => `שינוי גודל ${name}`],
+    [/^(.+) settings$/, (name) => `הגדרות ${name}`],
+    [/^Remove (.+)$/, (name) => `הסרת ${name}`],
+    [/^Drag to reorder (.+)$/, (name) => `גררו כדי לסדר מחדש את ${name}`],
+    [/^Add (.+) card$/, (name) => `הוספת כרטיס ${name}`],
+    [/^(.+): (\d+)% of this month's spending$/, (name, percent) => `${name}: ${percent}% מהוצאות החודש`],
   ];
   for (const [pattern, replacement] of patterns) {
     const match = message.match(pattern);

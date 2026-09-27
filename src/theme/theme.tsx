@@ -20,6 +20,7 @@ import {
   lightTokens,
   mixHex,
   readableTextColor,
+  withAlpha,
 } from '@/theme/tokens';
 
 export interface ThemeTokens {
@@ -32,6 +33,8 @@ export interface ThemeTokens {
   surface: ColorValue;
   surfaceElevated: ColorValue;
   surfaceMuted: ColorValue;
+  /** The fill of a sunken "well": progress tracks, segmented-control tracks, input fields. */
+  surfaceSunken: ColorValue;
   text: ColorValue;
   textMuted: ColorValue;
   border: ColorValue;
@@ -41,6 +44,8 @@ export interface ThemeTokens {
   onNegative: ColorValue;
   warning: ColorValue;
   onWarning: ColorValue;
+  /** Semantic color for transfers — neither an income nor an expense. */
+  transfer: ColorValue;
   glassTint: 'light' | 'dark' | 'systemMaterial';
   staticAccent: string;
   /**
@@ -53,38 +58,78 @@ export interface ThemeTokens {
   staticSurface: string;
   staticText: string;
   /**
-   * The elevation ladder. Exactly one mechanism conveys depth per mode: shadow
-   * in light (where the surface ramp tops out at white), lightness in dark
-   * (where shadows are invisible against the page). `shadowCard` is therefore
-   * `undefined` in dark — a resting card there is lifted by `surfaceElevated`,
-   * not by a glow that would never be seen.
+   * CSS `linear-gradient(180deg, top, bottom)` for a raised surface (card,
+   * sheet): a subtle top-to-bottom lightening that makes it read as physical
+   * material rather than a flat fill. `undefined` under Android's Material You,
+   * because `surface` is then an opaque platform color with no JS-readable hex
+   * to gradient from.
    */
-  shadowCard: string | undefined;
+  surfaceGradient: string | undefined;
+  /** CSS `linear-gradient(180deg, top, bottom)` for a primary/accent-filled control. */
+  accentGradient: string;
+  /**
+   * The elevation ladder for the "soft & tactile" material language. Every
+   * value is a real CSS `box-shadow` string, valid on native (RN 0.86's
+   * `boxShadow` style prop) and on web. Raised surfaces (`shadowCard`,
+   * `shadowRaised`) combine an inset top highlight — light catching the top
+   * edge — with a soft, layered outer drop shadow, in both modes: unlike the
+   * old ladder, dark mode's inset highlight *is* visible against a dark page
+   * even though an outer glow would not be, so `shadowCard` is a real string
+   * in both modes now, never `undefined`. Sunken wells and pressed controls
+   * use an inset shadow only, with no outer shadow, so they read as carved in
+   * rather than lifted.
+   */
+  shadowCard: string;
   shadowRaised: string;
+  /** A raised, unpressed control (button, chip, input) at rest. */
+  shadowControl: string;
+  /** The same control pressed in: inset only, no outer shadow. */
+  shadowControlPressed: string;
+  /** A sunken well: progress track, segmented-control track, input field. */
+  shadowSunken: string;
   shadowOverlay: string;
   /** The floating action button: tighter and darker than `shadowRaised`, so it reads as pressable. */
   shadowFab: string;
+  /** An accent-filled control (primary button, FAB) at rest. */
+  shadowAccent: string;
   /** The dimmed layer behind a modal picker or menu. */
   scrim: string;
 }
 
 const lightShadows = {
-  shadowCard: '0 1px 2px rgba(25, 27, 32, 0.05)',
-  shadowRaised: '0 8px 24px rgba(25, 27, 32, 0.08)',
+  shadowCard: 'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(25, 27, 32, 0.06), 0 8px 20px -10px rgba(25, 27, 32, 0.14)',
+  shadowRaised: 'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(25, 27, 32, 0.06), 0 14px 32px -12px rgba(25, 27, 32, 0.20)',
+  shadowControl: 'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 2px rgba(25, 27, 32, 0.10), 0 3px 8px -3px rgba(25, 27, 32, 0.16)',
+  shadowControlPressed: 'inset 0 2px 4px rgba(25, 27, 32, 0.16), inset 0 0 0 1px rgba(25, 27, 32, 0.04)',
+  shadowSunken: 'inset 0 1px 3px rgba(25, 27, 32, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.7)',
   shadowOverlay: '0 20px 48px rgba(25, 27, 32, 0.18)',
-  shadowFab: '0 4px 14px rgba(25, 27, 32, 0.28)',
+  shadowFab: 'inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 14px rgba(25, 27, 32, 0.28)',
   scrim: 'rgba(12, 13, 17, 0.42)',
 } as const;
 
 const darkShadows = {
-  shadowCard: undefined,
-  shadowRaised: '0 8px 24px rgba(0, 0, 0, 0.45)',
+  shadowCard: 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 0 rgba(0, 0, 0, 0.45), 0 10px 24px -12px rgba(0, 0, 0, 0.7)',
+  shadowRaised: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 36px -12px rgba(0, 0, 0, 0.75)',
+  shadowControl: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5)',
+  shadowControlPressed: 'inset 0 2px 5px rgba(0, 0, 0, 0.55)',
+  shadowSunken: 'inset 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.04)',
   shadowOverlay: '0 22px 52px rgba(0, 0, 0, 0.6)',
-  shadowFab: '0 6px 18px rgba(0, 0, 0, 0.58)',
+  shadowFab: 'inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 6px 18px rgba(0, 0, 0, 0.58)',
   scrim: 'rgba(0, 0, 0, 0.56)',
 } as const;
 
 const ThemeContext = createContext<ThemeTokens | null>(null);
+
+/** Builds the accent-dependent shadow/gradient pair that no static const can hold. */
+function accentMaterial(accent: string, dark: boolean) {
+  const gradientTop = mixHex(accent, '#FFFFFF', dark ? 0.10 : 0.14);
+  const accentGradient = `linear-gradient(180deg, ${gradientTop}, ${accent})`;
+  const highlightAlpha = dark ? 0.18 : 0.28;
+  const outerAlpha1 = dark ? 0.42 : 0.30;
+  const outerAlpha2 = dark ? 0.6 : 0.45;
+  const shadowAccent = `inset 0 1px 0 rgba(255,255,255,${highlightAlpha}), 0 1px 2px ${withAlpha(accent, outerAlpha1)}, 0 6px 14px -4px ${withAlpha(accent, outerAlpha2)}`;
+  return { accentGradient, shadowAccent };
+}
 
 // Hand-tuned neutral surfaces with a single accent family. The user's accent
 // only drives accent/accentContainer colors; surfaces stay neutral so the app
@@ -93,6 +138,10 @@ function accentTokens(seed: string, dark: boolean): ThemeTokens {
   const base = dark ? darkTokens : lightTokens;
   const accent = accessibleAccentColor(seed, base.surface, base.text);
   const accentContainer = mixHex(accent, base.surface, dark ? 0.78 : 0.86);
+  const surfaceGradient = dark
+    ? `linear-gradient(180deg, ${mixHex(base.surface, '#FFFFFF', 0.035)}, ${base.surface})`
+    : `linear-gradient(180deg, #FFFFFF, ${mixHex('#FFFFFF', base.background, 0.35)})`;
+  const { accentGradient, shadowAccent } = accentMaterial(accent, dark);
   return {
     mode: dark ? 'dark' : 'light',
     accent,
@@ -103,6 +152,7 @@ function accentTokens(seed: string, dark: boolean): ThemeTokens {
     surface: base.surface,
     surfaceElevated: base.surfaceElevated,
     surfaceMuted: base.surfaceMuted,
+    surfaceSunken: base.surfaceSunken,
     text: base.text,
     textMuted: base.textMuted,
     border: base.border,
@@ -112,10 +162,14 @@ function accentTokens(seed: string, dark: boolean): ThemeTokens {
     onNegative: readableTextColor(base.negative),
     warning: base.warning,
     onWarning: readableTextColor(base.warning),
+    transfer: base.transfer,
     glassTint: dark ? 'dark' : 'light',
     staticAccent: accent,
     staticSurface: base.surface,
     staticText: base.text,
+    surfaceGradient,
+    accentGradient,
+    shadowAccent,
     ...(dark ? darkShadows : lightShadows),
   };
 }
@@ -125,6 +179,7 @@ function accentTokens(seed: string, dark: boolean): ThemeTokens {
 function systemTokens(dark: boolean): ThemeTokens {
   const fallback = accentTokens(QASHY_ACCENT, dark);
   if (Platform.OS !== 'android') return fallback;
+  const { accentGradient, shadowAccent } = accentMaterial(fallback.staticAccent, dark);
   return {
     ...fallback,
     accent: Color.android.dynamic.primary,
@@ -135,9 +190,16 @@ function systemTokens(dark: boolean): ThemeTokens {
     surface: Color.android.dynamic.surfaceContainerLow,
     surfaceElevated: Color.android.dynamic.surfaceContainer,
     surfaceMuted: Color.android.dynamic.surfaceContainerHigh,
+    surfaceSunken: Color.android.dynamic.surfaceContainerHighest,
     text: Color.android.dynamic.onSurface,
     textMuted: Color.android.dynamic.onSurfaceVariant,
     border: Color.android.dynamic.outlineVariant,
+    // `surface` is now an opaque platform color with no JS-readable hex, so a
+    // gradient computed from it would be meaningless; the accent gradient is
+    // still derived from a real hex seed and stays valid.
+    surfaceGradient: undefined,
+    accentGradient,
+    shadowAccent,
   };
 }
 

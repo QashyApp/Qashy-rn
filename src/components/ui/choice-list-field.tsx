@@ -14,9 +14,11 @@ import { AppText } from '@/components/ui/app-text';
 import { IconButton } from '@/components/ui/icon-button';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { fontStyle } from '@/theme/typography';
 import { radius, space } from '@/theme/tokens';
+import { hapticSelection } from '@/utils/haptics';
 
 export type ChoiceListOption = {
   value: string;
@@ -85,22 +87,24 @@ export function ChoiceListField({
         accessibilityRole="button"
         accessibilityValue={{ text: triggerText }}
         onPress={() => setOpen(true)}
-        style={({ pressed }) => ({
-          minHeight: 50,
-          paddingHorizontal: space.lg - 2,
-          paddingVertical: space.md - 2,
-          // Same filled, borderless silhouette as FormField, so a picker and a
-          // text field in one form read as the same kind of control.
-          borderRadius: radius.tile,
-          borderCurve: 'continuous',
-          borderWidth: 1,
-          borderColor: open ? theme.accent : 'transparent',
-          backgroundColor: theme.surfaceMuted,
-          opacity: pressed ? 0.8 : 1,
+        style={({ pressed }) => [
+          {
+            minHeight: 50,
+            paddingHorizontal: space.lg - 2,
+            paddingVertical: space.md - 2,
+            borderRadius: radius.tile,
+            borderCurve: 'continuous',
+            borderWidth: open ? 2 : 0,
+            borderColor: open ? theme.accent : 'transparent',
+            opacity: pressed ? 0.8 : 1,
             flexDirection: isRtl ? 'row-reverse' : 'row',
-          alignItems: 'center',
-          gap: 12,
-        })}>
+            alignItems: 'center',
+            gap: 12,
+          },
+          // Same raised control silhouette as any other trigger; the accent
+          // ring on open replaces the previous filled-border affordance.
+          materialStyle(theme, 'control'),
+        ]}>
         <View style={{ flex: 1, gap: 1 }}>
           <AppText literal muted={!selected}>{triggerText}</AppText>
           {selected?.description ? <AppText literal={literalOptions} variant="caption" muted>{selected.description}</AppText> : null}
@@ -132,20 +136,20 @@ export function ChoiceListField({
             accessibilityViewIsModal
             importantForAccessibility="yes"
             variant="zoom"
-            style={{
-              width: '100%',
-              maxWidth: 520,
-              maxHeight: Math.max(320, height - 72),
-              alignSelf: 'center',
-              padding: 18,
-              gap: 14,
-              borderRadius: radius.card,
-              borderCurve: 'continuous',
-              borderWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: theme.surface,
-              boxShadow: theme.shadowOverlay,
-            }}>
+            style={[
+              {
+                width: '100%',
+                maxWidth: 520,
+                maxHeight: Math.max(320, height - 72),
+                alignSelf: 'center',
+                padding: 18,
+                gap: 14,
+                borderRadius: radius.card,
+                borderCurve: 'continuous',
+              },
+              materialStyle(theme, 'raised'),
+              { boxShadow: theme.shadowOverlay },
+            ]}>
             <View style={{ minHeight: 44, flexDirection: isRtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, gap: 2 }}>
                 {/* Built as one string: separate children are translated
@@ -217,6 +221,7 @@ export function ChoiceListField({
                       accessibilityRole="radio"
                       accessibilityState={{ selected: isSelected }}
                       onPress={() => {
+                        hapticSelection();
                         onChange(item.value);
                         close();
                       }}

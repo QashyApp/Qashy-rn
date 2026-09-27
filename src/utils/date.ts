@@ -119,12 +119,10 @@ export function firstRecurrenceOnOrAfter(
       (minimum.getFullYear() - start.getFullYear()) / normalizedInterval,
     ));
   }
-  let candidate = addRecurrence(
-    startValue,
-    unit,
-    Math.max(0, cycles) * normalizedInterval,
-    startValue,
-  );
+  const cycleSteps = Math.max(0, cycles) * normalizedInterval;
+  let candidate = cycleSteps > 0
+    ? addRecurrence(startValue, unit, cycleSteps, startValue)
+    : startValue;
   if (candidate < minimumValue) {
     candidate = addRecurrence(candidate, unit, normalizedInterval, startValue);
   }

@@ -1,38 +1,55 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { useMemo, useRef, useState } from 'react';
+import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedMoney } from '@/components/finance/animated-money';
-import { CategoryDonut, SpendLineChart } from '@/components/finance/charts';
-import { TransactionRow } from '@/components/finance/transaction-row';
+import { Sparkline } from '@/components/finance/sparkline';
 import { ActionButton } from '@/components/ui/action-button';
-import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
-import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { MonthSwitcher, type MonthDirection } from '@/components/ui/month-switcher';
 import { MotionView } from '@/components/ui/motion';
 import { PageHeading } from '@/components/ui/page-heading';
 import { PageHero } from '@/components/ui/page-hero';
-import { ProgressBar } from '@/components/ui/progress-bar';
 import { floatingActionMetrics, ScreenContainer } from '@/components/ui/screen-container';
-import { SectionHeader } from '@/components/ui/section-header';
-import { SegmentedControl } from '@/components/ui/segmented-control';
 import { TextButton } from '@/components/ui/text-button';
+import { UndoBar } from '@/components/ui/undo-bar';
 import { useScrollHide } from '@/components/ui/use-scroll-hide';
 import { FRANKFURTER_UNSUPPORTED } from '@/data/exchange-rates/frankfurter';
+import { AddCardWell } from '@/features/overview/card-gallery-screen';
+import { EditableCardFrame } from '@/features/overview/edit/editable-card-frame';
+import {
+  DEFAULT_OVERVIEW_LAYOUT,
+  WIDGET_RULES,
+  type OverviewCard,
+  type OverviewLayoutAction,
+} from '@/features/overview/layout/overview-layout';
+import { useOverviewLayout } from '@/features/overview/layout/use-overview-layout';
+import { GRID_BREAKPOINT, packOverviewRows } from '@/features/overview/widgets/grid';
+import { WIDGET_REGISTRY } from '@/features/overview/widgets/registry';
 import { useLocalization } from '@/localization/localization';
 import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useScreenMetrics } from '@/theme/layout';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, tile as tileMetrics, toneColors } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
-import { endOfMonth, monthKey, monthLabel, startOfMonth } from '@/utils/date';
-import { hapticSelection, hapticSuccess } from '@/utils/haptics';
-import { formatMoney } from '@/utils/money';
+import { endOfMonth, startOfMonth } from '@/utils/date';
+import { hapticImpactLight } from '@/utils/haptics';
+
+interface UndoState {
+  readonly card: OverviewCard;
+  readonly index: number;
+}
+
+function nextSizeFor(card: OverviewCard) {
+  const sizes = WIDGET_RULES[card.type].sizes;
+  const currentIndex = sizes.indexOf(card.size);
+  const nextIndex = (currentIndex + 1) % sizes.length;
+  return sizes[nextIndex];
+}
 
 export function OverviewScreen() {
   const repository = useFinanceRepository();
@@ -42,17 +59,33 @@ export function OverviewScreen() {
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
   const { contentWidth } = metrics;
+  // Single vs. multi-column is a product decision keyed off `contentWidth` (the room the web
+  // shell says a screen has beside the rail/sidebar) — that's the number the original design's
+  // breakpoint meant. But `contentWidth` can be wider than the box actually rendered inside it
+  // (`ScreenContainer` caps its own width below a 1200px window), so pixel widths must come from
+  // the card-stack container's own measured width instead, or cards overflow the real box.
+  // `gridWidth` starts at 0 so the very first render (before onLayout fires) uses full-width
+  // single-column cards instead of flashing an overflowing pixel width.
+  const [gridWidth, setGridWidth] = useState(0);
+  const onGridLayout = (event: LayoutChangeEvent) => {
+    const next = event.nativeEvent.layout.width;
+    setGridWidth((current) => (Math.abs(current - next) > 0.5 ? next : current));
+  };
   const [month, setMonth] = useState(startOfMonth());
   // Which way the month content slides: forward months push in from the
   // right, previous months from the left.
   const [monthDirection, setMonthDirection] = useState<'left' | 'right'>('right');
-  const [pendingUpcomingId, setPendingUpcomingId] = useState<string | null>(null);
   const { visibility: fabVisibility, onScroll } = useScrollHide();
   const exchangeRateService = useExchangeRateService();
   const rateStatus = useExchangeRateStatus();
   const [togglingRates, setTogglingRates] = useState(false);
 
-  const [insightMode, setInsightMode] = useState<'trend' | 'categories'>('trend');
+  const { layout, status, dispatch } = useOverviewLayout();
+  const cards = status === 'loading' ? DEFAULT_OVERVIEW_LAYOUT.cards : layout.cards;
+  const [editing, setEditing] = useState(false);
+  const [configOpenId, setConfigOpenId] = useState<string | null>(null);
+  const [undo, setUndo] = useState<UndoState | null>(null);
+  const cardLayoutsRef = useRef(new Map<string, { y: number; height: number }>());
 
   const turnOnAutomaticRates = async () => {
     if (togglingRates) return;
@@ -74,21 +107,7 @@ export function OverviewScreen() {
     setMonth(next);
   };
 
-  const resolveUpcoming = async (id: string, action: 'skip' | 'confirm') => {
-    if (pendingUpcomingId) return;
-    setPendingUpcomingId(id);
-    try {
-      await (action === 'skip' ? repository.skipUpcoming(id) : repository.confirmUpcoming(id));
-      if (action === 'confirm') hapticSuccess();
-      else hapticSelection();
-    } catch (reason) {
-      showError(action === 'skip' ? 'Couldn’t skip this item' : 'Couldn’t mark this item paid', errorMessage(reason, 'Try again.'));
-    } finally {
-      setPendingUpcomingId(null);
-    }
-  };
   const summary = useMemo(() => {
-    // Repository reads are synchronous; these references make their external-store inputs explicit.
     void state.accounts;
     void state.budgetPeriods;
     void state.budgets;
@@ -98,195 +117,274 @@ export function OverviewScreen() {
     void state.transactions;
     return repository.getDashboard(startOfMonth(month), endOfMonth(month));
   }, [repository, month, state.accounts, state.budgetPeriods, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
-  const wide = contentWidth >= 900;
+
   const currency = state.settings.baseCurrency;
   const locale = state.settings.locale;
-  const budgetProgress = summary.budgetLimitMinor > 0 ? summary.budgetSpentMinor / summary.budgetLimitMinor : summary.budgetSpentMinor > 0 ? 1 : 0;
-
-  const insight = insightMode === 'trend'
-    ? <SpendLineChart points={summary.dailySpend} currency={currency} locale={locale} />
-    : <CategoryDonut items={summary.categorySpend} currency={currency} locale={locale} />;
-  const seeMonth = () => router.push({ pathname: '/transactions', params: { month: monthKey(month) } });
   const missingCurrencies = summary.missingExchangeRates.map((rate) => rate.fromCurrency);
   const missingAllUnsupported = missingCurrencies.length > 0 && missingCurrencies.every((code) => FRANKFURTER_UNSUPPORTED.has(code));
+
+  const cumulativeSpend = useMemo(
+    () => summary.dailySpend.reduce<number[]>((running, day) => {
+      const previous = running.length ? running[running.length - 1] : 0;
+      running.push(previous + day.amountMinor);
+      return running;
+    }, []),
+    [summary.dailySpend],
+  );
+
+  // The column-count decision is `contentWidth`'s (the original design's breakpoint), kept
+  // separate from the pixel budget cards are packed into (the measured container). A row's
+  // `flexDirection` and the edit toolbar's size-cycle control follow the same `contentWidth`
+  // decision so all three never disagree about whether this is a "wide" layout.
+  const multiColumn = contentWidth >= GRID_BREAKPOINT;
+  const rows = useMemo(
+    () => (gridWidth > 0 ? packOverviewRows(cards, gridWidth, space.xl, { multiColumn }) : []),
+    [cards, gridWidth, multiColumn],
+  );
+
+  const dispatchGuarded = async (action: OverviewLayoutAction, failureTitle: string) => {
+    try {
+      await dispatch(action);
+    } catch (reason) {
+      showError(failureTitle, errorMessage(reason, 'Try again.'));
+    }
+  };
+
+  const moveCard = (id: string, delta: 1 | -1) => {
+    void dispatchGuarded({ type: 'moveBy', id, delta }, 'Couldn’t update your overview');
+  };
+
+  const resizeCard = (card: OverviewCard) => {
+    void dispatchGuarded({ type: 'resize', id: card.id, size: nextSizeFor(card) }, 'Couldn’t update your overview');
+  };
+
+  const configureCard = (id: string, config: Record<string, unknown>) => {
+    void dispatchGuarded({ type: 'configure', id, config }, 'Couldn’t update your overview');
+  };
+
+  const removeCard = (card: OverviewCard) => {
+    const index = cards.findIndex((existing) => existing.id === card.id);
+    void dispatchGuarded({ type: 'remove', id: card.id }, 'Couldn’t update your overview').then(() => {
+      setUndo({ card, index });
+    });
+  };
+
+  const undoRemove = () => {
+    if (!undo) return;
+    void dispatchGuarded(
+      { type: 'add', card: { id: undo.card.id, type: undo.card.type, size: undo.card.size, config: undo.card.config }, index: undo.index },
+      'Couldn’t restore this card',
+    );
+    setUndo(null);
+  };
+
+  const handleCardLayout = (id: string) => (event: LayoutChangeEvent) => {
+    cardLayoutsRef.current.set(id, { y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height });
+  };
+
+  const handleDragEnd = (card: OverviewCard, offsetY: number) => {
+    const fromIndex = cards.findIndex((existing) => existing.id === card.id);
+    const own = cardLayoutsRef.current.get(card.id);
+    if (fromIndex === -1 || !own) return;
+    const draggedMid = own.y + own.height / 2 + offsetY;
+    let targetIndex = 0;
+    cards.forEach((existing) => {
+      if (existing.id === card.id) return;
+      const layoutInfo = cardLayoutsRef.current.get(existing.id);
+      if (!layoutInfo) return;
+      if (layoutInfo.y + layoutInfo.height / 2 < draggedMid) targetIndex += 1;
+    });
+    if (targetIndex === fromIndex) return;
+    void dispatchGuarded({ type: 'move', id: card.id, toIndex: targetIndex }, 'Couldn’t update your overview');
+  };
+
+  const enterEditMode = () => {
+    hapticImpactLight();
+    setEditing(true);
+  };
+
+  const exitEditMode = () => {
+    setEditing(false);
+    setConfigOpenId(null);
+  };
+
+  const renderWidget = (card: OverviewCard, size = card.size) => {
+    const definition = WIDGET_REGISTRY[card.type];
+    if (!definition) return null;
+    const Component = definition.Component;
+    return <Component card={card} month={month} monthDirection={monthDirection} size={size} editing={editing} />;
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" onScroll={onScroll} scrollEventThrottle={16} style={{ flex: 1, backgroundColor: theme.background }}>
         <ScreenContainer>
-        {/* Native no longer draws its own copy of this heading: the section
-            stack shows a real navigation header titled "Overview". Web keeps
-            PageHeading, which is where the document's h1 lives. */}
-        <PageHeading title="Overview" />
+          {/* Native no longer draws its own copy of this heading: the section
+              stack shows a real navigation header titled "Overview". Web keeps
+              PageHeading, which is where the document's h1 lives. */}
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.md }}>
+            <View style={{ flex: 1 }}><PageHeading title="Overview" /></View>
+            {!editing ? (
+              <TextButton title="Customize" icon="gear" onPress={enterEditMode} />
+            ) : null}
+          </View>
 
-        <PageHero
-          overline="Net worth"
-          accessory={<MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} />}
-          figure={(
-            <View style={{ gap: space.xs }}>
-              <AnimatedMoney minor={summary.netWorthMinor} currency={currency} locale={locale} variant="display" />
-              {missingCurrencies.length ? (
-                <View style={{ gap: space.xs }}>
-                  <AppText literal variant="caption" style={{ color: theme.warning }}>
-                    {`Excludes ${missingCurrencies.join(', ')} until an effective exchange rate is added.`}
-                  </AppText>
-                  <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-                    {missingAllUnsupported ? (
-                      <ActionButton
-                        title="Add a manual rate"
-                        variant="secondary"
-                        onPress={() => router.push({ pathname: '/exchange-rate', params: { currency: missingCurrencies[0] } })}
-                      />
-                    ) : !rateStatus.enabled ? (
-                      <>
-                        <ActionButton title="Turn on automatic rates" busy={togglingRates} disabled={togglingRates} onPress={turnOnAutomaticRates} />
+          <PageHero
+            overline="Net worth"
+            accessory={<MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} />}
+            figure={(
+              <View style={{ gap: space.xs }}>
+                <AnimatedMoney minor={summary.netWorthMinor} currency={currency} locale={locale} variant="display" />
+                {missingCurrencies.length ? (
+                  <View style={{ gap: space.xs }}>
+                    <AppText literal variant="caption" style={{ color: theme.warning }}>
+                      {`Excludes ${missingCurrencies.join(', ')} until an effective exchange rate is added.`}
+                    </AppText>
+                    <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+                      {missingAllUnsupported ? (
                         <ActionButton
-                          title="Add manually"
+                          title="Add a manual rate"
                           variant="secondary"
                           onPress={() => router.push({ pathname: '/exchange-rate', params: { currency: missingCurrencies[0] } })}
                         />
-                      </>
-                    ) : rateStatus.lastError ? (
-                      <ActionButton
-                        title="Couldn’t fetch rates — Retry"
-                        variant="secondary"
-                        onPress={() => exchangeRateService.refreshLatest({ force: true }).catch(() => undefined)}
-                      />
-                    ) : null}
+                      ) : !rateStatus.enabled ? (
+                        <>
+                          <ActionButton title="Turn on automatic rates" busy={togglingRates} disabled={togglingRates} onPress={turnOnAutomaticRates} />
+                          <ActionButton
+                            title="Add manually"
+                            variant="secondary"
+                            onPress={() => router.push({ pathname: '/exchange-rate', params: { currency: missingCurrencies[0] } })}
+                          />
+                        </>
+                      ) : rateStatus.lastError ? (
+                        <ActionButton
+                          title="Couldn’t fetch rates — Retry"
+                          variant="secondary"
+                          onPress={() => exchangeRateService.refreshLatest({ force: true }).catch(() => undefined)}
+                        />
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              ) : null}
-            </View>
-          )}
-          // Spent is deliberately not red. In the ledger an expense amount is
-          // neutral text — red is reserved for "something is wrong", like a
-          // budget gone over. Income keeps its green because money arriving
-          // really is the exception worth marking.
-          stats={([
-            ['Income', summary.incomeMinor, theme.positive],
-            ['Spent', summary.expenseMinor, theme.text],
-            ['Net flow', summary.netFlowMinor, summary.netFlowMinor >= 0 ? theme.positive : theme.negative],
-          ] as const).map(([label, amount, color]) => ({
-            label,
-            value: (
-              <MotionView key={`${label}-${month}`} variant={monthDirection} exit>
-                <AnimatedMoney
-                  minor={amount}
-                  currency={currency}
-                  locale={locale}
-                  compact={contentWidth < 520}
-                  variant="headline"
-                  numeric
-                  style={{ color }}
-                />
-              </MotionView>
-            ),
-          }))}
-        />
-
-        <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.xl, alignItems: 'flex-start' }}>
-          <Card style={{ flex: wide ? 3 : undefined, alignSelf: 'stretch', gap: space.lg }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md, flexWrap: 'wrap' }}>
-              <SectionHeader title={insightMode === 'trend' ? 'Spending rhythm' : 'By category'} />
-              <View style={{ minWidth: 220 }}>
-                <SegmentedControl
-                  label="Insight"
-                  size="compact"
-                  value={insightMode}
-                  onChange={setInsightMode}
-                  options={[
-                    { value: 'trend', label: 'Trend' },
-                    { value: 'categories', label: 'Categories' },
-                  ]}
-                />
+                ) : null}
               </View>
-            </View>
-            <MotionView key={`${insightMode}-${month}`} variant="fade" exit>
-              {insight}
-            </MotionView>
-          </Card>
+            )}
+            stats={([
+              ['Income', summary.incomeMinor, theme.positive],
+              ['Spent', summary.expenseMinor, theme.text],
+              ['Net flow', summary.netFlowMinor, summary.netFlowMinor >= 0 ? theme.positive : theme.negative],
+            ] as const).map(([label, amount, color]) => ({
+              label,
+              value: (
+                <MotionView key={`${label}-${month}`} variant={monthDirection} exit>
+                  <AnimatedMoney
+                    minor={amount}
+                    currency={currency}
+                    locale={locale}
+                    compact={contentWidth < 520}
+                    variant="headline"
+                    numeric
+                    style={{ color }}
+                  />
+                </MotionView>
+              ),
+            }))}
+            footer={cumulativeSpend.some((value) => value > 0) ? (
+              <Sparkline values={cumulativeSpend} label={t('Spending this month')} />
+            ) : undefined}
+          />
 
-          <View style={{ flex: wide ? 2 : undefined, alignSelf: 'stretch', gap: space.xl }}>
-            <Card style={{ gap: space.md }}>
-              <SectionHeader title="Budget pulse" action="Open plan" onAction={() => router.push('/plan')} />
-              {summary.budgetLimitMinor > 0 || summary.budgetSpentMinor > 0 ? (
-                <>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.md, alignItems: 'baseline' }}>
-                    <AnimatedMoney minor={summary.budgetSpentMinor} currency={currency} locale={locale} variant="money" numeric />
-                    <AppText literal muted variant="caption">{`${t('of')} ${formatMoney(summary.budgetLimitMinor, currency, locale)}`}</AppText>
-                  </View>
-                  <ProgressBar label={t('Budget progress')} value={budgetProgress} color={budgetProgress > 1 ? theme.negative as string : undefined} />
-                  <AppText variant="caption" muted>{budgetProgress > 1 ? 'Over budget — review the categories driving it.' : `${Math.max(0, Math.round((1 - budgetProgress) * 100))}% remains in this period.`}</AppText>
-                </>
-              ) : (
-                <View style={{ gap: space.md, alignItems: 'flex-start' }}><AppText muted>Create a flexible monthly or custom budget to see your pace here.</AppText><ActionButton title="Create budget" variant="secondary" onPress={() => router.push('/budget')} /></View>
-              )}
-            </Card>
-            <View style={{ gap: space.sm }}>
-              <SectionHeader title="Accounts" action="Manage" onAction={() => router.push('/more')} />
-              <Card variant="list" dividerInset={tileMetrics.size + space.md}>
-                {summary.accountBalances.map(({ account, balanceMinor }) => {
-                  const tile = toneColors(account.color, theme.staticSurface, theme.staticText, theme.mode === 'dark');
-                  return (
-                    <MotionView key={account.id} variant="fade" animateLayout exit>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 60 }}>
-                        <View style={{ width: tileMetrics.size, height: tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}><AppIcon name="wallet" color={tile.onContainer} size={tileMetrics.icon} /></View>
-                        <View style={{ flex: 1, gap: space.xxs }}><AppText literal variant="label">{account.name}</AppText><AppText literal variant="caption" muted>{`${account.currency} · ${t(account.type)}`}</AppText></View>
-                        <AnimatedMoney minor={balanceMinor} currency={account.currency} locale={locale} variant="label" numeric />
-                      </View>
+          {!editing ? (
+            cards.length ? (
+              <View style={{ gap: space.xl }} onLayout={onGridLayout}>
+                {gridWidth === 0 ? (
+                  cards.map((card) => (
+                    <MotionView key={card.id} animateLayout style={{ width: '100%' }}>
+                      {Platform.OS === 'web' ? (
+                        renderWidget(card)
+                      ) : (
+                        <Pressable delayLongPress={450} onLongPress={enterEditMode} style={{ width: '100%' }}>
+                          {renderWidget(card)}
+                        </Pressable>
+                      )}
                     </MotionView>
-                  );
-                })}
-              </Card>
-            </View>
-          </View>
-        </View>
-
-        {summary.upcomingTransactions.length ? (
-          <View style={{ gap: space.sm }}>
-            <SectionHeader title="Coming up" />
-            <Card variant="list">
-              {summary.upcomingTransactions.map((transaction) => (
-                <MotionView key={transaction.id} variant="fade" animateLayout exit style={{ gap: space.xxs, paddingVertical: space.xs }}>
-                  <TransactionRow transaction={transaction} compact returnTo="/overview" />
-                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm }}>
-                    <TextButton title="Skip" tone="muted" disabled={pendingUpcomingId !== null} onPress={() => resolveUpcoming(transaction.id, 'skip')} />
-                    <TextButton title="Mark paid" disabled={pendingUpcomingId !== null} onPress={() => resolveUpcoming(transaction.id, 'confirm')} />
-                  </View>
-                </MotionView>
-              ))}
-            </Card>
-          </View>
-        ) : null}
-
-        <View style={{ gap: space.sm }}>
-          <SectionHeader title="Recent activity" action="See all" onAction={seeMonth} />
-          {summary.recentTransactions.length ? (
-            <Card variant="list">
-              {summary.recentTransactions.map((transaction) => (
-                <MotionView key={transaction.id} variant="fade" animateLayout exit>
-                  <TransactionRow transaction={transaction} returnTo="/overview" />
-                </MotionView>
-              ))}
-            </Card>
-          ) : (
-            <Card>
-              <EmptyState
-                compact
-                icon="arrow.left.arrow.right"
-                title={state.transactions.length ? `No activity in ${monthLabel(month, locale)}` : 'Your ledger is ready'}
-                body={state.transactions.length ? 'Choose another month or open the full transaction list.' : 'Add the first transaction and Qashy will turn it into useful context.'}>
-                {state.transactions.length ? (
-                  <ActionButton title="See all transactions" variant="secondary" onPress={seeMonth} />
+                  ))
                 ) : (
-                  <ActionButton title="Add transaction" icon="plus" onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/overview' } })} />
+                  rows.map((row, rowIndex) => (
+                    <View
+                      key={rowIndex}
+                      style={multiColumn
+                        ? { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start', flexWrap: 'wrap' }
+                        : { gap: space.xl }}>
+                      {row.cards.map(({ card, width }) => (
+                        <MotionView key={card.id} animateLayout style={{ width }}>
+                          {Platform.OS === 'web' ? (
+                            renderWidget(card)
+                          ) : (
+                            <Pressable delayLongPress={450} onLongPress={enterEditMode} style={{ width: '100%' }}>
+                              {renderWidget(card)}
+                            </Pressable>
+                          )}
+                        </MotionView>
+                      ))}
+                    </View>
+                  ))
                 )}
+              </View>
+            ) : (
+              <EmptyState
+                icon="plus.circle"
+                title="Your overview is empty"
+                body="Add cards to see budgets, goals and activity here.">
+                <ActionButton title="Add cards" icon="plus" onPress={() => router.push('/overview-cards')} />
               </EmptyState>
-            </Card>
+            )
+          ) : (
+            <View style={{ gap: space.lg }}>
+              {cards.map((card, index) => {
+                const definition = WIDGET_REGISTRY[card.type];
+                if (!definition) return null;
+                const rule = WIDGET_RULES[card.type];
+                const showSizeControl = rule.sizes.length > 1 && multiColumn;
+                const hasConfigSheet = Boolean(definition.ConfigSheet);
+                const ConfigSheetComponent = definition.ConfigSheet;
+                return (
+                  <EditableCardFrame
+                    key={card.id}
+                    title={t(definition.title)}
+                    index={index}
+                    total={cards.length}
+                    sizes={rule.sizes}
+                    showSizeControl={showSizeControl}
+                    hasConfigSheet={hasConfigSheet}
+                    configOpen={configOpenId === card.id}
+                    onToggleConfig={() => setConfigOpenId((current) => (current === card.id ? null : card.id))}
+                    onMoveUp={() => moveCard(card.id, -1)}
+                    onMoveDown={() => moveCard(card.id, 1)}
+                    onCycleSize={() => resizeCard(card)}
+                    onRemove={() => removeCard(card)}
+                    onDragEnd={(offsetY) => handleDragEnd(card, offsetY)}
+                    onLayout={handleCardLayout(card.id)}
+                    configSheet={ConfigSheetComponent ? (
+                      <ConfigSheetComponent card={card} onConfigure={(config) => configureCard(card.id, config)} />
+                    ) : undefined}>
+                    {renderWidget(card)}
+                  </EditableCardFrame>
+                );
+              })}
+              <AddCardWell onPress={() => router.push('/overview-cards')} />
+              <ActionButton title="Done" onPress={exitEditMode} />
+            </View>
           )}
-        </View>
         </ScreenContainer>
       </ScrollView>
+      {undo ? (
+        <UndoBar
+          message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ''} removed`}
+          onAction={undoRemove}
+          onDismiss={() => setUndo(null)}
+          style={{ position: 'absolute', left: space.lg, right: space.lg, bottom: insets.bottom + space.xxl + 64 }}
+        />
+      ) : null}
       <FloatingActionButton
         label="Add transaction"
         visibility={fabVisibility}

@@ -1,8 +1,10 @@
 import { useRef } from 'react';
 import { TextInput, View } from 'react-native';
 
+import { AmountHero } from '@/components/finance/amount-hero';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
+import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
 import { MotionPressable } from '@/components/ui/motion';
 import type { AccountType } from '@/domain/models';
@@ -81,7 +83,7 @@ export function AccountStep({
           );
         })}
       </View>
-      <View style={{ gap: space.lg }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="Account name"
           value={draft.accountName}
@@ -92,20 +94,21 @@ export function AccountStep({
           submitBehavior="submit"
           onSubmitEditing={() => balanceRef.current?.focus()}
         />
-        <FormField
+        <AmountHero
           ref={balanceRef}
-          label={`Opening balance (${draft.currency})`}
-          value={draft.openingBalance}
-          onChangeText={(openingBalance) => onChange({ openingBalance })}
-          keyboardType="decimal-pad"
+          label="Opening balance"
+          size="money"
+          required={false}
           placeholder="0"
           hint="What’s in it today. Leave empty to start from zero."
+          currency={draft.currency}
+          value={draft.openingBalance}
+          onChangeText={(openingBalance) => onChange({ openingBalance })}
           error={errors.openingBalance}
           returnKeyType="done"
           onSubmitEditing={onSubmit}
-          style={{ fontSize: 22, fontWeight: '600', fontVariant: ['tabular-nums'] }}
         />
-      </View>
+      </Card>
     </View>
   );
 }

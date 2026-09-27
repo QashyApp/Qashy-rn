@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { useFormSheet } from '@/components/navigation/use-form-sheet';
 import { ActionButton } from '@/components/ui/action-button';
+import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { ChoiceChip } from '@/components/ui/choice-chip';
@@ -13,9 +14,10 @@ import { FormScreen } from '@/components/ui/form-screen';
 import type { CategoryKind } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
+import { useQashyTheme } from '@/theme/theme';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { hapticSuccess } from '@/utils/haptics';
-import { CATEGORY_PALETTE } from '@/theme/tokens';
+import { CATEGORY_PALETTE, radius, space, toneColors } from '@/theme/tokens';
 
 const COLORS = CATEGORY_PALETTE;
 const ICONS = {
@@ -37,6 +39,7 @@ export function CategoryFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
+  const theme = useQashyTheme();
   const { t } = useLocalization();
   const existing = id ? state.categories.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
@@ -98,8 +101,28 @@ export function CategoryFormScreen() {
 
   if (id && !existing) return <Redirect href="/more" />;
 
+  const preview = toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark');
+
   return (
     <FormScreen contentContainerStyle={{ gap: 16 }}>
+      {/* Updates live as icon/color change below, the same tinted-tile derivation the category
+          appears with everywhere else (More's category list, transaction rows, chips). */}
+      <View style={{ alignItems: 'center', gap: space.sm, paddingVertical: space.sm }}>
+        <View
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: radius.card,
+            borderCurve: 'continuous',
+            backgroundColor: preview.container,
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: theme.shadowRaised,
+          }}>
+          <AppIcon name={icon} color={preview.onContainer} size={32} />
+        </View>
+        {name.trim() ? <AppText literal variant="headline" numberOfLines={1}>{name}</AppText> : null}
+      </View>
       <Card style={{ gap: 16 }}>
         <FormField label="Category name" value={name} onChangeText={setName} autoFocus={!existing} />
         <View accessibilityLabel={t('Category kind')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>{(['expense', 'income'] as CategoryKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "income" ? "arrow.down" : item === "expense" ? "arrow.up" : "arrow.left.arrow.right"} label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} disabled={kindLocked && kind !== item} onPress={() => {
@@ -119,7 +142,7 @@ export function CategoryFormScreen() {
         <View accessibilityLabel={t('Parent category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip icon="xmark.circle" label="None" selected={!selectedParentId} onPress={() => setParentId('')} />{parentChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived || hasChildren} selected={selectedParentId === item.id} onPress={() => setParentId(item.id)} />)}</View>
         {hasChildren ? <AppText variant="caption" muted>A category with child categories must stay at the top level.</AppText> : null}
       </Card>
-      <ActionButton title={busy ? 'Saving…' : existing ? 'Save category' : 'Create category'} icon="checkmark" onPress={save} disabled={busy} busy={busy} />
+      <ActionButton title={busy ? 'Saving…' : existing ? 'Save category' : 'Create category'} icon="checkmark" size="large" onPress={save} disabled={busy} busy={busy} />
       {existing ? <ActionButton title="Archive category" variant="danger" onPress={archive} disabled={busy} /> : null}
     </FormScreen>
   );

@@ -43,7 +43,7 @@ export function TextButton({
           justifyContent: 'center',
           flexDirection: 'row',
           gap: space.sm - 2,
-          opacity: isDisabled ? 0.4 : state.pressed ? 0.62 : 1,
+          opacity: isDisabled ? 0.4 : state.pressed ? 0.6 : 1,
         },
         typeof style === 'function' ? style(state) : style,
       ]}>

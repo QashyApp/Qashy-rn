@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 
@@ -25,17 +26,24 @@ export function EmptyState({
   title,
   body,
   compact = false,
+  tone = 'default',
   children,
 }: {
   icon: string;
   title: string;
   body?: string;
   compact?: boolean;
+  /** `'accent'` tints the icon well itself, for the rare empty state that wants more emphasis. */
+  tone?: 'default' | 'accent';
   /** Actions. Rendered in a row below the copy. */
   children?: ReactNode;
 }) {
   const theme = useQashyTheme();
   const tile = compact ? 48 : 56;
+  // The icon tile sits inside a larger sunken well, so it reads as set into
+  // the page rather than floating flat on it — the one place in the empty
+  // state where material carries the sense of "there's nothing here yet".
+  const well = tile + space.md * 2;
   return (
     <MotionView
       variant="down"
@@ -46,16 +54,31 @@ export function EmptyState({
         paddingHorizontal: space.lg,
       }}>
       <View
-        style={{
-          width: tile,
-          height: tile,
-          borderRadius: radius.card,
-          borderCurve: 'continuous',
-          backgroundColor: theme.accentContainer,
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
-        <AppIcon name={icon} color={theme.onAccentContainer} size={compact ? 21 : 24} />
+        style={[
+          {
+            width: well,
+            height: well,
+            borderRadius: well / 2,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          materialStyle(theme, 'sunken'),
+          // Sunken keeps its carved-in shadow either way; only the fill swaps to
+          // an accent tint, so the well still reads as "set into the page".
+          tone === 'accent' ? { backgroundColor: theme.accentContainer } : null,
+        ]}>
+        <View
+          style={{
+            width: tile,
+            height: tile,
+            borderRadius: radius.card,
+            borderCurve: 'continuous',
+            backgroundColor: theme.accentContainer,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+          <AppIcon name={icon} color={theme.onAccentContainer} size={compact ? 21 : 24} />
+        </View>
       </View>
       <AppText variant="headline" style={{ textAlign: 'center' }}>{title}</AppText>
       {body ? (

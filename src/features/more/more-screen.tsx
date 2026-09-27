@@ -2,12 +2,14 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
+import { StatTile } from '@/components/finance/stat-tile';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { PageHeading } from '@/components/ui/page-heading';
 import { ScreenContainer } from '@/components/ui/screen-container';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingsRow } from '@/components/ui/settings-row';
+import { StatusPill } from '@/components/ui/status-pill';
 import { useLocalization } from '@/localization/localization';
 import { summarizeSync } from '@/features/sync/sync-summary';
 import { useExchangeRateStatus } from '@/providers/exchange-rate-provider';
@@ -102,6 +104,23 @@ export function MoreScreen() {
     <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }}>
       <ScreenContainer>
         <PageHeading title="More" subtitle="Accounts, categories, automation, portability, and appearance." />
+        <Card variant="emphasized" style={{ gap: space.lg }}>
+          <AppText variant="overline" style={{ color: theme.onAccentContainer, opacity: 0.75 }}>Qashy</AppText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
+            <View style={{ minWidth: 96, flex: 1 }}>
+              <StatTile icon="wallet" label="Accounts" value={String(activeAccounts.length)} />
+            </View>
+            <View style={{ minWidth: 96, flex: 1 }}>
+              <StatTile icon="chart.pie" label="Categories" value={String(state.categories.filter((item) => !item.archived).length)} />
+            </View>
+          </View>
+          {syncSummary ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+              <AppText literal variant="caption" style={{ color: theme.onAccentContainer, opacity: 0.85 }}>{t('Sync')}</AppText>
+              <StatusPill literal label={syncSummary.subtitle} icon={syncSummary.icon} tone={syncSummary.tone} />
+            </View>
+          ) : null}
+        </Card>
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.xl, alignItems: 'flex-start' }}>
           <View style={{ flex: wide ? 1 : undefined, width: '100%', gap: space.md }}>
             <SectionHeader title="Accounts" action="Add" onAction={() => router.push('/account')} />
@@ -143,9 +162,8 @@ export function MoreScreen() {
               </>
             ) : null}
 
-            <SectionHeader title="Qashy" />
+            <SectionHeader title="Data" />
             <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
-              <SettingsRow title="Appearance" subtitle="Theme, Material You, and accent" icon="paintbrush" onPress={() => router.push('/appearance')} />
               {/* The subtitle is the at-a-glance answer to "is the relay down?" — it reads
                   `Relay unreachable` rather than a stale last-synced time whenever the drop-box
                   is the thing that broke. The row is not `literal`, so it translates itself. */}
@@ -157,8 +175,23 @@ export function MoreScreen() {
                 onPress={() => router.push('/exchange-rates')}
               />
               <SettingsRow title="Import & export" subtitle="CSV portability" icon="tray" onPress={() => router.push('/csv')} />
-              <SettingsRow title="Reset all data" subtitle="Delete everything and return to first-time setup" icon="trash" tone="danger" value={resetting ? 'Resetting…' : undefined} disabled={resetting} onPress={resetAllData} />
+            </Card>
+
+            <SectionHeader title="App" />
+            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+              <SettingsRow title="Appearance" subtitle="Theme, Material You, and accent" icon="paintbrush" onPress={() => router.push('/appearance')} />
               <SettingsRow title="Privacy" subtitle="Local-first · no account · no tracking" icon="checkmark" />
+              {/* Dev-only component gallery; the route itself redirects away in production
+                  builds (see src/app/kitchen-sink.tsx), but the row is also hidden there so
+                  it never shows up as a dead end for a real user. */}
+              {__DEV__ ? (
+                <SettingsRow title="Kitchen sink" literal subtitle="Dev-only component gallery" icon="paintbrush" onPress={() => router.push('/kitchen-sink')} />
+              ) : null}
+            </Card>
+
+            <SectionHeader title="Danger zone" />
+            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+              <SettingsRow title="Reset all data" subtitle="Delete everything and return to first-time setup" icon="trash" tone="danger" value={resetting ? 'Resetting…' : undefined} disabled={resetting} onPress={resetAllData} />
             </Card>
           </View>
         </View>

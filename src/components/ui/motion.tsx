@@ -21,6 +21,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
+import { motion as motionTokens } from '@/theme/tokens';
+
 // ── The motion system ───────────────────────────────────────────────────────
 // One curve family, two durations, one travel distance, no overshoot. Motion
 // here exists to explain a change, never to announce itself: content settles
@@ -29,11 +31,11 @@ import Animated, {
 // is the single thing that makes an interface read as a toy.
 export const motionDurations = {
   /** Anything arriving or changing in place. */
-  enter: 200,
+  enter: motionTokens.duration.base,
   /** Anything leaving. Exits are always faster than entrances. */
-  exit: 120,
+  exit: motionTokens.duration.fast,
   /** Reflow after an insert, delete, or resize. */
-  layout: 200,
+  layout: motionTokens.duration.base,
   /** A whole screen cross-fading in behind a navigation. */
   screen: 180,
 } as const;

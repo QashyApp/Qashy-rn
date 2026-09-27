@@ -5,6 +5,7 @@ import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { ColorSwatch } from '@/components/ui/color-swatch';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import type { AccentSource, ThemeMode } from '@/domain/models';
 import { StepHeading } from '@/features/onboarding/onboarding-shell';
@@ -120,9 +121,7 @@ function Preview({ currency, locale }: { currency: string; locale: string }) {
         </View>
         <View style={{ flex: 1, gap: space.xxs }}>
           <AppText variant="label">Groceries</AppText>
-          <View style={{ height: 4, borderRadius: radius.pill, backgroundColor: theme.surfaceMuted, overflow: 'hidden' }}>
-            <View style={{ width: '62%', height: '100%', backgroundColor: theme.accent }} />
-          </View>
+          <ProgressBar value={0.62} size="thin" />
         </View>
         <AppText literal variant="label" numeric>{amount}</AppText>
       </View>

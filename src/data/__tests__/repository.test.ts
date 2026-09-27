@@ -1502,6 +1502,22 @@ describe('FinanceRepository contract', () => {
     }, current.id)).resolves.toMatchObject({ tagIds: [kept.id] });
   });
 
+  it('refuses a soft-deleted tag id on a new transaction', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const doomed = await repository.saveTag({ name: 'Work', color: '#5966E9' });
+    await repository.deleteEntities('tags', [doomed.id]);
+
+    await expect(repository.saveTransaction({
+      kind: 'expense',
+      title: 'Taxi',
+      localDate: '2026-07-15',
+      accountId: account.id,
+      tagIds: [doomed.id],
+      amountMinor: 500,
+    })).rejects.toThrow('Choose valid tags.');
+  });
+
   it('clears a deleted category from the transactions that used it', async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
@@ -1869,8 +1885,27 @@ describe('FinanceRepository contract', () => {
     const cleanedRule = repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)!;
     expect(cleanedBudget.filters.tagIds).toEqual([]);
     expect(cleanedRule.template.tagIds).toEqual([]);
+    // Losing its only filter would otherwise widen this budget to match every
+    // expense in the app with no warning, so it must be archived instead.
+    expect(cleanedBudget.archived).toBe(true);
     await expect(repository.saveBudget(cleanedBudget, cleanedBudget.id, cleanedBudget.revision)).resolves.toBeDefined();
     await expect(repository.saveRecurringRule(cleanedRule, cleanedRule.id, cleanedRule.revision)).resolves.toBeDefined();
+  });
+
+  it('keeps a budget active when a deleted filter still leaves an account restriction', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const tag = await repository.saveTag({ name: 'Work', color: '#5966E9' });
+    const budget = await repository.saveBudget({
+      name: 'Work', icon: 'chart', color: '#5966E9', limitMinor: 1000,
+      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
+      rollover: false, filters: { accountIds: [account.id], categoryIds: [], tagIds: [tag.id] }, categoryLimits: [], archived: false,
+    });
+
+    await repository.deleteEntities('tags', [tag.id]);
+    const cleanedBudget = repository.getSnapshot().budgets.find((item) => item.id === budget.id)!;
+    expect(cleanedBudget.filters.tagIds).toEqual([]);
+    expect(cleanedBudget.archived).toBe(false);
   });
 
   it('does not count contributions whose linked transaction is skipped', async () => {
@@ -2094,9 +2129,11 @@ describe('FinanceRepository contract', () => {
       filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
     });
 
-    const [first] = repository.getBudgetStatuses('2026-09-15');
-    const [second] = repository.getBudgetStatuses('2026-09-15');
-    expect(first.snapshot.periodStart).toBe('2026-09-01');
+    // Far enough in the future that this period can never have been saved by
+    // an earlier run of the app, regardless of when this test itself runs.
+    const [first] = repository.getBudgetStatuses('2099-09-15');
+    const [second] = repository.getBudgetStatuses('2099-09-15');
+    expect(first.snapshot.periodStart).toBe('2099-09-01');
     expect(second.snapshot.id).toBe(first.snapshot.id);
     expect(second.snapshot).toEqual(first.snapshot);
     // A transient snapshot must never be mistaken for a stored one.

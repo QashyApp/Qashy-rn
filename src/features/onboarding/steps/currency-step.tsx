@@ -3,12 +3,14 @@ import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
-import { ChoiceChip } from '@/components/ui/choice-chip';
 import { ChoiceListField, type ChoiceListOption } from '@/components/ui/choice-list-field';
-import { MotionView } from '@/components/ui/motion';
+import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { StepHeading } from '@/features/onboarding/onboarding-shell';
 import { useLocalization } from '@/localization/localization';
-import { space } from '@/theme/tokens';
+import { materialStyle } from '@/theme/materials';
+import { useQashyTheme } from '@/theme/theme';
+import { radius, space } from '@/theme/tokens';
+import { hapticSelection } from '@/utils/haptics';
 import { formatMoney, parseMoney, SUPPORTED_CURRENCY_CODES } from '@/utils/money';
 
 const FEATURED_CURRENCIES = ['ILS', 'USD', 'EUR', 'GBP'];
@@ -79,7 +81,7 @@ export function CurrencyStep({ currency, locale, onCurrency }: { currency: strin
             // Equal columns, so the four quick picks read as one row of options
             // rather than wrapping raggedly on a phone.
             <View key={code} style={{ flex: 1 }}>
-              <ChoiceChip literal label={code} selected={currency === code} onPress={() => onCurrency(code)} />
+              <CurrencyTile code={code} name={currencyLabel(code, locale)} selected={currency === code} onPress={() => onCurrency(code)} />
             </View>
           ))}
         </View>
@@ -96,5 +98,44 @@ export function CurrencyStep({ currency, locale, onCurrency }: { currency: strin
         />
       </View>
     </View>
+  );
+}
+
+/**
+ * A quick-pick currency as a raised tactile tile: the code set large in the
+ * numeric display face, the currency's name beneath it. Selection reads as
+ * physically pressed in — a sunken fill instead of a raised one — the same
+ * language `ChoiceChip` uses, just roomier since there are only ever four.
+ */
+function CurrencyTile({ code, name, selected, onPress }: { code: string; name: string; selected: boolean; onPress: () => void }) {
+  const theme = useQashyTheme();
+  return (
+    <MotionPressable
+      accessibilityRole="radio"
+      accessibilityLabel={code}
+      accessibilityState={{ checked: selected }}
+      aria-checked={selected}
+      active={selected}
+      onPress={() => {
+        hapticSelection();
+        onPress();
+      }}
+      pressedScale={0.96}
+      style={[
+        {
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: space.xxs,
+          paddingVertical: space.md,
+          borderRadius: radius.tile,
+          borderCurve: 'continuous',
+        },
+        selected
+          ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+          : materialStyle(theme, 'control'),
+      ]}>
+      <AppText literal figure variant="label" style={{ fontWeight: '700', color: selected ? theme.onAccentContainer : theme.text }}>{code}</AppText>
+      <AppText literal variant="caption" numberOfLines={1} style={{ fontSize: 11, color: selected ? theme.onAccentContainer : theme.textMuted }}>{name}</AppText>
+    </MotionPressable>
   );
 }

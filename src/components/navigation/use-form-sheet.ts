@@ -1,5 +1,6 @@
 import { router, useNavigation } from 'expo-router';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePreventRemove } from 'expo-router/react-navigation';
+import { useCallback, useState } from 'react';
 
 import { confirmDestructive } from '@/utils/confirm';
 import { stableSerialize } from '@/utils/form-state';
@@ -28,20 +29,14 @@ export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; v
   const [baseline] = useState(() => serialized);
   const dirty = baseline !== serialized;
 
-  // Read through a ref inside the listener so it can stay subscribed for the
-  // screen's whole life instead of resubscribing on every keystroke.
-  const dirtyRef = useRef(dirty);
-  useEffect(() => {
-    dirtyRef.current = dirty;
-  }, [dirty]);
   // Set once the screen is leaving deliberately — a save, a delete, or a discard
-  // the user already confirmed — so the guard does not prompt about its own exit.
-  const leaving = useRef(false);
+  // the user already confirmed — so the guard stops blocking its own exit.
+  const [leaving, setLeaving] = useState(false);
 
   // `params` carries view state for the owner, never finance data — for example
   // the month the transaction list should open on after a save.
   const closeToOwner = useCallback((params?: Record<string, string>) => {
-    leaving.current = true;
+    setLeaving(true);
     const href = params ? { pathname: ownerRoute, params } : ownerRoute;
     router.dismissTo(href);
     if (process.env.EXPO_OS === 'web' && typeof window !== 'undefined') {
@@ -52,25 +47,42 @@ export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; v
   // Lets a screen leave by a route of its own (the account sheet returns to the
   // transaction sheet that opened it) without tripping the guard.
   const allowLeave = useCallback(() => {
-    leaving.current = true;
+    setLeaving(true);
   }, []);
 
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (event) => {
-      if (leaving.current || !dirtyRef.current) return;
-      event.preventDefault();
-      void confirmDestructive({
-        title: 'Discard changes?',
-        message: 'This form has unsaved changes.',
-        confirmLabel: 'Discard',
-      }).then((confirmed) => {
-        if (!confirmed) return;
-        leaving.current = true;
-        navigation.dispatch(event.data.action);
-      });
+  // A plain `beforeRemove` listener can only call `event.preventDefault()`
+  // after native-stack's interactive swipe-to-dismiss has already torn the
+  // screen down natively, which desyncs JS navigation state and logs "was
+  // removed natively but didn't get removed from JS state." `usePreventRemove`
+  // also disables that native gesture while the sheet is dirty on iOS, so the
+  // confirmation is never bypassed by a swipe there. On Android, react-native-
+  // screens' classic formSheet stays draggable/hideable regardless, so the
+  // branch below is still needed for that platform.
+  usePreventRemove(dirty && !leaving, (event) => {
+    // Android's formSheet ignores `preventNativeDismiss`: a swipe-down or
+    // backdrop tap already removed the sheet natively before native-stack
+    // dispatched this POP, so there is nothing left to guard — asking to
+    // confirm here would fight a screen that's already gone. Follow it by
+    // dispatching synchronously (before native-stack's dismissed-route check
+    // runs) rather than asking. Hardware back is unaffected: native-stack
+    // disables native back-button dismissal, so it arrives as a JS GO_BACK
+    // and the confirmation below still runs for it and for in-app exits.
+    if (process.env.EXPO_OS === 'android' && event.data.action.type === 'POP') {
+      setLeaving(true);
+      navigation.dispatch(event.data.action);
+      return;
+    }
+
+    void confirmDestructive({
+      title: 'Discard changes?',
+      message: 'This form has unsaved changes.',
+      confirmLabel: 'Discard',
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      setLeaving(true);
+      navigation.dispatch(event.data.action);
     });
-    return unsubscribe;
-  }, [navigation]);
+  });
 
   return { closeToOwner, allowLeave, dirty };
 }

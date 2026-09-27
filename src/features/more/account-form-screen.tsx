@@ -4,6 +4,7 @@ import { View } from 'react-native';
 
 import { useFormSheet } from '@/components/navigation/use-form-sheet';
 import { ActionButton } from '@/components/ui/action-button';
+import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { ChoiceChip } from '@/components/ui/choice-chip';
@@ -16,7 +17,7 @@ import { useLocalization } from '@/localization/localization';
 import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
-import { ACCENT_PRESETS } from '@/theme/tokens';
+import { ACCENT_PRESETS, radius, space, toneColors } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { validateCurrencyCode, validateMoneyInput } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
@@ -122,8 +123,29 @@ export function AccountFormScreen() {
 
   if (id && !existing) return <Redirect href="/more" />;
 
+  const preview = toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark');
+
   return (
     <FormScreen contentContainerStyle={{ gap: 16 }}>
+      {/* A hero preview of the tinted, raised tile this account will show everywhere else
+          (More's account list, transaction rows, the picker) — the same `toneColors` derivation
+          those rows use, so choosing an account color here previews exactly what it becomes. */}
+      <View style={{ alignItems: 'center', gap: space.sm, paddingVertical: space.sm }}>
+        <View
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: radius.card,
+            borderCurve: 'continuous',
+            backgroundColor: preview.container,
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: theme.shadowRaised,
+          }}>
+          <AppIcon name={ACCOUNT_TYPE_ICONS[type]} color={preview.onContainer} size={32} />
+        </View>
+        {name.trim() ? <AppText literal variant="headline" numberOfLines={1}>{name}</AppText> : null}
+      </View>
       <Card style={{ gap: 16 }}>
         <FormField label="Account name" value={name} onChangeText={setName} placeholder="Everyday" autoFocus={!existing} />
         <AppText variant="label">Type</AppText>
@@ -145,7 +167,7 @@ export function AccountFormScreen() {
           )}
         </Card>
       ) : null}
-      <ActionButton title={busy ? 'Saving…' : existing ? 'Save account' : 'Create account'} icon="checkmark" onPress={save} disabled={busy || !canSave} busy={busy} />
+      <ActionButton title={busy ? 'Saving…' : existing ? 'Save account' : 'Create account'} icon="checkmark" size="large" onPress={save} disabled={busy || !canSave} busy={busy} />
       {existing && state.accounts.filter((item) => !item.archived).length > 1 ? <ActionButton title="Archive account" variant="danger" onPress={archive} disabled={busy} /> : null}
     </FormScreen>
   );

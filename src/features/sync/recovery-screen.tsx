@@ -40,8 +40,9 @@ import { StatusPill } from '@/components/ui/status-pill';
 import { TextButton } from '@/components/ui/text-button';
 import { useSync } from '@/providers/sync-provider';
 import { RECOVERY_WORD_COUNT, vaultKeyToRecoveryPhrase } from '@/sync/crypto';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
+import { radius, space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 
 /** The same normalization `recoveryPhraseToVaultKey` applies, so the check matches what a restore would. */
@@ -145,6 +146,7 @@ export function RecoveryScreen() {
               <ActionButton
                 title={busy ? 'Reading…' : 'Show phrase'}
                 icon="eye"
+                size="large"
                 busy={busy}
                 disabled={busy}
                 onPress={() => void reveal()}
@@ -154,7 +156,12 @@ export function RecoveryScreen() {
 
           {phrase ? (
             <MotionView variant="up" exit animateLayout style={{ gap: space.lg }}>
-              <SasDisplay words={phrase.split(' ')} />
+              {/* Larger and better spaced than the tiles render on their own — this is the
+                  single most dangerous string in the app and it deserves room, carved into the
+                  page rather than floating above it. */}
+              <View style={[{ padding: space.lg, borderRadius: radius.card, borderCurve: 'continuous' }, materialStyle(theme, 'sunken')]}>
+                <SasDisplay words={phrase.split(' ')} />
+              </View>
 
               <SectionHeader title="Check what you wrote down" />
               <Card style={{ gap: space.md }}>

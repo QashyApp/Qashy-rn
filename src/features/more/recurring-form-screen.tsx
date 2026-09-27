@@ -11,6 +11,7 @@ import { FormField } from '@/components/ui/form-field';
 import { FormScreen } from '@/components/ui/form-screen';
 import type { CategoryKind, RecurrenceUnit } from '@/domain/models';
 import { takeRecurringDraft } from '@/features/more/recurring-draft';
+import { AmountHero } from '@/components/finance/amount-hero';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
 import { useLocalization } from '@/localization/localization';
@@ -129,6 +130,7 @@ export function RecurringFormScreen() {
 
   return (
     <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+      <AmountHero currency={account?.currency ?? state.settings.baseCurrency} value={amount} onChangeText={setAmount} error={amountError} />
       <Card style={{ gap: 16 }}>
         <View accessibilityLabel={t('Recurring transaction kind')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>{(['expense', 'income'] as CategoryKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "income" ? "arrow.down" : item === "expense" ? "arrow.up" : "arrow.left.arrow.right"} label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} onPress={() => {
           if (item === kind) return;
@@ -136,7 +138,6 @@ export function RecurringFormScreen() {
           setCategoryId('');
         }} /></View>)}</View>
         <FormField label="Title" value={title} onChangeText={setTitle} placeholder="Rent, salary, subscription…" />
-        <FormField label={`Amount (${account?.currency ?? state.settings.baseCurrency})`} value={amount} onChangeText={setAmount} keyboardType="decimal-pad" error={amountError} required />
         <AppText variant="label">Account</AppText>
         <View accessibilityLabel={t('Recurring account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{accountChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name}${item.archived ? ` (${t('Archived')})` : ''}`} disabled={item.archived} selected={accountId === item.id} onPress={() => setAccountId(item.id)} />)}</View>
         <AppText variant="label">Category</AppText>
@@ -172,7 +173,7 @@ export function RecurringFormScreen() {
         </View>
       </Card>
 
-      <ActionButton title={busy ? 'Saving…' : existing ? 'Save schedule' : 'Create schedule'} icon="checkmark" onPress={save} disabled={busy || !canSave} busy={busy} />
+      <ActionButton title={busy ? 'Saving…' : existing ? 'Save schedule' : 'Create schedule'} icon="checkmark" size="large" onPress={save} disabled={busy || !canSave} busy={busy} />
       {existing ? <ActionButton title="Delete schedule" variant="danger" onPress={remove} disabled={busy} /> : null}
     </FormScreen>
   );

@@ -13,6 +13,11 @@ export function FormScreen({ children, contentContainerStyle, maxWidth = 680, ..
       <ScrollView
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
+        // Android-only: without it, this ScrollView never registers as a nested
+        // scrolling child, so the form sheet's own BottomSheetBehavior treats
+        // every scroll drag as its own — collapsing or dismissing the sheet
+        // instead of scrolling the content, even on an untouched form.
+        nestedScrollEnabled
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={[
           { padding: 18, paddingBottom: 44, gap: 18, width: '100%', maxWidth, alignSelf: 'center' },

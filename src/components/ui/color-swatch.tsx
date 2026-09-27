@@ -1,6 +1,7 @@
 import { AppIcon } from '@/components/ui/app-icon';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { readableTextColor } from '@/theme/tokens';
+import { hapticSelection } from '@/utils/haptics';
 
 export function ColorSwatch({
   color,
@@ -20,7 +21,10 @@ export function ColorSwatch({
       accessibilityState={{ checked: selected }}
       aria-checked={selected}
       active={selected}
-      onPress={onPress}
+      onPress={() => {
+        hapticSelection();
+        onPress();
+      }}
       pressedScale={0.9}
       hoverScale={1.06}
       style={({ pressed }) => ({

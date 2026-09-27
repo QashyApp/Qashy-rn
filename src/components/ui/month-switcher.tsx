@@ -5,8 +5,9 @@ import { AppText } from '@/components/ui/app-text';
 import { IconButton } from '@/components/ui/icon-button';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
+import { motion, radius, space } from '@/theme/tokens';
 import { monthKey, monthLabel, moveMonth, parseLocalDate, startOfMonth } from '@/utils/date';
 import { hapticSelection } from '@/utils/haptics';
 
@@ -52,22 +53,24 @@ export function MonthSwitcher({
 
   return (
     <View
-      style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: space.xxs,
-        backgroundColor: theme.surface,
-        borderRadius: radius.pill,
-        padding: space.xxs,
-        opacity: disabled ? 0.45 : 1,
-      }}>
+      style={[
+        {
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: space.xxs,
+          borderRadius: radius.pill,
+          padding: space.xxs,
+          opacity: disabled ? 0.45 : 1,
+        },
+        materialStyle(theme, 'control'),
+      ]}>
       <IconButton label="Previous month" icon={backIcon} iconSize={16} disabled={disabled} onPress={() => step(-1)} />
       <MotionPressable
         accessibilityRole="button"
         accessibilityLabel={`${monthLabel(value, locale)}. ${t('Choose month')}`}
         disabled={disabled}
         onPress={() => setPickerOpen(true)}
-        pressedScale={0.97}
+        pressedScale={motion.pressScale}
         style={{ minHeight: 44, minWidth: 128, justifyContent: 'center', paddingHorizontal: space.sm, borderRadius: radius.pill }}>
         <MotionView key={value} variant={direction} duration={180}>
           <AppText literal variant="label" numeric style={{ textAlign: 'center' }}>{monthLabel(value, locale)}</AppText>

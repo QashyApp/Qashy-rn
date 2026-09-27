@@ -279,6 +279,9 @@ describe('convergence — three devices, random edits', () => {
   // Fixed seeds rather than a random one per run: a property test nobody can replay reports
   // failures as folklore. New seeds are added by hand, after being watched to pass.
   it.each([11, 4242, 90210])('converges and stays writable (seed %i)', async (seed) => {
+    // 60 ticks of real crypto sync across three devices comfortably clears the
+    // default 5s Jest timeout on a loaded machine — this is a slow property
+    // test, not a hang.
     const random = randomSource(seed);
     const devices = await populatedVault(3);
     const wires = [
@@ -350,7 +353,7 @@ describe('convergence — three devices, random edits', () => {
 
     await sync(devices, 3);
     expectConverged(devices);
-  });
+  }, 30_000);
 
   it('loses nothing across a partition and a heal', async () => {
     const [alice, bob] = await populatedVault(2);

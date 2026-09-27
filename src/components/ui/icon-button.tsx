@@ -1,9 +1,11 @@
-import { type PressableProps } from 'react-native';
+import { type PressableProps, type ViewStyle } from 'react-native';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
+import { motion } from '@/theme/tokens';
 
 export function IconButton({
   label,
@@ -30,12 +32,14 @@ export function IconButton({
   const theme = useQashyTheme();
   const { t } = useLocalization();
   const isDisabled = Boolean(disabled);
-  const backgroundColor = variant === 'accent'
-    ? theme.accent
-    : variant === 'surface'
-      ? theme.surfaceMuted
-      : 'transparent';
   const color = variant === 'accent' ? theme.onAccent : theme.textMuted;
+  // 'plain' is a ghost button: no fill or shadow at rest, but it still presses
+  // in like a raised control once touched, so it doesn't feel inert.
+  const materialFor = (pressed: boolean): ViewStyle => {
+    if (variant === 'accent') return materialStyle(theme, pressed ? 'accentPressed' : 'accent');
+    if (variant === 'surface') return materialStyle(theme, pressed ? 'controlPressed' : 'control');
+    return pressed ? materialStyle(theme, 'controlPressed') : { backgroundColor: 'transparent' };
+  };
   return (
     <MotionPressable
       accessibilityLabel={t(label)}
@@ -46,7 +50,7 @@ export function IconButton({
       enteringVariant={enteringVariant}
       enteringDelay={enteringDelay}
       onPress={onPress}
-      pressedScale={0.93}
+      pressedScale={motion.pressScale}
       hoverScale={1.04}
       style={(state) => [
         {
@@ -57,9 +61,9 @@ export function IconButton({
           borderRadius: 999,
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor,
-          opacity: isDisabled ? 0.4 : state.pressed ? 0.66 : 1,
+          opacity: isDisabled ? 0.4 : 1,
         },
+        materialFor(state.pressed),
         typeof style === 'function' ? style(state) : style,
         // Applied last so a caller style (for example the floating action
         // button's shadow layer) can never paint a disabled control at full

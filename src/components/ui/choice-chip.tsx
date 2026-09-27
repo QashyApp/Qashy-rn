@@ -4,6 +4,7 @@ import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
@@ -48,20 +49,25 @@ export function ChoiceChip({
       }}
       pressedScale={0.95}
       hoverScale={1.02}
-      style={({ pressed }) => ({
-        minWidth: 44,
-        minHeight: 44,
-        paddingHorizontal: space.md + 2,
-        borderRadius: radius.pill,
-        borderWidth: 1,
-        borderColor: selected ? theme.accent : 'transparent',
-        backgroundColor: selected ? theme.accentContainer : theme.surfaceMuted,
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: space.sm - 1,
-        opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
-      })}>
+      style={({ pressed }) => [
+        {
+          minWidth: 44,
+          minHeight: 44,
+          paddingHorizontal: space.md + 2,
+          borderRadius: radius.pill,
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: space.sm - 1,
+          opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
+        },
+        // Selected reads as physically pushed in — an inset shadow instead of
+        // a raised one — rather than merely tinted; unselected stays a raised
+        // control like any other chip or pill button.
+        selected
+          ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+          : materialStyle(theme, 'control'),
+      ]}>
       {icon ? <AppIcon name={icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={17} /> : null}
       {/* The label weight stays fixed. Bolding on selection re-measured the text
           and resized the chip, so picking one filter nudged every chip after it

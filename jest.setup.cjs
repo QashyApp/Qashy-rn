@@ -1,5 +1,23 @@
 const nodeCrypto = require('node:crypto');
 
+// Needed once `@testing-library/react-native` started rendering a component that uses
+// `Gesture.Pan()` (the Overview edit-mode drag handle): the package's own recommended Jest
+// setup, mocking the native gesture-handler module out entirely.
+require('react-native-gesture-handler/jestSetup');
+
+// Reanimated's official mock: swaps every worklet-driven API for a synchronous JS
+// equivalent so a component using `useSharedValue`/`useAnimatedStyle`/`Gesture.Pan()` can
+// render under Jest without the Babel worklet plugin or a real UI thread.
+jest.mock('react-native-reanimated', () => {
+  const Reanimated = require('react-native-reanimated/mock');
+  Reanimated.default.call = () => {};
+  // The bundled mock predates a couple of hooks this app calls directly: under Jest there is
+  // no OS-level "reduce motion" setting to read, so every animation just runs (or, for a
+  // component that branches on it, behaves as if reduce-motion were off).
+  Reanimated.useReducedMotion = Reanimated.useReducedMotion ?? (() => false);
+  return Reanimated;
+});
+
 let uuid = 0;
 
 jest.mock('expo-localization', () => ({

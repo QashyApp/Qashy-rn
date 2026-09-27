@@ -45,6 +45,7 @@ import { TextButton } from '@/components/ui/text-button';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { planMerge, suggestDuplicates, type DuplicateGroup, type MergeKind } from '@/sync/engine/duplicates';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
@@ -228,6 +229,7 @@ export function MergeScreen() {
           <ActionButton
             title={busy ? 'Merging…' : t(chosen.length === 1 ? 'Merge 1 group' : `Merge ${chosen.length} groups`)}
             icon="arrow.triangle.2.circlepath"
+            size="large"
             busy={busy}
             disabled={busy || Boolean(preview?.error)}
             onPress={() => void commit()}
@@ -302,7 +304,7 @@ function GroupRow({
         opacity: blocked ? 0.55 : pressed ? 0.62 : 1,
       })}>
       {blocked ? (
-        <View style={{ width: 38, height: 38, borderRadius: radius.control, borderCurve: 'continuous', backgroundColor: theme.surfaceMuted, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={[{ width: 38, height: 38, borderRadius: radius.control, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' }, materialStyle(theme, 'sunken')]}>
           <AppIcon name="exclamationmark.triangle" color={theme.warning} size={18} />
         </View>
       ) : (
@@ -342,7 +344,7 @@ function Tile({ value, label, accent = false }: { readonly value: number; readon
       style={{
         flex: 1,
         minWidth: 120,
-        padding: 14,
+        padding: space.md,
         borderRadius: radius.card,
         borderCurve: 'continuous',
         backgroundColor: accent ? theme.accentContainer : theme.surfaceMuted,

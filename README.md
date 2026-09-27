@@ -19,9 +19,13 @@ Qashy is an Expo app backed by a local `FinanceRepository`. Native builds persis
 
 <H3 div align="center"> Design </H3>
 
-- **Type:** the app bundles [Rubik](https://fonts.google.com/specimen/Rubik) (OFL, via `@expo-google-fonts/rubik`). It covers both of the app's languages, English and Hebrew, and has tabular figures. The font files ship with the app and are precached for offline use, so it never fetches fonts from the network. The type scale and tokens are in `src/theme/tokens.ts`.
-- **Surfaces:** sections are borderless tonal planes rather than bordered cards. Each screen's hero figure sits directly on the page (`PageHero`), and shadows are kept for things that genuinely float.
+- **Type:** the app bundles [Rubik](https://fonts.google.com/specimen/Rubik) (OFL, via `@expo-google-fonts/rubik`) for all text. It covers both of the app's languages, English and Hebrew, and has tabular figures. Money and hero figures use [Space Grotesk](https://fonts.google.com/specimen/Space+Grotesk) (OFL, via `@expo-google-fonts/space-grotesk`), with the currency symbol and fractional digits drawn smaller and muted. Digits are script-agnostic, so Hebrew is unaffected. The font files ship with the app and are precached for offline use, so it never fetches fonts from the network. The type scale and tokens are in `src/theme/tokens.ts`.
+- **Surfaces:** a soft, tactile material language. Cards are raised (subtle gradient, inner top highlight, soft shadow), inputs and progress tracks are sunken wells, and buttons press in. Every surface comes from `materialStyle` in `src/theme/materials.ts` rather than hand-written shadows. In development, `/kitchen-sink` (linked at the bottom of **More**) shows every shared component in each state.
+- **Overview** keeps net worth, income, spent, and net flow fixed at the top. Everything below is a set of cards you can reorder (drag, or Move up/down), remove with undo, resize on wide screens, add back from a gallery, or reset. Layouts are device-local: they're stored in `sync_meta`, not `AppSettings`, so a phone and a laptop can differ and layouts never sync.
+- **Adding a transaction** starts with the amount, then a category grid; date, tags, exchange rate, and note live under **More details**.
 - **Onboarding** has five screens: welcome and language, base currency, first account, look, and review. Choosing **I already use Qashy** lets a new install pair with another device or restore a `.qashyvault` backup before anything is created.
+- **Icons:** the source artwork is `assets/branding/qashy-app-icon.svg`. `node scripts/render-icons.mjs` re-renders every app, Android adaptive, favicon, and PWA PNG at its existing size using Playwright's Chromium.
+- **Plan** shows each budget's pace against the time elapsed in its period, with a projected end-of-period total (display-only, from `src/utils/pace.ts`).
 - **Transactions** shows one calendar month at a time, with that month's totals in the header. The month is in the URL (`/transactions?month=YYYY-MM`), so it can be deep-linked. Search stays within the month unless you choose **Search all months**.
 
 <H3 div align="center"> Sync </H3>

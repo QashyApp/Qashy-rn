@@ -69,6 +69,10 @@ function formSheetOptions(title: string, backTitle: string) {
     headerShown: true,
     title,
     headerBackTitle: backTitle,
+    // The long-press back-button menu can jump back multiple screens at
+    // once, natively removing this one without ever running `usePreventRemove`'s
+    // confirmation (see `useFormSheet`).
+    headerBackButtonMenuEnabled: false,
     presentation: 'formSheet' as const,
     sheetGrabberVisible: true,
     sheetAllowedDetents: [0.72, 1],
@@ -137,6 +141,7 @@ function RootNavigator() {
           <Stack.Screen name="transaction" options={formSheetOptions(t('Transaction'), backTitle)} />
           <Stack.Screen name="budget" options={formSheetOptions(t('Budget'), backTitle)} />
           <Stack.Screen name="goal" options={formSheetOptions(t('Goal'), backTitle)} />
+          <Stack.Screen name="overview-cards" options={formSheetOptions(t('Add cards'), backTitle)} />
           <Stack.Screen name="account" options={formSheetOptions(t('Account'), backTitle)} />
           <Stack.Screen name="category" options={formSheetOptions(t('Category'), backTitle)} />
           <Stack.Screen name="recurring" options={formSheetOptions(t('Recurring transaction'), backTitle)} />

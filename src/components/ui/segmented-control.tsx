@@ -6,6 +6,7 @@ import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { motionCurves, motionDurations, MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
@@ -63,13 +64,15 @@ export function SegmentedControl<T extends string>({
       accessibilityRole="radiogroup"
       accessibilityLabel={t(label)}
       onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}
-      style={{
-        flexDirection: 'row',
-        padding: space.xxs,
-        borderRadius: radius.pill,
-        backgroundColor: theme.surfaceMuted,
-        minHeight: height + space.xs,
-      }}>
+      style={[
+        {
+          flexDirection: 'row',
+          padding: space.xxs,
+          borderRadius: radius.pill,
+          minHeight: height + space.xs,
+        },
+        materialStyle(theme, 'sunken'),
+      ]}>
       {segment > 0 ? (
         <Animated.View
           pointerEvents="none"
@@ -81,9 +84,8 @@ export function SegmentedControl<T extends string>({
               start: space.xxs,
               width: segment,
               borderRadius: radius.pill,
-              backgroundColor: theme.surfaceElevated,
-              boxShadow: theme.shadowCard ?? '0 1px 2px rgba(0, 0, 0, 0.3)',
             },
+            materialStyle(theme, 'control'),
             thumbStyle,
           ]}
         />

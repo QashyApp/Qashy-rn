@@ -1,9 +1,10 @@
-import { type Ref } from 'react';
+import { useState, type Ref } from 'react';
 import { TextInput, View, type TextInputProps } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { withAppFont } from '@/theme/typography';
 import { radius, space } from '@/theme/tokens';
@@ -16,6 +17,8 @@ export function FormField({
   literalLabel = false,
   style,
   accessibilityHint,
+  onFocus,
+  onBlur,
   ...props
 }: TextInputProps & {
   /** Forwarded to the input, so a form can move focus field to field. */
@@ -33,6 +36,8 @@ export function FormField({
 }) {
   const theme = useQashyTheme();
   const { isRtl, t } = useLocalization();
+  const [focused, setFocused] = useState(false);
+  const sunken = materialStyle(theme, 'sunken');
   const description = error ?? hint;
   const translatedLabel = literalLabel ? label : t(label);
   const translatedDescription = description ? t(description) : undefined;
@@ -66,27 +71,38 @@ export function FormField({
         {...validityProps}
         aria-required={required || undefined}
         placeholderTextColor={theme.textMuted}
+        onFocus={(event) => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={(event) => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         style={withAppFont([
           {
-            minHeight: 50,
+            minHeight: 48,
             paddingHorizontal: space.lg - 2,
             paddingVertical: space.md,
             // Smaller than the card that holds it. Matching the container's own
             // 16 made the field read as a second card rather than a control.
             borderRadius: radius.tile,
             borderCurve: 'continuous',
-            borderWidth: 1,
-            // Filled and borderless at rest; the border only appears to carry an
-            // error, so it means something when it shows up.
-            borderColor: error ? theme.negative : 'transparent',
-            // Filled, not outlined. On a surface-colored card the old white fill
-            // left the border doing all the work, so a column of fields looked
-            // like ruled lines instead of things you can type into.
-            backgroundColor: theme.surfaceMuted,
+            // Always 2px, even at rest (transparent), so focusing or erroring
+            // never shifts the content inside by changing the border width.
+            borderWidth: 2,
+            // Sunken at rest, like a track or a switch's own well; the border
+            // only appears to carry an error, or a focus ring, so either one
+            // means something when it shows up.
+            borderColor: error ? theme.negative : focused ? theme.accent : 'transparent',
             color: theme.text,
             fontSize: 16,
             writingDirection: isRtl ? 'rtl' : 'ltr',
             textAlign: isRtl ? 'right' : 'left',
+            // A sunken well, same material as a progress track or a
+            // segmented-control track.
+            backgroundColor: sunken.backgroundColor,
+            boxShadow: sunken.boxShadow as string,
           },
           style,
         ])}

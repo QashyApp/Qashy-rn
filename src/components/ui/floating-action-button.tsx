@@ -52,9 +52,14 @@ export function FloatingActionButton({
         // No entrance: the button is positioned outside the screen's transition
         // boundary, so an entrance here would replay on every visit to the tab.
         // Its motion is `visibility` — tucking away as the list scrolls.
+        //
+        // `variant="accent"` already gives the accent gradient and fill; this
+        // overrides only the shadow, since the FAB reads pressable with a
+        // tighter, darker shadow than a regular accent control at rest, and
+        // presses in (inset shadow, no opacity dip) rather than dimming.
         style={(state) => ({
-          boxShadow: shadow,
-          opacity: isDisabled ? 0.4 : state.pressed ? 0.82 : 1,
+          boxShadow: state.pressed ? theme.shadowControlPressed : shadow,
+          opacity: isDisabled ? 0.4 : 1,
         })}
       />
     </Animated.View>

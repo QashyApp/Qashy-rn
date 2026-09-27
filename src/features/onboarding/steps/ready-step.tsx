@@ -3,11 +3,13 @@ import { View } from 'react-native';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
+import { MotionView } from '@/components/ui/motion';
 import { defaultCategoryPreview } from '@/domain/defaults';
 import { StepHeading } from '@/features/onboarding/onboarding-shell';
 import type { OnboardingDraft } from '@/features/onboarding/use-onboarding-flow';
 import { currencyLabel } from '@/features/onboarding/steps/currency-step';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space, toneColors } from '@/theme/tokens';
 import { formatMoney, parseMoney } from '@/utils/money';
@@ -35,6 +37,19 @@ export function ReadyStep({ draft }: { draft: OnboardingDraft }) {
 
   return (
     <View style={{ gap: space.xxl }}>
+      <View style={{ alignItems: 'center' }}>
+        <MotionView variant="zoom" duration={360}>
+          <View
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={[
+              { width: 64, height: 64, borderRadius: radius.pill, alignItems: 'center', justifyContent: 'center' },
+              materialStyle(theme, 'accent'),
+            ]}>
+            <AppIcon name="checkmark" color={theme.onAccent} size={30} />
+          </View>
+        </MotionView>
+      </View>
       <StepHeading title="You’re all set" body="Here’s what Qashy will create. Nothing leaves this device." />
       <Card variant="list">
         {rows.map(([label, value]) => (

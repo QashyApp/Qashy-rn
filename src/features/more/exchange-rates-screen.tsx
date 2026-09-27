@@ -3,16 +3,19 @@ import { useMemo, useState } from 'react';
 import { ScrollView, Switch, View } from 'react-native';
 
 import { ActionButton } from '@/components/ui/action-button';
+import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
+import { MotionPressable } from '@/components/ui/motion';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingsRow } from '@/components/ui/settings-row';
+import { StatusPill } from '@/components/ui/status-pill';
 import type { RateFetchErrorCode } from '@/data/exchange-rates/rate-client';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
+import { radius, space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
 import { endOfMonth, startOfMonth } from '@/utils/date';
 import { isFetchedRate } from '@/utils/deterministic-id';
@@ -126,7 +129,7 @@ export function ExchangeRatesScreen() {
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
           <AppText literal variant="caption" muted>
-            {lastUpdated ? `Last updated ${lastUpdated}` : 'Never updated'}
+            {lastUpdated ? `${t('Last updated')} ${lastUpdated}` : t('Never updated')}
           </AppText>
           <ActionButton
             title={status.fetching ? 'Refreshing…' : 'Refresh now'}
@@ -164,17 +167,50 @@ export function ExchangeRatesScreen() {
         <>
           <SectionHeader title="Manual rates" />
           <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
-            {manualRates.map((rate) => (
-              <SettingsRow
-                key={rate.id}
-                literal
-                title={`${rate.fromCurrency} → ${rate.toCurrency}`}
-                subtitle={t(`Effective ${rate.effectiveDate}`)}
-                value={rate.rate}
-                icon="arrow.left.arrow.right"
-                onPress={() => router.push({ pathname: '/exchange-rate', params: { id: rate.id, returnTo: '/exchange-rates' } })}
-              />
-            ))}
+            {manualRates.map((rate) => {
+              const label = `${rate.fromCurrency} → ${rate.toCurrency}, ${rate.rate}, ${t('Manual')}, ${t(`Effective ${rate.effectiveDate}`)}`;
+              return (
+                <MotionPressable
+                  key={rate.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={label}
+                  onPress={() => router.push({ pathname: '/exchange-rate', params: { id: rate.id, returnTo: '/exchange-rates' } })}
+                  pressedScale={0.985}
+                  style={({ pressed }) => ({ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: space.md, opacity: pressed ? 0.62 : 1 })}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: radius.tile,
+                      borderCurve: 'continuous',
+                      backgroundColor: theme.accentContainer,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: `inset 0 1px 0 rgba(255,255,255,${theme.mode === 'dark' ? 0.06 : 0.35})`,
+                    }}>
+                    <AppIcon name="arrow.left.arrow.right" color={theme.accent} size={20} />
+                  </View>
+                  <View
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                    style={{ flex: 1, gap: space.xxs }}>
+                    <AppText literal variant="label">{`${rate.fromCurrency} → ${rate.toCurrency}`}</AppText>
+                    <AppText literal variant="caption" muted>{t(`Effective ${rate.effectiveDate}`)}</AppText>
+                  </View>
+                  <StatusPill label="Manual" icon="pencil" tone="neutral" />
+                  <AppText
+                    accessibilityElementsHidden
+                    importantForAccessibility="no-hide-descendants"
+                    literal
+                    figure
+                    variant="label"
+                    numberOfLines={1}>
+                    {rate.rate}
+                  </AppText>
+                  <AppIcon name="chevron.right" color={theme.textMuted} size={17} />
+                </MotionPressable>
+              );
+            })}
           </Card>
           {automaticCount ? (
             <AppText literal variant="caption" muted>{`${automaticCount} automatic rate${automaticCount === 1 ? '' : 's'} stored.`}</AppText>

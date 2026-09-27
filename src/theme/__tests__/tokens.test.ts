@@ -8,6 +8,15 @@ import {
   readableTextColor,
 } from '@/theme/tokens';
 
+describe('transfer color', () => {
+  it.each([
+    ['light', lightTokens],
+    ['dark', darkTokens],
+  ] as const)('clears 4.5:1 against the %s surface', (_mode, tokens) => {
+    expect(contrastRatio(tokens.transfer, tokens.surface)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('theme contrast', () => {
   it.each(['#E7892C', '#36A852', '#FF8F96', '#5966E9'])(
     'chooses readable text for %s',

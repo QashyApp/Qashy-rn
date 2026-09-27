@@ -62,21 +62,41 @@ export const space = {
 } as const;
 
 /**
- * Corner radii. `control` and `card` keep their original values so the app's
- * existing silhouette is preserved; the rest name radii that were previously
- * inlined as bare numbers (7, 13, 14, 15, 22, 99, 999).
+ * Corner radii. The "soft & tactile" redesign widens every step so surfaces
+ * read as continuous, materially rounded shapes rather than sharp-cornered
+ * panels — a raised card or sheet should look poured, not cut. Key names are
+ * unchanged so every call site keeps working; only the values grew.
  */
 export const radius = {
-  sm: 8,
-  control: 10,
+  sm: 10,
+  control: 14,
   /** Icon tiles, swatches, and other small filled squares. */
-  tile: 12,
-  card: 16,
+  tile: 14,
+  card: 22,
   /** Floating overlays: the update prompt, the reload banner. */
-  sheet: 22,
+  sheet: 28,
   /** Navigation items: rail buttons, sidebar rows, the bottom-bar indicator. */
-  nav: 14,
+  nav: 16,
   pill: 999,
+} as const;
+
+/**
+ * Shared timing and spring presets for the soft/tactile motion language:
+ * raised controls settle with a snappy spring, larger surfaces (sheets,
+ * cards reflowing) use a gentler one, and emphasis moments (a completed
+ * goal, a saved form) get a touch more energy. `pressScale` is how far a
+ * raised control visibly sinks — scale, not just a shadow swap — when
+ * pressed, to sell the "it's physically depressing" feel.
+ */
+export const motion = {
+  duration: { fast: 120, base: 200, slow: 320 },
+  spring: {
+    snappy: { damping: 22, stiffness: 320, mass: 0.8 },
+    gentle: { damping: 20, stiffness: 180, mass: 1 },
+    emphasized: { damping: 16, stiffness: 220, mass: 1 },
+  },
+  /** How far a raised control sinks when pressed. */
+  pressScale: 0.97,
 } as const;
 
 /**
@@ -118,13 +138,34 @@ export const fontFamilies = {
 export type FontWeightName = keyof typeof fontFamilies;
 
 /**
+ * Space Grotesk, used only as a numeric display face for money figures and
+ * hero numbers (`typeScale.hero`, `display`, `money`, `figure`). Rubik still
+ * renders every word — including Hebrew, which Space Grotesk does not cover —
+ * so this face is scoped to variants whose content is guaranteed to be
+ * digits. Digits are script-agnostic, so swapping their face never affects
+ * Hebrew layout or shaping. There is no bundled 400-weight file, so
+ * `numericFontStyle('regular')` falls back to `medium`.
+ */
+export const numericFontFamilies = {
+  medium: 'SpaceGrotesk_500Medium',
+  semibold: 'SpaceGrotesk_600SemiBold',
+  bold: 'SpaceGrotesk_700Bold',
+} as const;
+
+/**
  * The type scale. Sizes step by at least ~25% at the top of the ramp so the
  * hero figure, a screen title, an inline amount and a section heading never
  * read as near-misses of each other (they used to be 34 / 30 / 28 / 20).
+ *
+ * `hero` sits above `display` for the single largest figure in the redesign
+ * (the net-worth number); `figure` is a smaller numeric stat (e.g. income or
+ * spent) that sits under a hero without competing with `label`/`headline`.
  */
 export const typeScale = {
+  /** The single largest figure in the app: the net-worth hero number. */
+  hero: { fontSize: 48, lineHeight: 54, weight: 'semibold', letterSpacing: -1.6 },
   /** The single largest figure on a screen. Net worth, a month's net flow. */
-  display: { fontSize: 40, lineHeight: 46, weight: 'semibold', letterSpacing: -1 },
+  display: { fontSize: 40, lineHeight: 46, weight: 'semibold', letterSpacing: -1.2 },
   title: { fontSize: 28, lineHeight: 34, weight: 'semibold', letterSpacing: -0.6 },
   /** A prominent amount inside a section: a budget's spend, a goal total. */
   money: { fontSize: 22, lineHeight: 28, weight: 'semibold', letterSpacing: -0.4 },
@@ -132,6 +173,8 @@ export const typeScale = {
   body: { fontSize: 16, lineHeight: 22, weight: 'regular', letterSpacing: 0 },
   /** A short piece of UI text with weight: a row title, a button, a stat value. */
   label: { fontSize: 15, lineHeight: 20, weight: 'medium', letterSpacing: -0.1 },
+  /** A numeric stat value under a hero figure (e.g. income/spent this period). */
+  figure: { fontSize: 18, lineHeight: 24, weight: 'semibold', letterSpacing: -0.3 },
   caption: { fontSize: 13, lineHeight: 18, weight: 'regular', letterSpacing: 0 },
   /** A sentence-case kicker above a heading, a hero figure or a group of rows. */
   overline: { fontSize: 13, lineHeight: 18, weight: 'medium', letterSpacing: 0 },
@@ -139,17 +182,24 @@ export const typeScale = {
   eyebrow: { fontSize: 11, lineHeight: 14, weight: 'semibold', letterSpacing: 0.6 },
 } as const satisfies Record<string, { fontSize: number; lineHeight: number; weight: FontWeightName; letterSpacing: number }>;
 
+/** Variants that always render in the numeric display face (Space Grotesk). */
+export const NUMERIC_FACE_VARIANTS = ['hero', 'display', 'money', 'figure'] as const;
+
 export interface BaseTokens {
   background: string;
   surface: string;
   surfaceElevated: string;
   surfaceMuted: string;
+  /** The fill of a sunken "well": progress tracks, segmented-control tracks, input fields. */
+  surfaceSunken: string;
   text: string;
   textMuted: string;
   border: string;
   positive: string;
   negative: string;
   warning: string;
+  /** Semantic color for transfers — neither income nor expense. */
+  transfer: string;
 }
 
 /**
@@ -170,12 +220,14 @@ export const lightTokens: BaseTokens = {
   surface: '#FFFFFF',
   surfaceElevated: '#FFFFFF',
   surfaceMuted: '#E9EBEF',
+  surfaceSunken: '#E8EAEE',
   text: '#191B20',
   textMuted: '#5F6570',
   border: '#E3E5EA',
   positive: '#208653',
   negative: '#C43D4A',
   warning: '#9A6700',
+  transfer: '#3F6FD8',
 };
 
 /**
@@ -192,12 +244,14 @@ export const darkTokens: BaseTokens = {
   surface: '#15161B',
   surfaceElevated: '#1E2027',
   surfaceMuted: '#262931',
+  surfaceSunken: '#0F1014',
   text: '#F2F3F5',
   textMuted: '#9BA1AC',
   border: '#2E323B',
   positive: '#65D99A',
   negative: '#FF8F96',
   warning: '#F0C36A',
+  transfer: '#8FB0FF',
 };
 
 function channels(hex: string): [number, number, number] {

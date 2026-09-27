@@ -61,7 +61,21 @@ export function SettingsRow({
       disabled={!onPress || disabled}
       pressedScale={0.985}
       style={({ pressed }) => ({ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: space.md, opacity: disabled ? 0.5 : pressed ? 0.62 : 1 })}>
-      <View style={{ width: tileMetrics.size, height: tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: tileMetrics.size,
+          height: tileMetrics.size,
+          borderRadius: radius.tile,
+          borderCurve: 'continuous',
+          backgroundColor: tile.container,
+          alignItems: 'center',
+          justifyContent: 'center',
+          // A raised icon tile: a 1px top highlight catching the light, same
+          // idea as a card's inner highlight but scaled to a small filled
+          // square. Lighter in dark mode, where a bright highlight against a
+          // dark tint would otherwise overpower the icon.
+          boxShadow: `inset 0 1px 0 rgba(255,255,255,${theme.mode === 'dark' ? 0.06 : 0.35})`,
+        }}>
         <AppIcon name={icon} color={tile.onContainer} size={tileMetrics.icon} />
       </View>
       <View

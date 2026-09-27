@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import {
   ContentWidthContext,
   NAV_RAIL_BREAKPOINT,
@@ -337,6 +338,10 @@ function NavigationBar({
             borderRadius: radius.nav,
             borderCurve: 'continuous',
             backgroundColor: theme.accentContainer,
+            // The selected item reads as pressed into the surface rather than a
+            // flat tinted rectangle — the same "physically depressing" language
+            // as every other active/pressed control in the tactile system.
+            boxShadow: theme.shadowControlPressed,
           },
           indicatorStyle,
         ]}
@@ -396,7 +401,11 @@ export default function WebTabsLayout() {
           gap: space.xxl,
         }}>
         <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: space.md }}>
-          <View style={{ width: 38, height: 38, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: theme.accent, alignItems: 'center', justifyContent: 'center' }}>
+          <View
+            style={[
+              { width: 38, height: 38, borderRadius: radius.tile, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
+              materialStyle(theme, 'accent'),
+            ]}>
             <AppText selectable={false} variant="headline" style={{ color: theme.onAccent }}>Q</AppText>
           </View>
           {!compact ? <AppText variant="headline">Qashy</AppText> : null}
@@ -418,26 +427,24 @@ export default function WebTabsLayout() {
       <View
         accessibilityLabel={t('Primary')}
         role="navigation"
-        style={{
-          display: mobile ? 'flex' : 'none',
-          position: 'absolute',
-          left: 0,
-          right: 0,
-          bottom: 0,
-          minHeight: 64 + insets.bottom,
-          backgroundColor: theme.surfaceElevated,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingLeft: space.sm + insets.left,
-          paddingRight: space.sm + insets.right,
-          paddingTop: space.xs,
-          paddingBottom: Math.max(space.xs, insets.bottom),
-          borderTopWidth: 1,
-          borderTopColor: theme.border,
-          // Upward, so it cannot come from the (downward) elevation tokens. Only
-          // light mode gets one; on a dark page the top border does the work.
-          boxShadow: theme.mode === 'light' ? '0 -2px 12px rgba(25, 27, 32, 0.06)' : undefined,
-        }}>
+        style={[
+          {
+            display: mobile ? 'flex' : 'none',
+            position: 'absolute',
+            left: space.md + insets.left,
+            right: space.md + insets.right,
+            bottom: space.md + insets.bottom,
+            minHeight: 64,
+            borderRadius: radius.sheet,
+            borderCurve: 'continuous',
+            flexDirection: 'row',
+            alignItems: 'center',
+            paddingLeft: space.sm,
+            paddingRight: space.sm,
+            paddingVertical: space.xs,
+          },
+          materialStyle(theme, 'raised'),
+        ]}>
         {mobile ? <NavigationBar mobile compact={false} narrow={narrow} pathname={pathname} /> : null}
       </View>
     </View>

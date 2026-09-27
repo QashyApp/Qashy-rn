@@ -4,11 +4,11 @@ import { ScrollView, SectionList, StyleSheet, TextInput, View } from 'react-nati
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { AnimatedMoney } from '@/components/finance/animated-money';
+import { StatTile } from '@/components/finance/stat-tile';
 import { TransactionRow } from '@/components/finance/transaction-row';
 import { ActionButton } from '@/components/ui/action-button';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
-import { Card } from '@/components/ui/card';
 import { ChoiceChip } from '@/components/ui/choice-chip';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
@@ -19,14 +19,17 @@ import { PageHeading } from '@/components/ui/page-heading';
 import { floatingActionMetrics, screenContentMetrics } from '@/components/ui/screen-container';
 import { TextButton } from '@/components/ui/text-button';
 import { useScrollHide } from '@/components/ui/use-scroll-hide';
+import { dayNetMinor } from '@/features/transactions/list/summary';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useScreenMetrics } from '@/theme/layout';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 import { fontStyle } from '@/theme/typography';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { endOfMonth, monthKey, monthLabel, parseLocalDate, parseMonthKey, startOfMonth } from '@/utils/date';
+import { formatMoney } from '@/utils/money';
 import { hapticImpactLight, hapticSelection, hapticSuccess } from '@/utils/haptics';
 
 type KindFilter = 'all' | 'expense' | 'income' | 'transfer' | 'upcoming';
@@ -198,6 +201,13 @@ export function TransactionsScreen() {
     }
   };
 
+  const clearFilters = () => {
+    setSearch('');
+    setSearchAllMonths(false);
+    setKind('all');
+    clearSelection();
+  };
+
   // The list content and the pinned toolbar have to occupy the same column, so
   // both derive their width and gutters from one call.
   const content = screenContentMetrics(metrics, insets);
@@ -215,6 +225,10 @@ export function TransactionsScreen() {
   const currency = state.settings.baseCurrency;
   const compactFigures = metrics.contentWidth < 520;
   const filtered = search.trim().length > 0 || kind !== 'all';
+  // The floating batch bar takes the FAB's usual spot while it is open, so the
+  // two never compete for the same corner of the screen — adding a transaction
+  // mid-selection is also just confusing.
+  const batchBarBottom = metrics.hasBottomNavigation ? 92 + insets.bottom : space.xxl + insets.bottom;
 
   return (
     <View collapsable={false} style={{ flex: 1, backgroundColor: theme.background }}>
@@ -226,26 +240,30 @@ export function TransactionsScreen() {
       <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border, backgroundColor: theme.background, zIndex: 2 }}>
         <View style={toolbarStyle}>
           <PageHeading title="Transactions" />
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md, flexWrap: 'wrap' }}>
+          <View style={{ gap: space.md }}>
             <MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} disabled={allMonths} />
             <MotionView
               key={`${month}-${allMonths}`}
               variant={monthDirection}
               accessibilityLabel={allMonths ? undefined : `${monthLabel(month, locale)} ${t('summary')}`}
-              style={{ flexDirection: 'row', gap: space.lg, opacity: allMonths ? 0.45 : 1 }}>
+              style={{ flexDirection: 'row', gap: space.sm, opacity: allMonths ? 0.45 : 1 }}>
               {([
                 ['Income', summary.incomeMinor, theme.positive],
                 ['Spent', summary.expenseMinor, theme.text],
                 ['Net', summary.netFlowMinor, summary.netFlowMinor >= 0 ? theme.positive : theme.negative],
               ] as const).map(([label, amount, color]) => (
-                <View key={label} style={{ gap: space.xxs, alignItems: 'flex-end' }}>
-                  <AppText variant="caption" muted>{label}</AppText>
-                  <AnimatedMoney minor={amount} currency={currency} locale={locale} compact={compactFigures} variant="label" numeric style={{ color }} />
+                <View key={label} style={{ flex: 1, minWidth: 0 }}>
+                  <StatTile
+                    label={label}
+                    value={(
+                      <AnimatedMoney minor={amount} currency={currency} locale={locale} compact={compactFigures} variant="label" numeric style={{ color }} />
+                    )}
+                  />
                 </View>
               ))}
             </MotionView>
           </View>
-          <View style={{ minHeight: 48, borderRadius: radius.pill, borderCurve: 'continuous', backgroundColor: theme.surface, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, gap: space.sm }}>
+          <View style={{ minHeight: 44, borderRadius: radius.pill, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, gap: space.sm, ...materialStyle(theme, 'sunken') }}>
             <AppIcon name="magnifyingglass" color={theme.textMuted} size={18} />
             <TextInput
               accessibilityLabel={t('Search transactions')}
@@ -300,40 +318,6 @@ export function TransactionsScreen() {
               />
             ))}
           </ScrollView>
-          {selectionMode ? (
-            <MotionView variant="down" exit animateLayout>
-              <Card style={{ gap: space.md, backgroundColor: theme.accentContainer }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
-                <MotionView key={selectedIds.length} variant="fade" animateLayout>
-                  <AppText literal variant="headline">{t(`${selectedIds.length} selected`)}</AppText>
-                </MotionView>
-                <TextButton title={selectedIds.length ? 'Clear' : 'Done'} onPress={() => {
-                  if (selectedIds.length) setSelectedIds([]);
-                  else setSelectionMode(false);
-                }} />
-              </View>
-              {selectedIds.length ? (
-                <>
-                  {hasSelectedTransfers ? (
-                    <AppText variant="caption" muted>Transfers do not have categories. Select only income or expense transactions to change categories.</AppText>
-                  ) : (
-                    <>
-                      <AppText variant="caption" muted>Change category</AppText>
-                      {selectedKinds.length > 1 ? <AppText variant="caption" muted>Select only income or only expense transactions to assign a category.</AppText> : null}
-                      <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
-                        <ChoiceChip mode="button" icon="questionmark.circle" label="Uncategorized" selected={false} disabled={busy} onPress={() => changeCategory(null)} />
-                        {state.categories.filter((item) => item.kind === compatibleCategoryKind && !item.archived).map((category) => (
-                          <ChoiceChip mode="button" key={category.id} literal icon={category.icon} label={category.name} selected={false} disabled={busy} onPress={() => changeCategory(category.id)} />
-                        ))}
-                      </View>
-                    </>
-                  )}
-                  <ActionButton title="Delete selected" variant="danger" disabled={busy} onPress={deleteSelected} />
-                </>
-              ) : <AppText variant="caption" muted>Choose one or more transactions below.</AppText>}
-              </Card>
-            </MotionView>
-          ) : null}
         </View>
       </View>
       <SectionList
@@ -341,7 +325,7 @@ export function TransactionsScreen() {
         onScroll={onScroll}
         scrollEventThrottle={16}
         style={{ flex: 1, backgroundColor: theme.background }}
-        contentContainerStyle={[content, { paddingTop: 0 }]}
+        contentContainerStyle={[content, { paddingTop: 0, paddingBottom: (Number(content.paddingBottom) || 0) + (selectionMode ? 140 : 0) }]}
         sections={sections}
         extraData={`${selectedIds.join(',')}|${selectionMode}|${state.transactions.map((item) => `${item.id}:${item.revision}`).join(',')}`}
         keyExtractor={(item) => `${item.id}:${item.revision}`}
@@ -368,16 +352,40 @@ export function TransactionsScreen() {
             </View>
           </View>
         }
-        renderSectionHeader={({ section }) => (
-          // Opaque, because a sticky header scrolls over live content. The
-          // negative margins let the fill reach the column's gutters so rows do
-          // not slide past it in the margin.
-          <View style={{ backgroundColor: theme.background, paddingTop: space.lg, paddingBottom: space.sm, marginHorizontal: -space.xs, paddingHorizontal: space.xs }}>
-            <AppText literal variant="overline" muted>{dayFormat.format(parseLocalDate(section.title))}</AppText>
-          </View>
-        )}
+        renderSectionHeader={({ section }) => {
+          const net = dayNetMinor(section.data);
+          const netLabel = formatMoney(Math.abs(net), currency, locale);
+          const netText = net === 0 ? netLabel : `${net > 0 ? '+' : '-'}${netLabel}`;
+          return (
+            // Opaque, because a sticky header scrolls over live content. The
+            // negative margins let the fill reach the column's gutters so rows do
+            // not slide past it in the margin.
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: space.sm,
+                backgroundColor: theme.background,
+                paddingTop: space.lg,
+                paddingBottom: space.sm,
+                marginHorizontal: -space.xs,
+                paddingHorizontal: space.xs,
+              }}>
+              <AppText literal variant="overline" muted>{dayFormat.format(parseLocalDate(section.title))}</AppText>
+              <AppText literal figure variant="caption" muted numeric>{netText}</AppText>
+            </View>
+          );
+        }}
         // Each day is one grouped surface with hairlines between its rows,
-        // rather than a separate card per transaction.
+        // rather than a separate card per transaction. A true nested `Card`
+        // can't wrap a section's rows here — `SectionList` virtualises each
+        // row independently, so there is no single element spanning a whole
+        // day to attach one shadow to. Every row instead carries the same
+        // flat `card` background and shadow (no gradient, which would band
+        // visibly repeating down a multi-row day); stacked with no gap and
+        // rounded only at the day's first/last row, they read as one raised
+        // slab per day rather than as N separate rows happening to touch.
         renderItem={({ item, index, section }) => {
           const selected = selectedIds.includes(item.id);
           const first = index === 0;
@@ -388,6 +396,7 @@ export function TransactionsScreen() {
                 style={{
                   paddingHorizontal: space.md,
                   backgroundColor: selected ? theme.accentContainer : theme.surface,
+                  boxShadow: theme.shadowCard,
                   borderTopLeftRadius: first ? radius.card : 0,
                   borderTopRightRadius: first ? radius.card : 0,
                   borderBottomLeftRadius: last ? radius.card : 0,
@@ -417,8 +426,9 @@ export function TransactionsScreen() {
               <EmptyState
                 icon="magnifyingglass"
                 title="Nothing matches"
-                body={allMonths ? 'Try another search or filter.' : `Nothing in ${monthLabel(month, locale)} matches. Try another filter, or search all months.`}
-              />
+                body={allMonths ? 'Try another search or filter.' : `Nothing in ${monthLabel(month, locale)} matches. Try another filter, or search all months.`}>
+                <ActionButton title="Clear filters" variant="secondary" onPress={clearFilters} />
+              </EmptyState>
             ) : state.transactions.length ? (
               <EmptyState
                 icon="calendar"
@@ -442,12 +452,67 @@ export function TransactionsScreen() {
         ListFooterComponent={<View style={{ height: 88 }} />}
       />
       </ScreenTransition>
-      <FloatingActionButton
-        label="Add transaction"
-        visibility={fabVisibility}
-        onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/transactions' } })}
-        style={floatingActionMetrics(metrics, insets)}
-      />
+      {selectionMode ? (
+        <MotionView
+          variant="up"
+          exit
+          animateLayout
+          style={{
+            position: 'absolute',
+            left: gutter,
+            right: gutter,
+            bottom: batchBarBottom,
+            maxWidth: content.maxWidth,
+            alignSelf: 'center',
+            width: '100%',
+          }}>
+          <View
+            style={{
+              gap: space.md,
+              padding: space.lg,
+              borderRadius: radius.sheet,
+              borderCurve: 'continuous',
+              ...materialStyle(theme, 'raised'),
+              boxShadow: theme.shadowOverlay,
+            }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+              <MotionView key={selectedIds.length} variant="fade" animateLayout>
+                <AppText literal variant="headline">{t(`${selectedIds.length} selected`)}</AppText>
+              </MotionView>
+              <TextButton title="Cancel" tone="muted" onPress={() => {
+                setSelectedIds([]);
+                setSelectionMode(false);
+              }} />
+            </View>
+            {selectedIds.length ? (
+              <>
+                {hasSelectedTransfers ? (
+                  <AppText variant="caption" muted>Transfers do not have categories. Select only income or expense transactions to change categories.</AppText>
+                ) : (
+                  <>
+                    <AppText variant="caption" muted>Change category</AppText>
+                    {selectedKinds.length > 1 ? <AppText variant="caption" muted>Select only income or only expense transactions to assign a category.</AppText> : null}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: space.sm }}>
+                      <ChoiceChip mode="button" icon="questionmark.circle" label="Uncategorized" selected={false} disabled={busy} onPress={() => changeCategory(null)} />
+                      {state.categories.filter((item) => item.kind === compatibleCategoryKind && !item.archived).map((category) => (
+                        <ChoiceChip mode="button" key={category.id} literal icon={category.icon} label={category.name} selected={false} disabled={busy} onPress={() => changeCategory(category.id)} />
+                      ))}
+                    </ScrollView>
+                  </>
+                )}
+                <ActionButton title="Delete selected" variant="danger" disabled={busy} onPress={deleteSelected} />
+              </>
+            ) : <AppText variant="caption" muted>Choose one or more transactions below.</AppText>}
+          </View>
+        </MotionView>
+      ) : (
+        <FloatingActionButton
+          label="Add transaction"
+          visibility={fabVisibility}
+          onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/transactions' } })}
+          style={floatingActionMetrics(metrics, insets)}
+        />
+      )}
     </View>
   );
 }

@@ -1,12 +1,17 @@
 import { Redirect, router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
+import { View } from 'react-native';
 
 import { useFormSheet } from '@/components/navigation/use-form-sheet';
 import { ActionButton } from '@/components/ui/action-button';
+import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
 import { FormScreen } from '@/components/ui/form-screen';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
+import { materialStyle } from '@/theme/materials';
+import { useQashyTheme } from '@/theme/theme';
+import { radius, space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { todayLocal } from '@/utils/date';
 import {
@@ -24,6 +29,7 @@ export function ExchangeRateScreen() {
   const { id, currency, returnTo } = useLocalSearchParams<{ id?: string; currency?: string; returnTo?: string }>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
+  const theme = useQashyTheme();
   const existing = id ? state.exchangeRates.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
   // `currency` arrives from the "Needs a manual rate" list on the Exchange rates screen
@@ -91,12 +97,19 @@ export function ExchangeRateScreen() {
 
   return (
     <FormScreen maxWidth={620} contentContainerStyle={{ gap: 16 }}>
+      {/* A hero read-out of the pair being defined, in the same sunken-well material as a
+          numeric hero field, so the rate this form edits reads as the primary subject rather
+          than one of three equally weighted fields. */}
+      <View style={{ ...materialStyle(theme, 'sunken'), borderRadius: radius.sheet, borderCurve: 'continuous', paddingVertical: space.xl, paddingHorizontal: space.xl, alignItems: 'center', gap: space.xs }}>
+        <AppText literal variant="overline" muted>{`${fromCurrency.toUpperCase() || '—'} → ${state.settings.baseCurrency}`}</AppText>
+        <AppText literal figure variant="display">{rate || '0'}</AppText>
+      </View>
       <Card style={{ gap: 16 }}>
         <FormField label="From currency" value={fromCurrency} onChangeText={setFromCurrency} autoCapitalize="characters" maxLength={3} error={currencyError} required />
         <FormField label={`1 ${fromCurrency.toUpperCase()} equals how many ${state.settings.baseCurrency}?`} value={rate} onChangeText={setRate} keyboardType="decimal-pad" error={rateError} required />
         <FormField label="Effective date" value={effectiveDate} onChangeText={setEffectiveDate} placeholder="YYYY-MM-DD" error={dateError} required />
       </Card>
-      <ActionButton title={saving ? 'Saving…' : 'Save rate'} icon="checkmark" onPress={save} disabled={saving || !canSave} busy={saving} />
+      <ActionButton title={saving ? 'Saving…' : 'Save rate'} icon="checkmark" size="large" onPress={save} disabled={saving || !canSave} busy={saving} />
       {existing ? <ActionButton title="Delete rate" variant="danger" onPress={remove} disabled={saving} /> : null}
     </FormScreen>
   );

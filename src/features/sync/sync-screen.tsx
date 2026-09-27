@@ -26,12 +26,13 @@ import { useCallback, useState } from 'react';
 import { RefreshControl, ScrollView, View } from 'react-native';
 
 import { ActionButton } from '@/components/ui/action-button';
+import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { MotionView } from '@/components/ui/motion';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingsRow } from '@/components/ui/settings-row';
-import { StatusPill } from '@/components/ui/status-pill';
+import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import { TextButton } from '@/components/ui/text-button';
 import { DeviceCard } from '@/features/sync/device-card';
 import { RelayCard } from '@/features/sync/relay-card';
@@ -40,6 +41,7 @@ import { useLocalization } from '@/localization/localization';
 import { useSync } from '@/providers/sync-provider';
 import { disableSync, resumeSync, rotateVaultKey } from '@/sync/setup';
 import type { RelayHealth } from '@/sync/transport/relay-health';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
@@ -138,10 +140,30 @@ export function SyncScreen() {
         {/* `accessibilityLiveRegion` is why the hero is one node: a state change here is the
             single thing on the screen worth interrupting a screen reader for. */}
         <Card accessibilityLiveRegion="polite" style={{ gap: space.md }}>
-          {/* The pill carries the short form — the same line the More row shows — so the two
-              screens cannot drift, and so the hero is not saying the same words twice. */}
-          <StatusPill label={summary.subtitle} icon={summary.icon} tone={summary.tone} />
-          <AppText variant="title">{summary.headline}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
+            {/* A sunken well, not a tinted fill — tone lives in the icon color and the pill
+                beside it, never in the well itself, so this reads correctly under the same
+                "icon plus text, never color alone" rule `StatusPill` follows. */}
+            <View
+              style={[
+                {
+                  width: 64,
+                  height: 64,
+                  borderRadius: radius.pill,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                },
+                materialStyle(theme, 'sunken'),
+              ]}>
+              <AppIcon name={summary.icon} color={toneColor(theme, summary.tone)} size={28} />
+            </View>
+            <View style={{ flex: 1, gap: space.xxs, minWidth: 0 }}>
+              {/* The pill carries the short form — the same line the More row shows — so the
+                  two screens cannot drift, and so the hero is not saying the same words twice. */}
+              <StatusPill label={summary.subtitle} icon={summary.icon} tone={summary.tone} />
+              <AppText variant="title">{summary.headline}</AppText>
+            </View>
+          </View>
           <AppText muted>{summary.body}</AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: space.sm, paddingTop: space.xs }}>
             {paired && status.enabled ? (
@@ -212,6 +234,7 @@ export function SyncScreen() {
         </Card>
       ) : null}
 
+      <SectionHeader title="Advanced" />
       <RelayCard status={status} health={health} now={now} onCheck={check} onChanged={refresh} />
 
       <SectionHeader title="How this works" />
@@ -315,6 +338,17 @@ const container = {
   maxWidth: 720,
   alignSelf: 'center',
 } as const;
+
+/** The same tone → color mapping `StatusPill` uses internally, for the hero's icon well. */
+function toneColor(theme: ReturnType<typeof useQashyTheme>, tone: StatusTone) {
+  if (tone === 'transfer') return theme.transfer;
+  return {
+    neutral: theme.textMuted,
+    positive: theme.positive,
+    warning: theme.warning,
+    negative: theme.negative,
+  }[tone];
+}
 
 /**
  * One claim about the system, with the glyph that makes a scanned list readable.

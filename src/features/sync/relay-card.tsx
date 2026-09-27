@@ -43,6 +43,7 @@ import {
   type EndpointPatch,
 } from '@/sync/transport/endpoints';
 import type { RelayHealth } from '@/sync/transport/relay-health';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
@@ -210,7 +211,7 @@ export function RelayCard({
 
         {FAILING.has(health.status) && health.detail ? (
           <MotionView key={health.detail} variant="up" exit animateLayout>
-            <View style={{ backgroundColor: theme.surfaceMuted, borderRadius: radius.tile, borderCurve: 'continuous', padding: space.md, gap: space.xs }}>
+            <View style={[{ borderRadius: radius.tile, borderCurve: 'continuous', padding: space.md, gap: space.xs }, materialStyle(theme, 'sunken')]}>
               <AppText variant="caption" muted>What the server said</AppText>
               {/* Verbatim and selectable. Whoever runs this relay needs the actual error. */}
               <AppText literal selectable variant="caption">{health.detail}</AppText>

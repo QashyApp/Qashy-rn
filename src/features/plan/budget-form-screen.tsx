@@ -10,6 +10,7 @@ import { ChoiceChip } from '@/components/ui/choice-chip';
 import { FormField } from '@/components/ui/form-field';
 import { FormScreen } from '@/components/ui/form-screen';
 import type { PeriodUnit } from '@/domain/models';
+import { AmountHero } from '@/components/finance/amount-hero';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
@@ -124,9 +125,19 @@ export function BudgetFormScreen() {
 
   return (
     <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+      <AmountHero
+        label="Total limit"
+        size="display"
+        currencyInTranslation={false}
+        currency={state.settings.baseCurrency}
+        value={limit}
+        onChangeText={setLimit}
+        error={limitError}
+        autoFocus={!existing}
+      />
+
       <Card style={{ gap: 16 }}>
         <FormField label="Budget name" value={name} onChangeText={setName} />
-        <FormField label={`Total limit (${state.settings.baseCurrency})`} value={limit} onChangeText={setLimit} keyboardType="decimal-pad" error={limitError} required />
         <AppText variant="label">Period</AppText>
         <View accessibilityLabel={t('Budget period')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {(['day', 'week', 'month', 'year', 'custom'] as PeriodUnit[]).map((item) => <ChoiceChip key={item} icon={item === "custom" ? "pencil" : "calendar"} label={item[0].toUpperCase() + item.slice(1)} selected={unit === item} onPress={() => setUnit(item)} />)}
@@ -155,7 +166,7 @@ export function BudgetFormScreen() {
         })}
       </Card>
 
-      <ActionButton title={saving ? 'Saving…' : existing ? 'Save budget' : 'Create budget'} icon="checkmark" onPress={save} disabled={saving || !canSave} busy={saving} />
+      <ActionButton size="large" title={saving ? 'Saving…' : existing ? 'Save budget' : 'Create budget'} icon="checkmark" onPress={save} disabled={saving || !canSave} busy={saving} />
       {existing ? <ActionButton title="Delete budget" variant="danger" onPress={remove} disabled={saving} /> : null}
     </FormScreen>
   );

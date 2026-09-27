@@ -1477,7 +1477,17 @@ export class LocalFinanceRepository implements FinanceRepository {
           filters.tagIds.length === budget.filters.tagIds.length &&
           categoryLimits.length === budget.categoryLimits.length
         ) return [];
-        return [updateEntity(budget, { filters, categoryLimits })];
+        // An emptied-out filter list means "match everything" to `budgetSpend`.
+        // Losing the last category/tag filter this way must archive the budget
+        // rather than silently widen it to every expense with no warning.
+        const wouldMatchEverything = !filters.accountIds.length &&
+          !filters.categoryIds.length &&
+          !filters.tagIds.length;
+        return [updateEntity(budget, {
+          filters,
+          categoryLimits,
+          archived: budget.archived || wouldMatchEverything,
+        })];
       })
       : [];
     const goalChanges = type === 'categories'
@@ -1873,7 +1883,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     // so omission means "leave them unchanged". Passing an explicit empty
     // array still clears every tag.
     const tagIds = [...new Set(input.tagIds ?? existing?.tagIds ?? [])];
-    const knownTagIds = new Set([...this.state.tags.map((tag) => tag.id), ...additionalTagIds]);
+    const knownTagIds = new Set([...this.active(this.state.tags).map((tag) => tag.id), ...additionalTagIds]);
     if (tagIds.some((tagId) => !knownTagIds.has(tagId))) {
       throw new Error('Choose valid tags.');
     }

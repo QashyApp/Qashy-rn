@@ -11,6 +11,7 @@ import { FormField } from '@/components/ui/form-field';
 import { FormScreen } from '@/components/ui/form-screen';
 import { TextButton } from '@/components/ui/text-button';
 import type { GoalContribution, GoalKind } from '@/domain/models';
+import { AmountHero } from '@/components/finance/amount-hero';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
@@ -176,6 +177,17 @@ export function GoalFormScreen() {
 
   return (
     <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+      <AmountHero
+        label="Target"
+        size="display"
+        currencyInTranslation={false}
+        currency={state.settings.baseCurrency}
+        value={target}
+        onChangeText={setTarget}
+        error={targetError}
+        autoFocus={!existing}
+      />
+
       <Card style={{ gap: 16 }}>
         <View accessibilityLabel={t('Goal type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
           {(['saving', 'spending'] as GoalKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "saving" ? "banknote" : "cart"} label={item === "saving" ? "Savings goal" : "Planned purchase"} selected={kind === item} onPress={() => {
@@ -185,7 +197,6 @@ export function GoalFormScreen() {
           }} /></View>)}
         </View>
         <FormField label="Goal name" value={name} onChangeText={setName} />
-        <FormField label={`Target (${state.settings.baseCurrency})`} value={target} onChangeText={setTarget} keyboardType="decimal-pad" error={targetError} required />
         <FormField label="Starting progress" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" error={initialError} required />
         <FormField label="Target date (optional)" value={targetDate} onChangeText={setTargetDate} placeholder="YYYY-MM-DD" error={targetDateError} />
       </Card>
@@ -229,7 +240,7 @@ export function GoalFormScreen() {
           </View>
         </Card>
       ) : null}
-      <ActionButton title={saving ? 'Saving…' : existing ? 'Save goal' : 'Create goal'} icon="checkmark" onPress={save} disabled={saving || !canSave} busy={saving} />
+      <ActionButton size="large" title={saving ? 'Saving…' : existing ? 'Save goal' : 'Create goal'} icon="checkmark" onPress={save} disabled={saving || !canSave} busy={saving} />
       {existing ? <ActionButton title="Delete goal" variant="danger" onPress={remove} disabled={saving} /> : null}
     </FormScreen>
   );

@@ -7,9 +7,17 @@ import { MotionPressable, MotionView } from '@/components/ui/motion';
 import type { TransactionRecord } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceState } from '@/providers/finance-provider';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space, toneColors, tile as tileMetrics } from '@/theme/tokens';
 import { formatMoney } from '@/utils/money';
+
+// The category tile's own inset highlight, on top of the tinted container
+// `toneColors` already computes. Not `theme.shadowControl` (that ladder is for
+// full-size raised controls); a 32-40px tile only needs the top-edge catch,
+// not an outer drop shadow that would compete with the row around it.
+const TILE_INSET_HIGHLIGHT_LIGHT = 'inset 0 1px 0 rgba(255,255,255,0.4)';
+const TILE_INSET_HIGHLIGHT_DARK = 'inset 0 1px 0 rgba(255,255,255,0.08)';
 
 export function TransactionRow({
   transaction,
@@ -47,7 +55,7 @@ export function TransactionRow({
   const color = selected
     ? theme.onAccentContainer
     : isTransfer
-      ? theme.accent
+      ? theme.transfer
       : isIncome
         ? theme.positive
         : theme.text;
@@ -90,7 +98,14 @@ export function TransactionRow({
       style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: compact ? 54 : 64, opacity: pressed ? 0.65 : 1 })}>
       {selectionMode ? (
         <MotionView variant="zoom" animateLayout style={{ width: 24, height: 24 }}>
-          <View style={{ flex: 1, borderRadius: radius.sm, borderWidth: 2, borderColor: selected ? theme.accent : theme.border, backgroundColor: selected ? theme.accent : theme.surface, alignItems: 'center', justifyContent: 'center' }}>
+          <View
+            style={{
+              flex: 1,
+              borderRadius: radius.sm,
+              alignItems: 'center',
+              justifyContent: 'center',
+              ...(selected ? materialStyle(theme, 'accent') : materialStyle(theme, 'sunken')),
+            }}>
             {selected ? (
               <MotionView variant="zoom" exit>
                 <AppIcon name="checkmark" color={theme.onAccent} size={16} />
@@ -99,14 +114,24 @@ export function TransactionRow({
           </View>
         </MotionView>
       ) : null}
-      <View style={{ width: compact ? tileMetrics.compactSize : tileMetrics.size, height: compact ? tileMetrics.compactSize : tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          width: compact ? tileMetrics.compactSize : tileMetrics.size,
+          height: compact ? tileMetrics.compactSize : tileMetrics.size,
+          borderRadius: radius.tile,
+          borderCurve: 'continuous',
+          backgroundColor: tile.container,
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: theme.mode === 'dark' ? TILE_INSET_HIGHLIGHT_DARK : TILE_INSET_HIGHLIGHT_LIGHT,
+        }}>
         <AppIcon name={isTransfer ? 'arrow.left.arrow.right' : category?.icon ?? (isIncome ? 'arrow.down' : 'arrow.up')} color={tile.onContainer} size={compact ? tileMetrics.compactIcon : tileMetrics.icon} />
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: space.xxs }}>
         <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
           <AppText literal variant="label" numberOfLines={1} style={{ flexShrink: 1 }}>{transaction.title}</AppText>
           {transaction.status === 'upcoming' ? (
-            <View style={{ borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: space.xxs, backgroundColor: theme.accentContainer }}>
+            <View style={{ borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: space.xxs, backgroundColor: theme.accentContainer, boxShadow: theme.shadowSunken }}>
               <AppText selectable={false} variant="eyebrow" style={{ color: theme.onAccentContainer }}>UPCOMING</AppText>
             </View>
           ) : null}
@@ -114,7 +139,7 @@ export function TransactionRow({
         <AppText literal variant="caption" muted numberOfLines={1}>{`${categoryLabel} · ${accountLabel}`}</AppText>
       </View>
       <View style={{ alignItems: 'flex-end', gap: space.xxs }}>
-        <AppText literal numeric variant="label" style={{ color }}>
+        <AppText literal figure variant="label" style={{ color }}>
           {amountText}
         </AppText>
         {showDate && !compact ? <AppText literal variant="caption" muted>{transaction.localDate}</AppText> : null}

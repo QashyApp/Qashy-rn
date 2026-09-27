@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { View, type LayoutChangeEvent } from 'react-native';
 import Animated, {
   Easing,
@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Line, Path, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
 
 import { useAnimatedMinorAmount } from '@/components/finance/animated-money';
 import { AppText } from '@/components/ui/app-text';
@@ -17,13 +17,21 @@ import { useLocalization } from '@/localization/localization';
 import { useScreenMetrics } from '@/theme/layout';
 import { useQashyTheme } from '@/theme/theme';
 import { radius as radii, space } from '@/theme/tokens';
-import { fontStyle } from '@/theme/typography';
+import { fontStyle, numericFontStyle } from '@/theme/typography';
 import { shortDate } from '@/utils/date';
 import { formatMoney } from '@/utils/money';
 
-// SVG text does not inherit the app face, so charts name it explicitly.
+// SVG text does not inherit the app face, so charts name it explicitly. Axis
+// labels that render dates use the app face (a locale's month name needs
+// Rubik's Hebrew coverage); anything guaranteed to be digits — the donut's
+// center total — uses the numeric display face instead, matching every other
+// figure in the app.
 const CHART_FONT = fontStyle('medium').fontFamily;
-const CHART_FONT_BOLD = fontStyle('semibold').fontFamily;
+const CHART_FONT_NUMERIC_BOLD = numericFontStyle('semibold').fontFamily;
+// Dashed gridlines at reduced opacity read as measurement scaffolding rather
+// than data, so they stay out of the way of the line/area they help scale.
+const GRID_STROKE_OPACITY = 0.6;
+const GRID_DASH = '4 4';
 
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -42,6 +50,7 @@ const DENSE_SERIES_POINTS = 14;
 
 export function SpendLineChart({ points, currency, locale }: { points: DashboardSummary['dailySpend']; currency: string; locale: string }) {
   const theme = useQashyTheme();
+  const areaGradientId = useId();
   const { contentWidth } = useScreenMetrics();
   const reduceMotion = useReducedMotion();
   // The SVG is laid out at 100% width, so the viewBox has to match the real
@@ -121,8 +130,24 @@ export function SpendLineChart({ points, currency, locale }: { points: Dashboard
       style={{ minHeight: height }}>
       {hasSpending ? (
         <Svg width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`}>
+          <Defs>
+            <LinearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
+              <Stop offset="0" stopColor={theme.accent as string} stopOpacity={0.22} />
+              <Stop offset="1" stopColor={theme.accent as string} stopOpacity={0} />
+            </LinearGradient>
+          </Defs>
           {GRID_RATIOS.map((ratio) => (
-            <Line key={ratio} x1="8" x2={chartWidth - 8} y1={plotBottom - ratio * plotHeight} y2={plotBottom - ratio * plotHeight} stroke={theme.border as string} strokeWidth="1" />
+            <Line
+              key={ratio}
+              x1="8"
+              x2={chartWidth - 8}
+              y1={plotBottom - ratio * plotHeight}
+              y2={plotBottom - ratio * plotHeight}
+              stroke={theme.border as string}
+              strokeWidth="1"
+              strokeOpacity={GRID_STROKE_OPACITY}
+              strokeDasharray={GRID_DASH}
+            />
           ))}
           {domainMin < 0 ? (
             <Line
@@ -138,7 +163,7 @@ export function SpendLineChart({ points, currency, locale }: { points: Dashboard
           {/* Fades in with the points rather than wiping with the stroke: a
               partially drawn area closes on a straight edge mid-series and reads
               as a wrong shape for the fraction of a second it is visible. */}
-          <AnimatedPath animatedProps={pointProps} d={areaPath} fill={theme.accent} fillOpacity={0.12} stroke="none" />
+          <AnimatedPath animatedProps={pointProps} d={areaPath} fill={`url(#${areaGradientId})`} stroke="none" />
           <AnimatedPath
             animatedProps={pathProps}
             d={path}
@@ -272,7 +297,10 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
       style={{ flexDirection: 'row', alignItems: 'center', gap: space.xl, flexWrap: 'wrap' }}>
       <View style={{ width: 126, height: 126 }}>
         <Svg width="126" height="126" viewBox="0 0 126 126">
-          <Circle cx="63" cy="63" r={ringRadius} fill="none" stroke={theme.surfaceMuted as string} strokeWidth="16" />
+          {/* A sunken track, like a progress well elsewhere in the app, rather
+              than a flat muted ring, so the segments read as filling a carved
+              groove instead of sitting on a plain disc. */}
+          <Circle cx="63" cy="63" r={ringRadius} fill="none" stroke={theme.surfaceSunken as string} strokeWidth="16" />
           {segments.map(({ slice, length, offset }) => (
               <Circle
                 key={slice.key}
@@ -284,7 +312,7 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
                 strokeWidth="16"
                 strokeDasharray={`${length} ${circumference - length}`}
                 strokeDashoffset={-offset}
-                strokeLinecap="butt"
+                strokeLinecap="round"
                 transform={RING_ROTATION}
               />
           ))}
@@ -294,14 +322,14 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
             cy="63"
             r={ringRadius}
             fill="none"
-            stroke={theme.surfaceMuted as string}
+            stroke={theme.surfaceSunken as string}
             strokeWidth="17"
             strokeDasharray={`${circumference} ${circumference}`}
             strokeLinecap="butt"
             transform={RING_ROTATION}
           />
           <SvgText x="63" y="59" textAnchor="middle" fill={theme.textMuted as string} fontSize="11" fontFamily={CHART_FONT}>{t('Spent')}</SvgText>
-          <SvgText x="63" y="77" textAnchor="middle" fill={theme.text as string} fontSize="13" fontFamily={CHART_FONT_BOLD}>
+          <SvgText x="63" y="77" textAnchor="middle" fill={theme.text as string} fontSize="13" fontFamily={CHART_FONT_NUMERIC_BOLD}>
             {formatMoney(animatedTotal, currency, locale, { compact: true })}
           </SvgText>
         </Svg>

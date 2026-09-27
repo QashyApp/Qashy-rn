@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
 import { SegmentedControl } from '@/components/ui/segmented-control';
-import { useQashyTheme } from '@/theme/theme';
+import { WelcomeHero } from '@/features/onboarding/steps/welcome-hero';
 import { space } from '@/theme/tokens';
 
 const LANGUAGES = [
@@ -17,24 +17,11 @@ const LANGUAGES = [
  * speaks. Everything else waits for the steps that need it.
  */
 export function WelcomeStep({ locale, onLocale }: { locale: string; onLocale: (locale: string) => void }) {
-  const theme = useQashyTheme();
   const headingLevelProps = process.env.EXPO_OS === 'web' ? ({ 'aria-level': 1 } as object) : {};
   return (
-    <View style={{ gap: space.xxxl, alignItems: 'center' }}>
-      <MotionView variant="zoom" duration={320}>
-        <View
-          style={{
-            width: 88,
-            height: 88,
-            borderRadius: 28,
-            borderCurve: 'continuous',
-            backgroundColor: theme.accent,
-            alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: theme.shadowRaised,
-          }}>
-          <AppText selectable={false} literal variant="display" style={{ color: theme.onAccent, fontSize: 48, lineHeight: 56 }}>Q</AppText>
-        </View>
+    <View style={{ gap: space.xxl, alignItems: 'center' }}>
+      <MotionView variant="zoom" duration={360}>
+        <WelcomeHero />
       </MotionView>
       <MotionView variant="up" delay={120} style={{ gap: space.sm, alignItems: 'center' }}>
         <AppText {...headingLevelProps} accessibilityRole="header" variant="title" style={{ textAlign: 'center', fontSize: 34, lineHeight: 40 }}>

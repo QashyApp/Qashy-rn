@@ -5,11 +5,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AppText } from '@/components/ui/app-text';
 import { IconButton } from '@/components/ui/icon-button';
 import { MotionView } from '@/components/ui/motion';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { StickyFooterLayout } from '@/components/ui/sticky-footer';
 import { SETUP_STEPS } from '@/features/onboarding/use-onboarding-flow';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
+import { space } from '@/theme/tokens';
 
 /**
  * The frame every onboarding step sits in: a quiet top bar (back, progress),
@@ -42,34 +43,30 @@ export function OnboardingShell({
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background, paddingTop: insets.top }}>
-      <View style={{ height: 56, flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, gap: space.sm, width: '100%', maxWidth: 600, alignSelf: 'center' }}>
-        <View style={{ width: 44 }}>
-          {onBack ? (
-            <IconButton label="Back" icon={isRtl ? 'chevron.right' : 'chevron.left'} iconSize={20} onPress={onBack} enteringVariant="fade" />
-          ) : null}
+      <View style={{ paddingTop: space.sm, paddingHorizontal: space.sm, gap: space.xs, width: '100%', maxWidth: 600, alignSelf: 'center' }}>
+        <View style={{ height: 44, flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          <View style={{ width: 44 }}>
+            {onBack ? (
+              <IconButton label="Back" icon={isRtl ? 'chevron.right' : 'chevron.left'} iconSize={20} onPress={onBack} enteringVariant="fade" />
+            ) : null}
+          </View>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            {progress > 0 ? (
+              <View style={{ width: '100%', maxWidth: 260 }}>
+                <ProgressBar
+                  value={progress / SETUP_STEPS.length}
+                  segments={SETUP_STEPS.length}
+                  size="thin"
+                  label={t(`Step ${progress} of ${SETUP_STEPS.length}`)}
+                />
+              </View>
+            ) : null}
+          </View>
+          <View style={{ width: 44 }} />
         </View>
-        <View style={{ flex: 1, alignItems: 'center' }}>
-          {progress > 0 ? (
-            <View
-              accessibilityRole="progressbar"
-              accessibilityLabel={t(`Step ${progress} of ${SETUP_STEPS.length}`)}
-              accessibilityValue={{ min: 1, max: SETUP_STEPS.length, now: progress }}
-              style={{ flexDirection: 'row', gap: space.xs, width: '100%', maxWidth: 220 }}>
-              {SETUP_STEPS.map((step, index) => (
-                <View key={step} style={{ flex: 1, height: 4, borderRadius: radius.pill, backgroundColor: theme.surfaceMuted, overflow: 'hidden' }}>
-                  {index < progress ? (
-                    <MotionView key={`${step}-${index < progress}`} variant="fade" style={{ flex: 1, backgroundColor: theme.accent }} />
-                  ) : null}
-                </View>
-              ))}
-            </View>
-          ) : null}
-        </View>
-        <View style={{ width: 44, alignItems: 'flex-end' }}>
-          {progress > 0 ? (
-            <AppText literal variant="caption" muted numeric>{`${progress}/${SETUP_STEPS.length}`}</AppText>
-          ) : null}
-        </View>
+        {progress > 0 ? (
+          <AppText variant="caption" muted style={{ textAlign: 'center' }}>{`Step ${progress} of ${SETUP_STEPS.length}`}</AppText>
+        ) : null}
       </View>
 
       <StickyFooterLayout footer={footer}>
@@ -80,7 +77,7 @@ export function OnboardingShell({
             key={stepKey}
             variant={fromTrailing ? 'right' : 'left'}
             exit
-            style={{ width: '100%', maxWidth: 560, alignSelf: 'center', gap: space.xxl }}>
+            style={{ width: '100%', maxWidth: 520, alignSelf: 'center', gap: space.xxl }}>
             {children}
           </MotionView>
         </ScrollView>

@@ -89,6 +89,20 @@ export const SYNC_META = {
   /** When `refreshLatest` last completed a fetch (successful or not). ISO timestamp, or absent. */
   ratesLastRefreshAt: 'ratesLastRefreshAt',
 
+  // -- Presentation preferences. Device-local; see `features/overview/layout`.
+
+  /**
+   * The Overview screen's card order, sizes, and per-card config, serialized JSON.
+   *
+   * Deliberately never replicated, for the same reason as `ratesAutoFetch`: `AppSettings`
+   * syncs to every peer, and a phone and a laptop legitimately want different card layouts —
+   * syncing this would mean one device's rearrangement silently reshuffling every other
+   * device's home screen. It lives here, beside the rest of this device's own local-only
+   * state, and a write to it goes through `syncingStorage.transact` directly rather than
+   * `putMany`, so it never diffs into an op and never leaves this device.
+   */
+  overviewLayout: 'overviewLayout',
+
   // -- Transport configuration. Non-secret by construction; see `sync/transport/endpoints.ts`.
 
   /** Origin of the relay and signaling service, without a trailing slash. `''` means none. */

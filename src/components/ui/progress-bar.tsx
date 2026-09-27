@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
-import { type ColorValue } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { View, type ColorValue } from 'react-native';
 import Animated, {
+  Easing,
   ReduceMotion,
   interpolateColor,
+  useAnimatedProps,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -10,8 +12,10 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
+import Svg, { Circle } from 'react-native-svg';
 
 import { motionCurves } from '@/components/ui/motion';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { QASHY_INDIGO, radius } from '@/theme/tokens';
 
@@ -22,12 +26,16 @@ const fillSpring = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
 export function ProgressBar({
   value,
   color,
   label,
   milestones = [1],
   onMilestone,
+  size = 'regular',
+  segments,
 }: {
   value: number;
   color?: ColorValue;
@@ -36,6 +44,10 @@ export function ProgressBar({
   /** Ratios that trigger a celebratory pulse when crossed upward after mount. */
   milestones?: number[];
   onMilestone?: (milestone: number) => void;
+  /** `thin` is 6px tall, for a bar nested inside a denser row. */
+  size?: 'regular' | 'thin';
+  /** Number of equal segments to mark on the track (e.g. 7 for a week). Purely visual. */
+  segments?: number;
 }) {
   const theme = useQashyTheme();
   // Math.min(1, NaN) is NaN, so a non-finite ratio would otherwise reach
@@ -120,26 +132,149 @@ export function ProgressBar({
       : interpolateColor(colorMix.value, [0, 1], [colorPair.from, colorPair.to]),
   }));
 
+  const trackHeight = size === 'thin' ? 6 : 10;
+
   return (
     <Animated.View
       accessibilityRole="progressbar"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
       style={[
-        { height: 9, borderRadius: radius.pill, overflow: 'hidden', backgroundColor: theme.surfaceMuted },
+        {
+          height: trackHeight,
+          borderRadius: radius.pill,
+          overflow: 'hidden',
+        },
+        materialStyle(theme, 'sunken'),
         trackStyle,
       ]}>
-      <Animated.View
-        style={[
-          {
-            height: '100%',
-            width: '100%',
-            transformOrigin: 'left center',
-          },
-          fillStyle,
-        ]}>
-        <Animated.View style={[{ flex: 1, borderRadius: radius.pill }, fillColorStyle]} />
-      </Animated.View>
+      {/* The fill sits 1px inside the track on every edge, so the sunken well
+          is always visible as a thin ring around a raised-looking fill. */}
+      <View style={{ position: 'absolute', top: 1, bottom: 1, start: 1, end: 1, borderRadius: radius.pill, overflow: 'hidden' }}>
+        <Animated.View
+          style={[
+            {
+              height: '100%',
+              width: '100%',
+              transformOrigin: 'left center',
+            },
+            fillStyle,
+          ]}>
+          <Animated.View
+            style={[
+              {
+                flex: 1,
+                borderRadius: radius.pill,
+                // Inner top highlight so the fill reads as raised material,
+                // not just a flat tinted bar inside the well.
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+              },
+              fillColorStyle,
+            ]}
+          />
+        </Animated.View>
+      </View>
+      {segments && segments > 1
+        ? Array.from({ length: segments - 1 }, (_, index) => (
+            <View
+              key={index}
+              pointerEvents="none"
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                start: `${((index + 1) / segments) * 100}%`,
+                width: 2,
+                marginStart: -1,
+                backgroundColor: theme.surface,
+              }}
+            />
+          ))
+        : null}
     </Animated.View>
+  );
+}
+
+/**
+ * A circular counterpart to `ProgressBar`, for a compact stat that wants a
+ * ring rather than a bar (a goal card, a budget tile). The track is the same
+ * sunken material as a linear track; the arc is a raised accent stroke with
+ * round caps, laid over it.
+ */
+export function ProgressRing({
+  value,
+  size = 64,
+  strokeWidth = 8,
+  color,
+  label,
+  children,
+}: {
+  value: number;
+  size?: number;
+  strokeWidth?: number;
+  color?: ColorValue;
+  /** Describes what this ring measures for assistive technology. */
+  label?: string;
+  /** Centered content (an icon, a short figure) layered over the ring. */
+  children?: ReactNode;
+}) {
+  const theme = useQashyTheme();
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const clamped = Math.max(0, Math.min(1, safeValue));
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(reduceMotion ? clamped : 0);
+
+  const staticFallback = typeof theme.staticAccent === 'string' && theme.staticAccent
+    ? theme.staticAccent
+    : QASHY_INDIGO;
+  const strokeColor = typeof color === 'string'
+    ? color
+    : color === undefined && typeof theme.accent === 'string'
+      ? theme.accent
+      : staticFallback;
+  const trackColor = typeof theme.surfaceSunken === 'string' ? theme.surfaceSunken : staticFallback;
+
+  useEffect(() => {
+    progress.set(reduceMotion
+      ? clamped
+      : withTiming(clamped, { duration: 420, easing: Easing.bezier(0.2, 0, 0, 1), reduceMotion: ReduceMotion.System }));
+  }, [clamped, progress, reduceMotion]);
+
+  const radiusPx = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radiusPx;
+
+  const animatedProps = useAnimatedProps(() => ({
+    strokeDashoffset: circumference * (1 - Math.min(1, progress.value)),
+  }));
+
+  return (
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel={label}
+      accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
+      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r={radiusPx}
+          stroke={trackColor}
+          strokeWidth={strokeWidth}
+          fill="none"
+        />
+        <AnimatedCircle
+          cx={size / 2}
+          cy={size / 2}
+          r={radiusPx}
+          stroke={strokeColor}
+          strokeWidth={strokeWidth}
+          fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${circumference} ${circumference}`}
+          animatedProps={animatedProps}
+        />
+      </Svg>
+      {children}
+    </View>
   );
 }

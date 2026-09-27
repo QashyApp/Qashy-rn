@@ -1,41 +1,67 @@
 import { Children, Fragment, type ReactNode } from 'react';
 import { StyleSheet, View, type ColorValue, type ViewProps, type ViewStyle } from 'react-native';
 
+import { MotionPressable } from '@/components/ui/motion';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 
-export type CardVariant = 'default' | 'list' | 'inset';
+export type CardVariant = 'default' | 'list' | 'inset' | 'emphasized';
 
 export interface CardProps extends ViewProps {
   /**
-   * `default` — a section of the page. A surface fill, nothing else.
-   * `list` — a container for rows. Flush padding, hairlines between children.
-   * `inset` — a quieter well *inside* a section (a summary, a preview, a
-   *   callout). Muted fill, so it never competes with the section around it.
+   * `default` — a section of the page. Raised material: gradient, top
+   *   highlight, layered shadow.
+   * `list` — a container for rows. Flush padding, hairlines between children,
+   *   same raised material as `default`.
+   * `inset` — a recessed well *inside* a section (a summary, a preview, a
+   *   callout). Sunken material, so it reads as carved into the card around
+   *   it rather than floating above the page.
+   * `emphasized` — a section that wants to read as accented rather than
+   *   neutral (a highlighted total, a call to action). Same raised shadow as
+   *   `default`, but filled with the accent container tint instead of a
+   *   gradient.
    */
   variant?: CardVariant;
   /** `list` only: pull the hairlines in from the start edge, past a row's icon. */
   dividerInset?: number;
+  onPress?: () => void;
 }
 
 /**
- * Sections are planes, not boxes.
+ * Sections are physical tiles, not flat planes.
  *
- * Every card used to carry a surface, a hairline border *and* a shadow, and
- * Overview stacked seven of them at equal weight, so nothing on the page
- * outranked anything else. A card is now only a tonal step off the page: no
- * border, no resting shadow. Hierarchy comes from type and from what sits
- * directly on the background — the screen's hero figure is not in a card at
- * all (see `PageHero`). Shadows are reserved for things that genuinely float:
- * sheets, menus, the floating action button.
+ * Every card is now raised material: a subtle top-to-bottom gradient, a 1px
+ * inner top highlight, and a soft layered shadow, so a section visibly sits
+ * above the page rather than merely stepping one tone off it. `inset` cards
+ * invert that — a sunken well carved *into* the surrounding card, for a
+ * summary or preview that should read as quieter, not as its own section.
+ * Hierarchy still comes from type as much as from material: the screen's hero
+ * figure sits directly on the background, outside any card (see `PageHero`),
+ * so the one thing on a page with no material at all is still the thing that
+ * outranks everything with it.
  */
-export function Card({ variant = 'default', dividerInset = 0, style, children, ...props }: CardProps) {
+export function Card({
+  variant = 'default',
+  dividerInset = 0,
+  onPress,
+  style,
+  children,
+  ...props
+}: CardProps) {
   const theme = useQashyTheme();
 
   const base: ViewStyle = {
-    backgroundColor: variant === 'inset' ? theme.surfaceMuted : theme.surface,
     borderRadius: variant === 'inset' ? radius.tile : radius.card,
     borderCurve: 'continuous',
+    ...(variant === 'inset'
+      ? materialStyle(theme, 'sunken')
+      : variant === 'emphasized'
+        // Same raised shadow as `card`, but an accent tint instead of the
+        // neutral gradient — a flat tint reads as intentionally accented,
+        // where a gradient over a tint would just look like a mistake.
+        ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowCard }
+        : materialStyle(theme, 'card')),
   };
 
   if (variant === 'list') {
@@ -46,9 +72,28 @@ export function Card({ variant = 'default', dividerInset = 0, style, children, .
     base.padding = variant === 'inset' ? space.md : space.lg;
   }
 
+  const content = variant === 'list' ? withDividers(children, theme.border, dividerInset) : children;
+  const pressable = Boolean(onPress);
+
+  if (pressable) {
+    return (
+      <MotionPressable
+        accessibilityRole="button"
+        onPress={onPress}
+        pressedScale={0.985}
+        style={({ pressed }) => [
+          base,
+          pressed ? { boxShadow: theme.shadowControlPressed } : null,
+          style,
+        ]}>
+        {content}
+      </MotionPressable>
+    );
+  }
+
   return (
     <View {...props} style={[base, style]}>
-      {variant === 'list' ? withDividers(children, theme.border, dividerInset) : children}
+      {content}
     </View>
   );
 }

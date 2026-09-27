@@ -25,6 +25,10 @@ export default function TabsLayout() {
       // here painted a solid gray disc over the icon on tap instead of a subtle
       // press overlay — a translucent tint of the real accent hex reads correctly.
       rippleColor={withAlpha(theme.staticAccent, 0.12)}
+      // iOS-only: the hairline the system draws above the bar when content
+      // scrolls under it. The theme's own border tone keeps it as restrained
+      // as every other divider, instead of the system default.
+      shadowColor={theme.border}
       minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="overview">
         <NativeTabs.Trigger.Label>{t('Overview')}</NativeTabs.Trigger.Label>

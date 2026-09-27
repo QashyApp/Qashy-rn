@@ -6,15 +6,17 @@ import { useState } from 'react';
 import { View } from 'react-native';
 
 import { ActionButton } from '@/components/ui/action-button';
+import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { ChoiceChip } from '@/components/ui/choice-chip';
+import { StatusPill } from '@/components/ui/status-pill';
 import type { CsvImportRow, ImportResult, TransactionKind, TransactionStatus } from '@/domain/models';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { FormScreen } from '@/components/ui/form-screen';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius } from '@/theme/tokens';
+import { radius, space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
 import { csvCategoryForRow, extractCsvRatePairs, parseCsvTable } from '@/utils/csv';
 import { todayLocal } from '@/utils/date';
@@ -40,6 +42,51 @@ const CSV_FIELDS: { key: CsvField; label: string; optional?: boolean; aliases: s
   { key: 'destinationAmount', label: 'Destination amount', optional: true, aliases: ['destination_amount', 'to_amount'] },
   { key: 'destinationBaseAmountMinor', label: 'Destination base amount (minor units)', optional: true, aliases: ['destination_base_amount_minor', 'destinationbaseamountminor'] },
 ];
+
+const CSV_STEPS = ['Choose file', 'Map columns', 'Preview', 'Import'] as const;
+
+/**
+ * A numbered horizontal step indicator for the import flow: completed steps read as filled
+ * accent material, the current step is raised with an accent ring, and upcoming steps sit in a
+ * sunken well — the same "material says the state" language as the rest of the redesign,
+ * purely decorative (the real progress is driven by `sourceRows`/`preview`/committed state).
+ */
+function CsvStepper({ current }: { current: number }) {
+  const theme = useQashyTheme();
+  const { t } = useLocalization();
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+      {CSV_STEPS.map((label, index) => {
+        const done = index < current;
+        const active = index === current;
+        return (
+          <View key={label} style={{ flex: index === CSV_STEPS.length - 1 ? 0 : 1, alignItems: 'center' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+              <View
+                style={{
+                  width: 28,
+                  height: 28,
+                  borderRadius: radius.pill,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: done ? theme.accent : active ? theme.surfaceElevated : theme.surfaceSunken,
+                  boxShadow: done
+                    ? 'inset 0 1px 0 rgba(255,255,255,0.3)'
+                    : active
+                      ? `inset 0 0 0 2px ${String(theme.accent)}, ${theme.shadowControl}`
+                      : theme.shadowSunken,
+                }}>
+                {done ? <AppIcon name="checkmark" color={theme.onAccent} size={14} /> : <AppText selectable={false} literal figure variant="caption" style={{ color: active ? theme.accent : theme.textMuted }}>{String(index + 1)}</AppText>}
+              </View>
+              {index < CSV_STEPS.length - 1 ? <View style={{ flex: 1, height: 2, backgroundColor: done ? theme.accent : theme.border, marginHorizontal: space.xs }} /> : null}
+            </View>
+            <AppText variant="caption" muted={!active} numberOfLines={1} style={{ marginTop: space.xxs, fontWeight: active ? '600' : '400' }}>{t(label)}</AppText>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 function inferMapping(headers: string[]) {
   return Object.fromEntries(CSV_FIELDS.map((field) => [
@@ -207,6 +254,7 @@ export function CsvScreen() {
       </Card>
       <Card style={{ gap: 14 }}>
         <AppText variant="headline">Import transactions</AppText>
+        <CsvStepper current={preview?.committedIds.length ? 3 : preview ? 2 : sourceRows.length ? 1 : 0} />
         <AppText muted>Headers are matched automatically. Required columns are date, type, title, amount, currency, and account. Nothing is committed until after preview.</AppText>
         <ActionButton title="Choose CSV" variant="secondary" onPress={pick} />
         {sourceRows.length ? (
@@ -262,15 +310,23 @@ export function CsvScreen() {
         {preview ? (
           <View style={{ gap: 10, paddingTop: 6 }}>
             <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.accentContainer }}><AppText variant="headline" style={{ color: theme.accent }}>{preview.validRows.length}</AppText><AppText variant="caption" muted>Ready</AppText></View>
-              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.surfaceMuted }}><AppText variant="headline">{preview.duplicateRows.length}</AppText><AppText variant="caption" muted>Duplicates</AppText></View>
-              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.surfaceMuted }}><AppText variant="headline" style={{ color: preview.rejectedRows.length ? theme.negative : theme.text }}>{preview.rejectedRows.length}</AppText><AppText variant="caption" muted>Rejected</AppText></View>
+              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.accentContainer }}><AppText literal figure variant="headline" style={{ color: theme.accent }}>{String(preview.validRows.length)}</AppText><AppText variant="caption" muted>Ready</AppText></View>
+              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.surfaceMuted }}><AppText literal figure variant="headline">{String(preview.duplicateRows.length)}</AppText><AppText variant="caption" muted>Duplicates</AppText></View>
+              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.surfaceMuted }}><AppText literal figure variant="headline" style={{ color: preview.rejectedRows.length ? theme.negative : theme.text }}>{String(preview.rejectedRows.length)}</AppText><AppText variant="caption" muted>Rejected</AppText></View>
             </View>
-            {/* Built as one string: the dictionary matches "Row N: reason" as a
-                whole and copies the reason through untouched. Split children
-                would translate the reason on its own. */}
-            {preview.rejectedRows.slice(0, 4).map((row) => <AppText key={row.rowNumber} literal variant="caption" style={{ color: theme.negative }}>{t(`Row ${row.rowNumber}: ${row.reason}`)}</AppText>)}
-            {preview.validRows.length && !preview.committedIds.length ? <ActionButton title={busy ? 'Importing…' : `Import ${preview.validRows.length} transactions`} icon="checkmark" onPress={commit} disabled={busy} /> : null}
+            {preview.rejectedRows.length ? (
+              <Card variant="list" dividerInset={0}>
+                {/* Built as one string: the dictionary matches "Row N: reason" as a
+                    whole and copies the reason through untouched. Split children
+                    would translate the reason on its own. */}
+                {preview.rejectedRows.slice(0, 4).map((row) => (
+                  <View key={row.rowNumber} style={{ minHeight: 44, justifyContent: 'center' }}>
+                    <StatusPill literal label={t(`Row ${row.rowNumber}: ${row.reason}`)} icon="exclamationmark.triangle" tone="negative" />
+                  </View>
+                ))}
+              </Card>
+            ) : null}
+            {preview.validRows.length && !preview.committedIds.length ? <ActionButton title={busy ? 'Importing…' : `Import ${preview.validRows.length} transactions`} icon="checkmark" size="large" onPress={commit} disabled={busy} /> : null}
           </View>
         ) : null}
       </Card>

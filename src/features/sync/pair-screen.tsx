@@ -51,6 +51,7 @@ import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
+import { ProgressBar } from '@/components/ui/progress-bar';
 import { StatusPill } from '@/components/ui/status-pill';
 import { TextButton } from '@/components/ui/text-button';
 import { useLocalization } from '@/localization/localization';
@@ -72,6 +73,7 @@ import {
   type DeviceProfile,
   type SyncStatus,
 } from '@/sync/setup';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space } from '@/theme/tokens';
 import { errorMessage } from '@/utils/confirm';
@@ -118,6 +120,7 @@ export function PairScreen() {
   const { status, setup, refresh, reconcile } = useSync();
   const { settings } = useFinanceState();
   const theme = useQashyTheme();
+  const { t } = useLocalization();
   // Reached from onboarding's "I already use Qashy". This device has nothing yet, so it can
   // only join: hosting would mint a vault around an empty ledger.
   const firstRun = useLocalSearchParams<{ onboarding?: string }>().onboarding === '1';
@@ -400,18 +403,15 @@ export function PairScreen() {
 
   return (
     <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
-      <View style={{ flexDirection: 'row', gap: space.sm, justifyContent: 'center' }}>
-        {STAGES.map((item) => (
-          <View
-            key={item}
-            style={{
-              width: item === stage ? 26 : 8,
-              height: 8,
-              borderRadius: radius.pill,
-              backgroundColor: item === stage ? theme.accent : theme.border,
-            }}
-          />
-        ))}
+      <View style={{ gap: space.sm }}>
+        <AppText literal variant="caption" muted style={{ textAlign: 'center' }}>
+          {t(`Step ${STAGES.indexOf(stage) + 1} of ${STAGES.length}`)}
+        </AppText>
+        <ProgressBar
+          value={(STAGES.indexOf(stage) + 1) / STAGES.length}
+          segments={STAGES.length}
+          label={t('Pairing progress')}
+        />
       </View>
 
       {error ? (
@@ -608,6 +608,7 @@ function RoleStep({
       <ActionButton
         title={busy ? 'Preparing…' : 'Continue'}
         icon="arrow.right"
+        size="large"
         busy={busy}
         disabled={busy || blockedHost}
         onPress={onContinue}
@@ -694,7 +695,7 @@ function HostCodeStep({
                 ? 'This pairing attempt has ended. Its code cannot be used again, even before the countdown ends.'
                 : 'This code has expired. Codes are single use and short-lived on purpose.'}
             </AppText>
-            <ActionButton title="Show a new code" icon="arrow.triangle.2.circlepath" onPress={onRestart} />
+            <ActionButton title="Show a new code" icon="arrow.triangle.2.circlepath" size="large" onPress={onRestart} />
           </View>
         ) : (
           <>
@@ -722,15 +723,22 @@ function HostCodeStep({
           />
           {showTyped ? (
             <MotionView variant="up" exit animateLayout style={{ gap: space.sm }}>
-              <Card style={{ gap: space.sm }}>
+              {/* A sunken well, like the six-word confirmation below: this string is looked at
+                  and copied by eye, not tapped, so it reads better carved into the page than
+                  floating above it. */}
+              <View style={[{ padding: space.lg, borderRadius: radius.card, borderCurve: 'continuous' }, materialStyle(theme, 'sunken')]}>
                 {/* Selectable, and that is the only concession made here. The code carries the
                     pairing secret, so there is no copy button and it is never persisted or
                     logged — a selection the user makes and pastes once is the shortest life
                     this string can have while still being usable on a desktop. */}
-                <AppText literal selectable variant="caption" style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' }}>
+                <AppText
+                  literal
+                  selectable
+                  variant="label"
+                  style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', letterSpacing: 1, lineHeight: 26 }}>
                   {formatPairingCodeForTyping(code.value)}
                 </AppText>
-              </Card>
+              </View>
               <AppText variant="caption" muted>
                 Type or paste this into the other device instead of scanning. Treat it like the
                 code itself — it works once, and only for the next minute or so.
@@ -760,6 +768,7 @@ function ConfirmStep({
   readonly onMatch: () => void;
   readonly onReject: () => void;
 }) {
+  const theme = useQashyTheme();
   return (
     <>
       <AppText variant="title">Do these words match?</AppText>
@@ -768,7 +777,12 @@ function ConfirmStep({
         one differs, stop — someone else may be trying to join.
       </AppText>
 
-      <SasDisplay words={sas} />
+      {/* A larger, better-spaced sunken well around the six words — the single most important
+          comparison in the app deserves more room than the cramped tiles the words render as
+          on their own. */}
+      <View style={[{ padding: space.lg, borderRadius: radius.card, borderCurve: 'continuous' }, materialStyle(theme, 'sunken')]}>
+        <SasDisplay words={sas} />
+      </View>
 
       {/* Equal weight, deliberately. The dangerous answer is "yes" given reflexively, so "yes"
           gets no visual advantage over "no" and neither is the default focus target. */}
@@ -776,6 +790,7 @@ function ConfirmStep({
         <ActionButton
           title={busy ? 'Pairing…' : 'They match'}
           icon="checkmark"
+          size="large"
           busy={busy}
           disabled={busy}
           onPress={onMatch}
@@ -785,6 +800,7 @@ function ConfirmStep({
           title="They don’t match"
           icon="xmark"
           variant="danger"
+          size="large"
           disabled={busy}
           onPress={onReject}
           style={{ flex: 1, minWidth: 160 }}
@@ -841,7 +857,7 @@ function DoneStep({
         </AppText>
       </Card>
 
-      <ActionButton title="Review duplicates" icon="arrow.triangle.2.circlepath" onPress={() => router.replace('/sync-merge')} />
+      <ActionButton title="Review duplicates" icon="arrow.triangle.2.circlepath" size="large" onPress={() => router.replace('/sync-merge')} />
       <TextButton title="Done" tone="muted" onPress={() => router.replace('/sync')} />
     </>
   );

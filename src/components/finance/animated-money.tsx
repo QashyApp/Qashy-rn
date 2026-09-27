@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { type TextProps } from 'react-native';
+import { Text, type TextProps, type TextStyle } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/app-text';
+import { useQashyTheme } from '@/theme/theme';
+import { typeScale } from '@/theme/tokens';
 import type { CurrencyCode } from '@/domain/models';
-import { formatMoney } from '@/utils/money';
+import { formatMoney, formatMoneyParts } from '@/utils/money';
 
 const COUNT_DURATION = 420;
 
@@ -62,33 +64,94 @@ export function useAnimatedMinorAmount(target: number) {
   return display;
 }
 
+/** Variants that split into a full-size integer/sign plus a visually subordinate currency+fraction run by default. */
+const SPLIT_BY_DEFAULT = new Set(['hero', 'display', 'money']);
+
+export type AnimatedMoneyVariant = 'hero' | 'display' | 'title' | 'headline' | 'body' | 'caption' | 'label' | 'eyebrow' | 'money' | 'figure';
+
 export function AnimatedMoney({
   minor,
   currency,
   locale,
   compact = false,
   sign = false,
+  variant = 'body',
+  // `figure` defaults on: an `AnimatedMoney` is a money amount, so it always
+  // renders digits in the numeric display face regardless of `variant`. Money
+  // callers that genuinely need Rubik digits (there are none today) can still
+  // opt out with `figure={false}`.
+  figure = true,
+  split,
+  style,
   ...props
 }: TextProps & {
   minor: number;
   currency: CurrencyCode;
   locale: string;
-  variant?: 'display' | 'title' | 'headline' | 'body' | 'caption' | 'label' | 'eyebrow' | 'money';
+  variant?: AnimatedMoneyVariant;
   muted?: boolean;
   /** Fixed-width digits. Implied by `display` and `money`; set it on the rest. */
   numeric?: boolean;
+  /** Forces the numeric display face (Space Grotesk) and tabular digits. */
+  figure?: boolean;
   compact?: boolean;
   sign?: boolean;
+  /**
+   * Renders the sign and integer at full size, with the currency symbol and
+   * fractional digits shrunk and muted — a statement figure reads as "$1,204"
+   * with ".50" as a footnote, not three equally loud tokens. Defaults to true
+   * for `hero`/`display`/`money` (the sizes actually used as statement
+   * figures) and false everywhere else.
+   */
+  split?: boolean;
 }) {
+  const theme = useQashyTheme();
   const display = useAnimatedMinorAmount(minor);
+  // Assistive tech should read the settled amount, not the mid-count value.
+  const accessibilityLabel = formatMoney(minor, currency, locale, { compact, sign });
+  const shouldSplit = split ?? SPLIT_BY_DEFAULT.has(variant);
+
+  if (!shouldSplit) {
+    return (
+      <AppText
+        accessibilityLabel={accessibilityLabel}
+        // Always a formatted amount, never dictionary copy.
+        literal
+        variant={variant}
+        figure={figure}
+        style={style}
+        {...props}>
+        {formatMoney(display, currency, locale, { compact, sign })}
+      </AppText>
+    );
+  }
+
+  const parts = formatMoneyParts(display, currency, locale, { compact, sign });
+  // `money` sits closer to body text than `hero`/`display` do, so its minor
+  // run only needs to step down a little to read as subordinate; the larger
+  // statement figures need the bigger drop to keep the minor run from
+  // competing with the integer.
+  const minorScale = variant === 'money' ? 0.75 : 0.6;
+  const minorStyle: TextStyle = {
+    fontSize: typeScale[variant].fontSize * minorScale,
+    lineHeight: typeScale[variant].lineHeight,
+    color: theme.textMuted,
+  };
   return (
     <AppText
-      // Assistive tech should read the settled amount, not the mid-count value.
-      accessibilityLabel={formatMoney(minor, currency, locale, { compact, sign })}
-      // Always a formatted amount, never dictionary copy.
+      accessibilityLabel={accessibilityLabel}
       literal
+      variant={variant}
+      figure={figure}
+      style={style}
       {...props}>
-      {formatMoney(display, currency, locale, { compact, sign })}
+      {parts.literalBefore}
+      {parts.sign}
+      {parts.currencyPosition === 'before' ? <Text style={minorStyle}>{parts.currency}</Text> : null}
+      {parts.integer}
+      <Text style={minorStyle}>{parts.fraction}</Text>
+      {parts.literalAfter}
+      {parts.currencyPosition === 'after' ? <Text style={minorStyle}>{parts.currency}</Text> : null}
     </AppText>
   );
 }

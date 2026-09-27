@@ -29,4 +29,20 @@ describe('localization', () => {
     expect(translateMessage('Custom account name', 'he')).toBe('Custom account name');
     expect(translateMessage('Base currency', 'en')).toBe('Base currency');
   });
+
+  it('translates the redesign-era additions to the Hebrew dictionary', () => {
+    expect(translateMessage('Clear filters', 'he')).toBe('ניקוי הסינון');
+    expect(translateMessage('Under pace', 'he')).toBe('מתחת לקצב');
+    expect(translateMessage('Over budget', 'he')).toBe('חריגה מהתקציב');
+    expect(translateMessage('Projected', 'he')).toBe('צפי');
+    expect(translateMessage('remaining', 'he')).toBe('נותרו');
+    expect(translateMessage('Pairing progress', 'he')).toBe('התקדמות החיבור');
+    expect(translateMessage('Advanced', 'he')).toBe('מתקדם');
+    expect(translateMessage('Preview · Net worth', 'he')).toBe('תצוגה מקדימה · שווי נקי');
+    expect(translateMessage('Choose file', 'he')).toBe('בחירת קובץ');
+    expect(translateMessage('Import', 'he')).toBe('ייבוא');
+    // Same "label (currency)" dynamic pattern as "Opening balance (ILS)", exercised through
+    // a different fixed label to confirm the pattern isn't matching on that label alone.
+    expect(translateMessage('Amount (ILS)', 'he')).toBe('סכום (ILS)');
+  });
 });
