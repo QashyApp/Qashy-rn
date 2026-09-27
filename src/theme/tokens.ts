@@ -237,6 +237,12 @@ export function mixHex(from: string, to: string, weight: number) {
   return toHex([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
 }
 
+/** Appends an alpha channel to a hex color, e.g. for a translucent press/ripple overlay. */
+export function withAlpha(hex: string, alpha: number) {
+  const clamped = Math.min(1, Math.max(0, alpha));
+  return `${hex}${Math.round(clamped * 255).toString(16).padStart(2, '0')}`;
+}
+
 export function ensureContrast(
   foreground: string,
   background: string,

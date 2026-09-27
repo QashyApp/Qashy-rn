@@ -2,6 +2,7 @@ import { NativeTabs } from 'expo-router/unstable-native-tabs';
 
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
+import { withAlpha } from '@/theme/tokens';
 
 export default function TabsLayout() {
   const theme = useQashyTheme();
@@ -19,7 +20,11 @@ export default function TabsLayout() {
         selected: { color: theme.accent },
       }}
       indicatorColor={theme.accentContainer}
-      rippleColor={theme.accentContainer}
+      // `accentContainer` is a fully opaque fill, right for the resting selected
+      // pill. Android's ripple draws its color at full alpha too, so reusing it
+      // here painted a solid gray disc over the icon on tap instead of a subtle
+      // press overlay — a translucent tint of the real accent hex reads correctly.
+      rippleColor={withAlpha(theme.staticAccent, 0.12)}
       minimizeBehavior="onScrollDown">
       <NativeTabs.Trigger name="overview">
         <NativeTabs.Trigger.Label>{t('Overview')}</NativeTabs.Trigger.Label>
