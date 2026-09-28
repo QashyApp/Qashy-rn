@@ -10,14 +10,18 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Circle, ClipPath, Defs, Path } from 'react-native-svg';
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
+import { DirectionScope } from '@/components/ui/direction-scope';
 import { ProgressRing } from '@/components/ui/progress-bar';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space, withAlpha } from '@/theme/tokens';
+
+/** The hero is English and left-to-right in every UI language, so its text opts out of the RTL defaults `AppText` applies. */
+const HERO_TEXT = { writingDirection: 'ltr', textAlign: 'left' } as const;
 
 /**
  * A slow, gentle vertical drift (±4px) for a floating card. Disabled entirely
@@ -64,105 +68,107 @@ export function WelcomeHero() {
   const chipFloat = useFloat(520, 3200, reduceMotion);
 
   return (
-    <View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={{ width: 248, height: 208, alignItems: 'center', justifyContent: 'center' }}>
+    <DirectionScope direction="ltr">
       <View
-        style={[
-          {
-            width: 92,
-            height: 92,
-            borderRadius: 30,
-            borderCurve: 'continuous',
-            alignItems: 'center',
-            justifyContent: 'center',
-          },
-          accent,
-        ]}>
-        <Svg width={48} height={48} viewBox="0 0 1024 1024">
-          <Circle cx={512} cy={492} r={284} fill="none" stroke={theme.onAccent as string} strokeOpacity={0.35} strokeWidth={48} />
-          <Path d="M636 664l116 116" fill="none" stroke={theme.onAccent as string} strokeLinecap="round" strokeWidth={76} />
-          <Path
-            d="M600 604c-26 26-60 40-102 40-98 0-170-74-170-180s72-180 170-180 170 74 170 180c0 32-6 60-18 84"
-            fill="none"
-            stroke={theme.onAccent as string}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={76}
-          />
-        </Svg>
-      </View>
-
-      {/* Mini balance card, leading edge. */}
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            start: 0,
-            top: 8,
-            width: 92,
-            padding: space.sm,
-            borderRadius: radius.tile,
-            borderCurve: 'continuous',
-            gap: space.xxs,
-          },
-          raised,
-          balanceFloat,
-        ]}>
-        <AppText literal variant="eyebrow" muted>NET WORTH</AppText>
-        <AppText literal figure variant="label" style={{ color: theme.positive }}>+2,480</AppText>
-      </Animated.View>
-
-      {/* Mini budget ring, trailing edge. */}
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            end: 4,
-            top: 0,
-            padding: space.xs,
-            borderRadius: radius.pill,
-          },
-          raised,
-          ringFloat,
-        ]}>
-        <ProgressRing value={0.62} size={52} strokeWidth={6}>
-          <AppText literal variant="caption" style={{ fontWeight: '700' }}>62%</AppText>
-        </ProgressRing>
-      </Animated.View>
-
-      {/* Mini category chip, bottom-center. */}
-      <Animated.View
-        style={[
-          {
-            position: 'absolute',
-            bottom: 4,
-            alignSelf: 'center',
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: space.xs,
-            paddingStart: space.xs,
-            paddingEnd: space.md,
-            paddingVertical: space.xs,
-            borderRadius: radius.pill,
-          },
-          raised,
-          chipFloat,
-        ]}>
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ width: 248, height: 208, alignItems: 'center', justifyContent: 'center' }}>
         <View
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: radius.pill,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: withAlpha(theme.staticAccent, 0.16),
-          }}>
-          <AppIcon name="cart" color={theme.staticAccent} size={13} />
+          style={[
+            {
+              width: 92,
+              height: 92,
+              borderRadius: 30,
+              borderCurve: 'continuous',
+              alignItems: 'center',
+              justifyContent: 'center',
+            },
+            accent,
+          ]}>
+          <Svg width={48} height={48} viewBox="0 0 1024 1024">
+            <Defs>
+              <ClipPath id="qashy-q-ring-clip">
+                <Path clipRule="evenodd" d="M0 0H1024V1024H0Z M430 594L594 430L1194 1030L1030 1194Z" />
+              </ClipPath>
+            </Defs>
+            <Circle cx={512} cy={512} r={246} fill="none" stroke={theme.onAccent as string} strokeWidth={56} clipPath="url(#qashy-q-ring-clip)" />
+            <Circle cx={500} cy={504} r={16} fill={theme.onAccent as string} />
+            <Circle cx={536} cy={542} r={16} fill={theme.onAccent as string} />
+            <Circle cx={572} cy={580} r={16} fill={theme.onAccent as string} />
+            <Path fill={theme.onAccent as string} d="M622 588L773 739L739 773L588 622Z" />
+          </Svg>
         </View>
-        <AppText literal variant="caption" style={{ fontWeight: '500' }}>Groceries</AppText>
-      </Animated.View>
-    </View>
+
+        {/* Mini balance card, leading edge. */}
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              start: 0,
+              top: 8,
+              width: 92,
+              padding: space.sm,
+              borderRadius: radius.tile,
+              borderCurve: 'continuous',
+              gap: space.xxs,
+            },
+            raised,
+            balanceFloat,
+          ]}>
+          <AppText literal variant="eyebrow" muted style={HERO_TEXT}>NET WORTH</AppText>
+          <AppText literal figure variant="label" style={[HERO_TEXT, { color: theme.positive }]}>+2,480</AppText>
+        </Animated.View>
+
+        {/* Mini budget ring, trailing edge. */}
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              end: 4,
+              top: 0,
+              padding: space.xs,
+              borderRadius: radius.pill,
+            },
+            raised,
+            ringFloat,
+          ]}>
+          <ProgressRing value={0.62} size={52} strokeWidth={6}>
+            <AppText literal variant="caption" style={[HERO_TEXT, { fontWeight: '700', textAlign: 'center' }]}>62%</AppText>
+          </ProgressRing>
+        </Animated.View>
+
+        {/* Mini category chip, bottom-center. */}
+        <Animated.View
+          style={[
+            {
+              position: 'absolute',
+              bottom: 4,
+              alignSelf: 'center',
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: space.xs,
+              paddingStart: space.xs,
+              paddingEnd: space.md,
+              paddingVertical: space.xs,
+              borderRadius: radius.pill,
+            },
+            raised,
+            chipFloat,
+          ]}>
+          <View
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: radius.pill,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: withAlpha(theme.staticAccent, 0.16),
+            }}>
+            <AppIcon name="cart" color={theme.staticAccent} size={13} />
+          </View>
+          <AppText literal variant="caption" style={[HERO_TEXT, { fontWeight: '500' }]}>Groceries</AppText>
+        </Animated.View>
+      </View>
+    </DirectionScope>
   );
 }

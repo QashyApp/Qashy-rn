@@ -2,14 +2,9 @@ import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
-import { SegmentedControl } from '@/components/ui/segmented-control';
+import { LanguageSelector } from '@/components/ui/language-selector';
 import { WelcomeHero } from '@/features/onboarding/steps/welcome-hero';
 import { space } from '@/theme/tokens';
-
-const LANGUAGES = [
-  { value: 'en-US', label: 'English', literal: true },
-  { value: 'he-IL', label: 'עברית', literal: true },
-] as const;
 
 /**
  * The first screen. One mark, one line of promise, and the only choice that
@@ -32,7 +27,7 @@ export function WelcomeStep({ locale, onLocale }: { locale: string; onLocale: (l
         </AppText>
       </MotionView>
       <MotionView variant="up" delay={220} style={{ width: '100%', maxWidth: 280, gap: space.sm }}>
-        <SegmentedControl label="Language" options={LANGUAGES} value={locale} onChange={onLocale} />
+        <LanguageSelector value={locale} onChange={onLocale} />
       </MotionView>
     </View>
   );

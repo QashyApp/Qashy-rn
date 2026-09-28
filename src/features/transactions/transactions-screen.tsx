@@ -241,7 +241,9 @@ export function TransactionsScreen() {
         <View style={toolbarStyle}>
           <PageHeading title="Transactions" />
           <View style={{ gap: space.md }}>
-            <MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} disabled={allMonths} />
+            <View style={{ alignSelf: 'flex-start' }}>
+              <MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} disabled={allMonths} />
+            </View>
             <MotionView
               key={`${month}-${allMonths}`}
               variant={monthDirection}
@@ -250,7 +252,7 @@ export function TransactionsScreen() {
               {([
                 ['Income', summary.incomeMinor, theme.positive],
                 ['Spent', summary.expenseMinor, theme.text],
-                ['Net', summary.netFlowMinor, summary.netFlowMinor >= 0 ? theme.positive : theme.negative],
+                ['Net', summary.netFlowMinor, summary.netFlowMinor > 0 ? theme.positive : summary.netFlowMinor < 0 ? theme.negative : theme.text],
               ] as const).map(([label, amount, color]) => (
                 <View key={label} style={{ flex: 1, minWidth: 0 }}>
                   <StatTile
@@ -464,7 +466,6 @@ export function TransactionsScreen() {
             bottom: batchBarBottom,
             maxWidth: content.maxWidth,
             alignSelf: 'center',
-            width: '100%',
           }}>
           <View
             style={{
@@ -475,8 +476,8 @@ export function TransactionsScreen() {
               ...materialStyle(theme, 'raised'),
               boxShadow: theme.shadowOverlay,
             }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
-              <MotionView key={selectedIds.length} variant="fade" animateLayout>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
+              <MotionView key={selectedIds.length} variant="fade" animateLayout style={{ flexShrink: 1 }}>
                 <AppText literal variant="headline">{t(`${selectedIds.length} selected`)}</AppText>
               </MotionView>
               <TextButton title="Cancel" tone="muted" onPress={() => {

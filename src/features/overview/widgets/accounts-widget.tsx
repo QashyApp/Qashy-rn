@@ -11,6 +11,7 @@ import { useLocalization } from '@/localization/localization';
 import { useFinanceState } from '@/providers/finance-provider';
 import { radius, space, tile as tileMetrics, toneColors } from '@/theme/tokens';
 import { useQashyTheme } from '@/theme/theme';
+import { accountTypeIcon, accountTypeLabel } from '@/utils/labels';
 import type { WidgetProps } from '@/features/overview/widgets/types';
 import { useDashboard } from '@/features/overview/widgets/use-dashboard';
 
@@ -31,8 +32,8 @@ export function AccountsWidget({ month }: WidgetProps) {
             return (
               <MotionView key={account.id} variant="fade" animateLayout exit>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 60 }}>
-                  <View style={{ width: tileMetrics.size, height: tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}><AppIcon name="wallet" color={tile.onContainer} size={tileMetrics.icon} /></View>
-                  <View style={{ flex: 1, gap: space.xxs }}><AppText literal variant="label">{account.name}</AppText><AppText literal variant="caption" muted>{`${account.currency} · ${t(account.type)}`}</AppText></View>
+                  <View style={{ width: tileMetrics.size, height: tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}><AppIcon name={accountTypeIcon(account.type)} color={tile.onContainer} size={tileMetrics.icon} /></View>
+                  <View style={{ flex: 1, gap: space.xxs }}><AppText literal variant="label">{account.name}</AppText><AppText literal variant="caption" muted>{`${account.currency} · ${t(accountTypeLabel(account.type))}`}</AppText></View>
                   <AnimatedMoney minor={balanceMinor} currency={account.currency} locale={locale} variant="label" numeric />
                 </View>
               </MotionView>

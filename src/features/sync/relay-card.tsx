@@ -22,9 +22,10 @@
  */
 
 import { useState } from 'react';
-import { Switch, View } from 'react-native';
+import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
+import { QashySwitch } from '@/components/ui/qashy-switch';
 import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/ui/form-field';
 import { MotionView } from '@/components/ui/motion';
@@ -294,7 +295,6 @@ function ToggleRow({
   readonly value: boolean;
   readonly onValueChange: (value: boolean) => void;
 }) {
-  const theme = useQashyTheme();
   const { t } = useLocalization();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.lg }}>
@@ -302,11 +302,10 @@ function ToggleRow({
         <AppText variant="label">{title}</AppText>
         <AppText variant="caption" muted>{body}</AppText>
       </View>
-      <Switch
+      <QashySwitch
         accessibilityLabel={t(title)}
         value={value}
         onValueChange={onValueChange}
-        trackColor={{ true: theme.accent }}
       />
     </View>
   );

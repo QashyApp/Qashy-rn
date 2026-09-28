@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/card';
 import { ChoiceChip } from '@/components/ui/choice-chip';
 import { ColorSwatch } from '@/components/ui/color-swatch';
 import { FormField } from '@/components/ui/form-field';
+import { LanguageSelector } from '@/components/ui/language-selector';
 import { MotionView } from '@/components/ui/motion';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
@@ -53,6 +54,18 @@ export function AppearanceScreen() {
   const customError = source === 'custom' && !validHex
     ? 'Use a six-digit hex color such as #5966E9.'
     : undefined;
+  // Language applies immediately, exactly like the onboarding welcome step: it writes
+  // `settings.locale`, and `LocalizationProvider` flips language and RTL from that — no reload.
+  // Adopt the new revision so a pending "Save appearance" doesn't hit a stale-revision conflict.
+  const changeLanguage = async (locale: string) => {
+    if (locale === settings.locale) return;
+    try {
+      const updated = await repository.updateSettings({ locale });
+      setExpectedRevision(updated.revision);
+    } catch (reason) {
+      showError('Couldn’t apply this setting', errorMessage(reason, 'Try again.'));
+    }
+  };
   const save = async () => {
     if (saving || customError) return;
     setSaving(true);
@@ -80,7 +93,9 @@ export function AppearanceScreen() {
           `preview.accent`/`preview.onAccent` directly — it is not interactive and never becomes
           real chrome, it exists purely so a color choice reads instantly, before Save. */}
       <MotionView key={`${mode}-${source}-${hex}`} variant="fade" exit animateLayout>
-        <Card style={{ backgroundColor: preview.accent, gap: space.lg }}>
+        {/* A plain View, not `Card`: Card's raised material paints a neutral gradient over any
+            backgroundColor, which hid the accent (and left on-accent text white on white). */}
+        <View style={{ backgroundColor: preview.accent, gap: space.lg, padding: space.lg, borderRadius: radius.card, borderCurve: 'continuous', boxShadow: theme.shadowCard }}>
           <View style={{ gap: space.xxs }}>
             <AppText variant="overline" style={previewMutedStyle}>Preview · Net worth</AppText>
             <AnimatedMoney
@@ -108,6 +123,12 @@ export function AppearanceScreen() {
             <AppIcon name="checkmark" color={preview.accent} size={16} />
             <AppText selectable={false} variant="label" style={{ color: preview.accent }}>Looks good</AppText>
           </View>
+        </View>
+      </MotionView>
+      <MotionView>
+        <Card style={{ gap: 16 }}>
+          <AppText variant="headline">Language</AppText>
+          <LanguageSelector value={settings.locale} onChange={changeLanguage} />
         </Card>
       </MotionView>
       <MotionView>

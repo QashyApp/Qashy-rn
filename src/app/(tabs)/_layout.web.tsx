@@ -116,7 +116,7 @@ function NavigationItem({
   onMeasure: (href: string, metrics: NavMetrics) => void;
 }) {
   const theme = useQashyTheme();
-  const { t } = useLocalization();
+  const { isRtl, t } = useLocalization();
   const [showTooltip, setShowTooltip] = useState(false);
   const currentPageProps = active ? { 'aria-current': 'page' as const } : {};
   const foreground = active ? theme.onAccentContainer : showTooltip ? theme.text : theme.textMuted;
@@ -140,10 +140,12 @@ function NavigationItem({
     tooltipProgress.set(withTiming(tooltipShown ? 1 : 0, tooltipShown ? tooltipInTiming : tooltipOutTiming));
   }, [tooltipProgress, tooltipShown]);
 
+  // The rail sits on the right in RTL, so the tooltip slides in from the left.
+  const direction = isRtl ? -1 : 1;
   const highlightStyle = useAnimatedStyle(() => ({ opacity: highlight.value }));
   const tooltipStyle = useAnimatedStyle(() => ({
     opacity: tooltipProgress.value,
-    transform: [{ translateX: (1 - tooltipProgress.value) * TOOLTIP_TRAVEL }],
+    transform: [{ translateX: (1 - tooltipProgress.value) * TOOLTIP_TRAVEL * direction }],
   }));
   return (
     <Link href={item.href} asChild>
@@ -228,7 +230,7 @@ function NavigationItem({
             style={[
               {
                 position: 'absolute',
-                left: TOOLTIP_OFFSET,
+                start: TOOLTIP_OFFSET,
                 top: (48 - TOOLTIP_HEIGHT) / 2,
                 minHeight: TOOLTIP_HEIGHT,
                 justifyContent: 'center',
@@ -394,10 +396,10 @@ export default function WebTabsLayout() {
           // the 84pt the layout reserves. Padding chosen independently of the
           // target made the items wider than the box that held them, so both the
           // icons and the selected pill overhung the divider.
-          paddingLeft: (compact ? RAIL_GUTTER : space.xl) + insets.left,
-          paddingRight: compact ? RAIL_GUTTER : space.xl,
-          borderRightWidth: 1,
-          borderRightColor: theme.border,
+          paddingStart: (compact ? RAIL_GUTTER : space.xl) + insets.left,
+          paddingEnd: compact ? RAIL_GUTTER : space.xl,
+          borderEndWidth: 1,
+          borderEndColor: theme.border,
           gap: space.xxl,
         }}>
         <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: space.md }}>

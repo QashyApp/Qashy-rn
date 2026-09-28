@@ -38,6 +38,8 @@ import { space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
 import { endOfMonth, startOfMonth } from '@/utils/date';
 import { hapticImpactLight } from '@/utils/haptics';
+import { amountTone } from '@/utils/labels';
+import { formatMoney } from '@/utils/money';
 
 interface UndoState {
   readonly card: OverviewCard;
@@ -122,6 +124,23 @@ export function OverviewScreen() {
   const locale = state.settings.locale;
   const missingCurrencies = summary.missingExchangeRates.map((rate) => rate.fromCurrency);
   const missingAllUnsupported = missingCurrencies.length > 0 && missingCurrencies.every((code) => FRANKFURTER_UNSUPPORTED.has(code));
+
+  // Zero is neutral: only a real gain is green and only a real loss is red.
+  const toneColor = (minor: number) => {
+    const tone = amountTone(minor);
+    return tone === 'positive' ? theme.positive : tone === 'negative' ? theme.negative : theme.text;
+  };
+
+  // The net-worth figure is a single line at any width. `adjustsFontSizeToFit` only exists on
+  // native; react-native-web ignores it, so the size is also derived from the measured column
+  // width and the formatted length (a display digit is ~0.6em wide, the currency/fraction runs
+  // are smaller, so this errs slightly small rather than wrapping).
+  const [netWorthWidth, setNetWorthWidth] = useState(0);
+  const NET_WORTH_BASE_SIZE = 40;
+  const netWorthChars = formatMoney(summary.netWorthMinor, currency, locale).length;
+  const netWorthScale = netWorthWidth > 0
+    ? Math.max(0.4, Math.min(1, netWorthWidth / (netWorthChars * 0.6 * NET_WORTH_BASE_SIZE)))
+    : 1;
 
   const cumulativeSpend = useMemo(
     () => summary.dailySpend.reduce<number[]>((running, day) => {
@@ -224,17 +243,34 @@ export function OverviewScreen() {
               PageHeading, which is where the document's h1 lives. */}
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.md }}>
             <View style={{ flex: 1 }}><PageHeading title="Overview" /></View>
-            {!editing ? (
+            {editing ? (
+              <TextButton title="Done" icon="checkmark" onPress={exitEditMode} />
+            ) : (
               <TextButton title="Customize" icon="gear" onPress={enterEditMode} />
-            ) : null}
+            )}
           </View>
 
           <PageHero
             overline="Net worth"
             accessory={<MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} />}
             figure={(
-              <View style={{ gap: space.xs }}>
-                <AnimatedMoney minor={summary.netWorthMinor} currency={currency} locale={locale} variant="display" />
+              <View
+                style={{ gap: space.xs }}
+                onLayout={(event: LayoutChangeEvent) => {
+                  const next = Math.floor(event.nativeEvent.layout.width);
+                  setNetWorthWidth((current) => (current === next ? current : next));
+                }}>
+                <AnimatedMoney
+                  minor={summary.netWorthMinor}
+                  currency={currency}
+                  locale={locale}
+                  variant="display"
+                  scale={netWorthScale}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                  style={{ flexShrink: 1, ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as object) : null) }}
+                />
                 {missingCurrencies.length ? (
                   <View style={{ gap: space.xs }}>
                     <AppText literal variant="caption" style={{ color: theme.warning }}>
@@ -269,9 +305,9 @@ export function OverviewScreen() {
               </View>
             )}
             stats={([
-              ['Income', summary.incomeMinor, theme.positive],
+              ['Income', summary.incomeMinor, toneColor(summary.incomeMinor)],
               ['Spent', summary.expenseMinor, theme.text],
-              ['Net flow', summary.netFlowMinor, summary.netFlowMinor >= 0 ? theme.positive : theme.negative],
+              ['Net flow', summary.netFlowMinor, toneColor(summary.netFlowMinor)],
             ] as const).map(([label, amount, color]) => ({
               label,
               value: (
@@ -289,7 +325,20 @@ export function OverviewScreen() {
               ),
             }))}
             footer={cumulativeSpend.some((value) => value > 0) ? (
-              <Sparkline values={cumulativeSpend} label={t('Spending this month')} />
+              <View style={{ gap: space.sm }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md }}>
+                  <AppText variant="caption" muted>Cumulative spending</AppText>
+                  <AnimatedMoney
+                    minor={cumulativeSpend[cumulativeSpend.length - 1]}
+                    currency={currency}
+                    locale={locale}
+                    compact={contentWidth < 520}
+                    variant="label"
+                    numeric
+                  />
+                </View>
+                <Sparkline values={cumulativeSpend} label={t('Cumulative spending')} />
+              </View>
             ) : undefined}
           />
 
@@ -372,7 +421,6 @@ export function OverviewScreen() {
                 );
               })}
               <AddCardWell onPress={() => router.push('/overview-cards')} />
-              <ActionButton title="Done" onPress={exitEditMode} />
             </View>
           )}
         </ScreenContainer>

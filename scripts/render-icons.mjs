@@ -42,21 +42,10 @@ function safeZoneMark(markSvg, { size, scale = 0.66 }) {
   </svg>`;
 }
 
-/** The adaptive icon background layer: the icon's gradient + top highlight, no mark, no rounded corners (Android supplies its own mask). */
+/** The adaptive icon background layer: a flat pale-blue background layer, no mark, no rounded corners (Android supplies its own mask). */
 function backgroundOnlySvg({ size }) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
-    <defs>
-      <linearGradient id="background" x1="144" y1="80" x2="876" y2="944" gradientUnits="userSpaceOnUse">
-        <stop stop-color="#7C86FF"/>
-        <stop offset="1" stop-color="#3F4CCF"/>
-      </linearGradient>
-      <linearGradient id="topHighlight" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#FFFFFF" stop-opacity=".55"/>
-        <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-      </linearGradient>
-    </defs>
-    <rect width="1024" height="1024" fill="url(#background)"/>
-    <rect x="24" y="24" width="976" height="976" fill="none" stroke="url(#topHighlight)" stroke-width="16"/>
+    <rect width="1024" height="1024" fill="#A7CBD6"/>
   </svg>`;
 }
 

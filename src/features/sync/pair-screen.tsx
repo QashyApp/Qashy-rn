@@ -644,16 +644,18 @@ function RoleOption({
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={{
-        gap: space.xs,
-        padding: space.lg,
-        borderRadius: radius.card,
-        borderCurve: 'continuous',
-        borderWidth: 1,
-        opacity: disabled ? 0.5 : 1,
-        borderColor: selected && !disabled ? theme.accent : theme.border,
-        backgroundColor: selected && !disabled ? theme.accentContainer : theme.surface,
-      }}>
+      style={[
+        {
+          gap: space.xs,
+          padding: space.lg,
+          borderRadius: radius.card,
+          borderCurve: 'continuous',
+          opacity: disabled ? 0.5 : 1,
+        },
+        selected && !disabled
+          ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+          : materialStyle(theme, 'control'),
+      ]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
         <AppIcon name={icon} color={selected && !disabled ? theme.onAccentContainer : theme.textMuted} size={18} />
         <AppText variant="label">{title}</AppText>

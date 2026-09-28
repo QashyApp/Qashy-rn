@@ -4,6 +4,7 @@ import Animated, { ReduceMotion, useAnimatedStyle, withTiming } from 'react-nati
 
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
+import { DirectionScope } from '@/components/ui/direction-scope';
 import { motionCurves, motionDurations, MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
@@ -34,6 +35,7 @@ export function SegmentedControl<T extends string>({
   value,
   onChange,
   size = 'regular',
+  lockLtr = false,
 }: {
   /** Accessible name for the group. */
   label: string;
@@ -41,9 +43,16 @@ export function SegmentedControl<T extends string>({
   value: T;
   onChange: (value: T) => void;
   size?: 'regular' | 'compact';
+  /**
+   * Keep the control left-to-right whatever the UI language, for choices whose
+   * position must not jump when the choice itself flips the layout — the
+   * language selector.
+   */
+  lockLtr?: boolean;
 }) {
   const theme = useQashyTheme();
   const { t, isRtl } = useLocalization();
+  const rtl = lockLtr ? false : isRtl;
   const [width, setWidth] = useState(0);
   const index = Math.max(0, options.findIndex((option) => option.value === value));
   const segment = width > 0 ? (width - space.xs) / options.length : 0;
@@ -51,7 +60,7 @@ export function SegmentedControl<T extends string>({
 
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{
-      translateX: withTiming((isRtl ? -1 : 1) * index * segment, {
+      translateX: withTiming((rtl ? -1 : 1) * index * segment, {
         duration: motionDurations.enter,
         easing: motionCurves.standard,
         reduceMotion: ReduceMotion.System,
@@ -60,74 +69,76 @@ export function SegmentedControl<T extends string>({
   }));
 
   return (
-    <View
-      accessibilityRole="radiogroup"
-      accessibilityLabel={t(label)}
-      onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}
-      style={[
-        {
-          flexDirection: 'row',
-          padding: space.xxs,
-          borderRadius: radius.pill,
-          minHeight: height + space.xs,
-        },
-        materialStyle(theme, 'sunken'),
-      ]}>
-      {segment > 0 ? (
-        <Animated.View
-          pointerEvents="none"
-          style={[
-            {
-              position: 'absolute',
-              top: space.xxs,
-              bottom: space.xxs,
-              start: space.xxs,
-              width: segment,
-              borderRadius: radius.pill,
-            },
-            materialStyle(theme, 'control'),
-            thumbStyle,
-          ]}
-        />
-      ) : null}
-      {options.map((option) => {
-        const selected = option.value === value;
-        return (
-          <MotionPressable
-            key={option.value}
-            accessibilityRole="radio"
-            accessibilityLabel={option.literal ? option.label : t(option.label)}
-            accessibilityState={{ checked: selected }}
-            aria-checked={selected}
-            onPress={() => {
-              if (selected) return;
-              hapticSelection();
-              onChange(option.value);
-            }}
-            pressedScale={0.97}
-            style={{
-              flex: 1,
-              minHeight: height,
-              minWidth: 44,
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: space.xs,
-              paddingHorizontal: space.sm,
-              borderRadius: radius.pill,
-            }}>
-            {option.icon ? <AppIcon name={option.icon} size={15} color={selected ? theme.text : theme.textMuted} /> : null}
-            <AppText
-              selectable={false}
-              literal={option.literal}
-              numberOfLines={1}
-              variant={size === 'compact' ? 'caption' : 'label'}
-              style={{ color: selected ? theme.text : theme.textMuted, fontWeight: selected ? '600' : '500' }}>
-              {option.label}
-            </AppText>
-          </MotionPressable>
-        );
-      })}
-    </View>
+    <DirectionScope direction={rtl ? 'rtl' : 'ltr'}>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={t(label)}
+        onLayout={(event: LayoutChangeEvent) => setWidth(event.nativeEvent.layout.width)}
+        style={[
+          {
+            flexDirection: 'row',
+            padding: space.xxs,
+            borderRadius: radius.pill,
+            minHeight: height + space.xs,
+          },
+          materialStyle(theme, 'sunken'),
+        ]}>
+        {segment > 0 ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              {
+                position: 'absolute',
+                top: space.xxs,
+                bottom: space.xxs,
+                start: space.xxs,
+                width: segment,
+                borderRadius: radius.pill,
+              },
+              materialStyle(theme, 'control'),
+              thumbStyle,
+            ]}
+          />
+        ) : null}
+        {options.map((option) => {
+          const selected = option.value === value;
+          return (
+            <MotionPressable
+              key={option.value}
+              accessibilityRole="radio"
+              accessibilityLabel={option.literal ? option.label : t(option.label)}
+              accessibilityState={{ checked: selected }}
+              aria-checked={selected}
+              onPress={() => {
+                if (selected) return;
+                hapticSelection();
+                onChange(option.value);
+              }}
+              pressedScale={0.97}
+              style={{
+                flex: 1,
+                minHeight: height,
+                minWidth: 44,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: space.xs,
+                paddingHorizontal: space.sm,
+                borderRadius: radius.pill,
+              }}>
+              {option.icon ? <AppIcon name={option.icon} size={15} color={selected ? theme.text : theme.textMuted} /> : null}
+              <AppText
+                selectable={false}
+                literal={option.literal}
+                numberOfLines={1}
+                variant={size === 'compact' ? 'caption' : 'label'}
+                style={{ color: selected ? theme.text : theme.textMuted, fontWeight: selected ? '600' : '500' }}>
+                {option.label}
+              </AppText>
+            </MotionPressable>
+          );
+        })}
+      </View>
+    </DirectionScope>
   );
 }

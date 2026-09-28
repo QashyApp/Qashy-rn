@@ -1,10 +1,11 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Switch, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useFormSheet } from '@/components/navigation/use-form-sheet';
 import { ActionButton } from '@/components/ui/action-button';
 import { AppText } from '@/components/ui/app-text';
+import { QashySwitch } from '@/components/ui/qashy-switch';
 import { Card } from '@/components/ui/card';
 import { ChoiceChip } from '@/components/ui/choice-chip';
 import { FormField } from '@/components/ui/form-field';
@@ -14,7 +15,6 @@ import { takeRecurringDraft } from '@/features/more/recurring-draft';
 import { AmountHero } from '@/components/finance/amount-hero';
 import { ForeignFeeFields, type ForeignFeeKind } from '@/features/transactions/form/foreign-fee-fields';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
-import { useQashyTheme } from '@/theme/theme';
 import { useLocalization } from '@/localization/localization';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { todayLocal } from '@/utils/date';
@@ -30,11 +30,19 @@ import { convertMinor, localizeDecimalString, minorToLocalizedDecimalString, nor
 import { appliedCrossRateFor } from '@/utils/rates';
 import { feeMinorFor, normalizeFeePercent, totalWithFee } from '@/utils/transaction-amounts';
 
+const pluralRules = new Intl.PluralRules('en');
+
+/** "Every month." / "Every 2 months." — English plural form chosen by CLDR rules, not by string concatenation. */
+function intervalHint(interval: string, unit: RecurrenceUnit) {
+  const count = Number(interval);
+  if (!Number.isInteger(count) || count < 1) return `Every ${unit}.`;
+  return pluralRules.select(count) === 'one' ? `Every ${unit}.` : `Every ${count} ${unit}s.`;
+}
+
 export function RecurringFormScreen() {
-  const params = useLocalSearchParams<{ id?: string; draftId?: string }>();
+  const params = useLocalSearchParams<{ id?: string; draftId?: string; returnTo?: string }>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
-  const theme = useQashyTheme();
   const { t } = useLocalization();
   const existing = params.id ? state.recurringRules.find((item) => item.id === params.id) : undefined;
   const [draft] = useState(() => existing ? null : takeRecurringDraft(params.draftId));
@@ -76,6 +84,7 @@ export function RecurringFormScreen() {
     return draft?.feeValue ?? '';
   });
   const [busy, setBusy] = useState(false);
+  const [amountTouched, setAmountTouched] = useState(false);
   const account = state.accounts.find((item) => item.id === accountId) ?? initialAccount;
   const accountChoices = state.accounts.filter((item) => !item.archived || item.id === accountId);
   const categories = state.categories.filter((item) =>
@@ -144,7 +153,7 @@ export function RecurringFormScreen() {
     }
   }, [kind, account, foreignEnabled, foreignCurrencyError, amount, trimmedForeignCurrency, foreignRate, foreignAppliedRate, feeKind, feeValue, state.settings.locale]);
   const { closeToOwner } = useFormSheet({
-    ownerRoute: '/more',
+    ownerRoute: params.returnTo === '/overview' || params.returnTo === '/transactions' ? params.returnTo : '/more',
     values: {
       kind, title, note, tagIds, amount, accountId, categoryId, unit, interval, startDate, endDate, autoPost, active,
       foreignEnabled, foreignCurrency, foreignRate, feeKind, feeValue,
@@ -242,8 +251,12 @@ export function RecurringFormScreen() {
       <AmountHero
         currency={foreignEnabled && trimmedForeignCurrency ? trimmedForeignCurrency : account?.currency ?? state.settings.baseCurrency}
         value={amount}
-        onChangeText={setAmount}
-        error={amountError}
+        onChangeText={(next) => {
+          setAmountTouched(true);
+          setAmount(next);
+        }}
+        onBlur={() => setAmountTouched(true)}
+        error={amountTouched || existing ? amountError : undefined}
       />
       <Card style={{ gap: 16 }}>
         <View accessibilityLabel={t('Recurring transaction kind')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>{(['expense', 'income'] as CategoryKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "income" ? "arrow.down" : item === "expense" ? "arrow.up" : "arrow.left.arrow.right"} label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} onPress={() => {
@@ -305,16 +318,16 @@ export function RecurringFormScreen() {
       <Card style={{ gap: 16 }}>
         <AppText variant="label">Repeats</AppText>
         <View accessibilityLabel={t('Recurrence period')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{(['day', 'week', 'month', 'year'] as RecurrenceUnit[]).map((item) => <ChoiceChip key={item} icon="calendar" label={item[0].toUpperCase() + item.slice(1)} selected={unit === item} onPress={() => setUnit(item)} />)}</View>
-        <FormField label="Every" value={interval} onChangeText={setInterval} keyboardType="number-pad" error={intervalError} hint={`Every ${interval || '1'} ${unit}${Number(interval) === 1 ? '' : 's'}.`} required />
+        <FormField label="Every" value={interval} onChangeText={setInterval} keyboardType="number-pad" error={intervalError} hint={intervalHint(interval, unit)} required />
         <FormField label="Starts" value={startDate} onChangeText={setStartDate} placeholder="YYYY-MM-DD" error={startDateError} required />
         <FormField label="Ends (optional)" value={endDate} onChangeText={setEndDate} placeholder="YYYY-MM-DD" error={endDateError} />
         <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
           <View style={{ flex: 1, gap: 2 }}><AppText variant="label">Post automatically</AppText><AppText variant="caption" muted>Off by default. Upcoming items wait for your review.</AppText></View>
-          <Switch accessibilityLabel={t('Post automatically')} value={autoPost} onValueChange={setAutoPost} trackColor={{ true: theme.accent }} />
+          <QashySwitch accessibilityLabel={t('Post automatically')} value={autoPost} onValueChange={setAutoPost} />
         </View>
         <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
           <View style={{ flex: 1, gap: 2 }}><AppText variant="label">Schedule active</AppText><AppText variant="caption" muted>Pause without deleting this schedule.</AppText></View>
-          <Switch accessibilityLabel={t('Schedule active')} value={active} onValueChange={setActive} disabled={referencesArchivedEntity} trackColor={{ true: theme.accent }} />
+          <QashySwitch accessibilityLabel={t('Schedule active')} value={active} onValueChange={setActive} disabled={referencesArchivedEntity} />
         </View>
       </Card>
 

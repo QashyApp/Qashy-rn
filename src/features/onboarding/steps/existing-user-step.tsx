@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionPressable } from '@/components/ui/motion';
 import { StepHeading } from '@/features/onboarding/onboarding-shell';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space, tile } from '@/theme/tokens';
 
@@ -57,7 +58,7 @@ function Option({ icon, title, body, onPress }: { icon: string; title: string; b
         padding: space.lg,
         borderRadius: radius.card,
         borderCurve: 'continuous',
-        backgroundColor: theme.surface,
+        ...materialStyle(theme, 'card'),
         opacity: pressed ? 0.8 : 1,
       })}>
       <View style={{ width: tile.size + 4, height: tile.size + 4, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: theme.accentContainer, alignItems: 'center', justifyContent: 'center' }}>

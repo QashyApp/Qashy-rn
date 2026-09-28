@@ -20,6 +20,7 @@ import { useQashyTheme } from '@/theme/theme';
 import { space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { endOfMonth, startOfMonth } from '@/utils/date';
+import { accountTypeIcon, accountTypeLabel, categoryKindLabel } from '@/utils/labels';
 import { formatMoney } from '@/utils/money';
 import { useNow } from '@/utils/use-now';
 
@@ -127,13 +128,13 @@ export function MoreScreen() {
             <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
               {activeAccounts.map((account) => {
                 const balance = summary.accountBalances.find((item) => item.account.id === account.id)?.balanceMinor ?? account.openingBalanceMinor;
-                return <SettingsRow key={account.id} literal title={account.name} subtitle={`${t(account.type)} · ${account.currency}`} value={formatMoney(balance, account.currency, state.settings.locale)} icon="wallet" color={account.color} onPress={() => router.push({ pathname: '/account', params: { id: account.id } })} />;
+                return <SettingsRow key={account.id} literal title={account.name} subtitle={`${t(accountTypeLabel(account.type))} · ${account.currency}`} value={formatMoney(balance, account.currency, state.settings.locale)} icon={accountTypeIcon(account.type)} color={account.color} onPress={() => router.push({ pathname: '/account', params: { id: account.id } })} />;
               })}
             </Card>
 
             <SectionHeader title="Categories" action="Add" onAction={() => router.push('/category')} />
             <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
-              {state.categories.filter((item) => !item.archived).map((category) => <SettingsRow key={category.id} literal title={category.name} subtitle={t(category.kind)} icon={category.icon} color={category.color} onPress={() => router.push({ pathname: '/category', params: { id: category.id } })} />)}
+              {state.categories.filter((item) => !item.archived).map((category) => <SettingsRow key={category.id} literal title={category.name} subtitle={t(categoryKindLabel(category.kind))} icon={category.icon} color={category.color} onPress={() => router.push({ pathname: '/category', params: { id: category.id } })} />)}
             </Card>
           </View>
 
@@ -159,7 +160,7 @@ export function MoreScreen() {
               <>
                 <SectionHeader title="Archived" />
                 <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
-                  {archivedAccounts.map((account) => <SettingsRow key={account.id} literal title={account.name} subtitle={t(`Archived account · ${account.currency}`)} value={t(restoringId === account.id ? 'Restoring…' : 'Restore')} icon="wallet" color={account.color} onPress={() => restore('account', account.id)} />)}
+                  {archivedAccounts.map((account) => <SettingsRow key={account.id} literal title={account.name} subtitle={t(`Archived account · ${account.currency}`)} value={t(restoringId === account.id ? 'Restoring…' : 'Restore')} icon={accountTypeIcon(account.type)} color={account.color} onPress={() => restore('account', account.id)} />)}
                   {archivedCategories.map((category) => <SettingsRow key={category.id} literal title={category.name} subtitle={t(`Archived ${category.kind} category`)} value={t(restoringId === category.id ? 'Restoring…' : 'Restore')} icon={category.icon} color={category.color} onPress={() => restore('category', category.id)} />)}
                 </Card>
               </>

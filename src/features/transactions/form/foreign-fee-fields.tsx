@@ -1,15 +1,18 @@
-import { useState } from 'react';
-import { Switch, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
+import { QashySwitch } from '@/components/ui/qashy-switch';
+import { ChoiceListField, type ChoiceListOption } from '@/components/ui/choice-list-field';
 import { FormField } from '@/components/ui/form-field';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { TextButton } from '@/components/ui/text-button';
+import { currencyLabel } from '@/features/onboarding/steps/currency-step';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
 import { space } from '@/theme/tokens';
 import { mediumDate } from '@/utils/date';
-import { formatMoney, localizeDecimalString } from '@/utils/money';
+import { formatMoney, localizeDecimalString, SUPPORTED_CURRENCY_CODES } from '@/utils/money';
 import type { AppliedRate } from '@/utils/rates';
 
 export type ForeignFeeKind = 'none' | 'percent' | 'fixed';
@@ -47,6 +50,8 @@ export function ForeignFeeFields({
   appliedRate,
   fetchingRate,
   rateOptional = false,
+  onTurnOnRates,
+  turningOnRates = false,
   feeKind,
   onChangeFeeKind,
   feeValue,
@@ -66,6 +71,9 @@ export function ForeignFeeFields({
   fetchingRate: boolean;
   /** Recurring schedules: a blank rate resolves per occurrence date rather than snapshotting one now. */
   rateOptional?: boolean;
+  /** When provided, a missing rate offers this inline action (opt-in automatic rates). Omit once rates are already on. */
+  onTurnOnRates?: () => void;
+  turningOnRates?: boolean;
   feeKind: ForeignFeeKind;
   onChangeFeeKind: (kind: ForeignFeeKind) => void;
   feeValue: string;
@@ -73,9 +81,22 @@ export function ForeignFeeFields({
   errors: ForeignFeeFieldsErrors;
   preview: ForeignFeePreview;
 }) {
-  const theme = useQashyTheme();
   const { t } = useLocalization();
+  const theme = useQashyTheme();
   const [rateOverrideOpen, setRateOverrideOpen] = useState(() => Boolean(rateText.trim()));
+  // Errors only surface once a field has been edited or left, so toggling a
+  // section on (or picking a fee type) doesn't open with a wall of red.
+  const [currencyTouched, setCurrencyTouched] = useState(false);
+  const [rateTouched, setRateTouched] = useState(false);
+  const [feeTouched, setFeeTouched] = useState(false);
+  const currencyOptions = useMemo(
+    () =>
+      [...SUPPORTED_CURRENCY_CODES]
+        .filter((code) => code !== accountCurrency.trim().toUpperCase())
+        .map((code): ChoiceListOption => ({ value: code, label: currencyLabel(code, locale), description: code }))
+        .sort((a, b) => a.label.localeCompare(b.label, locale)),
+    [accountCurrency, locale],
+  );
   const showBreakdown = (foreignEnabled || feeKind !== 'none') &&
     preview.principalMinor !== null && preview.feeMinor !== null && preview.totalMinor !== null;
 
@@ -86,20 +107,29 @@ export function ForeignFeeFields({
           <AppText variant="label">Paid in another currency</AppText>
           <AppText variant="caption" muted>Track the original amount and convert it to this account’s currency.</AppText>
         </View>
-        <Switch accessibilityLabel={t('Paid in another currency')} value={foreignEnabled} onValueChange={onToggleForeign} trackColor={{ true: theme.accent }} />
+        <QashySwitch accessibilityLabel={t('Paid in another currency')} value={foreignEnabled} onValueChange={(enabled) => {
+          if (!enabled) setCurrencyTouched(false);
+          onToggleForeign(enabled);
+        }} />
       </View>
 
       {foreignEnabled ? (
         <View style={{ gap: 12 }}>
-          <FormField
+          <ChoiceListField
             label="Foreign currency"
-            value={foreignCurrency}
-            onChangeText={onChangeForeignCurrency}
-            maxLength={3}
-            autoCapitalize="characters"
-            error={errors.foreignCurrency}
-            required
+            value={foreignCurrency.trim().toUpperCase()}
+            options={currencyOptions}
+            onChange={(value) => {
+              setCurrencyTouched(true);
+              onChangeForeignCurrency(value);
+            }}
+            searchable
+            literalOptions
+            searchPlaceholder="Search by currency name or code"
           />
+          {currencyTouched && errors.foreignCurrency ? (
+            <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>{errors.foreignCurrency}</AppText>
+          ) : null}
           {appliedRate ? (
             <AppText literal variant="caption" muted>
               {`1 ${foreignCurrency.trim().toUpperCase() || '?'} = ${localizeDecimalString(appliedRate.rate, locale)} ${accountCurrency} · ${mediumDate(appliedRate.effectiveDate, locale)} · ${appliedRate.automatic ? t('Automatic') : t('Manual')}`}
@@ -107,7 +137,17 @@ export function ForeignFeeFields({
           ) : fetchingRate ? (
             <AppText variant="caption" muted>Fetching rate…</AppText>
           ) : (
-            <AppText variant="caption" muted>No rate for this date.</AppText>
+            <View style={{ gap: 6 }}>
+              <AppText variant="caption" muted>No rate for this date.</AppText>
+              {onTurnOnRates ? (
+                <TextButton
+                  title={turningOnRates ? 'Turning on…' : 'Turn on automatic rates'}
+                  disabled={turningOnRates}
+                  onPress={onTurnOnRates}
+                  style={{ alignSelf: 'flex-start' }}
+                />
+              ) : null}
+            </View>
           )}
           <TextButton
             title={rateOverrideOpen ? 'Hide rate override' : 'Use a different rate'}
@@ -120,10 +160,14 @@ export function ForeignFeeFields({
               label={`1 ${foreignCurrency.trim().toUpperCase() || '?'} equals how many ${accountCurrency}?`}
               literalLabel
               value={rateText}
-              onChangeText={onChangeRateText}
+              onChangeText={(value) => {
+                setRateTouched(true);
+                onChangeRateText(value);
+              }}
+              onBlur={() => setRateTouched(true)}
               keyboardType="decimal-pad"
               placeholder="Use the applied rate above"
-              error={errors.rate}
+              error={rateTouched ? errors.rate : undefined}
               hint={rateOptional
                 ? 'Leave blank to use each occurrence’s rate.'
                 : 'Leave blank to use the applied rate above. The applied rate is snapshotted.'}
@@ -133,6 +177,7 @@ export function ForeignFeeFields({
       ) : null}
 
       <View style={{ gap: 12 }}>
+        <AppText variant="label">Extra fee</AppText>
         <SegmentedControl
           label="Extra fee"
           value={feeKind}
@@ -141,26 +186,37 @@ export function ForeignFeeFields({
             { value: 'percent' as const, label: 'Percentage' },
             { value: 'fixed' as const, label: 'Fixed' },
           ]}
-          onChange={onChangeFeeKind}
+          onChange={(next) => {
+            setFeeTouched(false);
+            onChangeFeeKind(next);
+          }}
         />
         {feeKind === 'percent' ? (
           <FormField
             label="Fee (%)"
             value={feeValue}
-            onChangeText={onChangeFeeValue}
+            onChangeText={(value) => {
+              setFeeTouched(true);
+              onChangeFeeValue(value);
+            }}
+            onBlur={() => setFeeTouched(true)}
             keyboardType="decimal-pad"
             placeholder="0"
-            error={errors.fee}
+            error={feeTouched ? errors.fee : undefined}
           />
         ) : feeKind === 'fixed' ? (
           <FormField
             label={`Fee (${accountCurrency})`}
             literalLabel
             value={feeValue}
-            onChangeText={onChangeFeeValue}
+            onChangeText={(value) => {
+              setFeeTouched(true);
+              onChangeFeeValue(value);
+            }}
+            onBlur={() => setFeeTouched(true)}
             keyboardType="decimal-pad"
             placeholder="0.00"
-            error={errors.fee}
+            error={feeTouched ? errors.fee : undefined}
           />
         ) : null}
       </View>

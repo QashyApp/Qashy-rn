@@ -36,9 +36,12 @@ html, body {
   background-color: var(--qashy-selection);
   color: var(--qashy-selection-text);
 }
-:focus-visible {
+:focus-visible:not(input):not(textarea):not(select):not([contenteditable]) {
   outline: 2px solid var(--qashy-focus) !important;
   outline-offset: 2px;
+}
+input:focus-visible, textarea:focus-visible, select:focus-visible, [contenteditable]:focus-visible {
+  outline: none !important;
 }
 @media (prefers-color-scheme: dark) {
   html, body { background: ${DARK_BACKGROUND}; }

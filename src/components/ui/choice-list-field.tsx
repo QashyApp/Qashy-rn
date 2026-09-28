@@ -97,7 +97,7 @@ export function ChoiceListField({
             borderWidth: open ? 2 : 0,
             borderColor: open ? theme.accent : 'transparent',
             opacity: pressed ? 0.8 : 1,
-            flexDirection: isRtl ? 'row-reverse' : 'row',
+            flexDirection: 'row',
             alignItems: 'center',
             gap: 12,
           },
@@ -150,7 +150,7 @@ export function ChoiceListField({
               materialStyle(theme, 'raised'),
               { boxShadow: theme.shadowOverlay },
             ]}>
-            <View style={{ minHeight: 44, flexDirection: isRtl ? 'row-reverse' : 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, gap: 2 }}>
                 {/* Built as one string: separate children are translated
                     individually, so "Choose " and "language" would each miss
@@ -163,7 +163,7 @@ export function ChoiceListField({
 
             {searchable ? (
               <View style={{ position: 'relative', justifyContent: 'center' }}>
-                <View style={{ position: 'absolute', left: 14, zIndex: 1 }}>
+                <View style={{ position: 'absolute', start: 14, zIndex: 1 }}>
                   <AppIcon name="magnifyingglass" color={theme.textMuted} size={18} />
                 </View>
                 <TextInput
@@ -176,8 +176,8 @@ export function ChoiceListField({
                   onChangeText={setQuery}
                   style={{
                     minHeight: 48,
-                    paddingLeft: 42,
-                    paddingRight: 14,
+                    paddingStart: 42,
+                    paddingEnd: 14,
                     borderRadius: radius.tile,
                     borderCurve: 'continuous',
                     backgroundColor: theme.surfaceMuted,
@@ -237,7 +237,7 @@ export function ChoiceListField({
                           : pressed
                             ? theme.surfaceMuted
                             : 'transparent',
-                        flexDirection: isRtl ? 'row-reverse' : 'row',
+                        flexDirection: 'row',
                         alignItems: 'center',
                         gap: 12,
                       })}>

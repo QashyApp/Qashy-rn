@@ -1,10 +1,11 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, ScrollView, Switch, View } from 'react-native';
+import { ActivityIndicator, ScrollView, View } from 'react-native';
 
 import { ActionButton } from '@/components/ui/action-button';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
+import { QashySwitch } from '@/components/ui/qashy-switch';
 import { Card } from '@/components/ui/card';
 import { MotionPressable } from '@/components/ui/motion';
 import { SectionHeader } from '@/components/ui/section-header';
@@ -128,7 +129,7 @@ export function ExchangeRatesScreen() {
           {toggling ? (
             <ActivityIndicator color={theme.accent} />
           ) : (
-            <Switch accessibilityLabel={t('Fetch rates automatically')} value={status.enabled} onValueChange={toggle} disabled={toggling} trackColor={{ true: theme.accent }} />
+            <QashySwitch accessibilityLabel={t('Fetch rates automatically')} value={status.enabled} onValueChange={toggle} disabled={toggling} />
           )}
         </View>
         {status.fetching ? (
@@ -148,6 +149,13 @@ export function ExchangeRatesScreen() {
             disabled={status.fetching || !status.enabled}
           />
         </View>
+        {status.enabled && !status.fetching && !status.lastError && (status.nothingNeeded || status.lastWritten !== null) ? (
+          <AppText literal variant="caption" muted>
+            {status.nothingNeeded
+              ? 'Nothing to update: none of your accounts or recurring rules use a currency other than your base currency.'
+              : `Fetched ${status.lastWritten} rate${status.lastWritten === 1 ? '' : 's'} from frankfurter.dev.`}
+          </AppText>
+        ) : null}
         {status.lastError ? (
           <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>
             {ERROR_MESSAGES[status.lastError]}

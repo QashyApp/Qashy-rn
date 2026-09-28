@@ -11,17 +11,15 @@ import type { AccountType } from '@/domain/models';
 import { StepHeading } from '@/features/onboarding/onboarding-shell';
 import type { OnboardingDraft } from '@/features/onboarding/use-onboarding-flow';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space, tile } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
+import { ACCOUNT_TYPE_INFO } from '@/utils/labels';
 
-const ACCOUNT_TYPES: { value: AccountType; label: string; icon: string }[] = [
-  { value: 'checking', label: 'Bank', icon: 'building.columns' },
-  { value: 'cash', label: 'Cash', icon: 'banknote' },
-  { value: 'savings', label: 'Savings', icon: 'leaf' },
-  { value: 'credit', label: 'Credit card', icon: 'creditcard' },
-  { value: 'wallet', label: 'Wallet', icon: 'wallet' },
-];
+const ACCOUNT_TYPES: { value: AccountType; label: string; icon: string }[] = (
+  ['checking', 'cash', 'savings', 'credit', 'wallet'] as const
+).map((value) => ({ value, label: ACCOUNT_TYPE_INFO[value].label, icon: ACCOUNT_TYPE_INFO[value].icon }));
 
 export function AccountStep({
   draft,
@@ -63,20 +61,22 @@ export function AccountStep({
                 onChange({ accountType: item.value });
               }}
               pressedScale={0.96}
-              style={{
-                flexGrow: 1,
-                flexBasis: 96,
-                minHeight: 84,
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: space.xs,
-                padding: space.sm,
-                borderRadius: radius.card,
-                borderCurve: 'continuous',
-                borderWidth: 1.5,
-                borderColor: selected ? theme.accent : 'transparent',
-                backgroundColor: selected ? theme.accentContainer : theme.surface,
-              }}>
+              style={[
+                {
+                  flexGrow: 1,
+                  flexBasis: 96,
+                  minHeight: 84,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: space.xs,
+                  padding: space.sm,
+                  borderRadius: radius.card,
+                  borderCurve: 'continuous',
+                },
+                selected
+                  ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+                  : materialStyle(theme, 'control'),
+              ]}>
               <AppIcon name={item.icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={tile.icon + 2} />
               <AppText variant="caption" numberOfLines={1} style={{ color: selected ? theme.onAccentContainer : theme.text, fontWeight: '500' }}>{item.label}</AppText>
             </MotionPressable>

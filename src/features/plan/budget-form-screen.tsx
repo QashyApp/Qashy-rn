@@ -1,10 +1,11 @@
 import { Redirect, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Switch, View } from 'react-native';
+import { View } from 'react-native';
 
 import { useFormSheet } from '@/components/navigation/use-form-sheet';
 import { ActionButton } from '@/components/ui/action-button';
 import { AppText } from '@/components/ui/app-text';
+import { QashySwitch } from '@/components/ui/qashy-switch';
 import { Card } from '@/components/ui/card';
 import { ChoiceChip } from '@/components/ui/choice-chip';
 import { FormField } from '@/components/ui/form-field';
@@ -150,7 +151,7 @@ export function BudgetFormScreen() {
         ) : null}
         <View style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
           <View style={{ flex: 1, gap: 2 }}><AppText variant="label">Rollover</AppText><AppText variant="caption" muted>Carry both surplus and overspend forward.</AppText></View>
-          <Switch accessibilityLabel={t('Rollover')} value={rollover} onValueChange={setRollover} trackColor={{ true: theme.accent }} />
+          <QashySwitch accessibilityLabel={t('Rollover')} value={rollover} onValueChange={setRollover} />
         </View>
       </Card>
 

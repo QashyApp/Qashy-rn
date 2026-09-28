@@ -53,6 +53,10 @@ export interface ExchangeRateStatus {
   readonly conflicts: readonly FetchedRateConflict[];
   /** Currencies in use that Frankfurter does not cover, sorted. */
   readonly unsupported: readonly string[];
+  /** The last refresh found no foreign currency in use, so there was nothing to fetch. */
+  readonly nothingNeeded: boolean;
+  /** Rates written by the last successful refresh; null until one completes. */
+  readonly lastWritten: number | null;
 }
 
 const INITIAL_STATUS: ExchangeRateStatus = {
@@ -62,6 +66,8 @@ const INITIAL_STATUS: ExchangeRateStatus = {
   lastError: null,
   conflicts: [],
   unsupported: [],
+  nothingNeeded: false,
+  lastWritten: null,
 };
 
 export interface ExchangeRateServiceDeps {
@@ -154,6 +160,8 @@ export class ExchangeRateService {
       next.lastRefreshAt === this.status.lastRefreshAt &&
       next.lastError === this.status.lastError &&
       next.conflicts === this.status.conflicts &&
+      next.nothingNeeded === this.status.nothingNeeded &&
+      next.lastWritten === this.status.lastWritten &&
       sameStrings(next.unsupported, this.status.unsupported)
     ) {
       return;
@@ -217,7 +225,11 @@ export class ExchangeRateService {
     if (!flag.enabled) return;
 
     const needed = neededCurrencies(state);
-    if (!needed.length) return;
+    if (!needed.length) {
+      this.setStatus({ nothingNeeded: true, lastError: null });
+      return;
+    }
+    this.setStatus({ nothingNeeded: false });
 
     if (!force) {
       const last = flag.lastRefreshAt ? Date.parse(flag.lastRefreshAt) : NaN;
@@ -236,7 +248,7 @@ export class ExchangeRateService {
       const result = await this.deps.repository.saveFetchedRates(derived);
       const at = this.now().toISOString();
       await this.deps.storage.transact((tx) => writeRatesFlag(tx, { lastRefreshAt: at }));
-      this.setStatus({ fetching: false, lastError: null, lastRefreshAt: at, conflicts: result.conflicts });
+      this.setStatus({ fetching: false, lastError: null, lastRefreshAt: at, conflicts: result.conflicts, lastWritten: result.written });
     } catch (error) {
       this.setStatus({
         fetching: false,

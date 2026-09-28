@@ -105,6 +105,7 @@ export function TransactionFormScreen() {
   const [rateOverrideOpen, setRateOverrideOpen] = useState(() => Boolean(existing?.exchangeRate?.trim()));
   const [fetchingRate, setFetchingRate] = useState(false);
   const [togglingRates, setTogglingRates] = useState(false);
+  const [saveError, setSaveError] = useState<string | undefined>();
   const account = state.accounts.find((item) => item.id === accountId) ?? defaultAccount;
   const destinationAccount = state.accounts.find((item) => item.id === destinationAccountId);
   const categories = useMemo(() => {
@@ -227,8 +228,14 @@ export function TransactionFormScreen() {
   // surfacing the applied/missing rate for, not only while it's unresolved — collapsing
   // must never hide something the user already did or a rate they still need to see.
   const detailsNeedAttention = tagIds.length > 0 || note.trim().length > 0 || Boolean(needsRate);
-  const [moreOpenManual, setMoreOpenManual] = useState(() => Boolean(existing));
-  const moreOpen = moreOpenManual || detailsNeedAttention;
+  // The auto-open condition only seeds the initial state and re-expands when a rate becomes
+  // relevant (needsRate flips on); after that the user's toggle always wins.
+  const [moreOpen, setMoreOpen] = useState(() => Boolean(existing) || detailsNeedAttention);
+  const [seenNeedsRate, setSeenNeedsRate] = useState(Boolean(needsRate));
+  if (Boolean(needsRate) !== seenNeedsRate) {
+    setSeenNeedsRate(Boolean(needsRate));
+    if (needsRate) setMoreOpen(true);
+  }
   // Debounced: an account or date settling triggers one `ensureRatesFor` for whatever this
   // transaction's legs need, so a user still picking an account doesn't fire a request per
   // keystroke. Entirely fire-and-forget — `save()` never awaits this, and a failure only ever
@@ -280,7 +287,27 @@ export function TransactionFormScreen() {
       setTogglingRates(false);
     }
   };
+  // A rate the repository would need but can't resolve fails late ("Missing exchange rate"), so it
+  // blocks saving up front. A typed override, or an unchanged saved foreign leg, counts as resolved.
+  const foreignRateMissing = foreignActive
+    && !foreignCurrencyError
+    && !foreignRate.trim()
+    && !foreignAppliedRate
+    && !(existing?.foreign
+      && existing.foreign.currency === trimmedForeignCurrency
+      && existing.accountId === account?.id
+      && existing.localDate === date);
+  const accountRateMissing = Boolean(needsRate) && !appliedRate && !exchangeRate.trim();
+  const missingRatePair = foreignRateMissing && account
+    ? `${trimmedForeignCurrency} → ${account.currency}`
+    : accountRateMissing && account
+      ? `${account.currency} → ${state.settings.baseCurrency}`
+      : null;
+  const rateMissingMessage = missingRatePair && !fetchingRate
+    ? `Add an exchange rate for ${missingRatePair} to save.`
+    : undefined;
   const canSave = Boolean(account)
+    && !missingRatePair
     && !amountError
     && !dateError
     && !destinationAmountError
@@ -290,7 +317,7 @@ export function TransactionFormScreen() {
     && !foreignRateError
     && !feeError;
   const ownerRoute = returnTo === '/overview' ? '/overview' as const : '/transactions' as const;
-  const { closeToOwner } = useFormSheet({
+  const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute,
     values: {
       kind, title, amount, date, accountId, destinationAccountId, categoryId, tagIds, note, exchangeRate, destinationAmount,
@@ -304,8 +331,9 @@ export function TransactionFormScreen() {
   };
 
   const save = async () => {
-    if (!account || busy) return;
+    if (!account || busy || !canSave) return;
     setBusy(true);
+    setSaveError(undefined);
     try {
       // `foreign`: the original amount in another currency plus the rate applied
       // to convert it into the account currency. A typed override always wins;
@@ -373,7 +401,7 @@ export function TransactionFormScreen() {
       // entry is visible the moment the sheet closes instead of "missing".
       closeToOwner(ownerRoute === '/transactions' ? { month: monthKey(date) } : undefined);
     } catch (reason) {
-      showError('Couldn’t save transaction', errorMessage(reason, 'Check the form and try again.'));
+      setSaveError(errorMessage(reason, 'Check the form and try again.'));
     } finally {
       setBusy(false);
     }
@@ -448,6 +476,8 @@ export function TransactionFormScreen() {
             onChangeRateText={setForeignRate}
             appliedRate={foreignAppliedRate}
             fetchingRate={fetchingRate}
+            onTurnOnRates={rateStatus.enabled ? undefined : turnOnRates}
+            turningOnRates={togglingRates}
             feeKind={feeKind}
             onChangeFeeKind={setFeeKind}
             feeValue={feeValue}
@@ -512,7 +542,7 @@ export function TransactionFormScreen() {
       </Card>
 
       <Card style={{ gap: 14 }}>
-        <MoreDetails expanded={moreOpen} onToggle={() => setMoreOpenManual((open) => !open)}>
+        <MoreDetails expanded={moreOpen} onToggle={() => setMoreOpen((open) => !open)}>
           <FormField label="Date" value={date} onChangeText={setDate} placeholder="YYYY-MM-DD" autoCapitalize="none" error={dateError} required />
 
           {state.tags.length && kind !== 'transfer' ? (
@@ -569,9 +599,12 @@ export function TransactionFormScreen() {
           {!existing && kind !== 'transfer' ? (
             <TextButton
               title="Make this recurring instead"
-              onPress={() => router.push({
+              onPress={() => {
+                allowLeave();
+                router.push({
                 pathname: '/recurring',
                 params: {
+                  returnTo: ownerRoute,
                   draftId: stashRecurringDraft({
                     kind,
                     title,
@@ -583,13 +616,17 @@ export function TransactionFormScreen() {
                     feeValue,
                   }),
                 },
-              })}
+                });
+              }}
               style={{ alignSelf: 'flex-start' }}
             />
           ) : null}
         </MoreDetails>
       </Card>
 
+      {rateMissingMessage || saveError ? (
+        <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>{rateMissingMessage ?? saveError}</AppText>
+      ) : null}
       <ActionButton title={busy ? 'Saving…' : existing ? 'Save changes' : 'Add transaction'} icon="checkmark" size="large" onPress={save} disabled={busy || !canSave} busy={busy} />
       {existing ? <ActionButton title="Delete transaction" variant="danger" onPress={remove} disabled={busy} /> : null}
     </FormScreen>

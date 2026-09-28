@@ -1,6 +1,6 @@
 import { router, useNavigation } from 'expo-router';
 import { usePreventRemove } from 'expo-router/react-navigation';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { confirmDestructive } from '@/utils/confirm';
 import { stableSerialize } from '@/utils/form-state';
@@ -83,6 +83,10 @@ export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; v
       navigation.dispatch(event.data.action);
     });
   });
+
+  // A hand-off (transaction sheet -> recurring sheet) disables the guard only while
+  // the sheet is buried; coming back to it re-arms the guard.
+  useEffect(() => navigation.addListener('focus', () => setLeaving(false)), [navigation]);
 
   return { closeToOwner, allowLeave, dirty };
 }

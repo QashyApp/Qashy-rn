@@ -129,7 +129,9 @@ export function SpendLineChart({ points, currency, locale }: { points: Dashboard
       onLayout={onLayout}
       style={{ minHeight: height }}>
       {hasSpending ? (
-        <Svg width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`}>
+        // The axis is a fixed left-to-right time axis, so the start/end text
+        // anchors must not flip when the page inherits `direction: rtl`.
+        <Svg width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`} style={{ direction: 'ltr' }}>
           <Defs>
             <LinearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor={theme.accent as string} stopOpacity={0.22} />

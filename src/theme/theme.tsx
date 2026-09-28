@@ -8,6 +8,7 @@ import {
   useColorScheme,
 } from 'react-native';
 
+import { DirectionScope } from '@/components/ui/direction-scope';
 import { QASHY_ACCENT } from '@/domain/defaults';
 import type { AccentSource } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
@@ -286,7 +287,9 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
         style={{ flex: 1, direction: isRtl ? 'rtl' : 'ltr' }}
         colorScheme={mode}
         seedColor={usesSystemAccent && Platform.OS === 'android' ? undefined : tokens.staticAccent}>
-        <NavigationThemeProvider value={navigationTheme}>{children}</NavigationThemeProvider>
+        <DirectionScope direction={isRtl ? 'rtl' : 'ltr'} style={{ flex: 1 }}>
+          <NavigationThemeProvider value={navigationTheme}>{children}</NavigationThemeProvider>
+        </DirectionScope>
       </Host>
     </ThemeContext>
   );

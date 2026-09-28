@@ -87,7 +87,9 @@ export function TransactionRow({
   // resolved here and the whole line renders verbatim. Otherwise a category or
   // account the user named "Savings" would be rewritten by the dictionary.
   const categoryLabel = category?.name ?? t(isTransfer ? 'Transfer' : 'Uncategorized');
-  const accountLabel = account?.name ?? t('Unknown account');
+  const accountLabel = isTransfer
+    ? `${account?.name ?? t('Unknown account')} → ${destination?.name ?? t('Unknown account')}`
+    : account?.name ?? t('Unknown account');
   const amountText = `${isIncome ? '+' : isTransfer ? '' : '-'}${formatMoney(transaction.amountMinor, transaction.currency, settings.locale)}`;
   // Category colors are identity, not emphasis. Painted at full saturation
   // across a 44pt tile they turned a mixed list into a row of signal lights all

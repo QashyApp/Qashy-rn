@@ -15,6 +15,7 @@ import Animated, {
 import Svg, { Circle } from 'react-native-svg';
 
 import { motionCurves } from '@/components/ui/motion';
+import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { QASHY_INDIGO, radius } from '@/theme/tokens';
@@ -50,6 +51,7 @@ export function ProgressBar({
   segments?: number;
 }) {
   const theme = useQashyTheme();
+  const { isRtl } = useLocalization();
   // Math.min(1, NaN) is NaN, so a non-finite ratio would otherwise reach
   // withSpring() and accessibilityValue.
   const safeValue = Number.isFinite(value) ? value : 0;
@@ -156,7 +158,8 @@ export function ProgressBar({
             {
               height: '100%',
               width: '100%',
-              transformOrigin: 'left center',
+              // The fill grows from the reading-start edge.
+              transformOrigin: isRtl ? 'right center' : 'left center',
             },
             fillStyle,
           ]}>

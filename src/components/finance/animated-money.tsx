@@ -82,9 +82,12 @@ export function AnimatedMoney({
   // opt out with `figure={false}`.
   figure = true,
   split,
+  scale = 1,
   style,
   ...props
 }: TextProps & {
+  /** Multiplies the variant's font size and line height, for a figure that must fit a width. */
+  scale?: number;
   minor: number;
   currency: CurrencyCode;
   locale: string;
@@ -110,6 +113,9 @@ export function AnimatedMoney({
   // Assistive tech should read the settled amount, not the mid-count value.
   const accessibilityLabel = formatMoney(minor, currency, locale, { compact, sign });
   const shouldSplit = split ?? SPLIT_BY_DEFAULT.has(variant);
+  const scaledStyle = scale === 1
+    ? style
+    : [{ fontSize: typeScale[variant].fontSize * scale, lineHeight: typeScale[variant].lineHeight * scale }, style];
 
   if (!shouldSplit) {
     return (
@@ -119,7 +125,7 @@ export function AnimatedMoney({
         literal
         variant={variant}
         figure={figure}
-        style={style}
+        style={scaledStyle}
         {...props}>
         {formatMoney(display, currency, locale, { compact, sign })}
       </AppText>
@@ -133,8 +139,8 @@ export function AnimatedMoney({
   // competing with the integer.
   const minorScale = variant === 'money' ? 0.75 : 0.6;
   const minorStyle: TextStyle = {
-    fontSize: typeScale[variant].fontSize * minorScale,
-    lineHeight: typeScale[variant].lineHeight,
+    fontSize: typeScale[variant].fontSize * minorScale * scale,
+    lineHeight: typeScale[variant].lineHeight * scale,
     color: theme.textMuted,
   };
   return (
@@ -143,7 +149,7 @@ export function AnimatedMoney({
       literal
       variant={variant}
       figure={figure}
-      style={style}
+      style={scaledStyle}
       {...props}>
       {parts.literalBefore}
       {parts.sign}

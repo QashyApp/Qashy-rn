@@ -6,6 +6,7 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionPressable } from '@/components/ui/motion';
 import { TextButton } from '@/components/ui/text-button';
 import { useLocalization } from '@/localization/localization';
+import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space, toneColors } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
@@ -86,22 +87,25 @@ export function CategoryGrid({
                 onSelect(id);
               }}
               pressedScale={0.97}
-              style={{
-                width: tileWidth,
-                flexGrow: tileWidth ? 0 : 1,
-                minWidth: 80,
-                minHeight: 72,
-                borderRadius: radius.tile,
-                borderCurve: 'continuous',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: space.xs,
-                paddingVertical: space.sm,
-                paddingHorizontal: space.xs,
-                opacity: item?.archived ? 0.45 : 1,
-                backgroundColor: selected ? theme.accentContainer : theme.surfaceElevated,
-                boxShadow: selected ? theme.shadowControlPressed : theme.shadowControl,
-              }}>
+              style={[
+                {
+                  width: tileWidth,
+                  flexGrow: tileWidth ? 0 : 1,
+                  minWidth: 80,
+                  minHeight: 72,
+                  borderRadius: radius.tile,
+                  borderCurve: 'continuous',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: space.xs,
+                  paddingVertical: space.sm,
+                  paddingHorizontal: space.xs,
+                  opacity: item?.archived ? 0.45 : 1,
+                },
+                selected
+                  ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+                  : materialStyle(theme, 'control'),
+              ]}>
               <View
                 style={{
                   width: 36,
