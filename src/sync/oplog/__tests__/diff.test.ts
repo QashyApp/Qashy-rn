@@ -73,6 +73,8 @@ describe('registers', () => {
       destinationBaseAmountMinor: null,
       destinationCurrency: null,
       exchangeRate: '1',
+      fee: null,
+      foreign: null,
       kind: 'expense',
       localDate: '2026-01-01',
       transferGroupId: null,

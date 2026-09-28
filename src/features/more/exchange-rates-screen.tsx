@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ScrollView, Switch, View } from 'react-native';
+import { ActivityIndicator, ScrollView, Switch, View } from 'react-native';
 
 import { ActionButton } from '@/components/ui/action-button';
 import { AppIcon } from '@/components/ui/app-icon';
@@ -125,8 +125,18 @@ export function ExchangeRatesScreen() {
             <AppText variant="label">Fetch rates automatically</AppText>
             <AppText variant="caption" muted>Off by default. Sends only currency codes and dates to frankfurter.dev — never amounts or account details. Frankfurter can see your IP address.</AppText>
           </View>
-          <Switch accessibilityLabel={t('Fetch rates automatically')} value={status.enabled} onValueChange={toggle} disabled={toggling} trackColor={{ true: theme.accent }} />
+          {toggling ? (
+            <ActivityIndicator color={theme.accent} />
+          ) : (
+            <Switch accessibilityLabel={t('Fetch rates automatically')} value={status.enabled} onValueChange={toggle} disabled={toggling} trackColor={{ true: theme.accent }} />
+          )}
         </View>
+        {status.fetching ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs + 2 }}>
+            <ActivityIndicator color={theme.accent} />
+            <AppText variant="caption" muted>{t('Fetching latest rates…')}</AppText>
+          </View>
+        ) : null}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 14 }}>
           <AppText literal variant="caption" muted>
             {lastUpdated ? `${t('Last updated')} ${lastUpdated}` : t('Never updated')}

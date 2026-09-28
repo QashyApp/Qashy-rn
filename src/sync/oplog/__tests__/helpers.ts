@@ -111,6 +111,8 @@ export const transaction = (
   transferGroupId: null,
   recurringRuleId: null,
   occurrenceKey: null,
+  foreign: null,
+  fee: null,
   ...over,
 });
 

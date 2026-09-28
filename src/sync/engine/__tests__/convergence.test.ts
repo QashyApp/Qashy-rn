@@ -29,6 +29,7 @@ import {
   randomSource,
   settle,
   sync,
+  transactionInputOf,
   type VaultDevice,
 } from '@/sync/engine/__tests__/vault';
 
@@ -132,7 +133,7 @@ const ACTIONS: readonly Action[] = [
       const [transaction] = device.state.transactions;
       if (!transaction) return false;
       await device.repository.saveTransaction(
-        { ...inputOf(transaction), amountMinor: 500 + tick * 7 },
+        { ...transactionInputOf(transaction), amountMinor: 500 + tick * 7 },
         transaction.id,
       );
       return true;

@@ -64,7 +64,25 @@ export function TransactionRow({
   const accountContext = isTransfer
     ? `${account?.name ?? t('Unknown account')} ${t('into')} ${destination?.name ?? t('Unknown account')}`
     : account?.name ?? t('Unknown account');
-  const rowLabel = `${direction}, ${transaction.title}, ${signedAmount}, ${category?.name ?? t(isTransfer ? 'Transfer' : 'Uncategorized')}, ${accountContext}, ${transaction.localDate}`;
+  // The original foreign amount and any fee are context, not the headline number —
+  // the row's own amount stays the account-currency total. Both fold into the
+  // accessible label too, so a screen reader hears exactly what the caption shows.
+  const foreignText = transaction.foreign
+    ? formatMoney(transaction.foreign.amountMinor, transaction.foreign.currency, settings.locale)
+    : null;
+  const feeText = transaction.fee && transaction.fee.amountMinor > 0
+    ? `${t('incl.')} ${formatMoney(transaction.fee.amountMinor, transaction.currency, settings.locale)} ${t('fee')}`
+    : null;
+  const foreignFeeCaption = [foreignText, feeText].filter((part): part is string => Boolean(part)).join(' · ');
+  const rowLabel = [
+    direction,
+    transaction.title,
+    signedAmount,
+    category?.name ?? t(isTransfer ? 'Transfer' : 'Uncategorized'),
+    accountContext,
+    transaction.localDate,
+    foreignFeeCaption || undefined,
+  ].filter((part): part is string => Boolean(part)).join(', ');
   // The fallbacks are the only translatable parts of the caption, so they are
   // resolved here and the whole line renders verbatim. Otherwise a category or
   // account the user named "Savings" would be rewritten by the dictionary.
@@ -137,6 +155,9 @@ export function TransactionRow({
           ) : null}
         </View>
         <AppText literal variant="caption" muted numberOfLines={1}>{`${categoryLabel} · ${accountLabel}`}</AppText>
+        {foreignFeeCaption ? (
+          <AppText literal variant="caption" muted numberOfLines={1}>{foreignFeeCaption}</AppText>
+        ) : null}
       </View>
       <View style={{ alignItems: 'flex-end', gap: space.xxs }}>
         <AppText literal figure variant="label" style={{ color }}>

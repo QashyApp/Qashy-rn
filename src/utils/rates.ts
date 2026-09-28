@@ -9,10 +9,12 @@
  * then `updatedAt` desc) so the transaction form's preview never disagrees with what saving the
  * transaction would actually resolve to.
  *
- * This intentionally does not triangulate through the base currency for two *foreign*
- * currencies the way `resolveRate` does for a cross-currency transfer's second leg — the
- * transaction form only ever previews the source leg (`currency` → base), which is always a
- * direct-or-inverse lookup, never a triangulation.
+ * `appliedRateFor` intentionally does not triangulate through the base currency for two
+ * *foreign* currencies the way `resolveRate` does for a cross-currency transfer's second leg
+ * — the transaction form only ever previews the source leg (`currency` → base), which is
+ * always a direct-or-inverse lookup, never a triangulation. `appliedCrossRateFor`, below, is
+ * the one that does triangulate — it previews a foreign-amount leg, which can be priced in a
+ * currency that is neither the account's nor the vault's base.
  */
 
 import { Decimal } from 'decimal.js';
@@ -60,12 +62,29 @@ export function appliedRateFor(state: FinanceState, currency: string, localDate:
 
   const rates = activeRates(state);
 
-  const direct = latestRate(rates, foreign, base, localDate);
+  const direct = directOrInverseApplied(rates, foreign, base, localDate);
+  if (direct) return direct;
+  return null;
+}
+
+/**
+ * A direct `from` → `to` row on or before `localDate`, or — failing that — the inverse of a
+ * `to` → `from` row, mirroring `LocalFinanceRepository`'s private `directOrInverseRate`
+ * exactly: same ordering (`effectiveDate` desc, then `updatedAt` desc), same
+ * `toSignificantDigits(20)` rounding when inverting. `null` when neither direction covers
+ * the date.
+ */
+function directOrInverseApplied(
+  rates: readonly ExchangeRate[],
+  fromCurrency: string,
+  toCurrency: string,
+  localDate: string,
+): AppliedRate | null {
+  const direct = latestRate(rates, fromCurrency, toCurrency, localDate);
   if (direct) {
     return { rate: direct.rate, effectiveDate: direct.effectiveDate, automatic: isFetchedRate(direct) };
   }
-
-  const inverse = latestRate(rates, base, foreign, localDate);
+  const inverse = latestRate(rates, toCurrency, fromCurrency, localDate);
   if (!inverse) return null;
   const inverseRate = new Decimal(inverse.rate);
   if (!inverseRate.isFinite() || !inverseRate.isPositive()) return null;
@@ -73,5 +92,56 @@ export function appliedRateFor(state: FinanceState, currency: string, localDate:
     rate: new Decimal(1).div(inverseRate).toSignificantDigits(20).toFixed(),
     effectiveDate: inverse.effectiveDate,
     automatic: isFetchedRate(inverse),
+  };
+}
+
+/**
+ * "What rate would apply right now" for converting `fromCurrency` into `toCurrency` as of
+ * `localDate` — a preview of the repository's private `resolveRate`, for a transaction's
+ * foreign-amount leg (a currency that may equal neither the account's currency nor the
+ * vault's base currency).
+ *
+ * A direct-or-inverse row between the two currencies wins first, exactly like
+ * `appliedRateFor`. Failing that, it pivots through the vault's base currency the same way
+ * `resolveRate` does for a cross-currency transfer's second leg: a `fromCurrency` → base leg
+ * and a `toCurrency` → base leg, each itself direct-or-inverse, combined as
+ * `rate = fromBase / toBase`. The reported `effectiveDate` is the older (lexicographically
+ * smaller, since dates are `YYYY-MM-DD`) of the two pivot legs, and `automatic` is true only
+ * when both legs are.
+ *
+ * Returns `null` when `fromCurrency === toCurrency` (nothing to apply) or when no path —
+ * direct, inverse, or pivoted — covers the date, the same condition under which
+ * `resolveRate` would throw "Missing exchange rate" for this leg.
+ */
+export function appliedCrossRateFor(
+  state: FinanceState,
+  fromCurrency: string,
+  toCurrency: string,
+  localDate: string,
+): AppliedRate | null {
+  const from = fromCurrency.trim().toUpperCase();
+  const to = toCurrency.trim().toUpperCase();
+  if (!from || !to || from === to) return null;
+
+  const rates = activeRates(state);
+
+  const direct = directOrInverseApplied(rates, from, to, localDate);
+  if (direct) return direct;
+
+  const base = state.settings.baseCurrency.trim().toUpperCase();
+  if (from === base || to === base) return null;
+
+  const fromBase = directOrInverseApplied(rates, from, base, localDate);
+  const toBase = directOrInverseApplied(rates, to, base, localDate);
+  if (!fromBase || !toBase) return null;
+
+  const fromBaseRate = new Decimal(fromBase.rate);
+  const toBaseRate = new Decimal(toBase.rate);
+  if (!toBaseRate.isFinite() || !toBaseRate.isPositive()) return null;
+
+  return {
+    rate: fromBaseRate.div(toBaseRate).toSignificantDigits(20).toFixed(),
+    effectiveDate: fromBase.effectiveDate < toBase.effectiveDate ? fromBase.effectiveDate : toBase.effectiveDate,
+    automatic: fromBase.automatic && toBase.automatic,
   };
 }

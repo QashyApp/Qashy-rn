@@ -2,6 +2,8 @@
 
 <div align="center">
   
+DISCLAIMR: This is a fun mostly AI generated experimental app also mostly for myself to kind off stress test Claude, Codex, or various Chinese models depends on the time of the year
+
 private and fully open source budgeting app
 
 ### Update

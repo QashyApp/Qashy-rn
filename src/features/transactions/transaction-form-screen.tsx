@@ -11,9 +11,10 @@ import { FormField } from '@/components/ui/form-field';
 import { FormScreen } from '@/components/ui/form-screen';
 import { SegmentedControl } from '@/components/ui/segmented-control';
 import { TextButton } from '@/components/ui/text-button';
-import type { TransactionKind } from '@/domain/models';
+import type { TransactionFeeInput, TransactionKind, ForeignAmountInput } from '@/domain/models';
 import { AmountHero } from '@/components/finance/amount-hero';
 import { CategoryGrid } from '@/features/transactions/form/category-grid';
+import { ForeignFeeFields, type ForeignFeeKind } from '@/features/transactions/form/foreign-fee-fields';
 import { MoreDetails } from '@/features/transactions/form/more-details';
 import { useLocalization } from '@/localization/localization';
 import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
@@ -23,18 +24,21 @@ import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { mediumDate, todayLocal, monthKey } from '@/utils/date';
 import { stashRecurringDraft } from '@/features/more/recurring-draft';
 import {
+  validateCurrencyCode,
   validateDateInput,
   validateMoneyInput,
   validatePositiveDecimal,
 } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
 import {
+  convertMinor,
   localizeDecimalString,
   minorToLocalizedDecimalString,
   normalizeDecimalString,
   parseMoney,
 } from '@/utils/money';
-import { appliedRateFor } from '@/utils/rates';
+import { appliedCrossRateFor, appliedRateFor } from '@/utils/rates';
+import { feeMinorFor, normalizeFeePercent, principalOf, totalWithFee } from '@/utils/transaction-amounts';
 
 const KIND_OPTIONS = [
   { value: 'expense' as const, label: 'Expense', icon: 'arrow.up' },
@@ -57,9 +61,13 @@ export function TransactionFormScreen() {
   const [kind, setKind] = useState<TransactionKind>(existing?.kind ?? 'expense');
   const [title, setTitle] = useState(existing?.title ?? '');
   const [amountTouched, setAmountTouched] = useState(false);
-  const [amount, setAmount] = useState(() => existing
-    ? minorToLocalizedDecimalString(existing.amountMinor, existing.currency, state.settings.locale)
-    : '');
+  const [amount, setAmount] = useState(() => {
+    if (!existing) return '';
+    if (existing.foreign) {
+      return minorToLocalizedDecimalString(existing.foreign.amountMinor, existing.foreign.currency, state.settings.locale);
+    }
+    return minorToLocalizedDecimalString(principalOf(existing), existing.currency, state.settings.locale);
+  });
   const [date, setDate] = useState(existing?.localDate ?? todayLocal());
   const [accountId, setAccountId] = useState(existing?.accountId ?? defaultAccount?.id ?? '');
   const [destinationAccountId, setDestinationAccountId] = useState(existing?.destinationAccountId ?? '');
@@ -75,6 +83,19 @@ export function TransactionFormScreen() {
       ? minorToLocalizedDecimalString(existing.destinationAmountMinor, existingDestination.currency, state.settings.locale)
       : '',
   );
+  const [foreignEnabled, setForeignEnabled] = useState(() => Boolean(existing?.foreign));
+  const [foreignCurrency, setForeignCurrency] = useState(() => existing?.foreign?.currency ?? '');
+  const [foreignRate, setForeignRate] = useState(() => existing?.foreign?.exchangeRate
+    ? localizeDecimalString(existing.foreign.exchangeRate, state.settings.locale)
+    : '');
+  const [feeKind, setFeeKind] = useState<ForeignFeeKind>(() => existing?.fee?.kind ?? 'none');
+  const [feeValue, setFeeValue] = useState(() => {
+    if (!existing?.fee) return '';
+    if (existing.fee.kind === 'percent') {
+      return existing.fee.percent ? localizeDecimalString(existing.fee.percent, state.settings.locale) : '';
+    }
+    return minorToLocalizedDecimalString(existing.fee.amountMinor, existing.currency, state.settings.locale);
+  });
   const [busy, setBusy] = useState(false);
   const exchangeRateService = useExchangeRateService();
   const rateStatus = useExchangeRateStatus();
@@ -112,8 +133,72 @@ export function TransactionFormScreen() {
     return current && current.archived ? [current, ...active] : active;
   }, [state.accounts, accountId]);
 
+  const foreignActive = kind !== 'transfer' && foreignEnabled;
+  const trimmedForeignCurrency = foreignCurrency.trim().toUpperCase();
+  const foreignCurrencyError = foreignActive
+    ? (validateCurrencyCode(foreignCurrency)
+      ?? (account && trimmedForeignCurrency === account.currency ? 'Foreign currency must differ from the account currency.' : undefined))
+    : undefined;
+  const foreignRateError = foreignActive
+    ? validatePositiveDecimal(foreignRate, 'Exchange rate', true, state.settings.locale)
+    : undefined;
+  const foreignAppliedRate = useMemo(
+    () => (foreignActive && account && !foreignCurrencyError
+      ? appliedCrossRateFor(state, trimmedForeignCurrency, account.currency, date)
+      : null),
+    [foreignActive, account, foreignCurrencyError, trimmedForeignCurrency, date, state],
+  );
+  let feeError: string | undefined;
+  if (kind !== 'transfer' && feeKind === 'percent') {
+    feeError = validatePositiveDecimal(feeValue, 'Fee', false, state.settings.locale);
+    if (!feeError) {
+      try {
+        normalizeFeePercent(normalizeDecimalString(feeValue, state.settings.locale));
+      } catch {
+        feeError = 'Fee must be greater than 0% and at most 100%.';
+      }
+    }
+  } else if (kind !== 'transfer' && feeKind === 'fixed') {
+    feeError = account
+      ? validateMoneyInput(feeValue, account.currency, state.settings.locale, { label: 'Fee', positive: true })
+      : undefined;
+  }
+  // The account-currency principal/fee/total breakdown shown under the foreign/fee
+  // controls. Bad or incomplete input (a currency that isn't resolved yet, an
+  // unparsable amount) must only blank the preview, never throw during render —
+  // the same fail-soft contract `appliedRateFor` gives the rate caption above.
+  const foreignFeePreview = useMemo(() => {
+    const previewKind: 'expense' | 'income' = kind === 'income' ? 'income' : 'expense';
+    const empty = { principalMinor: null, feeMinor: null, totalMinor: null, kind: previewKind } as const;
+    if (kind === 'transfer' || !account) return empty;
+    try {
+      let principalMinor: number;
+      if (foreignActive) {
+        if (foreignCurrencyError) return empty;
+        const foreignMinor = parseMoney(amount, trimmedForeignCurrency, state.settings.locale);
+        const rate = foreignRate.trim()
+          ? normalizeDecimalString(foreignRate, state.settings.locale)
+          : foreignAppliedRate?.rate;
+        if (!rate) return empty;
+        principalMinor = convertMinor(foreignMinor, trimmedForeignCurrency, account.currency, rate, state.settings.locale);
+      } else {
+        principalMinor = parseMoney(amount, account.currency, state.settings.locale);
+      }
+      let feeInput: TransactionFeeInput | null = null;
+      if (feeKind === 'percent' && feeValue.trim()) {
+        feeInput = { kind: 'percent', percent: normalizeFeePercent(normalizeDecimalString(feeValue, state.settings.locale)) };
+      } else if (feeKind === 'fixed' && feeValue.trim()) {
+        feeInput = { kind: 'fixed', amountMinor: parseMoney(feeValue, account.currency, state.settings.locale) };
+      }
+      const feeMinor = feeInput ? feeMinorFor(principalMinor, feeInput) : 0;
+      const totalMinor = totalWithFee(previewKind, principalMinor, feeMinor);
+      return { principalMinor, feeMinor, totalMinor, kind: previewKind };
+    } catch {
+      return empty;
+    }
+  }, [kind, account, foreignActive, foreignCurrencyError, amount, trimmedForeignCurrency, foreignRate, foreignAppliedRate, feeKind, feeValue, state.settings.locale]);
   const amountError = account
-    ? validateMoneyInput(amount, account.currency, state.settings.locale, { label: 'Amount', positive: true })
+    ? validateMoneyInput(amount, foreignActive && !foreignCurrencyError ? trimmedForeignCurrency : account.currency, state.settings.locale, { label: 'Amount', positive: true })
     : 'Choose an account before entering an amount.';
   const dateError = validateDateInput(date);
   const sameCurrencyTransfer = kind === 'transfer' &&
@@ -162,6 +247,13 @@ export function TransactionFormScreen() {
     ) {
       pairs.push({ currency: destinationAccount.currency, localDate: date });
     }
+    if (
+      foreignActive &&
+      !foreignCurrencyError &&
+      trimmedForeignCurrency !== state.settings.baseCurrency
+    ) {
+      pairs.push({ currency: trimmedForeignCurrency, localDate: date });
+    }
     if (!pairs.length) return;
     const timer = setTimeout(() => {
       setFetchingRate(true);
@@ -170,7 +262,7 @@ export function TransactionFormScreen() {
         .finally(() => setFetchingRate(false));
     }, RATE_LOOKUP_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [account, destinationAccount, date, dateError, kind, exchangeRateService, state.settings.baseCurrency]);
+  }, [account, destinationAccount, date, dateError, kind, exchangeRateService, state.settings.baseCurrency, foreignActive, foreignCurrencyError, trimmedForeignCurrency]);
   const turnOnRates = async () => {
     if (togglingRates) return;
     setTogglingRates(true);
@@ -193,11 +285,17 @@ export function TransactionFormScreen() {
     && !dateError
     && !destinationAmountError
     && !exchangeRateError
-    && !destinationError;
+    && !destinationError
+    && !foreignCurrencyError
+    && !foreignRateError
+    && !feeError;
   const ownerRoute = returnTo === '/overview' ? '/overview' as const : '/transactions' as const;
   const { closeToOwner } = useFormSheet({
     ownerRoute,
-    values: { kind, title, amount, date, accountId, destinationAccountId, categoryId, tagIds, note, exchangeRate, destinationAmount },
+    values: {
+      kind, title, amount, date, accountId, destinationAccountId, categoryId, tagIds, note, exchangeRate, destinationAmount,
+      foreignEnabled, foreignCurrency, foreignRate, feeKind, feeValue,
+    },
   });
   const toggleTag = (tagId: string) => {
     setTagIds((current) => current.includes(tagId)
@@ -209,6 +307,42 @@ export function TransactionFormScreen() {
     if (!account || busy) return;
     setBusy(true);
     try {
+      // `foreign`: the original amount in another currency plus the rate applied
+      // to convert it into the account currency. A typed override always wins;
+      // otherwise an unchanged currency/account/date keeps the previously
+      // snapshotted rate rather than silently re-resolving it, and only a real
+      // change (or a brand-new foreign leg) leaves it `undefined` for the
+      // repository to resolve fresh.
+      const foreignPayload: ForeignAmountInput | null = foreignActive
+        ? {
+          amountMinor: parseMoney(amount, trimmedForeignCurrency, state.settings.locale),
+          currency: trimmedForeignCurrency,
+          exchangeRate: foreignRate.trim()
+            ? normalizeDecimalString(foreignRate, state.settings.locale)
+            : existing?.foreign
+              && existing.foreign.currency === trimmedForeignCurrency
+              && existing.accountId === account.id
+              && existing.localDate === date
+              ? existing.foreign.exchangeRate
+              : undefined,
+        }
+        : null;
+      const feePayload: TransactionFeeInput | null = kind === 'transfer'
+        ? null
+        : feeKind === 'percent' && feeValue.trim()
+          ? { kind: 'percent', percent: normalizeDecimalString(feeValue, state.settings.locale) }
+          : feeKind === 'fixed' && feeValue.trim()
+            ? { kind: 'fixed', amountMinor: parseMoney(feeValue, account.currency, state.settings.locale) }
+            : null;
+      // The principal in account currency, before fees — `amountMinor` on the
+      // input is ignored by the repository once `foreign` is set, but a positive
+      // value must still be passed: the converted preview when the rate is
+      // known, else the raw foreign amount for the repository to convert itself.
+      const principalMinor = kind === 'transfer'
+        ? parseMoney(amount, account.currency, state.settings.locale)
+        : foreignActive
+          ? (foreignFeePreview.principalMinor ?? foreignPayload!.amountMinor)
+          : parseMoney(amount, account.currency, state.settings.locale);
       await repository.saveTransaction({
         kind,
         // Trimmed like every sibling form: a whitespace-only title is truthy, so it
@@ -226,7 +360,9 @@ export function TransactionFormScreen() {
           : null,
         categoryId: kind === 'transfer' ? null : categoryId || null,
         tagIds,
-        amountMinor: parseMoney(amount, account.currency, state.settings.locale),
+        amountMinor: principalMinor,
+        foreign: kind === 'transfer' ? null : foreignPayload,
+        fee: feePayload,
         exchangeRate: needsRate && exchangeRate.trim()
           ? normalizeDecimalString(exchangeRate, state.settings.locale)
           : undefined,
@@ -274,7 +410,7 @@ export function TransactionFormScreen() {
       />
 
       <AmountHero
-        currency={account?.currency ?? state.settings.baseCurrency}
+        currency={foreignActive && trimmedForeignCurrency ? trimmedForeignCurrency : account?.currency ?? state.settings.baseCurrency}
         value={amount}
         onChangeText={(next) => {
           setAmountTouched(true);
@@ -296,6 +432,32 @@ export function TransactionFormScreen() {
         </Card>
       ) : null}
 
+      {kind !== 'transfer' && account ? (
+        <Card style={{ gap: 14 }}>
+          <ForeignFeeFields
+            accountCurrency={account.currency}
+            locale={state.settings.locale}
+            foreignEnabled={foreignEnabled}
+            onToggleForeign={(enabled) => {
+              setForeignEnabled(enabled);
+              if (!enabled) setForeignRate('');
+            }}
+            foreignCurrency={foreignCurrency}
+            onChangeForeignCurrency={setForeignCurrency}
+            rateText={foreignRate}
+            onChangeRateText={setForeignRate}
+            appliedRate={foreignAppliedRate}
+            fetchingRate={fetchingRate}
+            feeKind={feeKind}
+            onChangeFeeKind={setFeeKind}
+            feeValue={feeValue}
+            onChangeFeeValue={setFeeValue}
+            errors={{ foreignCurrency: foreignCurrencyError, rate: foreignRateError, fee: feeError }}
+            preview={foreignFeePreview}
+          />
+        </Card>
+      ) : null}
+
       <Card style={{ gap: 14 }}>
         <AppText variant="label">From account</AppText>
         <View accessibilityLabel={t('From account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
@@ -305,6 +467,7 @@ export function TransactionFormScreen() {
             setExchangeRate('');
             setRateOverrideOpen(false);
             setDestinationAmount('');
+            setForeignRate('');
             if (destinationAccountId === item.id) setDestinationAccountId('');
           }} />)}
         </View>
@@ -408,7 +571,18 @@ export function TransactionFormScreen() {
               title="Make this recurring instead"
               onPress={() => router.push({
                 pathname: '/recurring',
-                params: { draftId: stashRecurringDraft({ kind, title, amount, accountId, categoryId }) },
+                params: {
+                  draftId: stashRecurringDraft({
+                    kind,
+                    title,
+                    amount,
+                    accountId,
+                    categoryId,
+                    foreignCurrency: foreignActive ? trimmedForeignCurrency : undefined,
+                    feeKind,
+                    feeValue,
+                  }),
+                },
               })}
               style={{ alignSelf: 'flex-start' }}
             />

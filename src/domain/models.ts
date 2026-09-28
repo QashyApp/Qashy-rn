@@ -56,6 +56,36 @@ export interface Tag extends SyncEntity {
   color: string;
 }
 
+/** A charge originally priced in a currency other than its account's. */
+export interface ForeignAmount {
+  /** Minor units of `currency`. */
+  amountMinor: number;
+  currency: CurrencyCode;
+  /** Decimal string: 1 unit of `currency` = `exchangeRate` units of the account currency. */
+  exchangeRate: string;
+}
+
+export type TransactionFeeKind = 'percent' | 'fixed';
+
+export interface TransactionFee {
+  kind: TransactionFeeKind;
+  /** Decimal percentage string such as "2.5" for 'percent'; null for 'fixed'. */
+  percent: string | null;
+  /** The fee in account-currency minor units: the entered value for 'fixed', the computed snapshot for 'percent'. */
+  amountMinor: number;
+}
+
+export interface ForeignAmountInput {
+  amountMinor: number;
+  currency: CurrencyCode;
+  /** Omit to resolve from stored rates for the date. */
+  exchangeRate?: string;
+}
+
+export type TransactionFeeInput =
+  | { kind: 'percent'; percent: string }
+  | { kind: 'fixed'; amountMinor: number };
+
 export interface TransactionRecord extends SyncEntity {
   kind: TransactionKind;
   status: TransactionStatus;
@@ -66,6 +96,12 @@ export interface TransactionRecord extends SyncEntity {
   destinationAccountId: string | null;
   categoryId: string | null;
   tagIds: string[];
+  /**
+   * The TOTAL effect on the account, in account-currency minor units: the principal
+   * (converted from `foreign` when set, otherwise entered directly) plus an expense's fee or
+   * minus an income's fee. Balances, analytics, and budgets read this field alone and never
+   * need to know a transaction carried a foreign price or a fee.
+   */
   amountMinor: number;
   destinationAmountMinor: number | null;
   destinationBaseAmountMinor: number | null;
@@ -76,6 +112,18 @@ export interface TransactionRecord extends SyncEntity {
   transferGroupId: string | null;
   recurringRuleId: string | null;
   occurrenceKey: string | null;
+  /**
+   * Optional because records saved before this field existed lack it entirely. Read a
+   * missing (`undefined`) value the same as `null` — "no foreign amount was recorded" —
+   * never as "unknown".
+   */
+  foreign?: ForeignAmount | null;
+  /**
+   * Optional because records saved before this field existed lack it entirely. Read a
+   * missing (`undefined`) value the same as `null` — "no fee was recorded" — never as
+   * "unknown".
+   */
+  fee?: TransactionFee | null;
 }
 
 export interface BudgetFilters {
@@ -148,6 +196,9 @@ export interface RecurringTemplate {
   tagIds: string[];
   amountMinor: number;
   currency: CurrencyCode;
+  /** When set, each occurrence is priced in this currency; a missing exchangeRate is resolved per occurrence date. */
+  foreign?: ForeignAmountInput | null;
+  fee?: TransactionFeeInput | null;
 }
 
 export interface RecurringRule extends SyncEntity {

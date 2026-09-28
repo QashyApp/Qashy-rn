@@ -13,6 +13,10 @@ export interface RecurringDraft {
   readonly amount: string;
   readonly accountId: string;
   readonly categoryId: string;
+  /** Foreign-currency code, when the source transaction drafted a foreign amount. */
+  readonly foreignCurrency?: string;
+  readonly feeKind?: 'none' | 'percent' | 'fixed';
+  readonly feeValue?: string;
 }
 
 const drafts = new Map<string, RecurringDraft>();

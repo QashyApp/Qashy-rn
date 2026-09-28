@@ -2825,3 +2825,230 @@ describe('applyRemoteOps', () => {
     expect(transaction.baseAmountMinor).toBe(1000);
   });
 });
+
+describe('foreign amounts and fees', () => {
+  it('prices an expense from a foreign amount using an explicit rate', async () => {
+    const { repository } = await createRepository();
+    // The default onboarding account is USD, which is also the base currency, so this
+    // exercises the foreign leg in isolation without needing an account→base rate too.
+    const account = repository.getSnapshot().accounts[0];
+    const transaction = await repository.saveTransaction({
+      kind: 'expense',
+      title: 'Hotel',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      amountMinor: 1, // ignored — derived from the foreign amount instead
+      foreign: { amountMinor: 5000, currency: 'EUR', exchangeRate: '1.1' },
+    });
+    // 50.00 EUR * 1.1 = 55.00 USD.
+    expect(transaction.amountMinor).toBe(5500);
+    expect(transaction.currency).toBe('USD');
+    expect(transaction.foreign).toEqual({ amountMinor: 5000, currency: 'EUR', exchangeRate: '1.1' });
+    // baseAmountMinor still derives from the total in account currency exactly as before.
+    expect(transaction.baseAmountMinor).toBe(transaction.amountMinor);
+  });
+
+  it('resolves a foreign rate from stored rates, including a pivot through the base currency', async () => {
+    const { repository } = await createRepository();
+    const gbpAccount = await repository.saveAccount({
+      name: 'Sterling', type: 'checking', currency: 'GBP', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+    });
+    // Base is USD. 1 EUR = 1.1 USD, 1 GBP = 1.32 USD, so 1 EUR = 1.1/1.32 GBP.
+    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' });
+    await repository.saveExchangeRate({ fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.32', effectiveDate: '2026-01-01' });
+    const transaction = await repository.saveTransaction({
+      kind: 'expense',
+      title: 'Dinner',
+      localDate: '2026-07-01',
+      accountId: gbpAccount.id,
+      amountMinor: 1,
+      foreign: { amountMinor: 10000, currency: 'EUR' },
+    });
+    expect(transaction.foreign?.currency).toBe('EUR');
+    expect(Number(transaction.foreign?.exchangeRate)).toBeCloseTo(1.1 / 1.32, 8);
+    expect(transaction.amountMinor).toBe(Math.round(10000 * (1.1 / 1.32)));
+  });
+
+  it('adds a percent fee to an expense and rounds half up', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const transaction = await repository.saveTransaction({
+      kind: 'expense',
+      title: 'Wire transfer',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      amountMinor: 10001,
+      fee: { kind: 'percent', percent: '2.5' },
+    });
+    // 2.5% of 10001 = 250.025 -> rounds to 250; total = 10251.
+    expect(transaction.fee).toEqual({ kind: 'percent', percent: '2.5', amountMinor: 250 });
+    expect(transaction.amountMinor).toBe(10251);
+    expect(transaction.baseAmountMinor).toBe(10251);
+  });
+
+  it('subtracts a fixed fee from income', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const transaction = await repository.saveTransaction({
+      kind: 'income',
+      title: 'Freelance payment',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      amountMinor: 10000,
+      fee: { kind: 'fixed', amountMinor: 250 },
+    });
+    expect(transaction.fee).toEqual({ kind: 'fixed', percent: null, amountMinor: 250 });
+    expect(transaction.amountMinor).toBe(9750);
+  });
+
+  it('rejects an income fee that would consume the entire amount or more', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await expect(repository.saveTransaction({
+      kind: 'income',
+      title: 'Payout',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      amountMinor: 10000,
+      fee: { kind: 'fixed', amountMinor: 10000 },
+    })).rejects.toThrow('Fees can’t exceed the income amount.');
+  });
+
+  it('rejects a fee or a foreign amount on a transfer', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const second = await repository.saveAccount({
+      name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false,
+    });
+    await expect(repository.saveTransaction({
+      kind: 'transfer',
+      title: 'Move money',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      destinationAccountId: second.id,
+      amountMinor: 1000,
+      fee: { kind: 'fixed', amountMinor: 100 },
+    })).rejects.toThrow('Foreign amounts and fees apply to expenses and income only.');
+    await expect(repository.saveTransaction({
+      kind: 'transfer',
+      title: 'Move money',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      destinationAccountId: second.id,
+      amountMinor: 1000,
+      foreign: { amountMinor: 1000, currency: 'EUR', exchangeRate: '1' },
+    })).rejects.toThrow('Foreign amounts and fees apply to expenses and income only.');
+  });
+
+  it('rejects a foreign currency equal to the account currency', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await expect(repository.saveTransaction({
+      kind: 'expense',
+      title: 'Coffee',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      amountMinor: 1,
+      foreign: { amountMinor: 500, currency: account.currency, exchangeRate: '1' },
+    })).rejects.toThrow('Choose a foreign currency different from the account’s.');
+  });
+
+  it('keeps a foreign rate snapshot on an unrelated edit even after the rate row is deleted', async () => {
+    const { repository } = await createRepository();
+    const euro = await repository.saveAccount({
+      name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+    });
+    const rate = await repository.saveExchangeRate({ fromCurrency: 'USD', toCurrency: 'EUR', rate: '0.9', effectiveDate: '2026-01-01' });
+    const original = await repository.saveTransaction({
+      kind: 'expense',
+      title: 'Hotel',
+      localDate: '2026-07-01',
+      accountId: euro.id,
+      amountMinor: 1,
+      foreign: { amountMinor: 5000, currency: 'USD' },
+    });
+    expect(original.foreign?.exchangeRate).toBe('0.9');
+    await repository.deleteEntities('exchangeRates', [rate.id]);
+
+    const renamed = await repository.saveTransaction(
+      {
+        kind: 'expense',
+        title: 'Hotel stay',
+        localDate: '2026-07-01',
+        accountId: euro.id,
+        amountMinor: 1,
+        foreign: { amountMinor: 5000, currency: 'USD' },
+      },
+      original.id,
+    );
+    expect(renamed.title).toBe('Hotel stay');
+    expect(renamed.foreign?.exchangeRate).toBe('0.9');
+    expect(renamed.amountMinor).toBe(original.amountMinor);
+  });
+
+  it('generates recurring occurrences from a foreign template with a percent fee, priced at each date', async () => {
+    const { repository } = await createRepository();
+    const euro = await repository.saveAccount({
+      name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+    });
+    await repository.saveExchangeRate({ fromCurrency: 'USD', toCurrency: 'EUR', rate: '0.9', effectiveDate: '2026-01-01' });
+    await repository.saveExchangeRate({ fromCurrency: 'USD', toCurrency: 'EUR', rate: '0.95', effectiveDate: '2026-02-01' });
+    await repository.saveRecurringRule({
+      template: {
+        kind: 'expense',
+        title: 'Subscription',
+        note: '',
+        accountId: euro.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 1,
+        currency: 'EUR',
+        foreign: { amountMinor: 1000, currency: 'USD' },
+        fee: { kind: 'percent', percent: '2' },
+      },
+      unit: 'month',
+      interval: 1,
+      startDate: '2026-01-31',
+      endDate: '2026-02-28',
+      nextDueDate: '2026-01-31',
+      autoPost: false,
+      active: true,
+    });
+    await repository.generateRecurring('2026-02-28');
+    const generated = repository.getSnapshot().transactions
+      .filter((item) => item.recurringRuleId)
+      .sort((a, b) => a.localDate.localeCompare(b.localDate));
+    expect(generated).toHaveLength(2);
+    // January prices at 0.9: principal = 1000 * 0.9 = 900, fee = 2% of 900 = 18, total = 918.
+    expect(generated[0].foreign?.exchangeRate).toBe('0.9');
+    expect(generated[0].amountMinor).toBe(918);
+    // February prices at 0.95: principal = 1000 * 0.95 = 950, fee = 2% of 950 = 19, total = 969.
+    expect(generated[1].foreign?.exchangeRate).toBe('0.95');
+    expect(generated[1].amountMinor).toBe(969);
+  });
+
+  it('reflects foreign-and-fee totals in account balances', async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await repository.saveTransaction({
+      kind: 'expense',
+      title: 'Groceries',
+      localDate: '2026-07-01',
+      accountId: account.id,
+      amountMinor: 10000,
+      fee: { kind: 'fixed', amountMinor: 100 },
+    });
+    await repository.saveTransaction({
+      kind: 'income',
+      title: 'Payout',
+      localDate: '2026-07-02',
+      accountId: account.id,
+      amountMinor: 5000,
+      fee: { kind: 'fixed', amountMinor: 50 },
+    });
+    const summary = repository.getDashboard('2026-07-01', '2026-07-31');
+    const balance = summary.accountBalances.find((item) => item.account.id === account.id)?.balanceMinor;
+    // opening 0 - (10000+100 expense total) + (5000-50 income total) = -5100.
+    expect(balance).toBe(0 - 10100 + 4950);
+  });
+});

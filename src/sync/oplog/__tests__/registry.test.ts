@@ -100,6 +100,8 @@ describe('registry coverage', () => {
         'destinationBaseAmountMinor',
         'destinationCurrency',
         'exchangeRate',
+        'fee',
+        'foreign',
         'kind',
         'localDate',
         'transferGroupId',

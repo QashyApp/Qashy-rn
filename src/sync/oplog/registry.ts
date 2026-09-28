@@ -123,8 +123,10 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
      * The ledger group. Every member is derived from or derives another:
      * `currency` is copied from the account at write time, `exchangeRate` and
      * `baseAmountMinor` are resolved for `localDate`, and `transferGroupId` legitimately
-     * goes to `null` when `kind` stops being `'transfer'`. Splitting any of them produces
-     * a row whose stored conversion does not describe its own amount.
+     * goes to `null` when `kind` stops being `'transfer'`. `foreign` and `fee` join the same
+     * group for the same reason: `amountMinor` is `foreign`'s converted principal plus or
+     * minus `fee`'s amount, so splitting either from `amountMinor` produces a total no local
+     * mutation could have created — one device's new fee paired with another's stale total.
      */
     kind: group('ledger'),
     localDate: group('ledger'),
@@ -138,6 +140,8 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
     destinationCurrency: group('ledger'),
     destinationBaseAmountMinor: group('ledger'),
     transferGroupId: group('ledger'),
+    foreign: group('ledger'),
+    fee: group('ledger'),
     status: LWW,
     title: LWW,
     note: LWW,

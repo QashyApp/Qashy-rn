@@ -148,7 +148,10 @@ export function MoreScreen() {
                     ? t('Monthly')
                     : t(`${rule.unit[0].toUpperCase()}${rule.unit.slice(1)}`)
                   : t(`Every ${rule.interval} ${rule.unit}s.`);
-                return <SettingsRow key={rule.id} literal title={rule.template.title} subtitle={`${frequency} · ${t(status)}`} value={formatMoney(rule.template.amountMinor, rule.template.currency, state.settings.locale)} icon="repeat" onPress={() => router.push({ pathname: '/recurring', params: { id: rule.id } })} />;
+                const foreignSuffix = rule.template.foreign
+                  ? ` · ${formatMoney(rule.template.foreign.amountMinor, rule.template.foreign.currency, state.settings.locale)}`
+                  : '';
+                return <SettingsRow key={rule.id} literal title={rule.template.title} subtitle={`${frequency} · ${t(status)}${foreignSuffix}`} value={formatMoney(rule.template.amountMinor, rule.template.currency, state.settings.locale)} icon="repeat" onPress={() => router.push({ pathname: '/recurring', params: { id: rule.id } })} />;
               }) : <View style={{ paddingVertical: space.md }}><AppText variant="caption" muted>Subscriptions and scheduled income will appear here.</AppText></View>}
             </Card>
 

@@ -9,11 +9,13 @@ import type {
   EntityType,
   ExchangeRate,
   FinanceState,
+  ForeignAmountInput,
   Goal,
   GoalContribution,
   ImportResult,
   RecurringRule,
   Tag,
+  TransactionFeeInput,
   TransactionQuery,
   TransactionRecord,
 } from '@/domain/models';
@@ -59,12 +61,17 @@ export interface TransactionInput {
   destinationAccountId?: string | null;
   categoryId?: string | null;
   tagIds?: string[];
+  /** Principal in account currency before fees. Ignored (derived) when `foreign` is set. */
   amountMinor: number;
   destinationAmountMinor?: number | null;
   destinationBaseAmountMinor?: number | null;
   exchangeRate?: string;
   recurringRuleId?: string | null;
   occurrenceKey?: string | null;
+  /** Omitted means "none" (null), never "keep existing" — this is a full replacement input. */
+  foreign?: ForeignAmountInput | null;
+  /** Omitted means "none" (null), never "keep existing" — this is a full replacement input. */
+  fee?: TransactionFeeInput | null;
 }
 
 export interface FetchedRateConflict {

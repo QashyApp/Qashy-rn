@@ -35,6 +35,7 @@ import {
   opsOf,
   settle,
   sync,
+  transactionInputOf,
   type VaultDevice,
 } from '@/sync/engine/__tests__/vault';
 
@@ -330,7 +331,7 @@ describe('merge scenarios — co-dependent fields', () => {
     // happened to run second.
     bob.skewMs = 90_000;
     await alice.repository.saveTransaction(
-      { ...inputOf(original), amountMinor: 55_000 },
+      { ...transactionInputOf(original), amountMinor: 55_000 },
       original.id,
     );
     // Written out rather than spread from the held record, because `inputOf` would carry the

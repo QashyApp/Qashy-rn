@@ -17,11 +17,13 @@ import type {
   ExchangeRate,
   FinanceEntity,
   FinanceState,
+  ForeignAmount,
   Goal,
   GoalContribution,
   ImportResult,
   RecurringRule,
   Tag,
+  TransactionFee,
   TransactionQuery,
   TransactionRecord,
 } from '@/domain/models';
@@ -81,6 +83,7 @@ import {
   sumMinor,
 } from '@/utils/money';
 import { resolvePeriod } from '@/utils/period';
+import { feeMinorFor, normalizeFeePercent, totalWithFee } from '@/utils/transaction-amounts';
 // Not `from 'zod'` — see `src/utils/zod.ts`; the CSP leaves no `eval` for zod's JIT probe.
 import { z } from '@/utils/zod';
 
@@ -742,7 +745,9 @@ export class LocalFinanceRepository implements FinanceRepository {
       existing.template.categoryId !== input.template.categoryId ||
       existing.template.amountMinor !== input.template.amountMinor ||
       existing.template.currency !== input.template.currency ||
-      JSON.stringify(existing.template.tagIds) !== JSON.stringify(input.template.tagIds)
+      JSON.stringify(existing.template.tagIds) !== JSON.stringify(input.template.tagIds) ||
+      JSON.stringify(existing.template.foreign ?? null) !== JSON.stringify(input.template.foreign ?? null) ||
+      JSON.stringify(existing.template.fee ?? null) !== JSON.stringify(input.template.fee ?? null)
     );
     const currentUpcoming = existing
       ? this.state.transactions.filter((transaction) =>
@@ -1851,7 +1856,6 @@ export class LocalFinanceRepository implements FinanceRepository {
     additionalTagIds: string[] = [],
     expectedRevision?: number,
   ) {
-    this.assertPositiveMinor(input.amountMinor, 'Amount');
     this.assertDate(input.localDate);
     if (!TRANSACTION_TYPES.includes(input.kind)) throw new Error('Choose a valid transaction type.');
     const status = input.status ?? 'posted';
@@ -1887,6 +1891,62 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (tagIds.some((tagId) => !knownTagIds.has(tagId))) {
       throw new Error('Choose valid tags.');
     }
+    if (input.kind === 'transfer' && (input.foreign || input.fee)) {
+      throw new Error('Foreign amounts and fees apply to expenses and income only.');
+    }
+    // Foreign pricing and fees never touch a transfer — the total is exactly
+    // `input.amountMinor`, validated positive just like it always was. For an
+    // expense or income, `input.amountMinor` is the principal *unless* a
+    // foreign amount is given, in which case the principal is derived from
+    // converting the foreign amount instead and `input.amountMinor` is ignored.
+    let principalMinor: number;
+    let foreign: ForeignAmount | null = null;
+    if (input.kind !== 'transfer' && input.foreign) {
+      const foreignCurrency = this.normalizeCurrency(input.foreign.currency);
+      if (foreignCurrency === account.currency) {
+        throw new Error('Choose a foreign currency different from the account’s.');
+      }
+      this.assertPositiveMinor(input.foreign.amountMinor, 'Amount');
+      // The foreign rate is a transaction snapshot, exactly like the base-currency
+      // rate below: reuse it across an edit that does not touch the account,
+      // date, or foreign currency, so a since-deleted rate cannot block renaming
+      // a transaction that already carries its own snapshot.
+      const preservesForeignRateSnapshot = Boolean(existing?.foreign) &&
+        existing?.accountId === account.id &&
+        existing.localDate === input.localDate &&
+        existing.foreign?.currency === foreignCurrency;
+      const foreignRate = input.foreign.exchangeRate
+        ? this.normalizeRate(input.foreign.exchangeRate)
+        : preservesForeignRateSnapshot
+          ? existing!.foreign!.exchangeRate
+          : this.resolveRate(foreignCurrency, account.currency, input.localDate);
+      principalMinor = convertMinor(
+        input.foreign.amountMinor,
+        foreignCurrency,
+        account.currency,
+        foreignRate,
+        this.state.settings.locale,
+      );
+      foreign = { amountMinor: input.foreign.amountMinor, currency: foreignCurrency, exchangeRate: foreignRate };
+    } else {
+      this.assertPositiveMinor(input.amountMinor, 'Amount');
+      principalMinor = input.amountMinor;
+    }
+    let fee: TransactionFee | null = null;
+    if (input.kind !== 'transfer' && input.fee) {
+      if (input.fee.kind === 'fixed') {
+        this.assertPositiveMinor(input.fee.amountMinor, 'Fee');
+        fee = { kind: 'fixed', percent: null, amountMinor: input.fee.amountMinor };
+      } else {
+        const percent = normalizeFeePercent(input.fee.percent);
+        fee = { kind: 'percent', percent, amountMinor: feeMinorFor(principalMinor, { kind: 'percent', percent }) };
+      }
+    }
+    const amountMinor = input.kind === 'transfer'
+      ? input.amountMinor
+      : fee
+        ? totalWithFee(input.kind, principalMinor, fee.amountMinor)
+        : principalMinor;
     // The applied rate is a transaction snapshot, exactly like the destination
     // leg below. While the account and date are unchanged, re-resolving it
     // through the live rate table let a since-deleted rate block edits to a
@@ -1904,7 +1964,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           ? existing.exchangeRate
           : this.resolveRate(account.currency, this.state.settings.baseCurrency, input.localDate);
     const baseAmountMinor = convertMinor(
-      input.amountMinor,
+      amountMinor,
       account.currency,
       this.state.settings.baseCurrency,
       rate,
@@ -1994,7 +2054,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       destinationAccountId: destination?.id ?? null,
       categoryId: input.kind === 'transfer' ? null : (category?.id ?? null),
       tagIds,
-      amountMinor: input.amountMinor,
+      amountMinor,
       destinationAmountMinor,
       destinationBaseAmountMinor,
       currency: account.currency,
@@ -2004,6 +2064,8 @@ export class LocalFinanceRepository implements FinanceRepository {
       transferGroupId: input.kind === 'transfer' ? (existing?.transferGroupId ?? makeId()) : null,
       recurringRuleId: input.recurringRuleId ?? existing?.recurringRuleId ?? null,
       occurrenceKey: input.occurrenceKey ?? existing?.occurrenceKey ?? null,
+      foreign,
+      fee,
     } satisfies Omit<TransactionRecord, keyof import('@/domain/models').SyncEntity>;
     return existing
       ? updateEntity(existing, value)
@@ -2375,7 +2437,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const existing = this.findExisting(this.state.recurringRules, id, 'recurring rule');
     if (!CATEGORY_KINDS.includes(input.template.kind)) throw new Error('Choose a valid recurring transaction kind.');
     if (!RECURRENCE_UNITS.includes(input.unit)) throw new Error('Choose a valid recurrence period.');
-    this.assertPositiveMinor(input.template.amountMinor, 'Recurring amount');
+    if (!input.template.foreign) this.assertPositiveMinor(input.template.amountMinor, 'Recurring amount');
     this.assertDate(input.startDate);
     this.assertDate(input.nextDueDate);
     if (input.endDate) {
@@ -2404,6 +2466,45 @@ export class LocalFinanceRepository implements FinanceRepository {
       }
     }
     this.assertIdsExist(input.template.tagIds, this.state.tags, 'tag');
+    // `amountMinor` on the returned template is a display estimate only —
+    // real occurrences are priced through `buildTransaction`, which derives
+    // the principal from `foreign` (and resolves its own rate per occurrence
+    // date when the template carries none) rather than trusting this number.
+    let estimatedAmountMinor = input.template.amountMinor;
+    let normalizedForeign: RecurringInput['template']['foreign'] = null;
+    if (input.template.foreign) {
+      const foreignCurrency = this.normalizeCurrency(input.template.foreign.currency);
+      if (foreignCurrency === account.currency) {
+        throw new Error('Choose a foreign currency different from the account’s.');
+      }
+      this.assertPositiveMinor(input.template.foreign.amountMinor, 'Amount');
+      const foreignRate = input.template.foreign.exchangeRate
+        ? this.normalizeRate(input.template.foreign.exchangeRate)
+        : this.resolveRate(foreignCurrency, account.currency, input.nextDueDate);
+      estimatedAmountMinor = convertMinor(
+        input.template.foreign.amountMinor,
+        foreignCurrency,
+        account.currency,
+        foreignRate,
+        this.state.settings.locale,
+      );
+      normalizedForeign = {
+        amountMinor: input.template.foreign.amountMinor,
+        currency: foreignCurrency,
+        // Keep an explicit rate only if the caller supplied one. A template
+        // with none resolves its own rate at each occurrence's date.
+        ...(input.template.foreign.exchangeRate ? { exchangeRate: foreignRate } : {}),
+      };
+    }
+    let normalizedFee: RecurringInput['template']['fee'] = null;
+    if (input.template.fee) {
+      if (input.template.fee.kind === 'fixed') {
+        this.assertPositiveMinor(input.template.fee.amountMinor, 'Fee');
+        normalizedFee = { kind: 'fixed', amountMinor: input.template.fee.amountMinor };
+      } else {
+        normalizedFee = { kind: 'percent', percent: normalizeFeePercent(input.template.fee.percent) };
+      }
+    }
     const referencesArchivedEntity = account.archived ||
       Boolean(input.template.categoryId &&
         this.state.categories.find((item) => item.id === input.template.categoryId)?.archived);
@@ -2417,6 +2518,9 @@ export class LocalFinanceRepository implements FinanceRepository {
         note: input.template.note.trim(),
         currency: account.currency,
         tagIds: [...new Set(input.template.tagIds)],
+        amountMinor: estimatedAmountMinor,
+        foreign: normalizedForeign,
+        fee: normalizedFee,
       },
     };
   }
@@ -2790,6 +2894,44 @@ export class LocalFinanceRepository implements FinanceRepository {
         transaction.destinationBaseAmountMinor !== null || transaction.destinationCurrency !== null || transaction.transferGroupId !== null) {
         throw new Error('Non-transfer transaction has transfer fields.');
       }
+      const foreign = transaction.foreign ?? null;
+      const fee = transaction.fee ?? null;
+      if (transaction.kind === 'transfer') {
+        if (foreign || fee) throw new Error('Foreign amounts and fees apply to expenses and income only.');
+      } else {
+        let principal = transaction.amountMinor;
+        if (foreign) {
+          assertCurrency(foreign.currency, 'Transaction foreign currency');
+          if (foreign.currency === transaction.currency) {
+            throw new Error('Choose a foreign currency different from the account’s.');
+          }
+          assertMinor(foreign.amountMinor, 'Transaction foreign amount', true);
+          assertRate(foreign.exchangeRate, 'Transaction foreign exchange rate');
+          principal = convertMinor(
+            foreign.amountMinor,
+            foreign.currency,
+            transaction.currency,
+            foreign.exchangeRate,
+            this.state.settings.locale,
+          );
+        }
+        if (fee) {
+          assertEnum(fee.kind, ['percent', 'fixed'], 'Transaction fee kind');
+          if (typeof fee.amountMinor !== 'number' || !isSafeMinor(fee.amountMinor) || fee.amountMinor < 0) {
+            throw new Error('Transaction fee amount must be a safe minor-unit integer.');
+          }
+          if (fee.kind === 'percent') {
+            if (typeof fee.percent !== 'string') throw new Error('Transaction fee percent is invalid.');
+            normalizeFeePercent(fee.percent);
+          } else if (fee.percent !== null) {
+            throw new Error('Transaction fee percent must be null for a fixed fee.');
+          }
+        }
+        const expectedAmountMinor = fee ? totalWithFee(transaction.kind, principal, fee.amountMinor) : principal;
+        if (transaction.amountMinor !== expectedAmountMinor) {
+          throw new Error('Transaction amount does not match its principal and fee.');
+        }
+      }
     }
     for (const budget of budgets) {
       assertMinor(budget.limitMinor, 'Budget limit', true);
@@ -2827,6 +2969,25 @@ export class LocalFinanceRepository implements FinanceRepository {
       if (rule.endDate !== null) assertDate(rule.endDate, 'Recurring end date');
       const account = accounts.find((item) => item.id === rule.template.accountId);
       if (!account || account.currency !== rule.template.currency) throw new Error('Recurring currency must match its account.');
+      const templateForeign = rule.template.foreign ?? null;
+      if (templateForeign) {
+        assertCurrency(templateForeign.currency, 'Recurring foreign currency');
+        if (templateForeign.currency === rule.template.currency) {
+          throw new Error('Choose a foreign currency different from the account’s.');
+        }
+        assertMinor(templateForeign.amountMinor, 'Recurring foreign amount', true);
+        if (templateForeign.exchangeRate !== undefined) assertRate(templateForeign.exchangeRate, 'Recurring foreign exchange rate');
+      }
+      const templateFee = rule.template.fee ?? null;
+      if (templateFee) {
+        assertEnum(templateFee.kind, ['percent', 'fixed'], 'Recurring fee kind');
+        if (templateFee.kind === 'fixed') {
+          assertMinor(templateFee.amountMinor, 'Recurring fee amount', true);
+        } else {
+          if (typeof templateFee.percent !== 'string') throw new Error('Recurring fee percent is invalid.');
+          normalizeFeePercent(templateFee.percent);
+        }
+      }
     }
     for (const rate of exchangeRates) {
       assertCurrency(rate.fromCurrency, 'Exchange-rate source currency');

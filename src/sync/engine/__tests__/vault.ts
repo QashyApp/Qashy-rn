@@ -18,7 +18,8 @@ import { LocalFinanceRepository } from '@/data/local-finance-repository';
 import { MemoryStorageAdapter } from '@/data/memory-storage';
 import { SyncingStorageAdapter } from '@/data/syncing-storage-adapter';
 import { SYNC_META, writeMeta } from '@/data/sync-store';
-import type { FinanceState } from '@/domain/models';
+import type { FinanceState, TransactionFeeInput, TransactionRecord } from '@/domain/models';
+import type { TransactionInput } from '@/data/repository';
 import {
   createDeviceIdentity,
   createVaultRootKey,
@@ -279,6 +280,25 @@ export const inputOf = <
   void createdAt;
   void updatedAt;
   return rest as Omit<T, 'id' | 'revision' | 'createdAt' | 'updatedAt'>;
+};
+
+/**
+ * `inputOf`, specialized for transactions.
+ *
+ * `TransactionRecord.fee` is the persisted snapshot shape (`{ kind, percent, amountMinor }`,
+ * `percent` always present), which is not the discriminated `TransactionFeeInput` a save
+ * takes (`{ kind: 'fixed'; amountMinor }` has no `percent` at all). Re-deriving one from the
+ * other here — rather than widening `TransactionInput['fee']` to accept the stored shape —
+ * keeps the save path exactly as strict for a re-saved transaction as for one entered fresh.
+ */
+export const transactionInputOf = (transaction: TransactionRecord): TransactionInput => {
+  const { fee, ...rest } = inputOf(transaction);
+  const feeInput: TransactionFeeInput | null | undefined = fee
+    ? fee.kind === 'fixed'
+      ? { kind: 'fixed', amountMinor: fee.amountMinor }
+      : { kind: 'percent', percent: fee.percent! }
+    : fee;
+  return { ...rest, fee: feeInput };
 };
 
 // ---------------------------------------------------------------------------
