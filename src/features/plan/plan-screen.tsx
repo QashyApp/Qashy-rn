@@ -70,7 +70,7 @@ export function PlanScreen() {
   const budgets = useMemo(
     () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
-    [repository, today, state.budgets, state.budgetPeriods, state.transactions, state.categories],
+    [repository, today, state.budgets, state.budgetPeriods, state.budgetAdjustments, state.transactions, state.categories],
   );
   const goals = useMemo(
     () => state.goals.filter((item) => !item.archived && !item.deletedAt),
@@ -146,7 +146,7 @@ function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) 
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { t } = useLocalization();
-  const { budget, snapshot, spentMinor, effectiveLimitMinor, categorySpend } = status;
+  const { budget, snapshot, spentMinor, adjustmentMinor, effectiveLimitMinor, categorySpend } = status;
   const pace = budgetPace({
     spentMinor,
     limitMinor: effectiveLimitMinor,
@@ -165,7 +165,10 @@ function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) 
     : '';
   // Dates and the rollover amount are data, so the caption is assembled with
   // its translatable words already resolved and then rendered verbatim.
-  const periodSummary = `${customState}${t(budget.period.unit)} · ${snapshot.periodStart} ${t('to')} ${snapshot.periodEnd}${budget.rollover ? ` · ${t('rollover')} ${formatMoney(snapshot.rolloverMinor, state.settings.baseCurrency, state.settings.locale, { sign: true })}` : ''}`;
+  const signed = (minor: number) => formatMoney(minor, state.settings.baseCurrency, state.settings.locale, { sign: true });
+  const periodSummary = `${customState}${t(budget.period.unit)} · ${snapshot.periodStart} ${t('to')} ${snapshot.periodEnd}${budget.rollover ? ` · ${t('rollover')} ${signed(snapshot.rolloverMinor)}` : ''}${adjustmentMinor ? ` · ${t('adjusted')} ${signed(adjustmentMinor)}` : ''}`;
+  // A custom budget outside its window has no current period to adjust.
+  const canAdjust = !customState;
 
   return (
     <MotionView variant="fade" animateLayout exit style={{ height: '100%' }}>
@@ -218,7 +221,22 @@ function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) 
           </Card>
         ) : null}
 
-        <ActionButton title="Edit" variant="secondary" onPress={() => router.push({ pathname: '/budget', params: { id: budget.id } })} />
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={{ flex: 1 }}>
+            <ActionButton title="Edit" variant="secondary" onPress={() => router.push({ pathname: '/budget', params: { id: budget.id } })} />
+          </View>
+          {canAdjust ? (
+            <View style={{ flex: 1 }}>
+              <ActionButton
+                title="Adjust"
+                icon="plus"
+                variant="secondary"
+                accessibilityLabel={`${t('Adjust')} ${budget.name}`}
+                onPress={() => router.push({ pathname: '/budget-adjustment', params: { budgetId: budget.id } })}
+              />
+            </View>
+          ) : null}
+        </View>
       </Card>
     </MotionView>
   );

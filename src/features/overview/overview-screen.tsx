@@ -112,13 +112,15 @@ export function OverviewScreen() {
   const summary = useMemo(() => {
     void state.accounts;
     void state.budgetPeriods;
+
+    void state.budgetAdjustments;
     void state.budgets;
     void state.categories;
     void state.exchangeRates;
     void state.settings;
     void state.transactions;
     return repository.getDashboard(startOfMonth(month), endOfMonth(month));
-  }, [repository, month, state.accounts, state.budgetPeriods, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
+  }, [repository, month, state.accounts, state.budgetPeriods, state.budgetAdjustments, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
 
   const currency = state.settings.baseCurrency;
   const locale = state.settings.locale;

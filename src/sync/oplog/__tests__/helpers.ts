@@ -13,6 +13,7 @@ import type {
   Account,
   AppSettings,
   Budget,
+  BudgetAdjustment,
   BudgetPeriodSnapshot,
   Category,
   ExchangeRate,
@@ -141,6 +142,17 @@ export const budgetPeriod = (
   rolloverMinor: 0,
   filters: { accountIds: [], categoryIds: [], tagIds: [] },
   categoryLimits: [],
+  ...over,
+});
+
+export const budgetAdjustment = (
+  over: Partial<BudgetAdjustment> & { id: string },
+): BudgetAdjustment => ({
+  ...base(over.id),
+  budgetId: 'bud-1',
+  date: '2026-01-15',
+  amountMinor: 5_000,
+  note: '',
   ...over,
 });
 

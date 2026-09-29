@@ -132,8 +132,10 @@ export function TransactionsScreen() {
     void state.transactions;
     void state.budgets;
     void state.budgetPeriods;
+
+    void state.budgetAdjustments;
     return repository.getDashboard(fromDate, toDate);
-  }, [repository, fromDate, toDate, state.accounts, state.exchangeRates, state.settings, state.transactions, state.budgets, state.budgetPeriods]);
+  }, [repository, fromDate, toDate, state.accounts, state.exchangeRates, state.settings, state.transactions, state.budgets, state.budgetPeriods, state.budgetAdjustments]);
 
   // Where "Go to latest" leads when this month is empty.
   const latestMonth = useMemo(() => {

@@ -23,6 +23,7 @@ import { todayLocal } from '@/utils/date';
 import { hapticSuccess } from '@/utils/haptics';
 import { MAX_CSV_IMPORT_BYTES, assertFileSize } from '@/utils/file-size';
 import { exchangeRateService } from '@/providers/exchange-rate-provider';
+import { ExternalImportCard } from '@/features/more/external-import-card';
 
 type CsvField = Exclude<keyof CsvImportRow, 'rowNumber'>;
 
@@ -60,8 +61,9 @@ function CsvStepper({ current }: { current: number }) {
         const done = index < current;
         const active = index === current;
         return (
-          <View key={label} style={{ flex: index === CSV_STEPS.length - 1 ? 0 : 1, alignItems: 'center' }}>
+          <View key={label} style={{ flex: 1, alignItems: 'center' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', width: '100%' }}>
+              <View style={{ flex: 1, height: 2, backgroundColor: index === 0 ? 'transparent' : index <= current ? theme.accent : theme.border }} />
               <View
                 style={{
                   width: 28,
@@ -78,9 +80,9 @@ function CsvStepper({ current }: { current: number }) {
                 }}>
                 {done ? <AppIcon name="checkmark" color={theme.onAccent} size={14} /> : <AppText selectable={false} literal figure variant="caption" style={{ color: active ? theme.accent : theme.textMuted }}>{String(index + 1)}</AppText>}
               </View>
-              {index < CSV_STEPS.length - 1 ? <View style={{ flex: 1, height: 2, backgroundColor: done ? theme.accent : theme.border, marginHorizontal: space.xs }} /> : null}
+              <View style={{ flex: 1, height: 2, backgroundColor: index === CSV_STEPS.length - 1 ? 'transparent' : done ? theme.accent : theme.border }} />
             </View>
-            <AppText variant="caption" muted={!active} numberOfLines={1} style={{ marginTop: space.xxs, fontWeight: active ? '600' : '400' }}>{t(label)}</AppText>
+            <AppText variant="caption" muted={!active} numberOfLines={1} style={{ marginTop: space.xxs, textAlign: 'center', fontWeight: active ? '600' : '400' }}>{t(label)}</AppText>
           </View>
         );
       })}
@@ -252,6 +254,7 @@ export function CsvScreen() {
         <AppText muted>Creates a UTF-8 CSV with dates, statuses, amounts, currencies, source and destination accounts, categories, tags, notes, exchange-rate snapshots, and transfer linkage.</AppText>
         <ActionButton title="Export CSV" icon="tray" onPress={exportData} />
       </Card>
+      <ExternalImportCard />
       <Card style={{ gap: 14 }}>
         <AppText variant="headline">Import transactions</AppText>
         <CsvStepper current={preview?.committedIds.length ? 3 : preview ? 2 : sourceRows.length ? 1 : 0} />

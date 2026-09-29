@@ -9,6 +9,7 @@ type IoniconName = keyof typeof Ionicons.glyphMap;
 
 const IONICON_BY_SF_NAME: Record<string, IoniconName> = {
   plus: 'add',
+  minus: 'remove',
   'plus.circle': 'add-circle-outline',
   'arrow.up': 'arrow-up',
   'arrow.down': 'arrow-down',

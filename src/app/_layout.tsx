@@ -140,6 +140,7 @@ function RootNavigator() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="transaction" options={formSheetOptions(t('Transaction'), backTitle)} />
           <Stack.Screen name="budget" options={formSheetOptions(t('Budget'), backTitle)} />
+          <Stack.Screen name="budget-adjustment" options={formSheetOptions(t('Adjust budget'), backTitle)} />
           <Stack.Screen name="goal" options={formSheetOptions(t('Goal'), backTitle)} />
           <Stack.Screen name="overview-cards" options={formSheetOptions(t('Add cards'), backTitle)} />
           <Stack.Screen name="account" options={formSheetOptions(t('Account'), backTitle)} />

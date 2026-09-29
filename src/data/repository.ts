@@ -2,6 +2,7 @@ import type {
   Account,
   AppSettings,
   Budget,
+  BudgetAdjustment,
   BudgetStatus,
   Category,
   CsvImportRow,
@@ -19,6 +20,7 @@ import type {
   TransactionQuery,
   TransactionRecord,
 } from '@/domain/models';
+import type { ExternalImportOutcome, ImportBundle, ImportMode } from '@/data/import/types';
 import type { CausalMeta, RepairNote, SyncOpBody } from '@/sync/oplog';
 import type { DuplicateGroup } from '@/sync/engine/duplicates';
 
@@ -44,7 +46,14 @@ export type AccountInput = Omit<Account, 'id' | 'revision' | 'createdAt' | 'upda
 export type CategoryInput = Omit<Category, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
 export type TagInput = Omit<Tag, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
 export type BudgetInput = Omit<Budget, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type GoalInput = Omit<Goal, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
+/** A one-time change to a budget's current period. The date is always today, never chosen. */
+export interface BudgetAdjustmentInput {
+  budgetId: string;
+  /** Signed, non-zero base-currency minor units: positive adds to the limit, negative cuts it. */
+  amountMinor: number;
+  note: string;
+}
+export type GoalInput =Omit<Goal, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
 export type ContributionInput = Omit<GoalContribution, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
 export type GoalContributionInput = Omit<ContributionInput, 'goalId'>;
 export type RecurringInput = Omit<RecurringRule, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'pausedByDependency'>;
@@ -128,6 +137,16 @@ export interface FinanceRepository {
   saveTag(input: TagInput, id?: string, expectedRevision?: number): Promise<Tag>;
   saveTransaction(input: TransactionInput, id?: string, expectedRevision?: number): Promise<TransactionRecord>;
   saveBudget(input: BudgetInput, id?: string, expectedRevision?: number): Promise<Budget>;
+  /**
+   * Adds a one-time adjustment to the budget's *current* period and returns it.
+   *
+   * Dated today, so it can never land in a closed period — rollover is computed once when a
+   * period opens, and a late edit would silently disagree with the number already carried
+   * forward. Rejects an adjustment that would push the effective limit below zero.
+   */
+  addBudgetAdjustment(input: BudgetAdjustmentInput): Promise<BudgetAdjustment>;
+  /** Soft-deletes an adjustment. Only one belonging to a budget's current period can be removed. */
+  deleteBudgetAdjustment(id: string): Promise<void>;
   saveGoal(input: GoalInput, id?: string, expectedRevision?: number): Promise<Goal>;
   saveGoalAndContribution(input: GoalInput, contribution?: GoalContributionInput, id?: string, expectedRevision?: number): Promise<Goal>;
   saveContribution(input: ContributionInput, id?: string, expectedRevision?: number): Promise<GoalContribution>;
@@ -165,6 +184,18 @@ export interface FinanceRepository {
    */
   mergeDuplicates(groups: readonly DuplicateGroup[]): Promise<MergeResult>;
   importCsv(rows: CsvImportRow[], commit?: boolean): Promise<ImportResult>;
+  /**
+   * Imports a bundle parsed from another app's backup, atomically.
+   *
+   * `commit = false` (the default) is a preview: the whole operation is validated and the
+   * outcome reported, but nothing is written and no op is captured. A commit that would leave
+   * any item rejected throws before writing, so an import is all or nothing.
+   *
+   * Every entity id is derived from the bundle's source and external ids, which makes a
+   * re-import idempotent. `merge` keeps the vault and reuses same-named entities; `replace`
+   * soft-deletes every live entity in the same write that creates the imported ones.
+   */
+  importExternalBundle(bundle: ImportBundle, options: { mode: ImportMode }, commit?: boolean): Promise<ExternalImportOutcome>;
   exportCsv(): string;
   resetAllData(): Promise<void>;
 }

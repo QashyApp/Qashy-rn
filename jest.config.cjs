@@ -22,6 +22,8 @@ module.exports = {
   // `.tsx` added alongside `.ts` for the first `@testing-library/react-native` component
   // suite (`editable-card-frame.test.tsx`) — every other suite in the project is still `.ts`.
   testMatch: ['**/__tests__/**/*.test.{ts,tsx}'],
+  // `.claude/worktrees/` holds stale git-ignored checkouts whose tests must not run here.
+  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/'],
   collectCoverageFrom: [
     'src/utils/**/*.ts',
     'src/data/**/*.ts',

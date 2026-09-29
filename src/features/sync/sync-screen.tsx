@@ -141,7 +141,7 @@ export function SyncScreen() {
             single thing on the screen worth interrupting a screen reader for. */}
         <Card accessibilityLiveRegion="polite" style={{ gap: space.md }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.lg }}>
-            {/* A sunken well, not a tinted fill — tone lives in the icon color and the pill
+            {/* A sunken well, not a tinted fill — tone lives in the icon color
                 beside it, never in the well itself, so this reads correctly under the same
                 "icon plus text, never color alone" rule `StatusPill` follows. */}
             <View
@@ -158,9 +158,6 @@ export function SyncScreen() {
               <AppIcon name={summary.icon} color={toneColor(theme, summary.tone)} size={28} />
             </View>
             <View style={{ flex: 1, gap: space.xxs, minWidth: 0 }}>
-              {/* The pill carries the short form — the same line the More row shows — so the
-                  two screens cannot drift, and so the hero is not saying the same words twice. */}
-              <StatusPill label={summary.subtitle} icon={summary.icon} tone={summary.tone} />
               <AppText variant="title">{summary.headline}</AppText>
             </View>
           </View>

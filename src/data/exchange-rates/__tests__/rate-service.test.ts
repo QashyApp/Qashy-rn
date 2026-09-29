@@ -91,6 +91,7 @@ function makeState(overrides: Partial<FinanceState> = {}): FinanceState {
     transactions: [],
     budgets: [],
     budgetPeriods: [],
+    budgetAdjustments: [],
     goals: [],
     contributions: [],
     recurringRules: [],

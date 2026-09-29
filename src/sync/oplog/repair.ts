@@ -31,6 +31,7 @@ import type {
   Account,
   AppSettings,
   Budget,
+  BudgetAdjustment,
   BudgetPeriodSnapshot,
   Category,
   EntityType,
@@ -54,6 +55,8 @@ export interface RepairInput {
   readonly transactions: readonly TransactionRecord[];
   readonly budgets: readonly Budget[];
   readonly budgetPeriods: readonly BudgetPeriodSnapshot[];
+  /** Carried through untouched: an adjustment whose budget is gone is inert, never wrong. */
+  readonly budgetAdjustments: readonly BudgetAdjustment[];
   readonly goals: readonly Goal[];
   readonly contributions: readonly GoalContribution[];
   readonly recurringRules: readonly RecurringRule[];
@@ -170,6 +173,7 @@ export function repairMergedState(input: RepairInput): RepairOutput {
     ['transactions', tableOf(input.transactions)],
     ['budgets', tableOf(input.budgets)],
     ['budgetPeriods', tableOf(input.budgetPeriods)],
+    ['budgetAdjustments', tableOf(input.budgetAdjustments)],
     ['goals', tableOf(input.goals)],
     ['contributions', tableOf(input.contributions)],
     ['recurringRules', tableOf(input.recurringRules)],
@@ -193,6 +197,7 @@ export function repairMergedState(input: RepairInput): RepairOutput {
     transactions: draft.all<TransactionRecord>('transactions'),
     budgets: draft.all<Budget>('budgets'),
     budgetPeriods: draft.all<BudgetPeriodSnapshot>('budgetPeriods'),
+    budgetAdjustments: draft.all<BudgetAdjustment>('budgetAdjustments'),
     goals: draft.all<Goal>('goals'),
     contributions: draft.all<GoalContribution>('contributions'),
     recurringRules: draft.all<RecurringRule>('recurringRules'),

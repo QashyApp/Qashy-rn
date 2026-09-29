@@ -166,6 +166,23 @@ export interface BudgetPeriodSnapshot extends SyncEntity {
   categoryLimits: BudgetCategoryLimit[];
 }
 
+/**
+ * A one-time change to a single budget period's limit — money handed out, or a deliberate cut.
+ *
+ * Deliberately its own entity rather than a field on the snapshot: it is create-only, so two
+ * devices adding one at the same moment both land instead of one overwriting the other, and it
+ * is keyed by `date` rather than `periodStart`, so editing the budget's period definition
+ * re-homes it to whichever window now contains that date instead of orphaning it.
+ */
+export interface BudgetAdjustment extends SyncEntity {
+  budgetId: string;
+  /** Local calendar date the adjustment applies to; it counts toward the period containing it. */
+  date: string;
+  /** Signed, non-zero, in base-currency minor units. */
+  amountMinor: number;
+  note: string;
+}
+
 export interface Goal extends SyncEntity {
   name: string;
   kind: GoalKind;
@@ -230,6 +247,7 @@ export interface FinanceState {
   transactions: TransactionRecord[];
   budgets: Budget[];
   budgetPeriods: BudgetPeriodSnapshot[];
+  budgetAdjustments: BudgetAdjustment[];
   goals: Goal[];
   contributions: GoalContribution[];
   recurringRules: RecurringRule[];
@@ -271,6 +289,10 @@ export interface BudgetStatus {
   budget: Budget;
   snapshot: BudgetPeriodSnapshot;
   spentMinor: number;
+  /** Sum of this period's one-time adjustments; already included in `effectiveLimitMinor`. */
+  adjustmentMinor: number;
+  /** This period's live adjustments, newest first. */
+  adjustments: BudgetAdjustment[];
   effectiveLimitMinor: number;
   categorySpend: { categoryId: string; amountMinor: number; limitMinor: number }[];
 }
@@ -317,6 +339,7 @@ export const ENTITY_TYPES = [
   'transactions',
   'budgets',
   'budgetPeriods',
+  'budgetAdjustments',
   'goals',
   'contributions',
   'recurringRules',
@@ -333,6 +356,7 @@ export type FinanceEntity =
   | TransactionRecord
   | Budget
   | BudgetPeriodSnapshot
+  | BudgetAdjustment
   | Goal
   | GoalContribution
   | RecurringRule

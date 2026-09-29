@@ -229,6 +229,42 @@ test('edits and deletes manual goal contributions', async ({ page }) => {
   await expect(page.getByText('No manual contributions yet.')).toBeVisible();
 });
 
+test('adds, persists, guards and removes a one-time budget adjustment', async ({ page }) => {
+  await completeOnboarding(page);
+  await page.goto('/budget');
+  await page.getByRole('button', { name: 'Create budget' }).click();
+  await expect(page.getByText('of $1,000.00')).toBeVisible();
+
+  await page.getByRole('button', { name: /^Adjust Everyday spending/ }).click();
+  await page.getByLabel('Amount (USD)').fill('250');
+  await page.getByLabel('Note (optional)').fill('Birthday money');
+  await expect(page.getByText(/\$1,000\.00 → \$1,250\.00/)).toBeVisible();
+  await page.getByRole('button', { name: 'Add funds' }).last().click();
+
+  // The card reflects it immediately and after a reload.
+  await expect(page).toHaveURL(/\/plan$/);
+  await expect(page.getByText('of $1,250.00')).toBeVisible();
+  await expect(page.getByText(/adjusted \+\$250\.00/)).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('of $1,250.00')).toBeVisible();
+
+  // A cut that would take the limit below zero is refused before it is saved.
+  await page.getByRole('button', { name: /^Adjust Everyday spending/ }).click();
+  await page.getByRole('radio', { name: 'Reduce budget' }).click();
+  await page.getByLabel('Amount (USD)').fill('2000');
+  await expect(page.getByText('This would reduce the budget below zero.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reduce budget' }).last()).toBeDisabled();
+
+  // A smaller one goes through, and the +$250 can then be removed from the sheet.
+  await page.getByLabel('Amount (USD)').fill('100');
+  await page.getByRole('button', { name: 'Reduce budget' }).last().click();
+  await expect(page.getByText(/adjusted \+\$150\.00/)).toBeVisible();
+  await page.getByRole('button', { name: /^Adjust Everyday spending/ }).click();
+  page.once('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Delete adjustment +$250.00' }).click();
+  await expect(page.getByText('Limit this period: $900.00')).toBeVisible();
+});
+
 test('shows every category cap and the actual recurring interval', async ({ page }) => {
   await completeOnboarding(page);
   await page.goto('/budget');

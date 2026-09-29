@@ -31,6 +31,7 @@ export const ID_NAMESPACES = {
   budgetPeriod: 'qashy/id/v1/budget-period',
   occurrence: 'qashy/id/v1/occurrence',
   fetchedRate: 'qashy/id/v1/fetched-rate',
+  externalImport: 'qashy/id/v1/external-import',
 } as const;
 
 export type IdNamespace = (typeof ID_NAMESPACES)[keyof typeof ID_NAMESPACES];
@@ -93,3 +94,23 @@ export const fetchedRateId = (from: string, to: string, effectiveDate: string) =
 export function isFetchedRate(rate: { readonly id: string; readonly fromCurrency: string; readonly toCurrency: string; readonly effectiveDate: string }): boolean {
   return rate.id === fetchedRateId(rate.fromCurrency, rate.toCurrency, rate.effectiveDate);
 }
+
+/** Entity kinds an import derives ids for; part of the id, so an account and a tag can share an external id. */
+export type ExternalImportEntityType =
+  | 'account'
+  | 'category'
+  | 'tag'
+  | 'transaction'
+  | 'recurringRule'
+  | 'budget'
+  | 'transfer-group';
+
+/**
+ * The id every device gives the entity an import of `source` derived from `externalId`.
+ *
+ * Re-importing the same backup therefore lands on the same entities instead of creating a
+ * second copy, and two devices that each import the same file mint the same rows, which the
+ * sync merge folds into one by construction rather than by a duplicate repair.
+ */
+export const externalImportId = (source: string, entityType: ExternalImportEntityType, externalId: string) =>
+  deterministicId(ID_NAMESPACES.externalImport, source, entityType, externalId);

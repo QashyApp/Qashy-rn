@@ -103,6 +103,7 @@ export function createInitialState(): FinanceState {
     transactions: [],
     budgets: [],
     budgetPeriods: [],
+    budgetAdjustments: [],
     goals: [],
     contributions: [],
     recurringRules: [],

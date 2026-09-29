@@ -2,6 +2,7 @@
 export const MAX_VAULT_IMPORT_BYTES = 64 * 1024 * 1024;
 export const MAX_SYNC_IMPORT_BYTES = 64 * 1024 * 1024;
 export const MAX_CSV_IMPORT_BYTES = 16 * 1024 * 1024;
+export const MAX_BACKUP_IMPORT_BYTES = 64 * 1024 * 1024;
 
 const mib = (bytes: number) => Math.floor(bytes / (1024 * 1024));
 

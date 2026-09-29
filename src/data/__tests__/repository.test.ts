@@ -2330,7 +2330,7 @@ describe('generation is stable across devices', () => {
   // silently making the clone below skip a table.
   const ALL_TYPES = Object.keys({
     settings: 0, accounts: 0, categories: 0, tags: 0, transactions: 0, budgets: 0,
-    budgetPeriods: 0, goals: 0, contributions: 0, recurringRules: 0, exchangeRates: 0,
+    budgetPeriods: 0, budgetAdjustments: 0, goals: 0, contributions: 0, recurringRules: 0, exchangeRates: 0,
   } satisfies Record<EntityType, 0>) as EntityType[];
 
   const withRule = async () => {

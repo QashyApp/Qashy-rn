@@ -8,7 +8,7 @@ import Animated, {
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Circle, Defs, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Stop, Text as SvgText } from 'react-native-svg';
 
 import { useAnimatedMinorAmount } from '@/components/finance/animated-money';
 import { AppText } from '@/components/ui/app-text';
@@ -264,12 +264,12 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
   const reduceMotion = useReducedMotion();
   // Sweeps a track-colored cover arc away clockwise so the segments appear to
   // draw themselves in sequence, mirroring the line chart's reveal.
-  const revealed = useSharedValue(reduceMotion ? circumference + 1 : 0);
+  const revealed = useSharedValue(reduceMotion ? circumference : 0);
   const signature = slices.map((slice) => `${slice.key}:${slice.amountMinor}`).join('|');
 
   useEffect(() => {
-    revealed.set(reduceMotion ? circumference + 1 : 0);
-    revealed.set(withTiming(circumference + 1, {
+    revealed.set(reduceMotion ? circumference : 0);
+    revealed.set(withTiming(circumference, {
       duration: 640,
       easing: Easing.out(Easing.cubic),
       reduceMotion: ReduceMotion.System,
@@ -280,6 +280,9 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
     // Negative offset walks the cover's gap clockwise from the top so segments
     // reveal in the same order they are stacked.
     strokeDashoffset: -revealed.value,
+    // Hidden outright once the sweep completes so no antialiased sliver of the
+    // cover's butt end is left at the ring's start.
+    opacity: revealed.value >= circumference ? 0 : 1,
   }));
   const animatedTotal = useAnimatedMinorAmount(total);
   const share = (amountMinor: number) => (total ? Math.round((amountMinor / total) * 100) : 0);
@@ -303,9 +306,13 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
               than a flat muted ring, so the segments read as filling a carved
               groove instead of sitting on a plain disc. */}
           <Circle cx="63" cy="63" r={ringRadius} fill="none" stroke={theme.surfaceSunken as string} strokeWidth="16" />
+          {/* Arcs end square; each slice's leading edge is a round dot painted
+              over the slice before it, so every seam reads as a "(" that bites
+              into the previous slice. The first slice's dot is painted again
+              last so it also bites into the final slice at the top. */}
           {segments.map(({ slice, length, offset }) => (
+            <G key={slice.key}>
               <Circle
-                key={slice.key}
                 cx="63"
                 cy="63"
                 r={ringRadius}
@@ -314,10 +321,13 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
                 strokeWidth="16"
                 strokeDasharray={`${length} ${circumference - length}`}
                 strokeDashoffset={-offset}
-                strokeLinecap="round"
+                strokeLinecap="butt"
                 transform={RING_ROTATION}
               />
+              {segments.length > 1 ? <SegmentStart offset={offset} circumference={circumference} radius={ringRadius} color={slice.color} /> : null}
+            </G>
           ))}
+          {segments.length > 1 ? <SegmentStart offset={0} circumference={circumference} radius={ringRadius} color={segments[0].slice.color} /> : null}
           <AnimatedCircle
             animatedProps={coverProps}
             cx="63"
@@ -349,4 +359,10 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
       </View>
     </View>
   );
+}
+
+/** Round leading edge of a donut slice, placed where the slice's arc begins. */
+function SegmentStart({ offset, circumference, radius, color }: { offset: number; circumference: number; radius: number; color: string }) {
+  const angle = (offset / circumference) * 2 * Math.PI;
+  return <Circle cx={63 + radius * Math.sin(angle)} cy={63 - radius * Math.cos(angle)} r="8" fill={color} />;
 }

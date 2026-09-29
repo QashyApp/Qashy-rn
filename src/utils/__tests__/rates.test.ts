@@ -48,6 +48,7 @@ function state(baseCurrency: string, exchangeRates: ExchangeRate[]): FinanceStat
     transactions: [],
     budgets: [],
     budgetPeriods: [],
+    budgetAdjustments: [],
     goals: [],
     contributions: [],
     recurringRules: [],

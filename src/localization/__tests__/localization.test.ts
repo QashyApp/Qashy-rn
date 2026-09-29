@@ -25,6 +25,15 @@ describe('localization', () => {
     expect(translateMessage('Budget progress', 'he')).toBe('התקדמות התקציב');
   });
 
+  it('translates the one-time budget adjustment copy', () => {
+    expect(translateMessage('Adjust budget', 'he')).toBe('התאמת תקציב');
+    expect(translateMessage('Add funds', 'he')).toBe('הוספת כסף');
+    expect(translateMessage('Delete this adjustment?', 'he')).toBe('למחוק את ההתאמה הזו?');
+    expect(translateMessage('Delete adjustment +$100.00', 'he')).toBe('מחיקת התאמה +$100.00');
+    expect(translateMessage('+$100.00 will be removed from this period’s limit.', 'he'))
+      .toBe('+$100.00 יוסר מהמגבלה של התקופה הזו.');
+  });
+
   it('leaves unknown copy and English unchanged', () => {
     expect(translateMessage('Custom account name', 'he')).toBe('Custom account name');
     expect(translateMessage('Base currency', 'en')).toBe('Base currency');

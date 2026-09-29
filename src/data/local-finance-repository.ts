@@ -1,5 +1,7 @@
 import { Decimal } from 'decimal.js';
 
+import { emptyImportCounts, orderParentsFirst, uniquifyName } from '@/data/external-import';
+import type { ExternalImportOutcome, ImportBundle, ImportMode } from '@/data/import/types';
 import { PlatformStorageAdapter } from '@/data/storage';
 import type { StorageAdapter, StoredEntity } from '@/data/storage-adapter';
 import { SyncingStorageAdapter } from '@/data/syncing-storage-adapter';
@@ -7,6 +9,7 @@ import type {
   Account,
   AppSettings,
   Budget,
+  BudgetAdjustment,
   BudgetFilters,
   BudgetPeriodSnapshot,
   BudgetStatus,
@@ -29,6 +32,7 @@ import type {
 } from '@/domain/models';
 import type {
   AccountInput,
+  BudgetAdjustmentInput,
   BudgetInput,
   CategoryInput,
   ContributionInput,
@@ -67,7 +71,7 @@ import {
   parseLocalDate,
   todayLocal,
 } from '@/utils/date';
-import { budgetPeriodId, fetchedRateId, occurrenceTransactionId } from '@/utils/deterministic-id';
+import { budgetPeriodId, externalImportId, fetchedRateId, occurrenceTransactionId } from '@/utils/deterministic-id';
 import { createEntity, makeId, nowIso, updateEntity } from '@/utils/entity';
 import { disambiguateNames, normalizeName } from '@/utils/naming';
 import { escapeCsv } from '@/utils/csv';
@@ -133,6 +137,7 @@ const ENTITY_TYPES: EntityType[] = [
   'transactions',
   'budgets',
   'budgetPeriods',
+  'budgetAdjustments',
   'goals',
   'contributions',
   'recurringRules',
@@ -329,6 +334,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           transactions: list<TransactionRecord>('transactions'),
           budgets: list<Budget>('budgets'),
           budgetPeriods: list<BudgetPeriodSnapshot>('budgetPeriods'),
+          budgetAdjustments: list<BudgetAdjustment>('budgetAdjustments'),
           goals: list<Goal>('goals'),
           contributions: list<GoalContribution>('contributions'),
           recurringRules: list<RecurringRule>('recurringRules'),
@@ -359,6 +365,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         push('transactions', repaired.transactions);
         push('budgets', repaired.budgets);
         push('budgetPeriods', repaired.budgetPeriods);
+        push('budgetAdjustments', repaired.budgetAdjustments);
         push('goals', repaired.goals);
         push('contributions', repaired.contributions);
         push('recurringRules', repaired.recurringRules);
@@ -621,7 +628,11 @@ export class LocalFinanceRepository implements FinanceRepository {
     this.assertBudgetSetSafe(this.withEntity(this.state.budgets, budget));
     const periods = this.buildBudgetSnapshots(budget, true);
     periods.forEach((period) => {
-      addMinor(period.limitMinor, period.rolloverMinor, `${budget.name} effective limit`);
+      addMinor(
+        addMinor(period.limitMinor, period.rolloverMinor, `${budget.name} effective limit`),
+        this.budgetAdjustmentTotal(budget.id, period.periodStart, period.periodEnd),
+        `${budget.name} effective limit`,
+      );
     });
     await this.storage.putMany([
       { type: 'budgets', entity: budget },
@@ -631,6 +642,106 @@ export class LocalFinanceRepository implements FinanceRepository {
     periods.forEach((period) => this.replaceInList('budgetPeriods', period));
     this.emit();
     return budget;
+  }
+
+  addBudgetAdjustment(input: BudgetAdjustmentInput) {
+    return this.enqueueMutation(() => this.addBudgetAdjustmentNow(input));
+  }
+
+  private async addBudgetAdjustmentNow(input: BudgetAdjustmentInput) {
+    const budget = this.active(this.state.budgets).find((item) => item.id === input.budgetId);
+    if (!budget || budget.archived) throw new Error('Choose a valid budget.');
+    if (!isSafeMinor(input.amountMinor) || input.amountMinor === 0) {
+      throw new Error('Adjustment must be a non-zero amount.');
+    }
+    // Always today: a closed period's rollover is already baked into the next one, so an
+    // adjustment dated into it would silently disagree with the number carried forward.
+    const today = todayLocal();
+    const snapshot = this.currentSnapshot(budget, today);
+    if (!snapshot) throw new Error('This budget has no active period to adjust.');
+    const before = this.effectiveLimitFor(budget, snapshot);
+    const adjustment = createEntity({
+      id: makeId(),
+      budgetId: budget.id,
+      date: today,
+      amountMinor: input.amountMinor,
+      note: input.note.trim(),
+    }) as BudgetAdjustment;
+    // The whole-vault total is checked too, not just this budget: the dashboard sums every
+    // effective limit and would throw on read if this pushed the sum past a safe integer.
+    this.withProspectiveState({
+      budgetAdjustments: [...this.state.budgetAdjustments, adjustment],
+    }, () => {
+      const statuses = this.getBudgetStatuses(today, { includeInactiveCustom: true });
+      sumMinor(statuses.map((entry) => entry.effectiveLimitMinor), 'Budget limit total');
+      const after = this.effectiveLimitFor(budget, snapshot);
+      this.assertLimitNotLowered(before, after, 'This adjustment');
+    });
+    await this.persist('budgetAdjustments', [adjustment]);
+    this.replaceInList('budgetAdjustments', adjustment);
+    this.emit();
+    return adjustment;
+  }
+
+  deleteBudgetAdjustment(id: string) {
+    return this.enqueueMutation(() => this.deleteBudgetAdjustmentNow(id));
+  }
+
+  private async deleteBudgetAdjustmentNow(id: string) {
+    const adjustment = this.state.budgetAdjustments.find((item) => item.id === id);
+    if (!adjustment) throw new Error('Choose a valid budget adjustment.');
+    const budget = this.active(this.state.budgets).find((item) => item.id === adjustment.budgetId);
+    const snapshot = budget ? this.currentSnapshot(budget, todayLocal()) : undefined;
+    if (!budget || !snapshot || adjustment.date < snapshot.periodStart || adjustment.date > snapshot.periodEnd) {
+      throw new Error('Only adjustments from the current period can be removed.');
+    }
+    const before = this.effectiveLimitFor(budget, snapshot);
+    const remaining = this.state.budgetAdjustments.filter((item) => item.id !== id);
+    this.withProspectiveState({ budgetAdjustments: remaining }, () => {
+      this.assertLimitNotLowered(before, this.effectiveLimitFor(budget, snapshot), 'Removing this adjustment');
+    });
+    const retired = updateEntity(adjustment, { deletedAt: nowIso() });
+    await this.persist('budgetAdjustments', [retired]);
+    this.state = { ...this.state, budgetAdjustments: remaining };
+    this.emit();
+  }
+
+  // A negative limit already exists as a consequence of overspending under rollover, so the
+  // rule cannot be "never below zero" — it is that a deliberate cut must not be what takes
+  // the limit there, or lowers it any further once it is already there.
+  private assertLimitNotLowered(before: number, after: number, subject: string) {
+    if (after < 0 && after < before) throw new Error(`${subject} would reduce the budget below zero.`);
+  }
+
+  private effectiveLimitFor(budget: Budget, snapshot: BudgetPeriodSnapshot) {
+    return addMinor(
+      addMinor(snapshot.limitMinor, snapshot.rolloverMinor, `${budget.name} effective limit`),
+      this.budgetAdjustmentTotal(budget.id, snapshot.periodStart, snapshot.periodEnd),
+      `${budget.name} effective limit`,
+    );
+  }
+
+  // The stored snapshot for the window containing `onDate`, or a transient one when the
+  // period rolled over while the app stayed open; the next generateRecurring run persists it.
+  private currentSnapshot(budget: Budget, onDate: string) {
+    const bounds = resolvePeriod(budget.period, onDate);
+    if (budget.period.unit === 'custom' && (onDate < bounds.start || onDate > bounds.end)) return undefined;
+    return this.state.budgetPeriods.find((item) =>
+      item.budgetId === budget.id && item.periodStart === bounds.start,
+    ) ?? this.buildBudgetSnapshots(budget, false, onDate, true).find((item) => item.periodStart === bounds.start);
+  }
+
+  private budgetAdjustmentsInWindow(budgetId: string, fromDate: string, toDate: string) {
+    return this.active(this.state.budgetAdjustments).filter((item) =>
+      item.budgetId === budgetId && item.date >= fromDate && item.date <= toDate,
+    );
+  }
+
+  private budgetAdjustmentTotal(budgetId: string, fromDate: string, toDate: string) {
+    return sumMinor(
+      this.budgetAdjustmentsInWindow(budgetId, fromDate, toDate).map((item) => item.amountMinor),
+      'Budget adjustment total',
+    );
   }
 
   saveGoal(input: GoalInput, id?: string, expectedRevision?: number) {
@@ -1174,6 +1285,9 @@ export class LocalFinanceRepository implements FinanceRepository {
           item.budgetId === budget.id && item.periodStart === bounds.start,
         ) ?? this.buildBudgetSnapshots(budget, false, onDate, true).find((item) => item.periodStart === bounds.start);
         if (!snapshot) return [];
+        const adjustments = this.budgetAdjustmentsInWindow(budget.id, snapshot.periodStart, snapshot.periodEnd)
+          .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+        const adjustmentMinor = sumMinor(adjustments.map((item) => item.amountMinor), 'Budget adjustment total');
         const spentMinor = this.budgetSpend(snapshot.filters, snapshot.periodStart, snapshot.periodEnd);
         const categorySpend = snapshot.categoryLimits.map((limit) => ({
           ...limit,
@@ -1187,9 +1301,11 @@ export class LocalFinanceRepository implements FinanceRepository {
           budget,
           snapshot,
           spentMinor,
+          adjustmentMinor,
+          adjustments,
           effectiveLimitMinor: addMinor(
-            snapshot.limitMinor,
-            snapshot.rolloverMinor,
+            addMinor(snapshot.limitMinor, snapshot.rolloverMinor, `${budget.name} effective limit`),
+            adjustmentMinor,
             `${budget.name} effective limit`,
           ),
           categorySpend,
@@ -1444,6 +1560,11 @@ export class LocalFinanceRepository implements FinanceRepository {
         .filter((item) => deletedIds.has(item.budgetId))
         .map((item) => updateEntity(item, { deletedAt: nowIso() }))
       : [];
+    const budgetAdjustments = type === 'budgets'
+      ? this.state.budgetAdjustments
+        .filter((item) => deletedIds.has(item.budgetId))
+        .map((item) => updateEntity(item, { deletedAt: nowIso() }))
+      : [];
     const orphanedContributions = type === 'transactions'
       ? this.state.contributions
         .filter((item) => !item.deletedAt && item.transactionId !== null && deletedIds.has(item.transactionId))
@@ -1514,6 +1635,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       ...contributions.map((entity) => ({ type: 'contributions' as const, entity })),
       ...orphanedContributions.map((entity) => ({ type: 'contributions' as const, entity })),
       ...budgetPeriods.map((entity) => ({ type: 'budgetPeriods' as const, entity })),
+      ...budgetAdjustments.map((entity) => ({ type: 'budgetAdjustments' as const, entity })),
       ...transactionChanges.map((entity) => ({ type: 'transactions' as const, entity })),
       ...detachedCategories.map((entity) => ({ type: 'categories' as const, entity })),
       ...budgetChanges.map((entity) => ({ type: 'budgets' as const, entity })),
@@ -1548,6 +1670,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     }
     if (type === 'budgets') {
       nextState.budgetPeriods = nextState.budgetPeriods.filter((item) => !deletedIds.has(item.budgetId));
+      nextState.budgetAdjustments = nextState.budgetAdjustments.filter((item) => !deletedIds.has(item.budgetId));
     }
     if (detachedCategories.length) {
       const replacements = new Map(detachedCategories.map((item) => [item.id, item]));
@@ -1749,6 +1872,602 @@ export class LocalFinanceRepository implements FinanceRepository {
     return result;
   }
 
+  importExternalBundle(bundle: ImportBundle, options: { mode: ImportMode }, commit = false) {
+    // Preview is queued too: it awaits storage reads between `this.state` reads, so a
+    // concurrent mutation would otherwise make it inconsistent.
+    return this.enqueueMutation(() => this.importExternalBundleNow(bundle, options.mode, commit));
+  }
+
+  /**
+   * Imports a bundle another app's backup was parsed into, all or nothing.
+   *
+   * Preview and commit share every line up to the write, so what the preview reports is what a
+   * commit does. Nothing touches `this.state` until `putMany` has succeeded: validation runs
+   * against a *prospective* snapshot swapped in only for the synchronous stretches that need
+   * it (see `withProspectiveState`), and a failed write leaves the live snapshot as it was.
+   *
+   * Every id is derived from the source and the record's external id, so a second import of the
+   * same file finds its own rows again instead of adding a copy. A row that exists as a
+   * tombstone under a derived id is revived rather than duplicated — except transactions,
+   * schedules and budgets in `merge` mode, because the user deleted those and an import must
+   * not undo the deletion. Accounts, categories and tags are still revived there, since
+   * imported transactions depend on them.
+   */
+  private async importExternalBundleNow(
+    bundle: ImportBundle,
+    mode: ImportMode,
+    commit: boolean,
+  ): Promise<ExternalImportOutcome> {
+    if (mode !== 'merge' && mode !== 'replace') throw new Error('Choose how to import: merge or replace.');
+    // Base-currency snapshots and the settings row come from onboarding, and onboarding
+    // refuses to run once any entity exists, so importing first would strand the vault.
+    if (!this.state.settings.onboardingComplete) throw new Error('Finish setting up Qashy before importing.');
+
+    const replacing = mode === 'replace';
+    const source = bundle.source;
+    const idOf = (type: Parameters<typeof externalImportId>[1], externalId: string) =>
+      externalImportId(source, type, externalId);
+    const outcome: ExternalImportOutcome = {
+      committed: false,
+      created: emptyImportCounts(),
+      reused: { accounts: 0, categories: 0, tags: 0 },
+      duplicateTransactions: 0,
+      replaced: { ...emptyImportCounts(), goals: 0 },
+      rejected: [],
+      renamed: [],
+    };
+    const reject = (externalId: string, reason: string) => {
+      outcome.rejected.push({ externalId, reason });
+    };
+    const reasonOf = (error: unknown) => (error instanceof Error ? error.message : 'Could not be imported.');
+
+    // Tombstones are invisible to `this.state`, and they decide whether a derived id is a
+    // revival or a fresh row, so the stored rows are read for that one purpose.
+    const readStored = async <T extends FinanceEntity>(type: EntityType) =>
+      new Map((await this.storage.readAll(type) as T[]).map((entity) => [entity.id, entity]));
+    const stored = {
+      accounts: await readStored<Account>('accounts'),
+      categories: await readStored<Category>('categories'),
+      tags: await readStored<Tag>('tags'),
+      transactions: await readStored<TransactionRecord>('transactions'),
+      budgets: await readStored<Budget>('budgets'),
+      recurringRules: await readStored<RecurringRule>('recurringRules'),
+    };
+
+    // What `merge` may reuse. In `replace` nothing of the old vault survives, so nothing in it
+    // can be reused or collide by name, and only the imported entities compete for names.
+    const liveAccounts = replacing ? [] : this.state.accounts;
+    const liveCategories = replacing ? [] : this.state.categories;
+    const liveTags = replacing ? [] : this.state.tags;
+    const liveBudgets = replacing ? [] : this.state.budgets;
+    const liveRules = replacing ? [] : this.state.recurringRules;
+
+    // A reused entity that is archived in the vault cannot take new postings.
+    const archivedVaultAccounts = new Set(liveAccounts.filter((item) => item.archived).map((item) => item.id));
+    const archivedVaultCategories = new Set(liveCategories.filter((item) => item.archived).map((item) => item.id));
+
+    // ---- Accounts ------------------------------------------------------------------------
+    const accountIds = new Map<string, string>();
+    const newAccounts: Account[] = [];
+    // `buildTransaction` refuses to post to an archived account, and an imported archived
+    // account has history that must still be importable. So the *view* used to build and
+    // validate holds a non-archived copy of each new account while the entity that is written
+    // keeps the flag from the backup.
+    const buildAccounts: Account[] = [...liveAccounts];
+    const takenAccountNames = new Set(liveAccounts.map((item) => normalizeName(item.name)));
+    const seenAccounts = new Set<string>();
+    for (const item of bundle.accounts) {
+      if (seenAccounts.has(item.externalId)) {
+        reject(item.externalId, 'The backup lists this account more than once.');
+        continue;
+      }
+      seenAccounts.add(item.externalId);
+      try {
+        const derivedId = idOf('account', item.externalId);
+        const currency = this.normalizeCurrency(item.currency);
+        this.assertSafeMinor(item.openingBalanceMinor, 'Opening balance');
+        const color = item.color.toUpperCase();
+        this.assertColor(color);
+        if (!ACCOUNT_TYPES.includes(item.type)) throw new Error('Choose a valid account type.');
+        const name = item.name.trim() || 'Account';
+        const sameId = liveAccounts.find((entity) => entity.id === derivedId);
+        if (sameId && sameId.currency !== currency) {
+          throw new Error('An account imported earlier has a different currency now.');
+        }
+        const reusable = sameId ?? liveAccounts.find((entity) =>
+          normalizeName(entity.name) === normalizeName(name) && entity.currency === currency,
+        );
+        if (reusable) {
+          accountIds.set(item.externalId, reusable.id);
+          outcome.reused.accounts += 1;
+          continue;
+        }
+        const finalName = uniquifyName(source, name, takenAccountNames);
+        if (finalName !== name) outcome.renamed.push({ kind: 'account', from: name, to: finalName });
+        takenAccountNames.add(normalizeName(finalName));
+        const account = createEntity({
+          id: derivedId,
+          name: finalName,
+          type: item.type,
+          currency,
+          openingBalanceMinor: item.openingBalanceMinor,
+          icon: item.icon,
+          color,
+          archived: item.archived,
+        }) as Account;
+        accountIds.set(item.externalId, account.id);
+        newAccounts.push(account);
+        buildAccounts.push({ ...account, archived: false });
+      } catch (error) {
+        reject(item.externalId, reasonOf(error));
+      }
+    }
+
+    // ---- Categories ----------------------------------------------------------------------
+    const categoryIds = new Map<string, string>();
+    const newCategories: Category[] = [];
+    const buildCategories: Category[] = [...liveCategories];
+    const takenCategoryNames = new Set(liveCategories.map((item) => normalizeName(item.name)));
+    const seenCategories = new Set<string>();
+    // Parents first: a child is validated against the parent it resolved to, and a backup's
+    // row order says nothing about which of the two comes first.
+    for (const item of orderParentsFirst(bundle.categories)) {
+      if (seenCategories.has(item.externalId)) {
+        reject(item.externalId, 'The backup lists this category more than once.');
+        continue;
+      }
+      seenCategories.add(item.externalId);
+      try {
+        const derivedId = idOf('category', item.externalId);
+        if (!CATEGORY_KINDS.includes(item.kind)) throw new Error('Choose a valid category kind.');
+        const color = item.color.toUpperCase();
+        this.assertColor(color);
+        const name = item.name.trim() || 'Category';
+        const sameId = liveCategories.find((entity) => entity.id === derivedId);
+        if (sameId && sameId.kind !== item.kind) {
+          throw new Error('A category imported earlier has a different kind now.');
+        }
+        const reusable = sameId ?? liveCategories.find((entity) =>
+          normalizeName(entity.name) === normalizeName(name) && entity.kind === item.kind,
+        );
+        if (reusable) {
+          categoryIds.set(item.externalId, reusable.id);
+          outcome.reused.categories += 1;
+          continue;
+        }
+        let parentId: string | null = null;
+        if (item.parentExternalId !== null) {
+          parentId = categoryIds.get(item.parentExternalId) ?? null;
+          const parent = parentId ? buildCategories.find((entity) => entity.id === parentId) : undefined;
+          // The rule `repairMergedState` enforces: a live, top-level parent of the same kind.
+          // An archived parent is allowed — the repair does not object, and an archived group
+          // can legitimately still own history.
+          if (!parent || parent.kind !== item.kind || parent.parentId) {
+            throw new Error('Choose a valid top-level parent category of the same kind.');
+          }
+        }
+        const finalName = uniquifyName(source, name, takenCategoryNames);
+        if (finalName !== name) outcome.renamed.push({ kind: 'category', from: name, to: finalName });
+        takenCategoryNames.add(normalizeName(finalName));
+        const category = createEntity({
+          id: derivedId,
+          name: finalName,
+          kind: item.kind,
+          icon: item.icon,
+          color,
+          parentId,
+          archived: item.archived,
+        }) as Category;
+        categoryIds.set(item.externalId, category.id);
+        newCategories.push(category);
+        buildCategories.push({ ...category, archived: false });
+      } catch (error) {
+        reject(item.externalId, reasonOf(error));
+      }
+    }
+
+    // ---- Tags ----------------------------------------------------------------------------
+    const tagIds = new Map<string, string>();
+    const newTags: Tag[] = [];
+    const buildTags: Tag[] = [...liveTags];
+    const takenTagNames = new Set(liveTags.map((item) => normalizeName(item.name)));
+    const seenTags = new Set<string>();
+    for (const item of bundle.tags) {
+      if (seenTags.has(item.externalId)) {
+        reject(item.externalId, 'The backup lists this tag more than once.');
+        continue;
+      }
+      seenTags.add(item.externalId);
+      try {
+        const derivedId = idOf('tag', item.externalId);
+        const name = item.name.trim();
+        if (!name) throw new Error('Tag name is required.');
+        const color = item.color.toUpperCase();
+        this.assertColor(color);
+        const reusable = liveTags.find((entity) => entity.id === derivedId) ??
+          liveTags.find((entity) => normalizeName(entity.name) === normalizeName(name));
+        if (reusable) {
+          tagIds.set(item.externalId, reusable.id);
+          outcome.reused.tags += 1;
+          continue;
+        }
+        const finalName = uniquifyName(source, name, takenTagNames);
+        if (finalName !== name) outcome.renamed.push({ kind: 'tag', from: name, to: finalName });
+        takenTagNames.add(normalizeName(finalName));
+        const tag = createEntity({ id: derivedId, name: finalName, color }) as Tag;
+        tagIds.set(item.externalId, tag.id);
+        newTags.push(tag);
+        buildTags.push(tag);
+      } catch (error) {
+        reject(item.externalId, reasonOf(error));
+      }
+    }
+
+    const resolveAccount = (externalId: string) => {
+      const id = accountIds.get(externalId);
+      if (!id) throw new Error('Its account could not be imported.');
+      return id;
+    };
+    const resolveCategory = (externalId: string) => {
+      const id = categoryIds.get(externalId);
+      if (!id) throw new Error('Its category could not be imported.');
+      return id;
+    };
+    const resolveTags = (externalIds: readonly string[]) => externalIds.map((externalId) => {
+      const id = tagIds.get(externalId);
+      if (!id) throw new Error('One of its tags could not be imported.');
+      return id;
+    });
+
+    const bundleRuleIds = new Set(bundle.recurringRules.map((item) => item.externalId));
+    const newRules: RecurringRule[] = [];
+    const newTransactions: TransactionRecord[] = [];
+    const newBudgets: Budget[] = [];
+
+    // Computed against the real snapshot, before any prospective one is swapped in, because
+    // the key resolves tag ids to names through `this.state.tags`.
+    const existingKeys = replacing
+      ? new Set<string>()
+      : new Set(this.state.transactions.map((item) => this.transactionDuplicateKey(item)));
+    const retainedTransactions = replacing ? [] : this.state.transactions;
+
+    // ---- Recurring rules -----------------------------------------------------------------
+    // Rules are validated as though no account or category were archived, then paused if one
+    // is: that is exactly what archiving does to a rule (`saveAccountNow`), so an archived
+    // dependency must not make the whole import unimportable.
+    const unarchived = <T extends { archived: boolean }>(list: readonly T[]) =>
+      list.map((item) => ({ ...item, archived: false }));
+    const archivedAccountIds = new Set([
+      ...archivedVaultAccounts,
+      ...newAccounts.filter((item) => item.archived).map((item) => item.id),
+    ]);
+    const archivedCategoryIds = new Set([
+      ...archivedVaultCategories,
+      ...newCategories.filter((item) => item.archived).map((item) => item.id),
+    ]);
+    const seenRules = new Set<string>();
+    this.withProspectiveState({
+      accounts: unarchived(buildAccounts),
+      categories: unarchived(buildCategories),
+      tags: buildTags,
+      ...(replacing ? { recurringRules: [], transactions: [] } : {}),
+    }, () => {
+      for (const item of bundle.recurringRules) {
+        if (seenRules.has(item.externalId)) {
+          reject(item.externalId, 'The backup lists this schedule more than once.');
+          continue;
+        }
+        seenRules.add(item.externalId);
+        try {
+          const derivedId = idOf('recurringRule', item.externalId);
+          // A schedule imported earlier is already here; it is not new, and re-validating it
+          // against today's vault could reject something the user has since edited.
+          if (liveRules.some((entity) => entity.id === derivedId)) continue;
+          // A schedule the user deleted stays deleted in merge mode.
+          if (!replacing && stored.recurringRules.has(derivedId)) continue;
+          const accountId = resolveAccount(item.accountExternalId);
+          const categoryId = item.categoryExternalId ? resolveCategory(item.categoryExternalId) : null;
+          const normalized = this.validateRecurring({
+            template: {
+              kind: item.kind,
+              title: item.title,
+              note: item.note,
+              accountId,
+              categoryId,
+              tagIds: resolveTags(item.tagExternalIds),
+              amountMinor: item.amountMinor,
+              currency: item.currency,
+            },
+            unit: item.unit,
+            interval: item.interval,
+            startDate: item.startDate,
+            endDate: item.endDate,
+            nextDueDate: item.nextDueDate,
+            autoPost: item.autoPost,
+            active: item.active,
+          });
+          const dependencyArchived = archivedAccountIds.has(accountId) ||
+            Boolean(categoryId && archivedCategoryIds.has(categoryId));
+          newRules.push(createEntity({
+            id: derivedId,
+            ...normalized,
+            active: item.active && !dependencyArchived,
+            pausedByDependency: item.active && dependencyArchived,
+          }) as RecurringRule);
+        } catch (error) {
+          reject(item.externalId, reasonOf(error));
+        }
+      }
+    });
+
+    // ---- Transactions --------------------------------------------------------------------
+    const seenTransactions = new Set<string>();
+    this.withProspectiveState({
+      accounts: buildAccounts,
+      categories: buildCategories,
+      tags: buildTags,
+      ...(replacing ? { recurringRules: [], transactions: [] } : {}),
+    }, () => {
+      for (const item of bundle.transactions) {
+        if (seenTransactions.has(item.externalId)) {
+          reject(item.externalId, 'The backup lists this transaction more than once.');
+          continue;
+        }
+        seenTransactions.add(item.externalId);
+        const derivedId = idOf('transaction', item.externalId);
+        // Live or tombstoned: either way the vault already has an answer for this record. The
+        // tombstone case is the user's deliberate deletion, which an import must not undo.
+        if (!replacing && stored.transactions.has(derivedId)) {
+          outcome.duplicateTransactions += 1;
+          continue;
+        }
+        try {
+          const accountId = resolveAccount(item.accountExternalId);
+          if (archivedVaultAccounts.has(accountId)) throw new Error('Its account is archived in this vault.');
+          const isTransfer = item.kind === 'transfer';
+          const destinationAccountId = isTransfer && item.destinationAccountExternalId !== null
+            ? resolveAccount(item.destinationAccountExternalId)
+            : null;
+          if (destinationAccountId && archivedVaultAccounts.has(destinationAccountId)) {
+            throw new Error('Its destination account is archived in this vault.');
+          }
+          const categoryId = !isTransfer && item.categoryExternalId !== null
+            ? resolveCategory(item.categoryExternalId)
+            : null;
+          if (categoryId && archivedVaultCategories.has(categoryId)) {
+            throw new Error('Its category is archived in this vault.');
+          }
+          const resolvedTagIds = resolveTags(item.tagExternalIds);
+          if (item.recurringRuleExternalId !== null && !bundleRuleIds.has(item.recurringRuleExternalId)) {
+            throw new Error('It belongs to a schedule that is not in the backup.');
+          }
+          // Rate resolution stays inside `buildTransaction`: a missing rate for the date throws
+          // here and becomes a per-record rejection rather than aborting the preview.
+          const built = this.buildTransaction({
+            kind: item.kind,
+            status: item.status,
+            title: item.title,
+            note: item.note,
+            localDate: item.localDate,
+            accountId,
+            destinationAccountId,
+            categoryId,
+            tagIds: resolvedTagIds,
+            amountMinor: item.amountMinor,
+            destinationAmountMinor: isTransfer ? item.destinationAmountMinor : null,
+            recurringRuleId: item.recurringRuleExternalId === null
+              ? null
+              : idOf('recurringRule', item.recurringRuleExternalId),
+            occurrenceKey: null,
+          }, undefined, [], undefined, derivedId);
+          // `buildTransaction` mints a random group id for a transfer; derive it instead so
+          // two devices importing the same file agree on it.
+          const transaction = built.kind === 'transfer'
+            ? { ...built, transferGroupId: idOf('transfer-group', item.externalId) }
+            : built;
+          if (!replacing) {
+            const tagNames = resolvedTagIds.map((id) => buildTags.find((tag) => tag.id === id)?.name ?? id);
+            if (existingKeys.has(this.transactionDuplicateKey(transaction, tagNames))) {
+              outcome.duplicateTransactions += 1;
+              continue;
+            }
+          }
+          newTransactions.push(transaction);
+        } catch (error) {
+          reject(item.externalId, reasonOf(error));
+        }
+      }
+    });
+
+    // ---- Budgets -------------------------------------------------------------------------
+    const seenBudgets = new Set<string>();
+    this.withProspectiveState({
+      accounts: buildAccounts,
+      categories: buildCategories,
+      tags: buildTags,
+    }, () => {
+      for (const item of bundle.budgets) {
+        if (seenBudgets.has(item.externalId)) {
+          reject(item.externalId, 'The backup lists this budget more than once.');
+          continue;
+        }
+        seenBudgets.add(item.externalId);
+        try {
+          const derivedId = idOf('budget', item.externalId);
+          if (liveBudgets.some((entity) => entity.id === derivedId)) continue;
+          // A budget the user deleted stays deleted in merge mode.
+          if (!replacing && stored.budgets.has(derivedId)) continue;
+          const normalized = this.validateBudget({
+            name: item.name,
+            icon: item.icon,
+            color: item.color,
+            limitMinor: item.limitMinor,
+            period: { ...item.period },
+            // An imported budget starts a fresh history here; there is no earlier Qashy period
+            // to carry an unspent balance out of.
+            rollover: false,
+            filters: {
+              accountIds: item.accountExternalIds.map(resolveAccount),
+              categoryIds: item.categoryExternalIds.map(resolveCategory),
+              tagIds: resolveTags(item.tagExternalIds),
+            },
+            categoryLimits: item.categoryLimits.map((limit) => ({
+              categoryId: resolveCategory(limit.categoryExternalId),
+              limitMinor: limit.limitMinor,
+            })),
+            archived: item.archived,
+          });
+          newBudgets.push(createEntity({ id: derivedId, ...normalized }) as Budget);
+        } catch (error) {
+          reject(item.externalId, reasonOf(error));
+        }
+      }
+    });
+
+    // ---- Whole-set safety ----------------------------------------------------------------
+    // Skipped once anything was rejected: the set is incomplete, so an overflow reported over
+    // it would describe a vault that is never going to exist.
+    if (!outcome.rejected.length) {
+      try {
+        this.withProspectiveState({
+          accounts: buildAccounts,
+          categories: buildCategories,
+          tags: buildTags,
+          ...(replacing ? { transactions: [], budgets: [], budgetPeriods: [], budgetAdjustments: [], goals: [], contributions: [], recurringRules: [] } : {}),
+        }, () => {
+          const transactions = [...retainedTransactions, ...newTransactions];
+          this.assertTransactionSetSafe(transactions, buildAccounts);
+          this.assertBudgetSetSafe([...liveBudgets, ...newBudgets]);
+          for (const rule of newRules) {
+            this.assertRecurringRuleGenerationSafe(rule, transactions, addRecurrence(todayLocal(), 'month', 1));
+          }
+        });
+      } catch (error) {
+        reject('import', reasonOf(error));
+      }
+    }
+
+    outcome.created = {
+      accounts: newAccounts.length,
+      categories: newCategories.length,
+      tags: newTags.length,
+      transactions: newTransactions.length,
+      recurringRules: newRules.length,
+      budgets: newBudgets.length,
+    };
+    const importedIds = {
+      accounts: new Set(newAccounts.map((item) => item.id)),
+      categories: new Set(newCategories.map((item) => item.id)),
+      tags: new Set(newTags.map((item) => item.id)),
+      transactions: new Set(newTransactions.map((item) => item.id)),
+      budgets: new Set(newBudgets.map((item) => item.id)),
+      recurringRules: new Set(newRules.map((item) => item.id)),
+    };
+
+    // Live entities that are overwritten in place by an imported row of the same id are not
+    // tombstoned separately (one row, one write), but they are still replaced.
+    const retire = <T extends FinanceEntity>(live: readonly T[], imported: ReadonlySet<string>, at: string) =>
+      replacing ? live.filter((entity) => !imported.has(entity.id)).map((entity) => updateEntity(entity, { deletedAt: at } as Partial<T>)) : [];
+    if (replacing) {
+      outcome.replaced = {
+        accounts: this.state.accounts.length,
+        categories: this.state.categories.length,
+        tags: this.state.tags.length,
+        transactions: this.state.transactions.length,
+        recurringRules: this.state.recurringRules.length,
+        budgets: this.state.budgets.length,
+        goals: this.state.goals.length,
+      };
+    }
+
+    if (!commit) return outcome;
+    if (outcome.rejected.length) {
+      throw new Error(
+        `Import blocked: ${outcome.rejected.length} item(s) could not be imported, so nothing was imported.`,
+      );
+    }
+
+    const at = nowIso();
+    // Overwrites a tombstone (or, in `replace`, a live row) that already holds this id, bumping
+    // the revision instead of restarting it at 1, so the op log records a revival or an update
+    // and never a second "create" of the same entity.
+    const settle = <T extends FinanceEntity>(fresh: T, previous: ReadonlyMap<string, T>): T => {
+      const old = previous.get(fresh.id);
+      return old ? updateEntity(old, { ...fresh, deletedAt: null } as Partial<T>) : fresh;
+    };
+    const records: StoredEntity[] = [
+      ...retire(this.state.accounts, importedIds.accounts, at).map((entity) => ({ type: 'accounts' as const, entity })),
+      ...retire(this.state.categories, importedIds.categories, at).map((entity) => ({ type: 'categories' as const, entity })),
+      ...retire(this.state.tags, importedIds.tags, at).map((entity) => ({ type: 'tags' as const, entity })),
+      // A tombstone that kept its occurrence key would suppress that occurrence on every
+      // later load, so a schedule imported again after a replace would silently skip it. The
+      // key is cleared first, exactly as a schedule change does when it retires an occurrence.
+      ...retire(this.state.transactions, importedIds.transactions, at).map((entity) => ({
+        type: 'transactions' as const,
+        entity: entity.occurrenceKey ? { ...entity, occurrenceKey: null } : entity,
+      })),
+      ...retire(this.state.budgets, importedIds.budgets, at).map((entity) => ({ type: 'budgets' as const, entity })),
+      ...retire(this.state.budgetPeriods, new Set(), at).map((entity) => ({ type: 'budgetPeriods' as const, entity })),
+      ...retire(this.state.budgetAdjustments, new Set(), at).map((entity) => ({ type: 'budgetAdjustments' as const, entity })),
+      ...retire(this.state.goals, new Set(), at).map((entity) => ({ type: 'goals' as const, entity })),
+      ...retire(this.state.contributions, new Set(), at).map((entity) => ({ type: 'contributions' as const, entity })),
+      ...retire(this.state.recurringRules, importedIds.recurringRules, at).map((entity) => ({ type: 'recurringRules' as const, entity })),
+      ...newAccounts.map((fresh) => ({ type: 'accounts' as const, entity: settle(fresh, stored.accounts) })),
+      ...newCategories.map((fresh) => ({ type: 'categories' as const, entity: settle(fresh, stored.categories) })),
+      ...newTags.map((fresh) => ({ type: 'tags' as const, entity: settle(fresh, stored.tags) })),
+      ...newTransactions.map((fresh) => ({ type: 'transactions' as const, entity: settle(fresh, stored.transactions) })),
+      ...newBudgets.map((fresh) => ({ type: 'budgets' as const, entity: settle(fresh, stored.budgets) })),
+      ...newRules.map((fresh) => ({ type: 'recurringRules' as const, entity: settle(fresh, stored.recurringRules) })),
+    ];
+    // Nothing new (a re-import) writes nothing and captures no ops.
+    if (!records.length) {
+      outcome.committed = true;
+      return outcome;
+    }
+    await this.storage.putMany(records, this);
+    // Rehydrate rather than splice: an import touches up to nine entity types, revives
+    // tombstones, and (in `replace`) retires occurrence keys, all of which `hydrateFromStorage`
+    // already derives from the stored rows.
+    await this.hydrateFromStorage();
+    this.emit();
+    outcome.committed = true;
+    // Same catch-up `saveAccountNow` does, so imported schedules show their upcoming
+    // occurrences and imported budgets get their current period straight away.
+    try {
+      await this.generateRecurringNow(addRecurrence(todayLocal(), 'month', 1));
+    } catch {
+      // The import is already durable; reporting a failure now would misreport a successful
+      // import. The recurring catch-up re-runs on the next load anyway.
+    }
+    return outcome;
+  }
+
+  /**
+   * Runs `work` with `this.state` temporarily replaced by `patch` laid over the real one.
+   *
+   * The validators an import reuses (`validateRecurring`, `validateBudget`, `buildTransaction`,
+   * the safety asserts) all read `this.state`, and the entities they must be checked against do
+   * not exist yet — they are only proposed. This lets them run unchanged over the proposal
+   * without copying their rules, and without writing anything to the real snapshot.
+   *
+   * It is safe only because the swap is synchronous end to end: nothing can interleave, no
+   * listener is notified, and the original is restored in `finally` even when `work` throws.
+   * `work` must therefore never await; a promise is rejected outright, because by the time it
+   * settled the real state would be back and the awaited code would validate against the wrong
+   * one.
+   */
+  private withProspectiveState<T>(patch: Partial<FinanceState>, work: () => T): T {
+    const original = this.state;
+    this.state = { ...original, ...patch };
+    try {
+      const result = work();
+      if (result instanceof Promise) throw new Error('A prospective validation must be synchronous.');
+      return result;
+    } finally {
+      this.state = original;
+    }
+  }
+
   exportCsv() {
     const headers = ['date', 'type', 'status', 'title', 'amount', 'currency', 'account', 'destination_account', 'destination_amount', 'destination_base_amount_minor', 'category', 'tags', 'note', 'exchange_rate', 'base_amount_minor', 'transfer_id'];
     const rows = this.queryTransactions({ sort: 'oldest' }).map((transaction) => {
@@ -1855,6 +2574,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     additionalTagIds: string[] = [],
     expectedRevision?: number,
+    newId?: string,
   ) {
     this.assertDate(input.localDate);
     if (!TRANSACTION_TYPES.includes(input.kind)) throw new Error('Choose a valid transaction type.');
@@ -2073,8 +2793,10 @@ export class LocalFinanceRepository implements FinanceRepository {
       // that both foreground and run `generateRecurring` produce the *same* transaction
       // rather than two that a later merge has to notice and deduplicate. Manually entered
       // transactions have no occurrence key and stay random.
+      // `newId` lets an import supply the id it derived from the source record, so a re-import
+      // lands on the same row. It only applies to a new record; an occurrence id still wins.
       : createEntity({
-        id: value.occurrenceKey ? occurrenceTransactionId(value.occurrenceKey) : makeId(),
+        id: value.occurrenceKey ? occurrenceTransactionId(value.occurrenceKey) : (newId ?? makeId()),
         ...value,
       }) as TransactionRecord;
   }
@@ -2314,9 +3036,15 @@ export class LocalFinanceRepository implements FinanceRepository {
         periodStart,
         periodEnd,
         limitMinor: budget.limitMinor,
+        // A one-time adjustment is part of what the period had to spend, so an unspent bonus
+        // carries forward (and a deliberate cut is carried as a smaller remainder).
         rolloverMinor: budget.rollover && previous
           ? this.clampRollover(subtractMinor(
-            addMinor(previous.rolloverMinor, previous.limitMinor, `${budget.name} rollover`),
+            addMinor(
+              addMinor(previous.rolloverMinor, previous.limitMinor, `${budget.name} rollover`),
+              this.budgetAdjustmentTotal(budget.id, previous.periodStart, previous.periodEnd),
+              `${budget.name} rollover`,
+            ),
             this.budgetSpend(previous.filters, previous.periodStart, previous.periodEnd),
             `${budget.name} rollover`,
           ), budget.limitMinor)
@@ -2763,6 +3491,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       transactions,
       budgets,
       budgetPeriods,
+      budgetAdjustments,
       goals,
       contributions,
       recurringRules,
@@ -2776,6 +3505,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       transactions,
       budgets,
       budgetPeriods,
+      budgetAdjustments,
       goals,
       contributions,
       recurringRules,
@@ -2820,6 +3550,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     transactions,
     budgets,
     budgetPeriods,
+    budgetAdjustments,
     goals,
     contributions,
     recurringRules,
@@ -2946,6 +3677,12 @@ export class LocalFinanceRepository implements FinanceRepository {
       assertDate(period.periodEnd, 'Budget period end');
       assertMinor(period.limitMinor, 'Budget period limit', true);
       assertMinor(period.rolloverMinor, 'Budget period rollover');
+    }
+    for (const adjustment of budgetAdjustments) {
+      assertDate(adjustment.date, 'Budget adjustment date');
+      assertMinor(adjustment.amountMinor, 'Budget adjustment amount');
+      if (adjustment.amountMinor === 0) throw new Error('Budget adjustment amount cannot be zero.');
+      assertText(adjustment.note, 'Budget adjustment note');
     }
     for (const goal of goals) {
       assertEnum(goal.kind, GOAL_KINDS, 'Goal kind');

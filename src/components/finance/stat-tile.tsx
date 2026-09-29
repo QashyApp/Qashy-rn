@@ -65,6 +65,12 @@ export function StatTile({
 
   const content = (
     <View style={{ gap: space.xxs }}>
+      {icon && typeof value === 'string' ? (
+        // Value sits centred above the icon; a min-width box keeps it aligned to the icon's centre.
+        <View style={{ minWidth: 28, alignSelf: 'flex-start', alignItems: 'center' }}>
+          <AppText literal figure variant="figure" style={{ color: toneColor }}>{value}</AppText>
+        </View>
+      ) : null}
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
         {icon ? (
           <View
@@ -81,7 +87,7 @@ export function StatTile({
         ) : null}
         <AppText variant="caption" muted numberOfLines={1}>{label}</AppText>
       </View>
-      {typeof value === 'string' ? (
+      {icon && typeof value === 'string' ? null : typeof value === 'string' ? (
         <AppText literal figure variant="figure" style={{ color: toneColor }}>{value}</AppText>
       ) : value}
       {delta ? (

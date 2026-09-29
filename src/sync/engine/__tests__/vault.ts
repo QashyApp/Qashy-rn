@@ -360,6 +360,7 @@ export function normalize(state: FinanceState) {
     transactions: entry(state.transactions),
     budgets: entry(state.budgets),
     budgetPeriods: entry(state.budgetPeriods),
+    budgetAdjustments: entry(state.budgetAdjustments),
     goals: entry(state.goals),
     contributions: entry(state.contributions),
     recurringRules: entry(state.recurringRules),

@@ -19,11 +19,13 @@ export function useDashboard(month: string) {
     // Repository reads are synchronous; these references make their external-store inputs explicit.
     void state.accounts;
     void state.budgetPeriods;
+
+    void state.budgetAdjustments;
     void state.budgets;
     void state.categories;
     void state.exchangeRates;
     void state.settings;
     void state.transactions;
     return repository.getDashboard(startOfMonth(month), endOfMonth(month));
-  }, [repository, month, state.accounts, state.budgetPeriods, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
+  }, [repository, month, state.accounts, state.budgetPeriods, state.budgetAdjustments, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
 }

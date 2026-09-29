@@ -19,6 +19,7 @@
  */
 
 import type { Account, Budget, FinanceState, Goal, RecurringRule } from '@/domain/models';
+import { todayLocal } from '@/utils/date';
 import {
   BASE_CURRENCY,
   expectConverged,
@@ -204,6 +205,35 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
+    name: 'addBudgetAdjustment',
+    async run(device, tick) {
+      const budget = device.state.budgets.find((row) => !row.archived);
+      if (!budget) return false;
+      // Positive only: a cut is rejected when it would lower the limit below zero, and a
+      // property test that swallows rejections would hide a real one.
+      await device.repository.addBudgetAdjustment({
+        budgetId: budget.id,
+        amountMinor: 100 + tick,
+        note: `Bonus ${tick}`,
+      });
+      return true;
+    },
+  },
+  {
+    name: 'removeBudgetAdjustment',
+    async run(device) {
+      const today = todayLocal();
+      const adjustment = device.state.budgetAdjustments.find((row) =>
+        row.amountMinor > 0 &&
+        row.date === today &&
+        device.state.budgets.some((budget) => budget.id === row.budgetId && !budget.archived),
+      );
+      if (!adjustment) return false;
+      await device.repository.deleteBudgetAdjustment(adjustment.id);
+      return true;
+    },
+  },
+  {
     name: 'addGoalAndContribution',
     async run(device, tick) {
       const goal = await device.repository.saveGoal({
@@ -332,6 +362,14 @@ describe('convergence — three devices, random edits', () => {
       for (const budget of state.budgets) {
         await device.repository.saveBudget(inputOf(budget) as Budget, budget.id);
       }
+      const adjustable = state.budgets.find((budget) => !budget.archived);
+      if (adjustable) {
+        await device.repository.addBudgetAdjustment({
+          budgetId: adjustable.id,
+          amountMinor: 1_00,
+          note: 'After the merge',
+        });
+      }
       for (const goal of state.goals) {
         await device.repository.saveGoal(inputOf(goal) as Goal, goal.id);
       }
@@ -355,6 +393,49 @@ describe('convergence — three devices, random edits', () => {
     await sync(devices, 3);
     expectConverged(devices);
   }, 30_000);
+
+  it('counts one-time budget adjustments that two devices add while partitioned', async () => {
+    const [alice, bob] = await populatedVault(2);
+    const budget = await alice.repository.saveBudget({
+      name: 'Groceries',
+      icon: 'chart.pie',
+      color: '#E08C5A',
+      limitMinor: 50_000,
+      // Anchored long ago so the current window contains today whenever this runs.
+      period: { unit: 'month', interval: 1, anchorDate: '2020-01-01', endDate: null },
+      rollover: true,
+      filters: { accountIds: [], categoryIds: [], tagIds: [] },
+      categoryLimits: [],
+      archived: false,
+    });
+    await sync([alice, bob], 3);
+    const wire = alice.wireTo(bob);
+    wire.partition();
+
+    await alice.repository.addBudgetAdjustment({ budgetId: budget.id, amountMinor: 10_000, note: 'Bonus' });
+    await bob.repository.addBudgetAdjustment({ budgetId: budget.id, amountMinor: -2_500, note: 'Cut' });
+    await sync([alice, bob], 2);
+
+    expect(wire.heal()).toBeGreaterThan(0);
+    await settle();
+    await sync([alice, bob], 3);
+
+    const converged = expectConverged([alice, bob]);
+    expect(converged.budgetAdjustments).toHaveLength(2);
+    // Two create-only rows, not one register two devices fought over: neither add is lost.
+    for (const device of [alice, bob]) {
+      const [status] = device.repository.getBudgetStatuses(todayLocal());
+      expect(status).toMatchObject({ adjustmentMinor: 7_500, effectiveLimitMinor: 57_500 });
+      expect(device.errors).toEqual([]);
+    }
+
+    // Deleting on one device removes it everywhere.
+    const bonus = alice.state.budgetAdjustments.find((row) => row.amountMinor === 10_000)!;
+    await alice.repository.deleteBudgetAdjustment(bonus.id);
+    await sync([alice, bob], 3);
+    expectConverged([alice, bob]);
+    expect(bob.repository.getBudgetStatuses(todayLocal())[0].adjustmentMinor).toBe(-2_500);
+  });
 
   it('loses nothing across a partition and a heal', async () => {
     const [alice, bob] = await populatedVault(2);

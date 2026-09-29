@@ -15,6 +15,7 @@ import {
 import {
   account,
   budget,
+  budgetAdjustment,
   budgetPeriod,
   category,
   contribution,
@@ -35,6 +36,7 @@ const SAMPLES: Record<EntityType, FinanceEntity> = {
   transactions: transaction({ id: 'txn-1' }),
   budgets: budget({ id: 'bud-1' }),
   budgetPeriods: budgetPeriod({ id: 'per-1' }),
+  budgetAdjustments: budgetAdjustment({ id: 'adj-1' }),
   goals: goal({ id: 'goal-1' }),
   contributions: contribution({ id: 'con-1' }),
   recurringRules: recurringRule({ id: 'rule-1' }),

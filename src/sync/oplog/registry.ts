@@ -183,6 +183,19 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
     categoryLimits: group('snapshot'),
   }),
 
+  /**
+   * A one-time change to a period's limit. Immutable once created — the UI only adds and
+   * deletes — so every field is create-only except `note`, and a delete is a tombstone.
+   * Two devices adding one concurrently produce two rows that both count, which is the
+   * reason this is an entity of its own rather than a register on `budgetPeriods`.
+   */
+  budgetAdjustments: spec({
+    budgetId: CREATE_ONLY,
+    date: CREATE_ONLY,
+    amountMinor: CREATE_ONLY,
+    note: LWW,
+  }),
+
   goals: spec({
     name: LWW,
     kind: LWW,

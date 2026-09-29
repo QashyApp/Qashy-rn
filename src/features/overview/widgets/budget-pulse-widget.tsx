@@ -30,7 +30,7 @@ export function BudgetPulseWidget({ card, month }: WidgetProps) {
   const budgetStatuses = useMemo(
     () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
-    [repository, today, state.budgets, state.budgetPeriods, state.transactions, state.categories],
+    [repository, today, state.budgets, state.budgetPeriods, state.budgetAdjustments, state.transactions, state.categories],
   );
   const selected = budgetId ? budgetStatuses.find((status) => status.budget.id === budgetId) : undefined;
 
@@ -88,7 +88,7 @@ export function BudgetPulseConfigSheet({ card, onConfigure }: WidgetConfigSheetP
   const budgetStatuses = useMemo(
     () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
-    [repository, today, state.budgets, state.budgetPeriods, state.transactions, state.categories],
+    [repository, today, state.budgets, state.budgetPeriods, state.budgetAdjustments, state.transactions, state.categories],
   );
   const budgetId = typeof card.config.budgetId === 'string' ? card.config.budgetId : '';
 

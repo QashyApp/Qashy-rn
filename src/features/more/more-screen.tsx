@@ -39,13 +39,15 @@ export function MoreScreen() {
   const summary = useMemo(() => {
     void state.accounts;
     void state.budgetPeriods;
+
+    void state.budgetAdjustments;
     void state.budgets;
     void state.categories;
     void state.exchangeRates;
     void state.settings;
     void state.transactions;
     return repository.getDashboard(startOfMonth(), endOfMonth());
-  }, [repository, state.accounts, state.budgetPeriods, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
+  }, [repository, state.accounts, state.budgetPeriods, state.budgetAdjustments, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
   const activeAccounts = state.accounts.filter((item) => !item.archived);
   const archivedAccounts = state.accounts.filter((item) => item.archived);
   const archivedCategories = state.categories.filter((item) => item.archived);
@@ -184,7 +186,6 @@ export function MoreScreen() {
             <SectionHeader title="App" />
             <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
               <SettingsRow title="Appearance" subtitle="Theme, Material You, and accent" icon="paintbrush" onPress={() => router.push('/appearance')} />
-              <SettingsRow title="Privacy" subtitle="Local-first · no account · no tracking" icon="checkmark" />
               {/* Dev-only component gallery; the route itself redirects away in production
                   builds (see src/app/kitchen-sink.tsx), but the row is also hidden there so
                   it never shows up as a dead end for a real user. */}
