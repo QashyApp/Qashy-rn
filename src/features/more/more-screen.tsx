@@ -10,6 +10,7 @@ import { ScreenContainer } from '@/components/ui/screen-container';
 import { SectionHeader } from '@/components/ui/section-header';
 import { SettingsRow } from '@/components/ui/settings-row';
 import { StatusPill } from '@/components/ui/status-pill';
+import { BatchDeleteBar, useBatchDelete } from '@/features/more/use-batch-delete';
 import { useLocalization } from '@/localization/localization';
 import { summarizeSync } from '@/features/sync/sync-summary';
 import { useExchangeRateStatus } from '@/providers/exchange-rate-provider';
@@ -54,6 +55,28 @@ export function MoreScreen() {
   const recurring = state.recurringRules;
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const activeCategories = state.categories.filter((item) => !item.archived);
+  const accountSelection = useBatchDelete({
+    type: 'accounts',
+    liveIds: activeAccounts.map((item) => item.id),
+    confirmTitle: (count) => count === 1 ? 'Delete 1 account?' : `Delete ${count} accounts?`,
+    confirmMessage: 'Accounts with transactions, schedules, budgets, or goals attached keep their history and are archived instead of erased.',
+    errorTitle: 'Couldn’t delete accounts',
+  });
+  const categorySelection = useBatchDelete({
+    type: 'categories',
+    liveIds: activeCategories.map((item) => item.id),
+    confirmTitle: (count) => count === 1 ? 'Delete 1 category?' : `Delete ${count} categories?`,
+    confirmMessage: 'Transactions in these categories become uncategorized, and the categories are removed from budgets and goals.',
+    errorTitle: 'Couldn’t delete categories',
+  });
+  const ruleSelection = useBatchDelete({
+    type: 'recurringRules',
+    liveIds: recurring.map((item) => item.id),
+    confirmTitle: (count) => count === 1 ? 'Delete 1 automation?' : `Delete ${count} automations?`,
+    confirmMessage: 'They will stop generating transactions, and upcoming unconfirmed ones are removed. Transactions already posted are kept.',
+    errorTitle: 'Couldn’t delete automations',
+  });
 
   // Deliberately not memoized: the whole point of this row is that "Relay unreachable" and
   // "Last synced 2 hours ago" are current when the screen is looked at, and a clock value in a
@@ -126,22 +149,42 @@ export function MoreScreen() {
         </Card>
         <View style={{ flexDirection: wide ? 'row' : 'column', gap: space.xl, alignItems: 'flex-start' }}>
           <View style={{ flex: wide ? 1 : undefined, width: '100%', gap: space.md }}>
-            <SectionHeader title="Accounts" action="Add" onAction={() => router.push('/account')} />
+            <SectionHeader
+              title="Accounts"
+              action={accountSelection.selecting ? undefined : 'Add'}
+              onAction={() => router.push('/account')}
+              secondaryAction={activeAccounts.length ? (accountSelection.selecting ? 'Done selecting' : 'Select') : undefined}
+              onSecondaryAction={accountSelection.toggleMode}
+            />
             <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
               {activeAccounts.map((account) => {
                 const balance = summary.accountBalances.find((item) => item.account.id === account.id)?.balanceMinor ?? account.openingBalanceMinor;
-                return <SettingsRow key={account.id} literal title={account.name} subtitle={`${t(accountTypeLabel(account.type))} · ${account.currency}`} value={formatMoney(balance, account.currency, state.settings.locale)} icon={accountTypeIcon(account.type)} color={account.color} onPress={() => router.push({ pathname: '/account', params: { id: account.id } })} />;
+                return <SettingsRow key={account.id} literal title={account.name} subtitle={`${t(accountTypeLabel(account.type))} · ${account.currency}`} value={formatMoney(balance, account.currency, state.settings.locale)} icon={accountTypeIcon(account.type)} color={account.color} selected={accountSelection.selecting ? accountSelection.selectedIds.includes(account.id) : undefined} disabled={accountSelection.deleting} onPress={() => accountSelection.selecting ? accountSelection.toggle(account.id) : router.push({ pathname: '/account', params: { id: account.id } })} />;
               })}
             </Card>
+            {accountSelection.selecting ? <BatchDeleteBar count={accountSelection.liveSelectedCount} busy={accountSelection.deleting} onDelete={accountSelection.deleteSelected} /> : null}
 
-            <SectionHeader title="Categories" action="Add" onAction={() => router.push('/category')} />
+            <SectionHeader
+              title="Categories"
+              action={categorySelection.selecting ? undefined : 'Add'}
+              onAction={() => router.push('/category')}
+              secondaryAction={activeCategories.length ? (categorySelection.selecting ? 'Done selecting' : 'Select') : undefined}
+              onSecondaryAction={categorySelection.toggleMode}
+            />
             <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
-              {state.categories.filter((item) => !item.archived).map((category) => <SettingsRow key={category.id} literal title={category.name} subtitle={t(categoryKindLabel(category.kind))} icon={category.icon} color={category.color} onPress={() => router.push({ pathname: '/category', params: { id: category.id } })} />)}
+              {activeCategories.map((category) => <SettingsRow key={category.id} literal title={category.name} subtitle={t(categoryKindLabel(category.kind))} icon={category.icon} color={category.color} selected={categorySelection.selecting ? categorySelection.selectedIds.includes(category.id) : undefined} disabled={categorySelection.deleting} onPress={() => categorySelection.selecting ? categorySelection.toggle(category.id) : router.push({ pathname: '/category', params: { id: category.id } })} />)}
             </Card>
+            {categorySelection.selecting ? <BatchDeleteBar count={categorySelection.liveSelectedCount} busy={categorySelection.deleting} onDelete={categorySelection.deleteSelected} /> : null}
           </View>
 
           <View style={{ flex: wide ? 1 : undefined, width: '100%', gap: space.md }}>
-            <SectionHeader title="Automation" action="New recurring" onAction={() => router.push('/recurring')} />
+            <SectionHeader
+              title="Automation"
+              action={ruleSelection.selecting ? undefined : 'New recurring'}
+              onAction={() => router.push('/recurring')}
+              secondaryAction={recurring.length ? (ruleSelection.selecting ? 'Done selecting' : 'Select') : undefined}
+              onSecondaryAction={ruleSelection.toggleMode}
+            />
             <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
               {recurring.length ? recurring.map((rule) => {
                 const ended = Boolean(rule.endDate && rule.nextDueDate > rule.endDate);
@@ -154,9 +197,12 @@ export function MoreScreen() {
                 const foreignSuffix = rule.template.foreign
                   ? ` · ${formatMoney(rule.template.foreign.amountMinor, rule.template.foreign.currency, state.settings.locale)}`
                   : '';
-                return <SettingsRow key={rule.id} literal title={rule.template.title} subtitle={`${frequency} · ${t(status)}${foreignSuffix}`} value={formatMoney(rule.template.amountMinor, rule.template.currency, state.settings.locale)} icon="repeat" onPress={() => router.push({ pathname: '/recurring', params: { id: rule.id } })} />;
+                return <SettingsRow key={rule.id} literal title={rule.template.title} subtitle={`${frequency} · ${t(status)}${foreignSuffix}`} value={formatMoney(rule.template.amountMinor, rule.template.currency, state.settings.locale)} icon="repeat" selected={ruleSelection.selecting ? ruleSelection.selectedIds.includes(rule.id) : undefined} disabled={ruleSelection.deleting} onPress={() => ruleSelection.selecting
+                  ? ruleSelection.toggle(rule.id)
+                  : router.push({ pathname: '/recurring', params: { id: rule.id } })} />;
               }) : <View style={{ paddingVertical: space.md }}><AppText variant="caption" muted>Subscriptions and scheduled income will appear here.</AppText></View>}
             </Card>
+            {ruleSelection.selecting ? <BatchDeleteBar count={ruleSelection.liveSelectedCount} busy={ruleSelection.deleting} onDelete={ruleSelection.deleteSelected} /> : null}
 
             {archivedAccounts.length || archivedCategories.length ? (
               <>

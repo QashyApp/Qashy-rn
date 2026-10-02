@@ -16,6 +16,7 @@ export function SettingsRow({
   tone = 'default',
   disabled = false,
   literal = false,
+  selected,
   onPress,
 }: {
   title: string;
@@ -32,6 +33,8 @@ export function SettingsRow({
    * site before composing it in.
    */
   literal?: boolean;
+  /** When defined the row is in a multi-select list: a check marker replaces the chevron. */
+  selected?: boolean;
   onPress?: () => void;
 }) {
   const theme = useQashyTheme();
@@ -56,7 +59,7 @@ export function SettingsRow({
     <MotionPressable
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={onPress ? 'button' : undefined}
-      accessibilityState={onPress ? { disabled } : undefined}
+      accessibilityState={onPress ? (selected === undefined ? { disabled } : { disabled, selected }) : undefined}
       onPress={onPress}
       disabled={!onPress || disabled}
       pressedScale={0.985}
@@ -94,7 +97,23 @@ export function SettingsRow({
           {value}
         </AppText>
       ) : null}
-      {onPress ? <AppIcon name="chevron.right" color={theme.textMuted} size={17} /> : null}
+      {selected !== undefined ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 12,
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 2,
+            borderColor: selected ? theme.accent : theme.textMuted,
+            backgroundColor: selected ? theme.accent : 'transparent',
+          }}>
+          {selected ? <AppIcon name="checkmark" color={theme.staticSurface} size={14} /> : null}
+        </View>
+      ) : onPress ? <AppIcon name="chevron.right" color={theme.textMuted} size={17} /> : null}
     </MotionPressable>
   );
 }

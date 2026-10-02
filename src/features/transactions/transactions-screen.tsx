@@ -71,6 +71,7 @@ export function TransactionsScreen() {
   const [kind, setKind] = useState<KindFilter>('all');
   const { visibility: fabVisibility, onScroll } = useScrollHide();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -200,6 +201,20 @@ export function TransactionsScreen() {
       showError('Couldn’t delete transactions', errorMessage(reason, 'Try again.'));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const resolveUpcoming = async (id: string, action: 'skip' | 'confirm') => {
+    if (resolvingId) return;
+    setResolvingId(id);
+    try {
+      await (action === 'skip' ? repository.skipUpcoming(id) : repository.confirmUpcoming(id));
+      if (action === 'confirm') hapticSuccess();
+      else hapticSelection();
+    } catch (reason) {
+      showError(action === 'skip' ? 'Couldn’t skip this item' : 'Couldn’t mark this item paid', errorMessage(reason, 'Try again.'));
+    } finally {
+      setResolvingId(null);
     }
   };
 
@@ -422,6 +437,12 @@ export function TransactionsScreen() {
                   }}
                   onPress={selectionMode ? () => toggleSelected(item.id) : undefined}
                 />
+                {item.status === 'upcoming' && !selectionMode ? (
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm, paddingBottom: space.xs }}>
+                    <TextButton title="Skip" tone="muted" disabled={resolvingId !== null} onPress={() => resolveUpcoming(item.id, 'skip')} />
+                    <TextButton title="Mark paid" disabled={resolvingId !== null} onPress={() => resolveUpcoming(item.id, 'confirm')} />
+                  </View>
+                ) : null}
               </View>
             </MotionView>
           );
@@ -505,7 +526,7 @@ export function TransactionsScreen() {
                     </ScrollView>
                   </>
                 )}
-                <ActionButton title="Delete selected" variant="danger" disabled={busy} onPress={deleteSelected} />
+                <ActionButton title="Delete selected" icon="trash" variant="danger" disabled={busy} onPress={deleteSelected} />
               </>
             ) : <AppText variant="caption" muted>Choose one or more transactions below.</AppText>}
           </View>

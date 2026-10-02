@@ -224,7 +224,7 @@ export function GoalFormScreen() {
                   </View>
                   <View style={{ flexDirection: 'row' }}>
                     <TextButton title="Edit" accessibilityLabel={t(`Edit contribution ${amountLabel}`)} onPress={() => editManualContribution(item)} disabled={saving} />
-                    <TextButton title="Delete" tone="danger" accessibilityLabel={t(`Delete contribution ${amountLabel}`)} onPress={() => removeManualContribution(item)} disabled={saving} />
+                    <TextButton title="Delete" icon="trash" tone="danger" accessibilityLabel={t(`Delete contribution ${amountLabel}`)} onPress={() => removeManualContribution(item)} disabled={saving} />
                   </View>
                 </View>
               </View>
@@ -241,7 +241,7 @@ export function GoalFormScreen() {
         </Card>
       ) : null}
       <ActionButton size="large" title={saving ? 'Saving…' : existing ? 'Save goal' : 'Create goal'} icon="checkmark" onPress={save} disabled={saving || !canSave} busy={saving} />
-      {existing ? <ActionButton title="Delete goal" variant="danger" onPress={remove} disabled={saving} /> : null}
+      {existing ? <ActionButton title="Delete goal" icon="trash" variant="danger" onPress={remove} disabled={saving} /> : null}
     </FormScreen>
   );
 }

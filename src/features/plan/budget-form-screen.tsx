@@ -168,7 +168,7 @@ export function BudgetFormScreen() {
       </Card>
 
       <ActionButton size="large" title={saving ? 'Saving…' : existing ? 'Save budget' : 'Create budget'} icon="checkmark" onPress={save} disabled={saving || !canSave} busy={saving} />
-      {existing ? <ActionButton title="Delete budget" variant="danger" onPress={remove} disabled={saving} /> : null}
+      {existing ? <ActionButton title="Delete budget" icon="trash" variant="danger" onPress={remove} disabled={saving} /> : null}
     </FormScreen>
   );
 }

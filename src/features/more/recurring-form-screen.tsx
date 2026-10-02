@@ -332,7 +332,7 @@ export function RecurringFormScreen() {
       </Card>
 
       <ActionButton title={busy ? 'Saving…' : existing ? 'Save schedule' : 'Create schedule'} icon="checkmark" size="large" onPress={save} disabled={busy || !canSave} busy={busy} />
-      {existing ? <ActionButton title="Delete schedule" variant="danger" onPress={remove} disabled={busy} /> : null}
+      {existing ? <ActionButton title="Delete schedule" icon="trash" variant="danger" onPress={remove} disabled={busy} /> : null}
     </FormScreen>
   );
 }

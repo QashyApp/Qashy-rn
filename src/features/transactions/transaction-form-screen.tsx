@@ -628,7 +628,7 @@ export function TransactionFormScreen() {
         <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>{rateMissingMessage ?? saveError}</AppText>
       ) : null}
       <ActionButton title={busy ? 'Saving…' : existing ? 'Save changes' : 'Add transaction'} icon="checkmark" size="large" onPress={save} disabled={busy || !canSave} busy={busy} />
-      {existing ? <ActionButton title="Delete transaction" variant="danger" onPress={remove} disabled={busy} /> : null}
+      {existing ? <ActionButton title="Delete transaction" icon="trash" variant="danger" onPress={remove} disabled={busy} /> : null}
     </FormScreen>
   );
 }

@@ -153,6 +153,7 @@ export function BudgetAdjustmentScreen() {
                 </View>
                 <TextButton
                   title="Delete"
+                  icon="trash"
                   tone="danger"
                   accessibilityLabel={t(`Delete adjustment ${amountLabel}`)}
                   onPress={() => remove(item)}

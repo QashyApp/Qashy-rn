@@ -73,6 +73,7 @@ import {
 } from '@/utils/date';
 import { budgetPeriodId, externalImportId, fetchedRateId, occurrenceTransactionId } from '@/utils/deterministic-id';
 import { createEntity, makeId, nowIso, updateEntity } from '@/utils/entity';
+import { isValidIconId } from '@/utils/icon-id';
 import { disambiguateNames, normalizeName } from '@/utils/naming';
 import { escapeCsv } from '@/utils/csv';
 import { validateLocale } from '@/utils/form-validation';
@@ -534,6 +535,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const name = input.name.trim() || 'Category';
     this.assertUniqueName('categories', name, id);
     this.assertColor(input.color);
+    if (!isValidIconId(input.icon)) throw new Error('Choose a valid icon.');
     if (!CATEGORY_KINDS.includes(input.kind)) throw new Error('Choose a valid category kind.');
     const existing = this.findExisting(this.state.categories, id, 'category');
     this.assertExpectedRevision(existing, input, expectedRevision);
@@ -1572,11 +1574,17 @@ export class LocalFinanceRepository implements FinanceRepository {
         .filter((item) => !item.deletedAt && item.transactionId !== null && deletedIds.has(item.transactionId))
         .map((item) => updateEntity(item, { deletedAt: nowIso() }))
       : [];
-    const releasedTransactions = type === 'recurringRules'
-      ? this.state.transactions
-        .filter((item) => !item.deletedAt && item.recurringRuleId !== null && deletedIds.has(item.recurringRuleId))
-        .map((item) => updateEntity(item, { recurringRuleId: null }))
+    // Unconfirmed occurrences exist only because the rule does, so they go with it. Posted and
+    // skipped ones are history and stay, detached from the rule.
+    const ruleOccurrences = type === 'recurringRules'
+      ? this.state.transactions.filter((item) => !item.deletedAt && item.recurringRuleId !== null && deletedIds.has(item.recurringRuleId))
       : [];
+    const discardedUpcoming = ruleOccurrences
+      .filter((item) => item.status === 'upcoming')
+      .map((item) => updateEntity(item, { deletedAt: nowIso() }));
+    const releasedTransactions = ruleOccurrences
+      .filter((item) => item.status !== 'upcoming')
+      .map((item) => updateEntity(item, { recurringRuleId: null }));
     const untaggedTransactions = type === 'tags'
       ? this.state.transactions
         .filter((item) => !item.deletedAt && item.tagIds.some((tagId) => deletedIds.has(tagId)))
@@ -1639,6 +1647,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       ...budgetPeriods.map((entity) => ({ type: 'budgetPeriods' as const, entity })),
       ...budgetAdjustments.map((entity) => ({ type: 'budgetAdjustments' as const, entity })),
       ...transactionChanges.map((entity) => ({ type: 'transactions' as const, entity })),
+      ...discardedUpcoming.map((entity) => ({ type: 'transactions' as const, entity })),
       ...detachedCategories.map((entity) => ({ type: 'categories' as const, entity })),
       ...budgetChanges.map((entity) => ({ type: 'budgets' as const, entity })),
       ...goalChanges.map((entity) => ({ type: 'goals' as const, entity })),
@@ -1662,6 +1671,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (transactionChanges.length) {
       const edits = new Map(transactionChanges.map((item) => [item.id, item]));
       nextState.transactions = nextState.transactions.map((item) => edits.get(item.id) ?? item);
+    }
+    if (discardedUpcoming.length) {
+      const discarded = new Set(discardedUpcoming.map((item) => item.id));
+      nextState.transactions = nextState.transactions.filter((item) => !discarded.has(item.id));
+      discardedUpcoming.forEach((item) => {
+        if (item.occurrenceKey) this.deletedOccurrenceKeys.add(item.occurrenceKey);
+      });
     }
     if (orphanedContributions.length) {
       const retired = new Set(orphanedContributions.map((item) => item.id));

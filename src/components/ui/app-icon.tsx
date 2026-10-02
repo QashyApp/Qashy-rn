@@ -3,7 +3,9 @@
 // and on web all of that lands in the offline precache too.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Image } from 'expo-image';
-import { View, type ColorValue } from 'react-native';
+import { Text, View, type ColorValue } from 'react-native';
+
+import { parseIconId } from '@/utils/icon-id';
 
 type IoniconName = keyof typeof Ionicons.glyphMap;
 
@@ -115,6 +117,31 @@ const IONICON_BY_SF_NAME: Record<string, IoniconName> = {
 };
 
 export function AppIcon({ name, color, size = 20 }: { name: string; color: ColorValue; size?: number }) {
+  const parsed = parseIconId(name);
+  if (parsed.kind === 'emoji') {
+    // Emoji carry their own colors, so the tint is deliberately ignored.
+    return (
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <Text allowFontScaling={false} style={{ fontSize: size * 0.85, lineHeight: size, textAlign: 'center' }}>{parsed.emoji}</Text>
+      </View>
+    );
+  }
+  if (parsed.kind === 'ion') {
+    // Drawn with Ionicons on every platform, iOS included, so a catalog icon looks the same
+    // on every device a vault syncs to.
+    const glyph = parsed.glyph in Ionicons.glyphMap ? (parsed.glyph as IoniconName) : 'help-circle-outline';
+    return (
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={glyph} size={size} color={color} />
+      </View>
+    );
+  }
   if (process.env.EXPO_OS === 'ios') {
     return (
       <Image

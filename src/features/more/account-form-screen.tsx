@@ -112,15 +112,15 @@ export function AccountFormScreen() {
     }
   };
 
-  const archive = async () => {
+  const remove = async () => {
     if (!existing || busy) return;
-    if (!(await confirmDestructive({ title: `Archive ${existing.name}?`, message: 'The account is hidden from lists and pickers, but any balance it holds still counts toward your totals. You can restore it from the Archived section in More.', confirmLabel: 'Archive' }))) return;
+    if (!(await confirmDestructive({ title: `Delete ${existing.name}?`, message: 'An account with transactions, schedules, budgets, or goals attached keeps its history, so it is removed from lists and pickers rather than erased.' }))) return;
     setBusy(true);
     try {
-      await repository.saveAccount({ ...existing, archived: true }, existing.id, expectedRevision);
+      await repository.deleteEntities('accounts', [existing.id]);
       closeToOwner();
     } catch (reason) {
-      showError('Couldn’t archive account', errorMessage(reason, 'Try again.'));
+      showError('Couldn’t delete account', errorMessage(reason, 'Try again.'));
     } finally {
       setBusy(false);
     }
@@ -185,8 +185,8 @@ export function AccountFormScreen() {
         </Card>
       ) : null}
       <ActionButton title={busy ? 'Saving…' : existing ? 'Save account' : 'Create account'} icon="checkmark" size="large" onPress={save} disabled={busy || !canSave} busy={busy} />
-      {existing && state.accounts.filter((item) => !item.archived).length > 1 ? <ActionButton title="Archive account" variant="danger" onPress={archive} disabled={busy} /> : null}
-      {existing && state.accounts.filter((item) => !item.archived).length <= 1 ? <AppText variant="caption" muted>This is your only account, so it can’t be archived. Add another account first.</AppText> : null}
+      {existing && state.accounts.filter((item) => !item.archived).length > 1 ? <ActionButton title="Delete account" icon="trash" variant="danger" onPress={remove} disabled={busy} /> : null}
+      {existing && state.accounts.filter((item) => !item.archived).length <= 1 ? <AppText variant="caption" muted>This is your only account, so it can’t be deleted. Add another account first.</AppText> : null}
     </FormScreen>
   );
 }

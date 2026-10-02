@@ -11,6 +11,7 @@ import { ChoiceChip } from '@/components/ui/choice-chip';
 import { ColorSwatch } from '@/components/ui/color-swatch';
 import { FormField } from '@/components/ui/form-field';
 import { FormScreen } from '@/components/ui/form-screen';
+import { IconPickerField } from '@/components/ui/icon-picker-field';
 import type { CategoryKind } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
@@ -20,33 +21,7 @@ import { hapticSuccess } from '@/utils/haptics';
 import { CATEGORY_PALETTE, radius, space, toneColors } from '@/theme/tokens';
 
 const COLORS = CATEGORY_PALETTE;
-const ICONS = {
-  expense: [
-    ['cart', 'Groceries'],
-    ['fork.knife', 'Dining'],
-    ['car', 'Transport'],
-    ['house', 'Home'],
-    ['heart', 'Health'],
-    ['sparkles', 'Fun'],
-    ['bag', 'Shopping'],
-    ['bus', 'Transit'],
-    ['airplane', 'Travel'],
-    ['gift', 'Gifts'],
-    ['graduationcap', 'Education'],
-    ['gamecontroller', 'Games'],
-    ['pawprint', 'Pets'],
-    ['bolt', 'Utilities'],
-    ['tshirt', 'Clothing'],
-  ],
-  income: [
-    ['banknote', 'Pay'],
-    ['plus.circle', 'Other income'],
-    ['briefcase', 'Business'],
-    ['gift', 'Gift'],
-    ['chart.line.uptrend.xyaxis', 'Investments'],
-    ['creditcard', 'Refund'],
-  ],
-} as const;
+const DEFAULT_ICON: Record<CategoryKind, string> = { expense: 'ion:cart-outline', income: 'ion:cash-outline' };
 
 export function CategoryFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -59,7 +34,7 @@ export function CategoryFormScreen() {
   const [name, setName] = useState(existing?.name ?? '');
   const [kind, setKind] = useState<CategoryKind>(existing?.kind ?? 'expense');
   const [color, setColor] = useState<string>(existing?.color ?? COLORS[0]);
-  const [icon, setIcon] = useState(existing?.icon ?? ICONS[existing?.kind ?? 'expense'][0][0]);
+  const [icon, setIcon] = useState(existing?.icon ?? DEFAULT_ICON[existing?.kind ?? 'expense']);
   const [parentId, setParentId] = useState(existing?.parentId ?? '');
   const [busy, setBusy] = useState(false);
   const { closeToOwner } = useFormSheet({
@@ -108,15 +83,15 @@ export function CategoryFormScreen() {
     }
   };
 
-  const archive = async () => {
+  const remove = async () => {
     if (!existing || busy) return;
-    if (!(await confirmDestructive({ title: `Archive ${existing.name}?`, message: 'The category is hidden from lists and pickers. You can restore it from the Archived section in More.', confirmLabel: 'Archive' }))) return;
+    if (!(await confirmDestructive({ title: `Delete ${existing.name}?`, message: 'Transactions in this category become uncategorized, and it is removed from budgets and goals.' }))) return;
     setBusy(true);
     try {
-      await repository.saveCategory({ ...existing, archived: true }, existing.id, expectedRevision);
+      await repository.deleteEntities('categories', [existing.id]);
       closeToOwner();
     } catch (reason) {
-      showError('Couldn’t archive category', errorMessage(reason, 'Try again.'));
+      showError('Couldn’t delete category', errorMessage(reason, 'Try again.'));
     } finally {
       setBusy(false);
     }
@@ -152,13 +127,11 @@ export function CategoryFormScreen() {
           if (item === kind) return;
           setKind(item);
           setParentId('');
-          setIcon(ICONS[item][0][0]);
+          // Keep a deliberately chosen icon; only swap the untouched default for the new kind.
+          if (icon === DEFAULT_ICON[kind]) setIcon(DEFAULT_ICON[item]);
         }} /></View>)}</View>
         {kindLocked ? <AppText variant="caption" muted>Kind is locked because transactions, budgets, goals, or schedules reference this category.</AppText> : null}
-        <AppText variant="label">Icon</AppText>
-        <View accessibilityLabel={t('Category icon')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {ICONS[kind].map(([value, label]) => <ChoiceChip key={value} label={label} icon={value} selected={icon === value} onPress={() => setIcon(value)} />)}
-        </View>
+        <IconPickerField label="Icon" value={icon} onChange={setIcon} kind={kind} previewColor={preview.onContainer} previewBackground={preview.container} />
         <AppText variant="label">Color</AppText>
         <View accessibilityLabel={t('Category color')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>{COLORS.map((item) => <ColorSwatch key={item} color={item} selected={color === item} label={`Use ${item} category color`} onPress={() => setColor(item)} />)}</View>
         <AppText variant="label">Parent category</AppText>
@@ -166,7 +139,7 @@ export function CategoryFormScreen() {
         {hasChildren ? <AppText variant="caption" muted>A category with child categories must stay at the top level.</AppText> : null}
       </Card>
       <ActionButton title={busy ? 'Saving…' : existing ? 'Save category' : 'Create category'} icon="checkmark" size="large" onPress={save} disabled={busy || Boolean(nameError)} busy={busy} />
-      {existing ? <ActionButton title="Archive category" variant="danger" onPress={archive} disabled={busy} /> : null}
+      {existing ? <ActionButton title="Delete category" icon="trash" variant="danger" onPress={remove} disabled={busy} /> : null}
     </FormScreen>
   );
 }

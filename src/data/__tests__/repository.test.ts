@@ -1449,10 +1449,15 @@ describe('FinanceRepository contract', () => {
       const account = repository.getSnapshot().accounts[0];
       const rule = await repository.saveRecurringRule({
         template: { kind: 'expense', title: 'Streaming', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-20', endDate: null, nextDueDate: '2026-07-20', autoPost: false, active: true,
+        unit: 'week', interval: 1, startDate: '2026-07-20', endDate: null, nextDueDate: '2026-07-20', autoPost: false, active: true,
       });
       const generated = repository.getSnapshot().transactions.find((item) => item.recurringRuleId === rule.id)!;
       expect(generated).toBeDefined();
+
+      // Posted history is kept, detached from the rule; unconfirmed ones go with it.
+      await repository.confirmUpcoming(generated.id);
+      const upcoming = repository.getSnapshot().transactions.filter((item) => item.recurringRuleId === rule.id && item.status === 'upcoming');
+      expect(upcoming.length).toBeGreaterThan(0);
 
       await repository.deleteEntities('recurringRules', [rule.id]);
       expect(repository.getSnapshot().recurringRules).toHaveLength(0);
@@ -1460,10 +1465,16 @@ describe('FinanceRepository contract', () => {
         id: generated.id,
         recurringRuleId: null,
       });
+      for (const item of upcoming) {
+        expect(repository.getSnapshot().transactions.find((entry) => entry.id === item.id)).toBeUndefined();
+      }
 
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
       expect(reloaded.getSnapshot().transactions.find((item) => item.id === generated.id)?.recurringRuleId).toBeNull();
+      for (const item of upcoming) {
+        expect(reloaded.getSnapshot().transactions.find((entry) => entry.id === item.id)).toBeUndefined();
+      }
     } finally {
       jest.useRealTimers();
     }
@@ -1689,6 +1700,15 @@ describe('FinanceRepository contract', () => {
     await expect(repository.saveCategory({ ...parent, parentId: otherParent.id }, parent.id))
       .rejects.toThrow('child categories');
     expect(repository.getSnapshot().categories.find((item) => item.id === parent.id)?.parentId).toBeNull();
+  });
+
+  it('accepts catalog and emoji category icons and rejects malformed ones', async () => {
+    const { repository } = await createRepository();
+    const base = { kind: 'expense' as const, color: '#5966E9', parentId: null, archived: false };
+    await expect(repository.saveCategory({ ...base, name: 'Catalog', icon: 'ion:beer-outline' })).resolves.toMatchObject({ icon: 'ion:beer-outline' });
+    await expect(repository.saveCategory({ ...base, name: 'Emoji', icon: 'emoji:🍕' })).resolves.toMatchObject({ icon: 'emoji:🍕' });
+    await expect(repository.saveCategory({ ...base, name: 'Bad', icon: 'emoji:ab' })).rejects.toThrow('valid icon');
+    await expect(repository.saveCategory({ ...base, name: 'Empty', icon: '' })).rejects.toThrow('valid icon');
   });
 
   it('validates a reactivated foreign schedule at its next due date', async () => {

@@ -93,7 +93,7 @@ export function PlanScreen() {
         <PageHeading title="Plan" subtitle="Set flexible limits and track progress toward meaningful goals." />
 
         <View style={{ gap: 10 }}>
-          <SectionHeader title="Budgets" />
+          <SectionHeader title="Budgets" action="Add budget" actionIcon="plus" onAction={() => router.push('/budget')} />
           {budgets.length ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
               {budgets.map((status) => (
@@ -116,7 +116,7 @@ export function PlanScreen() {
         </View>
 
         <View style={{ gap: 10 }}>
-          <SectionHeader title="Goals" />
+          <SectionHeader title="Goals" action="Add goal" actionIcon="plus" onAction={() => router.push('/goal')} />
           {goals.length ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
               {goals.map((goal) => (

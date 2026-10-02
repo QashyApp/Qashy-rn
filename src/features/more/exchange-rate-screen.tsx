@@ -110,7 +110,7 @@ export function ExchangeRateScreen() {
         <FormField label="Effective date" value={effectiveDate} onChangeText={setEffectiveDate} placeholder="YYYY-MM-DD" error={dateError} required />
       </Card>
       <ActionButton title={saving ? 'Saving…' : 'Save rate'} icon="checkmark" size="large" onPress={save} disabled={saving || !canSave} busy={saving} />
-      {existing ? <ActionButton title="Delete rate" variant="danger" onPress={remove} disabled={saving} /> : null}
+      {existing ? <ActionButton title="Delete rate" icon="trash" variant="danger" onPress={remove} disabled={saving} /> : null}
     </FormScreen>
   );
 }
