@@ -33,7 +33,19 @@ function normalizeNumberInput(value: string, locale: string, currency?: Currency
   });
   normalized = normalized
     .replace(/[\p{Sc}\s\u200E\u200F\u061C]/gu, '')
-    .replace(currency ? new RegExp(currency, 'gi') : /$^/, '')
+    .replace(currency ? new RegExp(currency, 'gi') : /$^/, '');
+  // A group symbol is only a thousands separator when it sits between digit
+  // groups of three. Otherwise "12,50" in en-US would silently become 1250
+  // instead of being rejected.
+  if (groupSymbol.trim() && normalized.includes(groupSymbol)) {
+    const integerPart = normalized.split(decimalSymbol)[0].replace(/^[+\-\u2212]/, '');
+    const groups = integerPart.split(groupSymbol);
+    const wellFormed = groups.every((group, index) =>
+      /^\d+$/.test(group)
+      && (index === 0 ? group.length <= 3 : group.length === 3 || (index < groups.length - 1 && group.length === 2)));
+    if (!wellFormed) throw new Error('Enter a valid number.');
+  }
+  normalized = normalized
     .split(groupSymbol).join('')
     .split(decimalSymbol).join('.')
     .split(minusSymbol).join('-')

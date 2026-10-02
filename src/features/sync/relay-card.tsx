@@ -170,6 +170,9 @@ export function RelayCard({
     <>
       <SectionHeader title="Connections" />
       <Card style={{ gap: space.lg }}>
+        {!status.enabled ? (
+          <AppText variant="caption" muted>These are preferences only. Nothing connects until sync is turned on.</AppText>
+        ) : null}
         <ToggleRow
           title="Direct connections"
           body="Devices talk to each other, encrypted end to end. On the same network this contacts no server at all."

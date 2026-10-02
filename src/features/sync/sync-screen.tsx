@@ -231,7 +231,6 @@ export function SyncScreen() {
         </Card>
       ) : null}
 
-      <SectionHeader title="Advanced" />
       <RelayCard status={status} health={health} now={now} onCheck={check} onChanged={refresh} />
 
       <SectionHeader title="How this works" />

@@ -108,7 +108,7 @@ function MonthPicker({
   onSelect: (month: string) => void;
 }) {
   const theme = useQashyTheme();
-  const { locale, isRtl } = useLocalization();
+  const { locale, isRtl, t } = useLocalization();
   const [year, setYear] = useState(() => parseLocalDate(value).getFullYear());
   const current = monthKey(value);
   const thisMonth = monthKey(startOfMonth());
@@ -123,7 +123,7 @@ function MonthPicker({
       onShow={() => setYear(parseLocalDate(value).getFullYear())}
       onRequestClose={onClose}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: space.xxl }}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Close" onPress={onClose} style={{ position: 'absolute', inset: 0, backgroundColor: theme.scrim }} />
+        <Pressable accessibilityRole="button" accessibilityLabel={t('Close')} onPress={onClose} style={{ position: 'absolute', inset: 0, backgroundColor: theme.scrim }} />
         <MotionView
           variant="zoom"
           accessibilityViewIsModal

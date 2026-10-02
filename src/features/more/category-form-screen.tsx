@@ -28,10 +28,23 @@ const ICONS = {
     ['house', 'Home'],
     ['heart', 'Health'],
     ['sparkles', 'Fun'],
+    ['bag', 'Shopping'],
+    ['bus', 'Transit'],
+    ['airplane', 'Travel'],
+    ['gift', 'Gifts'],
+    ['graduationcap', 'Education'],
+    ['gamecontroller', 'Games'],
+    ['pawprint', 'Pets'],
+    ['bolt', 'Utilities'],
+    ['tshirt', 'Clothing'],
   ],
   income: [
     ['banknote', 'Pay'],
     ['plus.circle', 'Other income'],
+    ['briefcase', 'Business'],
+    ['gift', 'Gift'],
+    ['chart.line.uptrend.xyaxis', 'Investments'],
+    ['creditcard', 'Refund'],
   ],
 } as const;
 
@@ -70,12 +83,22 @@ export function CategoryFormScreen() {
   );
   const hasChildren = !!existing && state.categories.some((item) => item.parentId === existing.id);
   const selectedParentId = parentChoices.some((item) => item.id === parentId) ? parentId : '';
+  const trimmedName = name.trim();
+  const duplicate = state.categories.some((item) =>
+    item.id !== existing?.id &&
+    !item.archived &&
+    item.kind === kind &&
+    (item.parentId ?? '') === selectedParentId &&
+    item.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase());
+  const nameError = !trimmedName
+    ? 'Category name is required.'
+    : duplicate ? 'A category with this name already exists.' : undefined;
 
   const save = async () => {
-    if (busy) return;
+    if (busy || nameError) return;
     setBusy(true);
     try {
-      await repository.saveCategory({ name: name.trim() || 'Category', kind, color, icon, parentId: selectedParentId || null, archived: false }, existing?.id, expectedRevision);
+      await repository.saveCategory({ name: name.trim(), kind, color, icon, parentId: selectedParentId || null, archived: false }, existing?.id, expectedRevision);
       hapticSuccess();
       closeToOwner();
     } catch (reason) {
@@ -124,7 +147,7 @@ export function CategoryFormScreen() {
         {name.trim() ? <AppText literal variant="headline" numberOfLines={1}>{name}</AppText> : null}
       </View>
       <Card style={{ gap: 16 }}>
-        <FormField label="Category name" value={name} onChangeText={setName} autoFocus={!existing} />
+        <FormField label="Category name" value={name} onChangeText={setName} autoFocus={!existing} error={name.length > 0 ? nameError : undefined} />
         <View accessibilityLabel={t('Category kind')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>{(['expense', 'income'] as CategoryKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "income" ? "arrow.down" : item === "expense" ? "arrow.up" : "arrow.left.arrow.right"} label={item[0].toUpperCase() + item.slice(1)} selected={kind === item} disabled={kindLocked && kind !== item} onPress={() => {
           if (item === kind) return;
           setKind(item);
@@ -142,7 +165,7 @@ export function CategoryFormScreen() {
         <View accessibilityLabel={t('Parent category')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}><ChoiceChip icon="xmark.circle" label="None" selected={!selectedParentId} onPress={() => setParentId('')} />{parentChoices.map((item) => <ChoiceChip key={item.id} literal icon={item.icon} label={`${item.name}${item.archived ? ' (archived)' : ''}`} disabled={item.archived || hasChildren} selected={selectedParentId === item.id} onPress={() => setParentId(item.id)} />)}</View>
         {hasChildren ? <AppText variant="caption" muted>A category with child categories must stay at the top level.</AppText> : null}
       </Card>
-      <ActionButton title={busy ? 'Saving…' : existing ? 'Save category' : 'Create category'} icon="checkmark" size="large" onPress={save} disabled={busy} busy={busy} />
+      <ActionButton title={busy ? 'Saving…' : existing ? 'Save category' : 'Create category'} icon="checkmark" size="large" onPress={save} disabled={busy || Boolean(nameError)} busy={busy} />
       {existing ? <ActionButton title="Archive category" variant="danger" onPress={archive} disabled={busy} /> : null}
     </FormScreen>
   );

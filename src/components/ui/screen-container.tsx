@@ -67,7 +67,8 @@ export function floatingActionMetrics(metrics: ScreenMetrics, insets: number | S
   return {
     position: 'absolute',
     // Aligns the button with the screen gutter rather than the window edge.
-    right: (metrics.contentWidth < 600 ? space.lg : 28) + (IS_WEB ? edges.right ?? 0 : 0),
+    // `end`, not `right`, so the button follows the reading direction in RTL.
+    end: (metrics.contentWidth < 600 ? space.lg : 28) + (IS_WEB ? edges.right ?? 0 : 0),
     // Clear the floating web bottom bar; native tab bars already reserve their
     // own space, so there the inset is the display's, not the chrome's.
     bottom: metrics.hasBottomNavigation

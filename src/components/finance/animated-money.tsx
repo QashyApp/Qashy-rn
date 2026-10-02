@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Text, type TextProps, type TextStyle } from 'react-native';
+import { StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/app-text';
@@ -138,10 +138,14 @@ export function AnimatedMoney({
   // statement figures need the bigger drop to keep the minor run from
   // competing with the integer.
   const minorScale = variant === 'money' ? 0.75 : 0.6;
+  // A caller-chosen color (e.g. on-accent text over an accent fill) must carry
+  // through to the minor run; the theme's muted grey is unreadable there.
+  const callerColor = StyleSheet.flatten(style)?.color;
   const minorStyle: TextStyle = {
     fontSize: typeScale[variant].fontSize * minorScale * scale,
     lineHeight: typeScale[variant].lineHeight * scale,
-    color: theme.textMuted,
+    color: callerColor ?? theme.textMuted,
+    opacity: callerColor ? 0.78 : 1,
   };
   return (
     <AppText

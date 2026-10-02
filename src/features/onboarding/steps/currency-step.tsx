@@ -127,6 +127,7 @@ function CurrencyTile({ code, name, selected, onPress }: { code: string; name: s
           justifyContent: 'center',
           gap: space.xxs,
           paddingVertical: space.md,
+          paddingHorizontal: space.sm,
           borderRadius: radius.tile,
           borderCurve: 'continuous',
         },
@@ -135,7 +136,7 @@ function CurrencyTile({ code, name, selected, onPress }: { code: string; name: s
           : materialStyle(theme, 'control'),
       ]}>
       <AppText literal figure variant="label" style={{ fontWeight: '700', color: selected ? theme.onAccentContainer : theme.text }}>{code}</AppText>
-      <AppText literal variant="caption" numberOfLines={1} style={{ fontSize: 11, color: selected ? theme.onAccentContainer : theme.textMuted }}>{name}</AppText>
+      <AppText literal variant="caption" numberOfLines={2} style={{ fontSize: 11, textAlign: 'center', color: selected ? theme.onAccentContainer : theme.textMuted }}>{name}</AppText>
     </MotionPressable>
   );
 }

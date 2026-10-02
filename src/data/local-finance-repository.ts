@@ -1390,12 +1390,14 @@ export class LocalFinanceRepository implements FinanceRepository {
         if (due !== rule.nextDueDate || active !== rule.active) {
           ruleChanges.push(updateEntity(rule, { nextDueDate: due, active }));
         }
-      } catch {
-        // Generation for this rule failed — most often a missing exchange rate
-        // for its currency pair. Swallowing it silently left `nextDueDate`
-        // frozen forever with no error, no flag, and nothing for the user to
-        // act on. Pause the rule instead so it surfaces as "Paused" in the
-        // Automation list and the user can fix the cause and re-enable it.
+      } catch (reason) {
+        // A missing exchange rate is transient: rates may simply not have
+        // loaded yet, and nothing would ever resume a rule paused for it. Leave
+        // the rule active and untouched so the next generation pass retries.
+        if (reason instanceof Error && reason.message.startsWith('Missing exchange rate')) continue;
+        // Any other failure (dangling reference, invalid schedule) will not fix
+        // itself. Pause the rule so it surfaces as "Paused" in the Automation
+        // list and the user can fix the cause and re-enable it.
         if (rule.active) ruleChanges.push(updateEntity(rule, { active: false, pausedByDependency: false }));
         continue;
       }

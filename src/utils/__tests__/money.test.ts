@@ -33,6 +33,9 @@ describe('money utilities', () => {
   it('parses locale decimal separators without changing magnitude', () => {
     expect(parseMoney('12,50', 'EUR', 'de-DE')).toBe(1250);
     expect(parseMoney('1.234,56', 'EUR', 'de-DE')).toBe(123456);
+    expect(parseMoney('1,250.50', 'USD', 'en-US')).toBe(125050);
+    expect(() => parseMoney('12,50', 'USD', 'en-US')).toThrow('valid amount');
+    expect(() => parseMoney('12.50', 'EUR', 'de-DE')).toThrow('valid amount');
     expect(minorToLocalizedDecimalString(1250, 'EUR', 'de-DE')).toBe('12,50');
   });
 

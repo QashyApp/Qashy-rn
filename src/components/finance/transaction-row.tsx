@@ -10,6 +10,7 @@ import { useFinanceState } from '@/providers/finance-provider';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { radius, space, toneColors, tile as tileMetrics } from '@/theme/tokens';
+import { parseLocalDate } from '@/utils/date';
 import { formatMoney } from '@/utils/money';
 
 // The category tile's own inset highlight, on top of the tinted container
@@ -74,13 +75,15 @@ export function TransactionRow({
     ? `${t('incl.')} ${formatMoney(transaction.fee.amountMinor, transaction.currency, settings.locale)} ${t('fee')}`
     : null;
   const foreignFeeCaption = [foreignText, feeText].filter((part): part is string => Boolean(part)).join(' · ');
+  // Read the date the way the app displays it, not as the raw ISO string.
+  const spokenDate = new Intl.DateTimeFormat(settings.locale, { dateStyle: 'full' }).format(parseLocalDate(transaction.localDate));
   const rowLabel = [
     direction,
     transaction.title,
     signedAmount,
     category?.name ?? t(isTransfer ? 'Transfer' : 'Uncategorized'),
     accountContext,
-    transaction.localDate,
+    spokenDate,
     foreignFeeCaption || undefined,
   ].filter((part): part is string => Boolean(part)).join(', ');
   // The fallbacks are the only translatable parts of the caption, so they are
@@ -90,7 +93,8 @@ export function TransactionRow({
   const accountLabel = isTransfer
     ? `${account?.name ?? t('Unknown account')} → ${destination?.name ?? t('Unknown account')}`
     : account?.name ?? t('Unknown account');
-  const amountText = `${isIncome ? '+' : isTransfer ? '' : '-'}${formatMoney(transaction.amountMinor, transaction.currency, settings.locale)}`;
+  // The formatter places the sign so right-to-left locales render it on the correct side.
+  const amountText = formatMoney(isIncome || isTransfer ? transaction.amountMinor : -transaction.amountMinor, transaction.currency, settings.locale, { sign: !isTransfer });
   // Category colors are identity, not emphasis. Painted at full saturation
   // across a 44pt tile they turned a mixed list into a row of signal lights all
   // shouting at once, and the amount — the reason a ledger exists — came third

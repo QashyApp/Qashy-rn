@@ -117,8 +117,8 @@ export function TransactionsScreen() {
       search,
       kinds: kind !== 'all' && kind !== 'upcoming' ? [kind] : undefined,
       statuses: kind === 'upcoming' ? ['upcoming'] : kind === 'all' ? ['posted', 'upcoming'] : ['posted'],
-      fromDate: allMonths ? undefined : fromDate,
-      toDate: allMonths ? undefined : toDate,
+      fromDate: allMonths || kind === 'upcoming' ? undefined : fromDate,
+      toDate: allMonths || kind === 'upcoming' ? undefined : toDate,
     }, state.transactions);
   }, [repository, search, kind, allMonths, fromDate, toDate, state.transactions, categoriesVersion]);
 
@@ -212,7 +212,8 @@ export function TransactionsScreen() {
 
   // The list content and the pinned toolbar have to occupy the same column, so
   // both derive their width and gutters from one call.
-  const content = screenContentMetrics(metrics, insets);
+  // A ledger is a reading column: past this width amounts drift far from their titles.
+  const content = { ...screenContentMetrics(metrics, insets), maxWidth: 860 };
   const toolbarStyle = {
     width: content.width,
     maxWidth: content.maxWidth,
@@ -220,8 +221,9 @@ export function TransactionsScreen() {
     paddingLeft: content.paddingLeft,
     paddingRight: content.paddingRight,
     paddingTop: content.paddingTop,
-    paddingBottom: space.md,
-    gap: space.md,
+    paddingBottom: metrics.contentWidth < 520 ? space.sm : space.md,
+    // Tighter on phones, where the pinned toolbar otherwise eats the list's room.
+    gap: metrics.contentWidth < 520 ? space.sm : space.md,
   } as const;
   const gutter = Number(content.paddingLeft ?? 0);
   const currency = state.settings.baseCurrency;
@@ -258,6 +260,7 @@ export function TransactionsScreen() {
               ] as const).map(([label, amount, color]) => (
                 <View key={label} style={{ flex: 1, minWidth: 0 }}>
                   <StatTile
+                    variant="sunken"
                     label={label}
                     value={(
                       <AnimatedMoney minor={amount} currency={currency} locale={locale} compact={compactFigures} variant="label" numeric style={{ color }} />
@@ -358,8 +361,7 @@ export function TransactionsScreen() {
         }
         renderSectionHeader={({ section }) => {
           const net = dayNetMinor(section.data);
-          const netLabel = formatMoney(Math.abs(net), currency, locale);
-          const netText = net === 0 ? netLabel : `${net > 0 ? '+' : '-'}${netLabel}`;
+          const netText = formatMoney(net, currency, locale, { sign: true });
           return (
             // Opaque, because a sticky header scrolls over live content. The
             // negative margins let the fill reach the column's gutters so rows do

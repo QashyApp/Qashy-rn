@@ -121,9 +121,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   }), [reloadError, reconcile]);
 
   if (error) {
+    // The database, and with it the saved language, failed to open, so this screen
+    // follows the device language instead of the app's own localization.
+    const hebrew = (globalThis.navigator?.language ?? Intl.DateTimeFormat().resolvedOptions().locale).toLowerCase().startsWith('he');
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12, backgroundColor: tokens.background }}>
-        <Text selectable style={{ fontSize: 20, fontWeight: '700', color: tokens.text }}>Couldn’t open Qashy</Text>
+        <Text selectable style={{ fontSize: 20, fontWeight: '700', color: tokens.text }}>{hebrew ? 'לא ניתן לפתוח את Qashy' : 'Couldn’t open Qashy'}</Text>
         <Text selectable style={{ textAlign: 'center', color: tokens.textMuted }}>{error}</Text>
         <Pressable
           accessibilityRole="button"
@@ -134,7 +137,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             );
           }}
           style={{ backgroundColor: QASHY_ACCENT, borderRadius: 999, paddingHorizontal: 20, paddingVertical: 12 }}>
-          <Text style={{ color: readableTextColor(QASHY_ACCENT), fontWeight: '700' }}>Try again</Text>
+          <Text style={{ color: readableTextColor(QASHY_ACCENT), fontWeight: '700' }}>{hebrew ? 'נסו שוב' : 'Try again'}</Text>
         </Pressable>
       </View>
     );

@@ -42,7 +42,12 @@ export function validateMoneyInput(
     if (options.positive && minor <= 0) return `${label} must be greater than zero.`;
     if (options.nonNegative && minor < 0) return `${label} cannot be negative.`;
     return undefined;
-  } catch {
+  } catch (reason) {
+    // Keep the parser's specific explanation (decimal places, range), relabelled
+    // for the field, instead of collapsing it into a generic message.
+    if (reason instanceof Error && reason.message.startsWith('Amount ')) {
+      return `${label}${reason.message.slice('Amount'.length)}`;
+    }
     return `Enter a valid ${label.toLocaleLowerCase()}.`;
   }
 }

@@ -375,7 +375,7 @@ export function TransactionFormScreen() {
         kind,
         // Trimmed like every sibling form: a whitespace-only title is truthy, so it
         // slipped past the fallback and saved a transaction that rendered blank.
-        title: title.trim() || (kind === 'transfer' ? 'Transfer' : categories.find((item) => item.id === categoryId)?.name ?? 'Transaction'),
+        title: title.trim() || (kind === 'transfer' ? t('Transfer') : categories.find((item) => item.id === categoryId)?.name ?? t('Transaction')),
         note,
         localDate: date,
         accountId: account.id,
@@ -460,34 +460,6 @@ export function TransactionFormScreen() {
         </Card>
       ) : null}
 
-      {kind !== 'transfer' && account ? (
-        <Card style={{ gap: 14 }}>
-          <ForeignFeeFields
-            accountCurrency={account.currency}
-            locale={state.settings.locale}
-            foreignEnabled={foreignEnabled}
-            onToggleForeign={(enabled) => {
-              setForeignEnabled(enabled);
-              if (!enabled) setForeignRate('');
-            }}
-            foreignCurrency={foreignCurrency}
-            onChangeForeignCurrency={setForeignCurrency}
-            rateText={foreignRate}
-            onChangeRateText={setForeignRate}
-            appliedRate={foreignAppliedRate}
-            fetchingRate={fetchingRate}
-            onTurnOnRates={rateStatus.enabled ? undefined : turnOnRates}
-            turningOnRates={togglingRates}
-            feeKind={feeKind}
-            onChangeFeeKind={setFeeKind}
-            feeValue={feeValue}
-            onChangeFeeValue={setFeeValue}
-            errors={{ foreignCurrency: foreignCurrencyError, rate: foreignRateError, fee: feeError }}
-            preview={foreignFeePreview}
-          />
-        </Card>
-      ) : null}
-
       <Card style={{ gap: 14 }}>
         <AppText variant="label">From account</AppText>
         <View accessibilityLabel={t('From account')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
@@ -540,6 +512,34 @@ export function TransactionFormScreen() {
           </>
         ) : null}
       </Card>
+
+      {kind !== 'transfer' && account ? (
+        <Card style={{ gap: 14 }}>
+          <ForeignFeeFields
+            accountCurrency={account.currency}
+            locale={state.settings.locale}
+            foreignEnabled={foreignEnabled}
+            onToggleForeign={(enabled) => {
+              setForeignEnabled(enabled);
+              if (!enabled) setForeignRate('');
+            }}
+            foreignCurrency={foreignCurrency}
+            onChangeForeignCurrency={setForeignCurrency}
+            rateText={foreignRate}
+            onChangeRateText={setForeignRate}
+            appliedRate={foreignAppliedRate}
+            fetchingRate={fetchingRate}
+            onTurnOnRates={rateStatus.enabled ? undefined : turnOnRates}
+            turningOnRates={togglingRates}
+            feeKind={feeKind}
+            onChangeFeeKind={setFeeKind}
+            feeValue={feeValue}
+            onChangeFeeValue={setFeeValue}
+            errors={{ foreignCurrency: foreignCurrencyError, rate: foreignRateError, fee: feeError }}
+            preview={foreignFeePreview}
+          />
+        </Card>
+      ) : null}
 
       <Card style={{ gap: 14 }}>
         <MoreDetails expanded={moreOpen} onToggle={() => setMoreOpen((open) => !open)}>

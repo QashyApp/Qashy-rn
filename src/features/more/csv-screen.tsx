@@ -29,11 +29,11 @@ type CsvField = Exclude<keyof CsvImportRow, 'rowNumber'>;
 
 const CSV_FIELDS: { key: CsvField; label: string; optional?: boolean; aliases: string[] }[] = [
   { key: 'date', label: 'Date', aliases: ['date', 'transaction_date', 'posted_date'] },
-  { key: 'type', label: 'Type', aliases: ['type', 'kind', 'transaction_type'] },
+  { key: 'type', label: 'Type', optional: true, aliases: ['type', 'kind', 'transaction_type'] },
   { key: 'status', label: 'Status', optional: true, aliases: ['status', 'transaction_status'] },
   { key: 'title', label: 'Title', aliases: ['title', 'description', 'merchant', 'name'] },
   { key: 'amount', label: 'Amount', aliases: ['amount', 'value'] },
-  { key: 'currency', label: 'Currency', aliases: ['currency', 'currency_code'] },
+  { key: 'currency', label: 'Currency', optional: true, aliases: ['currency', 'currency_code'] },
   { key: 'account', label: 'Account', aliases: ['account', 'account_name'] },
   { key: 'category', label: 'Category', optional: true, aliases: ['category', 'category_name'] },
   { key: 'tags', label: 'Tags', optional: true, aliases: ['tags', 'labels'] },
@@ -110,7 +110,10 @@ export function CsvScreen() {
   const [rows, setRows] = useState<CsvImportRow[]>([]);
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [busy, setBusy] = useState(false);
-  const missingRequiredFields = CSV_FIELDS.filter((field) => !field.optional && !mapping[field.key]);
+  // Type and currency fall back to expense and the base currency, and a chosen default account
+  // covers an unmapped account column, so none of those block the preview.
+  const isOptionalField = (field: (typeof CSV_FIELDS)[number]) => field.optional || (field.key === 'account' && Boolean(defaultAccountId));
+  const missingRequiredFields = CSV_FIELDS.filter((field) => !isOptionalField(field) && !mapping[field.key]);
 
   const pick = async () => {
     try {
@@ -271,8 +274,8 @@ export function CsvScreen() {
                 role="group"
                 style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <AppText variant="label">{field.label}{field.optional ? '' : ' *'}</AppText>
-                  {!field.optional && !mapping[field.key] ? <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>Required</AppText> : null}
+                  <AppText variant="label">{field.label}{isOptionalField(field) ? '' : ' *'}</AppText>
+                  {!isOptionalField(field) && !mapping[field.key] ? <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>Required</AppText> : null}
                 </View>
                 <View style={{ minWidth: 180, minHeight: 44, justifyContent: 'center' }}>
                   <Picker
@@ -322,11 +325,16 @@ export function CsvScreen() {
                 {/* Built as one string: the dictionary matches "Row N: reason" as a
                     whole and copies the reason through untouched. Split children
                     would translate the reason on its own. */}
-                {preview.rejectedRows.slice(0, 4).map((row) => (
+                {preview.rejectedRows.slice(0, 20).map((row) => (
                   <View key={row.rowNumber} style={{ minHeight: 44, justifyContent: 'center' }}>
                     <StatusPill literal label={t(`Row ${row.rowNumber}: ${row.reason}`)} icon="exclamationmark.triangle" tone="negative" />
                   </View>
                 ))}
+                {preview.rejectedRows.length > 20 ? (
+                  <View style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: space.md }}>
+                    <AppText literal variant="caption" muted>{t(`+${preview.rejectedRows.length - 20} more rejected rows`)}</AppText>
+                  </View>
+                ) : null}
               </Card>
             ) : null}
             {preview.validRows.length && !preview.committedIds.length ? <ActionButton title={busy ? 'Importing…' : `Import ${preview.validRows.length} transactions`} icon="checkmark" size="large" onPress={commit} disabled={busy} /> : null}

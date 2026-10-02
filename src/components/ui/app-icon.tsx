@@ -50,6 +50,16 @@ const IONICON_BY_SF_NAME: Record<string, IoniconName> = {
   heart: 'heart-outline',
   sparkles: 'sparkles-outline',
   banknote: 'cash-outline',
+  bag: 'bag-outline',
+  bus: 'bus-outline',
+  airplane: 'airplane-outline',
+  gift: 'gift-outline',
+  graduationcap: 'school-outline',
+  gamecontroller: 'game-controller-outline',
+  pawprint: 'paw-outline',
+  bolt: 'flash-outline',
+  tshirt: 'shirt-outline',
+  briefcase: 'briefcase-outline',
   // Sync. Every state a device, a relay, or a batch can be in needs a glyph here: the pills
   // and rows that report them are icon-plus-text by rule, so a missing entry does not degrade
   // to "no icon" on Android and web — it degrades to a question mark sitting next to the word

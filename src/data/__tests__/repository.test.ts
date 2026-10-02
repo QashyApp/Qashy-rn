@@ -1601,7 +1601,7 @@ describe('FinanceRepository contract', () => {
     }
   });
 
-  it('pauses a recurring rule whose generation fails instead of retrying it forever', async () => {
+  it('keeps a rule active and retries it when only its exchange rate is missing', async () => {
     jest.useFakeTimers();
     try {
       jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
@@ -1623,13 +1623,18 @@ describe('FinanceRepository contract', () => {
 
       await expect(repository.generateRecurring('2026-09-30')).resolves.toBe(1);
       const rules = repository.getSnapshot().recurringRules;
-      expect(rules.find((item) => item.id === poisoned.id)).toMatchObject({ active: false, nextDueDate: '2026-09-01' });
+      expect(rules.find((item) => item.id === poisoned.id)).toMatchObject({ active: true, nextDueDate: '2026-09-01' });
       expect(rules.find((item) => item.id === healthy.id)).toMatchObject({ active: true, nextDueDate: '2026-10-01' });
       expect(repository.getSnapshot().transactions.map((item) => item.title)).toEqual(['Healthy']);
 
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getSnapshot().recurringRules.find((item) => item.id === poisoned.id)?.active).toBe(false);
+      expect(reloaded.getSnapshot().recurringRules.find((item) => item.id === poisoned.id)?.active).toBe(true);
+
+      // Once the rate is back, the next pass posts the blocked occurrence.
+      await reloaded.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
+      await reloaded.generateRecurring('2026-09-30');
+      expect(reloaded.getSnapshot().transactions.map((item) => item.title).sort()).toEqual(['Foreign', 'Healthy']);
     } finally {
       jest.useRealTimers();
     }

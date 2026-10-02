@@ -42,7 +42,7 @@ export function GoalFormScreen() {
   const [linkedCategoryId, setLinkedCategoryId] = useState(existing?.linkedCategoryId ?? '');
   const [contribution, setContribution] = useState('');
   const [contributionDate, setContributionDate] = useState(todayLocal());
-  const [contributionNote, setContributionNote] = useState('Manual contribution');
+  const [contributionNote, setContributionNote] = useState(t('Manual contribution'));
   const [editingContributionId, setEditingContributionId] = useState<string | null>(null);
   const [editingContributionRevision, setEditingContributionRevision] = useState<number | undefined>();
   const [saving, setSaving] = useState(false);
@@ -108,7 +108,7 @@ export function GoalFormScreen() {
   const resetContributionForm = () => {
     setContribution('');
     setContributionDate(todayLocal());
-    setContributionNote('Manual contribution');
+    setContributionNote(t('Manual contribution'));
     setEditingContributionId(null);
     setEditingContributionRevision(undefined);
   };
@@ -189,8 +189,8 @@ export function GoalFormScreen() {
       />
 
       <Card style={{ gap: 16 }}>
-        <View accessibilityLabel={t('Goal type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8 }}>
-          {(['saving', 'spending'] as GoalKind[]).map((item) => <View key={item} style={{ flex: 1 }}><ChoiceChip icon={item === "saving" ? "banknote" : "cart"} label={item === "saving" ? "Savings goal" : "Planned purchase"} selected={kind === item} onPress={() => {
+        <View accessibilityLabel={t('Goal type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+          {(['saving', 'spending'] as GoalKind[]).map((item) => <View key={item} style={{ flexGrow: 1, flexBasis: 150 }}><ChoiceChip icon={item === "saving" ? "banknote" : "cart"} label={item === "saving" ? "Savings goal" : "Planned purchase"} selected={kind === item} onPress={() => {
             if (item === kind) return;
             setKind(item);
             setLinkedCategoryId('');

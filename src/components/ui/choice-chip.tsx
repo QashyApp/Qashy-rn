@@ -68,7 +68,7 @@ export function ChoiceChip({
           ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
           : materialStyle(theme, 'control'),
       ]}>
-      {icon ? <AppIcon name={icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={17} /> : null}
+      {icon ? <AppIcon name={icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={17} /> : selectable ? <View style={{ width: 16, height: 16 }} /> : null}
       {/* The label weight stays fixed. Bolding on selection re-measured the text
           and resized the chip, so picking one filter nudged every chip after it
           along the row — the same reflow the reserved checkmark slot below
