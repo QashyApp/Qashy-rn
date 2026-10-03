@@ -23,7 +23,7 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "QASHY_ANDROID_ARCHS": "armeabi-v7a,arm64-v8a,x86_64"
+        "QASHY_ANDROID_ARCHS": "arm64-v8a,x86_64"
       }
     }
   },

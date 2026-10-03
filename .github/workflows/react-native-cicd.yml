@@ -55,7 +55,7 @@ jobs:
       - name: 🎨 Run Prettier check
         run: npm run format:check
 
-      # Dev + preview APK on every push to main; production added for tag pushes.
+      # Dev, preview and production builds on every push (main and tags).
       # Manual runs pick builds from the buildType input.
       - name: 🗺 Plan builds
         id: plan
@@ -75,10 +75,8 @@ jobs:
               production) list="$production" ;;
               *) list="$dev,$preview,$production" ;;
             esac
-          elif [[ "$REF" == refs/tags/* ]]; then
-            list="$dev,$preview,$production"
           elif [ "$EVENT" = "push" ]; then
-            list="$dev,$preview"
+            list="$dev,$preview,$production"
           else
             list=""
           fi
