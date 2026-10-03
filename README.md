@@ -14,10 +14,11 @@ cool app, THANK YOU FOR YOUR ATTENTION TO THIS MATTER
 
 <H3 div align="center"> Features </H3>
 It's a completely free, private and open source app with 0 in-app purchases, not now not ever I don't believe such a helpful app should cost money nor annoy about optionally buying the app, you can:
-* Use it to track your money manually or be used as an expense tracker
-* Set up budget or goals for yourself
-* See a broad overview of your inputted financial data, budget status, upcoming sub/recurring payments and etc
-* Export & Import transaction CSVs, and import data from other apps - Currently just supports from Cashew, it's just the app I previously used...shoutout to bro his app is fine overall
+
+- Use it to track your money manually or be used as an expense tracker
+- Set up budget or goals for yourself
+- See a broad overview of your inputted financial data, budget status, upcoming sub/recurring payments and etc
+- Export & Import transaction CSVs, and import data from other apps - Currently just supports from Cashew, it's just the app I previously used...shoutout to bro his app is fine overall
 
 <H3 div align="center"> Import & export </H3>
 **More → Import & export** (`/csv`) exports and imports transactions as CSV, and can **import from other apps**. The first supported app is Cashew: its backup file (an `.sql` file that is really a SQLite database) brings over wallets, categories and subcategories, tags, transactions, transfers, recurring schedules and budgets, and every account's balance is checked against the backup before anything is saved. Loans and debts, objectives, shared and filtered budgets, app settings and scanner templates are not imported, and imported schedules wait for your review instead of posting automatically. The file is read entirely on the device with no network use. You preview the result first and can either add to your data or replace it (replaced data is hidden by soft deletion, not erased).
