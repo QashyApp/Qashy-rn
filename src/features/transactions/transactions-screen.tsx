@@ -247,7 +247,7 @@ export function TransactionsScreen() {
   const batchBarBottom = metrics.hasBottomNavigation ? 92 + insets.bottom : space.xxl + insets.bottom;
 
   return (
-    <MonthSwipeView gesture={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
+    <MonthSwipeView swipe={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
       <ScreenTransition style={{ flex: 1 }}>
       {/* Month, search and filters sit outside the list, not inside its header.
           Scrolled away, they made the ledger's most-used controls unreachable

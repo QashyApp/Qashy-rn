@@ -230,7 +230,7 @@ export function OverviewScreen() {
   };
 
   return (
-    <MonthSwipeView gesture={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
+    <MonthSwipeView swipe={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" onScroll={onScroll} scrollEventThrottle={16} style={{ flex: 1, backgroundColor: theme.background }}>
         <ScreenContainer>
           {/* Native no longer draws its own copy of this heading: the section
