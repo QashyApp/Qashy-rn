@@ -82,7 +82,8 @@
     "typecheck": "node ./scripts/typecheck.js",
     "lint": "expo lint",
     "test": "jest --runInBand",
-    "test:web": "playwright test"
+    "test:web": "playwright test",
+    "format:check": "prettier --check ."
   },
   "private": true
 }
