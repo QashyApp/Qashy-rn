@@ -32,6 +32,8 @@ export interface AppSettings extends SyncEntity {
   themeMode: ThemeMode;
   accentSource: AccentSource;
   accentHex: string;
+  /** Per device (`deviceLocal`). Swipe sideways on Overview and Transactions to change month. Saves from before this existed read as off. */
+  swipeBetweenMonths?: boolean;
 }
 
 export interface Account extends SyncEntity {

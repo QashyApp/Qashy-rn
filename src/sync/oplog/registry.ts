@@ -96,6 +96,7 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
     themeMode: { kind: 'deviceLocal' },
     accentSource: { kind: 'deviceLocal' },
     accentHex: { kind: 'deviceLocal' },
+    swipeBetweenMonths: { kind: 'deviceLocal' },
   }),
 
   accounts: spec({

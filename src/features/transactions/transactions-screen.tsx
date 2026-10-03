@@ -14,6 +14,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { IconButton } from '@/components/ui/icon-button';
 import { MonthSwitcher, type MonthDirection } from '@/components/ui/month-switcher';
+import { MonthSwipeView } from '@/components/ui/month-swipe-view';
+import { useMonthSwipe } from '@/components/ui/use-month-swipe';
 import { MotionView, ScreenTransition } from '@/components/ui/motion';
 import { PageHeading } from '@/components/ui/page-heading';
 import { floatingActionMetrics, screenContentMetrics } from '@/components/ui/screen-container';
@@ -100,6 +102,7 @@ export function TransactionsScreen() {
   };
 
   const allMonths = searchAllMonths && search.trim().length > 0;
+  const monthSwipe = useMonthSwipe({ month, onChange: changeMonth, disabled: allMonths || selectionMode });
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
@@ -244,7 +247,7 @@ export function TransactionsScreen() {
   const batchBarBottom = metrics.hasBottomNavigation ? 92 + insets.bottom : space.xxl + insets.bottom;
 
   return (
-    <View collapsable={false} style={{ flex: 1, backgroundColor: theme.background }}>
+    <MonthSwipeView gesture={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
       <ScreenTransition style={{ flex: 1 }}>
       {/* Month, search and filters sit outside the list, not inside its header.
           Scrolled away, they made the ledger's most-used controls unreachable
@@ -534,6 +537,6 @@ export function TransactionsScreen() {
           style={floatingActionMetrics(metrics, insets, space)}
         />
       )}
-    </View>
+    </MonthSwipeView>
   );
 }

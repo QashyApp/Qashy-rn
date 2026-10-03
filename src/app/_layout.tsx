@@ -157,6 +157,7 @@ function RootNavigator() {
           <Stack.Screen name="exchange-rate" options={formSheetOptions(t('Exchange rate'), backTitle, '/more')} />
           <Stack.Screen name="exchange-rates" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Exchange rates'), headerBackTitle: backTitle }} />
           <Stack.Screen name="appearance" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Appearance'), headerBackTitle: backTitle }} />
+          <Stack.Screen name="gestures" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Gestures'), headerBackTitle: backTitle }} />
           <Stack.Screen name="csv" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Import & export'), headerBackTitle: backTitle }} />
           <Stack.Screen name="sync" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Sync'), headerBackTitle: backTitle }} />
           <Stack.Screen name="sync-merge" options={{ headerShown: true, ...backFallbackOptions('/sync'), title: t('Review duplicates'), headerBackTitle: backTitle }} />

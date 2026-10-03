@@ -57,6 +57,7 @@ export const settings = (over: Partial<AppSettings> = {}): AppSettings => ({
   themeMode: 'system',
   accentSource: 'system',
   accentHex: '#5966E9',
+  swipeBetweenMonths: false,
   ...over,
 });
 

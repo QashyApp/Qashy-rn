@@ -611,6 +611,7 @@ const HEBREW: Record<string, string> = {
   'Insight': 'תובנה',
   'Trend': 'מגמה',
   'Choose month': 'בחירת חודש',
+  'Gestures': 'מחוות', 'Swipe between months': 'החלקה בין חודשים', 'Swipe to change month': 'החלקה למעבר בין חודשים', 'Swipe left or right on Overview and Transactions to move between months.': 'החליקו ימינה או שמאלה במסכי הסקירה והתנועות כדי לעבור בין חודשים.',
   'Previous year': 'השנה הקודמת',
   'Next year': 'השנה הבאה',
   'Close': 'סגירה',

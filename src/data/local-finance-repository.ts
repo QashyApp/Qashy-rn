@@ -479,6 +479,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       themeMode,
       accentSource,
       accentHex: (patch.accentHex ?? this.state.settings.accentHex).toUpperCase(),
+      swipeBetweenMonths: patch.swipeBetweenMonths ?? this.state.settings.swipeBetweenMonths ?? false,
     });
     await this.persist('settings', [settings]);
     this.state = { ...this.state, settings };
@@ -2619,7 +2620,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const storedSettings = (settingsRecords.find((item) => item.id === 'settings' && !item.deletedAt) ??
       initialSettings()) as AppSettings;
     // Saves from before themes existed have no id; the default theme is what they were already showing.
-    const settings: AppSettings = { ...storedSettings, themeId: storedSettings.themeId ?? DEFAULT_THEME_ID };
+    const settings: AppSettings = { ...storedSettings, themeId: storedSettings.themeId ?? DEFAULT_THEME_ID, swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? false };
     const loaded = await Promise.all(ENTITY_TYPES.map((type) => this.storage.readAll(type)));
     const loadedTransactions = loaded[ENTITY_TYPES.indexOf('transactions')] as TransactionRecord[];
     this.deletedOccurrenceKeys = new Set(

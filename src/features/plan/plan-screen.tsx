@@ -124,11 +124,12 @@ export function PlanScreen() {
                 <View key={status.budget.id} style={cardBasis}>
                   <SelectableCard
                     selecting={budgetSelection.selecting}
+                    fill={wide}
                     selected={budgetSelection.selectedIds.includes(status.budget.id)}
                     disabled={budgetSelection.deleting}
                     label={status.budget.name}
                     onToggle={() => budgetSelection.toggle(status.budget.id)}>
-                    <BudgetCard status={status} today={today} />
+                    <BudgetCard status={status} today={today} fill={wide} />
                   </SelectableCard>
                 </View>
               ))}
@@ -162,11 +163,12 @@ export function PlanScreen() {
                 <View key={goal.id} style={cardBasis}>
                   <SelectableCard
                     selecting={goalSelection.selecting}
+                    fill={wide}
                     selected={goalSelection.selectedIds.includes(goal.id)}
                     disabled={goalSelection.deleting}
                     label={goal.name}
                     onToggle={() => goalSelection.toggle(goal.id)}>
-                    <GoalCard goal={goal} progress={goalProgress.get(goal.id) ?? 0} />
+                    <GoalCard goal={goal} progress={goalProgress.get(goal.id) ?? 0} fill={wide} />
                   </SelectableCard>
                 </View>
               ))}
@@ -190,7 +192,7 @@ export function PlanScreen() {
 }
 
 /** In selection mode the whole card becomes one toggle; its inner buttons are inert. */
-function SelectableCard({ selecting, selected, disabled, label, onToggle, children }: { selecting: boolean; selected: boolean; disabled: boolean; label: string; onToggle: () => void; children: ReactNode }) {
+function SelectableCard({ selecting, fill, selected, disabled, label, onToggle, children }: { selecting: boolean; fill: boolean; selected: boolean; disabled: boolean; label: string; onToggle: () => void; children: ReactNode }) {
   const theme = useQashyTheme();
   if (!selecting) return <>{children}</>;
   return (
@@ -200,8 +202,8 @@ function SelectableCard({ selecting, selected, disabled, label, onToggle, childr
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
       onPress={onToggle}
-      style={{ height: '100%', borderRadius: theme.radius.card, borderWidth: 2, borderColor: selected ? theme.accent : 'transparent' }}>
-      <View pointerEvents="none" style={{ height: '100%' }}>{children}</View>
+      style={{ height: fill ? '100%' : undefined, borderRadius: theme.radius.card, borderWidth: 2, borderColor: selected ? theme.accent : 'transparent' }}>
+      <View pointerEvents="none" style={{ height: fill ? '100%' : undefined }}>{children}</View>
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
@@ -224,7 +226,7 @@ function SelectableCard({ selecting, selected, disabled, label, onToggle, childr
   );
 }
 
-function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) {
+function BudgetCard({ status, today, fill }: { status: BudgetStatus; today: string; fill: boolean }) {
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { t } = useLocalization();
@@ -253,8 +255,8 @@ function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) 
   const canAdjust = !customState;
 
   return (
-    <MotionView variant="fade" animateLayout exit style={{ height: '100%' }}>
-      <Card style={{ gap: 14, height: '100%' }}>
+    <MotionView variant="fade" animateLayout exit style={fill ? { height: '100%' } : undefined}>
+      <Card style={fill ? { gap: 14, height: '100%' } : { gap: 14 }}>
         <View style={{ gap: 2 }}>
           <AppText literal variant="headline">{budget.name}</AppText>
           <AppText literal variant="caption" muted>{periodSummary}</AppText>
@@ -324,7 +326,7 @@ function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) 
   );
 }
 
-function GoalCard({ goal, progress }: { goal: Goal; progress: number }) {
+function GoalCard({ goal, progress, fill }: { goal: Goal; progress: number; fill: boolean }) {
   const state = useFinanceState();
   const { t, isRtl } = useLocalization();
   const displayProgress = Math.max(0, progress);
@@ -334,8 +336,8 @@ function GoalCard({ goal, progress }: { goal: Goal; progress: number }) {
   useMilestoneHaptics(ratio, GOAL_MILESTONES, hapticSuccess);
 
   return (
-    <MotionView variant="fade" animateLayout exit style={{ height: '100%' }}>
-      <Card style={{ gap: 14, height: '100%' }}>
+    <MotionView variant="fade" animateLayout exit style={fill ? { height: '100%' } : undefined}>
+      <Card style={fill ? { gap: 14, height: '100%' } : { gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <ProgressRing value={ratio} size={72} color={goal.color} label={`${goal.name}: ${t('Goal progress')}`}>
             <AppText literal numeric variant="label">{`${percent}%`}</AppText>

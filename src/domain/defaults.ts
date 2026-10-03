@@ -37,6 +37,7 @@ export const initialSettings = (): AppSettings => {
     themeMode: 'system',
     accentSource: 'system',
     accentHex: QASHY_ACCENT,
+    swipeBetweenMonths: false,
   });
 };
 

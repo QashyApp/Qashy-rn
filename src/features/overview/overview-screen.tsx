@@ -10,6 +10,8 @@ import { AppText } from '@/components/ui/app-text';
 import { EmptyState } from '@/components/ui/empty-state';
 import { FloatingActionButton } from '@/components/ui/floating-action-button';
 import { MonthSwitcher, type MonthDirection } from '@/components/ui/month-switcher';
+import { MonthSwipeView } from '@/components/ui/month-swipe-view';
+import { useMonthSwipe } from '@/components/ui/use-month-swipe';
 import { MotionView } from '@/components/ui/motion';
 import { PageHeading } from '@/components/ui/page-heading';
 import { PageHero } from '@/components/ui/page-hero';
@@ -110,6 +112,7 @@ export function OverviewScreen() {
     setMonth(next);
   };
 
+  const monthSwipe = useMonthSwipe({ month, onChange: changeMonth, disabled: editing });
   const summary = useDashboard(month);
 
   const currency = state.settings.baseCurrency;
@@ -227,7 +230,7 @@ export function OverviewScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
+    <MonthSwipeView gesture={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
       <ScrollView contentInsetAdjustmentBehavior="automatic" onScroll={onScroll} scrollEventThrottle={16} style={{ flex: 1, backgroundColor: theme.background }}>
         <ScreenContainer>
           {/* Native no longer draws its own copy of this heading: the section
@@ -431,6 +434,6 @@ export function OverviewScreen() {
         onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/overview' } })}
         style={floatingActionMetrics(metrics, insets, space)}
       />
-    </View>
+    </MonthSwipeView>
   );
 }

@@ -30,15 +30,13 @@ import { convertMinor, localizeDecimalString, minorToLocalizedDecimalString, nor
 import { appliedCrossRateFor } from '@/utils/rates';
 import { feeMinorFor, normalizeFeePercent, totalWithFee } from '@/utils/transaction-amounts';
 
-const pluralRules = new Intl.PluralRules('en');
-
-/** "Every month." / "Every 2 months." — English plural form chosen by CLDR rules, not by string concatenation. */
 const MAX_REPEAT_INTERVAL = 999;
 
+/** "Every month." / "Every 2 months." — plain English singular/plural; Hermes (Android) has no `Intl.PluralRules`. */
 function intervalHint(interval: string, unit: RecurrenceUnit) {
   const count = Number(interval);
   if (!Number.isInteger(count) || count < 1) return `Every ${unit}.`;
-  return pluralRules.select(count) === 'one' ? `Every ${unit}.` : `Every ${count} ${unit}s.`;
+  return count === 1 ? `Every ${unit}.` : `Every ${count} ${unit}s.`;
 }
 
 export function RecurringFormScreen() {

@@ -60,7 +60,7 @@ export type ContributionInput = Omit<GoalContribution, 'id' | 'revision' | 'crea
 export type GoalContributionInput = Omit<ContributionInput, 'goalId'>;
 export type RecurringInput = Omit<RecurringRule, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'pausedByDependency'>;
 export type RateInput = Omit<ExchangeRate, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type SettingsInput = Partial<Pick<AppSettings, 'locale' | 'baseCurrency' | 'themeId' | 'themeMode' | 'accentSource' | 'accentHex'>>;
+export type SettingsInput = Partial<Pick<AppSettings, 'locale' | 'baseCurrency' | 'themeId' | 'themeMode' | 'accentSource' | 'accentHex' | 'swipeBetweenMonths'>>;
 
 export interface TransactionInput {
   kind: TransactionRecord['kind'];

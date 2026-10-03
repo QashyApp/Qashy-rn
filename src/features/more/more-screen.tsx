@@ -222,6 +222,7 @@ export function MoreScreen() {
             <SectionHeader title="App" />
             <Card variant="list" dividerInset={rowDividerInset}>
               <SettingsRow title="Appearance" subtitle="Theme, Material You, and accent" icon="paintbrush" onPress={() => router.push('/appearance')} />
+              <SettingsRow title="Gestures" subtitle="Swipe between months" icon="arrow.left.arrow.right" onPress={() => router.push('/gestures')} />
               {/* Dev-only component gallery; the route itself redirects away in production
                   builds (see src/app/kitchen-sink.tsx), but the row is also hidden there so
                   it never shows up as a dead end for a real user. */}
