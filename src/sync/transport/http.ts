@@ -14,19 +14,19 @@
 
 export type TransportFailure =
   /** No usable network at all. Distinct because it is not the relay's fault. */
-  | 'offline'
+  | "offline"
   /** DNS, TLS, connection refused, timeout — the host did not answer. */
-  | 'unreachable'
+  | "unreachable"
   /** The write token was refused. Almost always a stale endpoint or a rotated vault. */
-  | 'unauthorized'
+  | "unauthorized"
   /** The host answered with 5xx. It is up, and it is broken. */
-  | 'server'
+  | "server"
   /** 413, or a body past the cap. */
-  | 'tooLarge'
+  | "tooLarge"
   /** 429. */
-  | 'rateLimited'
+  | "rateLimited"
   /** A 2xx whose body was not what the protocol says it should be. */
-  | 'malformed';
+  | "malformed";
 
 export class RelayError extends Error {
   constructor(
@@ -36,7 +36,7 @@ export class RelayError extends Error {
     readonly status?: number,
   ) {
     super(message);
-    this.name = 'RelayError';
+    this.name = "RelayError";
   }
 }
 
@@ -76,10 +76,10 @@ export interface HttpDeps {
  * direction only, and that is the direction used here.
  */
 export const looksOffline = () =>
-  typeof navigator !== 'undefined' && navigator.onLine === false;
+  typeof navigator !== "undefined" && navigator.onLine === false;
 
 interface RequestInput {
-  readonly method: 'GET' | 'PUT' | 'DELETE';
+  readonly method: "GET" | "PUT" | "DELETE";
   readonly url: string;
   readonly token?: string;
   readonly body?: unknown;
@@ -102,17 +102,15 @@ interface ActiveRequest {
 }
 
 const cancelResponseBody = (response: Response): void => {
-  const body = response.body as
-    | {
-        cancel?: () => Promise<unknown>;
-        getReader?: () => { cancel(): Promise<unknown> };
-      }
-    | null;
+  const body = response.body as {
+    cancel?: () => Promise<unknown>;
+    getReader?: () => { cancel(): Promise<unknown> };
+  } | null;
   try {
     const cancellation =
-      typeof body?.cancel === 'function'
+      typeof body?.cancel === "function"
         ? body.cancel()
-        : typeof body?.getReader === 'function'
+        : typeof body?.getReader === "function"
           ? body.getReader().cancel()
           : undefined;
     if (cancellation) void cancellation.catch(() => undefined);
@@ -124,23 +122,30 @@ const cancelResponseBody = (response: Response): void => {
 
 const connectionFailure = (error: unknown): RelayError => {
   if (error instanceof RelayError) return error;
-  if (looksOffline()) return new RelayError('This device is offline.', 'offline');
-  const detail = error instanceof Error ? error.message : 'connection failed';
-  return new RelayError(`Could not reach the relay: ${detail}`, 'unreachable');
+  if (looksOffline())
+    return new RelayError("This device is offline.", "offline");
+  const detail = error instanceof Error ? error.message : "connection failed";
+  return new RelayError(`Could not reach the relay: ${detail}`, "unreachable");
 };
 
-async function request(deps: HttpDeps, input: RequestInput): Promise<ActiveRequest> {
+async function request(
+  deps: HttpDeps,
+  input: RequestInput,
+): Promise<ActiveRequest> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), deps.timeoutMs ?? REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    deps.timeoutMs ?? REQUEST_TIMEOUT_MS,
+  );
   const abort = () => controller.abort();
-  input.signal?.addEventListener('abort', abort);
+  input.signal?.addEventListener("abort", abort);
   if (input.signal?.aborted) controller.abort();
   let finished = false;
   const finish = () => {
     if (finished) return;
     finished = true;
     clearTimeout(timeout);
-    input.signal?.removeEventListener('abort', abort);
+    input.signal?.removeEventListener("abort", abort);
   };
 
   try {
@@ -151,14 +156,16 @@ async function request(deps: HttpDeps, input: RequestInput): Promise<ActiveReque
     const response = await deps.fetch.call(globalThis, input.url, {
       method: input.method,
       signal: controller.signal,
-      credentials: 'omit',
-      cache: 'no-store',
-      redirect: 'error',
-      referrerPolicy: 'no-referrer',
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
       headers: {
-        accept: 'application/json',
+        accept: "application/json",
         ...(input.token ? { authorization: `Bearer ${input.token}` } : {}),
-        ...(input.body === undefined ? {} : { 'content-type': 'application/json' }),
+        ...(input.body === undefined
+          ? {}
+          : { "content-type": "application/json" }),
       },
       ...(input.body === undefined ? {} : { body: JSON.stringify(input.body) }),
     });
@@ -173,28 +180,34 @@ async function request(deps: HttpDeps, input: RequestInput): Promise<ActiveReque
 }
 
 const classify = (status: number): TransportFailure => {
-  if (status === 401 || status === 403) return 'unauthorized';
-  if (status === 413) return 'tooLarge';
-  if (status === 429) return 'rateLimited';
-  if (status >= 500) return 'server';
-  return 'malformed';
+  if (status === 401 || status === 403) return "unauthorized";
+  if (status === 413) return "tooLarge";
+  if (status === 429) return "rateLimited";
+  if (status >= 500) return "server";
+  return "malformed";
 };
 
 async function readBoundedText(
   response: Response,
   signal: AbortSignal,
 ): Promise<string> {
-  const declaredHeader = response.headers.get('content-length');
+  const declaredHeader = response.headers.get("content-length");
   if (declaredHeader !== null) {
     const declared = Number(declaredHeader);
     if (Number.isFinite(declared) && declared > MAX_RESPONSE_BYTES) {
       cancelResponseBody(response);
-      throw new RelayError('The relay sent more than this device will accept.', 'tooLarge');
+      throw new RelayError(
+        "The relay sent more than this device will accept.",
+        "tooLarge",
+      );
     }
   }
 
   if (!response.body) {
-    throw new RelayError('The relay response has no readable body.', 'malformed');
+    throw new RelayError(
+      "The relay response has no readable body.",
+      "malformed",
+    );
   }
 
   const reader = response.body.getReader();
@@ -202,22 +215,28 @@ async function readBoundedText(
   const parts: string[] = [];
   let received = 0;
   while (true) {
-    if (signal.aborted) throw new Error('request timed out');
+    if (signal.aborted) throw new Error("request timed out");
     const { done, value } = await reader.read();
     if (done) break;
     received += value.byteLength;
     if (received > MAX_RESPONSE_BYTES) {
       void reader.cancel().catch(() => undefined);
-      throw new RelayError('The relay sent more than this device will accept.', 'tooLarge');
+      throw new RelayError(
+        "The relay sent more than this device will accept.",
+        "tooLarge",
+      );
     }
     parts.push(decoder.decode(value, { stream: true }));
   }
   parts.push(decoder.decode());
-  return parts.join('');
+  return parts.join("");
 }
 
 /** Performs a request and parses a JSON object out of it, or throws a classified failure. */
-export async function requestJson<T>(deps: HttpDeps, input: RequestInput): Promise<T> {
+export async function requestJson<T>(
+  deps: HttpDeps,
+  input: RequestInput,
+): Promise<T> {
   const active = await request(deps, input);
   const { response } = active;
 
@@ -237,14 +256,14 @@ export async function requestJson<T>(deps: HttpDeps, input: RequestInput): Promi
       parsed = JSON.parse(body);
     } catch {
       throw new RelayError(
-        'The relay sent something that is not a Qashy relay response.',
-        'malformed',
+        "The relay sent something that is not a Qashy relay response.",
+        "malformed",
       );
     }
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
       throw new RelayError(
-        'The relay sent something that is not a Qashy relay response.',
-        'malformed',
+        "The relay sent something that is not a Qashy relay response.",
+        "malformed",
       );
     }
     return parsed as T;
@@ -256,7 +275,10 @@ export async function requestJson<T>(deps: HttpDeps, input: RequestInput): Promi
 }
 
 /** A request whose response body carries nothing worth reading. */
-export async function requestVoid(deps: HttpDeps, input: RequestInput): Promise<void> {
+export async function requestVoid(
+  deps: HttpDeps,
+  input: RequestInput,
+): Promise<void> {
   const active = await request(deps, input);
   try {
     if (!active.response.ok) {

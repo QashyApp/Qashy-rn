@@ -1,7 +1,7 @@
-import { createContext, use } from 'react';
-import { useWindowDimensions } from 'react-native';
+import { createContext, use } from "react";
+import { useWindowDimensions } from "react-native";
 
-const IS_WEB = process.env.EXPO_OS === 'web';
+const IS_WEB = process.env.EXPO_OS === "web";
 
 /** At or above this viewport width the web shell shows a rail instead of the bottom bar. */
 export const NAV_RAIL_BREAKPOINT = 768;
@@ -13,7 +13,9 @@ export const NAV_SIDEBAR_WIDTH = 244;
 /** Horizontal space the persistent web navigation takes away from screen content. */
 export function navigationRailWidth(windowWidth: number) {
   if (!IS_WEB || windowWidth < NAV_RAIL_BREAKPOINT) return 0;
-  return windowWidth < NAV_SIDEBAR_BREAKPOINT ? NAV_RAIL_WIDTH : NAV_SIDEBAR_WIDTH;
+  return windowWidth < NAV_SIDEBAR_BREAKPOINT
+    ? NAV_RAIL_WIDTH
+    : NAV_SIDEBAR_WIDTH;
 }
 
 /**
@@ -57,7 +59,8 @@ export function useScreenMetrics(): ScreenMetrics {
     windowWidth: width,
     contentWidth,
     hasNavigationRail: contentWidth < width,
-    hasBottomNavigation: IS_WEB && provided !== null && width < NAV_RAIL_BREAKPOINT,
+    hasBottomNavigation:
+      IS_WEB && provided !== null && width < NAV_RAIL_BREAKPOINT,
     hasSidebar: IS_WEB && provided !== null && width >= NAV_SIDEBAR_BREAKPOINT,
   };
 }

@@ -15,30 +15,30 @@ declare const keyBrand: unique symbol;
 type Branded<Name extends string> = Uint8Array & { readonly [keyBrand]: Name };
 
 /** 32 random bytes. The root of everything, and the only thing pairing transfers. */
-export type VaultRootKey = Branded<'VaultRootKey'>;
+export type VaultRootKey = Branded<"VaultRootKey">;
 
 /** Seals op batches. Derived from the VRK; never itself transmitted. */
-export type ContentKey = Branded<'ContentKey'>;
+export type ContentKey = Branded<"ContentKey">;
 
 /** One direction of a session. `k_A→B` and `k_B→A` are distinct so the two sides can never collide on (key, nonce). */
-export type SessionKey = Branded<'SessionKey'>;
+export type SessionKey = Branded<"SessionKey">;
 
 /** Seals the passphrase-protected backup file. */
-export type BackupKey = Branded<'BackupKey'>;
+export type BackupKey = Branded<"BackupKey">;
 
 /** The short-lived secret that crosses the optical channel during pairing. */
-export type PairingSecret = Branded<'PairingSecret'>;
+export type PairingSecret = Branded<"PairingSecret">;
 
 /** Write capability presented to the relay. Proves nothing about identity. */
-export type BucketToken = Branded<'BucketToken'>;
+export type BucketToken = Branded<"BucketToken">;
 
-export type SigningSecretKey = Branded<'SigningSecretKey'>;
-export type SigningPublicKey = Branded<'SigningPublicKey'>;
-export type AgreementSecretKey = Branded<'AgreementSecretKey'>;
-export type AgreementPublicKey = Branded<'AgreementPublicKey'>;
+export type SigningSecretKey = Branded<"SigningSecretKey">;
+export type SigningPublicKey = Branded<"SigningPublicKey">;
+export type AgreementSecretKey = Branded<"AgreementSecretKey">;
+export type AgreementPublicKey = Branded<"AgreementPublicKey">;
 
 /** SHA-256 over the ordered handshake messages. Both the MITM defence and the SAS input. */
-export type TranscriptHash = Branded<'TranscriptHash'>;
+export type TranscriptHash = Branded<"TranscriptHash">;
 
 /**
  * Anything the AEAD may be keyed with. Deliberately a closed union rather than
@@ -71,17 +71,17 @@ export class SyncCryptoError extends Error {
     readonly code: SyncCryptoErrorCode,
   ) {
     super(message);
-    this.name = 'SyncCryptoError';
+    this.name = "SyncCryptoError";
   }
 }
 
 export type SyncCryptoErrorCode =
-  | 'badLength'
-  | 'badFormat'
-  | 'badVersion'
-  | 'badSignature'
-  | 'badTag'
-  | 'badIdentity'
-  | 'badPassphrase'
-  | 'badMnemonic'
-  | 'weakKey';
+  | "badLength"
+  | "badFormat"
+  | "badVersion"
+  | "badSignature"
+  | "badTag"
+  | "badIdentity"
+  | "badPassphrase"
+  | "badMnemonic"
+  | "weakKey";

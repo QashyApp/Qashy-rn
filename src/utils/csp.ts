@@ -47,7 +47,8 @@
  * loud, but at build time rather than in front of a user, which is why `e2e/qashy.spec.ts`
  * asserts the exported pages contain no inline script this list does not cover.
  */
-export const EXPO_HYDRATE_SCRIPT_HASH = 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8=';
+export const EXPO_HYDRATE_SCRIPT_HASH =
+  "sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3QruYNU/7fnRkI8=";
 
 /**
  * Every inline script the export is allowed to run, in the bare form a hashing tool emits
@@ -59,36 +60,41 @@ export const EXPO_HYDRATE_SCRIPT_HASH = 'sha256-67fhrP0+BkBqmgGGXTtgiVO/9EQs3Qru
  * is exactly what shipped for one build here. `quoteSource` is the single place the quotes go on,
  * and `csp.test.ts` asserts the assembled text rather than re-deriving it from this array.
  */
-export const INLINE_SCRIPT_HASHES: readonly string[] = [EXPO_HYDRATE_SCRIPT_HASH];
+export const INLINE_SCRIPT_HASHES: readonly string[] = [
+  EXPO_HYDRATE_SCRIPT_HASH,
+];
 
 const quoteSource = (hash: string) => `'${hash}'`;
 
 const DIRECTIVES: readonly (readonly [string, string])[] = [
   // Deny by default; every fetch type below is an explicit exception.
-  ['default-src', "'none'"],
-  ['script-src', ["'self'", ...INLINE_SCRIPT_HASHES.map(quoteSource)].join(' ')],
+  ["default-src", "'none'"],
+  [
+    "script-src",
+    ["'self'", ...INLINE_SCRIPT_HASHES.map(quoteSource)].join(" "),
+  ],
   // See the note above — react-native-web leaves no choice.
-  ['style-src', "'self' 'unsafe-inline'"],
+  ["style-src", "'self' 'unsafe-inline'"],
   // `data:` for the icon font's inlined glyphs, `blob:` for the QR bitmap path.
-  ['img-src', "'self' data: blob:"],
-  ['font-src', "'self' data:"],
+  ["img-src", "'self' data: blob:"],
+  ["font-src", "'self' data:"],
   // The camera preview attaches a `MediaStream` via `srcObject`, which CSP does not police;
   // `blob:` covers the fallback that goes through an object URL instead.
-  ['media-src', "'self' blob:"],
+  ["media-src", "'self' blob:"],
   // The relay and the rendezvous, wherever the user has pointed them. `'self'` additionally
   // covers same-origin `ws:` during development.
-  ['connect-src', "'self' https: wss:"],
+  ["connect-src", "'self' https: wss:"],
   // The Workbox service worker, which is same-origin and generated at build time.
-  ['worker-src', "'self'"],
-  ['manifest-src', "'self'"],
+  ["worker-src", "'self'"],
+  ["manifest-src", "'self'"],
   // Nothing in Qashy is framed, submits a form, or embeds a plugin.
-  ['frame-src', "'none'"],
-  ['object-src', "'none'"],
-  ['form-action', "'none'"],
-  ['base-uri', "'none'"],
+  ["frame-src", "'none'"],
+  ["object-src", "'none'"],
+  ["form-action", "'none'"],
+  ["base-uri", "'none'"],
 ];
 
 /** The policy as it appears in the `content` attribute. */
 export const CONTENT_SECURITY_POLICY = DIRECTIVES.map(
   ([name, value]) => `${name} ${value}`,
-).join('; ');
+).join("; ");

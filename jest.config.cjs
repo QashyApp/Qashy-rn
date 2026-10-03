@@ -1,4 +1,4 @@
-const expoPreset = require('jest-expo/jest-preset.js');
+const expoPreset = require("jest-expo/jest-preset.js");
 
 // The `@noble` and `@scure` crypto packages ship ESM only — no `require` condition — so
 // Jest has to transform them or it hits "Cannot use import statement outside a module"
@@ -6,46 +6,49 @@ const expoPreset = require('jest-expo/jest-preset.js');
 // the scopes it *will* transform, so the fix is to add ours to that list. Derived from the
 // preset rather than pasted, because a hard-coded copy silently stops matching the day
 // jest-expo adds a scope of its own.
-const TRANSFORM_ALSO = '@noble|@scure';
-const transformIgnorePatterns = expoPreset.transformIgnorePatterns.map((pattern) =>
-  pattern.startsWith('/node_modules/(?!(') ? pattern.replace('(?!(', `(?!(${TRANSFORM_ALSO}|`) : pattern,
+const TRANSFORM_ALSO = "@noble|@scure";
+const transformIgnorePatterns = expoPreset.transformIgnorePatterns.map(
+  (pattern) =>
+    pattern.startsWith("/node_modules/(?!(")
+      ? pattern.replace("(?!(", `(?!(${TRANSFORM_ALSO}|`)
+      : pattern,
 );
 
 module.exports = {
-  preset: 'jest-expo',
+  preset: "jest-expo",
   // Reanimated 4 splits its native worklets runtime into `react-native-worklets`. Its own
   // resolver strips `.native.ts` resolution inside that package so requiring it under Jest
   // (transitively, via `react-native-reanimated/mock`) resolves to its JS-safe fallback
   // instead of a module that reaches for the native `NativeWorklets` binding.
-  resolver: 'react-native-worklets/jest/resolver.js',
+  resolver: "react-native-worklets/jest/resolver.js",
   transformIgnorePatterns,
   // `.tsx` added alongside `.ts` for the first `@testing-library/react-native` component
   // suite (`editable-card-frame.test.tsx`) — every other suite in the project is still `.ts`.
-  testMatch: ['**/__tests__/**/*.test.{ts,tsx}'],
+  testMatch: ["**/__tests__/**/*.test.{ts,tsx}"],
   // `.claude/worktrees/` holds stale git-ignored checkouts whose tests must not run here.
-  testPathIgnorePatterns: ['/node_modules/', '/\\.claude/'],
+  testPathIgnorePatterns: ["/node_modules/", "/\\.claude/"],
   collectCoverageFrom: [
-    'src/utils/**/*.ts',
-    'src/data/**/*.ts',
-    'src/sync/**/*.ts',
-    '!src/data/storage.native.ts',
-    '!src/data/storage.web.ts',
+    "src/utils/**/*.ts",
+    "src/data/**/*.ts",
+    "src/sync/**/*.ts",
+    "!src/data/storage.native.ts",
+    "!src/data/storage.web.ts",
     // Platform-suffixed sync files need a device or a browser; the shared cores they
     // delegate to are covered directly.
-    '!src/sync/**/*.native.ts',
-    '!src/sync/**/*.web.ts',
+    "!src/sync/**/*.native.ts",
+    "!src/sync/**/*.web.ts",
     // Fixtures and helpers that live beside the suites are not production code.
-    '!src/**/__tests__/**',
+    "!src/**/__tests__/**",
   ],
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/src/$1',
+    "^@/(.*)$": "<rootDir>/src/$1",
     // tsconfig maps `dexie` to its declaration file to work around the package's
     // missing `types` export condition, and the Expo jest resolver honours those
     // paths — which would hand Jest a .d.ts to execute. Point the runtime at the
     // real bundle instead.
-    '^dexie$': '<rootDir>/node_modules/dexie/dist/dexie.js',
+    "^dexie$": "<rootDir>/node_modules/dexie/dist/dexie.js",
   },
-  setupFiles: ['<rootDir>/jest.setup.cjs'],
+  setupFiles: ["<rootDir>/jest.setup.cjs"],
   // Dexie's cache middleware arms a fixed 3s cleanup timer for every readwrite
   // transaction and for every released `liveQuery` subscription (dexie.js,
   // `enqueForDeletion`). Nothing in this project owns that timer or can cancel it,

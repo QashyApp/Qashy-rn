@@ -14,22 +14,22 @@
  * would be testing the double.
  */
 
-import type { IceServer } from '@/sync/transport/endpoints';
+import type { IceServer } from "@/sync/transport/endpoints";
 import type {
   RtcCandidateInit,
   RtcConnection,
   RtcDataChannel,
   RtcDescription,
   RtcFactory,
-} from '@/sync/transport/webrtc-core';
+} from "@/sync/transport/webrtc-core";
 
 const soon = (work: () => void) => {
   void Promise.resolve().then(work);
 };
 
 export class FakeChannel implements RtcDataChannel {
-  readyState = 'connecting';
-  binaryType = 'blob';
+  readyState = "connecting";
+  binaryType = "blob";
   peer: FakeChannel | null = null;
 
   onopen: (() => void) | null = null;
@@ -42,7 +42,8 @@ export class FakeChannel implements RtcDataChannel {
   constructor(readonly label: string) {}
 
   send(data: ArrayBuffer): void {
-    if (this.readyState !== 'open') throw new Error('That channel is not open.');
+    if (this.readyState !== "open")
+      throw new Error("That channel is not open.");
     this.sent.push(data);
     const target = this.peer;
     if (!target) return;
@@ -50,31 +51,33 @@ export class FakeChannel implements RtcDataChannel {
   }
 
   close(): void {
-    if (this.readyState === 'closed') return;
-    this.readyState = 'closed';
+    if (this.readyState === "closed") return;
+    this.readyState = "closed";
     this.onclose?.();
     const target = this.peer;
-    if (target && target.readyState !== 'closed') target.close();
+    if (target && target.readyState !== "closed") target.close();
   }
 
   markOpen(): void {
-    this.readyState = 'open';
+    this.readyState = "open";
     this.onopen?.();
   }
 }
 
 /** `offer:pc1` / `answer:pc2` — enough for the double to find the other end of the call. */
-const describe_ = (kind: string, id: string) => `v=0\r\no=- ${kind}:${id} IN IP4 127.0.0.1\r\n`;
+const describe_ = (kind: string, id: string) =>
+  `v=0\r\no=- ${kind}:${id} IN IP4 127.0.0.1\r\n`;
 const identify = (sdp: string | undefined): string | null => {
-  const match = /(?:offer|answer):(pc\d+)/.exec(sdp ?? '');
+  const match = /(?:offer|answer):(pc\d+)/.exec(sdp ?? "");
   return match ? match[1] : null;
 };
 
 export class FakeConnection implements RtcConnection {
-  connectionState = 'new';
-  iceConnectionState = 'new';
+  connectionState = "new";
+  iceConnectionState = "new";
 
-  onicecandidate: ((event: { candidate: RtcCandidateInit | null }) => void) | null = null;
+  onicecandidate:
+    ((event: { candidate: RtcCandidateInit | null }) => void) | null = null;
   ondatachannel: ((event: { channel: RtcDataChannel }) => void) | null = null;
   onconnectionstatechange: (() => void) | null = null;
   oniceconnectionstatechange: (() => void) | null = null;
@@ -92,7 +95,7 @@ export class FakeConnection implements RtcConnection {
   /** Whether `setRemoteDescription` has run, so a premature candidate can be rejected. */
   private remoteSet = false;
   /** Which half of the negotiation this connection performed. */
-  role: 'offer' | 'answer' | null = null;
+  role: "offer" | "answer" | null = null;
   /**
    * Whether this side called `createDataChannel`.
    *
@@ -116,13 +119,16 @@ export class FakeConnection implements RtcConnection {
   }
 
   createOffer(): Promise<RtcDescription> {
-    this.role = 'offer';
-    return Promise.resolve({ type: 'offer', sdp: describe_('offer', this.id) });
+    this.role = "offer";
+    return Promise.resolve({ type: "offer", sdp: describe_("offer", this.id) });
   }
 
   createAnswer(): Promise<RtcDescription> {
-    this.role = 'answer';
-    return Promise.resolve({ type: 'answer', sdp: describe_('answer', this.id) });
+    this.role = "answer";
+    return Promise.resolve({
+      type: "answer",
+      sdp: describe_("answer", this.id),
+    });
   }
 
   setLocalDescription(): Promise<void> {
@@ -132,9 +138,9 @@ export class FakeConnection implements RtcConnection {
 
   setRemoteDescription(description: RtcDescription): Promise<void> {
     const peerId = identify(description.sdp);
-    if (!peerId) return Promise.reject(new Error('Unparseable SDP.'));
+    if (!peerId) return Promise.reject(new Error("Unparseable SDP."));
     this.remoteSet = true;
-    if (description.type === 'answer') this.network.link(this, peerId);
+    if (description.type === "answer") this.network.link(this, peerId);
     return Promise.resolve();
   }
 
@@ -149,7 +155,7 @@ export class FakeConnection implements RtcConnection {
   addIceCandidate(candidate: RtcCandidateInit): Promise<void> {
     if (!this.remoteSet) {
       this.rejectedCandidates += 1;
-      return Promise.reject(new Error('No remote description.'));
+      return Promise.reject(new Error("No remote description."));
     }
     this.applied.push(candidate);
     return Promise.resolve();
@@ -158,13 +164,13 @@ export class FakeConnection implements RtcConnection {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    this.connectionState = 'closed';
+    this.connectionState = "closed";
     this.local?.close();
   }
 
   markConnected(): void {
-    this.connectionState = 'connected';
-    this.iceConnectionState = 'connected';
+    this.connectionState = "connected";
+    this.iceConnectionState = "connected";
     this.onconnectionstatechange?.();
   }
 
@@ -180,12 +186,20 @@ export class FakeConnection implements RtcConnection {
   private gather(): void {
     if (this.closed) return;
     this.onicecandidate?.({
-      candidate: { candidate: `candidate:host ${this.id}`, sdpMid: '0', sdpMLineIndex: 0 },
+      candidate: {
+        candidate: `candidate:host ${this.id}`,
+        sdpMid: "0",
+        sdpMLineIndex: 0,
+      },
     });
     soon(() => {
       if (this.closed) return;
       this.onicecandidate?.({
-        candidate: { candidate: `candidate:srflx ${this.id}`, sdpMid: '0', sdpMLineIndex: 0 },
+        candidate: {
+          candidate: `candidate:srflx ${this.id}`,
+          sdpMid: "0",
+          sdpMLineIndex: 0,
+        },
       });
       soon(() => this.onicecandidate?.({ candidate: null }));
     });
@@ -222,7 +236,7 @@ export class FakeRtcNetwork {
     const answerer = this.peers.get(answererId);
     if (!answerer) throw new Error(`No connection ${answererId}.`);
     const near = offerer.local;
-    if (!near) throw new Error('The offerer never created a data channel.');
+    if (!near) throw new Error("The offerer never created a data channel.");
 
     const far = new FakeChannel(near.label);
     near.peer = far;

@@ -1,7 +1,7 @@
 // Loaded dynamically so the app's TypeScript project does not pull in Cloudflare's deployment
 // globals. Jest still executes the real Worker router; the relay has its own typecheck config.
 // eslint-disable-next-line @typescript-eslint/no-require-imports
-const worker = require('../../../../server/src/worker').default as {
+const worker = require("../../../../server/src/worker").default as {
   fetch(request: Request, env: unknown): Promise<Response>;
 };
 
@@ -9,11 +9,11 @@ const oversizedPut = () => {
   const chunks = [new Uint8Array(1024 * 1024), new Uint8Array(1024 * 1024 + 1)];
   let index = 0;
   return {
-    url: 'https://relay.example.test/bucket/abcdefghijklmnop',
-    method: 'PUT',
+    url: "https://relay.example.test/bucket/abcdefghijklmnop",
+    method: "PUT",
     headers: new Headers({
-      authorization: 'Bearer attacker-chosen-token',
-      'content-length': '1',
+      authorization: "Bearer attacker-chosen-token",
+      "content-length": "1",
     }),
     body: {
       getReader: () => ({
@@ -48,7 +48,7 @@ const environment = (allocationAllowed = true, rendezvousAllowed = true) => {
           named += 1;
           return {};
         },
-        get: () => ({ fetch: () => Promise.resolve(new Response('{}')) }),
+        get: () => ({ fetch: () => Promise.resolve(new Response("{}")) }),
       },
       RENDEZVOUS: {
         idFromName: () => ({}),
@@ -60,8 +60,8 @@ const environment = (allocationAllowed = true, rendezvousAllowed = true) => {
   };
 };
 
-describe('relay outer request gate', () => {
-  it('rejects a streamed oversized PUT before naming a Durable Object', async () => {
+describe("relay outer request gate", () => {
+  it("rejects a streamed oversized PUT before naming a Durable Object", async () => {
     const target = environment();
 
     const response = await worker.fetch(oversizedPut(), target.env);
@@ -70,7 +70,7 @@ describe('relay outer request gate', () => {
     expect(target.named()).toBe(0);
   });
 
-  it('applies the allocation quota before naming a Durable Object', async () => {
+  it("applies the allocation quota before naming a Durable Object", async () => {
     const target = environment(false);
 
     const response = await worker.fetch(oversizedPut(), target.env);
@@ -79,11 +79,11 @@ describe('relay outer request gate', () => {
     expect(target.named()).toBe(0);
   });
 
-  it('returns a controlled 4xx for malformed encoded ids', async () => {
+  it("returns a controlled 4xx for malformed encoded ids", async () => {
     const target = environment();
 
     const response = await worker.fetch(
-      new Request('https://relay.example.test/rendezvous/%'),
+      new Request("https://relay.example.test/rendezvous/%"),
       target.env,
     );
 
@@ -91,11 +91,11 @@ describe('relay outer request gate', () => {
     expect(target.rendezvousGet).not.toHaveBeenCalled();
   });
 
-  it('bounds fresh rendezvous allocation before naming a Durable Object', async () => {
+  it("bounds fresh rendezvous allocation before naming a Durable Object", async () => {
     const target = environment(true, false);
 
     const response = await worker.fetch(
-      new Request('https://relay.example.test/rendezvous/bbbbbbbbbbbbbbbb'),
+      new Request("https://relay.example.test/rendezvous/bbbbbbbbbbbbbbbb"),
       target.env,
     );
 

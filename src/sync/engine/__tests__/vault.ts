@@ -14,25 +14,29 @@
  * calls that a pass. Writing to the converged state is what calls it what it is.
  */
 
-import { LocalFinanceRepository } from '@/data/local-finance-repository';
-import { MemoryStorageAdapter } from '@/data/memory-storage';
-import { SyncingStorageAdapter } from '@/data/syncing-storage-adapter';
-import { SYNC_META, writeMeta } from '@/data/sync-store';
-import type { FinanceState, TransactionFeeInput, TransactionRecord } from '@/domain/models';
-import type { TransactionInput } from '@/data/repository';
+import { LocalFinanceRepository } from "@/data/local-finance-repository";
+import { MemoryStorageAdapter } from "@/data/memory-storage";
+import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";
+import { SYNC_META, writeMeta } from "@/data/sync-store";
+import type {
+  FinanceState,
+  TransactionFeeInput,
+  TransactionRecord,
+} from "@/domain/models";
+import type { TransactionInput } from "@/data/repository";
 import {
   createDeviceIdentity,
   createVaultRootKey,
   deriveContentKey,
   type ContentKey,
   type DeviceIdentity,
-} from '@/sync/crypto';
-import { SyncSession } from '@/sync/engine/session';
-import { toPeerRow, type Peer } from '@/sync/engine/roster';
-import { LoopbackChannel, LoopbackTransport } from '@/sync/engine/transport';
+} from "@/sync/crypto";
+import { SyncSession } from "@/sync/engine/session";
+import { toPeerRow, type Peer } from "@/sync/engine/roster";
+import { LoopbackChannel, LoopbackTransport } from "@/sync/engine/transport";
 
 export const EPOCH = 1;
-export const BASE_CURRENCY = 'USD';
+export const BASE_CURRENCY = "USD";
 
 /**
  * One device, whole.
@@ -67,7 +71,9 @@ export class VaultDevice {
     readonly identity: DeviceIdentity,
     readonly contentKey: ContentKey,
   ) {
-    this.adapter = new SyncingStorageAdapter(this.storage, this.deviceId, () => this.now());
+    this.adapter = new SyncingStorageAdapter(this.storage, this.deviceId, () =>
+      this.now(),
+    );
     this.repository = new LocalFinanceRepository(this.adapter);
     this.session = new SyncSession({
       storage: this.storage,
@@ -95,7 +101,8 @@ export class VaultDevice {
   /** The link to a peer. Both devices see the same `Wire`, so either end can cut it. */
   wireTo(peer: VaultDevice): Wire {
     const wire = this.wires.get(peer.deviceId);
-    if (!wire) throw new Error(`No wire between ${this.deviceId} and ${peer.deviceId}.`);
+    if (!wire)
+      throw new Error(`No wire between ${this.deviceId} and ${peer.deviceId}.`);
     return wire;
   }
 
@@ -112,9 +119,9 @@ export class VaultDevice {
         [SYNC_META.deviceId]: this.deviceId,
         [SYNC_META.epoch]: String(EPOCH),
         [SYNC_META.baseCurrency]: baseCurrency,
-        [SYNC_META.enabled]: '1',
+        [SYNC_META.enabled]: "1",
       });
-      if (peers.length) await tx.table('syncPeers').put(peers.map(toPeerRow));
+      if (peers.length) await tx.table("syncPeers").put(peers.map(toPeerRow));
     });
     await this.repository.initialize();
     return this;
@@ -125,7 +132,7 @@ export class VaultDevice {
     return {
       deviceId: this.deviceId,
       name: `device-${this.deviceId.slice(0, 4)}`,
-      platform: 'test',
+      platform: "test",
       signingKey: this.identity.signing.publicKey,
       agreementKey: this.identity.agreement.publicKey,
       epoch: EPOCH,
@@ -167,7 +174,9 @@ export async function makeVault({
   );
   for (const [index, device] of devices.entries()) {
     await device.setUp(
-      devices.filter((other) => other !== device).map((other) => other.asPeer()),
+      devices
+        .filter((other) => other !== device)
+        .map((other) => other.asPeer()),
       currencies?.[index] ?? baseCurrency,
     );
   }
@@ -252,14 +261,14 @@ export interface OnboardOptions {
 /** The first-run flow, which is what puts a settings row and an account in an empty vault. */
 export const onboard = (device: VaultDevice, options: OnboardOptions = {}) =>
   device.repository.completeOnboarding({
-    locale: options.locale ?? 'en-US',
+    locale: options.locale ?? "en-US",
     baseCurrency: options.baseCurrency ?? BASE_CURRENCY,
-    accountName: options.accountName ?? 'Everyday',
-    accountType: 'checking',
+    accountName: options.accountName ?? "Everyday",
+    accountType: "checking",
     openingBalanceMinor: 250_00,
-    themeMode: 'system',
-    accentSource: 'system',
-    accentHex: '#5966E9',
+    themeMode: "system",
+    accentSource: "system",
+    accentHex: "#5966E9",
   });
 
 /**
@@ -270,7 +279,12 @@ export const onboard = (device: VaultDevice, options: OnboardOptions = {}) =>
  * longer satisfies it throws here rather than the first time the user opens the edit sheet.
  */
 export const inputOf = <
-  T extends { id: string; revision: number; createdAt: string; updatedAt: string },
+  T extends {
+    id: string;
+    revision: number;
+    createdAt: string;
+    updatedAt: string;
+  },
 >(
   entity: T,
 ) => {
@@ -279,7 +293,7 @@ export const inputOf = <
   void revision;
   void createdAt;
   void updatedAt;
-  return rest as Omit<T, 'id' | 'revision' | 'createdAt' | 'updatedAt'>;
+  return rest as Omit<T, "id" | "revision" | "createdAt" | "updatedAt">;
 };
 
 /**
@@ -291,12 +305,14 @@ export const inputOf = <
  * other here — rather than widening `TransactionInput['fee']` to accept the stored shape —
  * keeps the save path exactly as strict for a re-saved transaction as for one entered fresh.
  */
-export const transactionInputOf = (transaction: TransactionRecord): TransactionInput => {
+export const transactionInputOf = (
+  transaction: TransactionRecord,
+): TransactionInput => {
   const { fee, ...rest } = inputOf(transaction);
   const feeInput: TransactionFeeInput | null | undefined = fee
-    ? fee.kind === 'fixed'
-      ? { kind: 'fixed', amountMinor: fee.amountMinor }
-      : { kind: 'percent', percent: fee.percent! }
+    ? fee.kind === "fixed"
+      ? { kind: "fixed", amountMinor: fee.amountMinor }
+      : { kind: "percent", percent: fee.percent! }
     : fee;
   return { ...rest, fee: feeInput };
 };
@@ -316,16 +332,16 @@ export const transactionInputOf = (transaction: TransactionRecord): TransactionI
  */
 export const opsOf = (device: VaultDevice) =>
   device.storage.transact(async (tx) =>
-    (await tx.table('syncOps').all()).sort((first, second) =>
+    (await tx.table("syncOps").all()).sort((first, second) =>
       first.opId < second.opId ? -1 : 1,
     ),
   );
 
 export const quarantineOf = (device: VaultDevice) =>
-  device.storage.transact((tx) => tx.table('syncQuarantine').all());
+  device.storage.transact((tx) => tx.table("syncQuarantine").all());
 
 export const activityOf = (device: VaultDevice) =>
-  device.storage.transact((tx) => tx.table('syncActivity').all());
+  device.storage.transact((tx) => tx.table("syncActivity").all());
 
 // ---------------------------------------------------------------------------
 // Comparing devices
@@ -339,7 +355,7 @@ export const activityOf = (device: VaultDevice) =>
  * it would be the surprising outcome. `updatedAt` is recomputed locally from the winning HLC's
  * wall clock. Comparing either would fail on a correctly converged vault.
  */
-const DERIVED = ['revision', 'updatedAt'] as const;
+const DERIVED = ["revision", "updatedAt"] as const;
 
 const strip = <T extends object>(entity: T) => {
   const copy = { ...entity } as Record<string, unknown>;
@@ -347,11 +363,13 @@ const strip = <T extends object>(entity: T) => {
   return copy;
 };
 
-const byId = (first: { id: string }, second: { id: string }) => (first.id < second.id ? -1 : 1);
+const byId = (first: { id: string }, second: { id: string }) =>
+  first.id < second.id ? -1 : 1;
 
 /** A device's whole vault, in a shape two devices can be compared field by field. */
 export function normalize(state: FinanceState) {
-  const entry = <T extends { id: string }>(rows: readonly T[]) => [...rows].sort(byId).map(strip);
+  const entry = <T extends { id: string }>(rows: readonly T[]) =>
+    [...rows].sort(byId).map(strip);
   return {
     settings: strip(state.settings),
     accounts: entry(state.accounts),
@@ -388,7 +406,9 @@ export function expectConverged(devices: readonly VaultDevice[]) {
  * interesting once they have disagreed.
  */
 export function expectDiverged(devices: readonly VaultDevice[]) {
-  const snapshots = devices.map((device) => JSON.stringify(normalize(device.state)));
+  const snapshots = devices.map((device) =>
+    JSON.stringify(normalize(device.state)),
+  );
   expect(new Set(snapshots).size).toBeGreaterThan(1);
 }
 
@@ -415,7 +435,8 @@ export function randomSource(seed: number) {
     next,
     /** An integer in `[0, bound)`. */
     int: (bound: number) => Math.floor(next() * bound),
-    pick: <T>(items: readonly T[]): T => items[Math.floor(next() * items.length)],
+    pick: <T>(items: readonly T[]): T =>
+      items[Math.floor(next() * items.length)],
     /** Fisher-Yates, so "flush in a different order" is a real reordering. */
     shuffle: <T>(items: readonly T[]): T[] => {
       const copy = [...items];

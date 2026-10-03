@@ -17,7 +17,7 @@
  * by a module that happens to load first.
  */
 
-import { z } from 'zod';
+import { z } from "zod";
 
 z.config({ jitless: true });
 

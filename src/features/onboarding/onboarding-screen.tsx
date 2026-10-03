@@ -1,16 +1,16 @@
-import { useEffect } from 'react';
-import { BackHandler } from 'react-native';
+import { useEffect } from "react";
+import { BackHandler } from "react-native";
 
-import { ActionButton } from '@/components/ui/action-button';
-import { TextButton } from '@/components/ui/text-button';
-import { OnboardingShell } from '@/features/onboarding/onboarding-shell';
-import { AccountStep } from '@/features/onboarding/steps/account-step';
-import { CurrencyStep } from '@/features/onboarding/steps/currency-step';
-import { ExistingUserStep } from '@/features/onboarding/steps/existing-user-step';
-import { LookStep } from '@/features/onboarding/steps/look-step';
-import { ReadyStep } from '@/features/onboarding/steps/ready-step';
-import { WelcomeStep } from '@/features/onboarding/steps/welcome-step';
-import { useOnboardingFlow } from '@/features/onboarding/use-onboarding-flow';
+import { ActionButton } from "@/components/ui/action-button";
+import { TextButton } from "@/components/ui/text-button";
+import { OnboardingShell } from "@/features/onboarding/onboarding-shell";
+import { AccountStep } from "@/features/onboarding/steps/account-step";
+import { CurrencyStep } from "@/features/onboarding/steps/currency-step";
+import { ExistingUserStep } from "@/features/onboarding/steps/existing-user-step";
+import { LookStep } from "@/features/onboarding/steps/look-step";
+import { ReadyStep } from "@/features/onboarding/steps/ready-step";
+import { WelcomeStep } from "@/features/onboarding/steps/welcome-step";
+import { useOnboardingFlow } from "@/features/onboarding/use-onboarding-flow";
 
 /**
  * First-run setup: welcome → currency → first account → look → review.
@@ -24,39 +24,59 @@ export function OnboardingScreen() {
   const { step, draft } = flow;
 
   // Android's back gesture walks back through the steps instead of leaving the app.
-  const canGoBack = step !== 'welcome';
+  const canGoBack = step !== "welcome";
   const { back } = flow;
   useEffect(() => {
-    if (process.env.EXPO_OS !== 'android' || !canGoBack) return;
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      back();
-      return true;
-    });
+    if (process.env.EXPO_OS !== "android" || !canGoBack) return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        back();
+        return true;
+      },
+    );
     return () => subscription.remove();
   }, [back, canGoBack]);
 
   const footer = (() => {
     switch (step) {
-      case 'welcome':
+      case "welcome":
         return (
           <>
             <ActionButton title="Get started" onPress={flow.next} />
-            <TextButton title="I already use Qashy" tone="muted" onPress={() => flow.goTo('existing')} style={{ alignSelf: 'center' }} />
+            <TextButton
+              title="I already use Qashy"
+              tone="muted"
+              onPress={() => flow.goTo("existing")}
+              style={{ alignSelf: "center" }}
+            />
           </>
         );
-      case 'existing':
-        return <TextButton title="Set up as new instead" tone="muted" onPress={() => flow.goTo('currency')} style={{ alignSelf: 'center' }} />;
-      case 'look':
+      case "existing":
+        return (
+          <TextButton
+            title="Set up as new instead"
+            tone="muted"
+            onPress={() => flow.goTo("currency")}
+            style={{ alignSelf: "center" }}
+          />
+        );
+      case "look":
         return (
           <>
             <ActionButton title="Continue" onPress={flow.next} />
-            <TextButton title="Skip for now" tone="muted" onPress={flow.next} style={{ alignSelf: 'center' }} />
+            <TextButton
+              title="Skip for now"
+              tone="muted"
+              onPress={flow.next}
+              style={{ alignSelf: "center" }}
+            />
           </>
         );
-      case 'ready':
+      case "ready":
         return (
           <ActionButton
-            title={flow.saving ? 'Setting up…' : 'Start using Qashy'}
+            title={flow.saving ? "Setting up…" : "Start using Qashy"}
             icon="checkmark"
             busy={flow.saving}
             disabled={flow.saving || !flow.valid}
@@ -64,7 +84,13 @@ export function OnboardingScreen() {
           />
         );
       default:
-        return <ActionButton title="Continue" disabled={!flow.valid} onPress={flow.next} />;
+        return (
+          <ActionButton
+            title="Continue"
+            disabled={!flow.valid}
+            onPress={flow.next}
+          />
+        );
     }
   })();
 
@@ -74,16 +100,28 @@ export function OnboardingScreen() {
       direction={flow.direction}
       progress={flow.progress}
       onBack={canGoBack ? flow.back : undefined}
-      footer={footer}>
-      {step === 'welcome' ? <WelcomeStep locale={draft.locale} onLocale={flow.setLocale} /> : null}
-      {step === 'existing' ? <ExistingUserStep /> : null}
-      {step === 'currency' ? (
-        <CurrencyStep currency={draft.currency} locale={draft.locale} onCurrency={(currency) => flow.update({ currency })} />
+      footer={footer}
+    >
+      {step === "welcome" ? (
+        <WelcomeStep locale={draft.locale} onLocale={flow.setLocale} />
       ) : null}
-      {step === 'account' ? (
-        <AccountStep draft={draft} errors={flow.errors} onChange={flow.update} onSubmit={flow.next} />
+      {step === "existing" ? <ExistingUserStep /> : null}
+      {step === "currency" ? (
+        <CurrencyStep
+          currency={draft.currency}
+          locale={draft.locale}
+          onCurrency={(currency) => flow.update({ currency })}
+        />
       ) : null}
-      {step === 'look' ? (
+      {step === "account" ? (
+        <AccountStep
+          draft={draft}
+          errors={flow.errors}
+          onChange={flow.update}
+          onSubmit={flow.next}
+        />
+      ) : null}
+      {step === "look" ? (
         <LookStep
           themeId={draft.themeId}
           themeMode={draft.themeMode}
@@ -96,7 +134,7 @@ export function OnboardingScreen() {
           onAccent={flow.setAccent}
         />
       ) : null}
-      {step === 'ready' ? <ReadyStep draft={draft} /> : null}
+      {step === "ready" ? <ReadyStep draft={draft} /> : null}
     </OnboardingShell>
   );
 }

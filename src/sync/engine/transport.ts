@@ -20,7 +20,7 @@
  * confidentiality.
  */
 
-export type TransportKind = 'p2p' | 'relay' | 'file';
+export type TransportKind = "p2p" | "relay" | "file";
 
 /** What a transport needs to know about who it is reaching. Deliberately not a `Peer`. */
 export interface PeerDescriptor {
@@ -79,7 +79,9 @@ export interface SyncTransport {
  * which no real transport does, and would hide reentrancy bugs that only appear in the field.
  */
 export class LoopbackChannel implements SyncChannel {
-  private readonly handlers = new Set<(frame: Uint8Array, seq: number) => void>();
+  private readonly handlers = new Set<
+    (frame: Uint8Array, seq: number) => void
+  >();
   private peer: LoopbackChannel | null = null;
   private closed = false;
   /** Frames dropped while partitioned, so a test can assert what a heal has to redeliver. */
@@ -88,7 +90,10 @@ export class LoopbackChannel implements SyncChannel {
 
   constructor(readonly peerId: string) {}
 
-  static pair(firstId: string, secondId: string): [LoopbackChannel, LoopbackChannel] {
+  static pair(
+    firstId: string,
+    secondId: string,
+  ): [LoopbackChannel, LoopbackChannel] {
     // Each channel is named for the device on the *other* end, which is the id the engine
     // needs when it opens a frame.
     const first = new LoopbackChannel(secondId);
@@ -99,7 +104,8 @@ export class LoopbackChannel implements SyncChannel {
   }
 
   send(frame: Uint8Array, seq: number): Promise<void> {
-    if (this.closed) return Promise.reject(new Error('That channel is closed.'));
+    if (this.closed)
+      return Promise.reject(new Error("That channel is closed."));
     const target = this.peer;
     if (!target) return Promise.resolve();
     if (this.partitioned || target.partitioned) {
@@ -113,7 +119,8 @@ export class LoopbackChannel implements SyncChannel {
   /** Delivers everything withheld during a partition, in the order it was sent. */
   heal(): number {
     const pending = this.held.splice(0, this.held.length);
-    for (const held of pending) queueMicrotask(() => this.deliver(held.frame, held.seq));
+    for (const held of pending)
+      queueMicrotask(() => this.deliver(held.frame, held.seq));
     return pending.length;
   }
 
@@ -140,7 +147,7 @@ export class LoopbackChannel implements SyncChannel {
  * loopback genuinely cannot model and pretending otherwise would test nothing.
  */
 export class LoopbackTransport implements SyncTransport {
-  readonly kind: TransportKind = 'p2p';
+  readonly kind: TransportKind = "p2p";
   private readonly channels = new Map<string, LoopbackChannel>();
 
   register(peerId: string, channel: LoopbackChannel) {
@@ -148,9 +155,13 @@ export class LoopbackTransport implements SyncTransport {
   }
 
   connect(peer: PeerDescriptor, signal: AbortSignal): Promise<SyncChannel> {
-    if (signal.aborted) return Promise.reject(new Error('Connection cancelled.'));
+    if (signal.aborted)
+      return Promise.reject(new Error("Connection cancelled."));
     const channel = this.channels.get(peer.deviceId);
-    if (!channel) return Promise.reject(new Error(`No loopback channel for ${peer.deviceId}.`));
+    if (!channel)
+      return Promise.reject(
+        new Error(`No loopback channel for ${peer.deviceId}.`),
+      );
     return Promise.resolve(channel);
   }
 

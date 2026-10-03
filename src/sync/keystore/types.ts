@@ -13,7 +13,7 @@
  * URL touches the Keychain.
  */
 
-import type { DeviceIdentity, VaultRootKey } from '@/sync/crypto';
+import type { DeviceIdentity, VaultRootKey } from "@/sync/crypto";
 
 export interface StoredVault {
   readonly vaultKey: VaultRootKey;
@@ -36,19 +36,19 @@ export interface StoredVault {
  * - `unavailable` — this platform cannot store secrets safely (no Keychain, no WebCrypto,
  *   no IndexedDB). Sync must refuse to start rather than fall back to something weaker.
  */
-export type KeystoreStatus = 'empty' | 'unlocked' | 'locked' | 'unavailable';
+export type KeystoreStatus = "empty" | "unlocked" | "locked" | "unavailable";
 
 export type KeystoreErrorCode =
   /** A passphrase gate is armed. Call `unlock` first. */
-  | 'locked'
+  | "locked"
   /** The operation is meaningless on this platform (a passphrase gate on iOS, say). */
-  | 'unsupported'
+  | "unsupported"
   /** Secure storage is missing or refused. */
-  | 'unavailable'
+  | "unavailable"
   /** Something is stored, but it is not a vault record this build understands. */
-  | 'corrupt'
+  | "corrupt"
   /** There is no vault to operate on. */
-  | 'empty';
+  | "empty";
 
 export class KeystoreError extends Error {
   constructor(
@@ -56,13 +56,13 @@ export class KeystoreError extends Error {
     readonly code: KeystoreErrorCode,
   ) {
     super(message);
-    this.name = 'KeystoreError';
+    this.name = "KeystoreError";
   }
 }
 
 export interface SyncKeystore {
   /** Which implementation this is. Surfaced in diagnostics, never used to branch on behaviour. */
-  readonly kind: 'secure-store' | 'browser' | 'memory';
+  readonly kind: "secure-store" | "browser" | "memory";
 
   /**
    * Whether `setPassphrase` does anything here.

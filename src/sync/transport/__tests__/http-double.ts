@@ -17,21 +17,21 @@ export interface Call {
 }
 
 export type Reply =
-  | { readonly kind: 'json'; readonly status?: number; readonly body: unknown }
-  | { readonly kind: 'text'; readonly status?: number; readonly body: string }
+  | { readonly kind: "json"; readonly status?: number; readonly body: unknown }
+  | { readonly kind: "text"; readonly status?: number; readonly body: string }
   | {
-      readonly kind: 'stream';
+      readonly kind: "stream";
       readonly status?: number;
       readonly chunks: readonly (string | Uint8Array)[];
       readonly declaredLength?: number;
       /** Leaves the body open after the final chunk, until the request signal aborts. */
       readonly hangAfter?: boolean;
     }
-  | { readonly kind: 'status'; readonly status: number }
+  | { readonly kind: "status"; readonly status: number }
   /** A network-layer failure: DNS, TLS, a refused connection. `fetch` rejects. */
-  | { readonly kind: 'throw'; readonly message?: string }
+  | { readonly kind: "throw"; readonly message?: string }
   /** A connection that answers nothing, so the timeout is what resolves it. */
-  | { readonly kind: 'hang' };
+  | { readonly kind: "hang" };
 
 export interface FetchDouble {
   readonly fetch: typeof globalThis.fetch;
@@ -43,18 +43,26 @@ export interface FetchDouble {
 const headersOf = (init: RequestInit | undefined): Record<string, string> => {
   const raw = (init?.headers ?? {}) as Record<string, string>;
   const headers: Record<string, string> = {};
-  for (const [name, value] of Object.entries(raw)) headers[name.toLowerCase()] = value;
+  for (const [name, value] of Object.entries(raw))
+    headers[name.toLowerCase()] = value;
   return headers;
 };
 
 const respond = (reply: Reply, signal?: AbortSignal | null): Response => {
-  const status = 'status' in reply && reply.status !== undefined ? reply.status : 200;
+  const status =
+    "status" in reply && reply.status !== undefined ? reply.status : 200;
   const text =
-    reply.kind === 'json' ? JSON.stringify(reply.body) : reply.kind === 'text' ? reply.body : '';
+    reply.kind === "json"
+      ? JSON.stringify(reply.body)
+      : reply.kind === "text"
+        ? reply.body
+        : "";
   const encoder = new TextEncoder();
   const chunks =
-    reply.kind === 'stream'
-      ? reply.chunks.map((chunk) => (typeof chunk === 'string' ? encoder.encode(chunk) : chunk))
+    reply.kind === "stream"
+      ? reply.chunks.map((chunk) =>
+          typeof chunk === "string" ? encoder.encode(chunk) : chunk,
+        )
       : [encoder.encode(text)];
   let index = 0;
   let cancelled = false;
@@ -67,10 +75,14 @@ const respond = (reply: Reply, signal?: AbortSignal | null): Response => {
           index += 1;
           return Promise.resolve({ done: false, value });
         }
-        if (reply.kind === 'stream' && reply.hangAfter) {
-          return new Promise<{ done: boolean; value?: Uint8Array }>((_resolve, reject) => {
-            signal?.addEventListener('abort', () => reject(new Error('aborted')));
-          });
+        if (reply.kind === "stream" && reply.hangAfter) {
+          return new Promise<{ done: boolean; value?: Uint8Array }>(
+            (_resolve, reject) => {
+              signal?.addEventListener("abort", () =>
+                reject(new Error("aborted")),
+              );
+            },
+          );
         }
         return Promise.resolve({ done: true, value: undefined });
       },
@@ -80,16 +92,21 @@ const respond = (reply: Reply, signal?: AbortSignal | null): Response => {
       },
     }),
   };
-  const byteLength = chunks.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const byteLength = chunks.reduce(
+    (total, chunk) => total + chunk.byteLength,
+    0,
+  );
   return {
     ok: status >= 200 && status < 300,
     status,
     headers: {
       get: (name: string) =>
-        name.toLowerCase() === 'content-length'
-          ? String(reply.kind === 'stream' && reply.declaredLength !== undefined
-              ? reply.declaredLength
-              : byteLength)
+        name.toLowerCase() === "content-length"
+          ? String(
+              reply.kind === "stream" && reply.declaredLength !== undefined
+                ? reply.declaredLength
+                : byteLength,
+            )
           : null,
     },
     body,
@@ -103,21 +120,26 @@ export function fetchDouble(...initial: Reply[]): FetchDouble {
   const impl = ((url: string, init?: RequestInit) => {
     calls.push({
       url,
-      method: init?.method ?? 'GET',
+      method: init?.method ?? "GET",
       headers: headersOf(init),
-      body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      body: typeof init?.body === "string" ? JSON.parse(init.body) : undefined,
     });
 
-    const reply = queue.length > 1 ? (queue.shift() as Reply) : (queue[0] ?? { kind: 'json', body: {} });
+    const reply =
+      queue.length > 1
+        ? (queue.shift() as Reply)
+        : (queue[0] ?? { kind: "json", body: {} });
 
-    if (reply.kind === 'throw') {
-      return Promise.reject(new Error(reply.message ?? 'network failure'));
+    if (reply.kind === "throw") {
+      return Promise.reject(new Error(reply.message ?? "network failure"));
     }
-    if (reply.kind === 'hang') {
+    if (reply.kind === "hang") {
       // Rejects the way a real `fetch` does when its signal aborts, so the caller's timeout
       // path is the one under test rather than a bespoke error shape.
       return new Promise<Response>((_resolve, reject) => {
-        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')));
+        init?.signal?.addEventListener("abort", () =>
+          reject(new Error("aborted")),
+        );
       });
     }
     return Promise.resolve(respond(reply, init?.signal));

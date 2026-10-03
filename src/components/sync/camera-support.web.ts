@@ -14,4 +14,5 @@
  * consolation prize: it is the same secret, typed instead of photographed.
  */
 export const cameraSupported = () =>
-  typeof navigator !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function';
+  typeof navigator !== "undefined" &&
+  typeof navigator.mediaDevices?.getUserMedia === "function";

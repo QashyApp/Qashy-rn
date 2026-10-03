@@ -1,26 +1,29 @@
-export const QASHY_INDIGO = '#5966E9';
+export const QASHY_INDIGO = "#5966E9";
 
 export const ACCENT_PRESETS = [
-  '#5966E9',
-  '#007AFF',
-  '#00A58E',
-  '#36A852',
-  '#E7892C',
-  '#E0516B',
-  '#A95BCD',
-  '#6D7885',
+  "#5966E9",
+  "#007AFF",
+  "#00A58E",
+  "#36A852",
+  "#E7892C",
+  "#E0516B",
+  "#A95BCD",
+  "#6D7885",
 ] as const;
 
 /** Human names for the accent presets, used as swatch accessibility labels. */
-export const ACCENT_PRESET_NAMES: Record<(typeof ACCENT_PRESETS)[number], string> = {
-  '#5966E9': 'Indigo',
-  '#007AFF': 'Blue',
-  '#00A58E': 'Teal',
-  '#36A852': 'Green',
-  '#E7892C': 'Orange',
-  '#E0516B': 'Rose',
-  '#A95BCD': 'Purple',
-  '#6D7885': 'Slate',
+export const ACCENT_PRESET_NAMES: Record<
+  (typeof ACCENT_PRESETS)[number],
+  string
+> = {
+  "#5966E9": "Indigo",
+  "#007AFF": "Blue",
+  "#00A58E": "Teal",
+  "#36A852": "Green",
+  "#E7892C": "Orange",
+  "#E0516B": "Rose",
+  "#A95BCD": "Purple",
+  "#6D7885": "Slate",
 };
 
 /**
@@ -29,14 +32,14 @@ export const ACCENT_PRESET_NAMES: Record<(typeof ACCENT_PRESETS)[number], string
  * categories in `domain/defaults.ts` are drawn from this same set.
  */
 export const CATEGORY_PALETTE = [
-  '#5F9F78',
-  '#E08C5A',
-  '#5B8DEF',
-  '#8B76D8',
-  '#E16B75',
-  '#C47ED0',
-  '#4C9CB5',
-  '#6D7885',
+  "#5F9F78",
+  "#E08C5A",
+  "#5B8DEF",
+  "#8B76D8",
+  "#E16B75",
+  "#C47ED0",
+  "#4C9CB5",
+  "#6D7885",
 ] as const;
 
 /**
@@ -98,7 +101,7 @@ export const motion = {
   /** How far a raised control sinks when pressed. */
   pressScale: 0.97,
   /** `scale` sinks a control by shrinking it; `translate` shifts it down `pressTranslate` px (pixel-style themes). */
-  press: 'scale' as 'scale' | 'translate',
+  press: "scale" as "scale" | "translate",
   pressTranslate: 0,
 } as const;
 
@@ -132,10 +135,10 @@ export const iconSize = {
  * so each weight is its own family and `fontFamilyFor` maps a weight to it.
  */
 export const fontFamilies = {
-  regular: 'Rubik_400Regular',
-  medium: 'Rubik_500Medium',
-  semibold: 'Rubik_600SemiBold',
-  bold: 'Rubik_700Bold',
+  regular: "Rubik_400Regular",
+  medium: "Rubik_500Medium",
+  semibold: "Rubik_600SemiBold",
+  bold: "Rubik_700Bold",
 } as const;
 
 export type FontWeightName = keyof typeof fontFamilies;
@@ -150,9 +153,9 @@ export type FontWeightName = keyof typeof fontFamilies;
  * `numericFontStyle('regular')` falls back to `medium`.
  */
 export const numericFontFamilies = {
-  medium: 'SpaceGrotesk_500Medium',
-  semibold: 'SpaceGrotesk_600SemiBold',
-  bold: 'SpaceGrotesk_700Bold',
+  medium: "SpaceGrotesk_500Medium",
+  semibold: "SpaceGrotesk_600SemiBold",
+  bold: "SpaceGrotesk_700Bold",
 } as const;
 
 /**
@@ -166,27 +169,90 @@ export const numericFontFamilies = {
  */
 export const typeScale = {
   /** The single largest figure in the app: the net-worth hero number. */
-  hero: { fontSize: 48, lineHeight: 54, weight: 'semibold', letterSpacing: -1.6 },
+  hero: {
+    fontSize: 48,
+    lineHeight: 54,
+    weight: "semibold",
+    letterSpacing: -1.6,
+  },
   /** The single largest figure on a screen. Net worth, a month's net flow. */
-  display: { fontSize: 40, lineHeight: 46, weight: 'semibold', letterSpacing: -1.2 },
-  title: { fontSize: 28, lineHeight: 34, weight: 'semibold', letterSpacing: -0.6 },
+  display: {
+    fontSize: 40,
+    lineHeight: 46,
+    weight: "semibold",
+    letterSpacing: -1.2,
+  },
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    weight: "semibold",
+    letterSpacing: -0.6,
+  },
   /** A prominent amount inside a section: a budget's spend, a goal total. */
-  money: { fontSize: 22, lineHeight: 28, weight: 'semibold', letterSpacing: -0.4 },
-  headline: { fontSize: 18, lineHeight: 24, weight: 'semibold', letterSpacing: -0.2 },
-  body: { fontSize: 16, lineHeight: 22, weight: 'regular', letterSpacing: 0 },
+  money: {
+    fontSize: 22,
+    lineHeight: 28,
+    weight: "semibold",
+    letterSpacing: -0.4,
+  },
+  headline: {
+    fontSize: 18,
+    lineHeight: 24,
+    weight: "semibold",
+    letterSpacing: -0.2,
+  },
+  body: { fontSize: 16, lineHeight: 22, weight: "regular", letterSpacing: 0 },
   /** A short piece of UI text with weight: a row title, a button, a stat value. */
-  label: { fontSize: 15, lineHeight: 20, weight: 'medium', letterSpacing: -0.1 },
+  label: {
+    fontSize: 15,
+    lineHeight: 20,
+    weight: "medium",
+    letterSpacing: -0.1,
+  },
   /** A numeric stat value under a hero figure (e.g. income/spent this period). */
-  figure: { fontSize: 18, lineHeight: 24, weight: 'semibold', letterSpacing: -0.3 },
-  caption: { fontSize: 13, lineHeight: 18, weight: 'regular', letterSpacing: 0 },
+  figure: {
+    fontSize: 18,
+    lineHeight: 24,
+    weight: "semibold",
+    letterSpacing: -0.3,
+  },
+  caption: {
+    fontSize: 13,
+    lineHeight: 18,
+    weight: "regular",
+    letterSpacing: 0,
+  },
   /** A sentence-case kicker above a heading, a hero figure or a group of rows. */
-  overline: { fontSize: 13, lineHeight: 18, weight: 'medium', letterSpacing: 0 },
+  overline: {
+    fontSize: 13,
+    lineHeight: 18,
+    weight: "medium",
+    letterSpacing: 0,
+  },
   /** Tiny all-caps status text inside a pill ("UPCOMING"). Not for headings. */
-  eyebrow: { fontSize: 11, lineHeight: 14, weight: 'semibold', letterSpacing: 0.6 },
-} as const satisfies Record<string, { fontSize: number; lineHeight: number; weight: FontWeightName; letterSpacing: number }>;
+  eyebrow: {
+    fontSize: 11,
+    lineHeight: 14,
+    weight: "semibold",
+    letterSpacing: 0.6,
+  },
+} as const satisfies Record<
+  string,
+  {
+    fontSize: number;
+    lineHeight: number;
+    weight: FontWeightName;
+    letterSpacing: number;
+  }
+>;
 
 /** Variants that always render in the numeric display face (Space Grotesk). */
-export const NUMERIC_FACE_VARIANTS = ['hero', 'display', 'money', 'figure'] as const;
+export const NUMERIC_FACE_VARIANTS = [
+  "hero",
+  "display",
+  "money",
+  "figure",
+] as const;
 
 export interface BaseTokens {
   background: string;
@@ -219,18 +285,18 @@ export interface BaseTokens {
  * `background` is asserted by the web e2e suite as the address-bar theme color.
  */
 export const lightTokens: BaseTokens = {
-  background: '#F1F2F5',
-  surface: '#FFFFFF',
-  surfaceElevated: '#FFFFFF',
-  surfaceMuted: '#E9EBEF',
-  surfaceSunken: '#E8EAEE',
-  text: '#191B20',
-  textMuted: '#5F6570',
-  border: '#E3E5EA',
-  positive: '#208653',
-  negative: '#C43D4A',
-  warning: '#9A6700',
-  transfer: '#3F6FD8',
+  background: "#F1F2F5",
+  surface: "#FFFFFF",
+  surfaceElevated: "#FFFFFF",
+  surfaceMuted: "#E9EBEF",
+  surfaceSunken: "#E8EAEE",
+  text: "#191B20",
+  textMuted: "#5F6570",
+  border: "#E3E5EA",
+  positive: "#208653",
+  negative: "#C43D4A",
+  warning: "#9A6700",
+  transfer: "#3F6FD8",
 };
 
 /**
@@ -243,36 +309,48 @@ export const lightTokens: BaseTokens = {
  * gives each tier a visible step, which is how elevation has to work here.
  */
 export const darkTokens: BaseTokens = {
-  background: '#0C0D11',
-  surface: '#15161B',
-  surfaceElevated: '#1E2027',
-  surfaceMuted: '#262931',
-  surfaceSunken: '#0F1014',
-  text: '#F2F3F5',
-  textMuted: '#9BA1AC',
-  border: '#2E323B',
-  positive: '#65D99A',
-  negative: '#FF8F96',
-  warning: '#F0C36A',
-  transfer: '#8FB0FF',
+  background: "#0C0D11",
+  surface: "#15161B",
+  surfaceElevated: "#1E2027",
+  surfaceMuted: "#262931",
+  surfaceSunken: "#0F1014",
+  text: "#F2F3F5",
+  textMuted: "#9BA1AC",
+  border: "#2E323B",
+  positive: "#65D99A",
+  negative: "#FF8F96",
+  warning: "#F0C36A",
+  transfer: "#8FB0FF",
 };
 
 function channels(hex: string): [number, number, number] {
-  let value = hex.replace('#', '');
-  if (value.length === 3) value = value.split('').map((c) => c + c).join('');
+  let value = hex.replace("#", "");
+  if (value.length === 3)
+    value = value
+      .split("")
+      .map((c) => c + c)
+      .join("");
   const parsed = Number.parseInt(value.slice(0, 6), 16);
   if (!Number.isFinite(parsed)) return [0, 0, 0];
   return [(parsed >> 16) & 0xff, (parsed >> 8) & 0xff, parsed & 0xff];
 }
 
 function toHex(rgb: [number, number, number]) {
-  return `#${rgb.map((channel) => Math.round(Math.min(255, Math.max(0, channel))).toString(16).padStart(2, '0')).join('')}`;
+  return `#${rgb
+    .map((channel) =>
+      Math.round(Math.min(255, Math.max(0, channel)))
+        .toString(16)
+        .padStart(2, "0"),
+    )
+    .join("")}`;
 }
 
 export function relativeLuminance(hex: string) {
   const [r, g, b] = channels(hex).map((channel) => {
     const scaled = channel / 255;
-    return scaled <= 0.04045 ? scaled / 12.92 : ((scaled + 0.055) / 1.055) ** 2.4;
+    return scaled <= 0.04045
+      ? scaled / 12.92
+      : ((scaled + 0.055) / 1.055) ** 2.4;
   });
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
@@ -283,21 +361,29 @@ export function contrastRatio(first: string, second: string) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
-export function readableTextColor(hex: string): '#FFFFFF' | '#000000' {
-  return contrastRatio('#FFFFFF', hex) >= contrastRatio('#000000', hex) ? '#FFFFFF' : '#000000';
+export function readableTextColor(hex: string): "#FFFFFF" | "#000000" {
+  return contrastRatio("#FFFFFF", hex) >= contrastRatio("#000000", hex)
+    ? "#FFFFFF"
+    : "#000000";
 }
 
 export function mixHex(from: string, to: string, weight: number) {
   const a = channels(from);
   const b = channels(to);
   const t = Math.min(1, Math.max(0, weight));
-  return toHex([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]);
+  return toHex([
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+    a[2] + (b[2] - a[2]) * t,
+  ]);
 }
 
 /** Appends an alpha channel to a hex color, e.g. for a translucent press/ripple overlay. */
 export function withAlpha(hex: string, alpha: number) {
   const clamped = Math.min(1, Math.max(0, alpha));
-  return `${hex}${Math.round(clamped * 255).toString(16).padStart(2, '0')}`;
+  return `${hex}${Math.round(clamped * 255)
+    .toString(16)
+    .padStart(2, "0")}`;
 }
 
 export function ensureContrast(
@@ -306,15 +392,20 @@ export function ensureContrast(
   fallback: string,
   minimum = 4.5,
 ) {
-  if (contrastRatio(foreground, background) >= minimum) return foreground.toUpperCase();
-  const safeFallback = contrastRatio(fallback, background) >= minimum
-    ? fallback
-    : readableTextColor(background);
+  if (contrastRatio(foreground, background) >= minimum)
+    return foreground.toUpperCase();
+  const safeFallback =
+    contrastRatio(fallback, background) >= minimum
+      ? fallback
+      : readableTextColor(background);
   let low = 0;
   let high = 1;
   for (let index = 0; index < 18; index += 1) {
     const midpoint = (low + high) / 2;
-    if (contrastRatio(mixHex(foreground, safeFallback, midpoint), background) >= minimum) {
+    if (
+      contrastRatio(mixHex(foreground, safeFallback, midpoint), background) >=
+      minimum
+    ) {
       high = midpoint;
     } else {
       low = midpoint;
@@ -323,7 +414,11 @@ export function ensureContrast(
   return mixHex(foreground, safeFallback, high).toUpperCase();
 }
 
-export function accessibleAccentColor(seed: string, surface: string, text: string) {
+export function accessibleAccentColor(
+  seed: string,
+  surface: string,
+  text: string,
+) {
   return ensureContrast(seed, surface, text, 3);
 }
 
@@ -334,7 +429,10 @@ export interface ToneSpec {
 }
 
 /** The shipped tint recipe, used when a caller passes no theme tone. */
-export const CLASSIC_TONE: ToneSpec = { containerMix: { light: 0.86, dark: 0.78 }, minContrast: 3 };
+export const CLASSIC_TONE: ToneSpec = {
+  containerMix: { light: 0.86, dark: 0.78 },
+  minContrast: 3,
+};
 
 export interface ToneColors {
   /** A tinted fill that stays a surface, not a shout. */
@@ -357,7 +455,20 @@ export interface ToneColors {
  * exposes opaque platform colors with no JS-readable value, which is what
  * `staticSurface`/`staticText` on ThemeTokens are for.
  */
-export function toneColors(seed: string, surface: string, text: string, dark: boolean, tone: ToneSpec = CLASSIC_TONE): ToneColors {
-  const container = mixHex(seed, surface, dark ? tone.containerMix.dark : tone.containerMix.light);
-  return { container, onContainer: ensureContrast(seed, container, text, tone.minContrast) };
+export function toneColors(
+  seed: string,
+  surface: string,
+  text: string,
+  dark: boolean,
+  tone: ToneSpec = CLASSIC_TONE,
+): ToneColors {
+  const container = mixHex(
+    seed,
+    surface,
+    dark ? tone.containerMix.dark : tone.containerMix.light,
+  );
+  return {
+    container,
+    onContainer: ensureContrast(seed, container, text, tone.minContrast),
+  };
 }

@@ -11,16 +11,16 @@
  * figures per figure it returns.
  */
 
-import { Decimal } from 'decimal.js';
+import { Decimal } from "decimal.js";
 
-import type { RateInput } from '@/data/repository';
-import { isLocalDate } from '@/utils/date';
-import { z } from '@/utils/zod';
+import type { RateInput } from "@/data/repository";
+import { isLocalDate } from "@/utils/date";
+import { z } from "@/utils/zod";
 
-const FRANKFURTER_BASE_URL = 'https://api.frankfurter.dev/v2/rates';
+const FRANKFURTER_BASE_URL = "https://api.frankfurter.dev/v2/rates";
 
 /** Every request pivots through EUR; see the file header for why. */
-const PIVOT = 'EUR';
+const PIVOT = "EUR";
 
 /**
  * ISO codes Qashy accepts as an account currency that Frankfurter never returns.
@@ -31,16 +31,20 @@ const PIVOT = 'EUR';
  * currencies it ever asks for, and the "needs a manual rate" UI lists them as unsupported.
  */
 export const FRANKFURTER_UNSUPPORTED: ReadonlySet<string> = new Set([
-  'CUC',
-  'HRK',
-  'SLL',
-  'XSU',
-  'ZWL',
+  "CUC",
+  "HRK",
+  "SLL",
+  "XSU",
+  "ZWL",
 ]);
 
 export type RatesUrlParams =
   | { readonly quotes: readonly string[]; readonly date?: string }
-  | { readonly quotes: readonly string[]; readonly from: string; readonly to: string };
+  | {
+      readonly quotes: readonly string[];
+      readonly from: string;
+      readonly to: string;
+    };
 
 /**
  * Builds a `/v2/rates` URL for a EUR-pivoted request.
@@ -54,23 +58,30 @@ export type RatesUrlParams =
  * codes and dates, nothing else.
  */
 export function buildRatesUrl(params: RatesUrlParams): string {
-  const quotes = [...new Set(params.quotes.map((code) => code.trim().toUpperCase()))]
+  const quotes = [
+    ...new Set(params.quotes.map((code) => code.trim().toUpperCase())),
+  ]
     .filter((code) => code !== PIVOT)
     .sort();
   const query = [`base=${PIVOT}`];
-  if (quotes.length) query.push(`quotes=${quotes.join(',')}`);
-  if ('from' in params) {
+  if (quotes.length) query.push(`quotes=${quotes.join(",")}`);
+  if ("from" in params) {
     query.push(`from=${params.from}`, `to=${params.to}`);
   } else if (params.date) {
     query.push(`date=${params.date}`);
   }
-  return `${FRANKFURTER_BASE_URL}?${query.join('&')}`;
+  return `${FRANKFURTER_BASE_URL}?${query.join("&")}`;
 }
 
 const rateRowSchema = z.object({
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(isLocalDate, 'Frankfurter returned a malformed date.'),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .refine(isLocalDate, "Frankfurter returned a malformed date."),
   base: z.literal(PIVOT),
-  quote: z.string().regex(/^[A-Z]{3}$/, 'Frankfurter returned a malformed quote code.'),
+  quote: z
+    .string()
+    .regex(/^[A-Z]{3}$/, "Frankfurter returned a malformed quote code."),
   // `rate` is re-parsed through `Decimal(String(n))` in `deriveBaseRates` — JSON's own number
   // type is enough to reject NaN/Infinity/non-positive here, but not enough precision to
   // trust for the arithmetic, since small rates come back in exponent form.
@@ -94,17 +105,26 @@ export function parseRatesResponse(
   requestedQuotes: readonly string[],
 ): FrankfurterRow[] {
   const rows = ratesResponseSchema.parse(json);
-  const requested = new Set(requestedQuotes.map((code) => code.trim().toUpperCase()));
+  const requested = new Set(
+    requestedQuotes.map((code) => code.trim().toUpperCase()),
+  );
   for (const row of rows) {
     if (!requested.has(row.quote)) {
-      throw new Error(`Frankfurter returned a quote currency that was not requested: ${row.quote}.`);
+      throw new Error(
+        `Frankfurter returned a quote currency that was not requested: ${row.quote}.`,
+      );
     }
   }
   return rows;
 }
 
 /** One EUR-pivot leg for one calendar day: `1 EUR = rate QUOTE`. */
-function makeRate(fromCurrency: string, toCurrency: string, effectiveDate: string, rate: Decimal): RateInput {
+function makeRate(
+  fromCurrency: string,
+  toCurrency: string,
+  effectiveDate: string,
+  rate: Decimal,
+): RateInput {
   return {
     fromCurrency,
     toCurrency,
@@ -134,8 +154,9 @@ export function deriveBaseRates(
   foreignCurrencies: readonly string[],
 ): RateInput[] {
   const base = baseCurrency.trim().toUpperCase();
-  const foreign = [...new Set(foreignCurrencies.map((code) => code.trim().toUpperCase()))]
-    .filter((code) => code !== base);
+  const foreign = [
+    ...new Set(foreignCurrencies.map((code) => code.trim().toUpperCase())),
+  ].filter((code) => code !== base);
   if (!foreign.length) return [];
 
   // Grouped by date, not flattened, so a pair is only ever derived from two legs read off the
@@ -162,7 +183,10 @@ export function deriveBaseRates(
       }
       const eurToForeign = eur.get(code);
       if (!eurToForeign) continue; // No leg for this currency on this day: skip, don't guess.
-      const rate = base === PIVOT ? new Decimal(1).div(eurToForeign) : eurToBase?.div(eurToForeign);
+      const rate =
+        base === PIVOT
+          ? new Decimal(1).div(eurToForeign)
+          : eurToBase?.div(eurToForeign);
       if (!rate) continue; // Missing base leg for this date: skip rather than guess.
       results.push(makeRate(code, base, effectiveDate, rate));
     }

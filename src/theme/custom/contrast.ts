@@ -1,5 +1,10 @@
-import { contrastRatio, ensureContrast, readableTextColor, type BaseTokens } from '@/theme/tokens';
-import type { ThemeScheme } from '@/theme/themes/types';
+import {
+  contrastRatio,
+  ensureContrast,
+  readableTextColor,
+  type BaseTokens,
+} from "@/theme/tokens";
+import type { ThemeScheme } from "@/theme/themes/types";
 
 /**
  * Contrast enforcement for user-authored palettes.
@@ -32,7 +37,10 @@ function sameColor(first: string, second: string) {
   return first.toUpperCase() === second.toUpperCase();
 }
 
-export function clampPaletteContrast(scheme: ThemeScheme, input: BaseTokens): ContrastResult {
+export function clampPaletteContrast(
+  scheme: ThemeScheme,
+  input: BaseTokens,
+): ContrastResult {
   const palette: BaseTokens = { ...input };
   const warnings: string[] = [];
   const unsatisfied: string[] = [];
@@ -51,16 +59,22 @@ export function clampPaletteContrast(scheme: ThemeScheme, input: BaseTokens): Co
 
   // Text must read on every surface it can sit on. Moving it toward the readable extreme of one
   // surface can in principle break another, so iterate until stable (a few passes at most).
-  const surfaces: readonly Key[] = ['surface', 'surfaceElevated', 'background'];
+  const surfaces: readonly Key[] = ["surface", "surfaceElevated", "background"];
   for (let pass = 0; pass < 3; pass += 1) {
     const snapshot = palette.text;
-    for (const surface of surfaces) clamp('text', surface, readableTextColor(palette[surface]), TEXT_MIN_CONTRAST);
+    for (const surface of surfaces)
+      clamp(
+        "text",
+        surface,
+        readableTextColor(palette[surface]),
+        TEXT_MIN_CONTRAST,
+      );
     if (sameColor(snapshot, palette.text)) break;
   }
 
-  clamp('textMuted', 'surface', palette.text, TEXT_MIN_CONTRAST);
-  for (const key of ['positive', 'negative', 'warning'] as const) {
-    clamp(key, 'surface', palette.text, STATUS_MIN_CONTRAST);
+  clamp("textMuted", "surface", palette.text, TEXT_MIN_CONTRAST);
+  for (const key of ["positive", "negative", "warning"] as const) {
+    clamp(key, "surface", palette.text, STATUS_MIN_CONTRAST);
   }
 
   for (const key of Object.keys(original) as Key[]) {
@@ -73,12 +87,15 @@ export function clampPaletteContrast(scheme: ThemeScheme, input: BaseTokens): Co
 
   const check = (key: Key, on: Key, min: number) => {
     if (contrastRatio(palette[key], palette[on]) < min) {
-      unsatisfied.push(`palette.${scheme}.${key}: cannot reach ${min}:1 against palette.${scheme}.${on}`);
+      unsatisfied.push(
+        `palette.${scheme}.${key}: cannot reach ${min}:1 against palette.${scheme}.${on}`,
+      );
     }
   };
-  for (const surface of surfaces) check('text', surface, TEXT_MIN_CONTRAST);
-  check('textMuted', 'surface', TEXT_MIN_CONTRAST);
-  for (const key of ['positive', 'negative', 'warning'] as const) check(key, 'surface', STATUS_MIN_CONTRAST);
+  for (const surface of surfaces) check("text", surface, TEXT_MIN_CONTRAST);
+  check("textMuted", "surface", TEXT_MIN_CONTRAST);
+  for (const key of ["positive", "negative", "warning"] as const)
+    check(key, "surface", STATUS_MIN_CONTRAST);
 
   return { palette, warnings, unsatisfied };
 }

@@ -12,25 +12,28 @@
  * is the one default instance the app actually uses.
  */
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useSyncExternalStore } from "react";
 
-import { syncingStorage } from '@/data/local-finance-repository';
-import { readOverviewLayout, writeOverviewLayout } from '@/data/overview-layout-store';
-import type { StorageAdapter } from '@/data/storage-adapter';
+import { syncingStorage } from "@/data/local-finance-repository";
+import {
+  readOverviewLayout,
+  writeOverviewLayout,
+} from "@/data/overview-layout-store";
+import type { StorageAdapter } from "@/data/storage-adapter";
 import {
   DEFAULT_OVERVIEW_LAYOUT,
   overviewLayoutReducer,
   type OverviewLayout,
   type OverviewLayoutAction,
-} from '@/features/overview/layout/overview-layout';
+} from "@/features/overview/layout/overview-layout";
 
 export interface OverviewLayoutSnapshot {
-  readonly status: 'loading' | 'ready';
+  readonly status: "loading" | "ready";
   readonly layout: OverviewLayout;
 }
 
 const LOADING_SNAPSHOT: OverviewLayoutSnapshot = {
-  status: 'loading',
+  status: "loading",
   layout: DEFAULT_OVERVIEW_LAYOUT,
 };
 
@@ -69,14 +72,14 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
       .transact((tx) => readOverviewLayout(tx))
       .then((layout) => {
         base = layout;
-        setSnapshot({ status: 'ready', layout });
+        setSnapshot({ status: "ready", layout });
       })
       .catch(() => {
         // Storage itself failed to open. Fall back to the default layout rather than leaving
         // the screen stuck on "loading" forever; a later successful dispatch will persist
         // normally.
         base = DEFAULT_OVERVIEW_LAYOUT;
-        setSnapshot({ status: 'ready', layout: DEFAULT_OVERVIEW_LAYOUT });
+        setSnapshot({ status: "ready", layout: DEFAULT_OVERVIEW_LAYOUT });
       });
   }
 
@@ -101,7 +104,9 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     if (next === from) return Promise.resolve();
     base = next;
 
-    const attempt = writeTail.then(() => deps.storage.transact((tx) => writeOverviewLayout(tx, next)));
+    const attempt = writeTail.then(() =>
+      deps.storage.transact((tx) => writeOverviewLayout(tx, next)),
+    );
     // Keep the write chain alive even on failure, so a later dispatch's write still waits for
     // this attempt to settle rather than racing ahead of a write that never happened.
     writeTail = attempt.then(
@@ -111,7 +116,7 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
 
     return attempt.then(
       () => {
-        setSnapshot({ status: 'ready', layout: next });
+        setSnapshot({ status: "ready", layout: next });
       },
       (error: unknown) => {
         // Only undo the optimistic base if nothing has moved it further since — a later
@@ -131,11 +136,13 @@ export type OverviewLayoutStore = ReturnType<typeof createOverviewLayoutStore>;
  * The one instance for the app's lifetime, exactly like `financeRepository` and
  * `exchangeRateService`.
  */
-export const overviewLayoutStore = createOverviewLayoutStore({ storage: syncingStorage });
+export const overviewLayoutStore = createOverviewLayoutStore({
+  storage: syncingStorage,
+});
 
 export function useOverviewLayout(): {
   readonly layout: OverviewLayout;
-  readonly status: 'loading' | 'ready';
+  readonly status: "loading" | "ready";
   readonly dispatch: (action: OverviewLayoutAction) => Promise<void>;
 } {
   overviewLayoutStore.load();

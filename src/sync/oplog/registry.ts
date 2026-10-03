@@ -26,36 +26,36 @@
  * fixing a typo in the amount.
  */
 
-import type { EntityType } from '@/domain/models';
+import type { EntityType } from "@/domain/models";
 
 export type FieldStrategy =
   /** Established by the `create` op and never changed. A local change to one is a bug. */
-  | { readonly kind: 'createOnly' }
+  | { readonly kind: "createOnly" }
   /** Computed locally from the merged set. Never travels. */
-  | { readonly kind: 'derived' }
+  | { readonly kind: "derived" }
   /** Meaningful only on this device — a phone in dark mode must not darken a laptop. */
-  | { readonly kind: 'deviceLocal' }
+  | { readonly kind: "deviceLocal" }
   /** Last writer wins, on its own. */
-  | { readonly kind: 'lww' }
+  | { readonly kind: "lww" }
   /** Last writer wins, but every member of `group` moves together. */
-  | { readonly kind: 'group'; readonly group: string }
+  | { readonly kind: "group"; readonly group: string }
   /** Only ever moves forward; the larger value wins regardless of clock. */
-  | { readonly kind: 'monotoneMax' }
+  | { readonly kind: "monotoneMax" }
   /** Once true, true everywhere. A peer's stale `false` cannot undo it. */
-  | { readonly kind: 'monotoneTrue' }
+  | { readonly kind: "monotoneTrue" }
   /** An add-wins set of entity ids. */
-  | { readonly kind: 'elementSet' }
+  | { readonly kind: "elementSet" }
   /** An array of objects behaving as a map keyed on `key`, merged per entry. */
-  | { readonly kind: 'keyedMap'; readonly key: string };
+  | { readonly kind: "keyedMap"; readonly key: string };
 
 /** Field paths are dotted so a nested leaf (`filters.categoryIds`) can have its own strategy. */
 export type EntitySpec = Readonly<Record<string, FieldStrategy>>;
 
-const LWW: FieldStrategy = { kind: 'lww' };
-const CREATE_ONLY: FieldStrategy = { kind: 'createOnly' };
-const DERIVED: FieldStrategy = { kind: 'derived' };
-const ELEMENT_SET: FieldStrategy = { kind: 'elementSet' };
-const group = (name: string): FieldStrategy => ({ kind: 'group', group: name });
+const LWW: FieldStrategy = { kind: "lww" };
+const CREATE_ONLY: FieldStrategy = { kind: "createOnly" };
+const DERIVED: FieldStrategy = { kind: "derived" };
+const ELEMENT_SET: FieldStrategy = { kind: "elementSet" };
+const group = (name: string): FieldStrategy => ({ kind: "group", group: name });
 
 /**
  * Shared by every entity through `SyncEntity`.
@@ -74,7 +74,10 @@ const SYNC_ENTITY_SPEC: EntitySpec = {
   deletedAt: DERIVED,
 };
 
-const spec = (fields: EntitySpec): EntitySpec => ({ ...SYNC_ENTITY_SPEC, ...fields });
+const spec = (fields: EntitySpec): EntitySpec => ({
+  ...SYNC_ENTITY_SPEC,
+  ...fields,
+});
 
 export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
   settings: spec({
@@ -86,17 +89,17 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
      */
     baseCurrency: CREATE_ONLY,
     /** Monotone: a peer that has not finished onboarding must never un-onboard this one. */
-    onboardingComplete: { kind: 'monotoneTrue' },
+    onboardingComplete: { kind: "monotoneTrue" },
     locale: LWW,
     /**
      * Appearance is per device: a phone in a pixel-style dark theme must not restyle a laptop. The accent
      * pair is device-local together, so `'custom'` can never meet another device's system-derived hex.
      */
-    themeId: { kind: 'deviceLocal' },
-    themeMode: { kind: 'deviceLocal' },
-    accentSource: { kind: 'deviceLocal' },
-    accentHex: { kind: 'deviceLocal' },
-    swipeBetweenMonths: { kind: 'deviceLocal' },
+    themeId: { kind: "deviceLocal" },
+    themeMode: { kind: "deviceLocal" },
+    accentSource: { kind: "deviceLocal" },
+    accentHex: { kind: "deviceLocal" },
+    swipeBetweenMonths: { kind: "deviceLocal" },
   }),
 
   accounts: spec({
@@ -133,20 +136,20 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
      * minus `fee`'s amount, so splitting either from `amountMinor` produces a total no local
      * mutation could have created — one device's new fee paired with another's stale total.
      */
-    kind: group('ledger'),
-    localDate: group('ledger'),
-    accountId: group('ledger'),
-    destinationAccountId: group('ledger'),
-    amountMinor: group('ledger'),
-    currency: group('ledger'),
-    exchangeRate: group('ledger'),
-    baseAmountMinor: group('ledger'),
-    destinationAmountMinor: group('ledger'),
-    destinationCurrency: group('ledger'),
-    destinationBaseAmountMinor: group('ledger'),
-    transferGroupId: group('ledger'),
-    foreign: group('ledger'),
-    fee: group('ledger'),
+    kind: group("ledger"),
+    localDate: group("ledger"),
+    accountId: group("ledger"),
+    destinationAccountId: group("ledger"),
+    amountMinor: group("ledger"),
+    currency: group("ledger"),
+    exchangeRate: group("ledger"),
+    baseAmountMinor: group("ledger"),
+    destinationAmountMinor: group("ledger"),
+    destinationCurrency: group("ledger"),
+    destinationBaseAmountMinor: group("ledger"),
+    transferGroupId: group("ledger"),
+    foreign: group("ledger"),
+    fee: group("ledger"),
     status: LWW,
     title: LWW,
     note: LWW,
@@ -165,11 +168,11 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
     rollover: LWW,
     archived: LWW,
     /** Whole-object: `unit: 'custom'` requires an `endDate`, so the members cannot split. */
-    period: group('period'),
-    'filters.accountIds': ELEMENT_SET,
-    'filters.categoryIds': ELEMENT_SET,
-    'filters.tagIds': ELEMENT_SET,
-    categoryLimits: { kind: 'keyedMap', key: 'categoryId' },
+    period: group("period"),
+    "filters.accountIds": ELEMENT_SET,
+    "filters.categoryIds": ELEMENT_SET,
+    "filters.tagIds": ELEMENT_SET,
+    categoryLimits: { kind: "keyedMap", key: "categoryId" },
   }),
 
   budgetPeriods: spec({
@@ -184,8 +187,8 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
      * Set semantics would let an edit to the live budget bleed backwards into a closed
      * period and silently restate a number the user already saw.
      */
-    filters: group('snapshot'),
-    categoryLimits: group('snapshot'),
+    filters: group("snapshot"),
+    categoryLimits: group("snapshot"),
   }),
 
   /**
@@ -207,8 +210,8 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
     icon: LWW,
     color: LWW,
     /** A target without its starting progress is a percentage that jumps for no reason. */
-    targetMinor: group('money'),
-    initialMinor: group('money'),
+    targetMinor: group("money"),
+    initialMinor: group("money"),
     targetDate: LWW,
     linkedAccountId: LWW,
     linkedCategoryId: LWW,
@@ -229,17 +232,17 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
      * `currency` must agree with the account's, and `deleteEntities` already rewrites the
      * whole template when a dependency goes away.
      */
-    template: group('template'),
-    unit: group('schedule'),
-    interval: group('schedule'),
-    startDate: group('schedule'),
-    endDate: group('schedule'),
+    template: group("template"),
+    unit: group("schedule"),
+    interval: group("schedule"),
+    startDate: group("schedule"),
+    endDate: group("schedule"),
     /**
      * Monotone. Under plain LWW an offline device that had not yet advanced the pointer
      * would rewind it on reconnect, and `generateRecurring` would re-walk the same span on
      * every launch — producing occurrences that are then deduplicated forever.
      */
-    nextDueDate: { kind: 'monotoneMax' },
+    nextDueDate: { kind: "monotoneMax" },
     autoPost: LWW,
     active: LWW,
     /** Recomputed from the merged accounts and categories on every merge. Never travels. */
@@ -248,9 +251,9 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
 
   exchangeRates: spec({
     /** Together these are the natural key; splitting them breaks `assertReciprocalRate`. */
-    fromCurrency: group('pair'),
-    toCurrency: group('pair'),
-    effectiveDate: group('pair'),
+    fromCurrency: group("pair"),
+    toCurrency: group("pair"),
+    effectiveDate: group("pair"),
     rate: LWW,
   }),
 };
@@ -258,7 +261,8 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
 export const ENTITY_TYPES = Object.keys(REGISTRY) as EntityType[];
 
 export const isEntityType = (value: unknown): value is EntityType =>
-  typeof value === 'string' && Object.prototype.hasOwnProperty.call(REGISTRY, value);
+  typeof value === "string" &&
+  Object.prototype.hasOwnProperty.call(REGISTRY, value);
 
 const NO_SPEC: EntitySpec = {};
 
@@ -270,7 +274,8 @@ const NO_SPEC: EntitySpec = {};
  * carried through the same merge paths as everything else — so every lookup here has to
  * answer "nothing to merge" instead of taking the app down.
  */
-export const specFor = (entityType: EntityType): EntitySpec => REGISTRY[entityType] ?? NO_SPEC;
+export const specFor = (entityType: EntityType): EntitySpec =>
+  REGISTRY[entityType] ?? NO_SPEC;
 
 /**
  * The register a field contributes to: its group name, or its own path.
@@ -278,13 +283,16 @@ export const specFor = (entityType: EntityType): EntitySpec => REGISTRY[entityTy
  * Returns `null` for anything that does not travel as a register — immutables, derived
  * fields, device-local fields, sets, and maps all have their own paths through the merge.
  */
-export function registerOf(strategy: FieldStrategy, path: string): string | null {
+export function registerOf(
+  strategy: FieldStrategy,
+  path: string,
+): string | null {
   switch (strategy.kind) {
-    case 'lww':
-    case 'monotoneMax':
-    case 'monotoneTrue':
+    case "lww":
+    case "monotoneMax":
+    case "monotoneTrue":
       return path;
-    case 'group':
+    case "group":
       return strategy.group;
     default:
       return null;
@@ -304,7 +312,10 @@ const registerCache = new Map<EntityType, readonly RegisterSpec[]>();
 export function registersOf(entityType: EntityType): readonly RegisterSpec[] {
   const cached = registerCache.get(entityType);
   if (cached) return cached;
-  const byName = new Map<string, { fields: string[]; strategy: FieldStrategy }>();
+  const byName = new Map<
+    string,
+    { fields: string[]; strategy: FieldStrategy }
+  >();
   for (const path of Object.keys(specFor(entityType)).sort()) {
     const strategy = specFor(entityType)[path];
     const name = registerOf(strategy, path);
@@ -314,8 +325,14 @@ export function registersOf(entityType: EntityType): readonly RegisterSpec[] {
     else byName.set(name, { fields: [path], strategy });
   }
   const registers = [...byName.entries()]
-    .map(([name, entry]) => ({ name, fields: entry.fields, strategy: entry.strategy }))
-    .sort((first, second) => (first.name < second.name ? -1 : first.name > second.name ? 1 : 0));
+    .map(([name, entry]) => ({
+      name,
+      fields: entry.fields,
+      strategy: entry.strategy,
+    }))
+    .sort((first, second) =>
+      first.name < second.name ? -1 : first.name > second.name ? 1 : 0,
+    );
   registerCache.set(entityType, registers);
   return registers;
 }
@@ -323,7 +340,7 @@ export function registersOf(entityType: EntityType): readonly RegisterSpec[] {
 /** Field paths carrying an add-wins set, in a deterministic order. */
 export const elementSetsOf = (entityType: EntityType): readonly string[] =>
   Object.keys(specFor(entityType))
-    .filter((path) => specFor(entityType)[path].kind === 'elementSet')
+    .filter((path) => specFor(entityType)[path].kind === "elementSet")
     .sort();
 
 export interface KeyedMapSpec {
@@ -335,14 +352,16 @@ export const keyedMapsOf = (entityType: EntityType): readonly KeyedMapSpec[] =>
   Object.keys(specFor(entityType))
     .flatMap((path) => {
       const strategy = specFor(entityType)[path];
-      return strategy.kind === 'keyedMap' ? [{ path, key: strategy.key }] : [];
+      return strategy.kind === "keyedMap" ? [{ path, key: strategy.key }] : [];
     })
-    .sort((first, second) => (first.path < second.path ? -1 : first.path > second.path ? 1 : 0));
+    .sort((first, second) =>
+      first.path < second.path ? -1 : first.path > second.path ? 1 : 0,
+    );
 
 /** Field paths pinned by the `create` op. */
 export const createOnlyFieldsOf = (entityType: EntityType): readonly string[] =>
   Object.keys(specFor(entityType))
-    .filter((path) => specFor(entityType)[path].kind === 'createOnly')
+    .filter((path) => specFor(entityType)[path].kind === "createOnly")
     .sort();
 
 /**
@@ -353,9 +372,11 @@ export const createOnlyFieldsOf = (entityType: EntityType): readonly string[] =>
  * never held has *a* value to start from. Once a local copy exists it always wins, and no
  * remote write can move it — see `materialize`.
  */
-export const deviceLocalFieldsOf = (entityType: EntityType): readonly string[] =>
+export const deviceLocalFieldsOf = (
+  entityType: EntityType,
+): readonly string[] =>
   Object.keys(specFor(entityType))
-    .filter((path) => specFor(entityType)[path].kind === 'deviceLocal')
+    .filter((path) => specFor(entityType)[path].kind === "deviceLocal")
     .sort();
 
 // ---------------------------------------------------------------------------
@@ -365,8 +386,8 @@ export const deviceLocalFieldsOf = (entityType: EntityType): readonly string[] =
 /** Reads `filters.categoryIds` out of an entity. Returns `undefined` for a missing branch. */
 export function readPath(source: unknown, path: string): unknown {
   let current = source;
-  for (const segment of path.split('.')) {
-    if (typeof current !== 'object' || current === null) return undefined;
+  for (const segment of path.split(".")) {
+    if (typeof current !== "object" || current === null) return undefined;
     current = (current as Record<string, unknown>)[segment];
   }
   return current;
@@ -379,10 +400,15 @@ export function readPath(source: unknown, path: string): unknown {
  * writing every register in turn, and mutating in place would let a later write leak into
  * the previously-materialized value a caller is still holding.
  */
-export function writePath<T extends object>(target: T, path: string, value: unknown): T {
-  const [head, ...rest] = path.split('.');
+export function writePath<T extends object>(
+  target: T,
+  path: string,
+  value: unknown,
+): T {
+  const [head, ...rest] = path.split(".");
   if (!rest.length) return { ...target, [head]: value };
   const child = (target as Record<string, unknown>)[head];
-  const base = typeof child === 'object' && child !== null ? (child as object) : {};
-  return { ...target, [head]: writePath(base, rest.join('.'), value) };
+  const base =
+    typeof child === "object" && child !== null ? (child as object) : {};
+  return { ...target, [head]: writePath(base, rest.join("."), value) };
 }

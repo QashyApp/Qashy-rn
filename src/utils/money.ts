@@ -1,21 +1,26 @@
-import { Decimal } from 'decimal.js';
+import { Decimal } from "decimal.js";
 
-import type { CurrencyCode } from '@/domain/models';
+import type { CurrencyCode } from "@/domain/models";
 
 export const SUPPORTED_CURRENCY_CODES =
-  'AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL BSD BTN BWP BYN BZD CAD CDF CHF CLP CNY COP CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HRK HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD UYU UZS VES VND VUV WST XAF XCD XCG XDR XOF XPF XSU YER ZAR ZMW ZWG ZWL'.split(' ');
+  "AED AFN ALL AMD ANG AOA ARS AUD AWG AZN BAM BBD BDT BGN BHD BIF BMD BND BOB BRL BSD BTN BWP BYN BZD CAD CDF CHF CLP CNY COP CRC CUC CUP CVE CZK DJF DKK DOP DZD EGP ERN ETB EUR FJD FKP GBP GEL GHS GIP GMD GNF GTQ GYD HKD HNL HRK HTG HUF IDR ILS INR IQD IRR ISK JMD JOD JPY KES KGS KHR KMF KPW KRW KWD KYD KZT LAK LBP LKR LRD LSL LYD MAD MDL MGA MKD MMK MNT MOP MRU MUR MVR MWK MXN MYR MZN NAD NGN NIO NOK NPR NZD OMR PAB PEN PGK PHP PKR PLN PYG QAR RON RSD RUB RWF SAR SBD SCR SDG SEK SGD SHP SLE SLL SOS SRD SSP STN SVC SYP SZL THB TJS TMT TND TOP TRY TTD TWD TZS UAH UGX USD UYU UZS VES VND VUV WST XAF XCD XCG XDR XOF XPF XSU YER ZAR ZMW ZWG ZWL".split(
+    " ",
+  );
 
 const SUPPORTED_CURRENCIES = new Set(SUPPORTED_CURRENCY_CODES);
 
 function localeNumberParts(locale: string) {
   const formatter = new Intl.NumberFormat(locale);
   const parts = formatter.formatToParts(-12345.6);
-  const plusParts = new Intl.NumberFormat(locale, { signDisplay: 'always' }).formatToParts(1);
+  const plusParts = new Intl.NumberFormat(locale, {
+    signDisplay: "always",
+  }).formatToParts(1);
   return {
-    decimalSymbol: parts.find((part) => part.type === 'decimal')?.value ?? '.',
-    groupSymbol: parts.find((part) => part.type === 'group')?.value ?? ',',
-    minusSymbol: parts.find((part) => part.type === 'minusSign')?.value ?? '-',
-    plusSymbol: plusParts.find((part) => part.type === 'plusSign')?.value ?? '+',
+    decimalSymbol: parts.find((part) => part.type === "decimal")?.value ?? ".",
+    groupSymbol: parts.find((part) => part.type === "group")?.value ?? ",",
+    minusSymbol: parts.find((part) => part.type === "minusSign")?.value ?? "-",
+    plusSymbol:
+      plusParts.find((part) => part.type === "plusSign")?.value ?? "+",
     digits: new Map(
       Array.from({ length: 10 }, (_, digit) => [
         new Intl.NumberFormat(locale, { useGrouping: false }).format(digit),
@@ -25,44 +30,65 @@ function localeNumberParts(locale: string) {
   };
 }
 
-function normalizeNumberInput(value: string, locale: string, currency?: CurrencyCode) {
-  const { decimalSymbol, groupSymbol, minusSymbol, plusSymbol, digits } = localeNumberParts(locale);
+function normalizeNumberInput(
+  value: string,
+  locale: string,
+  currency?: CurrencyCode,
+) {
+  const { decimalSymbol, groupSymbol, minusSymbol, plusSymbol, digits } =
+    localeNumberParts(locale);
   let normalized = value.trim();
   digits.forEach((ascii, localized) => {
     normalized = normalized.split(localized).join(ascii);
   });
   normalized = normalized
-    .replace(/[\p{Sc}\s\u200E\u200F\u061C]/gu, '')
-    .replace(currency ? new RegExp(currency, 'gi') : /$^/, '');
+    .replace(/[\p{Sc}\s\u200E\u200F\u061C]/gu, "")
+    .replace(currency ? new RegExp(currency, "gi") : /$^/, "");
   // A group symbol is only a thousands separator when it sits between digit
   // groups of three. Otherwise "12,50" in en-US would silently become 1250
   // instead of being rejected.
   if (groupSymbol.trim() && normalized.includes(groupSymbol)) {
-    const integerPart = normalized.split(decimalSymbol)[0].replace(/^[+\-\u2212]/, '');
+    const integerPart = normalized
+      .split(decimalSymbol)[0]
+      .replace(/^[+\-\u2212]/, "");
     const groups = integerPart.split(groupSymbol);
-    const wellFormed = groups.every((group, index) =>
-      /^\d+$/.test(group)
-      && (index === 0 ? group.length <= 3 : group.length === 3 || (index < groups.length - 1 && group.length === 2)));
-    if (!wellFormed) throw new Error('Enter a valid number.');
+    const wellFormed = groups.every(
+      (group, index) =>
+        /^\d+$/.test(group) &&
+        (index === 0
+          ? group.length <= 3
+          : group.length === 3 ||
+            (index < groups.length - 1 && group.length === 2)),
+    );
+    if (!wellFormed) throw new Error("Enter a valid number.");
   }
   normalized = normalized
-    .split(groupSymbol).join('')
-    .split(decimalSymbol).join('.')
-    .split(minusSymbol).join('-')
-    .split(plusSymbol).join('+');
+    .split(groupSymbol)
+    .join("")
+    .split(decimalSymbol)
+    .join(".")
+    .split(minusSymbol)
+    .join("-")
+    .split(plusSymbol)
+    .join("+");
   if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(normalized)) {
-    throw new Error('Enter a valid number.');
+    throw new Error("Enter a valid number.");
   }
   return normalized;
 }
 
-function minorFromDecimal(decimal: Decimal, currency: CurrencyCode, locale: string) {
+function minorFromDecimal(
+  decimal: Decimal,
+  currency: CurrencyCode,
+  locale: string,
+) {
   const digits = currencyDigits(currency, locale);
   if (decimal.decimalPlaces() > digits) {
     throw new Error(`Amount can have at most ${digits} decimal places.`);
   }
   const minor = decimal.mul(new Decimal(10).pow(digits)).toNumber();
-  if (!isSafeMinor(minor)) throw new Error('Amount is outside the supported range.');
+  if (!isSafeMinor(minor))
+    throw new Error("Amount is outside the supported range.");
   return minor;
 }
 
@@ -70,23 +96,31 @@ function localizeAsciiDigits(value: string, locale: string) {
   const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
   return Array.from(value, (character) =>
     /\d/.test(character) ? formatter.format(Number(character)) : character,
-  ).join('');
+  ).join("");
 }
 
 export function isSupportedCurrencyCode(value: string) {
   return SUPPORTED_CURRENCIES.has(value.trim().toUpperCase());
 }
 
-export function currencyDigits(currency: CurrencyCode, locale = 'en-US') {
+export function currencyDigits(currency: CurrencyCode, locale = "en-US") {
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).resolvedOptions()
-      .maximumFractionDigits ?? 2;
+    return (
+      new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency,
+      }).resolvedOptions().maximumFractionDigits ?? 2
+    );
   } catch {
     throw new Error(`Unsupported currency or locale: ${currency} (${locale}).`);
   }
 }
 
-export function parseMoney(value: string, currency: CurrencyCode, locale = 'en-US') {
+export function parseMoney(
+  value: string,
+  currency: CurrencyCode,
+  locale = "en-US",
+) {
   try {
     return minorFromDecimal(
       new Decimal(normalizeNumberInput(value, locale, currency)),
@@ -98,14 +132,23 @@ export function parseMoney(value: string, currency: CurrencyCode, locale = 'en-U
     // "Enter a valid amount." also swallowed `Unsupported currency or locale: …`
     // from `currencyDigits`, which points at a configuration problem the user
     // cannot fix by retyping the number.
-    if (reason instanceof Error && (reason.message.startsWith('Amount ') || reason.message.startsWith('Unsupported currency or locale'))) throw reason;
-    throw new Error('Enter a valid amount.');
+    if (
+      reason instanceof Error &&
+      (reason.message.startsWith("Amount ") ||
+        reason.message.startsWith("Unsupported currency or locale"))
+    )
+      throw reason;
+    throw new Error("Enter a valid amount.");
   }
 }
 
-export function parseInvariantMoney(value: string, currency: CurrencyCode, locale = 'en-US') {
+export function parseInvariantMoney(
+  value: string,
+  currency: CurrencyCode,
+  locale = "en-US",
+) {
   if (!/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)$/.test(value.trim())) {
-    throw new Error('Enter a valid amount.');
+    throw new Error("Enter a valid amount.");
   }
   try {
     return minorFromDecimal(new Decimal(value.trim()), currency, locale);
@@ -114,27 +157,35 @@ export function parseInvariantMoney(value: string, currency: CurrencyCode, local
     // "Enter a valid amount." also swallowed `Unsupported currency or locale: …`
     // from `currencyDigits`, which points at a configuration problem the user
     // cannot fix by retyping the number.
-    if (reason instanceof Error && (reason.message.startsWith('Amount ') || reason.message.startsWith('Unsupported currency or locale'))) throw reason;
-    throw new Error('Enter a valid amount.');
+    if (
+      reason instanceof Error &&
+      (reason.message.startsWith("Amount ") ||
+        reason.message.startsWith("Unsupported currency or locale"))
+    )
+      throw reason;
+    throw new Error("Enter a valid amount.");
   }
 }
 
-export function normalizeDecimalString(value: string, locale = 'en-US') {
+export function normalizeDecimalString(value: string, locale = "en-US") {
   try {
     const decimal = new Decimal(normalizeNumberInput(value, locale));
     if (!decimal.isFinite()) throw new Error();
     return decimal.toString();
   } catch {
-    throw new Error('Enter a valid number.');
+    throw new Error("Enter a valid number.");
   }
 }
 
-export function localizeDecimalString(value: string, locale = 'en-US') {
+export function localizeDecimalString(value: string, locale = "en-US") {
   const { decimalSymbol, minusSymbol } = localeNumberParts(locale);
   const fixed = new Decimal(value).toFixed();
-  const negative = fixed.startsWith('-');
+  const negative = fixed.startsWith("-");
   const unsigned = negative ? fixed.slice(1) : fixed;
-  const localized = localizeAsciiDigits(unsigned.replace('.', decimalSymbol), locale);
+  const localized = localizeAsciiDigits(
+    unsigned.replace(".", decimalSymbol),
+    locale,
+  );
   return negative ? `${minusSymbol}${localized}` : localized;
 }
 
@@ -143,13 +194,14 @@ export function convertMinor(
   fromCurrency: CurrencyCode,
   toCurrency: CurrencyCode,
   rate: string,
-  locale = 'en-US',
+  locale = "en-US",
 ) {
   if (fromCurrency === toCurrency) return amountMinor;
-  if (!isSafeMinor(amountMinor)) throw new Error('Amount is outside the supported range.');
+  if (!isSafeMinor(amountMinor))
+    throw new Error("Amount is outside the supported range.");
   const decimalRate = new Decimal(rate);
   if (!decimalRate.isFinite() || decimalRate.lte(0)) {
-    throw new Error('Exchange rate must be a positive number.');
+    throw new Error("Exchange rate must be a positive number.");
   }
   const fromScale = new Decimal(10).pow(currencyDigits(fromCurrency, locale));
   const toScale = new Decimal(10).pow(currencyDigits(toCurrency, locale));
@@ -159,7 +211,8 @@ export function convertMinor(
     .mul(toScale)
     .toDecimalPlaces(0)
     .toNumber();
-  if (!isSafeMinor(converted)) throw new Error('Converted amount is outside the supported range.');
+  if (!isSafeMinor(converted))
+    throw new Error("Converted amount is outside the supported range.");
   return converted;
 }
 
@@ -180,52 +233,61 @@ function moneyPartsList(
   options?: MoneyOptions,
 ): { type: string; value: string }[] {
   const digits = currencyDigits(currency, locale);
-  if (!isSafeMinor(minor)) throw new Error('Amount is outside the supported range.');
+  if (!isSafeMinor(minor))
+    throw new Error("Amount is outside the supported range.");
   // Compact notation only starts abbreviating at a thousand. Below that it would
   // render the exact same magnitude while silently dropping minor units
   // ($12.50 -> "$12.5", $0.00 -> "$0"), so fall through to the exact formatter.
   // Use Decimal comparison directly to avoid an intermediate double that could
   // lose integer precision near MAX_SAFE_INTEGER.
-  const compact = options?.compact === true
-    && new Decimal(minor).abs().div(new Decimal(10).pow(digits)).gte(1000);
+  const compact =
+    options?.compact === true &&
+    new Decimal(minor).abs().div(new Decimal(10).pow(digits)).gte(1000);
   if (!compact) {
     const fixed = minorToDecimalString(Math.abs(minor), currency, locale);
-    const [integer, fraction = ''] = fixed.split('.');
+    const [integer, fraction = ""] = fixed.split(".");
     const numberParts = new Intl.NumberFormat(locale, {
       useGrouping: true,
       maximumFractionDigits: 0,
     }).formatToParts(Number(integer));
     const sample = minor < 0 ? -1 : minor > 0 ? 1 : 0;
     const pattern = new Intl.NumberFormat(locale, {
-      style: 'currency',
+      style: "currency",
       currency,
-      signDisplay: options?.sign ? 'exceptZero' : 'auto',
+      signDisplay: options?.sign ? "exceptZero" : "auto",
       minimumFractionDigits: digits,
       maximumFractionDigits: digits,
     }).formatToParts(sample);
     let insertedInteger = false;
     return pattern.map((part) => {
-      if (part.type === 'integer' || part.type === 'group') {
-        if (insertedInteger) return { type: part.type, value: '' };
+      if (part.type === "integer" || part.type === "group") {
+        if (insertedInteger) return { type: part.type, value: "" };
         insertedInteger = true;
         return {
-          type: 'integer',
+          type: "integer",
           value: numberParts
-            .filter((numberPart) => numberPart.type === 'integer' || numberPart.type === 'group')
+            .filter(
+              (numberPart) =>
+                numberPart.type === "integer" || numberPart.type === "group",
+            )
             .map((numberPart) => numberPart.value)
-            .join(''),
+            .join(""),
         };
       }
-      if (part.type === 'fraction') return { type: 'fraction', value: localizeAsciiDigits(fraction, locale) };
+      if (part.type === "fraction")
+        return {
+          type: "fraction",
+          value: localizeAsciiDigits(fraction, locale),
+        };
       return { type: part.type, value: part.value };
     });
   }
   const value = new Decimal(minor).div(new Decimal(10).pow(digits)).toNumber();
   return new Intl.NumberFormat(locale, {
-    style: 'currency',
+    style: "currency",
     currency,
-    notation: 'compact',
-    signDisplay: options?.sign ? 'exceptZero' : 'auto',
+    notation: "compact",
+    signDisplay: options?.sign ? "exceptZero" : "auto",
     maximumFractionDigits: 1,
   }).formatToParts(value);
 }
@@ -233,10 +295,12 @@ function moneyPartsList(
 export function formatMoney(
   minor: number,
   currency: CurrencyCode,
-  locale = 'en-US',
+  locale = "en-US",
   options?: MoneyOptions,
 ) {
-  return moneyPartsList(minor, currency, locale, options).map((part) => part.value).join('');
+  return moneyPartsList(minor, currency, locale, options)
+    .map((part) => part.value)
+    .join("");
 }
 
 export interface MoneyParts {
@@ -245,7 +309,7 @@ export interface MoneyParts {
   integer: string;
   /** The decimal separator and the fractional digits, e.g. ".34" or ",34". Empty for zero-decimal currencies. */
   fraction: string;
-  currencyPosition: 'before' | 'after';
+  currencyPosition: "before" | "after";
   /** Anything (bidi marks, a leading currency-adjacent space) that renders before the sign/currency/number cluster. */
   literalBefore: string;
   /** Anything (a compact suffix, a currency-adjacent space) that renders after the number, before a trailing currency. */
@@ -269,40 +333,52 @@ export interface MoneyParts {
 export function formatMoneyParts(
   minor: number,
   currency: CurrencyCode,
-  locale = 'en-US',
+  locale = "en-US",
   options?: MoneyOptions,
 ): MoneyParts {
   const parts = moneyPartsList(minor, currency, locale, options);
-  let sign = '';
-  let currencyValue = '';
-  let integer = '';
-  let fraction = '';
-  let literalBefore = '';
-  let literalAfter = '';
-  let currencyPosition: 'before' | 'after' = 'before';
+  let sign = "";
+  let currencyValue = "";
+  let integer = "";
+  let fraction = "";
+  let literalBefore = "";
+  let literalAfter = "";
+  let currencyPosition: "before" | "after" = "before";
   let numericStarted = false;
   for (const part of parts) {
-    if (part.type === 'integer' || part.type === 'group') {
+    if (part.type === "integer" || part.type === "group") {
       integer += part.value;
       numericStarted = true;
-    } else if (part.type === 'decimal' || part.type === 'fraction') {
+    } else if (part.type === "decimal" || part.type === "fraction") {
       fraction += part.value;
       numericStarted = true;
-    } else if (part.type === 'minusSign' || part.type === 'plusSign') {
+    } else if (part.type === "minusSign" || part.type === "plusSign") {
       sign += part.value;
-    } else if (part.type === 'currency') {
+    } else if (part.type === "currency") {
       currencyValue += part.value;
-      currencyPosition = numericStarted ? 'after' : 'before';
+      currencyPosition = numericStarted ? "after" : "before";
     } else if (!numericStarted) {
       literalBefore += part.value;
     } else {
       literalAfter += part.value;
     }
   }
-  return { sign, currency: currencyValue, integer, fraction, currencyPosition, literalBefore, literalAfter };
+  return {
+    sign,
+    currency: currencyValue,
+    integer,
+    fraction,
+    currencyPosition,
+    literalBefore,
+    literalAfter,
+  };
 }
 
-export function minorToDecimalString(minor: number, currency: CurrencyCode, locale = 'en-US') {
+export function minorToDecimalString(
+  minor: number,
+  currency: CurrencyCode,
+  locale = "en-US",
+) {
   const digits = currencyDigits(currency, locale);
   return new Decimal(minor).div(new Decimal(10).pow(digits)).toFixed(digits);
 }
@@ -310,34 +386,40 @@ export function minorToDecimalString(minor: number, currency: CurrencyCode, loca
 export function minorToLocalizedDecimalString(
   minor: number,
   currency: CurrencyCode,
-  locale = 'en-US',
+  locale = "en-US",
 ) {
   const { decimalSymbol, minusSymbol } = localeNumberParts(locale);
   const fixed = minorToDecimalString(minor, currency, locale);
-  const negative = fixed.startsWith('-');
+  const negative = fixed.startsWith("-");
   const unsigned = negative ? fixed.slice(1) : fixed;
-  const localized = localizeAsciiDigits(unsigned.replace('.', decimalSymbol), locale);
+  const localized = localizeAsciiDigits(
+    unsigned.replace(".", decimalSymbol),
+    locale,
+  );
   return negative ? `${minusSymbol}${localized}` : localized;
 }
 
 export function isSafeMinor(value: number) {
-  return Number.isSafeInteger(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER;
+  return (
+    Number.isSafeInteger(value) && Math.abs(value) <= Number.MAX_SAFE_INTEGER
+  );
 }
 
-export function addMinor(first: number, second: number, label = 'Amount') {
+export function addMinor(first: number, second: number, label = "Amount") {
   if (!isSafeMinor(first) || !isSafeMinor(second)) {
     throw new Error(`${label} is outside the supported range.`);
   }
   const result = first + second;
-  if (!isSafeMinor(result)) throw new Error(`${label} is outside the supported range.`);
+  if (!isSafeMinor(result))
+    throw new Error(`${label} is outside the supported range.`);
   return result;
 }
 
-export function subtractMinor(first: number, second: number, label = 'Amount') {
+export function subtractMinor(first: number, second: number, label = "Amount") {
   return addMinor(first, -second, label);
 }
 
-export function sumMinor(values: Iterable<number>, label = 'Amount') {
+export function sumMinor(values: Iterable<number>, label = "Amount") {
   let total = 0;
   for (const value of values) total = addMinor(total, value, label);
   return total;

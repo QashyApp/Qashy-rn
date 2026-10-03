@@ -5,12 +5,12 @@
  * ordering rules that the tests can exercise directly.
  */
 
-import type { ImportCounts, ImportSourceId } from '@/data/import/types';
-import { normalizeName } from '@/utils/naming';
+import type { ImportCounts, ImportSourceId } from "@/data/import/types";
+import { normalizeName } from "@/utils/naming";
 
 /** How a source is named in the suffix added to a colliding entity, e.g. "Food (Cashew)". */
 const SOURCE_LABELS: Record<ImportSourceId, string> = {
-  cashew: 'Cashew',
+  cashew: "Cashew",
 };
 
 export const emptyImportCounts = (): ImportCounts => ({
@@ -30,14 +30,18 @@ export const emptyImportCounts = (): ImportCounts => ({
  * able to tell apart. The result is compared with `normalizeName`, the same rule the
  * repository's uniqueness check uses, so a name accepted here is never rejected on save.
  */
-export function uniquifyName(source: ImportSourceId, name: string, taken: ReadonlySet<string>): string {
+export function uniquifyName(
+  source: ImportSourceId,
+  name: string,
+  taken: ReadonlySet<string>,
+): string {
   const base = name.trim();
   if (!taken.has(normalizeName(base))) return base;
   const label = SOURCE_LABELS[source];
   let index = 1;
-  let candidate = '';
+  let candidate = "";
   do {
-    candidate = `${base} (${label}${index === 1 ? '' : ` ${index}`})`;
+    candidate = `${base} (${label}${index === 1 ? "" : ` ${index}`})`;
     index += 1;
   } while (taken.has(normalizeName(candidate)));
   return candidate;
@@ -51,17 +55,22 @@ export function uniquifyName(source: ImportSourceId, name: string, taken: Readon
  * the point it is reached) rather than dropped: validation then rejects it with a reason
  * instead of the import silently losing a row.
  */
-export function orderParentsFirst<T extends { externalId: string; parentExternalId: string | null }>(
-  categories: readonly T[],
-): T[] {
-  const byId = new Map(categories.map((category) => [category.externalId, category]));
+export function orderParentsFirst<
+  T extends { externalId: string; parentExternalId: string | null },
+>(categories: readonly T[]): T[] {
+  const byId = new Map(
+    categories.map((category) => [category.externalId, category]),
+  );
   const ordered: T[] = [];
   const visited = new Set<string>();
   const visit = (category: T, path: Set<string>) => {
     if (visited.has(category.externalId)) return;
     visited.add(category.externalId);
-    const parent = category.parentExternalId ? byId.get(category.parentExternalId) : undefined;
-    if (parent && !path.has(parent.externalId)) visit(parent, new Set([...path, category.externalId]));
+    const parent = category.parentExternalId
+      ? byId.get(category.parentExternalId)
+      : undefined;
+    if (parent && !path.has(parent.externalId))
+      visit(parent, new Set([...path, category.externalId]));
     ordered.push(category);
   };
   for (const category of categories) visit(category, new Set());

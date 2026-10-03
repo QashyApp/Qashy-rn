@@ -12,21 +12,33 @@
  *
  * Run: `node scripts/render-icons.mjs`
  */
-import { chromium } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { chromium } from "@playwright/test";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = path.dirname(fileURLToPath(import.meta.url)) + '/..';
+const ROOT = path.dirname(fileURLToPath(import.meta.url)) + "/..";
 
-const APP_ICON_SVG = await readFile(path.join(ROOT, 'assets/branding/qashy-app-icon.svg'), 'utf8');
-const MARK_SVG = await readFile(path.join(ROOT, 'assets/branding/qashy-mark.svg'), 'utf8');
-const MARK_MONO_SVG = await readFile(path.join(ROOT, 'assets/branding/qashy-mark-monochrome.svg'), 'utf8');
-const PUBLIC_ICON_SVG = await readFile(path.join(ROOT, 'public/qashy-icon.svg'), 'utf8');
+const APP_ICON_SVG = await readFile(
+  path.join(ROOT, "assets/branding/qashy-app-icon.svg"),
+  "utf8",
+);
+const MARK_SVG = await readFile(
+  path.join(ROOT, "assets/branding/qashy-mark.svg"),
+  "utf8",
+);
+const MARK_MONO_SVG = await readFile(
+  path.join(ROOT, "assets/branding/qashy-mark-monochrome.svg"),
+  "utf8",
+);
+const PUBLIC_ICON_SVG = await readFile(
+  path.join(ROOT, "public/qashy-icon.svg"),
+  "utf8",
+);
 
 /** Strips the outer `<svg ...>` tag, keeping only its children, so a mark can be re-wrapped. */
 function innerMarkup(svg) {
-  return svg.replace(/^[\s\S]*?<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
+  return svg.replace(/^[\s\S]*?<svg[^>]*>/, "").replace(/<\/svg>\s*$/, "");
 }
 
 /**
@@ -50,18 +62,58 @@ function backgroundOnlySvg({ size }) {
 }
 
 const targets = [
-  { out: 'assets/images/icon.png', svg: APP_ICON_SVG, size: 1024, transparent: false },
+  {
+    out: "assets/images/icon.png",
+    svg: APP_ICON_SVG,
+    size: 1024,
+    transparent: false,
+  },
   // The splash screen now sits on the app's own neutral background token
   // (see app.json), so the splash image has to carry its own color rather
   // than being a white glyph meant for an indigo backdrop — the full,
   // self-contained icon reads correctly on both the light and dark splash.
-  { out: 'assets/images/splash-icon.png', svg: APP_ICON_SVG, size: 512, transparent: false },
-  { out: 'assets/images/favicon.png', svg: APP_ICON_SVG, size: 48, transparent: false },
-  { out: 'assets/images/android-icon-foreground.png', svg: safeZoneMark(MARK_SVG, { size: 512 }), size: 512, transparent: true },
-  { out: 'assets/images/android-icon-background.png', svg: backgroundOnlySvg({ size: 512 }), size: 512, transparent: false },
-  { out: 'assets/images/android-icon-monochrome.png', svg: safeZoneMark(MARK_MONO_SVG, { size: 432 }), size: 432, transparent: true },
-  { out: 'public/qashy-icon-192.png', svg: PUBLIC_ICON_SVG, size: 192, transparent: false },
-  { out: 'public/qashy-icon-512.png', svg: PUBLIC_ICON_SVG, size: 512, transparent: false },
+  {
+    out: "assets/images/splash-icon.png",
+    svg: APP_ICON_SVG,
+    size: 512,
+    transparent: false,
+  },
+  {
+    out: "assets/images/favicon.png",
+    svg: APP_ICON_SVG,
+    size: 48,
+    transparent: false,
+  },
+  {
+    out: "assets/images/android-icon-foreground.png",
+    svg: safeZoneMark(MARK_SVG, { size: 512 }),
+    size: 512,
+    transparent: true,
+  },
+  {
+    out: "assets/images/android-icon-background.png",
+    svg: backgroundOnlySvg({ size: 512 }),
+    size: 512,
+    transparent: false,
+  },
+  {
+    out: "assets/images/android-icon-monochrome.png",
+    svg: safeZoneMark(MARK_MONO_SVG, { size: 432 }),
+    size: 432,
+    transparent: true,
+  },
+  {
+    out: "public/qashy-icon-192.png",
+    svg: PUBLIC_ICON_SVG,
+    size: 192,
+    transparent: false,
+  },
+  {
+    out: "public/qashy-icon-512.png",
+    svg: PUBLIC_ICON_SVG,
+    size: 512,
+    transparent: false,
+  },
 ];
 
 // The CSS forces every SVG to the exact output pixel size regardless of its
@@ -82,8 +134,13 @@ try {
     await page.setContent(pageHtml(target.svg, target.size));
     await page.waitForTimeout(30);
     const outPath = path.join(ROOT, target.out);
-    await page.screenshot({ path: outPath, omitBackground: target.transparent });
-    console.log(`wrote ${target.out} (${target.size}x${target.size}, transparent=${target.transparent})`);
+    await page.screenshot({
+      path: outPath,
+      omitBackground: target.transparent,
+    });
+    console.log(
+      `wrote ${target.out} (${target.size}x${target.size}, transparent=${target.transparent})`,
+    );
   }
 } finally {
   await browser.close();

@@ -28,11 +28,16 @@
  * be opened as an archive by swapping a magic number.
  */
 
-import * as bip39 from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/english.js';
+import * as bip39 from "@scure/bip39";
+import { wordlist } from "@scure/bip39/wordlists/english.js";
 
-import { ENVELOPE_PURPOSES, open, seal, type EnvelopeContext } from '@/sync/crypto/envelope';
-import { deriveBackupKey } from '@/sync/crypto/keys';
+import {
+  ENVELOPE_PURPOSES,
+  open,
+  seal,
+  type EnvelopeContext,
+} from "@/sync/crypto/envelope";
+import { deriveBackupKey } from "@/sync/crypto/keys";
 import {
   KEY_LENGTH,
   SCRYPT_DEFAULTS,
@@ -43,8 +48,13 @@ import {
   u32be,
   u8,
   type ScryptParams,
-} from '@/sync/crypto/primitives';
-import { SyncCryptoError, brand, type BackupKey, type VaultRootKey } from '@/sync/crypto/types';
+} from "@/sync/crypto/primitives";
+import {
+  SyncCryptoError,
+  brand,
+  type BackupKey,
+  type VaultRootKey,
+} from "@/sync/crypto/types";
 
 export const RECOVERY_WORD_COUNT = 24;
 export const MIN_PASSPHRASE_LENGTH = 12;
@@ -61,26 +71,33 @@ export const MIN_PASSPHRASE_LENGTH = 12;
  * silently reconstructing a different, useless key. Someone restoring a vault years later
  * from handwriting deserves to be told they made a typo.
  */
-export const vaultKeyToRecoveryPhrase = (vrk: VaultRootKey) => bip39.entropyToMnemonic(vrk, wordlist);
+export const vaultKeyToRecoveryPhrase = (vrk: VaultRootKey) =>
+  bip39.entropyToMnemonic(vrk, wordlist);
 
 export const recoveryPhraseToVaultKey = (phrase: string) => {
-  const normalized = phrase.trim().toLowerCase().replace(/\s+/g, ' ');
+  const normalized = phrase.trim().toLowerCase().replace(/\s+/g, " ");
   if (!bip39.validateMnemonic(normalized, wordlist)) {
     throw new SyncCryptoError(
-      'That recovery phrase is not valid. Check for a mistyped or out-of-order word.',
-      'badMnemonic',
+      "That recovery phrase is not valid. Check for a mistyped or out-of-order word.",
+      "badMnemonic",
     );
   }
   const entropy = bip39.mnemonicToEntropy(normalized, wordlist);
   if (entropy.length !== KEY_LENGTH) {
-    throw new SyncCryptoError(`A Qashy recovery phrase is ${RECOVERY_WORD_COUNT} words.`, 'badMnemonic');
+    throw new SyncCryptoError(
+      `A Qashy recovery phrase is ${RECOVERY_WORD_COUNT} words.`,
+      "badMnemonic",
+    );
   }
   return brand<VaultRootKey>(entropy);
 };
 
 /** Validates without revealing anything, so the confirmation step can check as the user types. */
 export const isValidRecoveryPhrase = (phrase: string) =>
-  bip39.validateMnemonic(phrase.trim().toLowerCase().replace(/\s+/g, ' '), wordlist);
+  bip39.validateMnemonic(
+    phrase.trim().toLowerCase().replace(/\s+/g, " "),
+    wordlist,
+  );
 
 // ---------------------------------------------------------------------------
 // Backup files
@@ -101,26 +118,33 @@ const SALT_LENGTH = 32;
  * This is a routing hint, not a security check — the magic is unauthenticated, and a file
  * whose magic says one thing and whose ciphertext says another simply fails to open.
  */
-export const readBackupKind = (file: Uint8Array): 'passphrase' | 'vaultKey' | null => {
-  const matches = (magic: Uint8Array) => magic.every((byte, index) => file[index] === byte);
+export const readBackupKind = (
+  file: Uint8Array,
+): "passphrase" | "vaultKey" | null => {
+  const matches = (magic: Uint8Array) =>
+    magic.every((byte, index) => file[index] === byte);
   if (file.length < 5) return null;
-  if (matches(BACKUP_MAGIC)) return 'passphrase';
-  if (matches(VAULT_BACKUP_MAGIC)) return 'vaultKey';
+  if (matches(BACKUP_MAGIC)) return "passphrase";
+  if (matches(VAULT_BACKUP_MAGIC)) return "vaultKey";
   return null;
 };
 
 const backupContext = (): EnvelopeContext => ({
-  purpose: 'backup',
-  senderDeviceId: '',
-  recipientDeviceId: '',
+  purpose: "backup",
+  senderDeviceId: "",
+  recipientDeviceId: "",
   epoch: 0,
   seq: 0,
 });
 
-const bundleContext = (senderDeviceId: string, epoch: number, seq: number): EnvelopeContext => ({
-  purpose: 'file',
+const bundleContext = (
+  senderDeviceId: string,
+  epoch: number,
+  seq: number,
+): EnvelopeContext => ({
+  purpose: "file",
   senderDeviceId,
-  recipientDeviceId: '',
+  recipientDeviceId: "",
   epoch,
   seq,
 });
@@ -141,7 +165,7 @@ export const createPassphraseBackup = (
   if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
     throw new SyncCryptoError(
       `Use a passphrase of at least ${MIN_PASSPHRASE_LENGTH} characters.`,
-      'badPassphrase',
+      "badPassphrase",
     );
   }
   const salt = randomBytes(SALT_LENGTH);
@@ -160,19 +184,26 @@ export const createPassphraseBackup = (
 export const openPassphraseBackup = (passphrase: string, file: Uint8Array) => {
   const header = 4 + 1 + 4 + 4 + 4 + 4;
   if (file.length < header + SALT_LENGTH) {
-    throw new SyncCryptoError('That file is not a Qashy backup.', 'badFormat');
+    throw new SyncCryptoError("That file is not a Qashy backup.", "badFormat");
   }
   if (BACKUP_MAGIC.some((byte, index) => file[index] !== byte)) {
-    throw new SyncCryptoError('That file is not a Qashy backup.', 'badFormat');
+    throw new SyncCryptoError("That file is not a Qashy backup.", "badFormat");
   }
   if (file[4] !== BACKUP_FORMAT) {
-    throw new SyncCryptoError('That backup was written by a newer version of Qashy.', 'badVersion');
+    throw new SyncCryptoError(
+      "That backup was written by a newer version of Qashy.",
+      "badVersion",
+    );
   }
   const view = new DataView(file.buffer, file.byteOffset, file.byteLength);
-  const params: ScryptParams = { N: view.getUint32(5, false), r: view.getUint32(9, false), p: view.getUint32(13, false) };
+  const params: ScryptParams = {
+    N: view.getUint32(5, false),
+    r: view.getUint32(9, false),
+    p: view.getUint32(13, false),
+  };
   const saltLength = view.getUint32(17, false);
   if (saltLength !== SALT_LENGTH || file.length < header + saltLength) {
-    throw new SyncCryptoError('That backup file is damaged.', 'badFormat');
+    throw new SyncCryptoError("That backup file is damaged.", "badFormat");
   }
   // `scryptKey` validates aggregate memory and CPU cost before the KDF allocates anything.
   // Checking individual fields is insufficient: a modest N multiplied by hostile r or p is
@@ -184,8 +215,11 @@ export const openPassphraseBackup = (passphrase: string, file: Uint8Array) => {
   } catch (reason) {
     // The AEAD cannot distinguish a wrong passphrase from a damaged file, but the user
     // almost always mistyped, so lead with that and mention the other.
-    if (reason instanceof SyncCryptoError && reason.code === 'badTag') {
-      throw new SyncCryptoError('Wrong passphrase, or the backup file is damaged.', 'badPassphrase');
+    if (reason instanceof SyncCryptoError && reason.code === "badTag") {
+      throw new SyncCryptoError(
+        "Wrong passphrase, or the backup file is damaged.",
+        "badPassphrase",
+      );
     }
     throw reason;
   }
@@ -201,7 +235,12 @@ export const createVaultBundle = (
   epoch: number,
   seq: number,
   payload: Uint8Array,
-) => seal(deriveBackupKey(vrk), bundleContext(senderDeviceId, epoch, seq), payload);
+) =>
+  seal(
+    deriveBackupKey(vrk),
+    bundleContext(senderDeviceId, epoch, seq),
+    payload,
+  );
 
 export const openVaultBundle = (
   vrk: VaultRootKey,
@@ -209,7 +248,8 @@ export const openVaultBundle = (
   epoch: number,
   seq: number,
   file: Uint8Array,
-) => open(deriveBackupKey(vrk), bundleContext(senderDeviceId, epoch, seq), file);
+) =>
+  open(deriveBackupKey(vrk), bundleContext(senderDeviceId, epoch, seq), file);
 
 /**
  * Seals a backup archive under the vault root key, so the 24-word phrase opens it.
@@ -219,15 +259,25 @@ export const openVaultBundle = (
  * slow. Stretching exists to make a *low-entropy* secret expensive to guess.
  */
 export const createVaultKeyBackup = (vrk: VaultRootKey, payload: Uint8Array) =>
-  concatBytes(VAULT_BACKUP_MAGIC, u8(BACKUP_FORMAT), seal(deriveBackupKey(vrk), backupContext(), payload));
+  concatBytes(
+    VAULT_BACKUP_MAGIC,
+    u8(BACKUP_FORMAT),
+    seal(deriveBackupKey(vrk), backupContext(), payload),
+  );
 
 export const openVaultKeyBackup = (vrk: VaultRootKey, file: Uint8Array) => {
   const header = VAULT_BACKUP_MAGIC.length + 1;
-  if (file.length < header || VAULT_BACKUP_MAGIC.some((byte, index) => file[index] !== byte)) {
-    throw new SyncCryptoError('That file is not a Qashy backup.', 'badFormat');
+  if (
+    file.length < header ||
+    VAULT_BACKUP_MAGIC.some((byte, index) => file[index] !== byte)
+  ) {
+    throw new SyncCryptoError("That file is not a Qashy backup.", "badFormat");
   }
   if (file[4] !== BACKUP_FORMAT) {
-    throw new SyncCryptoError('That backup was written by a newer version of Qashy.', 'badVersion');
+    throw new SyncCryptoError(
+      "That backup was written by a newer version of Qashy.",
+      "badVersion",
+    );
   }
   try {
     return open(deriveBackupKey(vrk), backupContext(), file.slice(header));
@@ -235,10 +285,10 @@ export const openVaultKeyBackup = (vrk: VaultRootKey, file: Uint8Array) => {
     // Same reasoning as the passphrase path, different remedy: the phrase is far more
     // likely to be the wrong *vault's* phrase than mistyped, since a typo fails the BIP39
     // checksum long before it reaches here.
-    if (reason instanceof SyncCryptoError && reason.code === 'badTag') {
+    if (reason instanceof SyncCryptoError && reason.code === "badTag") {
       throw new SyncCryptoError(
-        'That recovery phrase does not match this backup, or the file is damaged.',
-        'badPassphrase',
+        "That recovery phrase does not match this backup, or the file is damaged.",
+        "badPassphrase",
       );
     }
     throw reason;

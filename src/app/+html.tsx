@@ -1,8 +1,8 @@
-import { ScrollViewStyleReset } from 'expo-router/html';
-import type { PropsWithChildren } from 'react';
+import { ScrollViewStyleReset } from "expo-router/html";
+import type { PropsWithChildren } from "react";
 
-import { classicTheme } from '@/theme/themes/classic';
-import { CONTENT_SECURITY_POLICY } from '@/utils/csp';
+import { classicTheme } from "@/theme/themes/classic";
+import { CONTENT_SECURITY_POLICY } from "@/utils/csp";
 
 // Derived from the same tokens the app renders with, rather than hand-copied. The
 // static shell used to carry its own `#F7F7FB`/`#121217` pair while the app painted
@@ -85,20 +85,39 @@ export default function Root({ children }: PropsWithChildren) {
             Metro over its own socket, and a policy fixed at build time cannot describe that
             without being loosened to the point of proving nothing. The exported `dist/` is
             what ships and what `e2e/qashy.spec.ts` runs against, so that is where it holds. */}
-        {process.env.NODE_ENV === 'production' ? (
-          <meta httpEquiv="Content-Security-Policy" content={CONTENT_SECURITY_POLICY} />
+        {process.env.NODE_ENV === "production" ? (
+          <meta
+            httpEquiv="Content-Security-Policy"
+            content={CONTENT_SECURITY_POLICY}
+          />
         ) : null}
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
         {/* Fallback title. Routes that render `expo-router/head` override it. */}
         <title>Qashy — Calm Budgeting</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1, viewport-fit=cover"
+        />
         {/* Tints the address bar to match the page behind it. The light entry
             used to be the indigo accent, which is not a surface the app ever
             paints. QashyThemeProvider rewrites both once it knows whether the
             user has forced a mode instead of following the system. */}
-        <meta id="qashy-theme-color-light" name="theme-color" content={LIGHT_BACKGROUND} media="(prefers-color-scheme: light)" />
-        <meta id="qashy-theme-color-dark" name="theme-color" content={DARK_BACKGROUND} media="(prefers-color-scheme: dark)" />
-        <meta name="description" content="A calm, private, local-first budget tracker." />
+        <meta
+          id="qashy-theme-color-light"
+          name="theme-color"
+          content={LIGHT_BACKGROUND}
+          media="(prefers-color-scheme: light)"
+        />
+        <meta
+          id="qashy-theme-color-dark"
+          name="theme-color"
+          content={DARK_BACKGROUND}
+          media="(prefers-color-scheme: dark)"
+        />
+        <meta
+          name="description"
+          content="A calm, private, local-first budget tracker."
+        />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="Qashy" />

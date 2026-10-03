@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { View, type StyleProp, type ViewStyle } from 'react-native';
+import type { ReactNode } from "react";
+import { View, type StyleProp, type ViewStyle } from "react-native";
 
 /**
  * Pins the layout direction of everything inside it. On native the `direction`
@@ -11,7 +11,7 @@ export function DirectionScope({
   style,
   children,
 }: {
-  direction: 'ltr' | 'rtl';
+  direction: "ltr" | "rtl";
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {

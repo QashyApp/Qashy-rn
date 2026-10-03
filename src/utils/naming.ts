@@ -17,7 +17,7 @@
  * different rule pass one in explicitly instead of inheriting the device's.
  */
 
-import type { Account, Category, Tag } from '@/domain/models';
+import type { Account, Category, Tag } from "@/domain/models";
 
 export type NameableEntity = Account | Category | Tag;
 
@@ -47,8 +47,8 @@ export interface NameRename {
  * order — which is what lets two devices that merged the same set produce the same names.
  */
 const byPrecedence = (first: NameableEntity, second: NameableEntity) => {
-  const firstArchived = 'archived' in first && first.archived ? 1 : 0;
-  const secondArchived = 'archived' in second && second.archived ? 1 : 0;
+  const firstArchived = "archived" in first && first.archived ? 1 : 0;
+  const secondArchived = "archived" in second && second.archived ? 1 : 0;
   return (
     firstArchived - secondArchived ||
     compareInvariant(first.createdAt, second.createdAt) ||
@@ -78,12 +78,13 @@ export function disambiguateNames(
       used.add(normalized);
       continue;
     }
-    const suffix = 'archived' in entity && entity.archived ? 'archived' : 'duplicate';
+    const suffix =
+      "archived" in entity && entity.archived ? "archived" : "duplicate";
     let index = 1;
-    let name = '';
-    let candidate = '';
+    let name = "";
+    let candidate = "";
     do {
-      name = `${entity.name.trim()} (${suffix}${index === 1 ? '' : ` ${index}`})`;
+      name = `${entity.name.trim()} (${suffix}${index === 1 ? "" : ` ${index}`})`;
       candidate = normalize(name);
       index += 1;
       // `reserved` holds every original name, so a generated name can never collide with

@@ -14,19 +14,25 @@
  * covers, with real repositories on both ends.
  */
 
-import { MemoryStorageAdapter } from '@/data/memory-storage';
-import type { StorageAdapter, StorageTx } from '@/data/storage-adapter';
-import { SYNC_META, readStates, storeOps, writeMeta, writeStates } from '@/data/sync-store';
-import type { ApplyResult } from '@/data/repository';
-import type { EntityType } from '@/domain/models';
+import { MemoryStorageAdapter } from "@/data/memory-storage";
+import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
+import {
+  SYNC_META,
+  readStates,
+  storeOps,
+  writeMeta,
+  writeStates,
+} from "@/data/sync-store";
+import type { ApplyResult } from "@/data/repository";
+import type { EntityType } from "@/domain/models";
 import {
   createDeviceIdentity,
   createVaultRootKey,
   deriveContentKey,
   type ContentKey,
   type DeviceIdentity,
-} from '@/sync/crypto';
-import { authenticateBatch } from '@/sync/engine/batch';
+} from "@/sync/crypto";
+import { authenticateBatch } from "@/sync/engine/batch";
 import {
   GENESIS_HASH,
   buildOp,
@@ -38,22 +44,22 @@ import {
   type CausalMeta,
   type SyncOp,
   type SyncOpBody,
-} from '@/sync/oplog';
-import type { FrameContext } from '@/sync/engine/frame';
-import { toPeerRow, type Peer } from '@/sync/engine/roster';
-import { SyncSession } from '@/sync/engine/session';
-import { LoopbackChannel, LoopbackTransport } from '@/sync/engine/transport';
+} from "@/sync/oplog";
+import type { FrameContext } from "@/sync/engine/frame";
+import { toPeerRow, type Peer } from "@/sync/engine/roster";
+import { SyncSession } from "@/sync/engine/session";
+import { LoopbackChannel, LoopbackTransport } from "@/sync/engine/transport";
 import {
   BATCH_FORMAT_VERSION,
   type SyncBatch,
   type UnsignedSyncBatch,
-} from '@/sync/engine/types';
+} from "@/sync/engine/types";
 
-export const BASE_CURRENCY = 'USD';
+export const BASE_CURRENCY = "USD";
 export const EPOCH = 1;
 
 /** A fixed clock. Every HLC and every `recordedAt` in these suites is reproducible. */
-export const NOW = Date.parse('2026-06-01T12:00:00.000Z');
+export const NOW = Date.parse("2026-06-01T12:00:00.000Z");
 export const NOW_ISO = new Date(NOW).toISOString();
 
 /**
@@ -69,12 +75,16 @@ export const NOW_ISO = new Date(NOW).toISOString();
  * The registers are left empty because nothing under test reads them. What matters is `maxHlc`,
  * and it moves monotonically — a later op must never be able to rewind an entity's projection.
  */
-async function project(tx: StorageTx, ops: readonly SyncOpBody[]): Promise<void> {
+async function project(
+  tx: StorageTx,
+  ops: readonly SyncOpBody[],
+): Promise<void> {
   const newest = new Map<string, SyncOpBody>();
   for (const op of ops) {
     if (!isEntityType(op.entityType)) continue;
     const current = newest.get(metaKey(op.entityType, op.entityId));
-    if (!current || op.hlc > current.hlc) newest.set(metaKey(op.entityType, op.entityId), op);
+    if (!current || op.hlc > current.hlc)
+      newest.set(metaKey(op.entityType, op.entityId), op);
   }
   if (!newest.size) return;
 
@@ -134,7 +144,9 @@ export class FakeRepository {
     this.applied.push([...ops]);
     await this.storage.transact((tx) => project(tx, ops), { silent: true });
 
-    const changed = [...new Set(ops.map((op) => op.entityType))] as EntityType[];
+    const changed = [
+      ...new Set(ops.map((op) => op.entityType)),
+    ] as EntityType[];
     return { applied: ops.length, changedTypes: changed, repairs: [] };
   }
 
@@ -144,7 +156,9 @@ export class FakeRepository {
       this.fail = null;
       throw error;
     }
-    await this.storage.transact((tx) => writeStates(tx, states), { silent: true });
+    await this.storage.transact((tx) => writeStates(tx, states), {
+      silent: true,
+    });
     return { applied: states.length, changedTypes: [], repairs: [] };
   }
 
@@ -225,16 +239,18 @@ export class TestDevice {
         [SYNC_META.deviceId]: this.deviceId,
         [SYNC_META.epoch]: String(EPOCH),
         [SYNC_META.baseCurrency]: BASE_CURRENCY,
-        [SYNC_META.enabled]: '1',
+        [SYNC_META.enabled]: "1",
       });
-      if (peers.length) await tx.table('syncPeers').put(peers.map(toPeerRow));
+      if (peers.length) await tx.table("syncPeers").put(peers.map(toPeerRow));
     });
     return this;
   }
 
   /** Signs and numbers ops on this device's own chain, continuing from wherever it left off. */
   author(bodies: readonly SyncOpBody[]): SyncOp[] {
-    return this.number(bodies).map((op) => sealOp(op, this.identity.signing.secretKey));
+    return this.number(bodies).map((op) =>
+      sealOp(op, this.identity.signing.secretKey),
+    );
   }
 
   /** Authors, signs, and stores ops — this device's state after a local edit and a seal. */
@@ -276,18 +292,26 @@ export class TestDevice {
   body(entityType: EntityType, entityId: string, offsetMs = 0): SyncOpBody {
     this.counter += 1;
     return {
-      hlc: formatHlc({ wall: NOW + offsetMs, counter: this.counter, deviceId: this.deviceId }),
+      hlc: formatHlc({
+        wall: NOW + offsetMs,
+        counter: this.counter,
+        deviceId: this.deviceId,
+      }),
       entityType,
       entityId,
-      kind: 'create',
+      kind: "create",
       payload: { name: `${entityType}-${entityId}` },
       schema: 1,
     };
   }
 
-  batch(ops: readonly SyncOp[], over: Partial<UnsignedSyncBatch> = {}): SyncBatch {
+  batch(
+    ops: readonly SyncOp[],
+    over: Partial<UnsignedSyncBatch> = {},
+  ): SyncBatch {
     const heads: Record<string, number> = {};
-    for (const op of ops) heads[op.deviceId] = Math.max(heads[op.deviceId] ?? 0, op.seq);
+    for (const op of ops)
+      heads[op.deviceId] = Math.max(heads[op.deviceId] ?? 0, op.seq);
     return authenticateBatch(
       {
         version: BATCH_FORMAT_VERSION,
@@ -308,7 +332,7 @@ export class TestDevice {
     return {
       deviceId: this.deviceId,
       name: `device-${this.deviceId.slice(0, 4)}`,
-      platform: 'test',
+      platform: "test",
       signingKey: this.identity.signing.publicKey,
       agreementKey: this.identity.agreement.publicKey,
       epoch: EPOCH,
@@ -331,7 +355,11 @@ export async function makeVault(count = 2): Promise<TestDevice[]> {
     () => new TestDevice(createDeviceIdentity(), contentKey),
   );
   for (const device of devices) {
-    await device.setUp(devices.filter((other) => other !== device).map((other) => other.asPeer()));
+    await device.setUp(
+      devices
+        .filter((other) => other !== device)
+        .map((other) => other.asPeer()),
+    );
   }
   return devices;
 }
@@ -373,22 +401,24 @@ export function link(first: TestDevice, second: TestDevice): Link {
 
 /** Reads a device's roster row for a peer, so a test can assert acks and last-seen. */
 export const peerRow = (device: TestDevice, peerId: string) =>
-  device.storage.transact((tx) => tx.table('syncPeers').get(peerId));
+  device.storage.transact((tx) => tx.table("syncPeers").get(peerId));
 
 export const opRows = (device: TestDevice) =>
   device.storage.transact(async (tx) =>
-    (await tx.table('syncOps').all()).sort((first, second) => (first.opId < second.opId ? -1 : 1)),
+    (await tx.table("syncOps").all()).sort((first, second) =>
+      first.opId < second.opId ? -1 : 1,
+    ),
   );
 
 export const activityRows = (device: TestDevice) =>
   device.storage.transact(async (tx) =>
-    (await tx.table('syncActivity').all()).sort((first, second) =>
+    (await tx.table("syncActivity").all()).sort((first, second) =>
       first.key < second.key ? -1 : 1,
     ),
   );
 
 export const quarantineRowsOf = (device: TestDevice) =>
-  device.storage.transact((tx) => tx.table('syncQuarantine').all());
+  device.storage.transact((tx) => tx.table("syncQuarantine").all());
 
 /**
  * A whole other keypair, for rostering a device under a key it does not hold.
@@ -399,7 +429,10 @@ export const quarantineRowsOf = (device: TestDevice) =>
  */
 export const strangerKeys = () => {
   const identity = createDeviceIdentity();
-  return { signingKey: identity.signing.publicKey, agreementKey: identity.agreement.publicKey };
+  return {
+    signingKey: identity.signing.publicKey,
+    agreementKey: identity.agreement.publicKey,
+  };
 };
 
 /**

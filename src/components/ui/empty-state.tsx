@@ -1,11 +1,11 @@
-import { type ReactNode } from 'react';
-import { View } from 'react-native';
+import { type ReactNode } from "react";
+import { View } from "react-native";
 
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { MotionView } from '@/components/ui/motion';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { MotionView } from "@/components/ui/motion";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * The one shape an empty list takes.
@@ -25,7 +25,7 @@ export function EmptyState({
   title,
   body,
   compact = false,
-  tone = 'default',
+  tone = "default",
   children,
 }: {
   icon: string;
@@ -33,7 +33,7 @@ export function EmptyState({
   body?: string;
   compact?: boolean;
   /** `'accent'` tints the icon well itself, for the rare empty state that wants more emphasis. */
-  tone?: 'default' | 'accent';
+  tone?: "default" | "accent";
   /** Actions. Rendered in a row below the copy. */
   children?: ReactNode;
 }) {
@@ -52,45 +52,64 @@ export function EmptyState({
     <MotionView
       variant="down"
       style={{
-        alignItems: 'center',
+        alignItems: "center",
         gap: space.md,
         paddingVertical: compact ? space.xxl : 40,
         paddingHorizontal: space.lg,
-      }}>
+      }}
+    >
       <View
         style={[
           {
             width: well,
             height: well,
             borderRadius: wellRadius,
-            borderCurve: 'continuous',
-            alignItems: 'center',
-            justifyContent: 'center',
+            borderCurve: "continuous",
+            alignItems: "center",
+            justifyContent: "center",
           },
-          materialStyle(theme, 'sunken'),
+          materialStyle(theme, "sunken"),
           // Sunken keeps its carved-in shadow either way; only the fill swaps to
           // an accent tint, so the well still reads as "set into the page".
-          tone === 'accent' ? { backgroundColor: theme.accentContainer } : null,
-        ]}>
+          tone === "accent" ? { backgroundColor: theme.accentContainer } : null,
+        ]}
+      >
         <View
           style={{
             width: tile,
             height: tile,
             borderRadius: tileRadius,
-            borderCurve: 'continuous',
+            borderCurve: "continuous",
             backgroundColor: theme.accentContainer,
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-          <AppIcon name={icon} color={theme.onAccentContainer} size={compact ? 21 : 24} />
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <AppIcon
+            name={icon}
+            color={theme.onAccentContainer}
+            size={compact ? 21 : 24}
+          />
         </View>
       </View>
-      <AppText variant="headline" style={{ textAlign: 'center' }}>{title}</AppText>
+      <AppText variant="headline" style={{ textAlign: "center" }}>
+        {title}
+      </AppText>
       {body ? (
-        <AppText muted style={{ textAlign: 'center', maxWidth: 360 }}>{body}</AppText>
+        <AppText muted style={{ textAlign: "center", maxWidth: 360 }}>
+          {body}
+        </AppText>
       ) : null}
       {children ? (
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: space.sm, paddingTop: space.xs }}>
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            justifyContent: "center",
+            gap: space.sm,
+            paddingTop: space.xs,
+          }}
+        >
           {children}
         </View>
       ) : null}

@@ -7,14 +7,14 @@ import {
   type StoredEntity,
   type SyncTable,
   type TransactOptions,
-} from '@/data/storage-adapter';
+} from "@/data/storage-adapter";
 import {
   SYNC_TABLE_NAMES,
   syncRowKey,
   type SyncRow,
   type SyncTableName,
-} from '@/data/sync-tables';
-import type { EntityType, FinanceEntity } from '@/domain/models';
+} from "@/data/sync-tables";
+import type { EntityType, FinanceEntity } from "@/domain/models";
 
 type SyncTables = Map<SyncTableName, Map<string, unknown>>;
 
@@ -56,7 +56,10 @@ class MemoryTx implements StorageTx {
   async putMany(records: readonly StoredEntity[]) {
     if (records.length) this.dirty = true;
     for (const record of records) {
-      this.records.set(recordKey(record.type, record.entity.id), structuredClone(record));
+      this.records.set(
+        recordKey(record.type, record.entity.id),
+        structuredClone(record),
+      );
     }
   }
 
@@ -92,7 +95,8 @@ class MemoryTx implements StorageTx {
       },
       async put(next) {
         if (next.length) markDirty();
-        for (const row of next) rows.set(syncRowKey(name, row), structuredClone(row));
+        for (const row of next)
+          rows.set(syncRowKey(name, row), structuredClone(row));
       },
       async delete(keys) {
         if (keys.length) markDirty();
@@ -114,7 +118,10 @@ export class MemoryStorageAdapter implements StorageAdapter {
     return this.enqueue(async () => sortedEntities(this.records, type));
   }
 
-  async transact<T>(work: (tx: StorageTx) => Promise<T>, options?: TransactOptions): Promise<T> {
+  async transact<T>(
+    work: (tx: StorageTx) => Promise<T>,
+    options?: TransactOptions,
+  ): Promise<T> {
     const { result, dirty } = await this.enqueue(async () => {
       // A shallow copy is a sufficient rollback because every write below *replaces* an entry
       // with a fresh clone rather than mutating one in place, so no restored value can have
@@ -171,10 +178,13 @@ export class MemoryStorageAdapter implements StorageAdapter {
   }
 
   async clear(source?: object) {
-    await this.transact(async (tx) => {
-      await tx.clearRecords();
-      await clearSyncTables(tx);
-    }, { source });
+    await this.transact(
+      async (tx) => {
+        await tx.clearRecords();
+        await clearSyncTables(tx);
+      },
+      { source },
+    );
   }
 
   subscribe(listener: (source?: object) => void) {

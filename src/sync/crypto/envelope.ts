@@ -15,7 +15,7 @@
  *    the contents stay sealed.
  */
 
-import { PROTOCOL_VERSION } from '@/sync/crypto/labels';
+import { PROTOCOL_VERSION } from "@/sync/crypto/labels";
 import {
   NONCE_LENGTH,
   TAG_LENGTH,
@@ -27,8 +27,8 @@ import {
   u32be,
   u64be,
   u8,
-} from '@/sync/crypto/primitives';
-import { SyncCryptoError, type SealingKey } from '@/sync/crypto/types';
+} from "@/sync/crypto/primitives";
+import { SyncCryptoError, type SealingKey } from "@/sync/crypto/types";
 
 /** Frame magic. Present so a truncated or foreign blob is rejected before any key is used. */
 const MAGIC = new Uint8Array([0x51, 0x53, 0x59]); // 'QSY'
@@ -58,7 +58,10 @@ export const ENVELOPE_PURPOSES = {
 export type EnvelopePurpose = keyof typeof ENVELOPE_PURPOSES;
 
 const PURPOSE_BY_CODE = new Map<number, EnvelopePurpose>(
-  Object.entries(ENVELOPE_PURPOSES).map(([name, code]) => [code, name as EnvelopePurpose]),
+  Object.entries(ENVELOPE_PURPOSES).map(([name, code]) => [
+    code,
+    name as EnvelopePurpose,
+  ]),
 );
 
 export interface EnvelopeContext {
@@ -101,7 +104,8 @@ const MAX_POWER_BUCKET = 262144;
 export const paddedSize = (length: number) => {
   const withPrefix = length + 4;
   if (withPrefix <= MIN_BUCKET) return MIN_BUCKET;
-  if (withPrefix <= MAX_POWER_BUCKET) return 2 ** Math.ceil(Math.log2(withPrefix));
+  if (withPrefix <= MAX_POWER_BUCKET)
+    return 2 ** Math.ceil(Math.log2(withPrefix));
   return Math.ceil(withPrefix / MAX_POWER_BUCKET) * MAX_POWER_BUCKET;
 };
 
@@ -113,10 +117,18 @@ const pad = (plaintext: Uint8Array) => {
 };
 
 const unpad = (padded: Uint8Array) => {
-  if (padded.length < 4) throw new SyncCryptoError('Padded payload is truncated.', 'badLength');
-  const length = new DataView(padded.buffer, padded.byteOffset, padded.byteLength).getUint32(0, false);
+  if (padded.length < 4)
+    throw new SyncCryptoError("Padded payload is truncated.", "badLength");
+  const length = new DataView(
+    padded.buffer,
+    padded.byteOffset,
+    padded.byteLength,
+  ).getUint32(0, false);
   if (length > padded.length - 4) {
-    throw new SyncCryptoError('Padded payload declares an impossible length.', 'badFormat');
+    throw new SyncCryptoError(
+      "Padded payload declares an impossible length.",
+      "badFormat",
+    );
   }
   return padded.slice(4, 4 + length);
 };
@@ -131,9 +143,18 @@ const unpad = (padded: Uint8Array) => {
  * The nonce is 24 random bytes. That is safe without coordination precisely because this
  * is XChaCha20 and not AES-GCM — see the note in `primitives.ts`.
  */
-export const seal = (key: SealingKey, context: EnvelopeContext, plaintext: Uint8Array) => {
+export const seal = (
+  key: SealingKey,
+  context: EnvelopeContext,
+  plaintext: Uint8Array,
+) => {
   const nonce = randomBytes(NONCE_LENGTH);
-  const ciphertext = aeadSeal(key, nonce, pad(plaintext), associatedData(context));
+  const ciphertext = aeadSeal(
+    key,
+    nonce,
+    pad(plaintext),
+    associatedData(context),
+  );
   return concatBytes(
     MAGIC,
     u8(PROTOCOL_VERSION),
@@ -151,27 +172,41 @@ export const seal = (key: SealingKey, context: EnvelopeContext, plaintext: Uint8
  * tag, so a frame whose real context differs in any way — different sender, replayed
  * sequence, stale epoch — fails here rather than being applied.
  */
-export const open = (key: SealingKey, context: EnvelopeContext, frame: Uint8Array) => {
+export const open = (
+  key: SealingKey,
+  context: EnvelopeContext,
+  frame: Uint8Array,
+) => {
   if (frame.length > MAX_FRAME_BYTES) {
-    throw new SyncCryptoError('Frame exceeds the maximum accepted size.', 'badLength');
+    throw new SyncCryptoError(
+      "Frame exceeds the maximum accepted size.",
+      "badLength",
+    );
   }
   if (frame.length < HEADER_LENGTH + TAG_LENGTH) {
-    throw new SyncCryptoError('Frame is truncated.', 'badLength');
+    throw new SyncCryptoError("Frame is truncated.", "badLength");
   }
   if (frame[0] !== MAGIC[0] || frame[1] !== MAGIC[1] || frame[2] !== MAGIC[2]) {
-    throw new SyncCryptoError('Not a Qashy sync frame.', 'badFormat');
+    throw new SyncCryptoError("Not a Qashy sync frame.", "badFormat");
   }
   const version = frame[3];
   if (version !== PROTOCOL_VERSION) {
     throw new SyncCryptoError(
       `This frame uses sync protocol v${version}; this device speaks v${PROTOCOL_VERSION}. Update the other device.`,
-      'badVersion',
+      "badVersion",
     );
   }
   const purpose = PURPOSE_BY_CODE.get(frame[4]);
-  if (!purpose) throw new SyncCryptoError('Frame declares an unknown purpose.', 'badFormat');
+  if (!purpose)
+    throw new SyncCryptoError(
+      "Frame declares an unknown purpose.",
+      "badFormat",
+    );
   if (purpose !== context.purpose) {
-    throw new SyncCryptoError('Frame is not the kind of frame that was expected here.', 'badFormat');
+    throw new SyncCryptoError(
+      "Frame is not the kind of frame that was expected here.",
+      "badFormat",
+    );
   }
   const nonce = frame.slice(MAGIC.length + 2, HEADER_LENGTH);
   const ciphertext = frame.slice(HEADER_LENGTH);
@@ -187,7 +222,8 @@ export const open = (key: SealingKey, context: EnvelopeContext, frame: Uint8Arra
  */
 export const peekPurpose = (frame: Uint8Array): EnvelopePurpose | null => {
   if (frame.length < HEADER_LENGTH) return null;
-  if (frame[0] !== MAGIC[0] || frame[1] !== MAGIC[1] || frame[2] !== MAGIC[2]) return null;
+  if (frame[0] !== MAGIC[0] || frame[1] !== MAGIC[1] || frame[2] !== MAGIC[2])
+    return null;
   if (frame[3] !== PROTOCOL_VERSION) return null;
   return PURPOSE_BY_CODE.get(frame[4]) ?? null;
 };

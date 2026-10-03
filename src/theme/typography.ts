@@ -1,9 +1,14 @@
-import { StyleSheet, type StyleProp, type TextStyle } from 'react-native';
+import { StyleSheet, type StyleProp, type TextStyle } from "react-native";
 
-import { FONT_REGISTRY, fontAssetsFor, isRegisteredFamily, type FontWeightKey } from '@/theme/fonts';
-import { classicTheme } from '@/theme/themes/classic';
-import type { FontStackSpec, TypeSpec } from '@/theme/themes/types';
-import type { FontWeightName } from '@/theme/tokens';
+import {
+  FONT_REGISTRY,
+  fontAssetsFor,
+  isRegisteredFamily,
+  type FontWeightKey,
+} from "@/theme/fonts";
+import { classicTheme } from "@/theme/themes/classic";
+import type { FontStackSpec, TypeSpec } from "@/theme/themes/types";
+import type { FontWeightName } from "@/theme/tokens";
 
 /**
  * Local font files, keyed by loaded family name, derived from the font registry.
@@ -16,24 +21,40 @@ export const FONT_ASSETS = fontAssetsFor(Object.keys(FONT_REGISTRY));
 // A system stack behind the bundled face on web, so text is readable during
 // the brief swap on a cold, uncached first load instead of falling back to
 // the browser's serif default.
-const WEB_FALLBACK = 'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif';
+const WEB_FALLBACK =
+  'system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Hebrew", sans-serif';
 
-export function weightName(weight: TextStyle['fontWeight']): FontWeightName {
-  const numeric = weight === 'bold' ? 700 : weight === 'normal' || weight == null ? 400 : Number(weight);
-  if (!Number.isFinite(numeric) || numeric < 450) return 'regular';
-  if (numeric < 550) return 'medium';
-  if (numeric < 650) return 'semibold';
-  return 'bold';
+export function weightName(weight: TextStyle["fontWeight"]): FontWeightName {
+  const numeric =
+    weight === "bold"
+      ? 700
+      : weight === "normal" || weight == null
+        ? 400
+        : Number(weight);
+  if (!Number.isFinite(numeric) || numeric < 450) return "regular";
+  if (numeric < 550) return "medium";
+  if (numeric < 650) return "semibold";
+  return "bold";
 }
 
-const CSS_WEIGHT = { regular: '400', medium: '500', semibold: '600', bold: '700' } as const;
-const WEIGHT_ORDER: readonly FontWeightKey[] = ['regular', 'medium', 'semibold', 'bold'];
+const CSS_WEIGHT = {
+  regular: "400",
+  medium: "500",
+  semibold: "600",
+  bold: "700",
+} as const;
+const WEIGHT_ORDER: readonly FontWeightKey[] = [
+  "regular",
+  "medium",
+  "semibold",
+  "bold",
+];
 
 function resolveStack(stack: FontStackSpec, weight: FontWeightName): TextStyle {
   const font = FONT_REGISTRY[stack.family];
   if (!font) throw new Error(`Unknown font "${stack.family}".`);
   const family = font.weights[weight].family;
-  if (process.env.EXPO_OS === 'web') {
+  if (process.env.EXPO_OS === "web") {
     // Per-glyph fallback: a Latin-only face lists a face that covers Hebrew behind it.
     const names = [family];
     for (const id of stack.fallbacks) {
@@ -42,8 +63,14 @@ function resolveStack(stack: FontStackSpec, weight: FontWeightName): TextStyle {
     }
     // The CSS weight follows the file actually used: a face with no 400 file maps regular to its
     // medium file, so the last weight sharing that file wins.
-    const cssKey = [...WEIGHT_ORDER].reverse().find((key) => font.weights[key].family === family) ?? weight;
-    return { fontFamily: `${names.join(', ')}, ${WEB_FALLBACK}`, fontWeight: CSS_WEIGHT[cssKey] };
+    const cssKey =
+      [...WEIGHT_ORDER]
+        .reverse()
+        .find((key) => font.weights[key].family === family) ?? weight;
+    return {
+      fontFamily: `${names.join(", ")}, ${WEB_FALLBACK}`,
+      fontWeight: CSS_WEIGHT[cssKey],
+    };
   }
   return { fontFamily: family, fontWeight: undefined };
 }
@@ -56,7 +83,10 @@ function resolveStack(stack: FontStackSpec, weight: FontWeightName): TextStyle {
  * real one, and iOS may ignore the family entirely. Web keeps the numeric
  * weight so the system fallback renders at the intended weight too.
  */
-export function fontStyle(weight: FontWeightName, type: TypeSpec = classicTheme.type): TextStyle {
+export function fontStyle(
+  weight: FontWeightName,
+  type: TypeSpec = classicTheme.type,
+): TextStyle {
   return resolveStack(type.text, weight);
 }
 
@@ -67,7 +97,10 @@ export function fontStyle(weight: FontWeightName, type: TypeSpec = classicTheme.
  * of symbols money formatting uses are rendered in this face, so it may be
  * Latin-only.
  */
-export function numericFontStyle(weight: FontWeightName, type: TypeSpec = classicTheme.type): TextStyle {
+export function numericFontStyle(
+  weight: FontWeightName,
+  type: TypeSpec = classicTheme.type,
+): TextStyle {
   return resolveStack(type.numeric, weight);
 }
 
@@ -80,12 +113,18 @@ export function numericFontStyle(weight: FontWeightName, type: TypeSpec = classi
  */
 export function withAppFont(
   style: StyleProp<TextStyle>,
-  fallback: FontWeightName = 'regular',
-  face: 'text' | 'numeric' = 'text',
+  fallback: FontWeightName = "regular",
+  face: "text" | "numeric" = "text",
   type: TypeSpec = classicTheme.type,
 ): TextStyle {
   const flat = StyleSheet.flatten(style) ?? {};
   if (flat.fontFamily && !isRegisteredFamily(flat.fontFamily)) return flat;
-  const weight = flat.fontWeight != null ? weightName(flat.fontWeight) : fallback;
-  return { ...flat, ...(face === 'numeric' ? numericFontStyle(weight, type) : fontStyle(weight, type)) };
+  const weight =
+    flat.fontWeight != null ? weightName(flat.fontWeight) : fallback;
+  return {
+    ...flat,
+    ...(face === "numeric"
+      ? numericFontStyle(weight, type)
+      : fontStyle(weight, type)),
+  };
 }

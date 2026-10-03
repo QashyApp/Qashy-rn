@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
-import { Platform, type ViewStyle } from 'react-native';
+import { useEffect } from "react";
+import { Platform, type ViewStyle } from "react-native";
 
-import { AppText } from '@/components/ui/app-text';
-import { MotionView } from '@/components/ui/motion';
-import { TextButton } from '@/components/ui/text-button';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
+import { AppText } from "@/components/ui/app-text";
+import { MotionView } from "@/components/ui/motion";
+import { TextButton } from "@/components/ui/text-button";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
 
 const DEFAULT_DURATION = 5000;
 
@@ -18,7 +18,7 @@ const DEFAULT_DURATION = 5000;
  */
 export function UndoBar({
   message,
-  actionLabel = 'Undo',
+  actionLabel = "Undo",
   onAction,
   onDismiss,
   duration = DEFAULT_DURATION,
@@ -53,23 +53,29 @@ export function UndoBar({
       exit
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
-      {...(Platform.OS === 'web' ? { role: 'status' as const } : null)}
+      {...(Platform.OS === "web" ? { role: "status" as const } : null)}
       style={[
         {
-          alignSelf: 'center',
-          flexDirection: 'row',
-          alignItems: 'center',
+          alignSelf: "center",
+          flexDirection: "row",
+          alignItems: "center",
           gap: space.md,
           paddingVertical: space.sm + 2,
           paddingHorizontal: space.lg,
           borderRadius: radius.sheet,
-          borderCurve: 'continuous',
+          borderCurve: "continuous",
           maxWidth: 480,
         },
-        materialStyle(theme, 'overlay'),
+        materialStyle(theme, "overlay"),
         style,
-      ]}>
-      <AppText selectable={false} literal={literal} variant="label" style={{ flexShrink: 1 }}>
+      ]}
+    >
+      <AppText
+        selectable={false}
+        literal={literal}
+        variant="label"
+        style={{ flexShrink: 1 }}
+      >
         {message}
       </AppText>
       <TextButton title={actionLabel} onPress={onAction} />

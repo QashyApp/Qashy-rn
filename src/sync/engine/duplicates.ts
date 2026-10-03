@@ -38,7 +38,7 @@
  *   validates and writes, so the whole-set money invariants run before anything lands.
  */
 
-import type { StoredEntity } from '@/data/storage-adapter';
+import type { StoredEntity } from "@/data/storage-adapter";
 import type {
   Account,
   Budget,
@@ -53,12 +53,12 @@ import type {
   RecurringRule,
   Tag,
   TransactionRecord,
-} from '@/domain/models';
-import { compareInvariant, normalizeName } from '@/utils/naming';
-import { nowIso, updateEntity } from '@/utils/entity';
+} from "@/domain/models";
+import { compareInvariant, normalizeName } from "@/utils/naming";
+import { nowIso, updateEntity } from "@/utils/entity";
 
 /** The entity types this screen can merge. See the module note for why the list stops here. */
-export type MergeKind = 'accounts' | 'categories' | 'tags' | 'transactions';
+export type MergeKind = "accounts" | "categories" | "tags" | "transactions";
 
 export interface DuplicateGroup {
   readonly kind: MergeKind;
@@ -100,9 +100,11 @@ export interface MergePlan {
  */
 const BARE_NAME = /\s*\((?:duplicate|archived)(?:\s+\d+)?\)$/;
 
-const bareName = (name: string) => normalizeName(name.trim().replace(BARE_NAME, ''));
+const bareName = (name: string) =>
+  normalizeName(name.trim().replace(BARE_NAME, ""));
 
-const live = <T extends FinanceEntity>(rows: readonly T[]) => rows.filter((row) => !row.deletedAt);
+const live = <T extends FinanceEntity>(rows: readonly T[]) =>
+  rows.filter((row) => !row.deletedAt);
 
 /**
  * The order that decides which entity survives a merge.
@@ -113,8 +115,8 @@ const live = <T extends FinanceEntity>(rows: readonly T[]) => rows.filter((row) 
  * a category out from under someone for no reason they could observe.
  */
 const byPrecedence = (first: FinanceEntity, second: FinanceEntity) => {
-  const firstArchived = 'archived' in first && first.archived ? 1 : 0;
-  const secondArchived = 'archived' in second && second.archived ? 1 : 0;
+  const firstArchived = "archived" in first && first.archived ? 1 : 0;
+  const secondArchived = "archived" in second && second.archived ? 1 : 0;
   return (
     firstArchived - secondArchived ||
     compareInvariant(first.createdAt, second.createdAt) ||
@@ -147,21 +149,27 @@ function collide<T>(rows: readonly T[], keyOf: (row: T) => string) {
 function accountBlocker(members: readonly Account[], state: FinanceState) {
   const currencies = new Set(members.map((account) => account.currency));
   if (currencies.size > 1) {
-    return `These accounts use different currencies (${[...currencies].sort().join(', ')}).`;
+    return `These accounts use different currencies (${[...currencies].sort().join(", ")}).`;
   }
   const ids = new Set(members.map((account) => account.id));
   // A transfer between two accounts that became one account is a transfer to itself, which
   // `validateTransaction` rejects — so the merged vault would be unwritable rather than wrong.
   const transfer = live(state.transactions).some(
     (row) =>
-      row.destinationAccountId && ids.has(row.accountId) && ids.has(row.destinationAccountId),
+      row.destinationAccountId &&
+      ids.has(row.accountId) &&
+      ids.has(row.destinationAccountId),
   );
-  return transfer ? 'A transfer moves money between these accounts, so they are not the same account.' : null;
+  return transfer
+    ? "A transfer moves money between these accounts, so they are not the same account."
+    : null;
 }
 
 function categoryBlocker(members: readonly Category[]) {
   const kinds = new Set(members.map((category) => category.kind));
-  return kinds.size > 1 ? 'These categories track different kinds of money — one income, one expense.' : null;
+  return kinds.size > 1
+    ? "These categories track different kinds of money — one income, one expense."
+    : null;
 }
 
 /**
@@ -188,7 +196,13 @@ export function transactionDuplicateKey(
     transaction.categoryId,
     normalizeName(transaction.title),
     normalizeName(transaction.note),
-    [...new Set(transaction.tagIds.map((id) => normalizeName(tagNameById.get(id) ?? id)))].sort(),
+    [
+      ...new Set(
+        transaction.tagIds.map((id) =>
+          normalizeName(tagNameById.get(id) ?? id),
+        ),
+      ),
+    ].sort(),
     transaction.exchangeRate,
   ]);
 }
@@ -198,7 +212,7 @@ export function suggestDuplicates(state: FinanceState): DuplicateGroup[] {
   const groups: DuplicateGroup[] = [];
 
   const named = <T extends Account | Category | Tag>(
-    kind: Extract<MergeKind, 'accounts' | 'categories' | 'tags'>,
+    kind: Extract<MergeKind, "accounts" | "categories" | "tags">,
     rows: readonly T[],
     blocker: (members: readonly T[]) => string | null,
   ) => {
@@ -214,9 +228,11 @@ export function suggestDuplicates(state: FinanceState): DuplicateGroup[] {
     }
   };
 
-  named('accounts', state.accounts, (members) => accountBlocker(members, state));
-  named('categories', state.categories, categoryBlocker);
-  named('tags', state.tags, () => null);
+  named("accounts", state.accounts, (members) =>
+    accountBlocker(members, state),
+  );
+  named("categories", state.categories, categoryBlocker);
+  named("tags", state.tags, () => null);
 
   const tagNameById = new Map(state.tags.map((tag) => [tag.id, tag.name]));
   for (const bucket of collide(live(state.transactions), (row) =>
@@ -224,7 +240,7 @@ export function suggestDuplicates(state: FinanceState): DuplicateGroup[] {
   )) {
     const [keep, ...merge] = [...bucket].sort(byPrecedence);
     groups.push({
-      kind: 'transactions',
+      kind: "transactions",
       keepId: keep.id,
       mergeIds: merge.map((row) => row.id),
       label: keep.title,
@@ -249,7 +265,12 @@ function remapList(ids: readonly string[], remap: Remap) {
   return [...new Set(ids.map((id) => remap.get(id) ?? id))];
 }
 
-function remapFilters(filters: BudgetFilters, accounts: Remap, categories: Remap, tags: Remap) {
+function remapFilters(
+  filters: BudgetFilters,
+  accounts: Remap,
+  categories: Remap,
+  tags: Remap,
+) {
   const accountIds = remapList(filters.accountIds, accounts);
   const categoryIds = remapList(filters.categoryIds, categories);
   const tagIds = remapList(filters.tagIds, tags);
@@ -268,8 +289,12 @@ function remapFilters(filters: BudgetFilters, accounts: Remap, categories: Remap
  * and it is the kind of guess that silently doubles a budget; keeping the one the user can
  * already see on the surviving category is at worst a number they can edit.
  */
-function remapLimits(limits: readonly BudgetCategoryLimit[], categories: Remap) {
-  if (!limits.some((limit) => categories.has(limit.categoryId))) return undefined;
+function remapLimits(
+  limits: readonly BudgetCategoryLimit[],
+  categories: Remap,
+) {
+  if (!limits.some((limit) => categories.has(limit.categoryId)))
+    return undefined;
   const kept = new Map<string, BudgetCategoryLimit>();
   for (const limit of limits) {
     const categoryId = categories.get(limit.categoryId) ?? limit.categoryId;
@@ -290,7 +315,10 @@ function remapLimits(limits: readonly BudgetCategoryLimit[], categories: Remap) 
  * of five confirmed merges would leave the user believing they had cleaned up a vault they had
  * not, and the leftover duplicate would keep showing up in totals.
  */
-export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]): MergePlan {
+export function planMerge(
+  state: FinanceState,
+  groups: readonly DuplicateGroup[],
+): MergePlan {
   const blocked = groups.find((group) => group.blocked);
   if (blocked) throw new Error(blocked.blocked!);
 
@@ -301,21 +329,28 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
     transactions: new Map(),
   };
   const byId = new Map<string, FinanceEntity>();
-  for (const kind of ['accounts', 'categories', 'tags', 'transactions'] as const) {
+  for (const kind of [
+    "accounts",
+    "categories",
+    "tags",
+    "transactions",
+  ] as const) {
     for (const row of state[kind]) byId.set(`${kind}:${row.id}`, row);
   }
 
   for (const group of groups) {
     if (!byId.has(`${group.kind}:${group.keepId}`)) {
-      throw new Error('The record to keep no longer exists.');
+      throw new Error("The record to keep no longer exists.");
     }
     for (const id of group.mergeIds) {
       if (id === group.keepId) continue;
-      if (!byId.has(`${group.kind}:${id}`)) throw new Error('A record to merge no longer exists.');
+      if (!byId.has(`${group.kind}:${id}`))
+        throw new Error("A record to merge no longer exists.");
       // Chained groups ("A into B" and "B into C" confirmed together) would otherwise leave a
       // reference pointing at a tombstone. Refusing is honest; resolving the chain silently
       // would merge two things the user never put in the same group.
-      if (remaps[group.kind].has(id)) throw new Error('That record is already being merged into another.');
+      if (remaps[group.kind].has(id))
+        throw new Error("That record is already being merged into another.");
       remaps[group.kind].set(id, group.keepId);
     }
   }
@@ -324,7 +359,11 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
   const records: StoredEntity[] = [];
   let retargeted = 0;
 
-  const push = <T extends FinanceEntity>(type: StoredEntity['type'], entity: T, changes: Partial<T>) => {
+  const push = <T extends FinanceEntity>(
+    type: StoredEntity["type"],
+    entity: T,
+    changes: Partial<T>,
+  ) => {
     if (!Object.keys(changes).length) return;
     records.push({ type, entity: updateEntity(entity, changes) });
     retargeted += 1;
@@ -336,8 +375,11 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
     const accountId = accounts.get(transaction.accountId);
     if (accountId) changes.accountId = accountId;
     if (transaction.destinationAccountId) {
-      const destinationAccountId = accounts.get(transaction.destinationAccountId);
-      if (destinationAccountId) changes.destinationAccountId = destinationAccountId;
+      const destinationAccountId = accounts.get(
+        transaction.destinationAccountId,
+      );
+      if (destinationAccountId)
+        changes.destinationAccountId = destinationAccountId;
     }
     if (transaction.categoryId) {
       const categoryId = categories.get(transaction.categoryId);
@@ -345,7 +387,7 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
     }
     const tagIds = remapList(transaction.tagIds, tags);
     if (tagIds) changes.tagIds = tagIds;
-    push('transactions', transaction, changes);
+    push("transactions", transaction, changes);
   }
 
   for (const category of live(state.categories)) {
@@ -355,16 +397,20 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
     if (!parentId) continue;
     // Merging a child into its own parent leaves the parent pointing at itself, which the
     // hierarchy repair would then have to undo on every device. Cut it here instead.
-    push('categories', category, { parentId: parentId === category.id ? null : parentId });
+    push("categories", category, {
+      parentId: parentId === category.id ? null : parentId,
+    });
   }
 
   for (const rule of live(state.recurringRules)) {
     const template = rule.template;
     const accountId = accounts.get(template.accountId);
-    const categoryId = template.categoryId ? categories.get(template.categoryId) : undefined;
+    const categoryId = template.categoryId
+      ? categories.get(template.categoryId)
+      : undefined;
     const tagIds = remapList(template.tagIds, tags);
     if (!accountId && !categoryId && !tagIds) continue;
-    push<RecurringRule>('recurringRules', rule, {
+    push<RecurringRule>("recurringRules", rule, {
       template: {
         ...template,
         accountId: accountId ?? template.accountId,
@@ -380,7 +426,7 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
     if (filters) changes.filters = filters;
     const categoryLimits = remapLimits(budget.categoryLimits, categories);
     if (categoryLimits) changes.categoryLimits = categoryLimits;
-    push('budgets', budget, changes);
+    push("budgets", budget, changes);
   }
 
   // Closed periods are immutable *history*, but they are not inert: `getBudgetStatuses` re-runs
@@ -394,7 +440,7 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
     if (filters) changes.filters = filters;
     const categoryLimits = remapLimits(period.categoryLimits, categories);
     if (categoryLimits) changes.categoryLimits = categoryLimits;
-    push('budgetPeriods', period, changes);
+    push("budgetPeriods", period, changes);
   }
 
   for (const goal of live(state.goals)) {
@@ -407,20 +453,29 @@ export function planMerge(state: FinanceState, groups: readonly DuplicateGroup[]
       const linkedCategoryId = categories.get(goal.linkedCategoryId);
       if (linkedCategoryId) changes.linkedCategoryId = linkedCategoryId;
     }
-    push('goals', goal, changes);
+    push("goals", goal, changes);
   }
 
   for (const contribution of live(state.contributions)) {
     if (!contribution.transactionId) continue;
     const transactionId = transactions.get(contribution.transactionId);
-    if (transactionId) push<GoalContribution>('contributions', contribution, { transactionId });
+    if (transactionId)
+      push<GoalContribution>("contributions", contribution, { transactionId });
   }
 
   const deletedAt = nowIso();
   let removed = 0;
-  for (const kind of ['accounts', 'categories', 'tags', 'transactions'] as const) {
+  for (const kind of [
+    "accounts",
+    "categories",
+    "tags",
+    "transactions",
+  ] as const) {
     for (const id of remaps[kind].keys()) {
-      records.push({ type: kind, entity: updateEntity(byId.get(`${kind}:${id}`)!, { deletedAt }) });
+      records.push({
+        type: kind,
+        entity: updateEntity(byId.get(`${kind}:${id}`)!, { deletedAt }),
+      });
       removed += 1;
     }
   }

@@ -12,9 +12,9 @@
  * applies: a record written by a newer build is refused rather than misread.
  */
 
-import { restoreDeviceIdentity, restoreVaultRootKey } from '@/sync/crypto';
+import { restoreDeviceIdentity, restoreVaultRootKey } from "@/sync/crypto";
 
-import { KeystoreError, type StoredVault } from '@/sync/keystore/types';
+import { KeystoreError, type StoredVault } from "@/sync/keystore/types";
 
 /** 'QSYK' — Qashy keystore. Distinct from the 'QSY' envelope magic; these never mix. */
 const MAGIC = Uint8Array.from([0x51, 0x53, 0x59, 0x4b]);
@@ -27,8 +27,15 @@ const HEADER_BYTES = MAGIC.length + 1 + 4;
 export const VAULT_RECORD_BYTES = HEADER_BYTES + KEY_BYTES * 3;
 
 export const encodeVaultRecord = (vault: StoredVault) => {
-  if (!Number.isInteger(vault.epoch) || vault.epoch < 1 || vault.epoch > 0xffffffff) {
-    throw new KeystoreError(`${vault.epoch} is not a valid vault epoch.`, 'corrupt');
+  if (
+    !Number.isInteger(vault.epoch) ||
+    vault.epoch < 1 ||
+    vault.epoch > 0xffffffff
+  ) {
+    throw new KeystoreError(
+      `${vault.epoch} is not a valid vault epoch.`,
+      "corrupt",
+    );
   }
   const out = new Uint8Array(VAULT_RECORD_BYTES);
   out.set(MAGIC, 0);
@@ -42,25 +49,33 @@ export const encodeVaultRecord = (vault: StoredVault) => {
 
 export const decodeVaultRecord = (bytes: Uint8Array): StoredVault => {
   if (bytes.length !== VAULT_RECORD_BYTES) {
-    throw new KeystoreError('The stored vault record is the wrong size.', 'corrupt');
+    throw new KeystoreError(
+      "The stored vault record is the wrong size.",
+      "corrupt",
+    );
   }
   if (MAGIC.some((byte, index) => bytes[index] !== byte)) {
-    throw new KeystoreError('The stored vault record is not a Qashy vault.', 'corrupt');
+    throw new KeystoreError(
+      "The stored vault record is not a Qashy vault.",
+      "corrupt",
+    );
   }
   if (bytes[MAGIC.length] !== FORMAT) {
     throw new KeystoreError(
-      'This vault was stored by a newer version of Qashy. Update the app to read it.',
-      'corrupt',
+      "This vault was stored by a newer version of Qashy. Update the app to read it.",
+      "corrupt",
     );
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const epoch = view.getUint32(MAGIC.length + 1, false);
   if (epoch < 1) {
-    throw new KeystoreError('The stored vault record has no epoch.', 'corrupt');
+    throw new KeystoreError("The stored vault record has no epoch.", "corrupt");
   }
   return {
     epoch,
-    vaultKey: restoreVaultRootKey(bytes.slice(HEADER_BYTES, HEADER_BYTES + KEY_BYTES)),
+    vaultKey: restoreVaultRootKey(
+      bytes.slice(HEADER_BYTES, HEADER_BYTES + KEY_BYTES),
+    ),
     identity: restoreDeviceIdentity(
       bytes.slice(HEADER_BYTES + KEY_BYTES, HEADER_BYTES + KEY_BYTES * 2),
       bytes.slice(HEADER_BYTES + KEY_BYTES * 2),

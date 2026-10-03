@@ -28,14 +28,19 @@
  * also having to be reviewed for confidentiality.
  */
 
-import { MAX_FRAME_BYTES, fromBase64Url, toBase64Url } from '@/sync/crypto';
+import { MAX_FRAME_BYTES, fromBase64Url, toBase64Url } from "@/sync/crypto";
 import type {
   PeerDescriptor,
   SyncChannel,
   SyncTransport,
   TransportKind,
-} from '@/sync/engine/transport';
-import { RelayError, requestJson, requestVoid, type HttpDeps } from '@/sync/transport/http';
+} from "@/sync/engine/transport";
+import {
+  RelayError,
+  requestJson,
+  requestVoid,
+  type HttpDeps,
+} from "@/sync/transport/http";
 
 /** Blobs fetched per request. Bounded so one poll cannot become an unbounded download. */
 export const RELAY_PAGE_SIZE = 100;
@@ -107,7 +112,8 @@ export interface RelayTransportDeps extends HttpDeps {
   readonly jitterMs?: number;
 }
 
-const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+const defaultSleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /**
  * One peer's view of the drop-box.
@@ -117,18 +123,27 @@ const defaultSleep = (ms: number) => new Promise<void>((resolve) => setTimeout(r
  * would otherwise drop everything it collected on the floor.
  */
 class RelayChannel implements SyncChannel {
-  private readonly handlers = new Set<(frame: Uint8Array, seq: number) => void>();
+  private readonly handlers = new Set<
+    (frame: Uint8Array, seq: number) => void
+  >();
   private readonly pending: { frame: Uint8Array; seq: number }[] = [];
   private closed = false;
 
   constructor(
     readonly peerId: string,
-    private readonly upload: (frame: Uint8Array, seq: number, to: string) => Promise<void>,
+    private readonly upload: (
+      frame: Uint8Array,
+      seq: number,
+      to: string,
+    ) => Promise<void>,
     private readonly tag: string,
   ) {}
 
   send(frame: Uint8Array, seq: number): Promise<void> {
-    if (this.closed) return Promise.reject(new RelayError('That channel is closed.', 'unreachable'));
+    if (this.closed)
+      return Promise.reject(
+        new RelayError("That channel is closed.", "unreachable"),
+      );
     return this.upload(frame, seq, this.tag);
   }
 
@@ -156,10 +171,13 @@ class RelayChannel implements SyncChannel {
 }
 
 export class RelayTransport implements SyncTransport {
-  readonly kind: TransportKind = 'relay';
+  readonly kind: TransportKind = "relay";
 
   private readonly channels = new Map<string, RelayChannel>();
-  private readonly pendingByTag = new Map<string, { frame: Uint8Array; seq: number }[]>();
+  private readonly pendingByTag = new Map<
+    string,
+    { frame: Uint8Array; seq: number }[]
+  >();
   /**
    * The in-flight poll, shared by every peer.
    *
@@ -182,8 +200,12 @@ export class RelayTransport implements SyncTransport {
    * whether this device has something to *upload* once the network recovers mid-pass, and
    * refusing the channel here would also deny the session the chance to record why.
    */
-  async connect(peer: PeerDescriptor, signal: AbortSignal): Promise<SyncChannel> {
-    if (signal.aborted) throw new RelayError('Sync was cancelled.', 'unreachable');
+  async connect(
+    peer: PeerDescriptor,
+    signal: AbortSignal,
+  ): Promise<SyncChannel> {
+    if (signal.aborted)
+      throw new RelayError("Sync was cancelled.", "unreachable");
     const channel = this.channelFor(peer.deviceId);
     await this.poll(signal);
     return channel;
@@ -206,7 +228,8 @@ export class RelayTransport implements SyncTransport {
   }
 
   private async drain(signal?: AbortSignal): Promise<number> {
-    const { baseUrl, bucketId, token, selfTag, readCursor, writeCursor } = this.deps;
+    const { baseUrl, bucketId, token, selfTag, readCursor, writeCursor } =
+      this.deps;
     let cursor = await readCursor();
     let delivered = 0;
 
@@ -214,7 +237,12 @@ export class RelayTransport implements SyncTransport {
       if (signal?.aborted) break;
 
       const url = `${baseUrl}/bucket/${encodeURIComponent(bucketId)}?after=${cursor}&limit=${RELAY_PAGE_SIZE}`;
-      const body = await requestJson<FetchResponse>(this.deps, { method: 'GET', url, token, signal });
+      const body = await requestJson<FetchResponse>(this.deps, {
+        method: "GET",
+        url,
+        token,
+        signal,
+      });
       const blobs = parseBlobs(body);
       if (!blobs.length) break;
 
@@ -253,10 +281,14 @@ export class RelayTransport implements SyncTransport {
    * arrive as a burst — which would restore exactly the timing signal the jitter exists to
    * blur.
    */
-  private async upload(frame: Uint8Array, seq: number, to: string): Promise<void> {
+  private async upload(
+    frame: Uint8Array,
+    seq: number,
+    to: string,
+  ): Promise<void> {
     const { baseUrl, bucketId, token } = this.deps;
     if (frame.length > MAX_FRAME_BYTES) {
-      throw new RelayError('That batch is too large to upload.', 'tooLarge');
+      throw new RelayError("That batch is too large to upload.", "tooLarge");
     }
 
     const window = this.deps.jitterMs ?? UPLOAD_JITTER_MS;
@@ -268,7 +300,7 @@ export class RelayTransport implements SyncTransport {
 
     try {
       await requestVoid(this.deps, {
-        method: 'PUT',
+        method: "PUT",
         url: `${baseUrl}/bucket/${encodeURIComponent(bucketId)}`,
         token,
         body: { from: this.deps.selfTag, to, seq, frame: toBase64Url(frame) },
@@ -278,7 +310,7 @@ export class RelayTransport implements SyncTransport {
       // counting it would flip a perfectly healthy relay to `degraded` after three such
       // uploads. It stays visible in the activity log, which is where a self-hoster looks
       // for a 413.
-      if (!(error instanceof RelayError) || error.code !== 'tooLarge') {
+      if (!(error instanceof RelayError) || error.code !== "tooLarge") {
         this.deps.onUpload?.(error);
       }
       throw error;
@@ -297,7 +329,7 @@ export class RelayTransport implements SyncTransport {
   async purge(): Promise<void> {
     const { baseUrl, bucketId, token } = this.deps;
     await requestVoid(this.deps, {
-      method: 'DELETE',
+      method: "DELETE",
       url: `${baseUrl}/bucket/${encodeURIComponent(bucketId)}`,
       token,
     });
@@ -339,16 +371,41 @@ export class RelayTransport implements SyncTransport {
  */
 function parseBlobs(body: FetchResponse): Blob[] {
   if (!Array.isArray(body.blobs)) {
-    throw new RelayError('The relay sent something that is not a Qashy relay response.', 'malformed');
+    throw new RelayError(
+      "The relay sent something that is not a Qashy relay response.",
+      "malformed",
+    );
   }
   const blobs: Blob[] = [];
   for (const entry of body.blobs) {
-    if (!entry || typeof entry !== 'object') continue;
+    if (!entry || typeof entry !== "object") continue;
     const row = entry as Record<string, unknown>;
-    if (typeof row.slot !== 'number' || !Number.isSafeInteger(row.slot) || row.slot < 0) continue;
-    if (typeof row.from !== 'string' || !row.from || typeof row.to !== 'string' || typeof row.frame !== 'string') continue;
-    if (typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq) || row.seq < 0) continue;
-    blobs.push({ slot: row.slot, from: row.from, to: row.to, seq: row.seq, frame: row.frame });
+    if (
+      typeof row.slot !== "number" ||
+      !Number.isSafeInteger(row.slot) ||
+      row.slot < 0
+    )
+      continue;
+    if (
+      typeof row.from !== "string" ||
+      !row.from ||
+      typeof row.to !== "string" ||
+      typeof row.frame !== "string"
+    )
+      continue;
+    if (
+      typeof row.seq !== "number" ||
+      !Number.isSafeInteger(row.seq) ||
+      row.seq < 0
+    )
+      continue;
+    blobs.push({
+      slot: row.slot,
+      from: row.from,
+      to: row.to,
+      seq: row.seq,
+      frame: row.frame,
+    });
   }
   // Ascending, so the cursor written after the page is a true high-water mark even if the
   // relay returned the page in some other order.

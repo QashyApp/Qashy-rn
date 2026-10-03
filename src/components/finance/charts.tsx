@@ -1,5 +1,5 @@
-import { useEffect, useId, useState } from 'react';
-import { View, type LayoutChangeEvent } from 'react-native';
+import { useEffect, useId, useState } from "react";
+import { View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   Easing,
   ReduceMotion,
@@ -7,19 +7,33 @@ import Animated, {
   useReducedMotion,
   useSharedValue,
   withTiming,
-} from 'react-native-reanimated';
-import Svg, { Circle, Defs, G, Line, LinearGradient, Path, Pattern, Rect, Stop, Text as SvgText } from 'react-native-svg';
+} from "react-native-reanimated";
+import Svg, {
+  Circle,
+  Defs,
+  G,
+  Line,
+  LinearGradient,
+  Path,
+  Pattern,
+  Rect,
+  Stop,
+  Text as SvgText,
+} from "react-native-svg";
 
-import { useAnimatedMinorAmount } from '@/components/finance/animated-money';
-import { slicePattern, type SlicePatternKind } from '@/components/finance/slice-pattern';
-import { AppText } from '@/components/ui/app-text';
-import type { DashboardSummary } from '@/domain/models';
-import { translateCurrent, useLocalization } from '@/localization/localization';
-import { useScreenMetrics } from '@/theme/layout';
-import { useQashyTheme } from '@/theme/theme';
-import { fontStyle, numericFontStyle } from '@/theme/typography';
-import { mediumDate, shortDate, todayLocal } from '@/utils/date';
-import { formatMoney } from '@/utils/money';
+import { useAnimatedMinorAmount } from "@/components/finance/animated-money";
+import {
+  slicePattern,
+  type SlicePatternKind,
+} from "@/components/finance/slice-pattern";
+import { AppText } from "@/components/ui/app-text";
+import type { DashboardSummary } from "@/domain/models";
+import { translateCurrent, useLocalization } from "@/localization/localization";
+import { useScreenMetrics } from "@/theme/layout";
+import { useQashyTheme } from "@/theme/theme";
+import { fontStyle, numericFontStyle } from "@/theme/typography";
+import { mediumDate, shortDate, todayLocal } from "@/utils/date";
+import { formatMoney } from "@/utils/money";
 
 // SVG text does not inherit the app face, so charts name the theme's face explicitly
 // (`fontStyle(..., theme.type)`). Axis labels that render dates use the text face (a
@@ -44,7 +58,15 @@ const GRID_RATIOS = [0.25, 0.5, 0.75];
 /** Past this many days a dot per point reads as noise, so only the peak is marked. */
 const DENSE_SERIES_POINTS = 14;
 
-export function SpendLineChart({ points: allPoints, currency, locale }: { points: DashboardSummary['dailySpend']; currency: string; locale: string }) {
+export function SpendLineChart({
+  points: allPoints,
+  currency,
+  locale,
+}: {
+  points: DashboardSummary["dailySpend"];
+  currency: string;
+  locale: string;
+}) {
   // Days that have not happened yet have no spending to draw: a flat zero tail reads as "spent
   // nothing". A range wholly in the future keeps its days so the empty state still names it.
   const today = todayLocal();
@@ -64,7 +86,9 @@ export function SpendLineChart({ points: allPoints, currency, locale }: { points
   const chartWidth = Math.max(measuredWidth || estimatedWidth, 1);
   const onLayout = (event: LayoutChangeEvent) => {
     const next = event.nativeEvent.layout.width;
-    setMeasuredWidth((current) => (Math.abs(current - next) > 0.5 ? next : current));
+    setMeasuredWidth((current) =>
+      Math.abs(current - next) > 0.5 ? next : current,
+    );
   };
   const height = 174;
   const amounts = points.map((item) => item.amountMinor);
@@ -79,33 +103,41 @@ export function SpendLineChart({ points: allPoints, currency, locale }: { points
   const hasSpending = amounts.some((amount) => amount !== 0);
   const plotBottom = height - PLOT_BOTTOM_INSET;
   const plotHeight = plotBottom - PLOT_TOP;
-  const scaleY = (amountMinor: number) => plotBottom - ((amountMinor - domainMin) / domainSpan) * plotHeight;
+  const scaleY = (amountMinor: number) =>
+    plotBottom - ((amountMinor - domainMin) / domainSpan) * plotHeight;
   const coordinates = points.map((point, index) => ({
     x: 8 + (index / Math.max(points.length - 1, 1)) * (chartWidth - 16),
     y: scaleY(point.amountMinor),
   }));
-  const path = coordinates.map(({ x, y }, index) => `${index ? 'L' : 'M'} ${x} ${y}`).join(' ');
+  const path = coordinates
+    .map(({ x, y }, index) => `${index ? "L" : "M"} ${x} ${y}`)
+    .join(" ");
   // Zero is always inside the domain, so the fill closes on the real baseline
   // rather than the frame; a month with refunds shades above and below it.
   const baselineY = scaleY(0);
   const areaPath = coordinates.length
     ? `${path} L ${coordinates[coordinates.length - 1].x} ${baselineY} L ${coordinates[0].x} ${baselineY} Z`
-    : '';
-  const pathLength = Math.max(1, coordinates.slice(1).reduce((length, point, index) => {
-    const previous = coordinates[index];
-    return length + Math.hypot(point.x - previous.x, point.y - previous.y);
-  }, 0));
+    : "";
+  const pathLength = Math.max(
+    1,
+    coordinates.slice(1).reduce((length, point, index) => {
+      const previous = coordinates[index];
+      return length + Math.hypot(point.x - previous.x, point.y - previous.y);
+    }, 0),
+  );
   const denseSeries = points.length > DENSE_SERIES_POINTS;
   const peakIndex = actualMax > 0 ? amounts.indexOf(actualMax) : -1;
   const reveal = useSharedValue(reduceMotion ? 1 : 0);
 
   useEffect(() => {
     reveal.set(reduceMotion ? 1 : 0);
-    reveal.set(withTiming(1, {
-      duration: 520,
-      easing: Easing.out(Easing.cubic),
-      reduceMotion: ReduceMotion.System,
-    }));
+    reveal.set(
+      withTiming(1, {
+        duration: 520,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
   }, [path, reduceMotion, reveal]);
 
   const pathProps = useAnimatedProps(() => ({
@@ -116,12 +148,13 @@ export function SpendLineChart({ points: allPoints, currency, locale }: { points
   }));
   const firstDate = points.at(0)?.date;
   const lastDate = points.at(-1)?.date;
-  const refundNote = actualMin < 0
-    ? ` Largest refund day ${formatMoney(actualMin, currency, locale)}.`
-    : '';
+  const refundNote =
+    actualMin < 0
+      ? ` Largest refund day ${formatMoney(actualMin, currency, locale)}.`
+      : "";
   const label = hasSpending
-    ? `Daily spending from ${mediumDate(firstDate ?? '', locale)} to ${mediumDate(lastDate ?? '', locale)}. Highest day ${formatMoney(actualMax, currency, locale)}.${refundNote}`
-    : `No spending from ${firstDate ? mediumDate(firstDate, locale) : 'the start of this period'} to ${lastDate ? mediumDate(lastDate, locale) : 'the end of this period'}.`;
+    ? `Daily spending from ${mediumDate(firstDate ?? "", locale)} to ${mediumDate(lastDate ?? "", locale)}. Highest day ${formatMoney(actualMax, currency, locale)}.${refundNote}`
+    : `No spending from ${firstDate ? mediumDate(firstDate, locale) : "the start of this period"} to ${lastDate ? mediumDate(lastDate, locale) : "the end of this period"}.`;
   return (
     // No entrance of its own: the keyed month transition around this chart
     // owns the motion, and the line reveal below carries the data change.
@@ -129,15 +162,29 @@ export function SpendLineChart({ points: allPoints, currency, locale }: { points
       accessibilityRole="image"
       accessibilityLabel={translateCurrent(label)}
       onLayout={onLayout}
-      style={{ minHeight: height }}>
+      style={{ minHeight: height }}
+    >
       {hasSpending ? (
         // The axis is a fixed left-to-right time axis, so the start/end text
         // anchors must not flip when the page inherits `direction: rtl`.
-        <Svg width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`} style={{ direction: 'ltr' }}>
+        <Svg
+          width="100%"
+          height={height}
+          viewBox={`0 0 ${chartWidth} ${height}`}
+          style={{ direction: "ltr" }}
+        >
           <Defs>
             <LinearGradient id={areaGradientId} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={theme.accent as string} stopOpacity={0.22} />
-              <Stop offset="1" stopColor={theme.accent as string} stopOpacity={0} />
+              <Stop
+                offset="0"
+                stopColor={theme.accent as string}
+                stopOpacity={0.22}
+              />
+              <Stop
+                offset="1"
+                stopColor={theme.accent as string}
+                stopOpacity={0}
+              />
             </LinearGradient>
           </Defs>
           {GRID_RATIOS.map((ratio) => (
@@ -167,7 +214,12 @@ export function SpendLineChart({ points: allPoints, currency, locale }: { points
           {/* Fades in with the points rather than wiping with the stroke: a
               partially drawn area closes on a straight edge mid-series and reads
               as a wrong shape for the fraction of a second it is visible. */}
-          <AnimatedPath animatedProps={pointProps} d={areaPath} fill={`url(#${areaGradientId})`} stroke="none" />
+          <AnimatedPath
+            animatedProps={pointProps}
+            d={areaPath}
+            fill={`url(#${areaGradientId})`}
+            stroke="none"
+          />
           <AnimatedPath
             animatedProps={pathProps}
             d={path}
@@ -189,25 +241,67 @@ export function SpendLineChart({ points: allPoints, currency, locale }: { points
                 animatedProps={pointProps}
                 cx={x}
                 cy={y}
-                r={marked ? '3.5' : '3'}
+                r={marked ? "3.5" : "3"}
                 fill={theme.accent}
                 stroke={marked ? theme.staticSurface : undefined}
-                strokeWidth={marked ? '2' : undefined}
+                strokeWidth={marked ? "2" : undefined}
               />
             );
           })}
           {/* The one y-axis value: the peak, so the line is more than a shape. Zero is the baseline. */}
-          <SvgText x="8" y={PLOT_TOP - 6} fill={theme.textMuted as string} fontSize="11" fontFamily={fontStyle('medium', theme.type).fontFamily}>{formatMoney(actualMax, currency, locale, { compact: true })}</SvgText>
-          {firstDate ? <SvgText x="8" y={height - 4} fill={theme.textMuted as string} fontSize="11" fontFamily={fontStyle('medium', theme.type).fontFamily}>{shortDate(firstDate, locale)}</SvgText> : null}
-          {lastDate ? <SvgText x={chartWidth - 8} y={height - 4} textAnchor="end" fill={theme.textMuted as string} fontSize="11" fontFamily={fontStyle('medium', theme.type).fontFamily}>{shortDate(lastDate, locale)}</SvgText> : null}
+          <SvgText
+            x="8"
+            y={PLOT_TOP - 6}
+            fill={theme.textMuted as string}
+            fontSize="11"
+            fontFamily={fontStyle("medium", theme.type).fontFamily}
+          >
+            {formatMoney(actualMax, currency, locale, { compact: true })}
+          </SvgText>
+          {firstDate ? (
+            <SvgText
+              x="8"
+              y={height - 4}
+              fill={theme.textMuted as string}
+              fontSize="11"
+              fontFamily={fontStyle("medium", theme.type).fontFamily}
+            >
+              {shortDate(firstDate, locale)}
+            </SvgText>
+          ) : null}
+          {lastDate ? (
+            <SvgText
+              x={chartWidth - 8}
+              y={height - 4}
+              textAnchor="end"
+              fill={theme.textMuted as string}
+              fontSize="11"
+              fontFamily={fontStyle("medium", theme.type).fontFamily}
+            >
+              {shortDate(lastDate, locale)}
+            </SvgText>
+          ) : null}
         </Svg>
       ) : (
-        <View style={{ minHeight: height, alignItems: 'center', justifyContent: 'center', gap: space.xs + 2 }}>
+        <View
+          style={{
+            minHeight: height,
+            alignItems: "center",
+            justifyContent: "center",
+            gap: space.xs + 2,
+          }}
+        >
           <AppText variant="label">No spending in this period</AppText>
           {firstDate && lastDate ? (
-            <AppText literal variant="caption" muted>{`${shortDate(firstDate, locale)} – ${shortDate(lastDate, locale)}`}</AppText>
+            <AppText
+              literal
+              variant="caption"
+              muted
+            >{`${shortDate(firstDate, locale)} – ${shortDate(lastDate, locale)}`}</AppText>
           ) : (
-            <AppText variant="caption" muted>Add an expense to start the rhythm.</AppText>
+            <AppText variant="caption" muted>
+              Add an expense to start the rhythm.
+            </AppText>
           )}
         </View>
       )}
@@ -222,7 +316,7 @@ const DONUT_TOP_COUNT = 5;
 // DOM attribute, which React rejects as a hyphenated property name ("Did you mean
 // transformOrigin?") on every render, and passes `rotation` through as a bogus
 // attribute besides. Both platforms parse this string form natively instead.
-const RING_ROTATION = 'rotate(-90 63 63)';
+const RING_ROTATION = "rotate(-90 63 63)";
 
 /**
  * Ring segments are separated by a hairline of track so two categories that
@@ -233,7 +327,15 @@ const RING_ROTATION = 'rotate(-90 63 63)';
 const SEGMENT_GAP = 2;
 const MIN_SEGMENT_LENGTH = 1.5;
 
-export function CategoryDonut({ items, currency, locale }: { items: DashboardSummary['categorySpend']; currency: string; locale: string }) {
+export function CategoryDonut({
+  items,
+  currency,
+  locale,
+}: {
+  items: DashboardSummary["categorySpend"];
+  currency: string;
+  locale: string;
+}) {
   const theme = useQashyTheme();
   const { space, charts } = theme;
   const thickness = charts.donutThickness;
@@ -245,42 +347,64 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
   // The ring and the legend share the same slices, with everything past the
   // top entries aggregated into "Other" so both always account for 100%.
   const top = items.slice(0, DONUT_TOP_COUNT);
-  const otherMinor = items.slice(DONUT_TOP_COUNT).reduce((sum, item) => sum + item.amountMinor, 0);
+  const otherMinor = items
+    .slice(DONUT_TOP_COUNT)
+    .reduce((sum, item) => sum + item.amountMinor, 0);
   // Only the two synthetic slices are translatable. Resolving them here lets
   // the legend render every name verbatim, so a category the user actually
   // named "Other" or "Savings" is never swapped for the dictionary's word.
   const slices = [
     ...top.map((item) => ({
-      key: item.category?.id ?? 'uncategorized',
-      name: item.category?.name ?? t('Uncategorized'),
-      color: item.category?.color ?? theme.textMuted as string,
+      key: item.category?.id ?? "uncategorized",
+      name: item.category?.name ?? t("Uncategorized"),
+      color: item.category?.color ?? (theme.textMuted as string),
       amountMinor: item.amountMinor,
     })),
-    ...(otherMinor > 0 ? [{ key: 'other', name: t('Other'), color: theme.textMuted as string, amountMinor: otherMinor }] : []),
+    ...(otherMinor > 0
+      ? [
+          {
+            key: "other",
+            name: t("Other"),
+            color: theme.textMuted as string,
+            amountMinor: otherMinor,
+          },
+        ]
+      : []),
   ];
   const segments = slices.map((slice, index, source) => {
     const length = total ? (slice.amountMinor / total) * circumference : 0;
     return {
       slice,
-      length: source.length > 1 ? Math.max(length - SEGMENT_GAP, MIN_SEGMENT_LENGTH) : length,
+      length:
+        source.length > 1
+          ? Math.max(length - SEGMENT_GAP, MIN_SEGMENT_LENGTH)
+          : length,
       offset: source
         .slice(0, index)
-        .reduce((sum, previous) => sum + (total ? (previous.amountMinor / total) * circumference : 0), 0),
+        .reduce(
+          (sum, previous) =>
+            sum + (total ? (previous.amountMinor / total) * circumference : 0),
+          0,
+        ),
     };
   });
   const reduceMotion = useReducedMotion();
   // Sweeps a track-colored cover arc away clockwise so the segments appear to
   // draw themselves in sequence, mirroring the line chart's reveal.
   const revealed = useSharedValue(reduceMotion ? circumference : 0);
-  const signature = slices.map((slice) => `${slice.key}:${slice.amountMinor}`).join('|');
+  const signature = slices
+    .map((slice) => `${slice.key}:${slice.amountMinor}`)
+    .join("|");
 
   useEffect(() => {
     revealed.set(reduceMotion ? circumference : 0);
-    revealed.set(withTiming(circumference, {
-      duration: 640,
-      easing: Easing.out(Easing.cubic),
-      reduceMotion: ReduceMotion.System,
-    }));
+    revealed.set(
+      withTiming(circumference, {
+        duration: 640,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
   }, [circumference, reduceMotion, revealed, signature]);
 
   const coverProps = useAnimatedProps(() => ({
@@ -292,27 +416,44 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
     opacity: revealed.value >= circumference ? 0 : 1,
   }));
   const animatedTotal = useAnimatedMinorAmount(total);
-  const share = (amountMinor: number) => (total ? Math.round((amountMinor / total) * 100) : 0);
+  const share = (amountMinor: number) =>
+    total ? Math.round((amountMinor / total) * 100) : 0;
   // The ring and the legend are matched by an ordinal as well as a color, so
   // the pairing survives color blindness and monochrome rendering.
   const label = slices.length
     ? `Spending by category. Total ${formatMoney(total, currency, locale)}. ${slices
-      .map((slice, index) => `${index + 1}. ${slice.name}, ${share(slice.amountMinor)} percent`)
-      .join('. ')}.`
-    : 'Spending by category. No spending yet.';
+        .map(
+          (slice, index) =>
+            `${index + 1}. ${slice.name}, ${share(slice.amountMinor)} percent`,
+        )
+        .join(". ")}.`
+    : "Spending by category. No spending yet.";
   return (
     // Like the line chart: the surrounding month transition animates the box;
     // the donut only sweeps its cover arc to draw the data.
     <View
       accessibilityRole="image"
       accessibilityLabel={label}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: space.xl, flexWrap: 'wrap' }}>
+      style={{
+        flexDirection: "row",
+        alignItems: "center",
+        gap: space.xl,
+        flexWrap: "wrap",
+      }}
+    >
       <View style={{ width: 126, height: 126 }}>
         <Svg width="126" height="126" viewBox="0 0 126 126">
           {/* A sunken track, like a progress well elsewhere in the app, rather
               than a flat muted ring, so the segments read as filling a carved
               groove instead of sitting on a plain disc. */}
-          <Circle cx="63" cy="63" r={ringRadius} fill="none" stroke={theme.surfaceSunken as string} strokeWidth={thickness} />
+          <Circle
+            cx="63"
+            cy="63"
+            r={ringRadius}
+            fill="none"
+            stroke={theme.surfaceSunken as string}
+            strokeWidth={thickness}
+          />
           {/* Arcs end square; each slice's leading edge is a round dot painted
               over the slice before it, so every seam reads as a "(" that bites
               into the previous slice. The first slice's dot is painted again
@@ -320,7 +461,12 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
           {charts.patterns ? (
             <Defs>
               {segments.map(({ slice }, index) => (
-                <SlicePatternDef key={slice.key} id={`${patternId}-${index}`} kind={slicePattern(index)} ink={theme.staticSurface} />
+                <SlicePatternDef
+                  key={slice.key}
+                  id={`${patternId}-${index}`}
+                  kind={slicePattern(index)}
+                  ink={theme.staticSurface}
+                />
               ))}
             </Defs>
           ) : null}
@@ -352,10 +498,26 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
                   transform={RING_ROTATION}
                 />
               ) : null}
-              {segments.length > 1 ? <SegmentStart offset={offset} circumference={circumference} radius={ringRadius} color={slice.color} thickness={thickness} /> : null}
+              {segments.length > 1 ? (
+                <SegmentStart
+                  offset={offset}
+                  circumference={circumference}
+                  radius={ringRadius}
+                  color={slice.color}
+                  thickness={thickness}
+                />
+              ) : null}
             </G>
           ))}
-          {segments.length > 1 ? <SegmentStart offset={0} circumference={circumference} radius={ringRadius} color={segments[0].slice.color} thickness={thickness} /> : null}
+          {segments.length > 1 ? (
+            <SegmentStart
+              offset={0}
+              circumference={circumference}
+              radius={ringRadius}
+              color={segments[0].slice.color}
+              thickness={thickness}
+            />
+          ) : null}
           <AnimatedCircle
             animatedProps={coverProps}
             cx="63"
@@ -368,19 +530,67 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
             strokeLinecap="butt"
             transform={RING_ROTATION}
           />
-          <SvgText x="63" y="59" textAnchor="middle" fill={theme.textMuted as string} fontSize="11" fontFamily={fontStyle('medium', theme.type).fontFamily}>{t('Spent')}</SvgText>
-          <SvgText x="63" y="77" textAnchor="middle" fill={theme.text as string} fontSize="13" fontFamily={numericFontStyle('semibold', theme.type).fontFamily}>
+          <SvgText
+            x="63"
+            y="59"
+            textAnchor="middle"
+            fill={theme.textMuted as string}
+            fontSize="11"
+            fontFamily={fontStyle("medium", theme.type).fontFamily}
+          >
+            {t("Spent")}
+          </SvgText>
+          <SvgText
+            x="63"
+            y="77"
+            textAnchor="middle"
+            fill={theme.text as string}
+            fontSize="13"
+            fontFamily={numericFontStyle("semibold", theme.type).fontFamily}
+          >
             {formatMoney(animatedTotal, currency, locale, { compact: true })}
           </SvgText>
         </Svg>
       </View>
       <View style={{ flex: 1, minWidth: 160, gap: space.sm + 1 }}>
         {slices.map((slice, index) => (
-          <View key={slice.key} style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-            <AppText literal variant="caption" muted numeric style={{ minWidth: 14 }}>{`${index + 1}.`}</AppText>
-            <View style={{ width: 9, height: 9, borderRadius: theme.radius.pill, backgroundColor: slice.color }} />
-            <AppText literal variant="caption" style={{ flex: 1 }} numberOfLines={1}>{slice.name}</AppText>
-            <AppText literal variant="caption" muted numeric>{`${share(slice.amountMinor)}%`}</AppText>
+          <View
+            key={slice.key}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.sm,
+            }}
+          >
+            <AppText
+              literal
+              variant="caption"
+              muted
+              numeric
+              style={{ minWidth: 14 }}
+            >{`${index + 1}.`}</AppText>
+            <View
+              style={{
+                width: 9,
+                height: 9,
+                borderRadius: theme.radius.pill,
+                backgroundColor: slice.color,
+              }}
+            />
+            <AppText
+              literal
+              variant="caption"
+              style={{ flex: 1 }}
+              numberOfLines={1}
+            >
+              {slice.name}
+            </AppText>
+            <AppText
+              literal
+              variant="caption"
+              muted
+              numeric
+            >{`${share(slice.amountMinor)}%`}</AppText>
           </View>
         ))}
         {!items.length ? <AppText muted>No spending yet</AppText> : null}
@@ -390,30 +600,69 @@ export function CategoryDonut({ items, currency, locale }: { items: DashboardSum
 }
 
 /** Round leading edge of a donut slice, placed where the slice's arc begins. */
-function SegmentStart({ offset, circumference, radius, color, thickness }: { offset: number; circumference: number; radius: number; color: string; thickness: number }) {
+function SegmentStart({
+  offset,
+  circumference,
+  radius,
+  color,
+  thickness,
+}: {
+  offset: number;
+  circumference: number;
+  radius: number;
+  color: string;
+  thickness: number;
+}) {
   const angle = (offset / circumference) * 2 * Math.PI;
-  return <Circle cx={63 + radius * Math.sin(angle)} cy={63 - radius * Math.cos(angle)} r={thickness / 2} fill={color} />;
+  return (
+    <Circle
+      cx={63 + radius * Math.sin(angle)}
+      cy={63 - radius * Math.cos(angle)}
+      r={thickness / 2}
+      fill={color}
+    />
+  );
 }
 
 /**
  * One tile of texture painted over a slice in the surface color, so a slice stays
  * identifiable when its neighbour has a similar hue or the chart is monochrome.
  */
-function SlicePatternDef({ id, kind, ink }: { id: string; kind: SlicePatternKind; ink: string }) {
+function SlicePatternDef({
+  id,
+  kind,
+  ink,
+}: {
+  id: string;
+  kind: SlicePatternKind;
+  ink: string;
+}) {
   const size = 6;
   const line = { stroke: ink, strokeWidth: 1.4, strokeOpacity: 0.7 };
   return (
     <Pattern id={id} width={size} height={size} patternUnits="userSpaceOnUse">
       <Rect width={size} height={size} fill="none" />
-      {kind === 'hatch' ? <Line x1="0" y1={size} x2={size} y2="0" {...line} /> : null}
-      {kind === 'diagonal' ? <Line x1="0" y1="0" x2={size} y2={size} {...line} /> : null}
-      {kind === 'crosshatch' ? (
+      {kind === "hatch" ? (
+        <Line x1="0" y1={size} x2={size} y2="0" {...line} />
+      ) : null}
+      {kind === "diagonal" ? (
+        <Line x1="0" y1="0" x2={size} y2={size} {...line} />
+      ) : null}
+      {kind === "crosshatch" ? (
         <>
           <Line x1="0" y1={size} x2={size} y2="0" {...line} />
           <Line x1="0" y1="0" x2={size} y2={size} {...line} />
         </>
       ) : null}
-      {kind === 'dots' ? <Circle cx={size / 2} cy={size / 2} r="1.3" fill={ink} fillOpacity={0.7} /> : null}
+      {kind === "dots" ? (
+        <Circle
+          cx={size / 2}
+          cy={size / 2}
+          r="1.3"
+          fill={ink}
+          fillOpacity={0.7}
+        />
+      ) : null}
     </Pattern>
   );
 }

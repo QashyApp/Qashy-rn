@@ -30,16 +30,22 @@ import {
   writeChainState,
   writeMeta,
   SYNC_META,
-} from '@/data/sync-store';
+} from "@/data/sync-store";
 import type {
   StorageAdapter,
   StorageTx,
   StoredEntity,
   TransactOptions,
-} from '@/data/storage-adapter';
-import { recordKey } from '@/data/storage-adapter';
-import type { EntityType, FinanceEntity } from '@/domain/models';
-import { buildOp, diffRecords, metaKey, tick, type DiffInput } from '@/sync/oplog';
+} from "@/data/storage-adapter";
+import { recordKey } from "@/data/storage-adapter";
+import type { EntityType, FinanceEntity } from "@/domain/models";
+import {
+  buildOp,
+  diffRecords,
+  metaKey,
+  tick,
+  type DiffInput,
+} from "@/sync/oplog";
 
 /** Surfaced after commit rather than thrown: the write itself is legitimate and complete. */
 export type DiffWarningListener = (warnings: readonly string[]) => void;
@@ -105,7 +111,10 @@ export class SyncingStorageAdapter implements StorageAdapter {
    * responsible for whatever ops it should produce. Wrapping it would make the sync engine's
    * own applies look like local edits.
    */
-  transact<T>(work: (tx: StorageTx) => Promise<T>, options?: TransactOptions): Promise<T> {
+  transact<T>(
+    work: (tx: StorageTx) => Promise<T>,
+    options?: TransactOptions,
+  ): Promise<T> {
     return this.inner.transact(work, options);
   }
 
@@ -133,37 +142,44 @@ export class SyncingStorageAdapter implements StorageAdapter {
     // input to `work` resolved up front is the habit the transaction contract is built on.
     const nowMs = this.now();
 
-    const warnings = await this.inner.transact(async (tx) => {
-      const previous = await this.readPrevious(tx, records);
-      const { clock, head } = await readChainState(tx);
+    const warnings = await this.inner.transact(
+      async (tx) => {
+        const previous = await this.readPrevious(tx, records);
+        const { clock, head } = await readChainState(tx);
 
-      // One clock reading for the whole batch: it is one user action, and the slots the ops
-      // land in are disjoint, so a finer-grained reading would order nothing that this one
-      // gets wrong.
-      const stamped = tick(clock, deviceId, nowMs);
-      const incoming: DiffInput[] = records.map(({ type, entity }) => ({ type, entity }));
-      const diff = diffRecords(previous, incoming, stamped.hlc);
+        // One clock reading for the whole batch: it is one user action, and the slots the ops
+        // land in are disjoint, so a finer-grained reading would order nothing that this one
+        // gets wrong.
+        const stamped = tick(clock, deviceId, nowMs);
+        const incoming: DiffInput[] = records.map(({ type, entity }) => ({
+          type,
+          entity,
+        }));
+        const diff = diffRecords(previous, incoming, stamped.hlc);
 
-      if (diff.ops.length) {
-        const built = buildOp(diff.ops, deviceId, head.seq, head.headHash);
-        await recordOps(tx, built.ops, 0);
-        await writeChainState(tx, {
-          clock: stamped.clock,
-          head: { seq: built.seq, headHash: built.headHash },
-        });
-      }
+        if (diff.ops.length) {
+          const built = buildOp(diff.ops, deviceId, head.seq, head.headHash);
+          await recordOps(tx, built.ops, 0);
+          await writeChainState(tx, {
+            clock: stamped.clock,
+            head: { seq: built.seq, headHash: built.headHash },
+          });
+        }
 
-      // Unconditional, so a write whose diff produced nothing — a no-op save, or a change
-      // confined to derived fields — still behaves exactly as it did before sync existed.
-      // Last, so a failure here unwinds the ops with it: an op describing a record that was
-      // never written is a change this device would broadcast but not itself hold.
-      await tx.putMany(records);
-      return diff.warnings;
-    }, { source });
+        // Unconditional, so a write whose diff produced nothing — a no-op save, or a change
+        // confined to derived fields — still behaves exactly as it did before sync existed.
+        // Last, so a failure here unwinds the ops with it: an op describing a record that was
+        // never written is a change this device would broadcast but not itself hold.
+        await tx.putMany(records);
+        return diff.warnings;
+      },
+      { source },
+    );
 
     // After commit: a warning is a note about a write that legitimately happened, so raising
     // it inside the transaction would roll back a change the user made and can see.
-    if (warnings.length) this.warningListeners.forEach((listener) => listener(warnings));
+    if (warnings.length)
+      this.warningListeners.forEach((listener) => listener(warnings));
   }
 
   /**
@@ -201,9 +217,12 @@ export class SyncingStorageAdapter implements StorageAdapter {
 
   /** Records the vault's base currency, which every incoming batch is checked against. */
   setBaseCurrency(currency: string) {
-    return this.inner.transact((tx) => writeMeta(tx, { [SYNC_META.baseCurrency]: currency }), {
-      silent: true,
-    });
+    return this.inner.transact(
+      (tx) => writeMeta(tx, { [SYNC_META.baseCurrency]: currency }),
+      {
+        silent: true,
+      },
+    );
   }
 
   private async readPrevious(tx: StorageTx, records: readonly StoredEntity[]) {

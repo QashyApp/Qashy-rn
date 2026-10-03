@@ -1,4 +1,4 @@
-import { parseLocalDate } from '@/utils/date';
+import { parseLocalDate } from "@/utils/date";
 
 const DAY_MS = 86_400_000;
 
@@ -15,7 +15,7 @@ function clamp01(value: number) {
   return Math.max(0, Math.min(1, value));
 }
 
-export type BudgetPaceStatus = 'under' | 'onTrack' | 'over' | 'projectedOver';
+export type BudgetPaceStatus = "under" | "onTrack" | "over" | "projectedOver";
 
 export interface BudgetPaceResult {
   /** How far through the period `today` sits, clamped to [0, 1]. */
@@ -67,25 +67,35 @@ export function budgetPace({
   const elapsedDaysRaw = daysBetween(periodStart, today) + 1;
   const elapsedDays = Math.max(0, Math.min(totalDays, elapsedDaysRaw));
   const elapsedRatio = clamp01(elapsedDays / totalDays);
-  const spentRatio = limitMinor > 0 ? spentMinor / limitMinor : spentMinor > 0 ? 1 : 0;
+  const spentRatio =
+    limitMinor > 0 ? spentMinor / limitMinor : spentMinor > 0 ? 1 : 0;
   // With no elapsed time to divide by, there is no pace to extrapolate — the
   // best available "projection" is simply what has been spent so far.
-  const projectedMinor = elapsedRatio > 0 ? Math.round(spentMinor / elapsedRatio) : spentMinor;
+  const projectedMinor =
+    elapsedRatio > 0 ? Math.round(spentMinor / elapsedRatio) : spentMinor;
 
-  const projectionReliable = elapsedDays >= Math.min(MIN_PROJECTION_DAYS, Math.ceil(totalDays * MIN_PROJECTION_RATIO));
+  const projectionReliable =
+    elapsedDays >=
+    Math.min(MIN_PROJECTION_DAYS, Math.ceil(totalDays * MIN_PROJECTION_RATIO));
 
   let status: BudgetPaceStatus;
   if (limitMinor <= 0) {
-    status = spentMinor > 0 ? 'over' : 'onTrack';
+    status = spentMinor > 0 ? "over" : "onTrack";
   } else if (spentMinor > limitMinor) {
-    status = 'over';
+    status = "over";
   } else if (projectionReliable && projectedMinor > limitMinor) {
-    status = 'projectedOver';
+    status = "projectedOver";
   } else if (spentRatio < elapsedRatio - ON_TRACK_TOLERANCE) {
-    status = 'under';
+    status = "under";
   } else {
-    status = 'onTrack';
+    status = "onTrack";
   }
 
-  return { elapsedRatio, spentRatio, projectedMinor, projectionReliable, status };
+  return {
+    elapsedRatio,
+    spentRatio,
+    projectedMinor,
+    projectionReliable,
+    status,
+  };
 }

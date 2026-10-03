@@ -8,16 +8,24 @@
  * sender's Ed25519 identity key.
  */
 
-import { LABELS } from '@/sync/crypto/labels';
-import { fromHex, sign, toHex, utf8Bytes, verify } from '@/sync/crypto/primitives';
-import type { SigningPublicKey, SigningSecretKey } from '@/sync/crypto/types';
-import { canonicalJson } from '@/utils/canonical-json';
+import { LABELS } from "@/sync/crypto/labels";
+import {
+  fromHex,
+  sign,
+  toHex,
+  utf8Bytes,
+  verify,
+} from "@/sync/crypto/primitives";
+import type { SigningPublicKey, SigningSecretKey } from "@/sync/crypto/types";
+import { canonicalJson } from "@/utils/canonical-json";
 
 const authenticatedBytes = (payload: unknown) =>
   utf8Bytes(`${LABELS.batchAuth}:${canonicalJson(payload)}`);
 
-export const signBatchPayload = (payload: unknown, secretKey: SigningSecretKey): string =>
-  toHex(sign(authenticatedBytes(payload), secretKey));
+export const signBatchPayload = (
+  payload: unknown,
+  secretKey: SigningSecretKey,
+): string => toHex(sign(authenticatedBytes(payload), secretKey));
 
 export function verifyBatchPayload(
   payload: unknown,

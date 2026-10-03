@@ -8,10 +8,10 @@
  * `@/utils/money`.
  */
 
-import { Decimal } from 'decimal.js';
+import { Decimal } from "decimal.js";
 
-import type { TransactionFeeInput, TransactionRecord } from '@/domain/models';
-import { addMinor, isSafeMinor, subtractMinor } from '@/utils/money';
+import type { TransactionFeeInput, TransactionRecord } from "@/domain/models";
+import { addMinor, isSafeMinor, subtractMinor } from "@/utils/money";
 
 /**
  * Validates and normalizes a plain (non-localized) decimal percentage string.
@@ -25,56 +25,60 @@ export function normalizeFeePercent(value: string): string {
   try {
     percent = new Decimal(value.trim());
   } catch {
-    throw new Error('Fee percentage must be greater than 0 and at most 100.');
+    throw new Error("Fee percentage must be greater than 0 and at most 100.");
   }
   if (!percent.isFinite() || percent.lte(0) || percent.gt(100)) {
-    throw new Error('Fee percentage must be greater than 0 and at most 100.');
+    throw new Error("Fee percentage must be greater than 0 and at most 100.");
   }
   return percent.toString();
 }
 
 /** The fee amount in account-currency minor units for a given principal and fee input. */
-export function feeMinorFor(principalMinor: number, fee: TransactionFeeInput): number {
-  if (fee.kind === 'fixed') {
+export function feeMinorFor(
+  principalMinor: number,
+  fee: TransactionFeeInput,
+): number {
+  if (fee.kind === "fixed") {
     if (!isSafeMinor(fee.amountMinor) || fee.amountMinor <= 0) {
-      throw new Error('Fee must be greater than zero.');
+      throw new Error("Fee must be greater than zero.");
     }
     return fee.amountMinor;
   }
   const percent = normalizeFeePercent(fee.percent);
   if (!isSafeMinor(principalMinor) || principalMinor <= 0) {
-    throw new Error('Amount must be greater than zero.');
+    throw new Error("Amount must be greater than zero.");
   }
   const computed = new Decimal(principalMinor)
     .mul(percent)
     .div(100)
     .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)
     .toNumber();
-  if (!isSafeMinor(computed)) throw new Error('Fee is outside the supported range.');
+  if (!isSafeMinor(computed))
+    throw new Error("Fee is outside the supported range.");
   return computed;
 }
 
 /** The total (principal plus/minus fee) that `TransactionRecord.amountMinor` stores. */
 export function totalWithFee(
-  kind: 'expense' | 'income',
+  kind: "expense" | "income",
   principalMinor: number,
   feeMinor: number,
 ): number {
-  if (kind === 'expense') {
-    return addMinor(principalMinor, feeMinor, 'Amount');
+  if (kind === "expense") {
+    return addMinor(principalMinor, feeMinor, "Amount");
   }
-  const total = subtractMinor(principalMinor, feeMinor, 'Amount');
-  if (total <= 0) throw new Error('Fees can’t exceed the income amount.');
+  const total = subtractMinor(principalMinor, feeMinor, "Amount");
+  if (total <= 0) throw new Error("Fees can’t exceed the income amount.");
   return total;
 }
 
 /** Reverses `totalWithFee`: the principal a stored total and fee imply. */
 export function principalOf(
-  record: Pick<TransactionRecord, 'kind' | 'amountMinor' | 'fee'>,
+  record: Pick<TransactionRecord, "kind" | "amountMinor" | "fee">,
 ): number {
   const fee = record.fee ?? null;
   if (!fee) return record.amountMinor;
-  return record.kind === 'expense'
-    ? subtractMinor(record.amountMinor, fee.amountMinor, 'Amount')
-    : addMinor(record.amountMinor, fee.amountMinor, 'Amount');
+  return record.kind === "expense"
+    ? subtractMinor(record.amountMinor, fee.amountMinor, "Amount")
+    : addMinor(record.amountMinor, fee.amountMinor, "Amount");
 }

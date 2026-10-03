@@ -14,32 +14,32 @@
  * behind to replay a delta receives instead (see `compaction.ts`).
  */
 
-import type { EntityType } from '@/domain/models';
-import type { Hlc } from '@/sync/oplog/hlc';
+import type { EntityType } from "@/domain/models";
+import type { Hlc } from "@/sync/oplog/hlc";
 
 export type OpKind =
-  | 'create'
-  | 'set'
-  | 'setAdd'
-  | 'setRemove'
-  | 'mapUpsert'
-  | 'mapRemove'
-  | 'delete'
-  | 'restore';
+  | "create"
+  | "set"
+  | "setAdd"
+  | "setRemove"
+  | "mapUpsert"
+  | "mapRemove"
+  | "delete"
+  | "restore";
 
 export const OP_KINDS: readonly OpKind[] = [
-  'create',
-  'set',
-  'setAdd',
-  'setRemove',
-  'mapUpsert',
-  'mapRemove',
-  'delete',
-  'restore',
+  "create",
+  "set",
+  "setAdd",
+  "setRemove",
+  "mapUpsert",
+  "mapRemove",
+  "delete",
+  "restore",
 ];
 
 /** Membership controls are stored and forwarded, but intentionally have no finance projection. */
-export const SYNC_CONTROL_ENTITY = '__sync_control__';
+export const SYNC_CONTROL_ENTITY = "__sync_control__";
 
 /**
  * The signed half of an op.
@@ -112,10 +112,17 @@ export interface CausalMeta {
   readonly entityType: EntityType;
   readonly entityId: string;
   readonly maxHlc: Hlc;
-  readonly created: { readonly hlc: Hlc; readonly fields: Readonly<Record<string, unknown>> } | null;
+  readonly created: {
+    readonly hlc: Hlc;
+    readonly fields: Readonly<Record<string, unknown>>;
+  } | null;
   readonly registers: Readonly<Record<string, RegisterState>>;
-  readonly sets: Readonly<Record<string, Readonly<Record<string, ElementState>>>>;
-  readonly maps: Readonly<Record<string, Readonly<Record<string, MapEntryState>>>>;
+  readonly sets: Readonly<
+    Record<string, Readonly<Record<string, ElementState>>>
+  >;
+  readonly maps: Readonly<
+    Record<string, Readonly<Record<string, MapEntryState>>>
+  >;
   readonly deleted: DeletionState | null;
   /**
    * Ops this build could not interpret — a newer `schema`, an unknown `kind`, an unknown
@@ -125,7 +132,11 @@ export interface CausalMeta {
   readonly unknown: readonly SyncOpBody[];
 }
 
-export const emptyMeta = (entityType: EntityType, entityId: string, hlc: Hlc): CausalMeta => ({
+export const emptyMeta = (
+  entityType: EntityType,
+  entityId: string,
+  hlc: Hlc,
+): CausalMeta => ({
   entityType,
   entityId,
   maxHlc: hlc,
@@ -138,20 +149,21 @@ export const emptyMeta = (entityType: EntityType, entityId: string, hlc: Hlc): C
 });
 
 /** `${entityType}:${entityId}` — the key both `records` and `sync_state` are stored under. */
-export const metaKey = (entityType: EntityType, entityId: string) => `${entityType}:${entityId}`;
+export const metaKey = (entityType: EntityType, entityId: string) =>
+  `${entityType}:${entityId}`;
 
 export class OpLogError extends Error {
   constructor(
     message: string,
     readonly code:
-      | 'malformed'
-      | 'chainBreak'
-      | 'chainFork'
-      | 'unsignedOp'
-      | 'badSignature'
-      | 'immutableField',
+      | "malformed"
+      | "chainBreak"
+      | "chainFork"
+      | "unsignedOp"
+      | "badSignature"
+      | "immutableField",
   ) {
     super(message);
-    this.name = 'OpLogError';
+    this.name = "OpLogError";
   }
 }

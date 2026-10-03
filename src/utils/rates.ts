@@ -17,10 +17,10 @@
  * currency that is neither the account's nor the vault's base.
  */
 
-import { Decimal } from 'decimal.js';
+import { Decimal } from "decimal.js";
 
-import type { ExchangeRate, FinanceState } from '@/domain/models';
-import { isFetchedRate } from '@/utils/deterministic-id';
+import type { ExchangeRate, FinanceState } from "@/domain/models";
+import { isFetchedRate } from "@/utils/deterministic-id";
 
 export interface AppliedRate {
   /** `1 currency = rate <base currency>`, as a plain decimal string. */
@@ -42,8 +42,17 @@ function latestRate(
   localDate: string,
 ): ExchangeRate | undefined {
   return rates
-    .filter((item) => item.fromCurrency === fromCurrency && item.toCurrency === toCurrency && item.effectiveDate <= localDate)
-    .sort((a, b) => b.effectiveDate.localeCompare(a.effectiveDate) || b.updatedAt.localeCompare(a.updatedAt))[0];
+    .filter(
+      (item) =>
+        item.fromCurrency === fromCurrency &&
+        item.toCurrency === toCurrency &&
+        item.effectiveDate <= localDate,
+    )
+    .sort(
+      (a, b) =>
+        b.effectiveDate.localeCompare(a.effectiveDate) ||
+        b.updatedAt.localeCompare(a.updatedAt),
+    )[0];
 }
 
 /**
@@ -55,7 +64,11 @@ function latestRate(
  * Returns `null`, not `'1'`, when `currency` already equals the base currency: there is nothing
  * to apply, and callers (the transaction form) only ask this for a genuinely foreign leg.
  */
-export function appliedRateFor(state: FinanceState, currency: string, localDate: string): AppliedRate | null {
+export function appliedRateFor(
+  state: FinanceState,
+  currency: string,
+  localDate: string,
+): AppliedRate | null {
   const base = state.settings.baseCurrency.trim().toUpperCase();
   const foreign = currency.trim().toUpperCase();
   if (!foreign || foreign === base) return null;
@@ -82,7 +95,11 @@ function directOrInverseApplied(
 ): AppliedRate | null {
   const direct = latestRate(rates, fromCurrency, toCurrency, localDate);
   if (direct) {
-    return { rate: direct.rate, effectiveDate: direct.effectiveDate, automatic: isFetchedRate(direct) };
+    return {
+      rate: direct.rate,
+      effectiveDate: direct.effectiveDate,
+      automatic: isFetchedRate(direct),
+    };
   }
   const inverse = latestRate(rates, toCurrency, fromCurrency, localDate);
   if (!inverse) return null;
@@ -141,7 +158,10 @@ export function appliedCrossRateFor(
 
   return {
     rate: fromBaseRate.div(toBaseRate).toSignificantDigits(20).toFixed(),
-    effectiveDate: fromBase.effectiveDate < toBase.effectiveDate ? fromBase.effectiveDate : toBase.effectiveDate,
+    effectiveDate:
+      fromBase.effectiveDate < toBase.effectiveDate
+        ? fromBase.effectiveDate
+        : toBase.effectiveDate,
     automatic: fromBase.automatic && toBase.automatic,
   };
 }

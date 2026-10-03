@@ -1,3 +1,3 @@
-import { TransactionsScreen } from '@/features/transactions/transactions-screen';
+import { TransactionsScreen } from "@/features/transactions/transactions-screen";
 
 export default TransactionsScreen;

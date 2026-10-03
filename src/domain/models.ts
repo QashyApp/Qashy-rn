@@ -1,14 +1,14 @@
 export type CurrencyCode = string;
 
-export type ThemeMode = 'system' | 'light' | 'dark';
-export type AccentSource = 'system' | 'preset' | 'custom';
-export type AccountType = 'cash' | 'checking' | 'savings' | 'credit' | 'wallet';
-export type CategoryKind = 'expense' | 'income';
-export type TransactionKind = 'expense' | 'income' | 'transfer';
-export type TransactionStatus = 'posted' | 'upcoming' | 'skipped';
-export type GoalKind = 'saving' | 'spending';
-export type PeriodUnit = 'day' | 'week' | 'month' | 'year' | 'custom';
-export type RecurrenceUnit = 'day' | 'week' | 'month' | 'year';
+export type ThemeMode = "system" | "light" | "dark";
+export type AccentSource = "system" | "preset" | "custom";
+export type AccountType = "cash" | "checking" | "savings" | "credit" | "wallet";
+export type CategoryKind = "expense" | "income";
+export type TransactionKind = "expense" | "income" | "transfer";
+export type TransactionStatus = "posted" | "upcoming" | "skipped";
+export type GoalKind = "saving" | "spending";
+export type PeriodUnit = "day" | "week" | "month" | "year" | "custom";
+export type RecurrenceUnit = "day" | "week" | "month" | "year";
 
 export interface SyncEntity {
   id: string;
@@ -69,7 +69,7 @@ export interface ForeignAmount {
   exchangeRate: string;
 }
 
-export type TransactionFeeKind = 'percent' | 'fixed';
+export type TransactionFeeKind = "percent" | "fixed";
 
 export interface TransactionFee {
   kind: TransactionFeeKind;
@@ -87,8 +87,7 @@ export interface ForeignAmountInput {
 }
 
 export type TransactionFeeInput =
-  | { kind: 'percent'; percent: string }
-  | { kind: 'fixed'; amountMinor: number };
+  { kind: "percent"; percent: string } | { kind: "fixed"; amountMinor: number };
 
 export interface TransactionRecord extends SyncEntity {
   kind: TransactionKind;
@@ -209,7 +208,7 @@ export interface GoalContribution extends SyncEntity {
 }
 
 export interface RecurringTemplate {
-  kind: Exclude<TransactionKind, 'transfer'>;
+  kind: Exclude<TransactionKind, "transfer">;
   title: string;
   note: string;
   accountId: string;
@@ -271,7 +270,7 @@ export interface TransactionQuery {
   maxMinor?: number;
   limit?: number;
   offset?: number;
-  sort?: 'newest' | 'oldest' | 'amount-desc' | false;
+  sort?: "newest" | "oldest" | "amount-desc" | false;
 }
 
 export interface DashboardSummary {
@@ -286,7 +285,10 @@ export interface DashboardSummary {
   recentTransactions: TransactionRecord[];
   upcomingTransactions: TransactionRecord[];
   dailySpend: { date: string; amountMinor: number }[];
-  missingExchangeRates: { fromCurrency: CurrencyCode; toCurrency: CurrencyCode }[];
+  missingExchangeRates: {
+    fromCurrency: CurrencyCode;
+    toCurrency: CurrencyCode;
+  }[];
 }
 
 export interface BudgetStatus {
@@ -298,7 +300,11 @@ export interface BudgetStatus {
   /** This period's live adjustments, newest first. */
   adjustments: BudgetAdjustment[];
   effectiveLimitMinor: number;
-  categorySpend: { categoryId: string; amountMinor: number; limitMinor: number }[];
+  categorySpend: {
+    categoryId: string;
+    amountMinor: number;
+    limitMinor: number;
+  }[];
 }
 
 export interface CsvImportRow {
@@ -336,18 +342,18 @@ export interface ImportResult {
  * omitted one would not fail to compile: it would export a backup missing a table.
  */
 export const ENTITY_TYPES = [
-  'settings',
-  'accounts',
-  'categories',
-  'tags',
-  'transactions',
-  'budgets',
-  'budgetPeriods',
-  'budgetAdjustments',
-  'goals',
-  'contributions',
-  'recurringRules',
-  'exchangeRates',
+  "settings",
+  "accounts",
+  "categories",
+  "tags",
+  "transactions",
+  "budgets",
+  "budgetPeriods",
+  "budgetAdjustments",
+  "goals",
+  "contributions",
+  "recurringRules",
+  "exchangeRates",
 ] as const;
 
 export type EntityType = (typeof ENTITY_TYPES)[number];

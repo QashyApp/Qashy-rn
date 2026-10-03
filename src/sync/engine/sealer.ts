@@ -17,10 +17,10 @@
  * signature and the second write is a no-op rather than a conflict.
  */
 
-import type { StorageAdapter } from '@/data/storage-adapter';
-import { fromOpRow, toOpRow } from '@/data/sync-store';
-import type { SigningSecretKey } from '@/sync/crypto';
-import { sealOp } from '@/sync/oplog';
+import type { StorageAdapter } from "@/data/storage-adapter";
+import { fromOpRow, toOpRow } from "@/data/sync-store";
+import type { SigningSecretKey } from "@/sync/crypto";
+import { sealOp } from "@/sync/oplog";
 
 /**
  * How many ops one pass signs.
@@ -60,7 +60,7 @@ export async function sealPending({
   limit = SEAL_BATCH_SIZE,
 }: SealerInput): Promise<number> {
   const pending = await storage.transact(async (tx) => {
-    const rows = await tx.table('syncOps').all();
+    const rows = await tx.table("syncOps").all();
     return rows
       .filter((row) => row.sealed === 0 && row.deviceId === deviceId)
       .sort((first, second) => first.seq - second.seq)
@@ -75,7 +75,10 @@ export async function sealPending({
     // `origin` is read back off the row rather than assumed: these are this device's own ops
     // so it is always 0, but re-deriving it from the row keeps the round-trip total and
     // stops a future caller from quietly relabelling a forwarded op as locally authored.
-    (tx) => tx.table('syncOps').put(sealed.map((op, index) => toOpRow(op, pending[index].origin))),
+    (tx) =>
+      tx
+        .table("syncOps")
+        .put(sealed.map((op, index) => toOpRow(op, pending[index].origin))),
     // Nothing a subscriber can observe has changed: `records` is untouched and the entity a
     // signature belongs to looks identical before and after. Notifying would re-hydrate all
     // eleven entity types to redraw exactly the same screen.
@@ -91,9 +94,12 @@ export async function sealPending({
  * SQLite means not taking the write lock at all — this runs on every foreground and is a
  * no-op the overwhelming majority of the time.
  */
-export async function hasUnsealed(storage: StorageAdapter, deviceId: string): Promise<boolean> {
+export async function hasUnsealed(
+  storage: StorageAdapter,
+  deviceId: string,
+): Promise<boolean> {
   return storage.transact(async (tx) => {
-    const rows = await tx.table('syncOps').all();
+    const rows = await tx.table("syncOps").all();
     return rows.some((row) => row.sealed === 0 && row.deviceId === deviceId);
   });
 }

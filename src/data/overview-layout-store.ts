@@ -10,21 +10,23 @@
  * file.
  */
 
-import type { StorageTx } from '@/data/storage-adapter';
-import { SYNC_META, readMeta, writeMeta } from '@/data/sync-store';
+import type { StorageTx } from "@/data/storage-adapter";
+import { SYNC_META, readMeta, writeMeta } from "@/data/sync-store";
 import {
   DEFAULT_OVERVIEW_LAYOUT,
   normalizeOverviewLayout,
   serializeOverviewLayout,
   type OverviewLayout,
-} from '@/features/overview/layout/overview-layout';
+} from "@/features/overview/layout/overview-layout";
 
 /**
  * Reads the layout. Never throws: an absent key means first launch (the default layout), and
  * unparseable JSON — a stale shape, a hand-edited value, a truncated write — degrades to the
  * default through `normalizeOverviewLayout` rather than crashing the Overview screen.
  */
-export async function readOverviewLayout(tx: StorageTx): Promise<OverviewLayout> {
+export async function readOverviewLayout(
+  tx: StorageTx,
+): Promise<OverviewLayout> {
   const meta = await readMeta(tx, [SYNC_META.overviewLayout]);
   const raw = meta.get(SYNC_META.overviewLayout);
   if (raw === undefined) return DEFAULT_OVERVIEW_LAYOUT;
@@ -36,6 +38,11 @@ export async function readOverviewLayout(tx: StorageTx): Promise<OverviewLayout>
   }
 }
 
-export async function writeOverviewLayout(tx: StorageTx, layout: OverviewLayout): Promise<void> {
-  await writeMeta(tx, { [SYNC_META.overviewLayout]: serializeOverviewLayout(layout) });
+export async function writeOverviewLayout(
+  tx: StorageTx,
+  layout: OverviewLayout,
+): Promise<void> {
+  await writeMeta(tx, {
+    [SYNC_META.overviewLayout]: serializeOverviewLayout(layout),
+  });
 }

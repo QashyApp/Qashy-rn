@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   Pressable,
   StyleSheet,
@@ -6,7 +14,7 @@ import {
   type PressableStateCallbackType,
   type ViewProps,
   type ViewStyle,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   Easing,
   FadeIn,
@@ -19,10 +27,10 @@ import Animated, {
   withDelay,
   withSpring,
   withTiming,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-import { useQashyTheme } from '@/theme/theme';
-import type { MotionSpec } from '@/theme/themes/types';
+import { useQashyTheme } from "@/theme/theme";
+import type { MotionSpec } from "@/theme/themes/types";
 
 // ── The motion system ───────────────────────────────────────────────────────
 // One curve family, two durations, one travel distance, no overshoot. Motion
@@ -75,7 +83,11 @@ const EASE_EXIT = Easing.bezier(0.4, 0, 1, 1);
 const EASE_IN_OUT = Easing.bezier(0.4, 0, 0.2, 1);
 
 /** The shared curves, for `withTiming` calls outside this file. */
-export const motionCurves = { standard: EASE_STANDARD, exit: EASE_EXIT, inOut: EASE_IN_OUT } as const;
+export const motionCurves = {
+  standard: EASE_STANDARD,
+  exit: EASE_EXIT,
+  inOut: EASE_IN_OUT,
+} as const;
 
 const springConfig = {
   damping: 20,
@@ -84,7 +96,6 @@ const springConfig = {
   overshootClamping: true,
   reduceMotion: ReduceMotion.System,
 } as const;
-
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -97,50 +108,55 @@ const REST_STATE: ExtendedPressableState = { pressed: false, hovered: false };
 const PRESSED_STATE: ExtendedPressableState = { pressed: true, hovered: false };
 const HOVERED_STATE: ExtendedPressableState = { pressed: false, hovered: true };
 
-export type MotionVariant = 'fade' | 'up' | 'down' | 'left' | 'right' | 'zoom';
+export type MotionVariant = "fade" | "up" | "down" | "left" | "right" | "zoom";
 // Moved onto the animated wrapper: box-model and flex participation belong to
 // the outer element, otherwise the wrapper collapses to content size and a
 // `flex: 1` pressable has nothing to fill.
 const wrapperStyleKeys = [
-  'alignSelf',
-  'bottom',
-  'display',
-  'end',
-  'flex',
-  'flexBasis',
-  'flexGrow',
-  'flexShrink',
-  'left',
-  'margin',
-  'marginBlock',
-  'marginBlockEnd',
-  'marginBlockStart',
-  'marginBottom',
-  'marginEnd',
-  'marginHorizontal',
-  'marginInline',
-  'marginInlineEnd',
-  'marginInlineStart',
-  'marginLeft',
-  'marginRight',
-  'marginStart',
-  'marginTop',
-  'marginVertical',
-  'position',
-  'right',
-  'start',
-  'top',
-  'zIndex',
+  "alignSelf",
+  "bottom",
+  "display",
+  "end",
+  "flex",
+  "flexBasis",
+  "flexGrow",
+  "flexShrink",
+  "left",
+  "margin",
+  "marginBlock",
+  "marginBlockEnd",
+  "marginBlockStart",
+  "marginBottom",
+  "marginEnd",
+  "marginHorizontal",
+  "marginInline",
+  "marginInlineEnd",
+  "marginInlineStart",
+  "marginLeft",
+  "marginRight",
+  "marginStart",
+  "marginTop",
+  "marginVertical",
+  "position",
+  "right",
+  "start",
+  "top",
+  "zIndex",
 ] as const satisfies readonly (keyof ViewStyle)[];
 
 // Mirrored onto the wrapper but kept on the pressable, so the wrapper cannot
 // shrink below an explicitly sized control and a percentage size still resolves
 // against the real parent.
-const mirroredStyleKeys = ['width', 'height'] as const satisfies readonly (keyof ViewStyle)[];
+const mirroredStyleKeys = [
+  "width",
+  "height",
+] as const satisfies readonly (keyof ViewStyle)[];
 
-const wrapperStyleKeySet: ReadonlySet<string> = new Set<string>(wrapperStyleKeys);
+const wrapperStyleKeySet: ReadonlySet<string> = new Set<string>(
+  wrapperStyleKeys,
+);
 
-function splitWrapperStyle(style: ViewProps['style']) {
+function splitWrapperStyle(style: ViewProps["style"]) {
   const flattenedStyle = (StyleSheet.flatten(style) ?? {}) as ViewStyle;
   const wrapperStyle: ViewStyle = {};
   const contentStyle: ViewStyle = { ...flattenedStyle };
@@ -164,13 +180,16 @@ function splitWrapperStyle(style: ViewProps['style']) {
  * stay on the JS thread.
  */
 function isWorkletSafe(value: unknown) {
-  return typeof value === 'number' || typeof value === 'string';
+  return typeof value === "number" || typeof value === "string";
 }
 
 // Where each variant starts before it settles into place. The presets ship with
 // a 25px offset and ZoomIn starts from scale 0, which is what made every mount
 // look like it was being performed.
-const ENTRANCE_START: Record<MotionVariant, { translateX: number; translateY: number; scale: number }> = {
+const ENTRANCE_START: Record<
+  MotionVariant,
+  { translateX: number; translateY: number; scale: number }
+> = {
   fade: { translateX: 0, translateY: 0, scale: 1 },
   up: { translateX: 0, translateY: -TRAVEL, scale: 1 },
   down: { translateX: 0, translateY: TRAVEL, scale: 1 },
@@ -196,16 +215,26 @@ const ENTRANCE_START: Record<MotionVariant, { translateX: number; translateY: nu
  * stay on Reanimated: they need an element the tree no longer owns, and neither
  * goes through the branch above.
  */
-function useEntrance(variant: MotionVariant, delay: number, duration: number, enabled: boolean) {
+function useEntrance(
+  variant: MotionVariant,
+  delay: number,
+  duration: number,
+  enabled: boolean,
+) {
   const progress = useSharedValue(enabled ? 0 : 1);
 
   useEffect(() => {
     if (!enabled) return;
-    progress.set(withDelay(delay, withTiming(1, {
-      duration,
-      easing: EASE_STANDARD,
-      reduceMotion: ReduceMotion.System,
-    })));
+    progress.set(
+      withDelay(
+        delay,
+        withTiming(1, {
+          duration,
+          easing: EASE_STANDARD,
+          reduceMotion: ReduceMotion.System,
+        }),
+      ),
+    );
   }, [delay, duration, enabled, progress]);
 
   const start = ENTRANCE_START[variant];
@@ -232,8 +261,7 @@ function useEntrance(variant: MotionVariant, delay: number, duration: number, en
 // exits uniform also sidesteps the presets' fixed 25px exit offset, which
 // `withInitialValues` cannot reach because it only overrides the start state.
 function exitingAnimation(durations: MotionDurations) {
-  return FadeOut
-    .duration(durations.exit)
+  return FadeOut.duration(durations.exit)
     .easing(EASE_EXIT)
     .reduceMotion(ReduceMotion.System);
 }
@@ -287,7 +315,10 @@ export function ScreenTransition({ style, ...props }: ViewProps) {
   }, []);
 
   const entering = useMemo(
-    () => FadeIn.duration(durations.screen).easing(EASE_STANDARD).reduceMotion(ReduceMotion.System),
+    () =>
+      FadeIn.duration(durations.screen)
+        .easing(EASE_STANDARD)
+        .reduceMotion(ReduceMotion.System),
     [durations.screen],
   );
 
@@ -299,7 +330,7 @@ export function ScreenTransition({ style, ...props }: ViewProps) {
 }
 
 export function MotionView({
-  variant = 'up',
+  variant = "up",
   delay = 0,
   duration,
   animateLayout = false,
@@ -320,18 +351,35 @@ export function MotionView({
 }) {
   const durations = useMotionDurations();
   const allowEntrance = useEntranceAllowed(entrance);
-  const entranceStyle = useEntrance(variant, delay, duration ?? durations.enter, allowEntrance);
-  const exiting = useMemo(() => exit ? exitingAnimation(durations) : undefined, [exit, durations]);
+  const entranceStyle = useEntrance(
+    variant,
+    delay,
+    duration ?? durations.enter,
+    allowEntrance,
+  );
+  const exiting = useMemo(
+    () => (exit ? exitingAnimation(durations) : undefined),
+    [exit, durations],
+  );
   const layout = useMemo(
-    () => animateLayout
-      ? LinearTransition.duration(durations.layout).easing(EASE_STANDARD).reduceMotion(ReduceMotion.System)
-      : undefined,
+    () =>
+      animateLayout
+        ? LinearTransition.duration(durations.layout)
+            .easing(EASE_STANDARD)
+            .reduceMotion(ReduceMotion.System)
+        : undefined,
     [animateLayout, durations.layout],
   );
 
   if (!animateLayout) {
     const { style: plainStyle, ...plainProps } = props;
-    return <Animated.View {...plainProps} exiting={exiting} style={[plainStyle, entranceStyle]} />;
+    return (
+      <Animated.View
+        {...plainProps}
+        exiting={exiting}
+        style={[plainStyle, entranceStyle]}
+      />
+    );
   }
 
   // Reanimated layout transitions and the entrance both write `transform`.
@@ -366,14 +414,14 @@ export function MotionPressable({
   enteringVariant,
   enteringDelay = 0,
   ...props
-}: Omit<PressableProps, 'children' | 'style'> & {
+}: Omit<PressableProps, "children" | "style"> & {
   children?: ReactNode | ((state: ExtendedPressableState) => ReactNode);
-  style?: PressableProps['style'];
+  style?: PressableProps["style"];
   pressedScale?: number;
   hoverScale?: number;
   liftOnHover?: boolean;
   active?: boolean;
-  enteringVariant?: 'fade' | 'zoom';
+  enteringVariant?: "fade" | "zoom";
   enteringDelay?: number;
 }) {
   const reduceMotion = useReducedMotion();
@@ -381,7 +429,7 @@ export function MotionPressable({
   const durations = useMotionDurations();
   // A translate theme sinks a control by shifting it down instead of shrinking it, and
   // never scales on hover or on the 'active' pop either.
-  const translatePress = motion.press === 'translate';
+  const translatePress = motion.press === "translate";
   const timingConfig = {
     duration: durations.exit,
     easing: EASE_STANDARD,
@@ -406,16 +454,15 @@ export function MotionPressable({
   }, [active, reduceMotion, translatePress, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
-    transform: [
-      { translateY: translateY.value },
-      { scale: scale.value },
-    ],
+    transform: [{ translateY: translateY.value }, { scale: scale.value }],
   }));
 
   const resolveStyle = (pressableState: ExtendedPressableState): ViewStyle =>
     (StyleSheet.flatten(
-      typeof style === 'function'
-        ? (style as unknown as (s: ExtendedPressableState) => ViewStyle)(pressableState)
+      typeof style === "function"
+        ? (style as unknown as (s: ExtendedPressableState) => ViewStyle)(
+            pressableState,
+          )
         : style,
     ) ?? {}) as ViewStyle;
 
@@ -423,31 +470,50 @@ export function MotionPressable({
   // press changes then becomes data the UI thread can pick between, instead of
   // something that needs a re-render to recompute.
   const restStyle = resolveStyle(REST_STATE);
-  const pressedStyle = typeof style === 'function' ? resolveStyle(PRESSED_STATE) : restStyle;
-  const hoveredStyle = typeof style === 'function' ? resolveStyle(HOVERED_STATE) : restStyle;
-  const stateKeys = (Array.from(new Set([
-    ...Object.keys(restStyle),
-    ...Object.keys(pressedStyle),
-    ...Object.keys(hoveredStyle),
-  ])) as (keyof ViewStyle)[]).filter((key) => (
-    !wrapperStyleKeySet.has(key)
-    && (restStyle[key] !== pressedStyle[key] || restStyle[key] !== hoveredStyle[key])
-  ));
-  const canDriveFromUiThread = stateKeys.every((key) => (
-    isWorkletSafe(restStyle[key]) && isWorkletSafe(pressedStyle[key]) && isWorkletSafe(hoveredStyle[key])
-  ));
+  const pressedStyle =
+    typeof style === "function" ? resolveStyle(PRESSED_STATE) : restStyle;
+  const hoveredStyle =
+    typeof style === "function" ? resolveStyle(HOVERED_STATE) : restStyle;
+  const stateKeys = (
+    Array.from(
+      new Set([
+        ...Object.keys(restStyle),
+        ...Object.keys(pressedStyle),
+        ...Object.keys(hoveredStyle),
+      ]),
+    ) as (keyof ViewStyle)[]
+  ).filter(
+    (key) =>
+      !wrapperStyleKeySet.has(key) &&
+      (restStyle[key] !== pressedStyle[key] ||
+        restStyle[key] !== hoveredStyle[key]),
+  );
+  const canDriveFromUiThread = stateKeys.every(
+    (key) =>
+      isWorkletSafe(restStyle[key]) &&
+      isWorkletSafe(pressedStyle[key]) &&
+      isWorkletSafe(hoveredStyle[key]),
+  );
   // A function child, or a value Reanimated cannot carry, still needs the old
   // render-per-touch behaviour so consumers keep working.
-  const usesJsState = typeof children === 'function' || (stateKeys.length > 0 && !canDriveFromUiThread);
+  const usesJsState =
+    typeof children === "function" ||
+    (stateKeys.length > 0 && !canDriveFromUiThread);
 
   const state: ExtendedPressableState = usesJsState
     ? { pressed: jsPressed, hovered: jsHovered }
     : REST_STATE;
   const flattenedStyle = usesJsState ? resolveStyle(state) : restStyle;
   const overrideKeys = usesJsState ? [] : (stateKeys as string[]);
-  const restValues = overrideKeys.map((key) => restStyle[key as keyof ViewStyle]);
-  const pressedValues = overrideKeys.map((key) => pressedStyle[key as keyof ViewStyle]);
-  const hoveredValues = overrideKeys.map((key) => hoveredStyle[key as keyof ViewStyle]);
+  const restValues = overrideKeys.map(
+    (key) => restStyle[key as keyof ViewStyle],
+  );
+  const pressedValues = overrideKeys.map(
+    (key) => pressedStyle[key as keyof ViewStyle],
+  );
+  const hoveredValues = overrideKeys.map(
+    (key) => hoveredStyle[key as keyof ViewStyle],
+  );
 
   const overrideStyle = useAnimatedStyle(() => {
     const pressedNow = isPressed.value > 0;
@@ -467,32 +533,35 @@ export function MotionPressable({
   // `button`, so a focused radio, checkbox, switch or tab ignored Space. These controls are
   // expected to answer to both.
   const pressRole = props.role ?? props.accessibilityRole;
-  const spaceActivates = process.env.EXPO_OS === 'web' && (
-    pressRole === 'radio' || pressRole === 'checkbox' || pressRole === 'switch' || pressRole === 'tab'
-  );
+  const spaceActivates =
+    process.env.EXPO_OS === "web" &&
+    (pressRole === "radio" ||
+      pressRole === "checkbox" ||
+      pressRole === "switch" ||
+      pressRole === "tab");
   const spaceKeyProps = spaceActivates
     ? {
-      onKeyDown: (event: { key?: string; preventDefault?: () => void }) => {
-        if (event.key !== ' ') return;
-        event.preventDefault?.();
-        if (!disabled) props.onPress?.(event as never);
-      },
-    }
+        onKeyDown: (event: { key?: string; preventDefault?: () => void }) => {
+          if (event.key !== " ") return;
+          event.preventDefault?.();
+          if (!disabled) props.onPress?.(event as never);
+        },
+      }
     : null;
-  const { wrapperStyle, contentStyle: pressableStyle } = splitWrapperStyle(flattenedStyle);
-  const resolvedChildren = typeof children === 'function' ? children(state) : children;
+  const { wrapperStyle, contentStyle: pressableStyle } =
+    splitWrapperStyle(flattenedStyle);
+  const resolvedChildren =
+    typeof children === "function" ? children(state) : children;
   const allowEntrance = useEntranceAllowed(Boolean(enteringVariant));
   const entranceStyle = useEntrance(
-    enteringVariant ?? 'fade',
+    enteringVariant ?? "fade",
     enteringDelay,
     durations.enter,
     allowEntrance,
   );
 
   return (
-    <Animated.View
-      collapsable={false}
-      style={[wrapperStyle, entranceStyle]}>
+    <Animated.View collapsable={false} style={[wrapperStyle, entranceStyle]}>
       <Animated.View style={animatedStyle}>
         <AnimatedPressable
           {...props}
@@ -503,8 +572,15 @@ export function MotionPressable({
             isHovered.set(1);
             if (usesJsState) setJsHovered(true);
             if (!pressedRef.current && !disabled) {
-              scale.set(withTiming(translatePress ? 1 : hoverScale, timingConfig));
-              translateY.set(withTiming(liftOnHover && !translatePress ? -1 : 0, timingConfig));
+              scale.set(
+                withTiming(translatePress ? 1 : hoverScale, timingConfig),
+              );
+              translateY.set(
+                withTiming(
+                  liftOnHover && !translatePress ? -1 : 0,
+                  timingConfig,
+                ),
+              );
             }
             onHoverIn?.(event);
           }}
@@ -523,8 +599,15 @@ export function MotionPressable({
             isPressed.set(1);
             if (usesJsState) setJsPressed(true);
             if (!disabled) {
-              scale.set(withSpring(translatePress ? 1 : pressedScale, springConfig));
-              translateY.set(withTiming(translatePress ? motion.pressTranslate : 0, timingConfig));
+              scale.set(
+                withSpring(translatePress ? 1 : pressedScale, springConfig),
+              );
+              translateY.set(
+                withTiming(
+                  translatePress ? motion.pressTranslate : 0,
+                  timingConfig,
+                ),
+              );
             }
             onPressIn?.(event);
           }}
@@ -532,11 +615,22 @@ export function MotionPressable({
             pressedRef.current = false;
             isPressed.set(0);
             if (usesJsState) setJsPressed(false);
-            scale.set(withSpring(hoveredRef.current && !translatePress ? hoverScale : 1, springConfig));
-            translateY.set(withTiming(hoveredRef.current && liftOnHover && !translatePress ? -1 : 0, timingConfig));
+            scale.set(
+              withSpring(
+                hoveredRef.current && !translatePress ? hoverScale : 1,
+                springConfig,
+              ),
+            );
+            translateY.set(
+              withTiming(
+                hoveredRef.current && liftOnHover && !translatePress ? -1 : 0,
+                timingConfig,
+              ),
+            );
             onPressOut?.(event);
           }}
-          style={[pressableStyle, overrideStyle]}>
+          style={[pressableStyle, overrideStyle]}
+        >
           {resolvedChildren}
         </AnimatedPressable>
       </Animated.View>

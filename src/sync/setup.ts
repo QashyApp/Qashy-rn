@@ -19,9 +19,9 @@
  * that says it is paired and cannot prove it.
  */
 
-import type { StorageAdapter, StorageTx } from '@/data/storage-adapter';
-import { syncRowKey } from '@/data/sync-tables';
-import { runGenesisMigration } from '@/data/sync-genesis';
+import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
+import { syncRowKey } from "@/data/sync-tables";
+import { runGenesisMigration } from "@/data/sync-genesis";
 import {
   SYNC_META,
   appendActivity,
@@ -33,33 +33,47 @@ import {
   storeOps,
   writeChainState,
   writeMeta,
-} from '@/data/sync-store';
-import type { SyncActivityRow } from '@/data/sync-tables';
+} from "@/data/sync-store";
+import type { SyncActivityRow } from "@/data/sync-tables";
 import {
   createDeviceIdentity,
   createVaultRootKey,
   OP_SCHEMA_VERSION,
   type DeviceIdentity,
   type VaultRootKey,
-} from '@/sync/crypto';
-import { activityEntry, hasUnsealed, quarantineCount, readRoster, writePeers, type Peer } from '@/sync/engine';
-import { KeystoreError, type KeystoreStatus, type SyncKeystore } from '@/sync/keystore';
-import { buildOp, sealOp, tick, type SyncOpBody } from '@/sync/oplog';
+} from "@/sync/crypto";
+import {
+  activityEntry,
+  hasUnsealed,
+  quarantineCount,
+  readRoster,
+  writePeers,
+  type Peer,
+} from "@/sync/engine";
+import {
+  KeystoreError,
+  type KeystoreStatus,
+  type SyncKeystore,
+} from "@/sync/keystore";
+import { buildOp, sealOp, tick, type SyncOpBody } from "@/sync/oplog";
 import {
   SYNC_CONTROL_ENTITY,
   deriveRevocationState,
   type RevocationMode,
   type RevocationPolicy,
   type RevocationProposal,
-} from '@/sync/revocation';
+} from "@/sync/revocation";
 import {
   readEndpoints,
   writeEndpoints,
   type EndpointPatch,
   type SyncEndpoints,
-} from '@/sync/transport/endpoints';
-import { readRelayHealth, type RelayHealth } from '@/sync/transport/relay-health';
-import { makeId, nowIso as defaultNowIso } from '@/utils/entity';
+} from "@/sync/transport/endpoints";
+import {
+  readRelayHealth,
+  type RelayHealth,
+} from "@/sync/transport/relay-health";
+import { makeId, nowIso as defaultNowIso } from "@/utils/entity";
 
 /**
  * The epoch a brand-new vault starts on.
@@ -119,7 +133,12 @@ export interface SyncStatus {
 }
 
 /** The state of a device that has never been near a vault. */
-const UNPAIRED = { deviceId: '', deviceName: '', epoch: 0, baseCurrency: '' } as const;
+const UNPAIRED = {
+  deviceId: "",
+  deviceName: "",
+  epoch: 0,
+  baseCurrency: "",
+} as const;
 
 const toInt = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -127,18 +146,18 @@ const toInt = (value: string | undefined, fallback: number) => {
 };
 
 const parseRevocationMode = (value: string | undefined): RevocationMode =>
-  value === 'quorum' || value === 'owner' ? value : 'any';
+  value === "quorum" || value === "owner" ? value : "any";
 
 /** Ops moved, in either direction. What "last synced" honestly means. */
-const MOVED = new Set(['sent', 'received']);
+const MOVED = new Set(["sent", "received"]);
 
 /** Tables that belong to the vault being left, rather than to the finance records themselves. */
 const FORGOTTEN_VAULT_TABLES = [
-  'syncOps',
-  'syncState',
-  'syncPeers',
-  'syncQuarantine',
-  'syncActivity',
+  "syncOps",
+  "syncState",
+  "syncPeers",
+  "syncQuarantine",
+  "syncActivity",
 ] as const;
 
 /**
@@ -151,7 +170,8 @@ async function clearForgottenVaultState(tx: StorageTx): Promise<void> {
   for (const name of FORGOTTEN_VAULT_TABLES) {
     const table = tx.table(name);
     const rows = await table.all();
-    if (rows.length) await table.delete(rows.map((row) => syncRowKey(name, row)));
+    if (rows.length)
+      await table.delete(rows.map((row) => syncRowKey(name, row)));
   }
 
   // `ratesAutoFetch` / `ratesLastRefreshAt` are deliberately absent from this list, for the
@@ -159,25 +179,27 @@ async function clearForgottenVaultState(tx: StorageTx): Promise<void> {
   // part of the vault being left. A user who opted into automatic rates should not have that
   // choice silently reset by an interrupted pairing or a `disableSync({ forget: true })` — and
   // because absent already means "off", leaving it out never turns fetching on by surprise.
-  await tx.table('syncMeta').delete([
-    SYNC_META.deviceId,
-    SYNC_META.deviceName,
-    SYNC_META.epoch,
-    SYNC_META.seq,
-    SYNC_META.headHash,
-    SYNC_META.hlcWall,
-    SYNC_META.hlcCounter,
-    SYNC_META.baseCurrency,
-    SYNC_META.ownerDeviceId,
-    SYNC_META.revocationMode,
-    SYNC_META.genesisAt,
-    SYNC_META.enabled,
-    SYNC_META.relayCursor,
-    SYNC_META.relayStatus,
-    SYNC_META.relayCheckedAt,
-    SYNC_META.relayDetail,
-    SYNC_META.relayFailures,
-  ]);
+  await tx
+    .table("syncMeta")
+    .delete([
+      SYNC_META.deviceId,
+      SYNC_META.deviceName,
+      SYNC_META.epoch,
+      SYNC_META.seq,
+      SYNC_META.headHash,
+      SYNC_META.hlcWall,
+      SYNC_META.hlcCounter,
+      SYNC_META.baseCurrency,
+      SYNC_META.ownerDeviceId,
+      SYNC_META.revocationMode,
+      SYNC_META.genesisAt,
+      SYNC_META.enabled,
+      SYNC_META.relayCursor,
+      SYNC_META.relayStatus,
+      SYNC_META.relayCheckedAt,
+      SYNC_META.relayDetail,
+      SYNC_META.relayFailures,
+    ]);
 }
 
 // ---------------------------------------------------------------------------
@@ -199,7 +221,7 @@ export async function readSyncStatus(deps: SyncSetupDeps): Promise<SyncStatus> {
   // with leftover vault rows is the inverse failure: the database was restored without the
   // device-only key, so those rows are discarded in the transaction below before setup can
   // create a new identity over them.
-  const vault = keystore === 'unlocked' ? await deps.keystore.read() : null;
+  const vault = keystore === "unlocked" ? await deps.keystore.read() : null;
 
   const status = await deps.storage.transact(async (tx) => {
     let meta = await readMeta(tx, [
@@ -215,7 +237,7 @@ export async function readSyncStatus(deps: SyncSetupDeps): Promise<SyncStatus> {
       SYNC_META.revocationMode,
     ]);
 
-    if (keystore === 'empty' && (await hasForgottenVaultState(tx, meta))) {
+    if (keystore === "empty" && (await hasForgottenVaultState(tx, meta))) {
       // The key is the authority for membership. Without it, this metadata and its chain can
       // never be resumed, and allowing setup to continue over it would pair a new identity with
       // old signed history. Keep finance records and transport configuration, but start a fresh
@@ -228,8 +250,12 @@ export async function readSyncStatus(deps: SyncSetupDeps): Promise<SyncStatus> {
     const activity = await readActivity(tx, ACTIVITY_VIEW_LIMIT);
     const moved = activity.find((row) => MOVED.has(row.kind) && row.count > 0);
 
-    const hasVault = keystore !== 'empty' && (keystore !== 'unlocked' || vault !== null);
-    const deviceId = keystore === 'empty' ? '' : vault?.identity.deviceId ?? meta.get(SYNC_META.deviceId) ?? '';
+    const hasVault =
+      keystore !== "empty" && (keystore !== "unlocked" || vault !== null);
+    const deviceId =
+      keystore === "empty"
+        ? ""
+        : (vault?.identity.deviceId ?? meta.get(SYNC_META.deviceId) ?? "");
     const initial: RevocationPolicy = {
       ownerDeviceId: meta.get(SYNC_META.ownerDeviceId) ?? deviceId,
       mode: parseRevocationMode(meta.get(SYNC_META.revocationMode)),
@@ -240,16 +266,31 @@ export async function readSyncStatus(deps: SyncSetupDeps): Promise<SyncStatus> {
       : { ...initial, proposals: [], revocations: [] };
 
     return {
-      enabled: hasVault && meta.get(SYNC_META.enabled) === '1',
+      enabled: hasVault && meta.get(SYNC_META.enabled) === "1",
       keystore,
       deviceId: deviceId || UNPAIRED.deviceId,
-      deviceName: keystore === 'empty' ? UNPAIRED.deviceName : meta.get(SYNC_META.deviceName) ?? UNPAIRED.deviceName,
-      epoch: keystore === 'empty' ? UNPAIRED.epoch : vault?.epoch ?? toInt(meta.get(SYNC_META.epoch), UNPAIRED.epoch),
-      baseCurrency: keystore === 'empty' ? UNPAIRED.baseCurrency : meta.get(SYNC_META.baseCurrency) ?? UNPAIRED.baseCurrency,
+      deviceName:
+        keystore === "empty"
+          ? UNPAIRED.deviceName
+          : (meta.get(SYNC_META.deviceName) ?? UNPAIRED.deviceName),
+      epoch:
+        keystore === "empty"
+          ? UNPAIRED.epoch
+          : (vault?.epoch ?? toInt(meta.get(SYNC_META.epoch), UNPAIRED.epoch)),
+      baseCurrency:
+        keystore === "empty"
+          ? UNPAIRED.baseCurrency
+          : (meta.get(SYNC_META.baseCurrency) ?? UNPAIRED.baseCurrency),
       revocation,
-      proposals: revocation.proposals.filter((proposal) => proposal.approvals.length < proposal.required),
+      proposals: revocation.proposals.filter(
+        (proposal) => proposal.approvals.length < proposal.required,
+      ),
       peers: [...roster.values()].sort((first, second) =>
-        first.addedAt < second.addedAt ? -1 : first.addedAt > second.addedAt ? 1 : 0,
+        first.addedAt < second.addedAt
+          ? -1
+          : first.addedAt > second.addedAt
+            ? 1
+            : 0,
       ),
       endpoints: await readEndpoints(tx),
       relay: await readRelayHealth(tx),
@@ -264,7 +305,9 @@ export async function readSyncStatus(deps: SyncSetupDeps): Promise<SyncStatus> {
   // is worth strictly less than having one definition of "not yet signed".
   return {
     ...status,
-    pending: status.deviceId ? await hasUnsealed(deps.storage, status.deviceId) : false,
+    pending: status.deviceId
+      ? await hasUnsealed(deps.storage, status.deviceId)
+      : false,
   };
 }
 
@@ -273,15 +316,16 @@ async function hasForgottenVaultState(
   meta: ReadonlyMap<string, string>,
 ): Promise<boolean> {
   if (
-    meta.has(SYNC_META.deviceId)
-    || meta.has(SYNC_META.deviceName)
-    || meta.has(SYNC_META.epoch)
-    || meta.has(SYNC_META.seq)
-    || meta.has(SYNC_META.headHash)
-    || meta.has(SYNC_META.baseCurrency)
-    || meta.has(SYNC_META.genesisAt)
-    || meta.has(SYNC_META.enabled)
-  ) return true;
+    meta.has(SYNC_META.deviceId) ||
+    meta.has(SYNC_META.deviceName) ||
+    meta.has(SYNC_META.epoch) ||
+    meta.has(SYNC_META.seq) ||
+    meta.has(SYNC_META.headHash) ||
+    meta.has(SYNC_META.baseCurrency) ||
+    meta.has(SYNC_META.genesisAt) ||
+    meta.has(SYNC_META.enabled)
+  )
+    return true;
 
   for (const name of FORGOTTEN_VAULT_TABLES) {
     if ((await tx.table(name).all()).length) return true;
@@ -296,11 +340,14 @@ async function hasForgottenVaultState(
  * screen has to render on that platform too — saying "this device can't store a key safely" is
  * the entire point of the `unavailable` state, and it cannot say it from an error boundary.
  */
-async function readKeystoreStatus(keystore: SyncKeystore): Promise<KeystoreStatus> {
+async function readKeystoreStatus(
+  keystore: SyncKeystore,
+): Promise<KeystoreStatus> {
   try {
     return await keystore.status();
   } catch (error) {
-    if (error instanceof KeystoreError) return error.code === 'locked' ? 'locked' : 'unavailable';
+    if (error instanceof KeystoreError)
+      return error.code === "locked" ? "locked" : "unavailable";
     throw error;
   }
 }
@@ -312,7 +359,9 @@ async function readKeystoreStatus(keystore: SyncKeystore): Promise<KeystoreStatu
  * the host cannot proceed at all, and the joiner is *expected* to have none and makes a fresh
  * one. Never creates anything, so calling it has no side effects a cancelled flow must undo.
  */
-export async function readIdentity(deps: SyncSetupDeps): Promise<DeviceIdentity | null> {
+export async function readIdentity(
+  deps: SyncSetupDeps,
+): Promise<DeviceIdentity | null> {
   const vault = await deps.keystore.read();
   return vault?.identity ?? null;
 }
@@ -346,7 +395,7 @@ export async function enableSync(
   // A plain Error, not a `KeystoreError`: nothing is wrong with the keystore. Reaching here
   // means the caller skipped the status check, which is a bug rather than a state to render.
   if (await deps.keystore.read()) {
-    throw new Error('This device is already part of a vault.');
+    throw new Error("This device is already part of a vault.");
   }
 
   const identity = createDeviceIdentity();
@@ -361,10 +410,12 @@ export async function enableSync(
       epoch: INITIAL_EPOCH,
       baseCurrency: await readLocalBaseCurrency(tx),
       ownerDeviceId: identity.deviceId,
-      revocationMode: 'any',
+      revocationMode: "any",
     });
     const genesis = await runGenesisMigration(tx, identity.deviceId, at);
-    await appendActivity(tx, [activityEntry({ kind: 'paired', recordedAt: at, count: 0 })]);
+    await appendActivity(tx, [
+      activityEntry({ kind: "paired", recordedAt: at, count: 0 }),
+    ]);
     return genesis.opCount;
   });
 
@@ -421,7 +472,11 @@ export async function adoptVault(
     await appendActivity(
       tx,
       input.peers.map((peer) =>
-        activityEntry({ kind: 'paired', recordedAt: at, peerId: peer.deviceId }),
+        activityEntry({
+          kind: "paired",
+          recordedAt: at,
+          peerId: peer.deviceId,
+        }),
       ),
     );
     return genesis.opCount;
@@ -436,15 +491,21 @@ export async function adoptVault(
  * Only a roster row: the host's key, epoch, and history all already exist, and this is the one
  * pairing outcome that changes nothing about the vault itself.
  */
-export async function recordPairedPeer(deps: SyncSetupDeps, peer: Peer): Promise<void> {
+export async function recordPairedPeer(
+  deps: SyncSetupDeps,
+  peer: Peer,
+): Promise<void> {
   const at = (deps.nowIso ?? defaultNowIso)();
   await deps.storage.transact(async (tx) => {
     await writePeers(tx, [peer]);
     await appendActivity(tx, [
-      activityEntry({ kind: 'paired', recordedAt: at, peerId: peer.deviceId }),
+      activityEntry({ kind: "paired", recordedAt: at, peerId: peer.deviceId }),
     ]);
   });
-  await appendMembershipControl(deps, () => ({ control: 'add', deviceId: peer.deviceId }));
+  await appendMembershipControl(deps, () => ({
+    control: "add",
+    deviceId: peer.deviceId,
+  }));
 }
 
 /** The `sync_meta` half of joining a vault, shared by both ways of doing it. */
@@ -464,9 +525,9 @@ async function enrol(
     [SYNC_META.deviceName]: input.profile.name.trim() || input.profile.platform,
     [SYNC_META.epoch]: String(input.epoch),
     [SYNC_META.baseCurrency]: input.baseCurrency,
-    [SYNC_META.enabled]: '1',
+    [SYNC_META.enabled]: "1",
     [SYNC_META.ownerDeviceId]: input.ownerDeviceId ?? input.deviceId,
-    [SYNC_META.revocationMode]: input.revocationMode ?? 'any',
+    [SYNC_META.revocationMode]: input.revocationMode ?? "any",
   });
 }
 
@@ -479,8 +540,8 @@ async function enrol(
  * finished onboarding, which is a legitimate state — it then accepts whatever it pairs with.
  */
 async function readLocalBaseCurrency(tx: StorageTx): Promise<string> {
-  const [settings] = await tx.readAll('settings');
-  return settings && 'baseCurrency' in settings ? settings.baseCurrency : '';
+  const [settings] = await tx.readAll("settings");
+  return settings && "baseCurrency" in settings ? settings.baseCurrency : "";
 }
 
 // ---------------------------------------------------------------------------
@@ -505,18 +566,24 @@ export const renameDevice = (deps: SyncSetupDeps, name: string) =>
  * `rotateVaultKey` is what stops it reading the drop-box — it cannot take back the plaintext the
  * device already has, and the UI says so.
  */
-const initialPolicy = (meta: ReadonlyMap<string, string>, deviceId: string): RevocationPolicy => ({
+const initialPolicy = (
+  meta: ReadonlyMap<string, string>,
+  deviceId: string,
+): RevocationPolicy => ({
   ownerDeviceId: meta.get(SYNC_META.ownerDeviceId) ?? deviceId,
   mode: parseRevocationMode(meta.get(SYNC_META.revocationMode)),
 });
 
-const controlBody = (hlc: string, payload: Readonly<Record<string, unknown>>): SyncOpBody => ({
-  hlc: hlc as SyncOpBody['hlc'],
+const controlBody = (
+  hlc: string,
+  payload: Readonly<Record<string, unknown>>,
+): SyncOpBody => ({
+  hlc: hlc as SyncOpBody["hlc"],
   // This deliberately remains an unknown entity to the finance projection. The sync engine
   // stores and forwards it like any other signed op, while membership code interprets it.
-  entityType: SYNC_CONTROL_ENTITY as SyncOpBody['entityType'],
-  entityId: 'revocation',
-  kind: 'set',
+  entityType: SYNC_CONTROL_ENTITY as SyncOpBody["entityType"],
+  entityId: "revocation",
+  kind: "set",
   payload,
   schema: OP_SCHEMA_VERSION,
 });
@@ -532,25 +599,49 @@ async function appendMembershipControl(
   ) => Readonly<Record<string, unknown>>,
 ): Promise<void> {
   const vault = await deps.keystore.read();
-  if (!vault) throw new KeystoreError('There is no vault on this device.', 'empty');
+  if (!vault)
+    throw new KeystoreError("There is no vault on this device.", "empty");
   const at = (deps.nowIso ?? defaultNowIso)();
   await deps.storage.transact(async (tx) => {
-    const meta = await readMeta(tx, [SYNC_META.deviceId, SYNC_META.ownerDeviceId, SYNC_META.revocationMode]);
+    const meta = await readMeta(tx, [
+      SYNC_META.deviceId,
+      SYNC_META.ownerDeviceId,
+      SYNC_META.revocationMode,
+    ]);
     const deviceId = meta.get(SYNC_META.deviceId) ?? vault.identity.deviceId;
-    if (deviceId !== vault.identity.deviceId) throw new Error('This device identity does not match its vault.');
+    if (deviceId !== vault.identity.deviceId)
+      throw new Error("This device identity does not match its vault.");
     const roster = await readRoster(tx);
     const existing = await readControlOps(tx);
-    const before = deriveRevocationState(existing, roster, initialPolicy(meta, deviceId), deviceId);
+    const before = deriveRevocationState(
+      existing,
+      roster,
+      initialPolicy(meta, deviceId),
+      deviceId,
+    );
     const held = await readHeldChains(tx);
     const { clock, head } = await readChainState(tx);
     const stamped = tick(clock, deviceId, Date.parse(at));
     const payload = makePayload(before, roster, deviceId, held.heads, at);
-    const built = buildOp([controlBody(stamped.hlc, payload)], deviceId, head.seq, head.headHash);
+    const built = buildOp(
+      [controlBody(stamped.hlc, payload)],
+      deviceId,
+      head.seq,
+      head.headHash,
+    );
     const op = sealOp(built.ops[0], vault.identity.signing.secretKey);
-    const after = deriveRevocationState([...existing, op], roster, initialPolicy(meta, deviceId), deviceId);
+    const after = deriveRevocationState(
+      [...existing, op],
+      roster,
+      initialPolicy(meta, deviceId),
+      deviceId,
+    );
 
     await storeOps(tx, [op], 0);
-    await writeChainState(tx, { clock: stamped.clock, head: { seq: built.seq, headHash: built.headHash } });
+    await writeChainState(tx, {
+      clock: stamped.clock,
+      head: { seq: built.seq, headHash: built.headHash },
+    });
     const changed: Peer[] = [];
     for (const decision of after.revocations) {
       const peer = roster.get(decision.targetId);
@@ -558,41 +649,85 @@ async function appendMembershipControl(
         changed.push({
           ...peer,
           revokedAt: decision.at,
-          revokedSeq: Math.max(decision.cutoff, held.heads.get(decision.targetId)?.seq ?? 0),
+          revokedSeq: Math.max(
+            decision.cutoff,
+            held.heads.get(decision.targetId)?.seq ?? 0,
+          ),
         });
       }
     }
     if (changed.length) {
       await writePeers(tx, changed);
-      await appendActivity(tx, changed.map((peer) => activityEntry({ kind: 'revoked', recordedAt: peer.revokedAt!, peerId: peer.deviceId })));
+      await appendActivity(
+        tx,
+        changed.map((peer) =>
+          activityEntry({
+            kind: "revoked",
+            recordedAt: peer.revokedAt!,
+            peerId: peer.deviceId,
+          }),
+        ),
+      );
     }
   });
 }
 
 /** Starts or approves a signed removal under the vault's selected policy. */
-export async function revokePeer(deps: SyncSetupDeps, peerId: string): Promise<void> {
-  const exists = await deps.storage.transact(async (tx) => {
-    const peer = (await readRoster(tx)).get(peerId);
-    return Boolean(peer && !peer.revokedAt);
-  }, { silent: true });
+export async function revokePeer(
+  deps: SyncSetupDeps,
+  peerId: string,
+): Promise<void> {
+  const exists = await deps.storage.transact(
+    async (tx) => {
+      const peer = (await readRoster(tx)).get(peerId);
+      return Boolean(peer && !peer.revokedAt);
+    },
+    { silent: true },
+  );
   if (!exists) return;
   await appendMembershipControl(deps, (state, roster, deviceId, heads, at) => {
     const cutoff = heads.get(peerId)?.seq ?? 0;
-    if (state.mode === 'quorum') {
-      const existing = state.proposals.find((proposal) => proposal.targetId === peerId && proposal.approvals.length < proposal.required);
-      if (existing) return { control: 'approve', proposalId: existing.id, targetId: peerId };
-      const voters = [deviceId, ...[...roster.values()].filter((peer) => !peer.revokedAt).map((peer) => peer.deviceId)].sort();
-      return { control: 'propose', proposalId: makeId(), targetId: peerId, voters, required: Math.ceil(voters.length / 2), cutoff, at };
+    if (state.mode === "quorum") {
+      const existing = state.proposals.find(
+        (proposal) =>
+          proposal.targetId === peerId &&
+          proposal.approvals.length < proposal.required,
+      );
+      if (existing)
+        return {
+          control: "approve",
+          proposalId: existing.id,
+          targetId: peerId,
+        };
+      const voters = [
+        deviceId,
+        ...[...roster.values()]
+          .filter((peer) => !peer.revokedAt)
+          .map((peer) => peer.deviceId),
+      ].sort();
+      return {
+        control: "propose",
+        proposalId: makeId(),
+        targetId: peerId,
+        voters,
+        required: Math.ceil(voters.length / 2),
+        cutoff,
+        at,
+      };
     }
-    return { control: 'revoke', targetId: peerId, cutoff, at };
+    return { control: "revoke", targetId: peerId, cutoff, at };
   });
 }
 
-export const setRevocationPolicy = (deps: SyncSetupDeps, mode: RevocationMode) =>
-  appendMembershipControl(deps, () => ({ control: 'policy', mode }));
+export const setRevocationPolicy = (
+  deps: SyncSetupDeps,
+  mode: RevocationMode,
+) => appendMembershipControl(deps, () => ({ control: "policy", mode }));
 
-export const transferVaultOwnership = (deps: SyncSetupDeps, ownerDeviceId: string) =>
-  appendMembershipControl(deps, () => ({ control: 'owner', ownerDeviceId }));
+export const transferVaultOwnership = (
+  deps: SyncSetupDeps,
+  ownerDeviceId: string,
+) => appendMembershipControl(deps, () => ({ control: "owner", ownerDeviceId }));
 
 /** Validates and stores the transport configuration. Throws `EndpointError` on a bad address. */
 export const setEndpoints = (deps: SyncSetupDeps, patch: EndpointPatch) =>
@@ -613,7 +748,10 @@ export const setEndpoints = (deps: SyncSetupDeps, patch: EndpointPatch) =>
 export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
   const vault = await deps.keystore.read();
   if (!vault) {
-    throw new KeystoreError('There is no vault on this device to resume.', 'empty');
+    throw new KeystoreError(
+      "There is no vault on this device to resume.",
+      "empty",
+    );
   }
 
   const at = (deps.nowIso ?? defaultNowIso)();
@@ -625,11 +763,12 @@ export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
       SYNC_META.baseCurrency,
       SYNC_META.genesisAt,
     ]);
-    const complete = meta.get(SYNC_META.deviceId) === vault.identity.deviceId
-      && meta.get(SYNC_META.epoch) === String(vault.epoch)
-      && meta.has(SYNC_META.genesisAt);
+    const complete =
+      meta.get(SYNC_META.deviceId) === vault.identity.deviceId &&
+      meta.get(SYNC_META.epoch) === String(vault.epoch) &&
+      meta.has(SYNC_META.genesisAt);
     if (complete) {
-      await writeMeta(tx, { [SYNC_META.enabled]: '1' });
+      await writeMeta(tx, { [SYNC_META.enabled]: "1" });
       return;
     }
 
@@ -637,26 +776,33 @@ export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
     // epoch disagreement as an interrupted rotation, never as a forgotten vault: clearing the
     // oplog here would destroy the only recoverable copy of the local sync history.
     const storedEpoch = meta.get(SYNC_META.epoch);
-    if (meta.get(SYNC_META.deviceId) === vault.identity.deviceId && storedEpoch && storedEpoch !== String(vault.epoch)) {
+    if (
+      meta.get(SYNC_META.deviceId) === vault.identity.deviceId &&
+      storedEpoch &&
+      storedEpoch !== String(vault.epoch)
+    ) {
       throw new Error(
-        'Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.',
+        "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.",
       );
     }
 
     // A reset from an older build (or a partial database restore) may leave the key while
     // removing the local roster, chain, and genesis marker. Never merely flip enabled in that
     // state: the next local edit would extend a different history under an old identity.
-    const baseCurrency = meta.get(SYNC_META.baseCurrency) ?? await readLocalBaseCurrency(tx);
-    const deviceName = meta.get(SYNC_META.deviceName) ?? '';
+    const baseCurrency =
+      meta.get(SYNC_META.baseCurrency) ?? (await readLocalBaseCurrency(tx));
+    const deviceName = meta.get(SYNC_META.deviceName) ?? "";
     await clearForgottenVaultState(tx);
     await enrol(tx, {
       deviceId: vault.identity.deviceId,
-      profile: { name: deviceName, platform: 'unknown' },
+      profile: { name: deviceName, platform: "unknown" },
       epoch: vault.epoch,
       baseCurrency,
     });
     const genesis = await runGenesisMigration(tx, vault.identity.deviceId, at);
-    await appendActivity(tx, [activityEntry({ kind: 'paired', recordedAt: at, count: genesis.opCount })]);
+    await appendActivity(tx, [
+      activityEntry({ kind: "paired", recordedAt: at, count: genesis.opCount }),
+    ]);
   });
 }
 
@@ -675,7 +821,11 @@ export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
  */
 export async function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
   const vault = await deps.keystore.read();
-  if (!vault) throw new KeystoreError('There is no vault on this device to rotate.', 'empty');
+  if (!vault)
+    throw new KeystoreError(
+      "There is no vault on this device to rotate.",
+      "empty",
+    );
 
   const epoch = vault.epoch + 1;
   await deps.keystore.write({
@@ -700,9 +850,15 @@ export async function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
     );
     await appendActivity(tx, [
       // The cursor counts slots in a bucket this vault no longer uses.
-      ...live.map((peer) => activityEntry({ kind: 'revoked', recordedAt: at, peerId: peer.deviceId })),
+      ...live.map((peer) =>
+        activityEntry({
+          kind: "revoked",
+          recordedAt: at,
+          peerId: peer.deviceId,
+        }),
+      ),
     ]);
-    await writeMeta(tx, { [SYNC_META.relayCursor]: '0' });
+    await writeMeta(tx, { [SYNC_META.relayCursor]: "0" });
   });
 
   return epoch;
@@ -740,7 +896,7 @@ export async function disableSync(
   options: DisableOptions = {},
 ): Promise<void> {
   await deps.storage.transact(async (tx) => {
-    await writeMeta(tx, { [SYNC_META.enabled]: '0' });
+    await writeMeta(tx, { [SYNC_META.enabled]: "0" });
     if (!options.forget) return;
 
     // This device is leaving, not revoking a peer from a vault it still owns. Its local roster,

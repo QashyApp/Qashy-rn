@@ -20,8 +20,8 @@
  * so a truncated row fails here rather than inside a curve implementation.
  */
 
-import type { StorageTx } from '@/data/storage-adapter';
-import type { SyncPeerRow } from '@/data/sync-tables';
+import type { StorageTx } from "@/data/storage-adapter";
+import type { SyncPeerRow } from "@/data/sync-tables";
 import {
   deriveDeviceId,
   fromBase64Url,
@@ -29,10 +29,10 @@ import {
   toBase64Url,
   type AgreementPublicKey,
   type SigningPublicKey,
-} from '@/sync/crypto';
-import type { PeerAcks } from '@/sync/oplog';
-import { MAX_ROSTER_MEMBERS } from '@/sync/engine/batch';
-import { SyncEngineError, type RosterMember } from '@/sync/engine/types';
+} from "@/sync/crypto";
+import type { PeerAcks } from "@/sync/oplog";
+import { MAX_ROSTER_MEMBERS } from "@/sync/engine/batch";
+import { SyncEngineError, type RosterMember } from "@/sync/engine/types";
 
 /** A roster entry, with its keys usable rather than encoded. */
 export interface Peer {
@@ -66,10 +66,18 @@ export interface Peer {
 const parseSeqMap = (value: string): Record<string, number> => {
   try {
     const parsed: unknown = JSON.parse(value);
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) return {};
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return {};
     const out: Record<string, number> = {};
-    for (const [deviceId, seq] of Object.entries(parsed as Record<string, unknown>)) {
-      if (deviceId && typeof seq === 'number' && Number.isSafeInteger(seq) && seq >= 0) {
+    for (const [deviceId, seq] of Object.entries(
+      parsed as Record<string, unknown>,
+    )) {
+      if (
+        deviceId &&
+        typeof seq === "number" &&
+        Number.isSafeInteger(seq) &&
+        seq >= 0
+      ) {
         out[deviceId] = seq;
       }
     }
@@ -80,7 +88,10 @@ const parseSeqMap = (value: string): Record<string, number> => {
 };
 
 export const fromPeerRow = (row: SyncPeerRow): Peer => {
-  const keys = restorePeerKeys(fromBase64Url(row.signingKey), fromBase64Url(row.agreementKey));
+  const keys = restorePeerKeys(
+    fromBase64Url(row.signingKey),
+    fromBase64Url(row.agreementKey),
+  );
   return {
     deviceId: row.peerId,
     name: row.name,
@@ -120,16 +131,19 @@ export const toPeerRow = (peer: Peer): SyncPeerRow => ({
 export type Roster = ReadonlyMap<string, Peer>;
 
 export async function readRoster(tx: StorageTx): Promise<Roster> {
-  const rows = await tx.table('syncPeers').all();
+  const rows = await tx.table("syncPeers").all();
   return new Map(rows.map((row) => [row.peerId, fromPeerRow(row)]));
 }
 
 export const writePeers = (tx: StorageTx, peers: readonly Peer[]) =>
-  peers.length ? tx.table('syncPeers').put(peers.map(toPeerRow)) : Promise.resolve();
+  peers.length
+    ? tx.table("syncPeers").put(peers.map(toPeerRow))
+    : Promise.resolve();
 
 export const isRevoked = (peer: Peer) => peer.revokedAt !== null;
 
-export const activePeers = (roster: Roster) => [...roster.values()].filter((peer) => !isRevoked(peer));
+export const activePeers = (roster: Roster) =>
+  [...roster.values()].filter((peer) => !isRevoked(peer));
 
 export const toRosterMember = (peer: Peer): RosterMember => ({
   deviceId: peer.deviceId,
@@ -152,10 +166,14 @@ const validIso = (value: string): boolean => {
 };
 
 const badRoster = (message: string, sender: string): never => {
-  throw new SyncEngineError(message, 'badBatch', sender);
+  throw new SyncEngineError(message, "badBatch", sender);
 };
 
-const fromRosterMember = (member: RosterMember, batchEpoch: number, sender: string): Peer => {
+const fromRosterMember = (
+  member: RosterMember,
+  batchEpoch: number,
+  sender: string,
+): Peer => {
   if (
     member.deviceId.length > 128 ||
     member.name.length > 128 ||
@@ -163,19 +181,34 @@ const fromRosterMember = (member: RosterMember, batchEpoch: number, sender: stri
     member.signingKey.length > 64 ||
     member.agreementKey.length > 64
   ) {
-    return badRoster('That batch contains an oversized device roster entry.', sender);
+    return badRoster(
+      "That batch contains an oversized device roster entry.",
+      sender,
+    );
   }
   if (member.epoch > batchEpoch) {
-    return badRoster('That batch contains a device from a future vault epoch.', sender);
+    return badRoster(
+      "That batch contains a device from a future vault epoch.",
+      sender,
+    );
   }
-  if (!validIso(member.addedAt) || (member.revokedAt !== null && !validIso(member.revokedAt))) {
-    return badRoster('That batch contains a malformed device membership time.', sender);
+  if (
+    !validIso(member.addedAt) ||
+    (member.revokedAt !== null && !validIso(member.revokedAt))
+  ) {
+    return badRoster(
+      "That batch contains a malformed device membership time.",
+      sender,
+    );
   }
   if (
     (member.revokedAt === null && member.revokedSeq !== null) ||
     (member.revokedAt !== null && member.revokedSeq === null)
   ) {
-    return badRoster('That batch contains an inconsistent revocation cutoff.', sender);
+    return badRoster(
+      "That batch contains an inconsistent revocation cutoff.",
+      sender,
+    );
   }
 
   try {
@@ -184,7 +217,10 @@ const fromRosterMember = (member: RosterMember, batchEpoch: number, sender: stri
       fromBase64Url(member.agreementKey),
     );
     if (deriveDeviceId(keys.signingKey) !== member.deviceId) {
-      return badRoster('A roster device id does not match its signing key.', sender);
+      return badRoster(
+        "A roster device id does not match its signing key.",
+        sender,
+      );
     }
     return {
       deviceId: member.deviceId,
@@ -202,12 +238,13 @@ const fromRosterMember = (member: RosterMember, batchEpoch: number, sender: stri
     };
   } catch (error) {
     if (error instanceof SyncEngineError) throw error;
-    return badRoster('That batch contains malformed device keys.', sender);
+    return badRoster("That batch contains malformed device keys.", sender);
   }
 };
 
 const sameBytes = (first: Uint8Array, second: Uint8Array): boolean =>
-  first.length === second.length && first.every((value, index) => value === second[index]);
+  first.length === second.length &&
+  first.every((value, index) => value === second[index]);
 
 /**
  * Merges a sender-authenticated roster snapshot without allowing stale snapshots to un-revoke
@@ -231,23 +268,38 @@ export function mergeAuthenticatedRoster(
 
   for (const member of members) {
     if (seen.has(member.deviceId)) {
-      badRoster('That batch names the same roster device more than once.', sender);
+      badRoster(
+        "That batch names the same roster device more than once.",
+        sender,
+      );
     }
     seen.add(member.deviceId);
     if (member.deviceId === localDeviceId) {
-      badRoster('That batch attempted to alter this device’s own roster entry.', sender);
+      badRoster(
+        "That batch attempted to alter this device’s own roster entry.",
+        sender,
+      );
     }
     const incoming = fromRosterMember(member, batchEpoch, sender);
     const current = merged.get(incoming.deviceId);
     if (!current) {
       if (!authorizedAddIds.has(incoming.deviceId)) {
-        badRoster('That batch introduced a device without a signed pairing control.', sender);
+        badRoster(
+          "That batch introduced a device without a signed pairing control.",
+          sender,
+        );
       }
       if (merged.size >= MAX_ROSTER_MEMBERS) {
-        badRoster(`That batch would exceed the ${MAX_ROSTER_MEMBERS}-device roster limit.`, sender);
+        badRoster(
+          `That batch would exceed the ${MAX_ROSTER_MEMBERS}-device roster limit.`,
+          sender,
+        );
       }
       if (incoming.epoch < batchEpoch && !incoming.revokedAt) {
-        badRoster('That batch introduces an active device from an old vault epoch.', sender);
+        badRoster(
+          "That batch introduces an active device from an old vault epoch.",
+          sender,
+        );
       }
       merged.set(incoming.deviceId, incoming);
       changed.push(incoming);
@@ -258,17 +310,24 @@ export function mergeAuthenticatedRoster(
       !sameBytes(current.signingKey, incoming.signingKey) ||
       !sameBytes(current.agreementKey, incoming.agreementKey)
     ) {
-      badRoster('A known device arrived with different identity keys.', sender);
+      badRoster("A known device arrived with different identity keys.", sender);
     }
     // A batch signature authenticates its sender, not a decision made by every device it
     // mentions. Ignore revocation fields here: only signed control ops can change them. This
     // also lets the control op that explains a newer roster snapshot arrive in the same batch.
-    const membership = { ...incoming, revokedAt: current.revokedAt, revokedSeq: current.revokedSeq };
+    const membership = {
+      ...incoming,
+      revokedAt: current.revokedAt,
+      revokedSeq: current.revokedSeq,
+    };
 
     if (membership.epoch < current.epoch) continue;
     const newerEpoch = membership.epoch > current.epoch;
     if (newerEpoch && membership.epoch !== batchEpoch) {
-      badRoster('A re-paired device does not match the current vault epoch.', sender);
+      badRoster(
+        "A re-paired device does not match the current vault epoch.",
+        sender,
+      );
     }
 
     const revokedAt = newerEpoch
@@ -277,7 +336,7 @@ export function mergeAuthenticatedRoster(
         ? current.revokedAt < membership.revokedAt
           ? current.revokedAt
           : membership.revokedAt
-        : current.revokedAt ?? membership.revokedAt;
+        : (current.revokedAt ?? membership.revokedAt);
     const heldSeq = heldHeads.get(membership.deviceId)?.seq ?? 0;
     const revokedSeq = newerEpoch
       ? membership.revokedAt
@@ -285,7 +344,11 @@ export function mergeAuthenticatedRoster(
         : null
       : current.revokedAt
         ? membership.revokedAt
-          ? Math.max(current.revokedSeq ?? 0, membership.revokedSeq ?? 0, heldSeq)
+          ? Math.max(
+              current.revokedSeq ?? 0,
+              membership.revokedSeq ?? 0,
+              heldSeq,
+            )
           : Math.max(current.revokedSeq ?? 0, heldSeq)
         : membership.revokedAt
           ? Math.max(membership.revokedSeq ?? 0, heldSeq)
@@ -293,7 +356,10 @@ export function mergeAuthenticatedRoster(
     const next: Peer = {
       ...current,
       epoch: membership.epoch,
-      addedAt: current.addedAt < membership.addedAt ? current.addedAt : membership.addedAt,
+      addedAt:
+        current.addedAt < membership.addedAt
+          ? current.addedAt
+          : membership.addedAt,
       revokedAt,
       revokedSeq,
       acked: newerEpoch ? {} : current.acked,
@@ -330,15 +396,15 @@ export function requireSender(roster: Roster, deviceId: string): Peer {
   const peer = roster.get(deviceId);
   if (!peer) {
     throw new SyncEngineError(
-      'A device that is not paired with this vault tried to sync.',
-      'unknownPeer',
+      "A device that is not paired with this vault tried to sync.",
+      "unknownPeer",
       deviceId,
     );
   }
   if (isRevoked(peer)) {
     throw new SyncEngineError(
       `${peer.name} was removed from this vault and can no longer sync.`,
-      'revokedPeer',
+      "revokedPeer",
       deviceId,
     );
   }
@@ -358,12 +424,16 @@ export function requireSender(roster: Roster, deviceId: string): Peer {
  * boundary an op fell on, and disagreeing about valid ops is a permanent fork. The
  * deterministic boundary is `revokedSeq`, captured from the accepted author chain.
  */
-export function requireAuthor(roster: Roster, deviceId: string, sender: string): Peer {
+export function requireAuthor(
+  roster: Roster,
+  deviceId: string,
+  sender: string,
+): Peer {
   const peer = roster.get(deviceId);
   if (!peer) {
     throw new SyncEngineError(
-      'That batch carries changes from a device this vault has never been paired with.',
-      'unknownAuthor',
+      "That batch carries changes from a device this vault has never been paired with.",
+      "unknownAuthor",
       sender,
     );
   }
@@ -375,7 +445,7 @@ export function requireAuthorSequence(author: Peer, seq: number): void {
   if (!author.revokedAt || seq <= (author.revokedSeq ?? 0)) return;
   throw new SyncEngineError(
     `${author.name} was removed at change ${author.revokedSeq ?? 0}; change ${seq} is not accepted.`,
-    'revokedPeer',
+    "revokedPeer",
     author.deviceId,
   );
 }

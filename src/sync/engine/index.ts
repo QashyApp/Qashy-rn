@@ -25,16 +25,28 @@
  * truncate everybody else's history.
  */
 
-export { MAX_DETAIL_LENGTH, activityCode, activityEntry, rejectionEntry, transportDetail, type ActivityInput } from '@/sync/engine/activity';
+export {
+  MAX_DETAIL_LENGTH,
+  activityCode,
+  activityEntry,
+  rejectionEntry,
+  transportDetail,
+  type ActivityInput,
+} from "@/sync/engine/activity";
 
 export {
   MAX_BATCH_OPS,
   MAX_ROSTER_MEMBERS,
   decodeBatch,
   encodeBatch,
-} from '@/sync/engine/batch';
+} from "@/sync/engine/batch";
 
-export { BATCH_PURPOSE, openBatch, sealBatch, type FrameContext } from '@/sync/engine/frame';
+export {
+  BATCH_PURPOSE,
+  openBatch,
+  sealBatch,
+  type FrameContext,
+} from "@/sync/engine/frame";
 
 export {
   QUARANTINE_REASON_BY_CODE,
@@ -44,9 +56,12 @@ export {
   quarantineRows,
   recordQuarantine,
   type QuarantineChange,
-} from '@/sync/engine/quarantine';
+} from "@/sync/engine/quarantine";
 
-export { compactSyncOps, type CompactionResult } from '@/sync/engine/compaction';
+export {
+  compactSyncOps,
+  type CompactionResult,
+} from "@/sync/engine/compaction";
 
 export {
   headsRecord,
@@ -54,7 +69,7 @@ export {
   receiveBatch,
   type ReceiveDeps,
   type ReceiveOutcome,
-} from '@/sync/engine/receive';
+} from "@/sync/engine/receive";
 
 export {
   activePeers,
@@ -70,9 +85,14 @@ export {
   writePeers,
   type Peer,
   type Roster,
-} from '@/sync/engine/roster';
+} from "@/sync/engine/roster";
 
-export { SEAL_BATCH_SIZE, hasUnsealed, sealPending, type SealerInput } from '@/sync/engine/sealer';
+export {
+  SEAL_BATCH_SIZE,
+  hasUnsealed,
+  sealPending,
+  type SealerInput,
+} from "@/sync/engine/sealer";
 
 export {
   FULL_STATE_CHUNK_CHARS,
@@ -83,7 +103,7 @@ export {
   type OutgoingBatch,
   type SendDeps,
   type SendSnapshot,
-} from '@/sync/engine/send';
+} from "@/sync/engine/send";
 
 export {
   MAX_BATCHES_PER_PASS,
@@ -91,7 +111,7 @@ export {
   type PushOutcome,
   type ReconcileOutcome,
   type SyncSessionDeps,
-} from '@/sync/engine/session';
+} from "@/sync/engine/session";
 
 export {
   LoopbackChannel,
@@ -100,7 +120,7 @@ export {
   type SyncChannel,
   type SyncTransport,
   type TransportKind,
-} from '@/sync/engine/transport';
+} from "@/sync/engine/transport";
 
 export {
   ACTIVITY_KINDS,
@@ -110,4 +130,4 @@ export {
   type RejectionCode,
   type RosterMember,
   type SyncBatch,
-} from '@/sync/engine/types';
+} from "@/sync/engine/types";

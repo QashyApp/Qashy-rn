@@ -1,5 +1,5 @@
 function isPrimitive(value: unknown) {
-  return value === null || typeof value !== 'object';
+  return value === null || typeof value !== "object";
 }
 
 /**
@@ -18,13 +18,13 @@ function isPrimitive(value: unknown) {
 export function stableSerialize(value: unknown): string {
   if (Array.isArray(value)) {
     const parts = value.map(stableSerialize);
-    return `[${(value.every(isPrimitive) ? parts.sort() : parts).join(',')}]`;
+    return `[${(value.every(isPrimitive) ? parts.sort() : parts).join(",")}]`;
   }
-  if (value && typeof value === 'object') {
+  if (value && typeof value === "object") {
     return `{${Object.entries(value as Record<string, unknown>)
       .map(([key, item]) => `${JSON.stringify(key)}:${stableSerialize(item)}`)
       .sort()
-      .join(',')}}`;
+      .join(",")}}`;
   }
   return JSON.stringify(value ?? null);
 }

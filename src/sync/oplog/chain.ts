@@ -18,13 +18,21 @@
  * commit underneath the write.
  */
 
-import type { SigningPublicKey, SigningSecretKey } from '@/sync/crypto';
-import { LABELS, fromHex, sha256, sign, toHex, utf8Bytes, verify } from '@/sync/crypto';
-import { canonicalJson } from '@/utils/canonical-json';
-import { OpLogError, type SyncOp, type SyncOpBody } from '@/sync/oplog/types';
+import type { SigningPublicKey, SigningSecretKey } from "@/sync/crypto";
+import {
+  LABELS,
+  fromHex,
+  sha256,
+  sign,
+  toHex,
+  utf8Bytes,
+  verify,
+} from "@/sync/crypto";
+import { canonicalJson } from "@/utils/canonical-json";
+import { OpLogError, type SyncOp, type SyncOpBody } from "@/sync/oplog/types";
 
 /** The first op of a chain has no predecessor; the empty string is that, explicitly. */
-export const GENESIS_HASH = '';
+export const GENESIS_HASH = "";
 
 export const opIdFor = (deviceId: string, seq: number) => `${deviceId}:${seq}`;
 
@@ -44,7 +52,9 @@ export function hashOp(prevHash: string, body: SyncOpBody): string {
     payload: body.payload,
     schema: body.schema,
   });
-  return toHex(sha256(utf8Bytes(LABELS.op), utf8Bytes(prevHash), utf8Bytes(canonical)));
+  return toHex(
+    sha256(utf8Bytes(LABELS.op), utf8Bytes(prevHash), utf8Bytes(canonical)),
+  );
 }
 
 /** Numbers and chains a locally-produced op. Unsigned — the background sealer does that. */
@@ -53,7 +63,11 @@ export function buildOp(
   deviceId: string,
   fromSeq: number,
   fromHash: string,
-): { readonly ops: readonly SyncOp[]; readonly seq: number; readonly headHash: string } {
+): {
+  readonly ops: readonly SyncOp[];
+  readonly seq: number;
+  readonly headHash: string;
+} {
   let seq = fromSeq;
   let prevHash = fromHash;
   const ops: SyncOp[] = [];
@@ -67,7 +81,7 @@ export function buildOp(
       seq,
       prevHash,
       opHash,
-      signature: '',
+      signature: "",
     });
     prevHash = opHash;
   }
@@ -75,7 +89,8 @@ export function buildOp(
 }
 
 /** The bytes a device signs, and the bytes a peer verifies. */
-const signedBytes = (op: SyncOp) => utf8Bytes(`${LABELS.op}:${op.deviceId}:${op.seq}:${op.opHash}`);
+const signedBytes = (op: SyncOp) =>
+  utf8Bytes(`${LABELS.op}:${op.deviceId}:${op.seq}:${op.opHash}`);
 
 /**
  * Signs an op.
@@ -88,7 +103,10 @@ export function sealOp(op: SyncOp, secretKey: SigningSecretKey): SyncOp {
   return { ...op, signature: toHex(sign(signedBytes(op), secretKey)) };
 }
 
-export function verifyOpSignature(op: SyncOp, publicKey: SigningPublicKey): boolean {
+export function verifyOpSignature(
+  op: SyncOp,
+  publicKey: SigningPublicKey,
+): boolean {
   if (!op.signature) return false;
   try {
     return verify(fromHex(op.signature), signedBytes(op), publicKey);
@@ -112,7 +130,10 @@ export interface ChainHead {
  *
  * `ops` must be this device's ops only, ascending by `seq`.
  */
-export function verifyChain(ops: readonly SyncOp[], head: ChainHead): ChainHead {
+export function verifyChain(
+  ops: readonly SyncOp[],
+  head: ChainHead,
+): ChainHead {
   let { seq, headHash } = head;
   for (const op of ops) {
     if (op.seq <= seq) {
@@ -120,20 +141,26 @@ export function verifyChain(ops: readonly SyncOp[], head: ChainHead): ChainHead 
       // but the op must be *identical*, or the chain has been rewritten behind us.
       throw new OpLogError(
         `Op ${op.opId} rewinds this device's history to ${op.seq}.`,
-        'chainFork',
+        "chainFork",
       );
     }
     if (op.seq !== seq + 1) {
       throw new OpLogError(
         `Missing ops between ${seq} and ${op.seq} for device ${op.deviceId}.`,
-        'chainBreak',
+        "chainBreak",
       );
     }
     if (op.prevHash !== headHash) {
-      throw new OpLogError(`Op ${op.opId} does not follow the history we hold.`, 'chainBreak');
+      throw new OpLogError(
+        `Op ${op.opId} does not follow the history we hold.`,
+        "chainBreak",
+      );
     }
     if (op.opHash !== hashOp(op.prevHash, op)) {
-      throw new OpLogError(`Op ${op.opId} does not match its own hash.`, 'malformed');
+      throw new OpLogError(
+        `Op ${op.opId} does not match its own hash.`,
+        "malformed",
+      );
     }
     seq = op.seq;
     headHash = op.opHash;
@@ -161,6 +188,7 @@ export function pendingByDevice(
     if (list) list.push(op);
     else byDevice.set(op.deviceId, [op]);
   }
-  for (const list of byDevice.values()) list.sort((first, second) => first.seq - second.seq);
+  for (const list of byDevice.values())
+    list.sort((first, second) => first.seq - second.seq);
   return byDevice;
 }

@@ -1,14 +1,14 @@
-import { View } from 'react-native';
+import { View } from "react-native";
 
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { MotionPressable } from '@/components/ui/motion';
-import { useLocalization } from '@/localization/localization';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { hapticSelection } from '@/utils/haptics';
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { MotionPressable } from "@/components/ui/motion";
+import { useLocalization } from "@/localization/localization";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { hapticSelection } from "@/utils/haptics";
 
-export type ChoiceChipMode = 'radio' | 'checkbox' | 'button';
+export type ChoiceChipMode = "radio" | "checkbox" | "button";
 
 export function ChoiceChip({
   label,
@@ -17,7 +17,7 @@ export function ChoiceChip({
   icon,
   disabled = false,
   literal = false,
-  mode = 'radio',
+  mode = "radio",
 }: {
   label: string;
   selected: boolean;
@@ -34,12 +34,14 @@ export function ChoiceChip({
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
-  const selectable = mode !== 'button';
+  const selectable = mode !== "button";
   return (
     <MotionPressable
       accessibilityLabel={literal ? label : t(label)}
       accessibilityRole={mode}
-      accessibilityState={selectable ? { checked: selected, disabled } : { disabled }}
+      accessibilityState={
+        selectable ? { checked: selected, disabled } : { disabled }
+      }
       aria-checked={selectable ? selected : undefined}
       active={selected}
       disabled={disabled}
@@ -55,9 +57,9 @@ export function ChoiceChip({
           minHeight: 44,
           paddingHorizontal: space.md + 2,
           borderRadius: radius.pill,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'center',
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
           gap: space.sm - 1,
           opacity: disabled ? 0.45 : pressed ? 0.72 : 1,
         },
@@ -65,10 +67,19 @@ export function ChoiceChip({
         // a raised one — rather than merely tinted; unselected stays a raised
         // control like any other chip or pill button.
         selected
-          ? materialStyle(theme, 'selected')
-          : materialStyle(theme, 'control'),
-      ]}>
-      {icon ? <AppIcon name={icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={17} /> : selectable ? <View style={{ width: 16, height: 16 }} /> : null}
+          ? materialStyle(theme, "selected")
+          : materialStyle(theme, "control"),
+      ]}
+    >
+      {icon ? (
+        <AppIcon
+          name={icon}
+          color={selected ? theme.onAccentContainer : theme.textMuted}
+          size={17}
+        />
+      ) : selectable ? (
+        <View style={{ width: 16, height: 16 }} />
+      ) : null}
       {/* The label weight stays fixed. Bolding on selection re-measured the text
           and resized the chip, so picking one filter nudged every chip after it
           along the row — the same reflow the reserved checkmark slot below
@@ -77,14 +88,28 @@ export function ChoiceChip({
         selectable={false}
         literal={literal}
         variant="label"
-        style={{ color: selected ? theme.onAccentContainer : theme.text }}>
+        style={{ color: selected ? theme.onAccentContainer : theme.text }}
+      >
         {label}
       </AppText>
       {/* Selection must not rely on the low-contrast accent fill alone. The
           slot is always reserved so choosing a chip never reflows the row. */}
       {selectable ? (
-        <View style={{ width: 16, height: 16, alignItems: 'center', justifyContent: 'center' }}>
-          {selected ? <AppIcon name="checkmark" color={theme.onAccentContainer} size={15} /> : null}
+        <View
+          style={{
+            width: 16,
+            height: 16,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          {selected ? (
+            <AppIcon
+              name="checkmark"
+              color={theme.onAccentContainer}
+              size={15}
+            />
+          ) : null}
         </View>
       ) : null}
     </MotionPressable>

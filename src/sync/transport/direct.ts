@@ -13,17 +13,30 @@
  * rather than merely absent.
  */
 
-import type { DeviceIdentity, HandshakeSession, PairingSecret, VaultRootKey } from '@/sync/crypto';
+import type {
+  DeviceIdentity,
+  HandshakeSession,
+  PairingSecret,
+  VaultRootKey,
+} from "@/sync/crypto";
 import type {
   PeerDescriptor,
   SyncChannel,
   SyncTransport,
   TransportKind,
-} from '@/sync/engine/transport';
-import type { IceServer } from '@/sync/transport/endpoints';
-import { SignalingClient, platformSocket, type RawSocket } from '@/sync/transport/signaling';
-import { rtcFactory } from '@/sync/transport/webrtc';
-import { connectWebRtc, type RtcFactory, type WebRtcConnection } from '@/sync/transport/webrtc-core';
+} from "@/sync/engine/transport";
+import type { IceServer } from "@/sync/transport/endpoints";
+import {
+  SignalingClient,
+  platformSocket,
+  type RawSocket,
+} from "@/sync/transport/signaling";
+import { rtcFactory } from "@/sync/transport/webrtc";
+import {
+  connectWebRtc,
+  type RtcFactory,
+  type WebRtcConnection,
+} from "@/sync/transport/webrtc-core";
 
 /**
  * A manual sync must fall through to the drop-box promptly when the peer is not also syncing.
@@ -67,7 +80,7 @@ export interface DirectTransportDeps {
 }
 
 export class DirectTransport implements SyncTransport {
-  readonly kind: TransportKind = 'p2p';
+  readonly kind: TransportKind = "p2p";
 
   private readonly connections = new Map<string, WebRtcConnection>();
 
@@ -86,14 +99,18 @@ export class DirectTransport implements SyncTransport {
    * handshake's transcript — which is what authenticates the peer — would be computed over
    * whichever hello happened to arrive first.
    */
-  async connect(peer: PeerDescriptor, signal: AbortSignal): Promise<SyncChannel> {
+  async connect(
+    peer: PeerDescriptor,
+    signal: AbortSignal,
+  ): Promise<SyncChannel> {
     const existing = this.connections.get(peer.deviceId);
     if (existing) return existing.channel;
 
     const { rendezvousId } = this.deps;
     const signaling = new SignalingClient({
       baseUrl: this.deps.baseUrl,
-      rendezvousId: typeof rendezvousId === 'function' ? rendezvousId() : rendezvousId,
+      rendezvousId:
+        typeof rendezvousId === "function" ? rendezvousId() : rendezvousId,
       open: this.deps.openSocket ?? platformSocket,
       idleTimeoutMs: this.deps.peerWaitTimeoutMs ?? DIRECT_PEER_TIMEOUT_MS,
     });

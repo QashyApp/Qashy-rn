@@ -1,10 +1,10 @@
-import { useMemo } from 'react';
-import { View } from 'react-native';
-import Svg, { Path, Rect } from 'react-native-svg';
-import { create } from 'qrcode';
+import { useMemo } from "react";
+import { View } from "react-native";
+import Svg, { Path, Rect } from "react-native-svg";
+import { create } from "qrcode";
 
-import { AppText } from '@/components/ui/app-text';
-import { useQashyTheme } from '@/theme/theme';
+import { AppText } from "@/components/ui/app-text";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * A QR code, rendered as vector paths.
@@ -37,7 +37,7 @@ export function QrCode({
       // 'M' — 15% recovery. Enough for a phone camera at an angle or a slightly smudged
       // screen, without pushing the symbol to a version whose modules are too fine to
       // scan from a laptop display at arm's length.
-      const { modules } = create(value, { errorCorrectionLevel: 'M' });
+      const { modules } = create(value, { errorCorrectionLevel: "M" });
       return { count: modules.size, path: toPath(modules.size, modules.data) };
     } catch {
       // `create` throws when the payload exceeds what any version can hold. That is a bug
@@ -53,16 +53,18 @@ export function QrCode({
         style={{
           width: size,
           height: size,
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems: "center",
+          justifyContent: "center",
           padding: space.lg,
           borderRadius: radius.card,
           borderWidth: 1,
           borderColor: theme.border,
           backgroundColor: theme.surfaceMuted,
-        }}>
-        <AppText variant="caption" muted style={{ textAlign: 'center' }}>
-          This code is too long to show as a QR code. Use the manual code instead.
+        }}
+      >
+        <AppText variant="caption" muted style={{ textAlign: "center" }}>
+          This code is too long to show as a QR code. Use the manual code
+          instead.
         </AppText>
       </View>
     );
@@ -85,11 +87,16 @@ export function QrCode({
         // Always light, in both themes, and deliberately not a semantic token. A QR code is
         // read by a camera, not a person: dark-on-light is what the spec assumes and what
         // every scanner is tuned for, and an inverted symbol fails on a good number of them.
-        backgroundColor: '#FFFFFF',
-      }}>
+        backgroundColor: "#FFFFFF",
+      }}
+    >
       <Svg width={size} height={size} viewBox={`0 0 ${extent} ${extent}`}>
         <Rect x={0} y={0} width={extent} height={extent} fill="#FFFFFF" />
-        <Path d={matrix.path} fill="#000000" transform={`translate(${quiet}, ${quiet})`} />
+        <Path
+          d={matrix.path}
+          fill="#000000"
+          transform={`translate(${quiet}, ${quiet})`}
+        />
       </Svg>
     </View>
   );
@@ -116,5 +123,5 @@ function toPath(count: number, data: Uint8Array): string {
       }
     }
   }
-  return parts.join('');
+  return parts.join("");
 }

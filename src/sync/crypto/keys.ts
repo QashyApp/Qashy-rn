@@ -13,7 +13,7 @@
  * from a roster would accomplish nothing.
  */
 
-import { LABELS, RENDEZVOUS_WINDOW_SECONDS } from '@/sync/crypto/labels';
+import { LABELS, RENDEZVOUS_WINDOW_SECONDS } from "@/sync/crypto/labels";
 import {
   KEY_LENGTH,
   assertLength,
@@ -28,7 +28,7 @@ import {
   agreementPublicKeyFrom,
   signingKeygen,
   signingPublicKeyFrom,
-} from '@/sync/crypto/primitives';
+} from "@/sync/crypto/primitives";
 import {
   brand,
   type AgreementKeyPair,
@@ -42,7 +42,7 @@ import {
   type SigningPublicKey,
   type SigningSecretKey,
   type VaultRootKey,
-} from '@/sync/crypto/types';
+} from "@/sync/crypto/types";
 
 /** Device ids are this many base32 characters — 130 bits of a SHA-256 digest. */
 export const DEVICE_ID_LENGTH = 26;
@@ -50,7 +50,8 @@ export const DEVICE_ID_LENGTH = 26;
 const EMPTY_SALT = new Uint8Array(0);
 
 /** Creates a brand new vault. Called exactly once, on the first device. */
-export const createVaultRootKey = () => brand<VaultRootKey>(randomBytes(KEY_LENGTH));
+export const createVaultRootKey = () =>
+  brand<VaultRootKey>(randomBytes(KEY_LENGTH));
 
 export const deriveContentKey = (vrk: VaultRootKey) =>
   brand<ContentKey>(hkdf(vrk, EMPTY_SALT, LABELS.content));
@@ -91,7 +92,10 @@ export const ROUTE_TAG_LENGTH = 16;
  * blobs or need the reader to scan every past window, which reveals more than it hides.
  */
 export const deriveRouteTag = (vrk: VaultRootKey, deviceId: string) =>
-  toBase32(hkdf(vrk, utf8Bytes(deviceId), LABELS.route)).slice(0, ROUTE_TAG_LENGTH);
+  toBase32(hkdf(vrk, utf8Bytes(deviceId), LABELS.route)).slice(
+    0,
+    ROUTE_TAG_LENGTH,
+  );
 
 /**
  * The signaling rendezvous identifier for a given 5-minute window.
@@ -115,11 +119,14 @@ export const rendezvousWindow = (unixSeconds: number) =>
  */
 export const rendezvousIds = (vrk: VaultRootKey, unixSeconds: number) => {
   const current = rendezvousWindow(unixSeconds);
-  return [current - 1, current, current + 1].map((index) => deriveRendezvousId(vrk, index));
+  return [current - 1, current, current + 1].map((index) =>
+    deriveRendezvousId(vrk, index),
+  );
 };
 
 /** A fresh single-use pairing secret. Crosses the optical channel, never the network. */
-export const createPairingSecret = () => brand<PairingSecret>(randomBytes(KEY_LENGTH));
+export const createPairingSecret = () =>
+  brand<PairingSecret>(randomBytes(KEY_LENGTH));
 
 /**
  * The rendezvous a pairing pair meets at.
@@ -136,7 +143,10 @@ export const createPairingSecret = () => brand<PairingSecret>(randomBytes(KEY_LE
  * `rendezvousIds` has to spend three lookups working around.
  */
 export const derivePairingRendezvousId = (pairingSecret: PairingSecret) =>
-  toBase32(hkdf(pairingSecret, EMPTY_SALT, LABELS.pairingRendezvous)).slice(0, 52);
+  toBase32(hkdf(pairingSecret, EMPTY_SALT, LABELS.pairingRendezvous)).slice(
+    0,
+    52,
+  );
 
 // ---------------------------------------------------------------------------
 // Device identity
@@ -156,8 +166,13 @@ export interface DeviceIdentity {
  * also holding their private key, so identity spoofing is caught before the roster is
  * even consulted.
  */
-export const deriveDeviceId = (signingPublicKey: SigningPublicKey | Uint8Array) =>
-  toBase32(sha256(utf8Bytes(LABELS.device), signingPublicKey)).slice(0, DEVICE_ID_LENGTH);
+export const deriveDeviceId = (
+  signingPublicKey: SigningPublicKey | Uint8Array,
+) =>
+  toBase32(sha256(utf8Bytes(LABELS.device), signingPublicKey)).slice(
+    0,
+    DEVICE_ID_LENGTH,
+  );
 
 export const createDeviceIdentity = (): DeviceIdentity => {
   const signing = signingKeygen();
@@ -188,12 +203,19 @@ export const restoreDeviceIdentity = (
   signingSecret: Uint8Array,
   agreementSecret: Uint8Array,
 ): DeviceIdentity => {
-  const signingPublic = brand<SigningPublicKey>(signingPublicKeyFrom(signingSecret));
+  const signingPublic = brand<SigningPublicKey>(
+    signingPublicKeyFrom(signingSecret),
+  );
   return {
     deviceId: deriveDeviceId(signingPublic),
-    signing: { publicKey: signingPublic, secretKey: brand<SigningSecretKey>(signingSecret) },
+    signing: {
+      publicKey: signingPublic,
+      secretKey: brand<SigningSecretKey>(signingSecret),
+    },
     agreement: {
-      publicKey: brand<AgreementPublicKey>(agreementPublicKeyFrom(agreementSecret)),
+      publicKey: brand<AgreementPublicKey>(
+        agreementPublicKeyFrom(agreementSecret),
+      ),
       secretKey: brand<AgreementSecretKey>(agreementSecret),
     },
   };
@@ -212,7 +234,10 @@ export const restoreDeviceIdentity = (
  * failed" and sends a user hunting for a pairing problem that does not exist. Failing here
  * says what is actually wrong: the stored row is corrupt.
  */
-export const restorePeerKeys = (signingPublic: Uint8Array, agreementPublic: Uint8Array) => ({
+export const restorePeerKeys = (
+  signingPublic: Uint8Array,
+  agreementPublic: Uint8Array,
+) => ({
   signingKey: brand<SigningPublicKey>(
     assertLength(signingPublic, KEY_LENGTH, "A peer's signing key"),
   ),
@@ -230,14 +255,14 @@ export const restorePeerKeys = (signingPublic: Uint8Array, agreementPublic: Uint
  * away as "authentication failed".
  */
 export const restoreVaultRootKey = (bytes: Uint8Array) =>
-  brand<VaultRootKey>(assertLength(bytes, KEY_LENGTH, 'Vault root key'));
+  brand<VaultRootKey>(assertLength(bytes, KEY_LENGTH, "Vault root key"));
 
 /**
  * Formats a device id for display in groups of seven, the way a fingerprint should be
  * shown: humans compare grouped strings far more reliably than a 26-character run.
  */
 export const formatDeviceId = (deviceId: string) =>
-  (deviceId.match(/.{1,7}/g) ?? [deviceId]).join('-');
+  (deviceId.match(/.{1,7}/g) ?? [deviceId]).join("-");
 
 /** The bytes a roster entry commits to. Exported so `handshake.ts` and the engine agree exactly. */
 export const deviceIdentityBytes = (

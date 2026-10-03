@@ -8,20 +8,20 @@ Background and history: [theming-plan.md](theming-plan.md).
 
 A theme is one `ThemeDefinition` (`src/theme/themes/types.ts`) in its own file under `src/theme/themes/`. The active theme is resolved by `getTheme(id, custom)` in `src/theme/themes/registry.ts`; an unknown id, or a theme not offered on the current platform, falls back to `classic`. Components never see the definition directly: they read the resolved result from `useQashyTheme()`.
 
-| Field | What it is |
-|---|---|
-| `id` | Stable, lowercase, hyphenated (`THEME_ID_PATTERN`). Stored per device as `AppSettings.themeId`. Never reuse an id for a different look. |
-| `name` | Display name. Looked up through localization (see below). |
-| `palette` | `{ light, dark }`, each a complete `BaseTokens` (12 colors). Both are mandatory. |
-| `shadows` | `{ light, dark }`, each a `ShadowSet` of CSS `box-shadow` strings plus `scrim`. Both mandatory. |
-| `space`, `radius`, `tile`, `iconSize` | Scales with the same keys as the classic ones. |
-| `motion` | Durations, springs, and press behaviour (`press: 'scale' \| 'translate'`, `pressScale`, `pressTranslate`). |
-| `material` | `{ engine: 'soft' \| 'bevel', gradients, bevelDepth }`. |
-| `type` | `text` and `numeric` font stacks (`family` plus `fallbacks`, both registry ids) and a `scale` of the 11 type variants. |
-| `icons` | `{ set }`, an id in `src/theme/icon-sets.ts`. |
-| `charts` | Line width, cap, donut thickness, grid dash, `patterns`, `categoryPalette`, `tone`. |
-| `accent` | `mode` (`user`, `fixed`, `system`), `default`, `presets`. |
-| `availableOn` | Optional platform list. Omitted means everywhere. |
+| Field                                 | What it is                                                                                                                              |
+| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                                  | Stable, lowercase, hyphenated (`THEME_ID_PATTERN`). Stored per device as `AppSettings.themeId`. Never reuse an id for a different look. |
+| `name`                                | Display name. Looked up through localization (see below).                                                                               |
+| `palette`                             | `{ light, dark }`, each a complete `BaseTokens` (12 colors). Both are mandatory.                                                        |
+| `shadows`                             | `{ light, dark }`, each a `ShadowSet` of CSS `box-shadow` strings plus `scrim`. Both mandatory.                                         |
+| `space`, `radius`, `tile`, `iconSize` | Scales with the same keys as the classic ones.                                                                                          |
+| `motion`                              | Durations, springs, and press behaviour (`press: 'scale' \| 'translate'`, `pressScale`, `pressTranslate`).                              |
+| `material`                            | `{ engine: 'soft' \| 'bevel', gradients, bevelDepth }`.                                                                                 |
+| `type`                                | `text` and `numeric` font stacks (`family` plus `fallbacks`, both registry ids) and a `scale` of the 11 type variants.                  |
+| `icons`                               | `{ set }`, an id in `src/theme/icon-sets.ts`.                                                                                           |
+| `charts`                              | Line width, cap, donut thickness, grid dash, `patterns`, `categoryPalette`, `tone`.                                                     |
+| `accent`                              | `mode` (`user`, `fixed`, `system`), `default`, `presets`.                                                                               |
+| `availableOn`                         | Optional platform list. Omitted means everywhere.                                                                                       |
 
 ## A minimal built-in theme
 
@@ -29,34 +29,38 @@ Spread `classicTheme` and override only what differs. Palettes must still be com
 
 ```ts
 // src/theme/themes/sepia.ts
-import { classicTheme } from '@/theme/themes/classic';
-import type { ThemeDefinition } from '@/theme/themes/types';
-import type { BaseTokens } from '@/theme/tokens';
+import { classicTheme } from "@/theme/themes/classic";
+import type { ThemeDefinition } from "@/theme/themes/types";
+import type { BaseTokens } from "@/theme/tokens";
 
 const light: BaseTokens = {
   ...classicTheme.palette.light,
-  background: '#EFE6D2',
-  surface: '#F8F1E0',
-  surfaceElevated: '#FFF9EA',
-  text: '#2B2112',
-  textMuted: '#5C4A2E',
+  background: "#EFE6D2",
+  surface: "#F8F1E0",
+  surfaceElevated: "#FFF9EA",
+  text: "#2B2112",
+  textMuted: "#5C4A2E",
 };
 
 const dark: BaseTokens = {
   ...classicTheme.palette.dark,
-  background: '#17120B',
-  surface: '#221B11',
-  surfaceElevated: '#2C2316',
-  text: '#F3E8D2',
-  textMuted: '#BCA98A',
+  background: "#17120B",
+  surface: "#221B11",
+  surfaceElevated: "#2C2316",
+  text: "#F3E8D2",
+  textMuted: "#BCA98A",
 };
 
 export const sepiaTheme: ThemeDefinition = {
   ...classicTheme,
-  id: 'sepia',
-  name: 'Sepia',
+  id: "sepia",
+  name: "Sepia",
   palette: { light, dark },
-  accent: { mode: 'user', default: '#B5651D', presets: ['#B5651D', '#7A4E2D', '#4C7A3A', '#3F6FD8'] },
+  accent: {
+    mode: "user",
+    default: "#B5651D",
+    presets: ["#B5651D", "#7A4E2D", "#4C7A3A", "#3F6FD8"],
+  },
 };
 ```
 

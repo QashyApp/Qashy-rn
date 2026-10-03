@@ -24,20 +24,20 @@
  * One engine, one code path, three transports.
  */
 
-import { MAX_FRAME_BYTES, fromBase64Url, toBase64Url } from '@/sync/crypto';
+import { MAX_FRAME_BYTES, fromBase64Url, toBase64Url } from "@/sync/crypto";
 import type {
   PeerDescriptor,
   SyncChannel,
   SyncTransport,
   TransportKind,
-} from '@/sync/engine/transport';
-import { SyncEngineError } from '@/sync/engine/types';
+} from "@/sync/engine/transport";
+import { SyncEngineError } from "@/sync/engine/types";
 
 /** Bumped only if the file's *envelope* changes. The frames inside carry their own version. */
 export const BUNDLE_VERSION = 1;
 
-export const BUNDLE_EXTENSION = '.qashysync';
-export const BUNDLE_MIME = 'application/octet-stream';
+export const BUNDLE_EXTENSION = ".qashysync";
+export const BUNDLE_MIME = "application/octet-stream";
 
 /**
  * The most frames one bundle may hold.
@@ -67,8 +67,8 @@ export interface SyncBundle {
 
 export class BundleError extends SyncEngineError {
   constructor(message: string) {
-    super(message, 'badBatch');
-    this.name = 'BundleError';
+    super(message, "badBatch");
+    this.name = "BundleError";
   }
 }
 
@@ -86,7 +86,9 @@ export class BundleError extends SyncEngineError {
  */
 class FileChannel implements SyncChannel {
   readonly collected: BundleFrame[] = [];
-  private readonly handlers = new Set<(frame: Uint8Array, seq: number) => void>();
+  private readonly handlers = new Set<
+    (frame: Uint8Array, seq: number) => void
+  >();
 
   constructor(
     readonly peerId: string,
@@ -95,7 +97,9 @@ class FileChannel implements SyncChannel {
 
   send(frame: Uint8Array, seq: number): Promise<void> {
     if (this.collected.length >= MAX_BUNDLE_FRAMES) {
-      return Promise.reject(new BundleError('That is more than one file can carry.'));
+      return Promise.reject(
+        new BundleError("That is more than one file can carry."),
+      );
     }
     this.collected.push({ to: this.tag, seq, frame });
     return Promise.resolve();
@@ -125,7 +129,7 @@ export interface FileTransportDeps {
 }
 
 export class FileTransport implements SyncTransport {
-  readonly kind: TransportKind = 'file';
+  readonly kind: TransportKind = "file";
 
   private readonly channels = new Map<string, FileChannel>();
 
@@ -138,9 +142,16 @@ export class FileTransport implements SyncTransport {
   /** Everything the session handed over, ready to be written to disk. */
   bundle(): SyncBundle {
     const frames: BundleFrame[] = [];
-    for (const channel of this.channels.values()) frames.push(...channel.collected);
-    if (frames.length > MAX_BUNDLE_FRAMES || frames.reduce((total, held) => total + held.frame.length, 0) > MAX_BUNDLE_DECODED_BYTES) {
-      throw new BundleError('That export is too large for one sync file. Sync in smaller passes.');
+    for (const channel of this.channels.values())
+      frames.push(...channel.collected);
+    if (
+      frames.length > MAX_BUNDLE_FRAMES ||
+      frames.reduce((total, held) => total + held.frame.length, 0) >
+        MAX_BUNDLE_DECODED_BYTES
+    ) {
+      throw new BundleError(
+        "That export is too large for one sync file. Sync in smaller passes.",
+      );
     }
     return { version: BUNDLE_VERSION, from: this.deps.deviceId, frames };
   }
@@ -207,58 +218,63 @@ export function decodeBundle(text: string): SyncBundle {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new BundleError('That file is not a Qashy sync file.');
+    throw new BundleError("That file is not a Qashy sync file.");
   }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw new BundleError('That file is not a Qashy sync file.');
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    throw new BundleError("That file is not a Qashy sync file.");
   }
 
   const body = parsed as Record<string, unknown>;
   // No numeric version at all means this was never a Qashy file (an empty object, someone
   // else's JSON), which is a different problem from a newer format Qashy could update to read.
-  if (typeof body.version !== 'number') {
-    throw new BundleError('That file is not a Qashy sync file.');
+  if (typeof body.version !== "number") {
+    throw new BundleError("That file is not a Qashy sync file.");
   }
   if (body.version !== BUNDLE_VERSION) {
     throw new BundleError(
       `That file was written by a newer version of Qashy (format v${String(body.version)}). Update this device.`,
     );
   }
-  if (typeof body.from !== 'string' || !Array.isArray(body.frames)) {
-    throw new BundleError('That sync file is incomplete.');
+  if (typeof body.from !== "string" || !Array.isArray(body.frames)) {
+    throw new BundleError("That sync file is incomplete.");
   }
   if (body.frames.length > MAX_BUNDLE_FRAMES) {
-    throw new BundleError('That sync file is too large to import.');
+    throw new BundleError("That sync file is too large to import.");
   }
 
   const frames: BundleFrame[] = [];
   let decodedBytes = 0;
   for (const entry of body.frames) {
-    if (!entry || typeof entry !== 'object') throw new BundleError('That sync file is damaged.');
+    if (!entry || typeof entry !== "object")
+      throw new BundleError("That sync file is damaged.");
     const row = entry as Record<string, unknown>;
-    if (typeof row.to !== 'string' || typeof row.frame !== 'string') {
-      throw new BundleError('That sync file is damaged.');
+    if (typeof row.to !== "string" || typeof row.frame !== "string") {
+      throw new BundleError("That sync file is damaged.");
     }
-    if (typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq) || row.seq < 0) {
-      throw new BundleError('That sync file is damaged.');
+    if (
+      typeof row.seq !== "number" ||
+      !Number.isSafeInteger(row.seq) ||
+      row.seq < 0
+    ) {
+      throw new BundleError("That sync file is damaged.");
     }
     // Checked on the *encoded* string, before decoding: a crafted file must not be able to
     // make this device allocate the megabytes the cap exists to refuse.
     if (row.frame.length > Math.ceil((MAX_FRAME_BYTES * 4) / 3) + 4) {
-      throw new BundleError('That sync file is damaged.');
+      throw new BundleError("That sync file is damaged.");
     }
     // Base64url expands by at most 4/3. Bound the aggregate before any individual decoder can
     // allocate the next frame, so many near-limit frames cannot exhaust memory.
     decodedBytes += Math.floor((row.frame.length * 3) / 4);
     if (decodedBytes > MAX_BUNDLE_DECODED_BYTES) {
-      throw new BundleError('That sync file is too large to import.');
+      throw new BundleError("That sync file is too large to import.");
     }
 
     let frame: Uint8Array;
     try {
       frame = fromBase64Url(row.frame);
     } catch {
-      throw new BundleError('That sync file is damaged.');
+      throw new BundleError("That sync file is damaged.");
     }
     frames.push({ to: row.to, seq: row.seq, frame });
   }

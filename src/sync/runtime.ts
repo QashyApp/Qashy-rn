@@ -26,10 +26,10 @@
  * repository's own reconcile hangs on, and the relay is contacted then and at no other moment.
  */
 
-import type { StorageAdapter } from '@/data/storage-adapter';
-import type { FinanceRepository } from '@/data/repository';
-import { fetch as expoFetch } from 'expo/fetch';
-import { SYNC_META, readMeta, writeMeta } from '@/data/sync-store';
+import type { StorageAdapter } from "@/data/storage-adapter";
+import type { FinanceRepository } from "@/data/repository";
+import { fetch as expoFetch } from "expo/fetch";
+import { SYNC_META, readMeta, writeMeta } from "@/data/sync-store";
 import {
   deriveBucketId,
   deriveBucketToken,
@@ -38,25 +38,33 @@ import {
   deriveRouteTag,
   rendezvousWindow,
   toBase64Url,
-} from '@/sync/crypto';
-import { KeystoreError, type StoredVault, type SyncKeystore } from '@/sync/keystore';
-import { SyncSession, type ReconcileOutcome } from '@/sync/engine/session';
-import type { SyncTransport } from '@/sync/engine/transport';
-import { DirectTransport } from '@/sync/transport/direct';
-import { readEndpoints, type SyncEndpoints } from '@/sync/transport/endpoints';
-import { FileTransport, decodeBundle, encodeBundle } from '@/sync/transport/file';
-import { RelayTransport } from '@/sync/transport/relay';
+} from "@/sync/crypto";
+import {
+  KeystoreError,
+  type StoredVault,
+  type SyncKeystore,
+} from "@/sync/keystore";
+import { SyncSession, type ReconcileOutcome } from "@/sync/engine/session";
+import type { SyncTransport } from "@/sync/engine/transport";
+import { DirectTransport } from "@/sync/transport/direct";
+import { readEndpoints, type SyncEndpoints } from "@/sync/transport/endpoints";
+import {
+  FileTransport,
+  decodeBundle,
+  encodeBundle,
+} from "@/sync/transport/file";
+import { RelayTransport } from "@/sync/transport/relay";
 import {
   checkRelayHealth,
   noteRelayFailure,
   noteRelaySuccess,
   readRelayHealth,
   type RelayHealth,
-} from '@/sync/transport/relay-health';
-import type { RawSocket } from '@/sync/transport/signaling';
-import { rtcFactory as platformRtcFactory } from '@/sync/transport/webrtc';
-import type { RtcFactory } from '@/sync/transport/webrtc-core';
-import { nowIso as defaultNowIso } from '@/utils/entity';
+} from "@/sync/transport/relay-health";
+import type { RawSocket } from "@/sync/transport/signaling";
+import { rtcFactory as platformRtcFactory } from "@/sync/transport/webrtc";
+import type { RtcFactory } from "@/sync/transport/webrtc-core";
+import { nowIso as defaultNowIso } from "@/utils/entity";
 
 /**
  * Why a pass did nothing.
@@ -67,15 +75,15 @@ import { nowIso as defaultNowIso } from '@/utils/entity';
  */
 export type SyncPassReason =
   /** The pass ran. */
-  | 'ok'
+  | "ok"
   /** Sync has not been switched on. The default, and not a problem. */
-  | 'disabled'
+  | "disabled"
   /** Switched on, but this device holds no vault. Pairing was never completed. */
-  | 'unpaired'
+  | "unpaired"
   /** A vault is stored behind a passphrase gate that has not been opened this session. */
-  | 'locked'
+  | "locked"
   /** This platform cannot store a key safely, or what is stored is not readable. */
-  | 'unavailable';
+  | "unavailable";
 
 export interface SyncPass {
   readonly reason: SyncPassReason;
@@ -108,7 +116,10 @@ export interface BundleImport {
 
 export interface SyncRuntimeDeps {
   readonly storage: StorageAdapter;
-  readonly repository: Pick<FinanceRepository, 'applyRemoteOps' | 'repairProjection'>;
+  readonly repository: Pick<
+    FinanceRepository,
+    "applyRemoteOps" | "repairProjection"
+  >;
   readonly keystore: SyncKeystore;
   /** Injected so the whole runtime can be exercised without a network. */
   readonly fetch?: typeof globalThis.fetch;
@@ -157,7 +168,7 @@ export class SyncRuntime {
    * A twenty-batch first sync would otherwise open twenty transactions to record the same
    * "still fine". Failures always write, because each one carries a count.
    */
-  private lastUpload: 'ok' | 'failed' | null = null;
+  private lastUpload: "ok" | "failed" | null = null;
 
   constructor(private readonly deps: SyncRuntimeDeps) {}
 
@@ -207,18 +218,21 @@ export class SyncRuntime {
 
     const [enabled, endpoints] = await storage.transact(async (tx) => {
       const meta = await readMeta(tx, [SYNC_META.enabled]);
-      return [meta.get(SYNC_META.enabled) === '1', await readEndpoints(tx)] as const;
+      return [
+        meta.get(SYNC_META.enabled) === "1",
+        await readEndpoints(tx),
+      ] as const;
     });
 
     if (!enabled) {
       // Closed rather than left holding a data channel. "Off" that keeps a socket open to
       // another device is not off, and the switch would be a lie.
       await this.close();
-      return { reason: 'disabled', outcome: null, health: await this.health() };
+      return { reason: "disabled", outcome: null, health: await this.health() };
     }
 
     const vault = await this.readVault();
-    if (typeof vault === 'string') {
+    if (typeof vault === "string") {
       await this.close();
       return { reason: vault, outcome: null, health: await this.health() };
     }
@@ -229,11 +243,12 @@ export class SyncRuntime {
     // Drained before measuring, so the run of upload failures this pass produced is the run
     // the verdict is computed from.
     await this.healthWrites;
-    const health = endpoints.relayUrl && endpoints.relayEnabled
-      ? await this.checkRelay(signal)
-      : await this.health();
+    const health =
+      endpoints.relayUrl && endpoints.relayEnabled
+        ? await this.checkRelay(signal)
+        : await this.health();
 
-    return { reason: 'ok', outcome, health };
+    return { reason: "ok", outcome, health };
   }
 
   /** Tears down every connection. Called on sign-out, reset, and when sync is switched off. */
@@ -264,16 +279,19 @@ export class SyncRuntime {
    */
   async exportBundle(signal?: AbortSignal): Promise<BundleExport> {
     const wired = await this.fileWiring();
-    if (typeof wired === 'string') return { reason: wired, text: '', frames: 0, peers: 0 };
+    if (typeof wired === "string")
+      return { reason: wired, text: "", frames: 0, peers: 0 };
 
     try {
       const outcome = await wired.session.reconcile(signal);
       const bundle = wired.file.bundle();
       return {
-        reason: 'ok',
+        reason: "ok",
         text: encodeBundle(bundle),
         frames: bundle.frames.length,
-        peers: outcome.pushed.filter((push) => push.ops > 0 || push.needsFullState.length > 0).length,
+        peers: outcome.pushed.filter(
+          (push) => push.ops > 0 || push.needsFullState.length > 0,
+        ).length,
       };
     } finally {
       await wired.file.close();
@@ -301,7 +319,7 @@ export class SyncRuntime {
     const bundle = decodeBundle(text);
 
     const wired = await this.fileWiring();
-    if (typeof wired === 'string') {
+    if (typeof wired === "string") {
       return {
         reason: wired,
         from: bundle.from,
@@ -313,7 +331,10 @@ export class SyncRuntime {
     }
 
     try {
-      const channel = await wired.file.connect({ deviceId: bundle.from, name: '' });
+      const channel = await wired.file.connect({
+        deviceId: bundle.from,
+        name: "",
+      });
       const collected: { frame: Uint8Array; seq: number }[] = [];
       const detach = channel.onFrame((frame, seq) => {
         collected.push({ frame, seq });
@@ -326,13 +347,17 @@ export class SyncRuntime {
       let applied = 0;
       let rejected = 0;
       for (const held of collected) {
-        const outcome = await wired.session.absorb(channel, held.frame, held.seq);
+        const outcome = await wired.session.absorb(
+          channel,
+          held.frame,
+          held.seq,
+        );
         if (outcome) applied += outcome.applied;
         else rejected += 1;
       }
 
       return {
-        reason: 'ok',
+        reason: "ok",
         from: bundle.from,
         accepted: collected.length,
         skipped: bundle.frames.length - collected.length,
@@ -353,24 +378,28 @@ export class SyncRuntime {
    * should not be. Silently does nothing when no relay is configured.
    */
   async purgeRelay(): Promise<void> {
-    const endpoints = await this.deps.storage.transact((tx) => readEndpoints(tx));
+    const endpoints = await this.deps.storage.transact((tx) =>
+      readEndpoints(tx),
+    );
     if (!endpoints.relayUrl) return;
     const vault = await this.readVault();
-    if (typeof vault === 'string') return;
+    if (typeof vault === "string") return;
     await this.buildRelay(vault, endpoints)?.purge();
   }
 
   /** The vault, or the reason there isn't one. */
-  private async readVault(): Promise<StoredVault | Exclude<SyncPassReason, 'ok' | 'disabled'>> {
+  private async readVault(): Promise<
+    StoredVault | Exclude<SyncPassReason, "ok" | "disabled">
+  > {
     try {
       const vault = await this.deps.keystore.read();
-      return vault ?? 'unpaired';
+      return vault ?? "unpaired";
     } catch (error) {
       // Narrow rather than a blanket catch: a locked keystore is an ordinary state with an
       // obvious remedy, and a corrupt one is a bug. Swallowing anything else here would hide
       // a real failure behind "not paired yet" and send the user to re-pair a working vault.
       if (error instanceof KeystoreError) {
-        return error.code === 'locked' ? 'locked' : 'unavailable';
+        return error.code === "locked" ? "locked" : "unavailable";
       }
       throw error;
     }
@@ -389,24 +418,27 @@ export class SyncRuntime {
       vault.identity.deviceId,
       vault.epoch,
       endpoints.relayUrl,
-      endpoints.relayEnabled ? '1' : '0',
-      endpoints.directEnabled ? '1' : '0',
+      endpoints.relayEnabled ? "1" : "0",
+      endpoints.directEnabled ? "1" : "0",
       // Username and credential ride along with the URL: the transport hands them to the ICE
       // agent at connection time, so a credential-only change must rebuild the wiring or the
       // direct path would keep authenticating with the old one.
       endpoints.iceServers
-        .map((server) => `${server.urls}|${server.username ?? ''}|${server.credential ?? ''}`)
-        .join(' '),
-    ].join('\0');
+        .map(
+          (server) =>
+            `${server.urls}|${server.username ?? ""}|${server.credential ?? ""}`,
+        )
+        .join(" "),
+    ].join("\0");
 
     const held = this.wiring;
     if (held?.fingerprint === fingerprint) return held;
     // Not awaited: the caller wants a session now, and the old wiring's teardown is a set of
     // channel closes with nothing to report. Errors go to `onError` rather than nowhere.
     if (held) {
-      void Promise.all(held.transports.map((transport) => transport.close())).catch(
-        (error: unknown) => this.deps.onError?.(error),
-      );
+      void Promise.all(
+        held.transports.map((transport) => transport.close()),
+      ).catch((error: unknown) => this.deps.onError?.(error));
     }
 
     const relay = this.buildRelay(vault, endpoints);
@@ -437,7 +469,10 @@ export class SyncRuntime {
    * epoch after a rotation, and a bundle sealed under a stale epoch is one every peer refuses
    * for a reason nobody would think to look for in an export button.
    */
-  private buildSession(vault: StoredVault, transports: readonly SyncTransport[]): SyncSession {
+  private buildSession(
+    vault: StoredVault,
+    transports: readonly SyncTransport[],
+  ): SyncSession {
     return new SyncSession({
       storage: this.deps.storage,
       repository: this.deps.repository,
@@ -464,19 +499,20 @@ export class SyncRuntime {
    * transport with nothing to keep alive — there is no connection to preserve between passes.
    */
   private async fileWiring(): Promise<
-    { readonly file: FileTransport; readonly session: SyncSession } | Exclude<SyncPassReason, 'ok'>
+    | { readonly file: FileTransport; readonly session: SyncSession }
+    | Exclude<SyncPassReason, "ok">
   > {
     const enabled = await this.deps.storage.transact(async (tx) => {
       const meta = await readMeta(tx, [SYNC_META.enabled]);
-      return meta.get(SYNC_META.enabled) === '1';
+      return meta.get(SYNC_META.enabled) === "1";
     });
     // Checked rather than inferred from an empty bundle. Change capture is armed only while
     // sync is on, so exporting with it off would produce a valid, empty, entirely misleading
     // file, and importing would apply frames this device has no op log to reconcile against.
-    if (!enabled) return 'disabled';
+    if (!enabled) return "disabled";
 
     const vault = await this.readVault();
-    if (typeof vault === 'string') return vault;
+    if (typeof vault === "string") return vault;
 
     const file = new FileTransport({
       deviceId: vault.identity.deviceId,
@@ -486,7 +522,10 @@ export class SyncRuntime {
     return { file, session: this.buildSession(vault, [file]) };
   }
 
-  private buildRelay(vault: StoredVault, endpoints: SyncEndpoints): RelayTransport | null {
+  private buildRelay(
+    vault: StoredVault,
+    endpoints: SyncEndpoints,
+  ): RelayTransport | null {
     if (!endpoints.relayUrl || !endpoints.relayEnabled) return null;
     const { storage } = this.deps;
 
@@ -507,15 +546,21 @@ export class SyncRuntime {
           return Number.isSafeInteger(stored) && stored > 0 ? stored : 0;
         }),
       writeCursor: (slot) =>
-        storage.transact((tx) => writeMeta(tx, { [SYNC_META.relayCursor]: String(slot) }), {
-          silent: true,
-        }),
+        storage.transact(
+          (tx) => writeMeta(tx, { [SYNC_META.relayCursor]: String(slot) }),
+          {
+            silent: true,
+          },
+        ),
       onUpload: (error) => this.noteUpload(error),
       jitterMs: this.deps.uploadJitterMs,
     });
   }
 
-  private buildDirect(vault: StoredVault, endpoints: SyncEndpoints): DirectTransport | null {
+  private buildDirect(
+    vault: StoredVault,
+    endpoints: SyncEndpoints,
+  ): DirectTransport | null {
     // A rendezvous is the one thing the direct path cannot do without. Two devices have to
     // agree on a meeting point before they can describe a connection to each other, and this
     // build has nowhere else to meet — which is why blanking the relay address turns off
@@ -533,7 +578,8 @@ export class SyncRuntime {
       baseUrl: endpoints.relayUrl,
       // A function, not a value: the id rotates every five minutes and this transport
       // outlives several windows.
-      rendezvousId: () => deriveRendezvousId(vault.vaultKey, rendezvousWindow(now() / 1000)),
+      rendezvousId: () =>
+        deriveRendezvousId(vault.vaultKey, rendezvousWindow(now() / 1000)),
       iceServers: endpoints.iceServers,
       factory,
       openSocket: this.deps.openSocket,
@@ -541,8 +587,8 @@ export class SyncRuntime {
   }
 
   private noteUpload(error: unknown | null): void {
-    const result = error ? 'failed' : 'ok';
-    if (result === 'ok' && this.lastUpload === 'ok') return;
+    const result = error ? "failed" : "ok";
+    if (result === "ok" && this.lastUpload === "ok") return;
     this.lastUpload = result;
 
     const { storage, nowIso = defaultNowIso, onError } = this.deps;

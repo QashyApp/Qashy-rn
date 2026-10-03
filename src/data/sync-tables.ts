@@ -18,7 +18,7 @@
  * has to avoid both.
  */
 
-import type { EntityType } from '@/domain/models';
+import type { EntityType } from "@/domain/models";
 
 /** One op in this device's outbox, or one received from a peer. */
 export interface SyncOpRow {
@@ -109,7 +109,7 @@ export interface SyncMetaRow {
  */
 export interface SyncQuarantineRow {
   readonly key: string;
-  readonly reason: 'overflow' | 'clockSkew' | 'epochMismatch' | 'unknownSchema';
+  readonly reason: "overflow" | "clockSkew" | "epochMismatch" | "unknownSchema";
   readonly detail: string;
   readonly hlc: string;
   readonly recordedAt: string;
@@ -145,12 +145,12 @@ export interface SyncActivityRow {
 }
 
 export const SYNC_TABLE_NAMES = [
-  'syncOps',
-  'syncState',
-  'syncPeers',
-  'syncMeta',
-  'syncQuarantine',
-  'syncActivity',
+  "syncOps",
+  "syncState",
+  "syncPeers",
+  "syncMeta",
+  "syncQuarantine",
+  "syncActivity",
 ] as const;
 
 export type SyncTableName = (typeof SYNC_TABLE_NAMES)[number];
@@ -168,13 +168,18 @@ export type SyncRow<Name extends SyncTableName> = SyncRowByTable[Name];
 
 /** The primary-key field of each table, so one generic implementation can serve all five. */
 export const SYNC_TABLE_KEYS = {
-  syncOps: 'opId',
-  syncState: 'key',
-  syncPeers: 'peerId',
-  syncMeta: 'key',
-  syncQuarantine: 'key',
-  syncActivity: 'key',
-} as const satisfies { readonly [Name in SyncTableName]: keyof SyncRow<Name> & string };
+  syncOps: "opId",
+  syncState: "key",
+  syncPeers: "peerId",
+  syncMeta: "key",
+  syncQuarantine: "key",
+  syncActivity: "key",
+} as const satisfies {
+  readonly [Name in SyncTableName]: keyof SyncRow<Name> & string;
+};
 
-export const syncRowKey = <Name extends SyncTableName>(name: Name, row: SyncRow<Name>): string =>
+export const syncRowKey = <Name extends SyncTableName>(
+  name: Name,
+  row: SyncRow<Name>,
+): string =>
   (row as unknown as Record<string, unknown>)[SYNC_TABLE_KEYS[name]] as string;

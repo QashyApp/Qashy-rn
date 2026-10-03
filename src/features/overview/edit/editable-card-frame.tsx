@@ -11,9 +11,14 @@
  * offset at release.
  */
 
-import { useState, type ReactNode } from 'react';
-import { AccessibilityInfo, Platform, View, type LayoutChangeEvent } from 'react-native';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useState, type ReactNode } from "react";
+import {
+  AccessibilityInfo,
+  Platform,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -21,21 +26,29 @@ import Animated, {
   useSharedValue,
   withSpring,
   withTiming,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-import { AppText } from '@/components/ui/app-text';
-import { IconButton } from '@/components/ui/icon-button';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { hapticSelection } from '@/utils/haptics';
-import type { WidgetSize } from '@/features/overview/layout/overview-layout';
+import { AppText } from "@/components/ui/app-text";
+import { IconButton } from "@/components/ui/icon-button";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { hapticSelection } from "@/utils/haptics";
+import type { WidgetSize } from "@/features/overview/layout/overview-layout";
 
 /** A plain three-bar grip, drawn directly rather than through a not-yet-mapped icon name. */
 function DragGripGlyph({ color }: { color: string }) {
   return (
     <View style={{ gap: 3, paddingHorizontal: 4 }}>
       {[0, 1, 2].map((row) => (
-        <View key={row} style={{ width: 16, height: 2, borderRadius: 1, backgroundColor: color }} />
+        <View
+          key={row}
+          style={{
+            width: 16,
+            height: 2,
+            borderRadius: 1,
+            backgroundColor: color,
+          }}
+        />
       ))}
     </View>
   );
@@ -87,11 +100,11 @@ export function EditableCardFrame({
   const translateY = useSharedValue(0);
   const scale = useSharedValue(1);
 
-  const announceMove = (direction: 'up' | 'down') => {
-    const nextPosition = direction === 'up' ? index : index + 2;
+  const announceMove = (direction: "up" | "down") => {
+    const nextPosition = direction === "up" ? index : index + 2;
     const message = `${title}, position ${nextPosition} of ${total}`;
-    if (Platform.OS === 'web') {
-      if (typeof AccessibilityInfo?.announceForAccessibility === 'function') {
+    if (Platform.OS === "web") {
+      if (typeof AccessibilityInfo?.announceForAccessibility === "function") {
         AccessibilityInfo.announceForAccessibility(message);
       }
     } else {
@@ -102,12 +115,12 @@ export function EditableCardFrame({
   const moveUp = () => {
     if (index === 0) return;
     onMoveUp();
-    announceMove('up');
+    announceMove("up");
   };
   const moveDown = () => {
     if (index === total - 1) return;
     onMoveDown();
-    announceMove('down');
+    announceMove("down");
   };
 
   const beginDrag = () => {
@@ -120,7 +133,7 @@ export function EditableCardFrame({
   };
 
   const pan = Gesture.Pan()
-    .activateAfterLongPress(Platform.OS === 'web' ? 0 : 200)
+    .activateAfterLongPress(Platform.OS === "web" ? 0 : 200)
     .onStart(() => {
       runOnJS(beginDrag)();
       scale.set(reduceMotion ? 1 : withTiming(1.02, { duration: 120 }));
@@ -132,7 +145,9 @@ export function EditableCardFrame({
     .onEnd((event) => {
       if (onDragEnd) runOnJS(onDragEnd)(event.translationY);
       runOnJS(endDrag)();
-      translateY.set(reduceMotion ? 0 : withSpring(0, { damping: 18, stiffness: 220 }));
+      translateY.set(
+        reduceMotion ? 0 : withSpring(0, { damping: 18, stiffness: 220 }),
+      );
       scale.set(reduceMotion ? 1 : withTiming(1, { duration: 120 }));
     });
 
@@ -145,40 +160,62 @@ export function EditableCardFrame({
     <Animated.View
       onLayout={onLayout}
       style={[
-        { borderRadius: radius.card, borderCurve: 'continuous' },
-        dragging ? materialStyle(theme, 'overlay') : null,
+        { borderRadius: radius.card, borderCurve: "continuous" },
+        dragging ? materialStyle(theme, "overlay") : null,
         animatedStyle,
       ]}
       accessibilityActions={[
-        { name: 'moveUp', label: 'Move up' },
-        { name: 'moveDown', label: 'Move down' },
-        { name: 'remove', label: 'Remove' },
+        { name: "moveUp", label: "Move up" },
+        { name: "moveDown", label: "Move down" },
+        { name: "remove", label: "Remove" },
       ]}
       onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === 'moveUp') moveUp();
-        else if (event.nativeEvent.actionName === 'moveDown') moveDown();
-        else if (event.nativeEvent.actionName === 'remove') onRemove();
-      }}>
+        if (event.nativeEvent.actionName === "moveUp") moveUp();
+        else if (event.nativeEvent.actionName === "moveDown") moveDown();
+        else if (event.nativeEvent.actionName === "remove") onRemove();
+      }}
+    >
       <View
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
+          flexDirection: "row",
+          alignItems: "center",
           gap: space.xs,
           paddingHorizontal: space.sm,
           paddingVertical: space.xs,
-        }}>
+        }}
+      >
         <GestureDetector gesture={pan}>
           <View
             accessibilityLabel={`Drag to reorder ${title}`}
-            style={{ padding: space.sm }}>
+            style={{ padding: space.sm }}
+          >
             <DragGripGlyph color={theme.textMuted as string} />
           </View>
         </GestureDetector>
-        <AppText literal variant="label" style={{ flex: 1 }} numberOfLines={1}>{title}</AppText>
-        <IconButton label={`Move ${title} up`} icon="arrow.up" size={40} disabled={index === 0} onPress={moveUp} />
-        <IconButton label={`Move ${title} down`} icon="arrow.down" size={40} disabled={index === total - 1} onPress={moveDown} />
+        <AppText literal variant="label" style={{ flex: 1 }} numberOfLines={1}>
+          {title}
+        </AppText>
+        <IconButton
+          label={`Move ${title} up`}
+          icon="arrow.up"
+          size={40}
+          disabled={index === 0}
+          onPress={moveUp}
+        />
+        <IconButton
+          label={`Move ${title} down`}
+          icon="arrow.down"
+          size={40}
+          disabled={index === total - 1}
+          onPress={moveDown}
+        />
         {showSizeControl && sizes.length > 1 ? (
-          <IconButton label={`Change ${title} size`} icon="arrow.up.left.and.arrow.down.right" size={40} onPress={onCycleSize} />
+          <IconButton
+            label={`Change ${title} size`}
+            icon="arrow.up.left.and.arrow.down.right"
+            size={40}
+            onPress={onCycleSize}
+          />
         ) : null}
         {hasConfigSheet ? (
           <IconButton
@@ -189,7 +226,12 @@ export function EditableCardFrame({
             onPress={onToggleConfig}
           />
         ) : null}
-        <IconButton label={`Remove ${title}`} icon="trash" size={40} onPress={onRemove} />
+        <IconButton
+          label={`Remove ${title}`}
+          icon="trash"
+          size={40}
+          onPress={onRemove}
+        />
       </View>
       {hasConfigSheet && configOpen ? (
         <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
@@ -199,7 +241,8 @@ export function EditableCardFrame({
       <View
         pointerEvents="none"
         accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants">
+        importantForAccessibility="no-hide-descendants"
+      >
         {children}
       </View>
     </Animated.View>

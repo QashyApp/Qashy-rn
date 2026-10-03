@@ -29,9 +29,9 @@ import {
   open,
   seal,
   type SealingKey,
-} from '@/sync/crypto';
-import { decodeBatch, encodeBatch } from '@/sync/engine/batch';
-import { SyncEngineError, type SyncBatch } from '@/sync/engine/types';
+} from "@/sync/crypto";
+import { decodeBatch, encodeBatch } from "@/sync/engine/batch";
+import { SyncEngineError, type SyncBatch } from "@/sync/engine/types";
 
 export interface FrameContext {
   /** The vault content key, derived from the root key. Never the root key itself. */
@@ -58,7 +58,7 @@ export const sealBatch = (
   seal(
     context.key,
     {
-      purpose: 'batch',
+      purpose: "batch",
       senderDeviceId: context.deviceId,
       recipientDeviceId,
       epoch: context.epoch,
@@ -84,7 +84,7 @@ export function openBatch(
   if (frame.length > MAX_FRAME_BYTES) {
     throw new SyncEngineError(
       `That frame is ${frame.length} bytes; the limit is ${MAX_FRAME_BYTES}.`,
-      'tooLarge',
+      "tooLarge",
       senderDeviceId,
     );
   }
@@ -92,7 +92,7 @@ export function openBatch(
     open(
       context.key,
       {
-        purpose: 'batch',
+        purpose: "batch",
         senderDeviceId,
         recipientDeviceId: context.deviceId,
         epoch: context.epoch,

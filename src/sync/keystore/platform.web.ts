@@ -18,20 +18,20 @@
  * independent layer over this one rather than a replacement for it.
  */
 
-import { BaseKeystore } from '@/sync/keystore/base';
-import { KeystoreError, type SyncKeystore } from '@/sync/keystore/types';
+import { BaseKeystore } from "@/sync/keystore/base";
+import { KeystoreError, type SyncKeystore } from "@/sync/keystore/types";
 
-const DB_NAME = 'qashy-keystore';
+const DB_NAME = "qashy-keystore";
 const DB_VERSION = 1;
-const STORE = 'vault';
-const WRAP_ID = 'wrap';
-const CONTAINER_ID = 'container';
+const STORE = "vault";
+const WRAP_ID = "wrap";
+const CONTAINER_ID = "container";
 
 /** AES-GCM rather than XChaCha20 here only because this layer must use WebCrypto — a key
  *  the browser refuses to export can only be driven through `crypto.subtle`. The IV is
  *  fresh per write and 96 bits, which is exactly the case GCM's nonce size is safe for:
  *  one key, one writer, one nonce per write. */
-const WRAP_ALGORITHM = { name: 'AES-GCM', length: 256 } as const;
+const WRAP_ALGORITHM = { name: "AES-GCM", length: 256 } as const;
 const IV_BYTES = 12;
 
 interface ContainerRow {
@@ -55,7 +55,8 @@ const bufferSource = (bytes: Uint8Array) => Uint8Array.from(bytes);
 const request = <T>(source: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
     source.onsuccess = () => resolve(source.result);
-    source.onerror = () => reject(source.error ?? new Error('IndexedDB request failed.'));
+    source.onerror = () =>
+      reject(source.error ?? new Error("IndexedDB request failed."));
   });
 
 const openDatabase = () =>
@@ -63,7 +64,7 @@ const openDatabase = () =>
     const open = indexedDB.open(DB_NAME, DB_VERSION);
     open.onupgradeneeded = () => {
       if (!open.result.objectStoreNames.contains(STORE)) {
-        open.result.createObjectStore(STORE, { keyPath: 'id' });
+        open.result.createObjectStore(STORE, { keyPath: "id" });
       }
     };
     open.onsuccess = () => {
@@ -72,20 +73,31 @@ const openDatabase = () =>
       open.result.onversionchange = () => open.result.close();
       resolve(open.result);
     };
-    open.onerror = () => reject(open.error ?? new Error('Could not open the Qashy keystore.'));
+    open.onerror = () =>
+      reject(open.error ?? new Error("Could not open the Qashy keystore."));
     open.onblocked = () =>
-      reject(new KeystoreError('Close other Qashy tabs and try again.', 'unavailable'));
+      reject(
+        new KeystoreError(
+          "Close other Qashy tabs and try again.",
+          "unavailable",
+        ),
+      );
   });
 
-async function withStore<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => Promise<T>) {
+async function withStore<T>(
+  mode: IDBTransactionMode,
+  work: (store: IDBObjectStore) => Promise<T>,
+) {
   const database = await openDatabase();
   try {
     const transaction = database.transaction(STORE, mode);
     const result = await work(transaction.objectStore(STORE));
     await new Promise<void>((resolve, reject) => {
       transaction.oncomplete = () => resolve();
-      transaction.onabort = () => reject(transaction.error ?? new Error('Keystore transaction aborted.'));
-      transaction.onerror = () => reject(transaction.error ?? new Error('Keystore transaction failed.'));
+      transaction.onabort = () =>
+        reject(transaction.error ?? new Error("Keystore transaction aborted."));
+      transaction.onerror = () =>
+        reject(transaction.error ?? new Error("Keystore transaction failed."));
     });
     return result;
   } finally {
@@ -94,21 +106,26 @@ async function withStore<T>(mode: IDBTransactionMode, work: (store: IDBObjectSto
 }
 
 class BrowserKeystore extends BaseKeystore {
-  readonly kind: SyncKeystore['kind'] = 'browser';
+  readonly kind: SyncKeystore["kind"] = "browser";
 
   /** A browser profile has no OS-level unlock, so the gate is worth offering here. */
   readonly supportsPassphrase = true;
 
   protected override async available() {
-    return typeof indexedDB !== 'undefined' && typeof globalThis.crypto?.subtle !== 'undefined';
+    return (
+      typeof indexedDB !== "undefined" &&
+      typeof globalThis.crypto?.subtle !== "undefined"
+    );
   }
 
   protected async readContainer() {
-    const row = await withStore('readonly', (store) => request<ContainerRow | undefined>(store.get(CONTAINER_ID)));
+    const row = await withStore("readonly", (store) =>
+      request<ContainerRow | undefined>(store.get(CONTAINER_ID)),
+    );
     if (!row) return null;
     const key = await this.wrappingKey();
     const plain = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv: bufferSource(row.iv) },
+      { name: "AES-GCM", iv: bufferSource(row.iv) },
       key,
       bufferSource(row.data),
     );
@@ -118,15 +135,23 @@ class BrowserKeystore extends BaseKeystore {
   protected async writeContainer(bytes: Uint8Array) {
     const key = await this.wrappingKey();
     const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
-    const sealed = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, bufferSource(bytes));
-    const row: ContainerRow = { id: CONTAINER_ID, iv, data: new Uint8Array(sealed) };
-    await withStore('readwrite', (store) => request(store.put(row)));
+    const sealed = await crypto.subtle.encrypt(
+      { name: "AES-GCM", iv },
+      key,
+      bufferSource(bytes),
+    );
+    const row: ContainerRow = {
+      id: CONTAINER_ID,
+      iv,
+      data: new Uint8Array(sealed),
+    };
+    await withStore("readwrite", (store) => request(store.put(row)));
   }
 
   protected async eraseContainer() {
     // The wrapping key goes too. Leaving it behind would mean a later pairing reuses a key
     // that a previous vault's ciphertext was written under, and there is no reason to.
-    await withStore('readwrite', async (store) => {
+    await withStore("readwrite", async (store) => {
       await request(store.delete(CONTAINER_ID));
       await request(store.delete(WRAP_ID));
     });
@@ -142,14 +167,21 @@ class BrowserKeystore extends BaseKeystore {
    * undecryptable, which is data loss, not a race to shrug at.
    */
   private async wrappingKey(): Promise<CryptoKey> {
-    const existing = await withStore('readonly', (store) => request<WrapRow | undefined>(store.get(WRAP_ID)));
+    const existing = await withStore("readonly", (store) =>
+      request<WrapRow | undefined>(store.get(WRAP_ID)),
+    );
     if (existing) return existing.key;
 
-    const generated = await crypto.subtle.generateKey(WRAP_ALGORITHM, false, ['encrypt', 'decrypt']);
-    return withStore('readwrite', async (store) => {
+    const generated = await crypto.subtle.generateKey(WRAP_ALGORITHM, false, [
+      "encrypt",
+      "decrypt",
+    ]);
+    return withStore("readwrite", async (store) => {
       const raced = await request<WrapRow | undefined>(store.get(WRAP_ID));
       if (raced) return raced.key;
-      await request(store.put({ id: WRAP_ID, key: generated } satisfies WrapRow));
+      await request(
+        store.put({ id: WRAP_ID, key: generated } satisfies WrapRow),
+      );
       return generated;
     });
   }

@@ -21,10 +21,10 @@
  * functions has one.
  */
 
-import { MemoryStorageAdapter } from '@/data/memory-storage';
-import type { StoredEntity } from '@/data/storage-adapter';
-import { SYNC_META, readActivity, writeMeta } from '@/data/sync-store';
-import type { EntityType, FinanceEntity } from '@/domain/models';
+import { MemoryStorageAdapter } from "@/data/memory-storage";
+import type { StoredEntity } from "@/data/storage-adapter";
+import { SYNC_META, readActivity, writeMeta } from "@/data/sync-store";
+import type { EntityType, FinanceEntity } from "@/domain/models";
 import {
   BackupError,
   backupFileName,
@@ -34,18 +34,27 @@ import {
   restoreVaultBackup,
   summarizeArchive,
   type VaultArchive,
-} from '@/sync/backup';
-import { createDeviceIdentity, createVaultKeyBackup, utf8Bytes, vaultKeyToRecoveryPhrase } from '@/sync/crypto';
-import { readRoster, writePeers, type Peer } from '@/sync/engine';
-import { KeystoreError, MemoryKeystore, type MemoryKeystoreCell } from '@/sync/keystore';
-import { INITIAL_EPOCH, enableSync, type SyncSetupDeps } from '@/sync/setup';
-import { account, settings, transaction } from '@/sync/oplog/__tests__/helpers';
+} from "@/sync/backup";
+import {
+  createDeviceIdentity,
+  createVaultKeyBackup,
+  utf8Bytes,
+  vaultKeyToRecoveryPhrase,
+} from "@/sync/crypto";
+import { readRoster, writePeers, type Peer } from "@/sync/engine";
+import {
+  KeystoreError,
+  MemoryKeystore,
+  type MemoryKeystoreCell,
+} from "@/sync/keystore";
+import { INITIAL_EPOCH, enableSync, type SyncSetupDeps } from "@/sync/setup";
+import { account, settings, transaction } from "@/sync/oplog/__tests__/helpers";
 
-const NOW_ISO = '2026-06-01T12:00:00.000Z';
-const LATER_ISO = '2026-09-14T09:30:00.000Z';
+const NOW_ISO = "2026-06-01T12:00:00.000Z";
+const LATER_ISO = "2026-09-14T09:30:00.000Z";
 
-const PROFILE = { name: 'Phone', platform: 'ios' } as const;
-const PASSPHRASE = 'correct horse battery staple';
+const PROFILE = { name: "Phone", platform: "ios" } as const;
+const PASSPHRASE = "correct horse battery staple";
 
 /**
  * scrypt at the shipped parameters is ~64 MiB of deliberate work, and the passphrase path pays
@@ -54,7 +63,10 @@ const PASSPHRASE = 'correct horse battery staple';
  */
 const SCRYPT_TIMEOUT = 60_000;
 
-const stored = (type: EntityType, entity: FinanceEntity): StoredEntity => ({ type, entity });
+const stored = (type: EntityType, entity: FinanceEntity): StoredEntity => ({
+  type,
+  entity,
+});
 
 /**
  * A vault with something in it, including a tombstone.
@@ -64,12 +76,19 @@ const stored = (type: EntityType, entity: FinanceEntity): StoredEntity => ({ typ
  * every recurrence its owner has ever deleted.
  */
 const populated = (): StoredEntity[] => [
-  stored('settings', settings({ baseCurrency: 'ILS' })),
-  stored('accounts', account({ id: 'acc-1' })),
-  stored('transactions', transaction({ id: 'txn-1', accountId: 'acc-1', title: 'Coffee' })),
+  stored("settings", settings({ baseCurrency: "ILS" })),
+  stored("accounts", account({ id: "acc-1" })),
   stored(
-    'transactions',
-    transaction({ id: 'txn-gone', accountId: 'acc-1', deletedAt: '2026-05-02T08:00:00.000Z' }),
+    "transactions",
+    transaction({ id: "txn-1", accountId: "acc-1", title: "Coffee" }),
+  ),
+  stored(
+    "transactions",
+    transaction({
+      id: "txn-gone",
+      accountId: "acc-1",
+      deletedAt: "2026-05-02T08:00:00.000Z",
+    }),
   ),
 ];
 
@@ -83,7 +102,10 @@ interface Rig {
   readonly activity: () => Promise<readonly string[]>;
 }
 
-const rig = async (records: readonly StoredEntity[] = [], nowIso = () => NOW_ISO): Promise<Rig> => {
+const rig = async (
+  records: readonly StoredEntity[] = [],
+  nowIso = () => NOW_ISO,
+): Promise<Rig> => {
   const storage = new MemoryStorageAdapter();
   await storage.initialize();
   if (records.length) await storage.putMany([...records]);
@@ -98,10 +120,12 @@ const rig = async (records: readonly StoredEntity[] = [], nowIso = () => NOW_ISO
     cell,
     meta: async () =>
       storage.transact(async (tx) => {
-        const rows = await tx.table('syncMeta').all();
+        const rows = await tx.table("syncMeta").all();
         return new Map(rows.map((row) => [row.key, row.value]));
       }),
-    roster: async () => [...(await storage.transact((tx) => readRoster(tx))).values()],
+    roster: async () => [
+      ...(await storage.transact((tx) => readRoster(tx))).values(),
+    ],
     activity: async () =>
       (await storage.transact((tx) => readActivity(tx))).map((row) => row.kind),
   };
@@ -113,7 +137,7 @@ const peerNamed = (name: string): Peer => {
   return {
     deviceId: identity.deviceId,
     name,
-    platform: 'test',
+    platform: "test",
     signingKey: identity.signing.publicKey,
     agreementKey: identity.agreement.publicKey,
     epoch: INITIAL_EPOCH,
@@ -141,75 +165,85 @@ interface Source extends Rig {
 const source = async (): Promise<Source> => {
   const target = await rig(populated());
   const { deviceId } = await enableSync(target.deps, PROFILE);
-  const peer = peerNamed('Laptop');
+  const peer = peerNamed("Laptop");
 
   await target.storage.transact(async (tx) => {
     await writePeers(tx, [peer]);
     await writeMeta(tx, {
-      [SYNC_META.relayUrl]: 'https://relay.example.com',
-      [SYNC_META.relayCursor]: '4096',
-      [SYNC_META.relayStatus]: 'reachable',
+      [SYNC_META.relayUrl]: "https://relay.example.com",
+      [SYNC_META.relayCursor]: "4096",
+      [SYNC_META.relayStatus]: "reachable",
       [SYNC_META.relayCheckedAt]: NOW_ISO,
-      [SYNC_META.relayFailures]: '0',
+      [SYNC_META.relayFailures]: "0",
     });
   });
 
   const vault = await target.keystore.read();
-  if (!vault) throw new Error('the rig failed to create a vault');
+  if (!vault) throw new Error("the rig failed to create a vault");
 
-  return { ...target, deviceId, peer, phrase: vaultKeyToRecoveryPhrase(vault.vaultKey) };
+  return {
+    ...target,
+    deviceId,
+    peer,
+    phrase: vaultKeyToRecoveryPhrase(vault.vaultKey),
+  };
 };
 
 /** The archive as bytes, sealed under the vault key — the fast lock, so most tests use it. */
-const sealed = async (from: Source) => exportVaultBackup(from.deps, { kind: 'recoveryPhrase' });
+const sealed = async (from: Source) =>
+  exportVaultBackup(from.deps, { kind: "recoveryPhrase" });
 
 const opened = async (from: Source, file: Uint8Array) =>
-  readVaultBackup(file, { kind: 'recoveryPhrase', phrase: from.phrase });
+  readVaultBackup(file, { kind: "recoveryPhrase", phrase: from.phrase });
 
 // ---------------------------------------------------------------------------
 
-describe('exporting a vault', () => {
-  it('refuses on a device that has no vault to export', async () => {
+describe("exporting a vault", () => {
+  it("refuses on a device that has no vault to export", async () => {
     const target = await rig(populated());
 
-    await expect(exportVaultBackup(target.deps, { kind: 'recoveryPhrase' })).rejects.toThrow(
-      KeystoreError,
-    );
+    await expect(
+      exportVaultBackup(target.deps, { kind: "recoveryPhrase" }),
+    ).rejects.toThrow(KeystoreError);
   });
 
-  it('carries everything a device needs to be that device again', async () => {
+  it("carries everything a device needs to be that device again", async () => {
     const from = await source();
 
     const archive = await opened(from, await sealed(from));
 
     expect(archive.deviceId).toBe(from.deviceId);
-    expect(archive.deviceName).toBe('Phone');
+    expect(archive.deviceName).toBe("Phone");
     // Read off the settings row at enable time, not from the caller. A restored device that
     // recorded the wrong one rejects every batch forever with a mismatch it cannot be talked
     // out of.
-    expect(archive.baseCurrency).toBe('ILS');
+    expect(archive.baseCurrency).toBe("ILS");
     expect(archive.createdAt).toBe(NOW_ISO);
     expect(archive.records).toHaveLength(4);
-    expect(archive.peers.map((row) => row.peerId)).toEqual([from.peer.deviceId]);
+    expect(archive.peers.map((row) => row.peerId)).toEqual([
+      from.peer.deviceId,
+    ]);
     // Five ops for four rows: genesis describes the tombstone as a `create` followed by a
     // `delete`, because a peer that received only the delete would have nothing to apply it to.
     expect(archive.ops).toHaveLength(5);
-    expect(archive.ops.filter((row) => row.kind === 'delete')).toHaveLength(1);
+    expect(archive.ops.filter((row) => row.kind === "delete")).toHaveLength(1);
     // One causal-state row per entity, tombstone included — it is the row that remembers the
     // delete happened at all once the log is compacted out from under it.
     expect(archive.state).toHaveLength(4);
   });
 
-  it('keeps tombstones, because recurrence suppression is stored in them', async () => {
+  it("keeps tombstones, because recurrence suppression is stored in them", async () => {
     const from = await source();
 
     const archive = await opened(from, await sealed(from));
 
-    const deleted = archive.records.filter((row) => row.entity.deletedAt !== null);
-    expect(deleted.map((row) => row.entity.id)).toEqual(['txn-gone']);
+    const deleted = archive.records.filter(
+      (row) => row.entity.deletedAt !== null,
+    );
+    expect(deleted.map((row) => row.entity.id)).toEqual(["txn-gone"]);
   });
 
-  it('drops what describes a relay and keeps what describes the vault', async () => {
+  it("drops what describes a relay and keeps what describes the vault", async () => {
     const from = await source();
 
     const archive = await opened(from, await sealed(from));
@@ -230,21 +264,21 @@ describe('exporting a vault', () => {
     expect(keys.has(SYNC_META.seq)).toBe(true);
   });
 
-  it('names the file by the day it was written', () => {
-    expect(backupFileName(LATER_ISO)).toBe('qashy-vault-2026-09-14.qashyvault');
+  it("names the file by the day it was written", () => {
+    expect(backupFileName(LATER_ISO)).toBe("qashy-vault-2026-09-14.qashyvault");
   });
 });
 
-describe('what the confirm step is shown', () => {
-  it('counts live transactions, not rows', async () => {
+describe("what the confirm step is shown", () => {
+  it("counts live transactions, not rows", async () => {
     const from = await source();
 
     const summary = summarizeArchive(await opened(from, await sealed(from)));
 
     expect(summary).toEqual({
       createdAt: NOW_ISO,
-      deviceName: 'Phone',
-      baseCurrency: 'ILS',
+      deviceName: "Phone",
+      baseCurrency: "ILS",
       peerCount: 1,
       opCount: 5,
       recordCount: 4,
@@ -255,36 +289,38 @@ describe('what the confirm step is shown', () => {
   });
 });
 
-describe('choosing which secret to ask for', () => {
-  it('reads the lock off the file before anything is typed', async () => {
+describe("choosing which secret to ask for", () => {
+  it("reads the lock off the file before anything is typed", async () => {
     const from = await source();
 
-    expect(readBackupLock(await sealed(from))).toBe('recoveryPhrase');
-    expect(readBackupLock(utf8Bytes('id,date,amount\n'))).toBeNull();
+    expect(readBackupLock(await sealed(from))).toBe("recoveryPhrase");
+    expect(readBackupLock(utf8Bytes("id,date,amount\n"))).toBeNull();
   });
 
-  it('refuses the wrong kind of secret without spending a key derivation on it', async () => {
+  it("refuses the wrong kind of secret without spending a key derivation on it", async () => {
     const from = await source();
     const file = await sealed(from);
 
     // The refusal has to happen here rather than in the AEAD, because "wrong passphrase" in
     // front of a phrase-locked archive is a prompt the user cannot satisfy and cannot diagnose.
-    await expect(readVaultBackup(file, { kind: 'passphrase', passphrase: PASSPHRASE })).rejects.toThrow(
-      'That backup is opened with a recovery phrase, not a passphrase.',
+    await expect(
+      readVaultBackup(file, { kind: "passphrase", passphrase: PASSPHRASE }),
+    ).rejects.toThrow(
+      "That backup is opened with a recovery phrase, not a passphrase.",
     );
   });
 
-  it('rejects a file that is not a Qashy backup at all', async () => {
+  it("rejects a file that is not a Qashy backup at all", async () => {
     const from = await source();
 
-    await expect(opened(from, utf8Bytes('id,date,amount\n1,2026-01-01,10'))).rejects.toThrow(
-      BackupError,
-    );
+    await expect(
+      opened(from, utf8Bytes("id,date,amount\n1,2026-01-01,10")),
+    ).rejects.toThrow(BackupError);
   });
 });
 
-describe('a damaged or foreign archive', () => {
-  it('names the phrase as the likely cause rather than reporting damage', async () => {
+describe("a damaged or foreign archive", () => {
+  it("names the phrase as the likely cause rather than reporting damage", async () => {
     const from = await source();
     const other = await source();
 
@@ -293,7 +329,7 @@ describe('a damaged or foreign archive', () => {
     );
   });
 
-  it('refuses a file with a flipped bit instead of restoring part of it', async () => {
+  it("refuses a file with a flipped bit instead of restoring part of it", async () => {
     const from = await source();
     const file = await sealed(from);
     file[file.length - 20] ^= 0x01;
@@ -301,12 +337,12 @@ describe('a damaged or foreign archive', () => {
     await expect(opened(from, file)).rejects.toThrow();
   });
 
-  it('says which version wrote an archive this build cannot read', async () => {
+  it("says which version wrote an archive this build cannot read", async () => {
     const from = await source();
     const vault = await from.keystore.read();
     const forged = createVaultKeyBackup(
       vault!.vaultKey,
-      utf8Bytes(JSON.stringify({ format: 2, vault: '', deviceId: '' })),
+      utf8Bytes(JSON.stringify({ format: 2, vault: "", deviceId: "" })),
     );
 
     // Naming the number matters: the remedy is "update this device", and a generic "damaged"
@@ -314,18 +350,24 @@ describe('a damaged or foreign archive', () => {
     await expect(opened(from, forged)).rejects.toThrow(/format v2/);
   });
 
-  it('fails before writing anything when the key inside will not decode', async () => {
+  it("fails before writing anything when the key inside will not decode", async () => {
     const from = await source();
     const vault = await from.keystore.read();
     const forged = createVaultKeyBackup(
       vault!.vaultKey,
-      utf8Bytes(JSON.stringify({ format: 1, vault: 'not-base64url-at-all!!', deviceId: 'x' })),
+      utf8Bytes(
+        JSON.stringify({
+          format: 1,
+          vault: "not-base64url-at-all!!",
+          deviceId: "x",
+        }),
+      ),
     );
 
     await expect(opened(from, forged)).rejects.toThrow(/usable vault key/);
   });
 
-  it('opens an older archive without revocation cutoffs and fails closed for revoked peers', async () => {
+  it("opens an older archive without revocation cutoffs and fails closed for revoked peers", async () => {
     const from = await source();
     const vault = await from.keystore.read();
     const archive = await opened(from, await sealed(from));
@@ -348,13 +390,16 @@ describe('a damaged or foreign archive', () => {
   });
 });
 
-describe('restoring onto a replacement device', () => {
-  it('lands the key, the roster, the log, and the records together', async () => {
+describe("restoring onto a replacement device", () => {
+  it("lands the key, the roster, the log, and the records together", async () => {
     const from = await source();
     const archive = await opened(from, await sealed(from));
     // Not empty: a reinstall where the user typed something in before remembering the backup.
     // If `clearRecords` did not run, that row would survive into a vault that never had it.
-    const target = await rig([stored('accounts', account({ id: 'acc-stray', name: 'Stray' }))], () => LATER_ISO);
+    const target = await rig(
+      [stored("accounts", account({ id: "acc-stray", name: "Stray" }))],
+      () => LATER_ISO,
+    );
 
     const result = await restoreVaultBackup(target.deps, archive);
 
@@ -370,30 +415,35 @@ describe('restoring onto a replacement device', () => {
     const vault = await target.keystore.read();
     expect(vault?.identity.deviceId).toBe(from.deviceId);
 
-    expect((await target.storage.readAll('accounts')).map((row) => row.id)).toEqual(['acc-1']);
-    expect((await target.storage.readAll('transactions')).map((row) => row.id).sort()).toEqual([
-      'txn-1',
-      'txn-gone',
+    expect(
+      (await target.storage.readAll("accounts")).map((row) => row.id),
+    ).toEqual(["acc-1"]);
+    expect(
+      (await target.storage.readAll("transactions"))
+        .map((row) => row.id)
+        .sort(),
+    ).toEqual(["txn-1", "txn-gone"]);
+    expect((await target.roster()).map((peer) => peer.deviceId)).toEqual([
+      from.peer.deviceId,
     ]);
-    expect((await target.roster()).map((peer) => peer.deviceId)).toEqual([from.peer.deviceId]);
 
     const meta = await target.meta();
-    expect(meta.get(SYNC_META.enabled)).toBe('1');
+    expect(meta.get(SYNC_META.enabled)).toBe("1");
     expect(meta.get(SYNC_META.deviceId)).toBe(from.deviceId);
-    expect(meta.get(SYNC_META.deviceName)).toBe('Phone');
-    expect(meta.get(SYNC_META.baseCurrency)).toBe('ILS');
+    expect(meta.get(SYNC_META.deviceName)).toBe("Phone");
+    expect(meta.get(SYNC_META.baseCurrency)).toBe("ILS");
     expect(meta.has(SYNC_META.relayCursor)).toBe(false);
 
     // Recorded, because a restore is the single most consequential thing this app does and a
     // device that cannot say when it happened cannot explain a fork afterwards.
-    expect(await target.activity()).toContain('recovered');
+    expect(await target.activity()).toContain("recovered");
   });
 
-  it('refuses a device that is already part of a vault', async () => {
+  it("refuses a device that is already part of a vault", async () => {
     const from = await source();
     const archive = await opened(from, await sealed(from));
     const target = await rig();
-    await enableSync(target.deps, { name: 'Tablet', platform: 'android' });
+    await enableSync(target.deps, { name: "Tablet", platform: "android" });
     const before = await target.keystore.read();
 
     await expect(restoreVaultBackup(target.deps, archive)).rejects.toThrow(
@@ -407,13 +457,13 @@ describe('restoring onto a replacement device', () => {
     expect(after?.vaultKey).toEqual(before?.vaultKey);
   });
 
-  it('treats a locked keystore as a vault it must not overwrite', async () => {
+  it("treats a locked keystore as a vault it must not overwrite", async () => {
     const from = await source();
     const archive = await opened(from, await sealed(from));
 
     const target = await rig();
-    await enableSync(target.deps, { name: 'Tablet', platform: 'android' });
-    await target.keystore.setPassphrase('a passphrase on this browser');
+    await enableSync(target.deps, { name: "Tablet", platform: "android" });
+    await target.keystore.setPassphrase("a passphrase on this browser");
     // A second keystore over the same bytes starts cold, which is what an app restart looks
     // like: the record is there and unreadable. "Cannot see" is not "is not there", and
     // reading it as empty would let a restore overwrite exactly the vault the gate protects.
@@ -426,15 +476,20 @@ describe('restoring onto a replacement device', () => {
     expect(target.cell.bytes).not.toBeNull();
   });
 
-  it('leaves an empty archive restorable rather than throwing on empty tables', async () => {
+  it("leaves an empty archive restorable rather than throwing on empty tables", async () => {
     // A device that enabled sync before entering anything. Every table is empty, and a `put([])`
     // that reaches SQL builds a `VALUES` clause with nothing in it.
     const empty = await rig();
     const { deviceId } = await enableSync(empty.deps, PROFILE);
     const vault = await empty.keystore.read();
     const phrase = vaultKeyToRecoveryPhrase(vault!.vaultKey);
-    const file = await exportVaultBackup(empty.deps, { kind: 'recoveryPhrase' });
-    const archive = await readVaultBackup(file, { kind: 'recoveryPhrase', phrase });
+    const file = await exportVaultBackup(empty.deps, {
+      kind: "recoveryPhrase",
+    });
+    const archive = await readVaultBackup(file, {
+      kind: "recoveryPhrase",
+      phrase,
+    });
 
     const target = await rig();
     await expect(restoreVaultBackup(target.deps, archive)).resolves.toEqual({
@@ -446,23 +501,29 @@ describe('restoring onto a replacement device', () => {
   });
 });
 
-describe('a backup sealed with a passphrase', () => {
+describe("a backup sealed with a passphrase", () => {
   let from: Source;
   let file: Uint8Array;
 
   beforeAll(async () => {
     from = await source();
-    file = await exportVaultBackup(from.deps, { kind: 'passphrase', passphrase: PASSPHRASE });
+    file = await exportVaultBackup(from.deps, {
+      kind: "passphrase",
+      passphrase: PASSPHRASE,
+    });
   }, SCRYPT_TIMEOUT);
 
-  it('advertises which secret it wants', () => {
-    expect(readBackupLock(file)).toBe('passphrase');
+  it("advertises which secret it wants", () => {
+    expect(readBackupLock(file)).toBe("passphrase");
   });
 
   it(
-    'carries the same archive the phrase-locked file does',
+    "carries the same archive the phrase-locked file does",
     async () => {
-      const archive = await readVaultBackup(file, { kind: 'passphrase', passphrase: PASSPHRASE });
+      const archive = await readVaultBackup(file, {
+        kind: "passphrase",
+        passphrase: PASSPHRASE,
+      });
 
       // One format, two locks. A second archive shape for the second lock would be a second
       // thing to review and a second restore path to get wrong.
@@ -476,26 +537,31 @@ describe('a backup sealed with a passphrase', () => {
   );
 
   it(
-    'leads with the likely cause on a wrong passphrase',
+    "leads with the likely cause on a wrong passphrase",
     async () => {
       await expect(
-        readVaultBackup(file, { kind: 'passphrase', passphrase: 'correct horse battery stapl' }),
+        readVaultBackup(file, {
+          kind: "passphrase",
+          passphrase: "correct horse battery stapl",
+        }),
       ).rejects.toThrow(/Wrong passphrase, or the backup file is damaged/);
     },
     SCRYPT_TIMEOUT,
   );
 
-  it('refuses a recovery phrase in front of it, before the derivation', async () => {
+  it("refuses a recovery phrase in front of it, before the derivation", async () => {
     await expect(
-      readVaultBackup(file, { kind: 'recoveryPhrase', phrase: from.phrase }),
-    ).rejects.toThrow('That backup is protected by a passphrase, not a recovery phrase.');
+      readVaultBackup(file, { kind: "recoveryPhrase", phrase: from.phrase }),
+    ).rejects.toThrow(
+      "That backup is protected by a passphrase, not a recovery phrase.",
+    );
   });
 
   it(
-    'restores exactly what the phrase-locked one would',
+    "restores exactly what the phrase-locked one would",
     async () => {
       const archive: VaultArchive = await readVaultBackup(file, {
-        kind: 'passphrase',
+        kind: "passphrase",
         passphrase: PASSPHRASE,
       });
       const target = await rig();
@@ -503,8 +569,10 @@ describe('a backup sealed with a passphrase', () => {
       const result = await restoreVaultBackup(target.deps, archive);
 
       expect(result.deviceId).toBe(from.deviceId);
-      expect((await target.keystore.read())?.identity.deviceId).toBe(from.deviceId);
-      expect((await target.storage.readAll('transactions'))).toHaveLength(2);
+      expect((await target.keystore.read())?.identity.deviceId).toBe(
+        from.deviceId,
+      );
+      expect(await target.storage.readAll("transactions")).toHaveLength(2);
     },
     SCRYPT_TIMEOUT,
   );

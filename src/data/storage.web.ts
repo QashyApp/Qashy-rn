@@ -1,4 +1,10 @@
-import { Dexie, liveQuery, type EntityTable, type Subscription, type Table } from 'dexie';
+import {
+  Dexie,
+  liveQuery,
+  type EntityTable,
+  type Subscription,
+  type Table,
+} from "dexie";
 
 import {
   clearSyncTables,
@@ -9,7 +15,7 @@ import {
   type StoredEntity,
   type SyncTable,
   type TransactOptions,
-} from '@/data/storage-adapter';
+} from "@/data/storage-adapter";
 import type {
   SyncActivityRow,
   SyncMetaRow,
@@ -19,9 +25,9 @@ import type {
   SyncRow,
   SyncStateRow,
   SyncTableName,
-} from '@/data/sync-tables';
-import type { EntityType, FinanceEntity } from '@/domain/models';
-import { makeId } from '@/utils/entity';
+} from "@/data/sync-tables";
+import type { EntityType, FinanceEntity } from "@/domain/models";
+import { makeId } from "@/utils/entity";
 
 interface DbRecord {
   key: string;
@@ -32,24 +38,24 @@ interface DbRecord {
   deletedAt: string | null;
 }
 
-const STORAGE_CHANGE_KEY = 'qashy:storage-change';
+const STORAGE_CHANGE_KEY = "qashy:storage-change";
 
 /** The single `syncMeta` row every commit stamps. See `PlatformStorageAdapter.transact`. */
-const LAST_WRITE_KEY = 'lastWrite';
+const LAST_WRITE_KEY = "lastWrite";
 
 class QashyDatabase extends Dexie {
-  records!: EntityTable<DbRecord, 'key'>;
-  syncOps!: EntityTable<SyncOpRow, 'opId'>;
-  syncState!: EntityTable<SyncStateRow, 'key'>;
-  syncPeers!: EntityTable<SyncPeerRow, 'peerId'>;
-  syncMeta!: EntityTable<SyncMetaRow, 'key'>;
-  syncQuarantine!: EntityTable<SyncQuarantineRow, 'key'>;
-  syncActivity!: EntityTable<SyncActivityRow, 'key'>;
+  records!: EntityTable<DbRecord, "key">;
+  syncOps!: EntityTable<SyncOpRow, "opId">;
+  syncState!: EntityTable<SyncStateRow, "key">;
+  syncPeers!: EntityTable<SyncPeerRow, "peerId">;
+  syncMeta!: EntityTable<SyncMetaRow, "key">;
+  syncQuarantine!: EntityTable<SyncQuarantineRow, "key">;
+  syncActivity!: EntityTable<SyncActivityRow, "key">;
 
   constructor(onBlocked: () => void) {
-    super('qashy');
+    super("qashy");
     this.version(1).stores({
-      records: '&key, type, entityId, updatedAt, deletedAt',
+      records: "&key, type, entityId, updatedAt, deletedAt",
     });
     // No `upgrade()` callback: no existing row changes shape, so Dexie adds the stores and
     // the compound index and leaves `records` exactly as it found it.
@@ -58,41 +64,45 @@ class QashyDatabase extends Dexie {
     // absent `signature` is `''` — a nullable column simply drops out of its index, and
     // `[sealed+deviceId+seq]` is how the sealer finds its work.
     this.version(2).stores({
-      records: '&key, type, entityId, updatedAt, deletedAt, [type+updatedAt]',
-      syncOps: '&opId, [deviceId+seq], [entityType+entityId], hlc, [sealed+deviceId+seq]',
-      syncState: '&key, type, maxHlc',
-      syncPeers: '&peerId',
-      syncMeta: '&key',
-      syncQuarantine: '&key',
+      records: "&key, type, entityId, updatedAt, deletedAt, [type+updatedAt]",
+      syncOps:
+        "&opId, [deviceId+seq], [entityType+entityId], hlc, [sealed+deviceId+seq]",
+      syncState: "&key, type, maxHlc",
+      syncPeers: "&peerId",
+      syncMeta: "&key",
+      syncQuarantine: "&key",
     });
     // Append-only, exactly like the SQLite ladder: a browser that already upgraded to v2 gets
     // the activity store from here, and editing v2 in place would leave it without one.
     this.version(3).stores({
-      syncActivity: '&key',
+      syncActivity: "&key",
     });
     // Structured-clone rows do not need a schema change for a non-indexed field, but existing
     // revoked rows need a fail-closed cutoff. Active rows keep null until revocation records
     // the chain head this device had accepted.
     this.version(4)
-      .stores({ syncPeers: '&peerId' })
+      .stores({ syncPeers: "&peerId" })
       .upgrade((transaction) =>
         transaction
-          .table('syncPeers')
+          .table("syncPeers")
           .toCollection()
-          .modify((row: { revokedAt?: unknown; revokedSeq?: number | null }) => {
-            if (row.revokedSeq === undefined) row.revokedSeq = row.revokedAt ? 0 : null;
-          }),
+          .modify(
+            (row: { revokedAt?: unknown; revokedSeq?: number | null }) => {
+              if (row.revokedSeq === undefined)
+                row.revokedSeq = row.revokedAt ? 0 : null;
+            },
+          ),
       );
     // Without this, shipping a new `version()` while a second tab holds the old one blocks
     // the upgrade *indefinitely* — and two open tabs is a routine PWA state, not an edge
     // case. Closing here lets the upgrading tab through; this tab's next query reopens at
     // the new version.
-    this.on('versionchange', () => {
+    this.on("versionchange", () => {
       this.close();
     });
     // The other side of the same coin: we are the one being blocked, by a tab too old to
     // have the handler above. Nothing can fix that from here, so tell the user.
-    this.on('blocked', onBlocked);
+    this.on("blocked", onBlocked);
   }
 }
 
@@ -118,7 +128,7 @@ class DexieTx implements StorageTx {
   ) {}
 
   async readAll(type: EntityType) {
-    const rows = await this.db.records.where('type').equals(type).toArray();
+    const rows = await this.db.records.where("type").equals(type).toArray();
     rows.sort((a, b) => compareStoredEntities(a.payload, b.payload));
     return rows.map((row) => row.payload);
   }
@@ -206,9 +216,11 @@ export class PlatformStorageAdapter implements StorageAdapter {
   private lastSeenToken: string | null = null;
 
   constructor() {
-    this.db = new QashyDatabase(() => this.blockedListeners.forEach((listener) => listener()));
-    if (typeof globalThis.addEventListener === 'function') {
-      globalThis.addEventListener('storage', (event: StorageEvent) => {
+    this.db = new QashyDatabase(() =>
+      this.blockedListeners.forEach((listener) => listener()),
+    );
+    if (typeof globalThis.addEventListener === "function") {
+      globalThis.addEventListener("storage", (event: StorageEvent) => {
         if (event.key === STORAGE_CHANGE_KEY) this.notifyLocalListeners();
       });
     }
@@ -227,9 +239,11 @@ export class PlatformStorageAdapter implements StorageAdapter {
   private async openDatabase() {
     await this.db.open();
     if (!this.observation) {
-      this.observation = liveQuery(() => this.db.syncMeta.get(LAST_WRITE_KEY)).subscribe({
+      this.observation = liveQuery(() =>
+        this.db.syncMeta.get(LAST_WRITE_KEY),
+      ).subscribe({
         next: (row) => {
-          const token = row?.value ?? '';
+          const token = row?.value ?? "";
           // The first emission is the initial read — it may carry a token left by a previous
           // session, which is history rather than news.
           if (this.lastSeenToken === null) {
@@ -254,7 +268,8 @@ export class PlatformStorageAdapter implements StorageAdapter {
   // change notifications then silently never fired. The native adapter throws for
   // the same misuse; match it so the mistake surfaces on both platforms.
   private database() {
-    if (!this.opened) throw new Error('Qashy database has not been initialized.');
+    if (!this.opened)
+      throw new Error("Qashy database has not been initialized.");
     return this.db;
   }
 
@@ -262,7 +277,10 @@ export class PlatformStorageAdapter implements StorageAdapter {
     return new DexieTx(this.database(), { dirty: false }).readAll(type);
   }
 
-  async transact<T>(work: (tx: StorageTx) => Promise<T>, options?: TransactOptions): Promise<T> {
+  async transact<T>(
+    work: (tx: StorageTx) => Promise<T>,
+    options?: TransactOptions,
+  ): Promise<T> {
     const database = this.database();
     // Dexie joins a nested transaction into its parent rather than starting a second one, so
     // the inner call must not stamp or notify — the outer commit is the only real one.
@@ -272,24 +290,34 @@ export class PlatformStorageAdapter implements StorageAdapter {
     // Every table is in scope even for a records-only write. Dexie scopes a transaction to
     // exactly the tables named, so `tx.table('syncOps')` inside one opened over `records`
     // alone throws NotFoundError — and this transaction always writes the `lastWrite` row.
-    const { value, dirty } = await database.transaction('rw', database.tables, async () => {
-      const current = Dexie.currentTransaction as object;
-      const state = txDirty.get(current) ?? { dirty: false };
-      txDirty.set(current, state);
+    const { value, dirty } = await database.transaction(
+      "rw",
+      database.tables,
+      async () => {
+        const current = Dexie.currentTransaction as object;
+        const state = txDirty.get(current) ?? { dirty: false };
+        txDirty.set(current, state);
 
-      const tx = new DexieTx(database, state);
-      const result = await work(tx);
-      // Read before stamping, because the stamp is itself a write and would set the flag.
-      const wrote = state.dirty;
-      if (wrote && !nested && !options?.silent) {
-        this.writeCounter += 1;
-        await tx
-          .table('syncMeta')
-          .put([{ key: LAST_WRITE_KEY, value: `${this.instanceId}:${this.writeCounter}` }]);
-      }
-      return { value: result, dirty: wrote };
-    });
-    if (dirty && !nested && !options?.silent) this.notifyChange(options?.source);
+        const tx = new DexieTx(database, state);
+        const result = await work(tx);
+        // Read before stamping, because the stamp is itself a write and would set the flag.
+        const wrote = state.dirty;
+        if (wrote && !nested && !options?.silent) {
+          this.writeCounter += 1;
+          await tx
+            .table("syncMeta")
+            .put([
+              {
+                key: LAST_WRITE_KEY,
+                value: `${this.instanceId}:${this.writeCounter}`,
+              },
+            ]);
+        }
+        return { value: result, dirty: wrote };
+      },
+    );
+    if (dirty && !nested && !options?.silent)
+      this.notifyChange(options?.source);
     return value;
   }
 
@@ -299,10 +327,13 @@ export class PlatformStorageAdapter implements StorageAdapter {
   }
 
   async clear(source?: object) {
-    await this.transact(async (tx) => {
-      await tx.clearRecords();
-      await clearSyncTables(tx);
-    }, { source });
+    await this.transact(
+      async (tx) => {
+        await tx.clearRecords();
+        await clearSyncTables(tx);
+      },
+      { source },
+    );
   }
 
   subscribe(listener: (source?: object) => void) {
@@ -330,7 +361,10 @@ export class PlatformStorageAdapter implements StorageAdapter {
   private notifyChange(source?: object) {
     this.notifyLocalListeners(source);
     try {
-      globalThis.localStorage?.setItem(STORAGE_CHANGE_KEY, `${Date.now()}:${Math.random()}`);
+      globalThis.localStorage?.setItem(
+        STORAGE_CHANGE_KEY,
+        `${Date.now()}:${Math.random()}`,
+      );
     } catch {
       // IndexedDB remains usable when localStorage is blocked; visibility
       // reconciliation still refreshes the repository when the app resumes.

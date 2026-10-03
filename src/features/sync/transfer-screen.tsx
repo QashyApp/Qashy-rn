@@ -26,25 +26,25 @@
  * for anyone who would simply rather no server existed.
  */
 
-import * as DocumentPicker from 'expo-document-picker';
-import { File as ExpoFile, Paths } from 'expo-file-system';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as Sharing from 'expo-sharing';
-import { useState } from 'react';
-import { View } from 'react-native';
+import * as DocumentPicker from "expo-document-picker";
+import { File as ExpoFile, Paths } from "expo-file-system";
+import { router, useLocalSearchParams } from "expo-router";
+import * as Sharing from "expo-sharing";
+import { useState } from "react";
+import { View } from "react-native";
 
-import { ActionButton } from '@/components/ui/action-button';
-import { AppText } from '@/components/ui/app-text';
-import { Card } from '@/components/ui/card';
-import { ChoiceChip } from '@/components/ui/choice-chip';
-import { FormField } from '@/components/ui/form-field';
-import { FormScreen } from '@/components/ui/form-screen';
-import { MotionView } from '@/components/ui/motion';
-import { SectionHeader } from '@/components/ui/section-header';
-import { StatusPill } from '@/components/ui/status-pill';
-import { useLocalization } from '@/localization/localization';
-import { useFinanceRepository } from '@/providers/finance-provider';
-import { useSync } from '@/providers/sync-provider';
+import { ActionButton } from "@/components/ui/action-button";
+import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
+import { ChoiceChip } from "@/components/ui/choice-chip";
+import { FormField } from "@/components/ui/form-field";
+import { FormScreen } from "@/components/ui/form-screen";
+import { MotionView } from "@/components/ui/motion";
+import { SectionHeader } from "@/components/ui/section-header";
+import { StatusPill } from "@/components/ui/status-pill";
+import { useLocalization } from "@/localization/localization";
+import { useFinanceRepository } from "@/providers/finance-provider";
+import { useSync } from "@/providers/sync-provider";
 import {
   BACKUP_MIME,
   backupFileName,
@@ -55,23 +55,27 @@ import {
   summarizeArchive,
   type BackupKeySource,
   type VaultArchive,
-} from '@/sync/backup';
+} from "@/sync/backup";
 import {
   MIN_PASSPHRASE_LENGTH,
   RECOVERY_WORD_COUNT,
   isValidRecoveryPhrase,
-} from '@/sync/crypto';
-import type { BundleExport, BundleImport, SyncPassReason } from '@/sync/runtime';
-import { BUNDLE_MIME, bundleFileName } from '@/sync/transport/file';
-import { useQashyTheme } from '@/theme/theme';
-import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
-import { toLocalDate, todayLocal } from '@/utils/date';
-import { hapticSuccess } from '@/utils/haptics';
+} from "@/sync/crypto";
+import type {
+  BundleExport,
+  BundleImport,
+  SyncPassReason,
+} from "@/sync/runtime";
+import { BUNDLE_MIME, bundleFileName } from "@/sync/transport/file";
+import { useQashyTheme } from "@/theme/theme";
+import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import { toLocalDate, todayLocal } from "@/utils/date";
+import { hapticSuccess } from "@/utils/haptics";
 import {
   MAX_SYNC_IMPORT_BYTES,
   MAX_VAULT_IMPORT_BYTES,
   assertFileSize,
-} from '@/utils/file-size';
+} from "@/utils/file-size";
 
 /**
  * Why a `.qashysync` pass did nothing, in the user's terms.
@@ -79,27 +83,32 @@ import {
  * The runtime's `SyncPassReason` is deliberately not a message — the same reason reads
  * differently on a screen offering to pair than on one offering to unlock.
  */
-const BUNDLE_REASONS: Record<Exclude<SyncPassReason, 'ok'>, string> = {
-  disabled: 'Sync is paused on this device. Resume it from the sync screen, then try again.',
-  unpaired: 'This device is not part of a vault, so there is nothing to send or receive.',
-  locked: 'This device’s key is locked. Unlock it from the sync screen and try again.',
-  unavailable: 'This device can’t read its stored key, so nothing can be sealed or opened.',
+const BUNDLE_REASONS: Record<Exclude<SyncPassReason, "ok">, string> = {
+  disabled:
+    "Sync is paused on this device. Resume it from the sync screen, then try again.",
+  unpaired:
+    "This device is not part of a vault, so there is nothing to send or receive.",
+  locked:
+    "This device’s key is locked. Unlock it from the sync screen and try again.",
+  unavailable:
+    "This device can’t read its stored key, so nothing can be sealed or opened.",
 };
 
 /** Which long-running action owns the screen, so two can never be started at once. */
-type Busy = 'backup' | 'open' | 'restore' | 'send' | 'receive' | null;
+type Busy = "backup" | "open" | "restore" | "send" | "receive" | null;
 
 /** A chosen file, held between picking it and knowing the secret that opens it. */
 interface PickedBackup {
   readonly name: string;
   readonly bytes: Uint8Array;
-  readonly wants: BackupKeySource['kind'];
+  readonly wants: BackupKeySource["kind"];
 }
 
 export function TransferScreen() {
   const { radius, space } = useQashyTheme();
   const { status, refresh, setup, runtime } = useSync();
-  const onboardingParam = useLocalSearchParams<{ onboarding?: string }>().onboarding;
+  const onboardingParam = useLocalSearchParams<{ onboarding?: string }>()
+    .onboarding;
   const repository = useFinanceRepository();
   // `t` is only for strings that leave React — the native share sheet's title. Everything
   // rendered through AppText, StatusPill, or the confirm helpers is translated by those.
@@ -108,14 +117,14 @@ export function TransferScreen() {
   const [busy, setBusy] = useState<Busy>(null);
 
   // Export
-  const [lock, setLock] = useState<BackupKeySource['kind']>('passphrase');
-  const [passphrase, setPassphrase] = useState('');
-  const [repeated, setRepeated] = useState('');
+  const [lock, setLock] = useState<BackupKeySource["kind"]>("passphrase");
+  const [passphrase, setPassphrase] = useState("");
+  const [repeated, setRepeated] = useState("");
   const [saved, setSaved] = useState(false);
 
   // Restore
   const [picked, setPicked] = useState<PickedBackup | null>(null);
-  const [secret, setSecret] = useState('');
+  const [secret, setSecret] = useState("");
   /**
    * The decrypted archive, held between "Open" and "Restore".
    *
@@ -142,20 +151,26 @@ export function TransferScreen() {
   const paired = Boolean(status.deviceId);
   // Reached from onboarding's "I already use Qashy": nothing exists here yet, so only the
   // restore half of this screen applies.
-  const firstRun = onboardingParam === '1';
-  const readable = status.keystore === 'unlocked';
+  const firstRun = onboardingParam === "1";
+  const readable = status.keystore === "unlocked";
   const passphraseReady =
     passphrase.length >= MIN_PASSPHRASE_LENGTH && passphrase === repeated;
   const secretReady =
-    picked?.wants === 'recoveryPhrase' ? isValidRecoveryPhrase(secret) : secret.length > 0;
+    picked?.wants === "recoveryPhrase"
+      ? isValidRecoveryPhrase(secret)
+      : secret.length > 0;
 
-  const run = async (kind: Exclude<Busy, null>, work: () => Promise<unknown>, failure: string) => {
+  const run = async (
+    kind: Exclude<Busy, null>,
+    work: () => Promise<unknown>,
+    failure: string,
+  ) => {
     if (busy) return;
     setBusy(kind);
     try {
       await work();
     } catch (reason) {
-      showError(failure, errorMessage(reason, 'Nothing was changed.'));
+      showError(failure, errorMessage(reason, "Nothing was changed."));
     } finally {
       setBusy(null);
     }
@@ -167,23 +182,30 @@ export function TransferScreen() {
 
   const backup = () =>
     run(
-      'backup',
+      "backup",
       async () => {
         setSaved(false);
         const file = await exportVaultBackup(
           setup,
-          lock === 'passphrase' ? { kind: 'passphrase', passphrase } : { kind: 'recoveryPhrase' },
+          lock === "passphrase"
+            ? { kind: "passphrase", passphrase }
+            : { kind: "recoveryPhrase" },
         );
-        await save(backupFileName(todayLocal()), BACKUP_MIME, file, t('Save Qashy vault backup'));
+        await save(
+          backupFileName(todayLocal()),
+          BACKUP_MIME,
+          file,
+          t("Save Qashy vault backup"),
+        );
         // Cleared on success rather than kept for a second export: a passphrase sitting in a
         // form field is one screenshot, one shoulder, or one handed-over phone away from being
         // the thing that opens the file it protects.
-        setPassphrase('');
-        setRepeated('');
+        setPassphrase("");
+        setRepeated("");
         setSaved(true);
         hapticSuccess();
       },
-      'Couldn’t create the backup',
+      "Couldn’t create the backup",
     );
 
   // -------------------------------------------------------------------------
@@ -192,7 +214,7 @@ export function TransferScreen() {
 
   const choose = () =>
     run(
-      'open',
+      "open",
       async () => {
         const file = await pickBytes();
         if (!file) return;
@@ -200,53 +222,53 @@ export function TransferScreen() {
         // turns out not to be a vault backup.
         setArchive(null);
         setPicked(null);
-        setSecret('');
+        setSecret("");
         const wants = readBackupLock(file.bytes);
         if (!wants) {
           showError(
-            'That isn’t a Qashy backup',
-            'Choose the .qashyvault file you saved from Sync → Backup & transfer.',
+            "That isn’t a Qashy backup",
+            "Choose the .qashyvault file you saved from Sync → Backup & transfer.",
           );
           return;
         }
         setPicked({ name: file.name, bytes: file.bytes, wants });
       },
-      'Couldn’t read that file',
+      "Couldn’t read that file",
     );
 
   const open = () =>
     run(
-      'open',
+      "open",
       async () => {
         if (!picked) return;
         const opened = await readVaultBackup(
           picked.bytes,
-          picked.wants === 'passphrase'
-            ? { kind: 'passphrase', passphrase: secret }
-            : { kind: 'recoveryPhrase', phrase: secret },
+          picked.wants === "passphrase"
+            ? { kind: "passphrase", passphrase: secret }
+            : { kind: "recoveryPhrase", phrase: secret },
         );
         // The secret has done its work. Keeping it would leave a recovery phrase in component
         // state for as long as the confirm step is on screen, which is exactly the window
         // somebody walks past.
-        setSecret('');
+        setSecret("");
         setArchive(opened);
       },
-      'Couldn’t open that backup',
+      "Couldn’t open that backup",
     );
 
   const restore = async () => {
     if (!archive || busy) return;
     const confirmed = await confirmDestructive({
-      title: 'Restore this backup?',
+      title: "Restore this backup?",
       // Named plainly, because this is the one button on the screen that destroys something.
       // "Replaces everything" is the whole truth and it is short enough to read in a dialog.
       message:
-        'Everything currently on this device — accounts, transactions, budgets, goals, and schedules — is replaced by what is in this file. This device then continues as the device that made the backup, so do not do this while that device is still in use.',
-      confirmLabel: 'Restore',
+        "Everything currently on this device — accounts, transactions, budgets, goals, and schedules — is replaced by what is in this file. This device then continues as the device that made the backup, so do not do this while that device is still in use.",
+      confirmLabel: "Restore",
     });
     if (!confirmed) return;
     await run(
-      'restore',
+      "restore",
       async () => {
         await restoreVaultBackup(setup, archive);
         setArchive(null);
@@ -260,13 +282,13 @@ export function TransferScreen() {
         // interrupting for — the screen the user lands on next looks the same whether the
         // restore worked or silently did nothing.
         showError(
-          'Backup restored',
-          'Your data is back on this device. Your other devices already know it, so sync continues from where the backup left off.',
+          "Backup restored",
+          "Your data is back on this device. Your other devices already know it, so sync continues from where the backup left off.",
         );
         // From onboarding the restored settings have just completed setup, so go straight in.
-        router.replace(firstRun ? '/overview' : '/sync');
+        router.replace(firstRun ? "/overview" : "/sync");
       },
-      'Couldn’t restore that backup',
+      "Couldn’t restore that backup",
     );
   };
 
@@ -276,51 +298,61 @@ export function TransferScreen() {
 
   const send = () =>
     run(
-      'send',
+      "send",
       async () => {
         setSent(null);
         const bundle = await runtime.exportBundle();
-        if (bundle.reason !== 'ok') {
-          showError('Nothing to send', BUNDLE_REASONS[bundle.reason]);
+        if (bundle.reason !== "ok") {
+          showError("Nothing to send", BUNDLE_REASONS[bundle.reason]);
           return;
         }
         setSent(bundle);
         if (!bundle.frames) return;
-        await save(bundleFileName(todayLocal()), BUNDLE_MIME, bundle.text, t('Send Qashy changes'));
+        await save(
+          bundleFileName(todayLocal()),
+          BUNDLE_MIME,
+          bundle.text,
+          t("Send Qashy changes"),
+        );
         hapticSuccess();
       },
-      'Couldn’t create the sync file',
+      "Couldn’t create the sync file",
     );
 
   const receive = () =>
     run(
-      'receive',
+      "receive",
       async () => {
         setReceived(null);
         const file = await pickText();
         if (!file) return;
         const outcome = await runtime.importBundle(file);
-        if (outcome.reason !== 'ok') {
-          showError('Nothing was applied', BUNDLE_REASONS[outcome.reason]);
+        if (outcome.reason !== "ok") {
+          showError("Nothing was applied", BUNDLE_REASONS[outcome.reason]);
           return;
         }
         setReceived(outcome);
         await refresh();
         if (outcome.applied) hapticSuccess();
       },
-      'Couldn’t import that sync file',
+      "Couldn’t import that sync file",
     );
 
   // -------------------------------------------------------------------------
 
   return (
-    <FormScreen maxWidth={720} contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>
+    <FormScreen
+      maxWidth={720}
+      contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}
+    >
       <Card style={{ gap: space.md }}>
-        <AppText variant="title">{firstRun ? 'Restore a backup' : 'Backup & transfer'}</AppText>
+        <AppText variant="title">
+          {firstRun ? "Restore a backup" : "Backup & transfer"}
+        </AppText>
         <AppText muted>
           {firstRun
-            ? 'Open the .qashyvault file you saved from your old device. Everything in it — accounts, history and your vault key — moves onto this one.'
-            : 'A vault backup is a complete, encrypted copy of this device — its key, its records, and its history — in one file you keep. It is the only thing that can put your data on a replacement device when every device you had is gone.'}
+            ? "Open the .qashyvault file you saved from your old device. Everything in it — accounts, history and your vault key — moves onto this one."
+            : "A vault backup is a complete, encrypted copy of this device — its key, its records, and its history — in one file you keep. It is the only thing that can put your data on a replacement device when every device you had is gone."}
         </AppText>
       </Card>
 
@@ -337,36 +369,43 @@ export function TransferScreen() {
               />
             )}
             <AppText variant="caption" muted>
-              Choose what opens the file later. A passphrase is right for a copy you store
-              somewhere else; the recovery phrase is right if those twenty-four words are already
-              written down and this file will sit beside them.
+              Choose what opens the file later. A passphrase is right for a copy
+              you store somewhere else; the recovery phrase is right if those
+              twenty-four words are already written down and this file will sit
+              beside them.
             </AppText>
             <View
-              accessibilityLabel={t('How the backup is protected')}
+              accessibilityLabel={t("How the backup is protected")}
               accessibilityRole="radiogroup"
-              style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+              style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}
+            >
               <ChoiceChip
                 label="A passphrase"
                 icon="textformat"
-                selected={lock === 'passphrase'}
+                selected={lock === "passphrase"}
                 onPress={() => {
-                  setLock('passphrase');
+                  setLock("passphrase");
                   setSaved(false);
                 }}
               />
               <ChoiceChip
                 label="My recovery phrase"
                 icon="key"
-                selected={lock === 'recoveryPhrase'}
+                selected={lock === "recoveryPhrase"}
                 onPress={() => {
-                  setLock('recoveryPhrase');
+                  setLock("recoveryPhrase");
                   setSaved(false);
                 }}
               />
             </View>
 
-            {lock === 'passphrase' ? (
-              <MotionView variant="up" exit animateLayout style={{ gap: space.md }}>
+            {lock === "passphrase" ? (
+              <MotionView
+                variant="up"
+                exit
+                animateLayout
+                style={{ gap: space.md }}
+              >
                 <FormField
                   label="Passphrase"
                   value={passphrase}
@@ -392,7 +431,7 @@ export function TransferScreen() {
                   textContentType="newPassword"
                   error={
                     repeated && passphrase !== repeated
-                      ? 'These two do not match.'
+                      ? "These two do not match."
                       : undefined
                   }
                 />
@@ -400,19 +439,24 @@ export function TransferScreen() {
             ) : (
               <MotionView variant="up" exit animateLayout>
                 <AppText variant="caption" muted>
-                  Nothing to type. The file is sealed with the key this device already holds, so
-                  the phrase that opens it is this vault’s own — which also means a file written
-                  this way cannot be opened by a phrase you mistyped into a box.
+                  Nothing to type. The file is sealed with the key this device
+                  already holds, so the phrase that opens it is this vault’s own
+                  — which also means a file written this way cannot be opened by
+                  a phrase you mistyped into a box.
                 </AppText>
               </MotionView>
             )}
 
             <ActionButton
-              title={busy === 'backup' ? 'Working…' : 'Create backup'}
+              title={busy === "backup" ? "Working…" : "Create backup"}
               icon="tray"
               size="large"
-              busy={busy === 'backup'}
-              disabled={Boolean(busy) || !readable || (lock === 'passphrase' && !passphraseReady)}
+              busy={busy === "backup"}
+              disabled={
+                Boolean(busy) ||
+                !readable ||
+                (lock === "passphrase" && !passphraseReady)
+              }
               onPress={() => void backup()}
             />
             {saved ? (
@@ -426,42 +470,60 @@ export function TransferScreen() {
               </MotionView>
             ) : null}
             <AppText variant="caption" muted>
-              Treat the file exactly like the recovery phrase: whoever can open it can read every
-              account, transaction, and balance you have. Storing it somewhere only you can reach
-              is the whole job.
+              Treat the file exactly like the recovery phrase: whoever can open
+              it can read every account, transaction, and balance you have.
+              Storing it somewhere only you can reach is the whole job.
             </AppText>
           </Card>
 
           <SectionHeader title="Sync with a file" />
           <Card style={{ gap: space.md }}>
             <AppText variant="caption" muted>
-              Carry your changes to another of your devices yourself — AirDrop, a USB stick, an
-              email to yourself. No relay, no signaling, no network of any kind is involved. This
-              is the path when the relay is down, or when two devices are never online together.
+              Carry your changes to another of your devices yourself — AirDrop,
+              a USB stick, an email to yourself. No relay, no signaling, no
+              network of any kind is involved. This is the path when the relay
+              is down, or when two devices are never online together.
             </AppText>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+            <View
+              style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}
+            >
               <ActionButton
-                title={busy === 'send' ? 'Sealing…' : 'Export changes'}
+                title={busy === "send" ? "Sealing…" : "Export changes"}
                 icon="square.and.arrow.up"
-                busy={busy === 'send'}
+                busy={busy === "send"}
                 disabled={Boolean(busy)}
                 onPress={() => void send()}
               />
               <ActionButton
-                title={busy === 'receive' ? 'Applying…' : 'Import a sync file'}
+                title={busy === "receive" ? "Applying…" : "Import a sync file"}
                 icon="square.and.arrow.down"
                 variant="secondary"
-                busy={busy === 'receive'}
+                busy={busy === "receive"}
                 disabled={Boolean(busy)}
                 onPress={() => void receive()}
               />
             </View>
 
             {sent ? (
-              <MotionView variant="up" exit animateLayout style={{ gap: space.sm }}>
+              <MotionView
+                variant="up"
+                exit
+                animateLayout
+                style={{ gap: space.sm }}
+              >
                 {sent.frames ? (
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-                    <Tally value={sent.frames} label="Sealed batches" tone="accent" />
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      flexWrap: "wrap",
+                      gap: space.sm,
+                    }}
+                  >
+                    <Tally
+                      value={sent.frames}
+                      label="Sealed batches"
+                      tone="accent"
+                    />
                     <Tally value={sent.peers} label="Devices covered" />
                   </View>
                 ) : (
@@ -474,24 +536,45 @@ export function TransferScreen() {
                 )}
                 {sent.frames ? (
                   <AppText variant="caption" muted>
-                    Exporting again later is harmless. Changes stay queued until a device confirms
-                    it received them, so a file that never arrives costs nothing but a second export.
+                    Exporting again later is harmless. Changes stay queued until
+                    a device confirms it received them, so a file that never
+                    arrives costs nothing but a second export.
                   </AppText>
                 ) : null}
               </MotionView>
             ) : null}
 
             {received ? (
-              <MotionView variant="up" exit animateLayout style={{ gap: space.sm }}>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-                  <Tally value={received.applied} label="Changes applied" tone="accent" />
+              <MotionView
+                variant="up"
+                exit
+                animateLayout
+                style={{ gap: space.sm }}
+              >
+                <View
+                  style={{
+                    flexDirection: "row",
+                    flexWrap: "wrap",
+                    gap: space.sm,
+                  }}
+                >
+                  <Tally
+                    value={received.applied}
+                    label="Changes applied"
+                    tone="accent"
+                  />
                   <Tally value={received.skipped} label="For another device" />
-                  <Tally value={received.rejected} label="Refused" tone={received.rejected ? 'negative' : 'plain'} />
+                  <Tally
+                    value={received.rejected}
+                    label="Refused"
+                    tone={received.rejected ? "negative" : "plain"}
+                  />
                 </View>
                 <AppText variant="caption" muted>
-                  Batches meant for a different device in this vault are skipped, not lost — one
-                  file carries a share for each of them. Anything refused is recorded on the sync
-                  screen with the reason.
+                  Batches meant for a different device in this vault are
+                  skipped, not lost — one file carries a share for each of them.
+                  Anything refused is recorded on the sync screen with the
+                  reason.
                 </AppText>
               </MotionView>
             ) : null}
@@ -500,9 +583,10 @@ export function TransferScreen() {
           <SectionHeader title="Restoring onto this device" />
           <Card>
             <AppText variant="caption" muted>
-              Not offered here, because this device already holds a vault and restoring would
-              replace it. A device that needs restoring is one with nothing on it — or one that
-              has left this vault from Sync → Danger zone first.
+              Not offered here, because this device already holds a vault and
+              restoring would replace it. A device that needs restoring is one
+              with nothing on it — or one that has left this vault from Sync →
+              Danger zone first.
             </AppText>
           </Card>
         </>
@@ -511,24 +595,38 @@ export function TransferScreen() {
           <SectionHeader title="Restore from a backup" />
           <Card style={{ gap: space.md }}>
             <AppText variant="caption" muted>
-              Everything currently on this device is replaced by what the file holds. The restored
-              device carries on as the one that made the backup, so restore onto a replacement —
-              never alongside a device that is still in use.
+              Everything currently on this device is replaced by what the file
+              holds. The restored device carries on as the one that made the
+              backup, so restore onto a replacement — never alongside a device
+              that is still in use.
             </AppText>
             <ActionButton
-              title={picked ? 'Choose a different file' : 'Choose a backup file'}
+              title={
+                picked ? "Choose a different file" : "Choose a backup file"
+              }
               icon="folder"
-              variant={picked ? 'secondary' : 'primary'}
+              variant={picked ? "secondary" : "primary"}
               size="large"
-              busy={busy === 'open' && !picked}
+              busy={busy === "open" && !picked}
               disabled={Boolean(busy)}
               onPress={() => void choose()}
             />
 
             {picked && !archive ? (
-              <MotionView variant="up" exit animateLayout style={{ gap: space.md }}>
-                <StatusPill label={picked.name} icon="doc" tone="neutral" literal style={{ borderRadius: radius.control }} />
-                {picked.wants === 'passphrase' ? (
+              <MotionView
+                variant="up"
+                exit
+                animateLayout
+                style={{ gap: space.md }}
+              >
+                <StatusPill
+                  label={picked.name}
+                  icon="doc"
+                  tone="neutral"
+                  literal
+                  style={{ borderRadius: radius.control }}
+                />
+                {picked.wants === "passphrase" ? (
                   <FormField
                     label="Passphrase"
                     value={secret}
@@ -555,23 +653,30 @@ export function TransferScreen() {
                   />
                 )}
                 <ActionButton
-                  title={busy === 'open' ? 'Opening…' : 'Open backup'}
+                  title={busy === "open" ? "Opening…" : "Open backup"}
                   icon="lock.open"
                   size="large"
-                  busy={busy === 'open'}
+                  busy={busy === "open"}
                   disabled={Boolean(busy) || !secretReady}
                   onPress={() => void open()}
                 />
               </MotionView>
             ) : null}
 
-            {archive ? <Preview archive={archive} busy={busy} onRestore={() => void restore()} /> : null}
+            {archive ? (
+              <Preview
+                archive={archive}
+                busy={busy}
+                onRestore={() => void restore()}
+              />
+            ) : null}
           </Card>
 
           <Card>
             <AppText variant="caption" muted>
-              No backup file? A device that still has your data can add this one from Sync → Add a
-              device instead, which copies the vault across without a file at all.
+              No backup file? A device that still has your data can add this one
+              from Sync → Add a device instead, which copies the vault across
+              without a file at all.
             </AppText>
           </Card>
         </>
@@ -602,7 +707,9 @@ function Preview({
   // string showed a different date to anyone away from UTC around midnight.
   const madeOnDate = (createdAt: string) => {
     const made = new Date(createdAt);
-    return Number.isNaN(made.getTime()) ? createdAt.slice(0, 10) : toLocalDate(made);
+    return Number.isNaN(made.getTime())
+      ? createdAt.slice(0, 10)
+      : toLocalDate(made);
   };
   return (
     <MotionView variant="up" exit animateLayout style={{ gap: space.md }}>
@@ -614,20 +721,28 @@ function Preview({
       />
       <View style={{ gap: space.xxs }}>
         <Detail label="Made on" value={madeOnDate(summary.createdAt)} />
-        <Detail label="Made by" value={summary.deviceName || '—'} />
-        <Detail label="Base currency" value={summary.baseCurrency || '—'} />
+        <Detail label="Made by" value={summary.deviceName || "—"} />
+        <Detail label="Base currency" value={summary.baseCurrency || "—"} />
       </View>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
-        <Tally value={summary.transactionCount} label="Transactions" tone="accent" />
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
+        <Tally
+          value={summary.transactionCount}
+          label="Transactions"
+          tone="accent"
+        />
         <Tally value={summary.recordCount} label="Records" />
         <Tally value={summary.peerCount} label="Other devices" />
       </View>
       <ActionButton
-        title={busy === 'restore' ? 'Restoring…' : 'Replace this device with this backup'}
+        title={
+          busy === "restore"
+            ? "Restoring…"
+            : "Replace this device with this backup"
+        }
         icon="arrow.down.circle"
         variant="danger"
         size="large"
-        busy={busy === 'restore'}
+        busy={busy === "restore"}
         disabled={Boolean(busy)}
         onPress={onRestore}
       />
@@ -642,9 +757,18 @@ function Preview({
 function Detail({ label, value }: { label: string; value: string }) {
   const { space } = useQashyTheme();
   return (
-    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: space.sm }}>
+    <View
+      style={{
+        flexDirection: "row",
+        flexWrap: "wrap",
+        alignItems: "baseline",
+        gap: space.sm,
+      }}
+    >
       <AppText variant="label">{label}</AppText>
-      <AppText literal variant="caption" muted>{value}</AppText>
+      <AppText literal variant="caption" muted>
+        {value}
+      </AppText>
     </View>
   );
 }
@@ -659,11 +783,11 @@ function Detail({ label, value }: { label: string; value: string }) {
 function Tally({
   value,
   label,
-  tone = 'plain',
+  tone = "plain",
 }: {
   value: number;
   label: string;
-  tone?: 'accent' | 'negative' | 'plain';
+  tone?: "accent" | "negative" | "plain";
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
@@ -674,19 +798,28 @@ function Tally({
         minWidth: 108,
         padding: space.md,
         borderRadius: radius.card,
-        borderCurve: 'continuous',
-        backgroundColor: tone === 'accent' ? theme.accentContainer : theme.surfaceMuted,
-      }}>
+        borderCurve: "continuous",
+        backgroundColor:
+          tone === "accent" ? theme.accentContainer : theme.surfaceMuted,
+      }}
+    >
       <AppText
         literal
         variant="headline"
         style={{
           color:
-            tone === 'accent' ? theme.onAccentContainer : tone === 'negative' ? theme.negative : theme.text,
-        }}>
+            tone === "accent"
+              ? theme.onAccentContainer
+              : tone === "negative"
+                ? theme.negative
+                : theme.text,
+        }}
+      >
         {String(value)}
       </AppText>
-      <AppText variant="caption" muted>{label}</AppText>
+      <AppText variant="caption" muted>
+        {label}
+      </AppText>
     </View>
   );
 }
@@ -707,17 +840,23 @@ function Tally({
  * one sealed to a passphrase or the vault key, the other a set of frames sealed per device —
  * so what is left behind is not readable by whatever else can see the cache.
  */
-async function save(name: string, mime: string, data: string | Uint8Array, dialogTitle: string) {
-  if (process.env.EXPO_OS === 'web') {
+async function save(
+  name: string,
+  mime: string,
+  data: string | Uint8Array,
+  dialogTitle: string,
+) {
+  if (process.env.EXPO_OS === "web") {
     // `Blob` rejects a view that might be backed by a SharedArrayBuffer, which is what a bare
     // `Uint8Array` widens to. Copying into a fresh view is the type-safe way to say it is not —
     // one extra copy of a file that is about to be written to disk anyway.
-    const part: BlobPart = typeof data === 'string' ? data : new Uint8Array(data);
+    const part: BlobPart =
+      typeof data === "string" ? data : new Uint8Array(data);
     const url = URL.createObjectURL(new Blob([part], { type: mime }));
-    const anchor = document.createElement('a');
+    const anchor = document.createElement("a");
     anchor.href = url;
     anchor.download = name;
-    anchor.style.display = 'none';
+    anchor.style.display = "none";
     document.body.appendChild(anchor);
     anchor.click();
     window.setTimeout(() => {
@@ -730,7 +869,8 @@ async function save(name: string, mime: string, data: string | Uint8Array, dialo
   if (file.exists) file.delete();
   file.create();
   file.write(data);
-  if (await Sharing.isAvailableAsync()) await Sharing.shareAsync(file.uri, { mimeType: mime, dialogTitle });
+  if (await Sharing.isAvailableAsync())
+    await Sharing.shareAsync(file.uri, { mimeType: mime, dialogTitle });
 }
 
 /**
@@ -741,9 +881,16 @@ async function save(name: string, mime: string, data: string | Uint8Array, dialo
  * type the provider reports, which for an unknown extension is frequently blank. The file's
  * own magic bytes are what decides whether it is one of ours, one step later.
  */
-const PICKER = { type: '*/*', copyToCacheDirectory: true, base64: false } as const;
+const PICKER = {
+  type: "*/*",
+  copyToCacheDirectory: true,
+  base64: false,
+} as const;
 
-async function pickBytes(): Promise<{ name: string; bytes: Uint8Array } | null> {
+async function pickBytes(): Promise<{
+  name: string;
+  bytes: Uint8Array;
+} | null> {
   const result = await DocumentPicker.getDocumentAsync(PICKER);
   if (result.canceled) return null;
   const asset = result.assets[0];
@@ -751,7 +898,7 @@ async function pickBytes(): Promise<{ name: string; bytes: Uint8Array } | null> 
   assertFileSize(
     asset.size ?? asset.file?.size ?? nativeFile?.size,
     MAX_VAULT_IMPORT_BYTES,
-    'Vault backup',
+    "Vault backup",
   );
   const bytes = asset.file
     ? new Uint8Array(await asset.file.arrayBuffer())
@@ -767,7 +914,7 @@ async function pickText(): Promise<string | null> {
   assertFileSize(
     asset.size ?? asset.file?.size ?? nativeFile?.size,
     MAX_SYNC_IMPORT_BYTES,
-    'Sync file',
+    "Sync file",
   );
   return asset.file ? await asset.file.text() : await nativeFile!.text();
 }

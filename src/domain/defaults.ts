@@ -1,75 +1,82 @@
-import { getLocales } from 'expo-localization';
+import { getLocales } from "expo-localization";
 
-import type { AppSettings, Category, FinanceState } from '@/domain/models';
-import { createEntity, makeId } from '@/utils/entity';
-import { validateLocale } from '@/utils/form-validation';
-import { isSupportedCurrencyCode } from '@/utils/money';
-import { DEFAULT_THEME_ID } from '@/theme/themes/types';
-import { QASHY_INDIGO } from '@/theme/tokens';
+import type { AppSettings, Category, FinanceState } from "@/domain/models";
+import { createEntity, makeId } from "@/utils/entity";
+import { validateLocale } from "@/utils/form-validation";
+import { isSupportedCurrencyCode } from "@/utils/money";
+import { DEFAULT_THEME_ID } from "@/theme/themes/types";
+import { QASHY_INDIGO } from "@/theme/tokens";
 
 export const QASHY_ACCENT: string = QASHY_INDIGO;
 
 export function initialLocalePreferences(
-  saved?: Pick<AppSettings, 'locale' | 'baseCurrency'>,
+  saved?: Pick<AppSettings, "locale" | "baseCurrency">,
 ) {
   const deviceLocale = getLocales()[0];
-  const detectedLocale = validateLocale(deviceLocale?.languageTag ?? '')
-    ? 'en-US'
+  const detectedLocale = validateLocale(deviceLocale?.languageTag ?? "")
+    ? "en-US"
     : deviceLocale.languageTag;
-  const detectedCurrency = deviceLocale?.currencyCode?.toUpperCase() ?? '';
-  const fallbackCurrency = isSupportedCurrencyCode(detectedCurrency) ? detectedCurrency : 'USD';
-  const savedLocale = saved?.locale.trim() ?? '';
-  const savedCurrency = saved?.baseCurrency.trim().toUpperCase() ?? '';
+  const detectedCurrency = deviceLocale?.currencyCode?.toUpperCase() ?? "";
+  const fallbackCurrency = isSupportedCurrencyCode(detectedCurrency)
+    ? detectedCurrency
+    : "USD";
+  const savedLocale = saved?.locale.trim() ?? "";
+  const savedCurrency = saved?.baseCurrency.trim().toUpperCase() ?? "";
   return {
     locale: validateLocale(savedLocale) ? detectedLocale : savedLocale,
-    baseCurrency: isSupportedCurrencyCode(savedCurrency) ? savedCurrency : fallbackCurrency,
+    baseCurrency: isSupportedCurrencyCode(savedCurrency)
+      ? savedCurrency
+      : fallbackCurrency,
   };
 }
 
 export const initialSettings = (): AppSettings => {
   const { locale, baseCurrency } = initialLocalePreferences();
   return createEntity({
-    id: 'settings',
+    id: "settings",
     onboardingComplete: false,
     locale,
     baseCurrency,
     themeId: DEFAULT_THEME_ID,
-    themeMode: 'system',
-    accentSource: 'system',
+    themeMode: "system",
+    accentSource: "system",
     accentHex: QASHY_ACCENT,
     swipeBetweenMonths: false,
   });
 };
 
 const CATEGORY_SEEDS = [
-  ['Groceries', 'cart', '#5F9F78', 'expense'],
-  ['Dining', 'fork.knife', '#E08C5A', 'expense'],
-  ['Transport', 'car', '#5B8DEF', 'expense'],
-  ['Home', 'house', '#8B76D8', 'expense'],
-  ['Health', 'heart', '#E16B75', 'expense'],
-  ['Fun', 'sparkles', '#C47ED0', 'expense'],
-  ['Salary', 'banknote', '#3B9A69', 'income'],
-  ['Other income', 'plus.circle', '#4C9CB5', 'income'],
+  ["Groceries", "cart", "#5F9F78", "expense"],
+  ["Dining", "fork.knife", "#E08C5A", "expense"],
+  ["Transport", "car", "#5B8DEF", "expense"],
+  ["Home", "house", "#8B76D8", "expense"],
+  ["Health", "heart", "#E16B75", "expense"],
+  ["Fun", "sparkles", "#C47ED0", "expense"],
+  ["Salary", "banknote", "#3B9A69", "income"],
+  ["Other income", "plus.circle", "#4C9CB5", "income"],
 ] as const;
 
-const HEBREW_CATEGORY_NAMES: Record<(typeof CATEGORY_SEEDS)[number][0], string> = {
-  Groceries: 'מצרכים',
-  Dining: 'מסעדות',
-  Transport: 'תחבורה',
-  Home: 'בית',
-  Health: 'בריאות',
-  Fun: 'פנאי',
-  Salary: 'משכורת',
-  'Other income': 'הכנסה אחרת',
+const HEBREW_CATEGORY_NAMES: Record<
+  (typeof CATEGORY_SEEDS)[number][0],
+  string
+> = {
+  Groceries: "מצרכים",
+  Dining: "מסעדות",
+  Transport: "תחבורה",
+  Home: "בית",
+  Health: "בריאות",
+  Fun: "פנאי",
+  Salary: "משכורת",
+  "Other income": "הכנסה אחרת",
 };
 
 export function defaultAccountName(locale: string) {
-  return locale.toLocaleLowerCase().startsWith('he') ? 'יומיומי' : 'Everyday';
+  return locale.toLocaleLowerCase().startsWith("he") ? "יומיומי" : "Everyday";
 }
 
 /** The starter categories as they will be named, for showing before they exist. */
-export function defaultCategoryPreview(locale = 'en-US') {
-  const hebrew = locale.toLocaleLowerCase().startsWith('he');
+export function defaultCategoryPreview(locale = "en-US") {
+  const hebrew = locale.toLocaleLowerCase().startsWith("he");
   return CATEGORY_SEEDS.map(([name, icon, color, kind]) => ({
     name: hebrew ? HEBREW_CATEGORY_NAMES[name] : name,
     icon,
@@ -78,8 +85,8 @@ export function defaultCategoryPreview(locale = 'en-US') {
   }));
 }
 
-export function createDefaultCategories(locale = 'en-US'): Category[] {
-  const hebrew = locale.toLocaleLowerCase().startsWith('he');
+export function createDefaultCategories(locale = "en-US"): Category[] {
+  const hebrew = locale.toLocaleLowerCase().startsWith("he");
   const firstTimestamp = Date.now() - CATEGORY_SEEDS.length;
   return CATEGORY_SEEDS.map(([name, icon, color, kind], index) => {
     const entity = createEntity({

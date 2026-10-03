@@ -16,26 +16,39 @@
  * disappearing.
  */
 
-const { spawnSync } = require('node:child_process');
-const path = require('node:path');
+const { spawnSync } = require("node:child_process");
+const path = require("node:path");
 
 // Invoke TypeScript's JS entry point directly rather than the `.bin` shim, so no
 // shell is involved and the call behaves identically on Windows and POSIX.
-const tsc = path.join(__dirname, '..', 'node_modules', 'typescript', 'bin', 'tsc');
-const result = spawnSync(process.execPath, [tsc, '--noEmit', '--pretty', 'false'], { encoding: 'utf8' });
+const tsc = path.join(
+  __dirname,
+  "..",
+  "node_modules",
+  "typescript",
+  "bin",
+  "tsc",
+);
+const result = spawnSync(
+  process.execPath,
+  [tsc, "--noEmit", "--pretty", "false"],
+  { encoding: "utf8" },
+);
 
 if (result.error) {
   console.error(`Could not run tsc: ${result.error.message}`);
   process.exit(1);
 }
 
-const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+const output = `${result.stdout ?? ""}${result.stderr ?? ""}`;
 const lines = output.split(/\r?\n/);
 
 // A diagnostic starts at column 0 with `path(line,col): error TSxxxx: ...`;
 // continuation lines are indented and belong to the diagnostic above them.
-const isDiagnosticStart = (line) => /^\S.*\(\d+,\d+\): (error|warning) TS\d+:/.test(line);
-const isVendor = (line) => line.startsWith('node_modules/') || line.startsWith('node_modules\\');
+const isDiagnosticStart = (line) =>
+  /^\S.*\(\d+,\d+\): (error|warning) TS\d+:/.test(line);
+const isVendor = (line) =>
+  line.startsWith("node_modules/") || line.startsWith("node_modules\\");
 
 const projectLines = [];
 const vendorFiles = new Set();
@@ -44,7 +57,7 @@ let inVendorDiagnostic = false;
 for (const line of lines) {
   if (isDiagnosticStart(line)) {
     inVendorDiagnostic = isVendor(line);
-    if (inVendorDiagnostic) vendorFiles.add(line.slice(0, line.indexOf('(')));
+    if (inVendorDiagnostic) vendorFiles.add(line.slice(0, line.indexOf("(")));
     else projectLines.push(line);
     continue;
   }
@@ -53,7 +66,7 @@ for (const line of lines) {
 
 const projectErrorCount = projectLines.filter(isDiagnosticStart).length;
 
-if (projectLines.length) console.error(projectLines.join('\n'));
+if (projectLines.length) console.error(projectLines.join("\n"));
 
 if (vendorFiles.size) {
   console.error(
@@ -67,4 +80,4 @@ if (projectErrorCount) {
   process.exit(1);
 }
 
-console.log('No type errors in project code.');
+console.log("No type errors in project code.");

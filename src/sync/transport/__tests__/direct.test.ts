@@ -11,16 +11,19 @@
  * this whole design exists to stop needing.
  */
 
-import { createDeviceIdentity, createVaultRootKey } from '@/sync/crypto';
-import type { IceServer } from '@/sync/transport/endpoints';
-import { DirectTransport, type DirectTransportDeps } from '@/sync/transport/direct';
-import { UNAVAILABLE_RTC } from '@/sync/transport/webrtc-core';
-import { FakeRtcNetwork } from '@/sync/transport/__tests__/rtc-double';
-import { SocketHub, flush } from '@/sync/transport/__tests__/socket-double';
+import { createDeviceIdentity, createVaultRootKey } from "@/sync/crypto";
+import type { IceServer } from "@/sync/transport/endpoints";
+import {
+  DirectTransport,
+  type DirectTransportDeps,
+} from "@/sync/transport/direct";
+import { UNAVAILABLE_RTC } from "@/sync/transport/webrtc-core";
+import { FakeRtcNetwork } from "@/sync/transport/__tests__/rtc-double";
+import { SocketHub, flush } from "@/sync/transport/__tests__/socket-double";
 
-const BASE = 'https://relay.example.com';
-const RENDEZVOUS = 'MFRGGZDFMZTWQ2LKNNWG23TPOBYXE43UOV3HO6DZPIZQ';
-const ICE: readonly IceServer[] = [{ urls: 'stun:stun.example.com:19302' }];
+const BASE = "https://relay.example.com";
+const RENDEZVOUS = "MFRGGZDFMZTWQ2LKNNWG23TPOBYXE43UOV3HO6DZPIZQ";
+const ICE: readonly IceServer[] = [{ urls: "stun:stun.example.com:19302" }];
 const CONNECT_TIMEOUT_MS = 50;
 
 const vaultKey = createVaultRootKey();
@@ -64,7 +67,8 @@ const rig = (overrides: Partial<DirectTransportDeps> = {}): Rig => {
     a: new DirectTransport({
       ...shape,
       identity: first,
-      onSession: (peerId, session) => sessions.push({ peerId, sas: session.sas }),
+      onSession: (peerId, session) =>
+        sessions.push({ peerId, sas: session.sas }),
     }),
     b: new DirectTransport({ ...shape, identity: second }),
   };
@@ -73,21 +77,21 @@ const rig = (overrides: Partial<DirectTransportDeps> = {}): Rig => {
 /** Both sides have to be connecting at once — the handshake is a strict alternation. */
 const meet = (target: Rig, signal = new AbortController().signal) =>
   Promise.all([
-    target.a.connect({ deviceId: target.bId, name: 'B' }, signal),
-    target.b.connect({ deviceId: target.aId, name: 'A' }, signal),
+    target.a.connect({ deviceId: target.bId, name: "B" }, signal),
+    target.b.connect({ deviceId: target.aId, name: "A" }, signal),
   ]);
 
-describe('DirectTransport', () => {
-  it('is a p2p transport', () => {
-    expect(rig().a.kind).toBe('p2p');
+describe("DirectTransport", () => {
+  it("is a p2p transport", () => {
+    expect(rig().a.kind).toBe("p2p");
   });
 
-  it('reports whether this build can do it at all', () => {
+  it("reports whether this build can do it at all", () => {
     expect(rig().a.available).toBe(true);
     expect(rig({ factory: UNAVAILABLE_RTC }).a.available).toBe(false);
   });
 
-  it('connects two devices and hands back a channel for each', async () => {
+  it("connects two devices and hands back a channel for each", async () => {
     const target = rig();
     const [left, right] = await meet(target);
 
@@ -97,11 +101,14 @@ describe('DirectTransport', () => {
     await Promise.all([target.a.close(), target.b.close()]);
   });
 
-  it('gives the relay a turn promptly when no peer enters the rendezvous', async () => {
+  it("gives the relay a turn promptly when no peer enters the rendezvous", async () => {
     jest.useFakeTimers();
     try {
       const target = rig({ peerWaitTimeoutMs: 1 });
-      const attempt = target.a.connect({ deviceId: target.bId, name: 'B' }, new AbortController().signal);
+      const attempt = target.a.connect(
+        { deviceId: target.bId, name: "B" },
+        new AbortController().signal,
+      );
 
       await flush();
       jest.advanceTimersByTime(1);
@@ -113,7 +120,7 @@ describe('DirectTransport', () => {
     }
   });
 
-  it('reports the SAS so the pairing screen can show it', async () => {
+  it("reports the SAS so the pairing screen can show it", async () => {
     const target = rig();
     await meet(target);
 
@@ -124,11 +131,14 @@ describe('DirectTransport', () => {
     await Promise.all([target.a.close(), target.b.close()]);
   });
 
-  it('reuses the connection for a peer it already reached', async () => {
+  it("reuses the connection for a peer it already reached", async () => {
     const target = rig();
     const [left] = await meet(target);
 
-    const again = await target.a.connect({ deviceId: target.bId, name: 'B' }, new AbortController().signal);
+    const again = await target.a.connect(
+      { deviceId: target.bId, name: "B" },
+      new AbortController().signal,
+    );
     expect(again).toBe(left);
     // No second rendezvous, and no second SAS to confuse the user with.
     expect(target.sessions).toHaveLength(1);
@@ -136,7 +146,7 @@ describe('DirectTransport', () => {
     await Promise.all([target.a.close(), target.b.close()]);
   });
 
-  it('closes the rendezvous once it has served its purpose', async () => {
+  it("closes the rendezvous once it has served its purpose", async () => {
     const target = rig();
     await meet(target);
     await flush();
@@ -149,12 +159,12 @@ describe('DirectTransport', () => {
     await Promise.all([target.a.close(), target.b.close()]);
   });
 
-  it('closes the rendezvous even when the connection fails', async () => {
+  it("closes the rendezvous even when the connection fails", async () => {
     const target = rig();
     const controller = new AbortController();
 
     const attempt = target.a
-      .connect({ deviceId: target.bId, name: 'B' }, controller.signal)
+      .connect({ deviceId: target.bId, name: "B" }, controller.signal)
       .catch((error: unknown) => error);
     await flush();
     controller.abort();
@@ -163,12 +173,12 @@ describe('DirectTransport', () => {
     expect(target.hub.sockets).toHaveLength(0);
   });
 
-  it('does not cache a failed attempt', async () => {
+  it("does not cache a failed attempt", async () => {
     const target = rig();
     const controller = new AbortController();
 
     const failed = target.a
-      .connect({ deviceId: target.bId, name: 'B' }, controller.signal)
+      .connect({ deviceId: target.bId, name: "B" }, controller.signal)
       .catch((error: unknown) => error);
     await flush();
     controller.abort();
@@ -183,14 +193,18 @@ describe('DirectTransport', () => {
     await Promise.all([target.a.close(), target.b.close()]);
   });
 
-  it('gives each peer its own rendezvous rather than sharing one socket', async () => {
+  it("gives each peer its own rendezvous rather than sharing one socket", async () => {
     const target = rig();
     const signal = new AbortController().signal;
 
     // Two peers on one wire would interleave their hellos, and the transcript — which is the
     // only thing that authenticates a peer — would be computed over whichever arrived first.
-    const first = target.a.connect({ deviceId: target.bId, name: 'B' }, signal).catch(() => null);
-    const second = target.a.connect({ deviceId: 'device-c', name: 'C' }, signal).catch(() => null);
+    const first = target.a
+      .connect({ deviceId: target.bId, name: "B" }, signal)
+      .catch(() => null);
+    const second = target.a
+      .connect({ deviceId: "device-c", name: "C" }, signal)
+      .catch(() => null);
     await flush();
 
     expect(target.hub.opened).toHaveLength(2);
@@ -204,7 +218,7 @@ describe('DirectTransport', () => {
     await Promise.all([first, second]);
   });
 
-  it('carries frames over the channel it returned', async () => {
+  it("carries frames over the channel it returned", async () => {
     const target = rig();
     const [left, right] = await meet(target);
 
@@ -218,7 +232,7 @@ describe('DirectTransport', () => {
     await Promise.all([target.a.close(), target.b.close()]);
   });
 
-  it('closes every connection it holds', async () => {
+  it("closes every connection it holds", async () => {
     const target = rig();
     const [left] = await meet(target);
 
@@ -231,11 +245,14 @@ describe('DirectTransport', () => {
     await target.b.close();
   });
 
-  it('refuses on a build without WebRTC without opening a rendezvous', async () => {
+  it("refuses on a build without WebRTC without opening a rendezvous", async () => {
     const target = rig({ factory: UNAVAILABLE_RTC });
 
     await expect(
-      target.a.connect({ deviceId: target.bId, name: 'B' }, new AbortController().signal),
+      target.a.connect(
+        { deviceId: target.bId, name: "B" },
+        new AbortController().signal,
+      ),
     ).rejects.toThrow();
 
     // It opened the socket to reach the rendezvous and closed it again on the way out; what it

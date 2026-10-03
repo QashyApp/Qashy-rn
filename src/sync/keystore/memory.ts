@@ -11,8 +11,8 @@
  * It is never wired into a real build.
  */
 
-import { BaseKeystore } from '@/sync/keystore/base';
-import type { SyncKeystore } from '@/sync/keystore/types';
+import { BaseKeystore } from "@/sync/keystore/base";
+import type { SyncKeystore } from "@/sync/keystore/types";
 
 /**
  * The bytes on "disk". Held outside the keystore instance so two instances can share one,
@@ -24,7 +24,7 @@ export interface MemoryKeystoreCell {
 }
 
 export class MemoryKeystore extends BaseKeystore {
-  readonly kind: SyncKeystore['kind'] = 'memory';
+  readonly kind: SyncKeystore["kind"] = "memory";
   /** Widened from the literal so a suite can subclass this to stand in for a platform that has no gate. */
   readonly supportsPassphrase: boolean = true;
 

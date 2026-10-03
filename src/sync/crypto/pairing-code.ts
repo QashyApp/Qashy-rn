@@ -13,13 +13,24 @@
  * difference between a code that scans instantly and one that does not.
  */
 
-import { PAIRING_TTL_SECONDS, PROTOCOL_VERSION } from '@/sync/crypto/labels';
-import { deriveDeviceId } from '@/sync/crypto/keys';
-import { KEY_LENGTH, fromBase32, fromBase64Url, toBase32, toBase64Url, utf8Bytes } from '@/sync/crypto/primitives';
-import { SyncCryptoError, brand, type PairingSecret } from '@/sync/crypto/types';
+import { PAIRING_TTL_SECONDS, PROTOCOL_VERSION } from "@/sync/crypto/labels";
+import { deriveDeviceId } from "@/sync/crypto/keys";
+import {
+  KEY_LENGTH,
+  fromBase32,
+  fromBase64Url,
+  toBase32,
+  toBase64Url,
+  utf8Bytes,
+} from "@/sync/crypto/primitives";
+import {
+  SyncCryptoError,
+  brand,
+  type PairingSecret,
+} from "@/sync/crypto/types";
 
-const SCHEME = 'qashy-pair';
-const SEPARATOR = ':';
+const SCHEME = "qashy-pair";
+const SEPARATOR = ":";
 /** Reject before base32/base64 decoding so pasted input cannot allocate without bound. */
 export const MAX_PAIRING_CODE_LENGTH = 4_096;
 
@@ -45,7 +56,7 @@ export const encodePairingCode = (code: PairingCode) =>
     toBase32(code.ephemeralPublicKey),
     toBase32(code.pairingSecret),
     String(code.expiresAt),
-    code.relayUrl ? toBase64Url(utf8Bytes(code.relayUrl)) : '',
+    code.relayUrl ? toBase64Url(utf8Bytes(code.relayUrl)) : "",
   ].join(SEPARATOR);
 
 /**
@@ -55,55 +66,75 @@ export const encodePairingCode = (code: PairingCode) =>
  * the claimed device id and the signing key it is supposed to be derived from. A code
  * that fails any check is rejected whole — there is no partially-usable pairing code.
  */
-export const decodePairingCode = (value: string, nowSeconds: number): PairingCode => {
+export const decodePairingCode = (
+  value: string,
+  nowSeconds: number,
+): PairingCode => {
   const trimmed = value.trim();
   if (trimmed.length > MAX_PAIRING_CODE_LENGTH) {
-    throw new SyncCryptoError('That pairing code is too large.', 'badLength');
+    throw new SyncCryptoError("That pairing code is too large.", "badLength");
   }
   const parts = trimmed.split(SEPARATOR);
   if (parts.length !== 8 || parts[0] !== SCHEME) {
-    throw new SyncCryptoError('That is not a Qashy pairing code.', 'badFormat');
+    throw new SyncCryptoError("That is not a Qashy pairing code.", "badFormat");
   }
   const version = Number(parts[1]);
   if (!Number.isInteger(version) || version < 1) {
-    throw new SyncCryptoError('That is not a Qashy pairing code.', 'badFormat');
+    throw new SyncCryptoError("That is not a Qashy pairing code.", "badFormat");
   }
   if (version !== PROTOCOL_VERSION) {
     throw new SyncCryptoError(
       `That code was made by a device using sync protocol v${version}; this one speaks v${PROTOCOL_VERSION}. Update whichever is older.`,
-      'badVersion',
+      "badVersion",
     );
   }
 
   const deviceId = parts[2];
   // These fields are fixed-size protocol values. Check their encoded length before decoding.
-  if (parts[2].length > 128 || parts[3].length > 64 || parts[4].length > 64 || parts[5].length > 64) {
-    throw new SyncCryptoError('That pairing code is damaged.', 'badLength');
+  if (
+    parts[2].length > 128 ||
+    parts[3].length > 64 ||
+    parts[4].length > 64 ||
+    parts[5].length > 64
+  ) {
+    throw new SyncCryptoError("That pairing code is damaged.", "badLength");
   }
   const signingPublicKey = fromBase32(parts[3]);
   const ephemeralPublicKey = fromBase32(parts[4]);
   const pairingSecret = fromBase32(parts[5]);
   const expiresAt = Number(parts[6]);
 
-  if (signingPublicKey.length !== KEY_LENGTH || ephemeralPublicKey.length !== KEY_LENGTH) {
-    throw new SyncCryptoError('That pairing code is damaged.', 'badLength');
+  if (
+    signingPublicKey.length !== KEY_LENGTH ||
+    ephemeralPublicKey.length !== KEY_LENGTH
+  ) {
+    throw new SyncCryptoError("That pairing code is damaged.", "badLength");
   }
   if (pairingSecret.length !== KEY_LENGTH) {
-    throw new SyncCryptoError('That pairing code is damaged.', 'badLength');
+    throw new SyncCryptoError("That pairing code is damaged.", "badLength");
   }
   if (deriveDeviceId(signingPublicKey) !== deviceId) {
-    throw new SyncCryptoError('That pairing code does not match the device that made it.', 'badIdentity');
+    throw new SyncCryptoError(
+      "That pairing code does not match the device that made it.",
+      "badIdentity",
+    );
   }
   if (!Number.isFinite(expiresAt)) {
-    throw new SyncCryptoError('That pairing code is damaged.', 'badFormat');
+    throw new SyncCryptoError("That pairing code is damaged.", "badFormat");
   }
   if (expiresAt <= nowSeconds) {
-    throw new SyncCryptoError('That pairing code has expired. Generate a new one on the other device.', 'badFormat');
+    throw new SyncCryptoError(
+      "That pairing code has expired. Generate a new one on the other device.",
+      "badFormat",
+    );
   }
   // A code claiming to be valid for longer than the protocol allows is either from a
   // tampered build or an attacker widening their own window. Neither is acceptable.
   if (expiresAt > nowSeconds + PAIRING_TTL_SECONDS * 2) {
-    throw new SyncCryptoError('That pairing code claims an implausible expiry.', 'badFormat');
+    throw new SyncCryptoError(
+      "That pairing code claims an implausible expiry.",
+      "badFormat",
+    );
   }
 
   return {
@@ -113,7 +144,7 @@ export const decodePairingCode = (value: string, nowSeconds: number): PairingCod
     ephemeralPublicKey,
     pairingSecret: brand<PairingSecret>(pairingSecret),
     expiresAt,
-    relayUrl: parts[7] ? new TextDecoder().decode(fromBase64Url(parts[7])) : '',
+    relayUrl: parts[7] ? new TextDecoder().decode(fromBase64Url(parts[7])) : "",
   };
 };
 
@@ -125,6 +156,7 @@ export const decodePairingCode = (value: string, nowSeconds: number): PairingCod
  * for the human.
  */
 export const formatPairingCodeForTyping = (encoded: string) =>
-  (encoded.match(/.{1,5}/g) ?? [encoded]).join(' ');
+  (encoded.match(/.{1,5}/g) ?? [encoded]).join(" ");
 
-export const normalizeTypedPairingCode = (typed: string) => typed.replace(/\s+/g, '');
+export const normalizeTypedPairingCode = (typed: string) =>
+  typed.replace(/\s+/g, "");

@@ -1,3 +1,3 @@
-import { AccountFormScreen } from '@/features/more/account-form-screen';
+import { AccountFormScreen } from "@/features/more/account-form-screen";
 
 export default AccountFormScreen;

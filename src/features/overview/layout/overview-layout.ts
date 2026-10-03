@@ -14,23 +14,23 @@
  * willing to render, defaulting to `DEFAULT_OVERVIEW_LAYOUT` rather than throwing.
  */
 
-import { z } from '@/utils/zod';
+import { z } from "@/utils/zod";
 
 export const OVERVIEW_WIDGET_TYPES = [
-  'insight',
-  'budget-pulse',
-  'accounts',
-  'upcoming',
-  'recent',
-  'goals',
-  'top-categories',
+  "insight",
+  "budget-pulse",
+  "accounts",
+  "upcoming",
+  "recent",
+  "goals",
+  "top-categories",
 ] as const;
 
 export type OverviewWidgetType = (typeof OVERVIEW_WIDGET_TYPES)[number];
 
-export type WidgetSize = 'compact' | 'regular' | 'wide';
+export type WidgetSize = "compact" | "regular" | "wide";
 
-const WIDGET_SIZES: readonly WidgetSize[] = ['compact', 'regular', 'wide'];
+const WIDGET_SIZES: readonly WidgetSize[] = ["compact", "regular", "wide"];
 
 export interface OverviewCard {
   readonly id: string;
@@ -56,13 +56,33 @@ export interface WidgetRule {
  * UI that renders a widget, not with the model that orders and sizes it.
  */
 export const WIDGET_RULES: Record<OverviewWidgetType, WidgetRule> = {
-  insight: { sizes: ['regular', 'wide'], defaultSize: 'wide', multiple: false },
-  'budget-pulse': { sizes: ['compact', 'regular', 'wide'], defaultSize: 'regular', multiple: true },
-  accounts: { sizes: ['regular', 'wide'], defaultSize: 'regular', multiple: false },
-  upcoming: { sizes: ['regular', 'wide'], defaultSize: 'wide', multiple: false },
-  recent: { sizes: ['regular', 'wide'], defaultSize: 'wide', multiple: false },
-  goals: { sizes: ['compact', 'regular', 'wide'], defaultSize: 'regular', multiple: true },
-  'top-categories': { sizes: ['regular', 'wide'], defaultSize: 'regular', multiple: false },
+  insight: { sizes: ["regular", "wide"], defaultSize: "wide", multiple: false },
+  "budget-pulse": {
+    sizes: ["compact", "regular", "wide"],
+    defaultSize: "regular",
+    multiple: true,
+  },
+  accounts: {
+    sizes: ["regular", "wide"],
+    defaultSize: "regular",
+    multiple: false,
+  },
+  upcoming: {
+    sizes: ["regular", "wide"],
+    defaultSize: "wide",
+    multiple: false,
+  },
+  recent: { sizes: ["regular", "wide"], defaultSize: "wide", multiple: false },
+  goals: {
+    sizes: ["compact", "regular", "wide"],
+    defaultSize: "regular",
+    multiple: true,
+  },
+  "top-categories": {
+    sizes: ["regular", "wide"],
+    defaultSize: "regular",
+    multiple: false,
+  },
 };
 
 const EMPTY_CONFIG: Readonly<Record<string, unknown>> = Object.freeze({});
@@ -78,11 +98,11 @@ const card = (
 export const DEFAULT_OVERVIEW_LAYOUT: OverviewLayout = {
   version: 1,
   cards: [
-    card('default-insight', 'insight', 'wide'),
-    card('default-budget-pulse', 'budget-pulse', 'regular'),
-    card('default-accounts', 'accounts', 'regular'),
-    card('default-upcoming', 'upcoming', 'wide'),
-    card('default-recent', 'recent', 'wide'),
+    card("default-insight", "insight", "wide"),
+    card("default-budget-pulse", "budget-pulse", "regular"),
+    card("default-accounts", "accounts", "regular"),
+    card("default-upcoming", "upcoming", "wide"),
+    card("default-recent", "recent", "wide"),
   ],
 };
 
@@ -98,27 +118,46 @@ export interface AddCardInput {
 }
 
 export type OverviewLayoutAction =
-  | { readonly type: 'add'; readonly card: AddCardInput; readonly index?: number }
-  | { readonly type: 'remove'; readonly id: string }
-  | { readonly type: 'move'; readonly id: string; readonly toIndex: number }
-  | { readonly type: 'moveBy'; readonly id: string; readonly delta: number }
-  | { readonly type: 'resize'; readonly id: string; readonly size: WidgetSize }
-  | { readonly type: 'configure'; readonly id: string; readonly config: Record<string, unknown> }
-  | { readonly type: 'reset' };
+  | {
+      readonly type: "add";
+      readonly card: AddCardInput;
+      readonly index?: number;
+    }
+  | { readonly type: "remove"; readonly id: string }
+  | { readonly type: "move"; readonly id: string; readonly toIndex: number }
+  | { readonly type: "moveBy"; readonly id: string; readonly delta: number }
+  | { readonly type: "resize"; readonly id: string; readonly size: WidgetSize }
+  | {
+      readonly type: "configure";
+      readonly id: string;
+      readonly config: Record<string, unknown>;
+    }
+  | { readonly type: "reset" };
 
-const resolveSize = (type: OverviewWidgetType, size: WidgetSize | undefined): WidgetSize => {
+const resolveSize = (
+  type: OverviewWidgetType,
+  size: WidgetSize | undefined,
+): WidgetSize => {
   const rule = WIDGET_RULES[type];
   if (size && (rule.sizes as readonly string[]).includes(size)) return size;
   return rule.defaultSize;
 };
 
-const clampIndex = (index: number, length: number) => Math.max(0, Math.min(index, length));
+const clampIndex = (index: number, length: number) =>
+  Math.max(0, Math.min(index, length));
 
-function addCard(layout: OverviewLayout, action: Extract<OverviewLayoutAction, { type: 'add' }>): OverviewLayout {
+function addCard(
+  layout: OverviewLayout,
+  action: Extract<OverviewLayoutAction, { type: "add" }>,
+): OverviewLayout {
   const { card: input, index } = action;
   if (layout.cards.some((existing) => existing.id === input.id)) return layout;
   const rule = WIDGET_RULES[input.type];
-  if (!rule.multiple && layout.cards.some((existing) => existing.type === input.type)) return layout;
+  if (
+    !rule.multiple &&
+    layout.cards.some((existing) => existing.type === input.type)
+  )
+    return layout;
 
   const next: OverviewCard = {
     id: input.id,
@@ -127,7 +166,10 @@ function addCard(layout: OverviewLayout, action: Extract<OverviewLayoutAction, {
     config: input.config ? { ...input.config } : EMPTY_CONFIG,
   };
 
-  const insertAt = index === undefined ? layout.cards.length : clampIndex(index, layout.cards.length);
+  const insertAt =
+    index === undefined
+      ? layout.cards.length
+      : clampIndex(index, layout.cards.length);
   const cards = [...layout.cards];
   cards.splice(insertAt, 0, next);
   return { ...layout, cards };
@@ -135,10 +177,17 @@ function addCard(layout: OverviewLayout, action: Extract<OverviewLayoutAction, {
 
 function removeCard(layout: OverviewLayout, id: string): OverviewLayout {
   if (!layout.cards.some((existing) => existing.id === id)) return layout;
-  return { ...layout, cards: layout.cards.filter((existing) => existing.id !== id) };
+  return {
+    ...layout,
+    cards: layout.cards.filter((existing) => existing.id !== id),
+  };
 }
 
-function moveCard(layout: OverviewLayout, id: string, toIndex: number): OverviewLayout {
+function moveCard(
+  layout: OverviewLayout,
+  id: string,
+  toIndex: number,
+): OverviewLayout {
   const fromIndex = layout.cards.findIndex((existing) => existing.id === id);
   if (fromIndex === -1) return layout;
 
@@ -151,7 +200,11 @@ function moveCard(layout: OverviewLayout, id: string, toIndex: number): Overview
   return { ...layout, cards };
 }
 
-function resizeCard(layout: OverviewLayout, id: string, size: WidgetSize): OverviewLayout {
+function resizeCard(
+  layout: OverviewLayout,
+  id: string,
+  size: WidgetSize,
+): OverviewLayout {
   const index = layout.cards.findIndex((existing) => existing.id === id);
   if (index === -1) return layout;
   const existing = layout.cards[index];
@@ -193,23 +246,27 @@ export function overviewLayoutReducer(
   action: OverviewLayoutAction,
 ): OverviewLayout {
   switch (action.type) {
-    case 'add':
+    case "add":
       return addCard(layout, action);
-    case 'remove':
+    case "remove":
       return removeCard(layout, action.id);
-    case 'move':
+    case "move":
       return moveCard(layout, action.id, action.toIndex);
-    case 'moveBy': {
-      const fromIndex = layout.cards.findIndex((existing) => existing.id === action.id);
+    case "moveBy": {
+      const fromIndex = layout.cards.findIndex(
+        (existing) => existing.id === action.id,
+      );
       if (fromIndex === -1) return layout;
       return moveCard(layout, action.id, fromIndex + action.delta);
     }
-    case 'resize':
+    case "resize":
       return resizeCard(layout, action.id, action.size);
-    case 'configure':
+    case "configure":
       return configureCard(layout, action.id, action.config);
-    case 'reset':
-      return layout === DEFAULT_OVERVIEW_LAYOUT ? layout : DEFAULT_OVERVIEW_LAYOUT;
+    case "reset":
+      return layout === DEFAULT_OVERVIEW_LAYOUT
+        ? layout
+        : DEFAULT_OVERVIEW_LAYOUT;
     default:
       return layout;
   }
@@ -235,10 +292,11 @@ const isWidgetType = (value: string): value is OverviewWidgetType =>
   (OVERVIEW_WIDGET_TYPES as readonly string[]).includes(value);
 
 const isWidgetSize = (value: unknown): value is WidgetSize =>
-  typeof value === 'string' && (WIDGET_SIZES as readonly string[]).includes(value);
+  typeof value === "string" &&
+  (WIDGET_SIZES as readonly string[]).includes(value);
 
 const normalizeConfig = (value: unknown): Readonly<Record<string, unknown>> => {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
     return { ...(value as Record<string, unknown>) };
   }
   return EMPTY_CONFIG;
@@ -274,9 +332,11 @@ export function normalizeOverviewLayout(raw: unknown): OverviewLayout {
     cards.push({
       id: raw.id,
       type: raw.type,
-      size: isWidgetSize(raw.size) && (rule.sizes as readonly string[]).includes(raw.size)
-        ? raw.size
-        : rule.defaultSize,
+      size:
+        isWidgetSize(raw.size) &&
+        (rule.sizes as readonly string[]).includes(raw.size)
+          ? raw.size
+          : rule.defaultSize,
       config: normalizeConfig(raw.config),
     });
   }
@@ -287,7 +347,9 @@ export function normalizeOverviewLayout(raw: unknown): OverviewLayout {
 /** Types that can currently be added: `multiple` types always, single-instance types only when absent. */
 export function availableToAdd(layout: OverviewLayout): OverviewWidgetType[] {
   const present = new Set(layout.cards.map((existing) => existing.type));
-  return OVERVIEW_WIDGET_TYPES.filter((type) => WIDGET_RULES[type].multiple || !present.has(type));
+  return OVERVIEW_WIDGET_TYPES.filter(
+    (type) => WIDGET_RULES[type].multiple || !present.has(type),
+  );
 }
 
 export function serializeOverviewLayout(layout: OverviewLayout): string {

@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
-import type { StyleProp, ViewStyle } from 'react-native';
-import { View } from 'react-native';
+import { useEffect } from "react";
+import type { StyleProp, ViewStyle } from "react-native";
+import { View } from "react-native";
 import Animated, {
   Easing,
   ReduceMotion,
@@ -9,9 +9,9 @@ import Animated, {
   useSharedValue,
   withRepeat,
   withTiming,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-import { useQashyTheme } from '@/theme/theme';
+import { useQashyTheme } from "@/theme/theme";
 
 const PULSE_DURATION = 900;
 const PULSE_MIN = 0.55;
@@ -38,22 +38,26 @@ export function Skeleton({
   const theme = useQashyTheme();
   const { radius } = theme;
   const reduceMotion = useReducedMotion();
-  const opacity = useSharedValue(reduceMotion ? REDUCED_MOTION_OPACITY : PULSE_MIN);
+  const opacity = useSharedValue(
+    reduceMotion ? REDUCED_MOTION_OPACITY : PULSE_MIN,
+  );
 
   useEffect(() => {
     if (reduceMotion) {
       opacity.set(REDUCED_MOTION_OPACITY);
       return;
     }
-    opacity.set(withRepeat(
-      withTiming(PULSE_MAX, {
-        duration: PULSE_DURATION,
-        easing: Easing.inOut(Easing.ease),
-        reduceMotion: ReduceMotion.System,
-      }),
-      -1,
-      true,
-    ));
+    opacity.set(
+      withRepeat(
+        withTiming(PULSE_MAX, {
+          duration: PULSE_DURATION,
+          easing: Easing.inOut(Easing.ease),
+          reduceMotion: ReduceMotion.System,
+        }),
+        -1,
+        true,
+      ),
+    );
   }, [opacity, reduceMotion]);
 
   const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
@@ -67,7 +71,13 @@ export function Skeleton({
       importantForAccessibility="no-hide-descendants"
       aria-hidden
       style={[
-        { width, height, borderRadius: cornerRadius ?? radius.control, borderCurve: 'continuous', backgroundColor: theme.surfaceSunken },
+        {
+          width,
+          height,
+          borderRadius: cornerRadius ?? radius.control,
+          borderCurve: "continuous",
+          backgroundColor: theme.surfaceSunken,
+        },
         animatedStyle,
         style,
       ]}
@@ -76,7 +86,15 @@ export function Skeleton({
 }
 
 /** A stack of `Skeleton` lines, narrowing the last one so the block reads as text rather than a bar chart. */
-export function SkeletonText({ lines = 3, lineHeight = 14, gap }: { lines?: number; lineHeight?: number; gap?: number }) {
+export function SkeletonText({
+  lines = 3,
+  lineHeight = 14,
+  gap,
+}: {
+  lines?: number;
+  lineHeight?: number;
+  gap?: number;
+}) {
   const { radius, space } = useQashyTheme();
   return (
     <View style={{ gap: gap ?? space.sm }}>
@@ -84,7 +102,7 @@ export function SkeletonText({ lines = 3, lineHeight = 14, gap }: { lines?: numb
         <Skeleton
           // A static placeholder list never reorders, so an index key is safe here.
           key={index}
-          width={index === lines - 1 && lines > 1 ? '60%' : '100%'}
+          width={index === lines - 1 && lines > 1 ? "60%" : "100%"}
           height={lineHeight}
           radius={radius.sm}
         />

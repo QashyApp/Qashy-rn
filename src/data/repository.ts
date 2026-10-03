@@ -19,10 +19,14 @@ import type {
   TransactionFeeInput,
   TransactionQuery,
   TransactionRecord,
-} from '@/domain/models';
-import type { ExternalImportOutcome, ImportBundle, ImportMode } from '@/data/import/types';
-import type { CausalMeta, RepairNote, SyncOpBody } from '@/sync/oplog';
-import type { DuplicateGroup } from '@/sync/engine/duplicates';
+} from "@/domain/models";
+import type {
+  ExternalImportOutcome,
+  ImportBundle,
+  ImportMode,
+} from "@/data/import/types";
+import type { CausalMeta, RepairNote, SyncOpBody } from "@/sync/oplog";
+import type { DuplicateGroup } from "@/sync/engine/duplicates";
 
 export interface MergeResult {
   /** Records tombstoned because they turned out to be a copy of another one. */
@@ -35,19 +39,31 @@ export interface OnboardingInput {
   locale: string;
   baseCurrency: string;
   accountName: string;
-  accountType: Account['type'];
+  accountType: Account["type"];
   openingBalanceMinor: number;
   /** Optional so callers that predate themes keep working; omitted means the settings' current theme. */
-  themeId?: AppSettings['themeId'];
-  themeMode: AppSettings['themeMode'];
-  accentSource: AppSettings['accentSource'];
+  themeId?: AppSettings["themeId"];
+  themeMode: AppSettings["themeMode"];
+  accentSource: AppSettings["accentSource"];
   accentHex: string;
 }
 
-export type AccountInput = Omit<Account, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type CategoryInput = Omit<Category, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type TagInput = Omit<Tag, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type BudgetInput = Omit<Budget, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
+export type AccountInput = Omit<
+  Account,
+  "id" | "revision" | "createdAt" | "updatedAt" | "deletedAt"
+>;
+export type CategoryInput = Omit<
+  Category,
+  "id" | "revision" | "createdAt" | "updatedAt" | "deletedAt"
+>;
+export type TagInput = Omit<
+  Tag,
+  "id" | "revision" | "createdAt" | "updatedAt" | "deletedAt"
+>;
+export type BudgetInput = Omit<
+  Budget,
+  "id" | "revision" | "createdAt" | "updatedAt" | "deletedAt"
+>;
 /** A one-time change to a budget's current period. The date is always today, never chosen. */
 export interface BudgetAdjustmentInput {
   budgetId: string;
@@ -55,16 +71,44 @@ export interface BudgetAdjustmentInput {
   amountMinor: number;
   note: string;
 }
-export type GoalInput =Omit<Goal, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type ContributionInput = Omit<GoalContribution, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type GoalContributionInput = Omit<ContributionInput, 'goalId'>;
-export type RecurringInput = Omit<RecurringRule, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'pausedByDependency'>;
-export type RateInput = Omit<ExchangeRate, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type SettingsInput = Partial<Pick<AppSettings, 'locale' | 'baseCurrency' | 'themeId' | 'themeMode' | 'accentSource' | 'accentHex' | 'swipeBetweenMonths'>>;
+export type GoalInput = Omit<
+  Goal,
+  "id" | "revision" | "createdAt" | "updatedAt" | "deletedAt"
+>;
+export type ContributionInput = Omit<
+  GoalContribution,
+  "id" | "revision" | "createdAt" | "updatedAt" | "deletedAt"
+>;
+export type GoalContributionInput = Omit<ContributionInput, "goalId">;
+export type RecurringInput = Omit<
+  RecurringRule,
+  | "id"
+  | "revision"
+  | "createdAt"
+  | "updatedAt"
+  | "deletedAt"
+  | "pausedByDependency"
+>;
+export type RateInput = Omit<
+  ExchangeRate,
+  "id" | "revision" | "createdAt" | "updatedAt" | "deletedAt"
+>;
+export type SettingsInput = Partial<
+  Pick<
+    AppSettings,
+    | "locale"
+    | "baseCurrency"
+    | "themeId"
+    | "themeMode"
+    | "accentSource"
+    | "accentHex"
+    | "swipeBetweenMonths"
+  >
+>;
 
 export interface TransactionInput {
-  kind: TransactionRecord['kind'];
-  status?: TransactionRecord['status'];
+  kind: TransactionRecord["kind"];
+  status?: TransactionRecord["status"];
   title: string;
   note?: string;
   localDate: string;
@@ -133,12 +177,35 @@ export interface FinanceRepository {
   getSnapshot(): FinanceState;
   subscribe(listener: () => void): () => void;
   completeOnboarding(input: OnboardingInput): Promise<void>;
-  updateSettings(patch: SettingsInput, expectedRevision?: number): Promise<AppSettings>;
-  saveAccount(input: AccountInput, id?: string, expectedRevision?: number): Promise<Account>;
-  saveCategory(input: CategoryInput, id?: string, expectedRevision?: number): Promise<Category>;
-  saveTag(input: TagInput, id?: string, expectedRevision?: number): Promise<Tag>;
-  saveTransaction(input: TransactionInput, id?: string, expectedRevision?: number): Promise<TransactionRecord>;
-  saveBudget(input: BudgetInput, id?: string, expectedRevision?: number): Promise<Budget>;
+  updateSettings(
+    patch: SettingsInput,
+    expectedRevision?: number,
+  ): Promise<AppSettings>;
+  saveAccount(
+    input: AccountInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<Account>;
+  saveCategory(
+    input: CategoryInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<Category>;
+  saveTag(
+    input: TagInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<Tag>;
+  saveTransaction(
+    input: TransactionInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<TransactionRecord>;
+  saveBudget(
+    input: BudgetInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<Budget>;
   /**
    * Adds a one-time adjustment to the budget's *current* period and returns it.
    *
@@ -151,11 +218,32 @@ export interface FinanceRepository {
   resetBudgetRollover(budgetId: string): Promise<void>;
   /** Soft-deletes an adjustment. Only one belonging to a budget's current period can be removed. */
   deleteBudgetAdjustment(id: string): Promise<void>;
-  saveGoal(input: GoalInput, id?: string, expectedRevision?: number): Promise<Goal>;
-  saveGoalAndContribution(input: GoalInput, contribution?: GoalContributionInput, id?: string, expectedRevision?: number): Promise<Goal>;
-  saveContribution(input: ContributionInput, id?: string, expectedRevision?: number): Promise<GoalContribution>;
-  saveRecurringRule(input: RecurringInput, id?: string, expectedRevision?: number): Promise<RecurringRule>;
-  saveExchangeRate(input: RateInput, id?: string, expectedRevision?: number): Promise<ExchangeRate>;
+  saveGoal(
+    input: GoalInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<Goal>;
+  saveGoalAndContribution(
+    input: GoalInput,
+    contribution?: GoalContributionInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<Goal>;
+  saveContribution(
+    input: ContributionInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<GoalContribution>;
+  saveRecurringRule(
+    input: RecurringInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<RecurringRule>;
+  saveExchangeRate(
+    input: RateInput,
+    id?: string,
+    expectedRevision?: number,
+  ): Promise<ExchangeRate>;
   /**
    * Saves a batch of automatically fetched rates in one atomic write.
    *
@@ -168,14 +256,23 @@ export interface FinanceRepository {
    * before writing anything.
    */
   saveFetchedRates(rates: readonly RateInput[]): Promise<FetchedRateResult>;
-  queryTransactions(query?: TransactionQuery, snapshot?: TransactionRecord[]): TransactionRecord[];
+  queryTransactions(
+    query?: TransactionQuery,
+    snapshot?: TransactionRecord[],
+  ): TransactionRecord[];
   getDashboard(fromDate: string, toDate: string): DashboardSummary;
-  getBudgetStatuses(onDate: string, options?: { includeInactiveCustom?: boolean }): BudgetStatus[];
+  getBudgetStatuses(
+    onDate: string,
+    options?: { includeInactiveCustom?: boolean },
+  ): BudgetStatus[];
   getGoalProgress(goalId: string): number;
   generateRecurring(horizonDate?: string): Promise<number>;
   confirmUpcoming(id: string): Promise<void>;
   skipUpcoming(id: string): Promise<void>;
-  updateTransactionsCategory(ids: string[], categoryId: string | null): Promise<void>;
+  updateTransactionsCategory(
+    ids: string[],
+    categoryId: string | null,
+  ): Promise<void>;
   deleteEntities(type: keyof FinanceState, ids: string[]): Promise<void>;
   /**
    * Collapses user-confirmed duplicates into one record each, atomically.
@@ -199,7 +296,11 @@ export interface FinanceRepository {
    * re-import idempotent. `merge` keeps the vault and reuses same-named entities; `replace`
    * soft-deletes every live entity in the same write that creates the imported ones.
    */
-  importExternalBundle(bundle: ImportBundle, options: { mode: ImportMode }, commit?: boolean): Promise<ExternalImportOutcome>;
+  importExternalBundle(
+    bundle: ImportBundle,
+    options: { mode: ImportMode },
+    commit?: boolean,
+  ): Promise<ExternalImportOutcome>;
   exportCsv(): string;
   resetAllData(): Promise<void>;
 }

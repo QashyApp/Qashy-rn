@@ -1,8 +1,8 @@
-import { NativeTabs } from 'expo-router/unstable-native-tabs';
+import { NativeTabs } from "expo-router/unstable-native-tabs";
 
-import { useLocalization } from '@/localization/localization';
-import { useQashyTheme } from '@/theme/theme';
-import { withAlpha } from '@/theme/tokens';
+import { useLocalization } from "@/localization/localization";
+import { useQashyTheme } from "@/theme/theme";
+import { withAlpha } from "@/theme/tokens";
 
 export default function TabsLayout() {
   const theme = useQashyTheme();
@@ -29,21 +29,34 @@ export default function TabsLayout() {
       // scrolls under it. The theme's own border tone keeps it as restrained
       // as every other divider, instead of the system default.
       shadowColor={theme.border}
-      minimizeBehavior="onScrollDown">
+      minimizeBehavior="onScrollDown"
+    >
       <NativeTabs.Trigger name="overview">
-        <NativeTabs.Trigger.Label>{t('Overview')}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} md="home" />
+        <NativeTabs.Trigger.Label>{t("Overview")}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "house", selected: "house.fill" }}
+          md="home"
+        />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="transactions">
-        <NativeTabs.Trigger.Label>{t('Transactions')}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }} md="receipt_long" />
+        <NativeTabs.Trigger.Label>{t("Transactions")}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{
+            default: "list.bullet.rectangle",
+            selected: "list.bullet.rectangle.fill",
+          }}
+          md="receipt_long"
+        />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
-        <NativeTabs.Trigger.Label>{t('Plan')}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf={{ default: 'chart.pie', selected: 'chart.pie.fill' }} md="donut_large" />
+        <NativeTabs.Trigger.Label>{t("Plan")}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Icon
+          sf={{ default: "chart.pie", selected: "chart.pie.fill" }}
+          md="donut_large"
+        />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more" role="more">
-        <NativeTabs.Trigger.Label>{t('More')}</NativeTabs.Trigger.Label>
+        <NativeTabs.Trigger.Label>{t("More")}</NativeTabs.Trigger.Label>
         <NativeTabs.Trigger.Icon sf="ellipsis.circle" md="more_horiz" />
       </NativeTabs.Trigger>
     </NativeTabs>

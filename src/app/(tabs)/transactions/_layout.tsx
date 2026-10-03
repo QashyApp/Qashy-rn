@@ -1,4 +1,4 @@
-import { TabStackLayout } from '@/components/navigation/stack-layout';
+import { TabStackLayout } from "@/components/navigation/stack-layout";
 
 export default function Layout() {
   // The ledger pins its search field and filter chips above the list, so the

@@ -1,17 +1,17 @@
-import type { ReactNode } from 'react';
-import { View, type ColorValue } from 'react-native';
+import type { ReactNode } from "react";
+import { View, type ColorValue } from "react-native";
 
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { withAlpha } from '@/theme/tokens';
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { withAlpha } from "@/theme/tokens";
 
-export type StatTileTone = 'positive' | 'negative' | 'transfer' | 'default';
+export type StatTileTone = "positive" | "negative" | "transfer" | "default";
 
 export interface StatDelta {
   label: string;
-  tone: 'positive' | 'negative' | 'neutral';
+  tone: "positive" | "negative" | "neutral";
 }
 
 /**
@@ -26,10 +26,10 @@ export interface StatDelta {
 export function StatTile({
   label,
   value,
-  tone = 'default',
+  tone = "default",
   delta,
   icon,
-  variant = 'flat',
+  variant = "flat",
   onTint = false,
 }: {
   label: string;
@@ -39,79 +39,118 @@ export function StatTile({
   /** An `AppIcon` name, shown in a small tinted circle beside the label. */
   icon?: string;
   /** `sunken` sets a carved-in well look; `flat` (default) renders inline with its surroundings. */
-  variant?: 'flat' | 'sunken';
+  variant?: "flat" | "sunken";
   /** Set when the tile sits on the accent container (an emphasized card): text then uses its readable foreground instead of the neutral text colours, which fall short of 4.5:1 there. */
   onTint?: boolean;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
-  const toneColor: ColorValue = tone === 'positive'
-    ? theme.positive
-    : tone === 'negative'
-      ? theme.negative
-      : tone === 'transfer'
-        ? theme.transfer
-        : onTint ? theme.onAccentContainer : theme.text;
-  const deltaColor: ColorValue = delta?.tone === 'positive'
-    ? theme.positive
-    : delta?.tone === 'negative'
-      ? theme.negative
-      : theme.textMuted;
+  const toneColor: ColorValue =
+    tone === "positive"
+      ? theme.positive
+      : tone === "negative"
+        ? theme.negative
+        : tone === "transfer"
+          ? theme.transfer
+          : onTint
+            ? theme.onAccentContainer
+            : theme.text;
+  const deltaColor: ColorValue =
+    delta?.tone === "positive"
+      ? theme.positive
+      : delta?.tone === "negative"
+        ? theme.negative
+        : theme.textMuted;
   // `theme.textMuted` can be an opaque Android platform color, so the neutral
   // delta background stays a flat token instead of running it through `withAlpha`.
   const deltaBackground = !delta
     ? undefined
-    : delta.tone === 'positive'
+    : delta.tone === "positive"
       ? withAlpha(theme.positive as string, 0.12)
-      : delta.tone === 'negative'
+      : delta.tone === "negative"
         ? withAlpha(theme.negative as string, 0.12)
         : theme.surfaceMuted;
 
   const content = (
     <View style={{ gap: space.xxs }}>
-      {icon && typeof value === 'string' ? (
+      {icon && typeof value === "string" ? (
         // Value sits centred above the icon; a min-width box keeps it aligned to the icon's centre.
-        <View style={{ minWidth: 28, alignSelf: 'flex-start', alignItems: 'center' }}>
-          <AppText literal figure variant="figure" style={{ color: toneColor }}>{value}</AppText>
+        <View
+          style={{
+            minWidth: 28,
+            alignSelf: "flex-start",
+            alignItems: "center",
+          }}
+        >
+          <AppText literal figure variant="figure" style={{ color: toneColor }}>
+            {value}
+          </AppText>
         </View>
       ) : null}
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
+      <View
+        style={{ flexDirection: "row", alignItems: "center", gap: space.xs }}
+      >
         {icon ? (
           <View
             style={{
               width: 28,
               height: 28,
               borderRadius: radius.pill,
-              alignItems: 'center',
-              justifyContent: 'center',
+              alignItems: "center",
+              justifyContent: "center",
               backgroundColor: withAlpha(theme.staticAccent, 0.12),
-            }}>
-            <AppIcon name={icon} color={onTint ? theme.onAccentContainer : theme.staticAccent} size={16} />
+            }}
+          >
+            <AppIcon
+              name={icon}
+              color={onTint ? theme.onAccentContainer : theme.staticAccent}
+              size={16}
+            />
           </View>
         ) : null}
-        <AppText variant="caption" muted={!onTint} numberOfLines={1} style={onTint ? { color: theme.onAccentContainer } : undefined}>{label}</AppText>
+        <AppText
+          variant="caption"
+          muted={!onTint}
+          numberOfLines={1}
+          style={onTint ? { color: theme.onAccentContainer } : undefined}
+        >
+          {label}
+        </AppText>
       </View>
-      {icon && typeof value === 'string' ? null : typeof value === 'string' ? (
-        <AppText literal figure variant="figure" style={{ color: toneColor }}>{value}</AppText>
-      ) : value}
+      {icon && typeof value === "string" ? null : typeof value === "string" ? (
+        <AppText literal figure variant="figure" style={{ color: toneColor }}>
+          {value}
+        </AppText>
+      ) : (
+        value
+      )}
       {delta ? (
         <View
           style={{
-            alignSelf: 'flex-start',
+            alignSelf: "flex-start",
             borderRadius: radius.pill,
             paddingHorizontal: space.sm,
             paddingVertical: space.xxs,
             backgroundColor: deltaBackground,
-          }}>
-          <AppText literal variant="eyebrow" style={{ color: deltaColor }}>{delta.label}</AppText>
+          }}
+        >
+          <AppText literal variant="eyebrow" style={{ color: deltaColor }}>
+            {delta.label}
+          </AppText>
         </View>
       ) : null}
     </View>
   );
 
-  if (variant === 'sunken') {
+  if (variant === "sunken") {
     return (
-      <View style={{ ...materialStyle(theme, 'sunken'), borderRadius: radius.control, padding: space.md }}>
+      <View
+        style={{
+          ...materialStyle(theme, "sunken"),
+          borderRadius: radius.control,
+          padding: space.md,
+        }}
+      >
         {content}
       </View>
     );

@@ -14,19 +14,19 @@
  * outside the transaction, over batches — see the sealer in the engine.
  */
 
-import type { EntityType, FinanceEntity } from '@/domain/models';
-import { OP_SCHEMA_VERSION } from '@/sync/crypto';
-import { canonicalJson } from '@/utils/canonical-json';
-import type { Hlc } from '@/sync/oplog/hlc';
-import { registerValueOf } from '@/sync/oplog/merge';
+import type { EntityType, FinanceEntity } from "@/domain/models";
+import { OP_SCHEMA_VERSION } from "@/sync/crypto";
+import { canonicalJson } from "@/utils/canonical-json";
+import type { Hlc } from "@/sync/oplog/hlc";
+import { registerValueOf } from "@/sync/oplog/merge";
 import {
   createOnlyFieldsOf,
   elementSetsOf,
   keyedMapsOf,
   readPath,
   registersOf,
-} from '@/sync/oplog/registry';
-import { metaKey, type SyncOpBody } from '@/sync/oplog/types';
+} from "@/sync/oplog/registry";
+import { metaKey, type SyncOpBody } from "@/sync/oplog/types";
 
 export interface DiffResult {
   readonly ops: readonly SyncOpBody[];
@@ -44,23 +44,36 @@ const body = (
   entityType: EntityType,
   entityId: string,
   hlc: Hlc,
-  kind: SyncOpBody['kind'],
+  kind: SyncOpBody["kind"],
   payload: Record<string, unknown>,
-): SyncOpBody => ({ hlc, entityType, entityId, kind, payload, schema: OP_SCHEMA_VERSION });
+): SyncOpBody => ({
+  hlc,
+  entityType,
+  entityId,
+  kind,
+  payload,
+  schema: OP_SCHEMA_VERSION,
+});
 
 const elementsAt = (source: unknown, path: string): string[] => {
   const value = readPath(source, path);
-  return Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((each): each is string => typeof each === "string")
+    : [];
 };
 
-const entriesAt = (source: unknown, path: string, key: string): Map<string, unknown> => {
+const entriesAt = (
+  source: unknown,
+  path: string,
+  key: string,
+): Map<string, unknown> => {
   const value = readPath(source, path);
   const entries = new Map<string, unknown>();
   if (!Array.isArray(value)) return entries;
   for (const entry of value) {
-    if (typeof entry !== 'object' || entry === null) continue;
+    if (typeof entry !== "object" || entry === null) continue;
     const id = (entry as Record<string, unknown>)[key];
-    if (typeof id === 'string') entries.set(id, entry);
+    if (typeof id === "string") entries.set(id, entry);
   }
   return entries;
 };
@@ -81,7 +94,10 @@ export function diffEntity(
   const entityId = next.id;
 
   if (!previous) {
-    return { ops: [body(entityType, entityId, hlc, 'create', { entity: next })], warnings: [] };
+    return {
+      ops: [body(entityType, entityId, hlc, "create", { entity: next })],
+      warnings: [],
+    };
   }
 
   const ops: SyncOpBody[] = [];
@@ -94,7 +110,9 @@ export function diffEntity(
     if (canonicalJson(before) !== canonicalJson(after)) {
       // Emitting nothing is the right call: the peers' copies stay consistent with the
       // create they already agreed on, and the local row is the one that is wrong.
-      warnings.push(`${entityType}.${field} changed on ${entityId} but is immutable; not synced.`);
+      warnings.push(
+        `${entityType}.${field} changed on ${entityId} but is immutable; not synced.`,
+      );
     }
   }
 
@@ -104,18 +122,31 @@ export function diffEntity(
     const after = registerValueOf(spec, next);
     // A group emits every member whenever any one of them moved. That is the entire point
     // of grouping — half a group on the wire is half a group in the merge.
-    if (canonicalJson(before) !== canonicalJson(after)) registers[spec.name] = after;
+    if (canonicalJson(before) !== canonicalJson(after))
+      registers[spec.name] = after;
   }
-  if (Object.keys(registers).length) ops.push(body(entityType, entityId, hlc, 'set', { registers }));
+  if (Object.keys(registers).length)
+    ops.push(body(entityType, entityId, hlc, "set", { registers }));
 
   for (const path of elementSetsOf(entityType)) {
     const before = new Set(elementsAt(previous, path));
     const after = new Set(elementsAt(next, path));
     const added = [...after].filter((element) => !before.has(element)).sort();
     const removed = [...before].filter((element) => !after.has(element)).sort();
-    if (added.length) ops.push(body(entityType, entityId, hlc, 'setAdd', { field: path, elements: added }));
+    if (added.length)
+      ops.push(
+        body(entityType, entityId, hlc, "setAdd", {
+          field: path,
+          elements: added,
+        }),
+      );
     if (removed.length) {
-      ops.push(body(entityType, entityId, hlc, 'setRemove', { field: path, elements: removed }));
+      ops.push(
+        body(entityType, entityId, hlc, "setRemove", {
+          field: path,
+          elements: removed,
+        }),
+      );
     }
   }
 
@@ -125,23 +156,35 @@ export function diffEntity(
     const entries: Record<string, unknown> = {};
     for (const [entryKey, value] of after) {
       const existing = before.get(entryKey);
-      if (existing === undefined || canonicalJson(existing) !== canonicalJson(value)) {
+      if (
+        existing === undefined ||
+        canonicalJson(existing) !== canonicalJson(value)
+      ) {
         entries[entryKey] = value;
       }
     }
-    const removed = [...before.keys()].filter((entryKey) => !after.has(entryKey)).sort();
+    const removed = [...before.keys()]
+      .filter((entryKey) => !after.has(entryKey))
+      .sort();
     if (Object.keys(entries).length) {
-      ops.push(body(entityType, entityId, hlc, 'mapUpsert', { field: path, entries }));
+      ops.push(
+        body(entityType, entityId, hlc, "mapUpsert", { field: path, entries }),
+      );
     }
     if (removed.length) {
-      ops.push(body(entityType, entityId, hlc, 'mapRemove', { field: path, keys: removed }));
+      ops.push(
+        body(entityType, entityId, hlc, "mapRemove", {
+          field: path,
+          keys: removed,
+        }),
+      );
     }
   }
 
   if (next.deletedAt && !previous.deletedAt) {
-    ops.push(body(entityType, entityId, hlc, 'delete', { at: next.deletedAt }));
+    ops.push(body(entityType, entityId, hlc, "delete", { at: next.deletedAt }));
   } else if (!next.deletedAt && previous.deletedAt) {
-    ops.push(body(entityType, entityId, hlc, 'restore', {}));
+    ops.push(body(entityType, entityId, hlc, "restore", {}));
   }
 
   return ops.length || warnings.length ? { ops, warnings } : EMPTY;
@@ -167,7 +210,12 @@ export function diffRecords(
   const ops: SyncOpBody[] = [];
   const warnings: string[] = [];
   for (const { type, entity } of incoming) {
-    const result = diffEntity(type, previous.get(metaKey(type, entity.id)) ?? null, entity, hlc);
+    const result = diffEntity(
+      type,
+      previous.get(metaKey(type, entity.id)) ?? null,
+      entity,
+      hlc,
+    );
     ops.push(...result.ops);
     warnings.push(...result.warnings);
   }

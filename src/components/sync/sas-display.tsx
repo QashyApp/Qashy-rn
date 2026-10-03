@@ -1,8 +1,8 @@
-import { View } from 'react-native';
+import { View } from "react-native";
 
-import { AppText } from '@/components/ui/app-text';
-import { useLocalization } from '@/localization/localization';
-import { useQashyTheme } from '@/theme/theme';
+import { AppText } from "@/components/ui/app-text";
+import { useLocalization } from "@/localization/localization";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * The six words both devices must be showing.
@@ -37,14 +37,15 @@ export function SasDisplay({ words }: { words: readonly string[] }) {
     <View
       accessibilityRole="list"
       style={{
-        flexDirection: 'row',
-        flexWrap: 'wrap',
+        flexDirection: "row",
+        flexWrap: "wrap",
         gap: space.sm,
         // Left-to-right in every locale. The words are read as an ordered sequence against
         // another screen, and mirroring the grid under RTL would put word one where the
         // other device shows word three.
-        direction: 'ltr',
-      }}>
+        direction: "ltr",
+      }}
+    >
       {words.map((word, index) => (
         <View
           key={`${index}-${word}`}
@@ -53,11 +54,11 @@ export function SasDisplay({ words }: { words: readonly string[] }) {
           accessibilityLabel={t(`Word ${index + 1}: ${word}`)}
           style={{
             // Three columns, two rows, however wide the container is.
-            flexBasis: '30%',
+            flexBasis: "30%",
             flexGrow: 1,
             minHeight: 64,
-            alignItems: 'center',
-            justifyContent: 'center',
+            alignItems: "center",
+            justifyContent: "center",
             gap: space.xxs,
             paddingVertical: space.sm,
             paddingHorizontal: space.xs,
@@ -65,12 +66,14 @@ export function SasDisplay({ words }: { words: readonly string[] }) {
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surfaceMuted,
-          }}>
+          }}
+        >
           <AppText
             selectable={false}
             literal
             variant="eyebrow"
-            style={{ color: theme.textMuted }}>
+            style={{ color: theme.textMuted }}
+          >
             {String(index + 1)}
           </AppText>
           <AppText
@@ -79,7 +82,8 @@ export function SasDisplay({ words }: { words: readonly string[] }) {
             variant="label"
             numberOfLines={1}
             adjustsFontSizeToFit
-            style={{ color: theme.text }}>
+            style={{ color: theme.text }}
+          >
             {word}
           </AppText>
         </View>

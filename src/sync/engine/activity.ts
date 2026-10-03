@@ -17,10 +17,10 @@
  * private from in the first place: it only ever handled sealed bytes.
  */
 
-import type { SyncActivityInput } from '@/data/sync-store';
-import { SyncCryptoError } from '@/sync/crypto';
-import { OpLogError } from '@/sync/oplog';
-import { SyncEngineError, type ActivityKind } from '@/sync/engine/types';
+import type { SyncActivityInput } from "@/data/sync-store";
+import { SyncCryptoError } from "@/sync/crypto";
+import { OpLogError } from "@/sync/oplog";
+import { SyncEngineError, type ActivityKind } from "@/sync/engine/types";
 
 /**
  * How much of a failure description is kept.
@@ -52,10 +52,10 @@ export interface ActivityInput {
 export const activityEntry = ({
   kind,
   recordedAt,
-  peerId = '',
+  peerId = "",
   count = 0,
-  code = '',
-  detail = '',
+  code = "",
+  detail = "",
 }: ActivityInput): SyncActivityInput => ({
   kind,
   peerId,
@@ -77,7 +77,7 @@ export function activityCode(error: unknown): string {
   if (error instanceof SyncEngineError) return error.code;
   if (error instanceof SyncCryptoError) return error.code;
   if (error instanceof OpLogError) return error.code;
-  return 'unknown';
+  return "unknown";
 }
 
 /**
@@ -89,19 +89,29 @@ export function activityCode(error: unknown): string {
  * worker needs, and withholding it to be safe would be withholding it for no reason.
  */
 export function transportDetail(error: unknown): string {
-  if (error instanceof Error && error.message) return error.message.slice(0, MAX_DETAIL_LENGTH);
-  if (typeof error === 'string' && error) return error.slice(0, MAX_DETAIL_LENGTH);
-  return '';
+  if (error instanceof Error && error.message)
+    return error.message.slice(0, MAX_DETAIL_LENGTH);
+  if (typeof error === "string" && error)
+    return error.slice(0, MAX_DETAIL_LENGTH);
+  return "";
 }
 
 /** A rejected batch, with everything the sync screen needs to explain it. */
-export const rejectionEntry = (error: unknown, peerId: string, recordedAt: string) =>
+export const rejectionEntry = (
+  error: unknown,
+  peerId: string,
+  recordedAt: string,
+) =>
   activityEntry({
-    kind: 'rejected',
+    kind: "rejected",
     recordedAt,
-    peerId: error instanceof SyncEngineError && error.peerId ? error.peerId : peerId,
+    peerId:
+      error instanceof SyncEngineError && error.peerId ? error.peerId : peerId,
     code: activityCode(error),
     // A `SyncEngineError` writes its own messages and they are protocol-level by
     // construction, so they are safe to show. Anything else is reduced to its code above.
-    detail: error instanceof SyncEngineError ? error.message.slice(0, MAX_DETAIL_LENGTH) : '',
+    detail:
+      error instanceof SyncEngineError
+        ? error.message.slice(0, MAX_DETAIL_LENGTH)
+        : "",
   });

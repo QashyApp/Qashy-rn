@@ -11,10 +11,14 @@ export function assertFileSize(
   maxBytes: number,
   kind: string,
 ): asserts size is number {
-  if (typeof size !== 'number' || !Number.isSafeInteger(size) || size < 0) {
-    throw new Error(`${kind} size could not be checked safely. Choose another file.`);
+  if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) {
+    throw new Error(
+      `${kind} size could not be checked safely. Choose another file.`,
+    );
   }
   if (size > maxBytes) {
-    throw new Error(`${kind} is larger than the ${mib(maxBytes)} MiB safety limit.`);
+    throw new Error(
+      `${kind} is larger than the ${mib(maxBytes)} MiB safety limit.`,
+    );
   }
 }

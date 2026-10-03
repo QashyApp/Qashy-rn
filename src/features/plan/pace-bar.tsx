@@ -1,7 +1,7 @@
-import { View } from 'react-native';
+import { View } from "react-native";
 
-import { ProgressBar } from '@/components/ui/progress-bar';
-import { useQashyTheme } from '@/theme/theme';
+import { ProgressBar } from "@/components/ui/progress-bar";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * A `ProgressBar` with a thin vertical tick overlaid at `elapsedRatio`, so a
@@ -21,19 +21,22 @@ export function PaceBar({
   color?: string;
 }) {
   const theme = useQashyTheme();
-  const clampedElapsed = Math.max(0, Math.min(1, Number.isFinite(elapsedRatio) ? elapsedRatio : 0));
+  const clampedElapsed = Math.max(
+    0,
+    Math.min(1, Number.isFinite(elapsedRatio) ? elapsedRatio : 0),
+  );
   // Never draw the tick flush at either edge: at 0% or 100% it would sit on
   // top of the track's own rounded end and read as a rendering glitch rather
   // than a marker.
   const showTick = clampedElapsed > 0.01 && clampedElapsed < 0.99;
   return (
-    <View style={{ justifyContent: 'center' }}>
+    <View style={{ justifyContent: "center" }}>
       <ProgressBar label={label} value={value} color={color} />
       {showTick ? (
         <View
           pointerEvents="none"
           style={{
-            position: 'absolute',
+            position: "absolute",
             top: -3,
             bottom: -3,
             start: `${clampedElapsed * 100}%`,

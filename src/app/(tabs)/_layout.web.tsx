@@ -1,6 +1,11 @@
-import { Link, Slot, usePathname } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
-import { Pressable, View, useWindowDimensions, type LayoutRectangle } from 'react-native';
+import { Link, Slot, usePathname } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import {
+  Pressable,
+  View,
+  useWindowDimensions,
+  type LayoutRectangle,
+} from "react-native";
 import Animated, {
   Easing,
   ReduceMotion,
@@ -10,29 +15,44 @@ import Animated, {
   withSpring,
   withTiming,
   type SharedValue,
-} from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { useLocalization } from '@/localization/localization';
-import { materialStyle } from '@/theme/materials';
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { useLocalization } from "@/localization/localization";
+import { materialStyle } from "@/theme/materials";
 import {
   ContentWidthContext,
   NAV_RAIL_BREAKPOINT,
   NAV_RAIL_WIDTH,
   NAV_SIDEBAR_BREAKPOINT,
   navigationRailWidth,
-} from '@/theme/layout';
-import { useQashyTheme } from '@/theme/theme';
+} from "@/theme/layout";
+import { useQashyTheme } from "@/theme/theme";
 
 // Icon names mirror the SF Symbols used by the native tabs in `_layout.tsx` so
 // the same section reads the same on every platform.
 const NAV_ITEMS = [
-  { href: '/overview' as const, label: 'Overview', icon: 'house', match: '/overview' },
-  { href: '/transactions' as const, label: 'Transactions', icon: 'list.bullet.rectangle', match: '/transactions' },
-  { href: '/plan' as const, label: 'Plan', icon: 'chart.pie', match: '/plan' },
-  { href: '/more' as const, label: 'More', icon: 'ellipsis.circle', match: '/more' },
+  {
+    href: "/overview" as const,
+    label: "Overview",
+    icon: "house",
+    match: "/overview",
+  },
+  {
+    href: "/transactions" as const,
+    label: "Transactions",
+    icon: "list.bullet.rectangle",
+    match: "/transactions",
+  },
+  { href: "/plan" as const, label: "Plan", icon: "chart.pie", match: "/plan" },
+  {
+    href: "/more" as const,
+    label: "More",
+    icon: "ellipsis.circle",
+    match: "/more",
+  },
 ];
 
 /** The selected section switches to the solid glyph, as the native tabs do. */
@@ -89,13 +109,15 @@ const RAIL_GUTTER = (NAV_RAIL_WIDTH - RAIL_ITEM_SIZE) / 2;
 const tooltipOffset = (gap: number) => NAV_RAIL_WIDTH - RAIL_GUTTER + gap;
 const TOOLTIP_HEIGHT = 36;
 
-type NavItem = typeof NAV_ITEMS[number];
-type NavMetrics = Pick<LayoutRectangle, 'x' | 'y' | 'width' | 'height'>;
+type NavItem = (typeof NAV_ITEMS)[number];
+type NavMetrics = Pick<LayoutRectangle, "x" | "y" | "width" | "height">;
 
 function isActiveItem(item: NavItem, pathname: string) {
-  return pathname === item.match
-    || pathname.startsWith(`${item.match}/`)
-    || (item.match === '/overview' && pathname === '/');
+  return (
+    pathname === item.match ||
+    pathname.startsWith(`${item.match}/`) ||
+    (item.match === "/overview" && pathname === "/")
+  );
 }
 
 function NavigationItem({
@@ -118,8 +140,12 @@ function NavigationItem({
   const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
   const [showTooltip, setShowTooltip] = useState(false);
-  const currentPageProps = active ? { 'aria-current': 'page' as const } : {};
-  const foreground = active ? theme.onAccentContainer : showTooltip ? theme.text : theme.textMuted;
+  const currentPageProps = active ? { "aria-current": "page" as const } : {};
+  const foreground = active
+    ? theme.onAccentContainer
+    : showTooltip
+      ? theme.text
+      : theme.textMuted;
   const pressScale = useSharedValue(1);
   const contentStyle = useAnimatedStyle(() => ({
     transform: [{ scale: pressScale.value }],
@@ -137,7 +163,12 @@ function NavigationItem({
   }, [highlight, highlighted]);
 
   useEffect(() => {
-    tooltipProgress.set(withTiming(tooltipShown ? 1 : 0, tooltipShown ? tooltipInTiming : tooltipOutTiming));
+    tooltipProgress.set(
+      withTiming(
+        tooltipShown ? 1 : 0,
+        tooltipShown ? tooltipInTiming : tooltipOutTiming,
+      ),
+    );
   }, [tooltipProgress, tooltipShown]);
 
   // The rail sits on the right in RTL, so the tooltip slides in from the left.
@@ -145,7 +176,9 @@ function NavigationItem({
   const highlightStyle = useAnimatedStyle(() => ({ opacity: highlight.value }));
   const tooltipStyle = useAnimatedStyle(() => ({
     opacity: tooltipProgress.value,
-    transform: [{ translateX: (1 - tooltipProgress.value) * TOOLTIP_TRAVEL * direction }],
+    transform: [
+      { translateX: (1 - tooltipProgress.value) * TOOLTIP_TRAVEL * direction },
+    ],
   }));
   return (
     <Link href={item.href} asChild>
@@ -174,22 +207,23 @@ function NavigationItem({
           flex: mobile ? 1 : undefined,
           paddingHorizontal: mobile ? (narrow ? 2 : 4) : compact ? 12 : 16,
           borderRadius: radius.nav,
-          borderCurve: 'continuous',
-          backgroundColor: 'transparent',
-          position: 'relative',
+          borderCurve: "continuous",
+          backgroundColor: "transparent",
+          position: "relative",
           zIndex: showTooltip ? 20 : undefined,
-        }}>
+        }}
+      >
         <Animated.View
           pointerEvents="none"
           style={[
             {
-              position: 'absolute',
+              position: "absolute",
               top: 0,
               right: 0,
               bottom: 0,
               left: 0,
               borderRadius: radius.nav,
-              borderCurve: 'continuous',
+              borderCurve: "continuous",
               backgroundColor: theme.surfaceMuted,
             },
             highlightStyle,
@@ -199,22 +233,36 @@ function NavigationItem({
           style={[
             {
               flex: 1,
-              alignSelf: 'stretch',
-              flexDirection: mobile ? 'column' : !compact ? 'row' : 'column',
-              alignItems: 'center',
+              alignSelf: "stretch",
+              flexDirection: mobile ? "column" : !compact ? "row" : "column",
+              alignItems: "center",
               // Only the expanded sidebar starts its content at the leading edge,
               // because there the icon is followed by a label and the labels have
               // to line up. Everywhere else the icon is alone in the box, and
               // `flex-start` was pinning it to the top of a 48pt target — the
               // rail's selected pill sat visibly low around its own icon.
-              justifyContent: mobile || compact ? 'center' : 'flex-start',
+              justifyContent: mobile || compact ? "center" : "flex-start",
               gap: mobile ? space.xxs : space.sm,
             },
             contentStyle,
-          ]}>
-          <AppIcon name={active ? activeIconName(item.icon) : item.icon} color={foreground as string} size={mobile ? 22 : 20} />
+          ]}
+        >
+          <AppIcon
+            name={active ? activeIconName(item.icon) : item.icon}
+            color={foreground as string}
+            size={mobile ? 22 : 20}
+          />
           {mobile || !compact ? (
-            <AppText selectable={false} variant="label" numberOfLines={1} style={{ color: foreground, fontSize: mobile ? (narrow ? 10 : 11) : undefined, letterSpacing: mobile && narrow ? -0.2 : undefined }}>
+            <AppText
+              selectable={false}
+              variant="label"
+              numberOfLines={1}
+              style={{
+                color: foreground,
+                fontSize: mobile ? (narrow ? 10 : 11) : undefined,
+                letterSpacing: mobile && narrow ? -0.2 : undefined,
+              }}
+            >
               {item.label}
             </AppText>
           ) : null}
@@ -229,11 +277,11 @@ function NavigationItem({
             role="tooltip"
             style={[
               {
-                position: 'absolute',
+                position: "absolute",
                 start: tooltipOffset(space.sm),
                 top: (48 - TOOLTIP_HEIGHT) / 2,
                 minHeight: TOOLTIP_HEIGHT,
-                justifyContent: 'center',
+                justifyContent: "center",
                 paddingHorizontal: 12,
                 borderRadius: radius.control,
                 backgroundColor: theme.surfaceElevated,
@@ -242,8 +290,11 @@ function NavigationItem({
                 boxShadow: theme.shadowRaised,
               },
               tooltipStyle,
-            ]}>
-            <AppText selectable={false} variant="caption" numberOfLines={1}>{item.label}</AppText>
+            ]}
+          >
+            <AppText selectable={false} variant="caption" numberOfLines={1}>
+              {item.label}
+            </AppText>
           </Animated.View>
         ) : null}
       </Pressable>
@@ -274,7 +325,9 @@ function NavigationBar({
   const { radius, space } = theme;
   const reduceMotion = useReducedMotion();
   const [metrics, setMetrics] = useState<Record<string, NavMetrics>>({});
-  const activeHref = NAV_ITEMS.find((item) => isActiveItem(item, pathname))?.href;
+  const activeHref = NAV_ITEMS.find((item) =>
+    isActiveItem(item, pathname),
+  )?.href;
   const activeMetrics = activeHref ? metrics[activeHref] : undefined;
 
   const x = useSharedValue(0);
@@ -286,7 +339,12 @@ function NavigationBar({
   useEffect(() => {
     // The inactive bar is unmounted at the breakpoint, so its metrics never enter this state.
     // There is nothing to position until the active bar has measured itself.
-    if (!activeMetrics || activeMetrics.width === 0 || activeMetrics.height === 0) return;
+    if (
+      !activeMetrics ||
+      activeMetrics.width === 0 ||
+      activeMetrics.height === 0
+    )
+      return;
     // A first measurement has nowhere to slide from, so it is placed rather
     // than moved — otherwise the indicator flies in from the corner on load.
     const place = shown.get() === 0 || reduceMotion;
@@ -310,11 +368,13 @@ function NavigationBar({
   const handleMeasure = useCallback((href: string, next: NavMetrics) => {
     setMetrics((current) => {
       const previous = current[href];
-      if (previous
-        && previous.x === next.x
-        && previous.y === next.y
-        && previous.width === next.width
-        && previous.height === next.height) {
+      if (
+        previous &&
+        previous.x === next.x &&
+        previous.y === next.y &&
+        previous.width === next.width &&
+        previous.height === next.height
+      ) {
         return current;
       }
       return { ...current, [href]: next };
@@ -324,22 +384,23 @@ function NavigationBar({
   return (
     <View
       style={{
-        position: 'relative',
-        flexDirection: mobile ? 'row' : 'column',
-        alignItems: mobile ? 'center' : 'stretch',
+        position: "relative",
+        flexDirection: mobile ? "row" : "column",
+        alignItems: mobile ? "center" : "stretch",
         flex: mobile ? 1 : undefined,
         gap: mobile ? 0 : space.sm,
         zIndex: mobile ? undefined : 10,
-      }}>
+      }}
+    >
       <Animated.View
         pointerEvents="none"
         style={[
           {
-            position: 'absolute',
+            position: "absolute",
             top: 0,
             left: 0,
             borderRadius: radius.nav,
-            borderCurve: 'continuous',
+            borderCurve: "continuous",
             backgroundColor: theme.accentContainer,
             // The selected item reads as pressed into the surface rather than a
             // flat tinted rectangle — the same "physically depressing" language
@@ -379,12 +440,18 @@ export default function WebTabsLayout() {
   const railWidth = navigationRailWidth(width);
 
   return (
-    <View style={{ flex: 1, flexDirection: mobile ? 'column' : 'row', backgroundColor: theme.background }}>
+    <View
+      style={{
+        flex: 1,
+        flexDirection: mobile ? "column" : "row",
+        backgroundColor: theme.background,
+      }}
+    >
       <View
-        accessibilityLabel={t('Primary')}
+        accessibilityLabel={t("Primary")}
         role="navigation"
         style={{
-          display: mobile ? 'none' : 'flex',
+          display: mobile ? "none" : "flex",
           width: railWidth,
           // Above the content pane, which is a later sibling and therefore paints
           // over it by default. Nothing here overlaps the page except the compact
@@ -403,53 +470,97 @@ export default function WebTabsLayout() {
           borderEndWidth: 1,
           borderEndColor: theme.border,
           gap: space.xxl,
-        }}>
-        <View style={{ minHeight: 52, flexDirection: 'row', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: space.md }}>
+        }}
+      >
+        <View
+          style={{
+            minHeight: 52,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: compact ? "center" : "flex-start",
+            gap: space.md,
+          }}
+        >
           <View
             style={[
-              { width: 38, height: 38, borderRadius: radius.tile, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' },
-              materialStyle(theme, 'accent'),
-            ]}>
-            <AppText selectable={false} variant="headline" style={{ color: theme.onAccent }}>Q</AppText>
+              {
+                width: 38,
+                height: 38,
+                borderRadius: radius.tile,
+                borderCurve: "continuous",
+                alignItems: "center",
+                justifyContent: "center",
+              },
+              materialStyle(theme, "accent"),
+            ]}
+          >
+            <AppText
+              selectable={false}
+              variant="headline"
+              style={{ color: theme.onAccent }}
+            >
+              Q
+            </AppText>
           </View>
           {!compact ? <AppText variant="headline">Qashy</AppText> : null}
         </View>
-        {!mobile ? <NavigationBar mobile={false} compact={compact} narrow={narrow} pathname={pathname} /> : null}
+        {!mobile ? (
+          <NavigationBar
+            mobile={false}
+            compact={compact}
+            narrow={narrow}
+            pathname={pathname}
+          />
+        ) : null}
         {!compact ? (
-          <View style={{ marginTop: 'auto', gap: space.xs }}>
-            <AppText variant="overline" muted>{t('Local-first finance')}</AppText>
+          <View style={{ marginTop: "auto", gap: space.xs }}>
+            <AppText variant="overline" muted>
+              {t("Local-first finance")}
+            </AppText>
             {/* Not "stays on this device" any more: with sync on, it also reaches the user's
                 other devices. What survived the change is the claim that actually matters —
                 nobody else, including any relay in the middle, can read it. */}
-            <AppText variant="caption" muted>Only your devices can read your data.</AppText>
+            <AppText variant="caption" muted>
+              Only your devices can read your data.
+            </AppText>
           </View>
         ) : null}
       </View>
       <ContentWidthContext value={Math.max(width - railWidth, 0)}>
-        <View style={{ flex: 1 }}><Slot /></View>
+        <View style={{ flex: 1 }}>
+          <Slot />
+        </View>
       </ContentWidthContext>
       <View
-        accessibilityLabel={t('Primary')}
+        accessibilityLabel={t("Primary")}
         role="navigation"
         style={[
           {
-            display: mobile ? 'flex' : 'none',
-            position: 'absolute',
+            display: mobile ? "flex" : "none",
+            position: "absolute",
             left: space.md + insets.left,
             right: space.md + insets.right,
             bottom: space.md + insets.bottom,
             minHeight: 64,
             borderRadius: radius.sheet,
-            borderCurve: 'continuous',
-            flexDirection: 'row',
-            alignItems: 'center',
+            borderCurve: "continuous",
+            flexDirection: "row",
+            alignItems: "center",
             paddingLeft: space.sm,
             paddingRight: space.sm,
             paddingVertical: space.xs,
           },
-          materialStyle(theme, 'raised'),
-        ]}>
-        {mobile ? <NavigationBar mobile compact={false} narrow={narrow} pathname={pathname} /> : null}
+          materialStyle(theme, "raised"),
+        ]}
+      >
+        {mobile ? (
+          <NavigationBar
+            mobile
+            compact={false}
+            narrow={narrow}
+            pathname={pathname}
+          />
+        ) : null}
       </View>
     </View>
   );

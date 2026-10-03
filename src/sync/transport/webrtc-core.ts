@@ -39,14 +39,14 @@ import {
   type HandshakeSession,
   type PairingSecret,
   type VaultRootKey,
-} from '@/sync/crypto';
-import type { PeerDescriptor, SyncChannel } from '@/sync/engine/transport';
-import type { IceServer } from '@/sync/transport/endpoints';
-import { RelayError } from '@/sync/transport/http';
-import type { SignalingClient } from '@/sync/transport/signaling';
+} from "@/sync/crypto";
+import type { PeerDescriptor, SyncChannel } from "@/sync/engine/transport";
+import type { IceServer } from "@/sync/transport/endpoints";
+import { RelayError } from "@/sync/transport/http";
+import type { SignalingClient } from "@/sync/transport/signaling";
 
 /** The data channel's label. Both sides must agree; it is not secret and identifies nothing. */
-export const CHANNEL_LABEL = 'qashy-sync';
+export const CHANNEL_LABEL = "qashy-sync";
 
 /** How long to wait for ICE to find a path before giving up and letting the relay take over. */
 export const CONNECT_TIMEOUT_MS = 20_000;
@@ -89,14 +89,18 @@ export interface RtcDataChannel {
 export interface RtcConnection {
   readonly connectionState?: string;
   readonly iceConnectionState?: string;
-  createDataChannel(label: string, options?: { ordered?: boolean }): RtcDataChannel;
+  createDataChannel(
+    label: string,
+    options?: { ordered?: boolean },
+  ): RtcDataChannel;
   createOffer(): Promise<RtcDescription>;
   createAnswer(): Promise<RtcDescription>;
   setLocalDescription(description: RtcDescription): Promise<void>;
   setRemoteDescription(description: RtcDescription): Promise<void>;
   addIceCandidate(candidate: RtcCandidateInit): Promise<void>;
   close(): void;
-  onicecandidate: ((event: { candidate: RtcCandidateInit | null }) => void) | null;
+  onicecandidate:
+    ((event: { candidate: RtcCandidateInit | null }) => void) | null;
   ondatachannel: ((event: { channel: RtcDataChannel }) => void) | null;
   onconnectionstatechange: (() => void) | null;
   oniceconnectionstatechange: (() => void) | null;
@@ -113,9 +117,14 @@ export interface RtcFactory {
 // ---------------------------------------------------------------------------
 
 type SignalBody =
-  | { readonly t: 'sdp'; readonly type: string; readonly sdp: string }
-  | { readonly t: 'ice'; readonly candidate: string; readonly mid: string | null; readonly index: number | null }
-  | { readonly t: 'done' };
+  | { readonly t: "sdp"; readonly type: string; readonly sdp: string }
+  | {
+      readonly t: "ice";
+      readonly candidate: string;
+      readonly mid: string | null;
+      readonly index: number | null;
+    }
+  | { readonly t: "done" };
 
 export interface WebRtcDeps {
   readonly identity: DeviceIdentity;
@@ -153,8 +162,8 @@ export async function connectWebRtc(
 ): Promise<WebRtcConnection> {
   if (!deps.factory.available) {
     throw new RelayError(
-      'This build cannot make a direct connection. Sync will use the relay instead.',
-      'unreachable',
+      "This build cannot make a direct connection. Sync will use the relay instead.",
+      "unreachable",
     );
   }
 
@@ -167,7 +176,13 @@ export async function connectWebRtc(
   const connection = deps.factory.create(deps.iceServers);
 
   try {
-    const channel = await negotiateChannel(deps, connection, wire, isOfferer, signal);
+    const channel = await negotiateChannel(
+      deps,
+      connection,
+      wire,
+      isOfferer,
+      signal,
+    );
     return {
       session,
       channel,
@@ -226,7 +241,7 @@ class SealedSignaling {
     const frame = seal(
       this.session.sendKey,
       {
-        purpose: 'handshake',
+        purpose: "handshake",
         senderDeviceId: this.deps.identity.deviceId,
         recipientDeviceId: this.session.peerDeviceId,
         epoch: this.deps.epoch,
@@ -243,7 +258,7 @@ class SealedSignaling {
     const plaintext = open(
       this.session.receiveKey,
       {
-        purpose: 'handshake',
+        purpose: "handshake",
         senderDeviceId: this.session.peerDeviceId,
         recipientDeviceId: this.deps.identity.deviceId,
         epoch: this.deps.epoch,
@@ -261,26 +276,39 @@ function parseSignal(text: string): SignalBody {
   try {
     parsed = JSON.parse(text);
   } catch {
-    throw new RelayError('The other device sent an unreadable message.', 'malformed');
+    throw new RelayError(
+      "The other device sent an unreadable message.",
+      "malformed",
+    );
   }
-  if (!parsed || typeof parsed !== 'object') {
-    throw new RelayError('The other device sent an unreadable message.', 'malformed');
+  if (!parsed || typeof parsed !== "object") {
+    throw new RelayError(
+      "The other device sent an unreadable message.",
+      "malformed",
+    );
   }
   const body = parsed as Record<string, unknown>;
 
-  if (body.t === 'sdp' && typeof body.type === 'string' && typeof body.sdp === 'string') {
-    return { t: 'sdp', type: body.type, sdp: body.sdp };
+  if (
+    body.t === "sdp" &&
+    typeof body.type === "string" &&
+    typeof body.sdp === "string"
+  ) {
+    return { t: "sdp", type: body.type, sdp: body.sdp };
   }
-  if (body.t === 'ice' && typeof body.candidate === 'string') {
+  if (body.t === "ice" && typeof body.candidate === "string") {
     return {
-      t: 'ice',
+      t: "ice",
       candidate: body.candidate,
-      mid: typeof body.mid === 'string' ? body.mid : null,
-      index: typeof body.index === 'number' ? body.index : null,
+      mid: typeof body.mid === "string" ? body.mid : null,
+      index: typeof body.index === "number" ? body.index : null,
     };
   }
-  if (body.t === 'done') return { t: 'done' };
-  throw new RelayError('The other device sent an unexpected message.', 'malformed');
+  if (body.t === "done") return { t: "done" };
+  throw new RelayError(
+    "The other device sent an unexpected message.",
+    "malformed",
+  );
 }
 
 /**
@@ -300,7 +328,12 @@ async function negotiateChannel(
 ): Promise<SyncChannel> {
   const opened = new Promise<RtcDataChannel>((resolve, reject) => {
     const timer = setTimeout(() => {
-      reject(new RelayError('Could not open a direct connection to that device.', 'unreachable'));
+      reject(
+        new RelayError(
+          "Could not open a direct connection to that device.",
+          "unreachable",
+        ),
+      );
     }, deps.connectTimeoutMs ?? CONNECT_TIMEOUT_MS);
 
     const settle = (channel: RtcDataChannel) => {
@@ -309,28 +342,31 @@ async function negotiateChannel(
     };
     const fail = (message: string) => {
       clearTimeout(timer);
-      reject(new RelayError(message, 'unreachable'));
+      reject(new RelayError(message, "unreachable"));
     };
 
-    signal.addEventListener('abort', () => fail('Sync was cancelled.'));
+    signal.addEventListener("abort", () => fail("Sync was cancelled."));
 
     if (isOfferer) {
-      const channel = connection.createDataChannel(CHANNEL_LABEL, { ordered: true });
-      channel.binaryType = 'arraybuffer';
+      const channel = connection.createDataChannel(CHANNEL_LABEL, {
+        ordered: true,
+      });
+      channel.binaryType = "arraybuffer";
       channel.onopen = () => settle(channel);
-      channel.onerror = () => fail('The direct connection failed.');
+      channel.onerror = () => fail("The direct connection failed.");
     } else {
       connection.ondatachannel = (event) => {
         const channel = event.channel;
-        channel.binaryType = 'arraybuffer';
-        if (channel.readyState === 'open') settle(channel);
+        channel.binaryType = "arraybuffer";
+        if (channel.readyState === "open") settle(channel);
         else channel.onopen = () => settle(channel);
       };
     }
 
     connection.onconnectionstatechange = () => {
       const state = connection.connectionState;
-      if (state === 'failed' || state === 'closed') fail('The direct connection failed.');
+      if (state === "failed" || state === "closed")
+        fail("The direct connection failed.");
     };
   });
 
@@ -338,11 +374,11 @@ async function negotiateChannel(
 
   connection.onicecandidate = (event) => {
     if (!event.candidate) {
-      gate.offer({ t: 'done' });
+      gate.offer({ t: "done" });
       return;
     }
     gate.offer({
-      t: 'ice',
+      t: "ice",
       candidate: event.candidate.candidate,
       mid: event.candidate.sdpMid ?? null,
       index: event.candidate.sdpMLineIndex ?? null,
@@ -352,14 +388,16 @@ async function negotiateChannel(
   if (isOfferer) {
     const offer = await connection.createOffer();
     await connection.setLocalDescription(offer);
-    wire.send({ t: 'sdp', type: offer.type, sdp: offer.sdp ?? '' });
+    wire.send({ t: "sdp", type: offer.type, sdp: offer.sdp ?? "" });
     gate.release();
   }
 
   // Pumped in the background: ICE trickles for as long as the connection is being
   // established, and awaiting each message in sequence here would stall the offerer waiting
   // for an answer that cannot be produced until its own candidates have been delivered.
-  const pump = drainSignals(connection, wire, gate, isOfferer, signal).catch(() => undefined);
+  const pump = drainSignals(connection, wire, gate, isOfferer, signal).catch(
+    () => undefined,
+  );
 
   try {
     const channel = await opened;
@@ -424,21 +462,25 @@ async function drainSignals(
     if (signal.aborted) return;
     const body = await wire.receive(signal);
 
-    if (body.t === 'done') continue;
-    if (body.t === 'ice') {
+    if (body.t === "done") continue;
+    if (body.t === "ice") {
       // A candidate that the platform rejects is one path among several, not a failure:
       // ICE is a race and losing one runner does not lose the race.
       await connection
-        .addIceCandidate({ candidate: body.candidate, sdpMid: body.mid, sdpMLineIndex: body.index })
+        .addIceCandidate({
+          candidate: body.candidate,
+          sdpMid: body.mid,
+          sdpMLineIndex: body.index,
+        })
         .catch(() => undefined);
       continue;
     }
 
     await connection.setRemoteDescription({ type: body.type, sdp: body.sdp });
-    if (!isOfferer && body.type === 'offer') {
+    if (!isOfferer && body.type === "offer") {
       const answer = await connection.createAnswer();
       await connection.setLocalDescription(answer);
-      wire.send({ t: 'sdp', type: answer.type, sdp: answer.sdp ?? '' });
+      wire.send({ t: "sdp", type: answer.type, sdp: answer.sdp ?? "" });
       gate.release();
     }
   }
@@ -453,7 +495,9 @@ async function drainSignals(
  * merely late rather than the end of the channel.
  */
 class DataChannelWire implements SyncChannel {
-  private readonly handlers = new Set<(frame: Uint8Array, seq: number) => void>();
+  private readonly handlers = new Set<
+    (frame: Uint8Array, seq: number) => void
+  >();
 
   constructor(
     readonly peerId: string,
@@ -463,8 +507,10 @@ class DataChannelWire implements SyncChannel {
   }
 
   send(frame: Uint8Array, seq: number): Promise<void> {
-    if (this.channel.readyState !== 'open') {
-      return Promise.reject(new RelayError('That connection is closed.', 'unreachable'));
+    if (this.channel.readyState !== "open") {
+      return Promise.reject(
+        new RelayError("That connection is closed.", "unreachable"),
+      );
     }
     const message = new Uint8Array(frame.length + 4);
     new DataView(message.buffer).setUint32(0, seq, false);
@@ -487,7 +533,11 @@ class DataChannelWire implements SyncChannel {
   private absorb(data: unknown): void {
     const bytes = toBytes(data);
     if (!bytes || bytes.length < 4) return;
-    const seq = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(0, false);
+    const seq = new DataView(
+      bytes.buffer,
+      bytes.byteOffset,
+      bytes.byteLength,
+    ).getUint32(0, false);
     // A frame past the channel's hard ceiling is still handed over, as a zero-copy view rather
     // than a slice. `openBatch` refuses it as `tooLarge` — cheaply, before any allocation —
     // and the refusal is recorded in the activity log. Dropping it here would be a rejection
@@ -495,7 +545,11 @@ class DataChannelWire implements SyncChannel {
     // and every resend would be dropped the same silent way.
     const frame =
       bytes.length > MAX_CHANNEL_MESSAGE
-        ? new Uint8Array(bytes.buffer, bytes.byteOffset + 4, bytes.byteLength - 4)
+        ? new Uint8Array(
+            bytes.buffer,
+            bytes.byteOffset + 4,
+            bytes.byteLength - 4,
+          )
         : bytes.slice(4);
     for (const handler of this.handlers) handler(frame, seq);
   }
@@ -520,6 +574,9 @@ function toBytes(data: unknown): Uint8Array | null {
 export const UNAVAILABLE_RTC: RtcFactory = {
   available: false,
   create: () => {
-    throw new RelayError('This build cannot make a direct connection.', 'unreachable');
+    throw new RelayError(
+      "This build cannot make a direct connection.",
+      "unreachable",
+    );
   },
 };

@@ -1,8 +1,14 @@
-import { useId, useState } from 'react';
-import { View, type ColorValue, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Defs, LinearGradient, Path, Stop } from 'react-native-svg';
+import { useId, useState } from "react";
+import { View, type ColorValue, type LayoutChangeEvent } from "react-native";
+import Svg, {
+  Circle,
+  Defs,
+  LinearGradient,
+  Path,
+  Stop,
+} from "react-native-svg";
 
-import { useQashyTheme } from '@/theme/theme';
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * Builds a smoothed path through `points` using a simple quadratic-midpoint
@@ -12,7 +18,7 @@ import { useQashyTheme } from '@/theme/theme';
  * monotone-cubic (Catmull-Rom) fit.
  */
 function smoothPath(points: { x: number; y: number }[]) {
-  if (points.length === 0) return '';
+  if (points.length === 0) return "";
   if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
   let path = `M ${points[0].x} ${points[0].y}`;
   for (let index = 1; index < points.length; index += 1) {
@@ -55,13 +61,22 @@ export function Sparkline({
   const resolvedColor = (color ?? theme.staticAccent) as string;
   const onLayout = (event: LayoutChangeEvent) => {
     const next = event.nativeEvent.layout.width;
-    setMeasuredWidth((current) => (Math.abs(current - next) > 0.5 ? next : current));
+    setMeasuredWidth((current) =>
+      Math.abs(current - next) > 0.5 ? next : current,
+    );
   };
   const chartWidth = Math.max(width ?? measuredWidth, 1);
   const canDraw = values.length > 0 && chartWidth > 0;
 
   if (!canDraw) {
-    return <View accessibilityRole="image" accessibilityLabel={label} onLayout={width ? undefined : onLayout} style={{ width, height }} />;
+    return (
+      <View
+        accessibilityRole="image"
+        accessibilityLabel={label}
+        onLayout={width ? undefined : onLayout}
+        style={{ width, height }}
+      />
+    );
   }
 
   const min = Math.min(...values);
@@ -74,7 +89,11 @@ export function Sparkline({
   const plotWidth = Math.max(chartWidth - inset * 2, 1);
   const plotHeight = Math.max(height - inset * 2, 1);
   const points = values.map((value, index) => ({
-    x: inset + (values.length > 1 ? (index / (values.length - 1)) * plotWidth : plotWidth / 2),
+    x:
+      inset +
+      (values.length > 1
+        ? (index / (values.length - 1)) * plotWidth
+        : plotWidth / 2),
     y: inset + plotHeight - ((value - min) / span) * plotHeight,
   }));
   const path = smoothPath(points);
@@ -82,9 +101,18 @@ export function Sparkline({
   const areaPath = `${path} L ${last.x} ${height} L ${points[0].x} ${height} Z`;
 
   return (
-    <View accessibilityRole="image" accessibilityLabel={label} onLayout={width ? undefined : onLayout} style={{ width: width ?? '100%', height }}>
+    <View
+      accessibilityRole="image"
+      accessibilityLabel={label}
+      onLayout={width ? undefined : onLayout}
+      style={{ width: width ?? "100%", height }}
+    >
       {chartWidth > 1 ? (
-        <Svg width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`}>
+        <Svg
+          width="100%"
+          height={height}
+          viewBox={`0 0 ${chartWidth} ${height}`}
+        >
           <Defs>
             <LinearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor={resolvedColor} stopOpacity={0.25} />
@@ -92,8 +120,17 @@ export function Sparkline({
             </LinearGradient>
           </Defs>
           <Path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
-          <Path d={path} fill="none" stroke={resolvedColor} strokeWidth={theme.charts.sparklineWidth ?? theme.charts.lineWidth} strokeLinecap={theme.charts.lineCap} strokeLinejoin="round" />
-          {values.length > 0 ? <Circle cx={last.x} cy={last.y} r={2.5} fill={resolvedColor} /> : null}
+          <Path
+            d={path}
+            fill="none"
+            stroke={resolvedColor}
+            strokeWidth={theme.charts.sparklineWidth ?? theme.charts.lineWidth}
+            strokeLinecap={theme.charts.lineCap}
+            strokeLinejoin="round"
+          />
+          {values.length > 0 ? (
+            <Circle cx={last.x} cy={last.y} r={2.5} fill={resolvedColor} />
+          ) : null}
         </Svg>
       ) : null}
     </View>

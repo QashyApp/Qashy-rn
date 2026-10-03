@@ -1,15 +1,15 @@
-import { useState, type Ref } from 'react';
-import { Pressable, TextInput, View, type TextInputProps } from 'react-native';
+import { useState, type Ref } from "react";
+import { Pressable, TextInput, View, type TextInputProps } from "react-native";
 
-import { AppText } from '@/components/ui/app-text';
-import { MotionView } from '@/components/ui/motion';
-import { useLocalization } from '@/localization/localization';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme, type ThemeTokens } from '@/theme/theme';
-import type { TypeScaleSpec } from '@/theme/themes/types';
-import { withAppFont } from '@/theme/typography';
+import { AppText } from "@/components/ui/app-text";
+import { MotionView } from "@/components/ui/motion";
+import { useLocalization } from "@/localization/localization";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme, type ThemeTokens } from "@/theme/theme";
+import type { TypeScaleSpec } from "@/theme/themes/types";
+import { withAppFont } from "@/theme/typography";
 
-type AmountHeroSize = 'hero' | 'display' | 'money';
+type AmountHeroSize = "hero" | "display" | "money";
 
 /**
  * Per-`size` layout: the large centered numeric well with a currency pill
@@ -18,10 +18,40 @@ type AmountHeroSize = 'hero' | 'display' | 'money';
  * other two sizes render a visible label above the well, sized down to fit
  * a form alongside other fields.
  */
-const sizeConfig = ({ space, radius }: Pick<ThemeTokens, 'space' | 'radius'>): Record<AmountHeroSize, { face: keyof TypeScaleSpec; radius: number; paddingVertical: number; paddingHorizontal: number; showLabel: boolean }> => ({
-  hero: { face: 'hero', radius: radius.sheet, paddingVertical: space.xxl, paddingHorizontal: space.xl, showLabel: false },
-  display: { face: 'display', radius: radius.sheet, paddingVertical: space.xl, paddingHorizontal: space.xl, showLabel: true },
-  money: { face: 'money', radius: radius.tile, paddingVertical: space.xl, paddingHorizontal: space.lg, showLabel: true },
+const sizeConfig = ({
+  space,
+  radius,
+}: Pick<ThemeTokens, "space" | "radius">): Record<
+  AmountHeroSize,
+  {
+    face: keyof TypeScaleSpec;
+    radius: number;
+    paddingVertical: number;
+    paddingHorizontal: number;
+    showLabel: boolean;
+  }
+> => ({
+  hero: {
+    face: "hero",
+    radius: radius.sheet,
+    paddingVertical: space.xxl,
+    paddingHorizontal: space.xl,
+    showLabel: false,
+  },
+  display: {
+    face: "display",
+    radius: radius.sheet,
+    paddingVertical: space.xl,
+    paddingHorizontal: space.xl,
+    showLabel: true,
+  },
+  money: {
+    face: "money",
+    radius: radius.tile,
+    paddingVertical: space.xl,
+    paddingHorizontal: space.lg,
+    showLabel: true,
+  },
 });
 
 /**
@@ -41,8 +71,8 @@ export function AmountHero({
   value,
   onChangeText,
   currency,
-  label = 'Amount',
-  size = 'hero',
+  label = "Amount",
+  size = "hero",
   error,
   autoFocus = false,
   hint,
@@ -59,7 +89,7 @@ export function AmountHero({
   onCurrencyPress,
   onSubmitEditing,
   returnKeyType,
-  placeholder = '0.00',
+  placeholder = "0.00",
   onBlur,
   ref,
 }: {
@@ -81,7 +111,7 @@ export function AmountHero({
   currencyInTranslation?: boolean;
   onCurrencyPress?: () => void;
   onSubmitEditing?: () => void;
-  returnKeyType?: TextInputProps['returnKeyType'];
+  returnKeyType?: TextInputProps["returnKeyType"];
   placeholder?: string;
   /** Called alongside the field's own internal blur handling. */
   onBlur?: () => void;
@@ -92,19 +122,21 @@ export function AmountHero({
   const { isRtl, t } = useLocalization();
   const [focused, setFocused] = useState(false);
   const [pillWidth, setPillWidth] = useState(0);
-  const sunken = materialStyle(theme, 'sunken');
-  const pill = materialStyle(theme, 'control');
+  const sunken = materialStyle(theme, "sunken");
+  const pill = materialStyle(theme, "control");
   const config = sizeConfig(theme)[size];
   const face = theme.type.scale[config.face];
 
   const baseAccessibilityLabel = currencyInTranslation
     ? t(`${label} (${currency})`)
     : `${t(label)} (${currency})`;
-  const accessibilityLabel = required ? `${baseAccessibilityLabel}, ${t('required')}` : baseAccessibilityLabel;
+  const accessibilityLabel = required
+    ? `${baseAccessibilityLabel}, ${t("required")}`
+    : baseAccessibilityLabel;
   const isInvalid = Boolean(error);
   const validityProps = {
     accessibilityState: { invalid: isInvalid },
-    ...(process.env.EXPO_OS === 'web' ? { 'aria-invalid': isInvalid } : null),
+    ...(process.env.EXPO_OS === "web" ? { "aria-invalid": isInvalid } : null),
   } as TextInputProps;
 
   const currencyPill = (
@@ -117,28 +149,50 @@ export function AmountHero({
         paddingVertical: space.xs,
         backgroundColor: pill.backgroundColor,
         boxShadow: pill.boxShadow as string,
-      }}>
-      <AppText literal variant="label" style={{ fontWeight: '700' }}>{currency}</AppText>
+      }}
+    >
+      <AppText literal variant="label" style={{ fontWeight: "700" }}>
+        {currency}
+      </AppText>
     </View>
   );
 
   return (
     <View style={{ gap: space.sm }}>
-      {config.showLabel ? <AppText variant="label" style={size === 'display' ? { textAlign: 'center' } : undefined}>{label}</AppText> : null}
+      {config.showLabel ? (
+        <AppText
+          variant="label"
+          style={size === "display" ? { textAlign: "center" } : undefined}
+        >
+          {label}
+        </AppText>
+      ) : null}
       <View
         style={{
           borderRadius: config.radius,
-          borderCurve: 'continuous',
+          borderCurve: "continuous",
           paddingVertical: config.paddingVertical,
           paddingHorizontal: config.paddingHorizontal,
-          alignItems: 'center',
-          justifyContent: 'center',
+          alignItems: "center",
+          justifyContent: "center",
           backgroundColor: sunken.backgroundColor,
           boxShadow: sunken.boxShadow as string,
           borderWidth: 2,
-          borderColor: error ? theme.negative : focused ? theme.accent : 'transparent',
-        }}>
-        <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+          borderColor: error
+            ? theme.negative
+            : focused
+              ? theme.accent
+              : "transparent",
+        }}
+      >
+        <View
+          style={{
+            alignSelf: "stretch",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: space.sm,
+          }}
+        >
           <View
             pointerEvents="none"
             accessibilityElementsHidden
@@ -171,21 +225,25 @@ export function AmountHero({
                   flex: 1,
                   minWidth: 0,
                   paddingVertical: space.xs,
-                  textAlign: 'center',
+                  textAlign: "center",
                   fontSize: face.fontSize,
                   lineHeight: face.lineHeight,
                   letterSpacing: face.letterSpacing,
                   color: theme.text,
-                  writingDirection: isRtl ? 'rtl' : 'ltr',
+                  writingDirection: isRtl ? "rtl" : "ltr",
                 },
               ],
-              'semibold',
-              'numeric',
+              "semibold",
+              "numeric",
               theme.type,
             )}
           />
           {onCurrencyPress ? (
-            <Pressable accessibilityRole="button" accessibilityLabel={currency} onPress={onCurrencyPress}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={currency}
+              onPress={onCurrencyPress}
+            >
               {currencyPill}
             </Pressable>
           ) : (
@@ -196,12 +254,13 @@ export function AmountHero({
       {hint !== undefined ? (
         <MotionView key={error ?? hint} variant="up" exit animateLayout>
           <AppText
-            accessibilityRole={error ? 'alert' : undefined}
-            accessibilityLiveRegion={error ? 'polite' : undefined}
+            accessibilityRole={error ? "alert" : undefined}
+            accessibilityLiveRegion={error ? "polite" : undefined}
             selectable
             variant="caption"
             muted={!error}
-            style={error ? { color: theme.negative } : undefined}>
+            style={error ? { color: theme.negative } : undefined}
+          >
             {error ?? hint}
           </AppText>
         </MotionView>
@@ -213,7 +272,8 @@ export function AmountHero({
             selectable
             literal
             variant="caption"
-            style={{ color: theme.negative, textAlign: 'center' }}>
+            style={{ color: theme.negative, textAlign: "center" }}
+          >
             {t(error)}
           </AppText>
         </MotionView>

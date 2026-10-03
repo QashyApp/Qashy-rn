@@ -1,9 +1,9 @@
-import { View, type ViewStyle } from 'react-native';
+import { View, type ViewStyle } from "react-native";
 
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { useQashyTheme } from '@/theme/theme';
-import { toneColors } from '@/theme/tokens';
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { useQashyTheme } from "@/theme/theme";
+import { toneColors } from "@/theme/tokens";
 
 /**
  * How a state reads at a glance.
@@ -12,10 +12,12 @@ import { toneColors } from '@/theme/tokens';
  * `tone="red"` for something that is merely informational and later have to
  * chase every site down when the palette changes.
  */
-export type StatusTone = 'neutral' | 'positive' | 'warning' | 'negative' | 'transfer';
+export type StatusTone =
+  "neutral" | "positive" | "warning" | "negative" | "transfer";
 
 /** A subtle inner top highlight so a tone pill reads as a raised chip, not a flat label. */
-const INNER_HIGHLIGHT: ViewStyle['boxShadow'] = 'inset 0 1px 0 rgba(255,255,255,0.35)';
+const INNER_HIGHLIGHT: ViewStyle["boxShadow"] =
+  "inset 0 1px 0 rgba(255,255,255,0.35)";
 
 /**
  * A small labelled state marker.
@@ -34,7 +36,7 @@ const INNER_HIGHLIGHT: ViewStyle['boxShadow'] = 'inset 0 1px 0 rgba(255,255,255,
 export function StatusPill({
   label,
   icon,
-  tone = 'neutral',
+  tone = "neutral",
   literal = false,
   style,
 }: {
@@ -53,21 +55,30 @@ export function StatusPill({
   // always a static hex in practice (only surface-family colors map to opaque
   // platform colors under Material You), but this guards the type anyway
   // rather than assume it.
-  const transferSeed = typeof theme.transfer === 'string' ? theme.transfer : undefined;
+  const transferSeed =
+    typeof theme.transfer === "string" ? theme.transfer : undefined;
   const transferTone = transferSeed
-    ? toneColors(transferSeed, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone)
+    ? toneColors(
+        transferSeed,
+        theme.staticSurface,
+        theme.staticText,
+        theme.mode === "dark",
+        theme.charts.tone,
+      )
     : undefined;
-  const color = tone === 'transfer'
-    ? (transferTone?.onContainer ?? theme.onAccentContainer)
-    : {
-      neutral: theme.textMuted,
-      positive: theme.positive,
-      warning: theme.warning,
-      negative: theme.negative,
-    }[tone];
-  const backgroundColor = tone === 'transfer'
-    ? (transferTone?.container ?? theme.accentContainer)
-    : theme.surfaceMuted;
+  const color =
+    tone === "transfer"
+      ? (transferTone?.onContainer ?? theme.onAccentContainer)
+      : {
+          neutral: theme.textMuted,
+          positive: theme.positive,
+          warning: theme.warning,
+          negative: theme.negative,
+        }[tone];
+  const backgroundColor =
+    tone === "transfer"
+      ? (transferTone?.container ?? theme.accentContainer)
+      : theme.surfaceMuted;
 
   return (
     <View
@@ -77,9 +88,9 @@ export function StatusPill({
       accessible
       accessibilityRole="text"
       style={{
-        flexDirection: 'row',
-        alignItems: 'center',
-        alignSelf: 'flex-start',
+        flexDirection: "row",
+        alignItems: "center",
+        alignSelf: "flex-start",
         gap: space.xs + 1,
         paddingHorizontal: space.sm + 2,
         paddingVertical: space.xs + 1,
@@ -89,9 +100,15 @@ export function StatusPill({
         backgroundColor,
         boxShadow: INNER_HIGHLIGHT,
         ...style,
-      }}>
+      }}
+    >
       <AppIcon name={icon} color={color} size={13} />
-      <AppText selectable={false} literal={literal} variant="caption" style={{ color }}>
+      <AppText
+        selectable={false}
+        literal={literal}
+        variant="caption"
+        style={{ color }}
+      >
         {label}
       </AppText>
     </View>

@@ -23,8 +23,8 @@
  * that fails. **A hostile signaling server must be assumed, not merely tolerated.**
  */
 
-import { fromBase64Url, toBase64Url } from '@/sync/crypto';
-import { RelayError } from '@/sync/transport/http';
+import { fromBase64Url, toBase64Url } from "@/sync/crypto";
+import { RelayError } from "@/sync/transport/http";
 
 /**
  * The largest signaling message accepted.
@@ -51,7 +51,7 @@ export const SIGNAL_IDLE_TIMEOUT_MS = 45_000;
  * which it quite correctly rejected as malformed. This marker is a liveness hint only: a
  * hostile relay can forge or omit it, but can never authenticate a handshake frame.
  */
-export const PEER_READY_MESSAGE = 'qashy-rendezvous-ready:1';
+export const PEER_READY_MESSAGE = "qashy-rendezvous-ready:1";
 
 /**
  * The part of `WebSocket` this module uses.
@@ -88,8 +88,8 @@ export interface SignalingDeps {
  * which id was contacted, and when — to anyone on the path.
  */
 export function signalingUrl(baseUrl: string, rendezvousId: string): string {
-  const scheme = baseUrl.startsWith('https:') ? 'wss:' : 'ws:';
-  const rest = baseUrl.slice(baseUrl.indexOf(':') + 1);
+  const scheme = baseUrl.startsWith("https:") ? "wss:" : "ws:";
+  const rest = baseUrl.slice(baseUrl.indexOf(":") + 1);
   return `${scheme}${rest}/rendezvous/${encodeURIComponent(rendezvousId)}`;
 }
 
@@ -131,7 +131,10 @@ export class SignalingClient {
   /** Opens the socket. Resolves once the server has accepted it, or throws. */
   open(signal?: AbortSignal): Promise<void> {
     if (this.socket) return Promise.resolve();
-    if (signal?.aborted) return Promise.reject(new RelayError('Sync was cancelled.', 'unreachable'));
+    if (signal?.aborted)
+      return Promise.reject(
+        new RelayError("Sync was cancelled.", "unreachable"),
+      );
 
     const socket = this.deps.open(this.url);
     this.socket = socket;
@@ -148,27 +151,30 @@ export class SignalingClient {
         else resolve();
       };
 
-      const timer = setTimeout(
-        () => {
-          const error = new RelayError('The rendezvous server did not answer.', 'unreachable');
-          this.fail(error);
-          settle(error);
-        },
-        this.deps.openTimeoutMs ?? SIGNAL_OPEN_TIMEOUT_MS,
-      );
+      const timer = setTimeout(() => {
+        const error = new RelayError(
+          "The rendezvous server did not answer.",
+          "unreachable",
+        );
+        this.fail(error);
+        settle(error);
+      }, this.deps.openTimeoutMs ?? SIGNAL_OPEN_TIMEOUT_MS);
       undo.push(() => clearTimeout(timer));
 
       const onAbort = () => {
-        const error = new RelayError('Sync was cancelled.', 'unreachable');
+        const error = new RelayError("Sync was cancelled.", "unreachable");
         this.fail(error);
         settle(error);
       };
-      signal?.addEventListener('abort', onAbort);
-      undo.push(() => signal?.removeEventListener('abort', onAbort));
+      signal?.addEventListener("abort", onAbort);
+      undo.push(() => signal?.removeEventListener("abort", onAbort));
 
       socket.onopen = () => settle(null);
       socket.onerror = () => {
-        const error = new RelayError('Could not reach the rendezvous server.', 'unreachable');
+        const error = new RelayError(
+          "Could not reach the rendezvous server.",
+          "unreachable",
+        );
         this.fail(error);
         settle(error);
       };
@@ -176,7 +182,10 @@ export class SignalingClient {
       // under way a close is the peer or the server hanging up, and everything waiting on a
       // reply has to be told — a closed socket will never produce the message it waits for.
       socket.onclose = () => {
-        const error = new RelayError('The rendezvous connection closed.', 'unreachable');
+        const error = new RelayError(
+          "The rendezvous connection closed.",
+          "unreachable",
+        );
         this.fail(error);
         settle(error);
       };
@@ -186,9 +195,13 @@ export class SignalingClient {
 
   send(payload: Uint8Array): void {
     if (this.failure) throw this.failure;
-    if (!this.socket) throw new RelayError('That rendezvous is not open.', 'unreachable');
+    if (!this.socket)
+      throw new RelayError("That rendezvous is not open.", "unreachable");
     if (payload.length > MAX_SIGNAL_BYTES) {
-      throw new RelayError('That signaling message is too large to send.', 'tooLarge');
+      throw new RelayError(
+        "That signaling message is too large to send.",
+        "tooLarge",
+      );
     }
     this.socket.send(toBase64Url(payload));
   }
@@ -203,7 +216,10 @@ export class SignalingClient {
   waitForPeer(signal?: AbortSignal): Promise<void> {
     if (this.failure) return Promise.reject(this.failure);
     if (this.peerReady) return Promise.resolve();
-    if (signal?.aborted) return Promise.reject(new RelayError('Sync was cancelled.', 'unreachable'));
+    if (signal?.aborted)
+      return Promise.reject(
+        new RelayError("Sync was cancelled.", "unreachable"),
+      );
 
     return new Promise<void>((resolve, reject) => {
       const waiter: PeerWaiter = {
@@ -213,16 +229,18 @@ export class SignalingClient {
       const finish = () => {
         this.dropPeerWaiter(waiter);
         clearTimeout(waiter.timer);
-        signal?.removeEventListener('abort', onAbort);
+        signal?.removeEventListener("abort", onAbort);
       };
       const onAbort = () => {
         finish();
-        reject(new RelayError('Sync was cancelled.', 'unreachable'));
+        reject(new RelayError("Sync was cancelled.", "unreachable"));
       };
 
       waiter.timer = setTimeout(() => {
         finish();
-        reject(new RelayError('The other device did not respond.', 'unreachable'));
+        reject(
+          new RelayError("The other device did not respond.", "unreachable"),
+        );
       }, this.deps.idleTimeoutMs ?? SIGNAL_IDLE_TIMEOUT_MS);
       waiter.resolve = () => {
         finish();
@@ -233,7 +251,7 @@ export class SignalingClient {
         reject(error);
       };
 
-      signal?.addEventListener('abort', onAbort);
+      signal?.addEventListener("abort", onAbort);
       this.peerWaiters.push(waiter);
     });
   }
@@ -249,7 +267,10 @@ export class SignalingClient {
     const queued = this.inbox.shift();
     if (queued) return Promise.resolve(queued);
     if (this.failure) return Promise.reject(this.failure);
-    if (signal?.aborted) return Promise.reject(new RelayError('Sync was cancelled.', 'unreachable'));
+    if (signal?.aborted)
+      return Promise.reject(
+        new RelayError("Sync was cancelled.", "unreachable"),
+      );
 
     return new Promise<Uint8Array>((resolve, reject) => {
       const waiter: Waiter = { resolve, reject };
@@ -257,27 +278,29 @@ export class SignalingClient {
       const finish = () => {
         this.drop(waiter);
         clearTimeout(waiter.timer);
-        signal?.removeEventListener('abort', onAbort);
+        signal?.removeEventListener("abort", onAbort);
       };
       const onAbort = () => {
         finish();
-        reject(new RelayError('Sync was cancelled.', 'unreachable'));
+        reject(new RelayError("Sync was cancelled.", "unreachable"));
       };
 
       waiter.timer = setTimeout(() => {
         finish();
-        reject(new RelayError('The other device did not respond.', 'unreachable'));
+        reject(
+          new RelayError("The other device did not respond.", "unreachable"),
+        );
       }, this.deps.idleTimeoutMs ?? SIGNAL_IDLE_TIMEOUT_MS);
       waiter.resolve = (frame) => {
-        signal?.removeEventListener('abort', onAbort);
+        signal?.removeEventListener("abort", onAbort);
         resolve(frame);
       };
       waiter.reject = (error) => {
-        signal?.removeEventListener('abort', onAbort);
+        signal?.removeEventListener("abort", onAbort);
         reject(error);
       };
 
-      signal?.addEventListener('abort', onAbort);
+      signal?.addEventListener("abort", onAbort);
       this.waiters.push(waiter);
     });
   }
@@ -285,7 +308,7 @@ export class SignalingClient {
   close(): void {
     if (this.closed) return;
     this.closed = true;
-    this.fail(new RelayError('The rendezvous was closed.', 'unreachable'));
+    this.fail(new RelayError("The rendezvous was closed.", "unreachable"));
     const socket = this.socket;
     this.socket = null;
     if (socket) {
@@ -306,7 +329,7 @@ export class SignalingClient {
    * single malformed message abort a pairing that was otherwise about to succeed.
    */
   private absorb(data: unknown): void {
-    if (typeof data !== 'string') return;
+    if (typeof data !== "string") return;
     if (data === PEER_READY_MESSAGE) {
       this.markPeerReady();
       return;
@@ -324,7 +347,12 @@ export class SignalingClient {
     const waiter = this.waiters.shift();
     if (!waiter) {
       if (this.inbox.length >= MAX_SIGNAL_INBOX) {
-        this.fail(new RelayError('The pairing rendezvous sent too many queued messages.', 'tooLarge'));
+        this.fail(
+          new RelayError(
+            "The pairing rendezvous sent too many queued messages.",
+            "tooLarge",
+          ),
+        );
         return;
       }
       this.inbox.push(payload);
@@ -372,9 +400,13 @@ export class SignalingClient {
  * than a `ReferenceError` from somewhere inside the handshake.
  */
 export const platformSocket = (url: string): RawSocket => {
-  const ctor = (globalThis as { WebSocket?: new (url: string) => RawSocket }).WebSocket;
+  const ctor = (globalThis as { WebSocket?: new (url: string) => RawSocket })
+    .WebSocket;
   if (!ctor) {
-    throw new RelayError('This platform cannot open a rendezvous connection.', 'unreachable');
+    throw new RelayError(
+      "This platform cannot open a rendezvous connection.",
+      "unreachable",
+    );
   }
   return new ctor(url);
 };

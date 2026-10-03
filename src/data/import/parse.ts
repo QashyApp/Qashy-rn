@@ -1,6 +1,10 @@
-import { mapCashewBackup } from '@/data/import/cashew/mapper';
-import { readCashewBackup } from '@/data/import/cashew/reader';
-import type { ImportBundle, ImportSourceId, ParseOptions } from '@/data/import/types';
+import { mapCashewBackup } from "@/data/import/cashew/mapper";
+import { readCashewBackup } from "@/data/import/cashew/reader";
+import type {
+  ImportBundle,
+  ImportSourceId,
+  ParseOptions,
+} from "@/data/import/types";
 
 /** Reads a backup file from another app and maps it to an `ImportBundle`. Pure; throws `ImportError`. */
 export function parseExternalBackup(
@@ -9,7 +13,7 @@ export function parseExternalBackup(
   options: ParseOptions,
 ): ImportBundle {
   switch (source) {
-    case 'cashew':
+    case "cashew":
       return mapCashewBackup(readCashewBackup(bytes), options);
     default: {
       const unreachable: never = source;

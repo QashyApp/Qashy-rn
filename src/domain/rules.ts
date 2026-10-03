@@ -10,7 +10,13 @@
  * Nothing here reads a clock, a locale, or any state beyond its arguments.
  */
 
-import type { Account, Category, CategoryKind, GoalKind, RecurringRule } from '@/domain/models';
+import type {
+  Account,
+  Category,
+  CategoryKind,
+  GoalKind,
+  RecurringRule,
+} from "@/domain/models";
 
 /**
  * Whether a recurring rule still has everything it needs to post.
@@ -26,7 +32,9 @@ export function canActivateRecurringRule(
   accounts: readonly Account[],
   categories: readonly Category[],
 ): boolean {
-  const account = accounts.find((item) => item.id === rule.template.accountId && !item.archived);
+  const account = accounts.find(
+    (item) => item.id === rule.template.accountId && !item.archived,
+  );
   const category = rule.template.categoryId
     ? categories.find(
         (item) =>
@@ -51,4 +59,4 @@ export function canActivateRecurringRule(
  * can never save again.
  */
 export const goalCategoryKind = (kind: GoalKind): CategoryKind =>
-  kind === 'saving' ? 'income' : 'expense';
+  kind === "saving" ? "income" : "expense";

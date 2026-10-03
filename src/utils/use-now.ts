@@ -21,8 +21,8 @@
  * a pairing deadline, an HLC, an `updatedAt` — reads the clock directly at the point of use.
  */
 
-import { useSyncExternalStore } from 'react';
-import { AppState } from 'react-native';
+import { useSyncExternalStore } from "react";
+import { AppState } from "react-native";
 
 const MINUTE = 60_000;
 
@@ -76,20 +76,20 @@ export function useNow(): number {
 }
 
 function attachForegroundListener(onForeground: () => void) {
-  if (typeof document !== 'undefined') {
+  if (typeof document !== "undefined") {
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') onForeground();
+      if (document.visibilityState === "visible") onForeground();
     };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    globalThis.addEventListener('focus', onForeground);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    globalThis.addEventListener("focus", onForeground);
     return () => {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      globalThis.removeEventListener('focus', onForeground);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      globalThis.removeEventListener("focus", onForeground);
     };
   }
   let previous = AppState.currentState;
-  const subscription = AppState.addEventListener('change', (next) => {
-    if (previous !== 'active' && next === 'active') onForeground();
+  const subscription = AppState.addEventListener("change", (next) => {
+    if (previous !== "active" && next === "active") onForeground();
     previous = next;
   });
   return () => subscription.remove();

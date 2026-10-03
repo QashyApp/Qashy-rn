@@ -7,7 +7,7 @@
 
 export type BoundedBody =
   | { readonly ok: true; readonly bytes: Uint8Array }
-  | { readonly ok: false; readonly reason: 'tooLarge' };
+  | { readonly ok: false; readonly reason: "tooLarge" };
 
 interface ByteReader {
   read(): Promise<
@@ -26,11 +26,11 @@ export async function readBoundedRequestBody(
   request: BodySource,
   maxBytes: number,
 ): Promise<BoundedBody> {
-  const declaredHeader = request.headers.get('content-length');
+  const declaredHeader = request.headers.get("content-length");
   if (declaredHeader !== null) {
     const declared = Number(declaredHeader);
     if (Number.isFinite(declared) && declared > maxBytes) {
-      return { ok: false, reason: 'tooLarge' };
+      return { ok: false, reason: "tooLarge" };
     }
   }
 
@@ -45,7 +45,7 @@ export async function readBoundedRequestBody(
     total += value.byteLength;
     if (total > maxBytes) {
       void reader.cancel().catch(() => undefined);
-      return { ok: false, reason: 'tooLarge' };
+      return { ok: false, reason: "tooLarge" };
     }
     chunks.push(value);
   }

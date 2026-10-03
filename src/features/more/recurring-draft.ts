@@ -1,5 +1,5 @@
-import type { CategoryKind } from '@/domain/models';
-import { makeId } from '@/utils/entity';
+import type { CategoryKind } from "@/domain/models";
+import { makeId } from "@/utils/entity";
 
 /**
  * One-navigation, in-memory handoff from a transaction draft to the recurring form.
@@ -15,7 +15,7 @@ export interface RecurringDraft {
   readonly categoryId: string;
   /** Foreign-currency code, when the source transaction drafted a foreign amount. */
   readonly foreignCurrency?: string;
-  readonly feeKind?: 'none' | 'percent' | 'fixed';
+  readonly feeKind?: "none" | "percent" | "fixed";
   readonly feeValue?: string;
 }
 
@@ -27,7 +27,9 @@ export const stashRecurringDraft = (draft: RecurringDraft): string => {
   return id;
 };
 
-export const takeRecurringDraft = (id: string | undefined): RecurringDraft | null => {
+export const takeRecurringDraft = (
+  id: string | undefined,
+): RecurringDraft | null => {
   if (!id) return null;
   const draft = drafts.get(id) ?? null;
   drafts.delete(id);

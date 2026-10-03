@@ -22,10 +22,10 @@ import {
   peekPurpose,
   type DeviceIdentity,
   type VaultRootKey,
-} from '@/sync/crypto';
-import type { IceServer } from '@/sync/transport/endpoints';
-import { RelayError } from '@/sync/transport/http';
-import { SignalingClient } from '@/sync/transport/signaling';
+} from "@/sync/crypto";
+import type { IceServer } from "@/sync/transport/endpoints";
+import { RelayError } from "@/sync/transport/http";
+import { SignalingClient } from "@/sync/transport/signaling";
 import {
   CHANNEL_LABEL,
   MAX_CHANNEL_MESSAGE,
@@ -33,13 +33,17 @@ import {
   connectWebRtc,
   type WebRtcConnection,
   type WebRtcDeps,
-} from '@/sync/transport/webrtc-core';
-import { FakeRtcNetwork } from '@/sync/transport/__tests__/rtc-double';
-import { FakeSocket, SocketHub, flush } from '@/sync/transport/__tests__/socket-double';
+} from "@/sync/transport/webrtc-core";
+import { FakeRtcNetwork } from "@/sync/transport/__tests__/rtc-double";
+import {
+  FakeSocket,
+  SocketHub,
+  flush,
+} from "@/sync/transport/__tests__/socket-double";
 
-const BASE = 'https://relay.example.com';
-const RENDEZVOUS = 'MFRGGZDFMZTWQ2LKNNWG23TPOBYXE43UOV3HO6DZPIZQ';
-const ICE: readonly IceServer[] = [{ urls: 'stun:stun.example.com:19302' }];
+const BASE = "https://relay.example.com";
+const RENDEZVOUS = "MFRGGZDFMZTWQ2LKNNWG23TPOBYXE43UOV3HO6DZPIZQ";
+const ICE: readonly IceServer[] = [{ urls: "stun:stun.example.com:19302" }];
 
 /**
  * Short enough that a test which is *meant* to fail to connect does so in milliseconds.
@@ -56,8 +60,15 @@ interface Party {
   readonly socket: FakeSocket;
 }
 
-const partyFor = async (hub: SocketHub, rendezvousId = RENDEZVOUS): Promise<Party> => {
-  const signaling = new SignalingClient({ baseUrl: BASE, rendezvousId, open: hub.open });
+const partyFor = async (
+  hub: SocketHub,
+  rendezvousId = RENDEZVOUS,
+): Promise<Party> => {
+  const signaling = new SignalingClient({
+    baseUrl: BASE,
+    rendezvousId,
+    open: hub.open,
+  });
   await signaling.open();
   return { identity: createDeviceIdentity(), signaling, socket: hub.latest };
 };
@@ -66,7 +77,7 @@ const depsFor = (
   party: Party,
   peer: Party,
   psk: VaultRootKey,
-  factory: FakeRtcNetwork['factory'],
+  factory: FakeRtcNetwork["factory"],
 ): WebRtcDeps => ({
   identity: party.identity,
   psk,
@@ -74,7 +85,7 @@ const depsFor = (
   iceServers: ICE,
   factory,
   signaling: party.signaling,
-  peer: { deviceId: peer.identity.deviceId, name: 'peer' },
+  peer: { deviceId: peer.identity.deviceId, name: "peer" },
   connectTimeoutMs: CONNECT_TIMEOUT_MS,
 });
 
@@ -97,19 +108,25 @@ const pair = (
   ]);
 
 /** Closes everything, so no idle-timeout timer outlives the test that created it. */
-const teardown = (parties: readonly Party[], connections: readonly WebRtcConnection[] = []) => {
+const teardown = (
+  parties: readonly Party[],
+  connections: readonly WebRtcConnection[] = [],
+) => {
   for (const connection of connections) connection.close();
   for (const party of parties) party.signaling.close();
 };
 
-describe('connectWebRtc', () => {
-  it('refuses on a platform without WebRTC rather than pretending to connect', async () => {
+describe("connectWebRtc", () => {
+  it("refuses on a platform without WebRTC rather than pretending to connect", async () => {
     const hub = new SocketHub();
     const a = await partyFor(hub);
     const b = await partyFor(hub);
 
     await expect(
-      connectWebRtc(depsFor(a, b, createVaultRootKey(), UNAVAILABLE_RTC), new AbortController().signal),
+      connectWebRtc(
+        depsFor(a, b, createVaultRootKey(), UNAVAILABLE_RTC),
+        new AbortController().signal,
+      ),
     ).rejects.toThrow(RelayError);
 
     // It refused before saying anything at a rendezvous, so a build that cannot do this never
@@ -118,7 +135,7 @@ describe('connectWebRtc', () => {
     teardown([a, b]);
   });
 
-  it('connects two devices and gives both the same SAS', async () => {
+  it("connects two devices and gives both the same SAS", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -134,7 +151,7 @@ describe('connectWebRtc', () => {
     teardown([a, b], [left, right]);
   });
 
-  it('carries frames and their sequence numbers in both directions', async () => {
+  it("carries frames and their sequence numbers in both directions", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -153,13 +170,15 @@ describe('connectWebRtc', () => {
     await right.channel.send(Uint8Array.from([9]), 0);
     await flush();
 
-    expect(heardByRight).toEqual([{ frame: Uint8Array.from([1, 2, 3]), seq: 7 }]);
+    expect(heardByRight).toEqual([
+      { frame: Uint8Array.from([1, 2, 3]), seq: 7 },
+    ]);
     expect(heardByLeft).toEqual([{ frame: Uint8Array.from([9]), seq: 0 }]);
 
     teardown([a, b], [left, right]);
   });
 
-  it('names the peer on the channel so the engine can attribute what arrives', async () => {
+  it("names the peer on the channel so the engine can attribute what arrives", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -172,7 +191,7 @@ describe('connectWebRtc', () => {
     teardown([a, b], [left, right]);
   });
 
-  it('hands an oversized frame over instead of dropping it, so the refusal can be recorded', async () => {
+  it("hands an oversized frame over instead of dropping it, so the refusal can be recorded", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -195,7 +214,7 @@ describe('connectWebRtc', () => {
     teardown([a, b], [left, right]);
   });
 
-  it('stops sending and stops delivering once closed', async () => {
+  it("stops sending and stops delivering once closed", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -207,7 +226,9 @@ describe('connectWebRtc', () => {
     right.close();
     await flush();
 
-    await expect(left.channel.send(Uint8Array.from([1]), 0)).rejects.toThrow(RelayError);
+    await expect(left.channel.send(Uint8Array.from([1]), 0)).rejects.toThrow(
+      RelayError,
+    );
     await flush();
     expect(heard).toHaveLength(0);
 
@@ -215,8 +236,8 @@ describe('connectWebRtc', () => {
   });
 });
 
-describe('role selection', () => {
-  it('gives the offer to the lower device id, so there is nothing to negotiate', async () => {
+describe("role selection", () => {
+  it("gives the offer to the lower device id, so there is nothing to negotiate", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -226,27 +247,33 @@ describe('role selection', () => {
     // Exactly one side offered and exactly one answered. Glare — both offering, or neither —
     // is the failure this rule exists to prevent, and it is invisible to any test that only
     // looks at one device.
-    const offerers = network.connections.filter((connection) => connection.role === 'offer');
-    const answerers = network.connections.filter((connection) => connection.role === 'answer');
+    const offerers = network.connections.filter(
+      (connection) => connection.role === "offer",
+    );
+    const answerers = network.connections.filter(
+      (connection) => connection.role === "answer",
+    );
     expect(offerers).toHaveLength(1);
     expect(answerers).toHaveLength(1);
 
     // Only the offerer creates the channel; the answerer receives it through `ondatachannel`.
     expect(offerers[0].local?.label).toBe(CHANNEL_LABEL);
-    expect(network.connections.filter((connection) => connection.createdChannel)).toHaveLength(1);
+    expect(
+      network.connections.filter((connection) => connection.createdChannel),
+    ).toHaveLength(1);
 
     // `network.connections` is in creation order, and `pair` starts A's call first — so the
     // first connection belongs to A. Which of the two offered must match the id comparison
     // both sides computed independently.
-    const aOffered = network.connections[0].role === 'offer';
+    const aOffered = network.connections[0].role === "offer";
     expect(aOffered).toBe(a.identity.deviceId < b.identity.deviceId);
 
     teardown([a, b], [left, right]);
   });
 });
 
-describe('ordering', () => {
-  it('sends exactly two plaintext messages, then seals everything else', async () => {
+describe("ordering", () => {
+  it("sends exactly two plaintext messages, then seals everything else", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -266,13 +293,14 @@ describe('ordering', () => {
       // Everything from the third message on is SDP and ICE, and every one of them is sealed
       // under the session key. `peekPurpose` parses the magic, the version, and the purpose
       // byte, so a plaintext SDP would fail here rather than passing a shallow shape check.
-      for (const frame of sent.slice(2)) expect(peekPurpose(frame)).toBe('handshake');
+      for (const frame of sent.slice(2))
+        expect(peekPurpose(frame)).toBe("handshake");
     }
 
     teardown([a, b], [left, right]);
   });
 
-  it('never puts an ICE candidate on the wire before its own description', async () => {
+  it("never puts an ICE candidate on the wire before its own description", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -284,8 +312,14 @@ describe('ordering', () => {
     // connection does — and `webrtc-core.ts` swallows that rejection, because ICE is a race
     // and losing one runner does not lose it. So a candidate that arrived too early leaves no
     // trace anywhere except this counter, which is why the counter exists.
-    const applied = network.connections.reduce((total, pc) => total + pc.applied.length, 0);
-    const rejected = network.connections.reduce((total, pc) => total + pc.rejectedCandidates, 0);
+    const applied = network.connections.reduce(
+      (total, pc) => total + pc.applied.length,
+      0,
+    );
+    const rejected = network.connections.reduce(
+      (total, pc) => total + pc.rejectedCandidates,
+      0,
+    );
 
     expect(applied).toBeGreaterThan(0);
     expect(rejected).toBe(0);
@@ -294,8 +328,8 @@ describe('ordering', () => {
   });
 });
 
-describe('a hostile rendezvous', () => {
-  it('refuses a peer whose device id is not the one expected', async () => {
+describe("a hostile rendezvous", () => {
+  it("refuses a peer whose device id is not the one expected", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const psk = createVaultRootKey();
@@ -306,13 +340,16 @@ describe('a hostile rendezvous', () => {
     const impostor: WebRtcDeps = {
       ...depsFor(a, b, psk, network.factory),
       // Whoever is actually on the other end of this rendezvous, it is not this device.
-      peer: { deviceId: createDeviceIdentity().deviceId, name: 'Impostor' },
+      peer: { deviceId: createDeviceIdentity().deviceId, name: "Impostor" },
     };
 
-    const left = connectWebRtc(impostor, controller.signal).catch((error: unknown) => error);
-    const right = connectWebRtc(depsFor(b, a, psk, network.factory), controller.signal).catch(
+    const left = connectWebRtc(impostor, controller.signal).catch(
       (error: unknown) => error,
     );
+    const right = connectWebRtc(
+      depsFor(b, a, psk, network.factory),
+      controller.signal,
+    ).catch((error: unknown) => error);
 
     expect(await left).toBeInstanceOf(Error);
     // The rejection happens during the handshake, before a peer connection is built at all —
@@ -324,7 +361,7 @@ describe('a hostile rendezvous', () => {
     teardown([a, b]);
   });
 
-  it('fails when the two sides hold different pre-shared keys', async () => {
+  it("fails when the two sides hold different pre-shared keys", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);
@@ -351,7 +388,7 @@ describe('a hostile rendezvous', () => {
     teardown([a, b]);
   });
 
-  it('derives a different SAS for every pairing attempt', async () => {
+  it("derives a different SAS for every pairing attempt", async () => {
     const network = new FakeRtcNetwork();
     const psk = createVaultRootKey();
 
@@ -378,8 +415,8 @@ describe('a hostile rendezvous', () => {
   });
 });
 
-describe('cancellation', () => {
-  it('abandons a pairing nobody answered, without building a connection', async () => {
+describe("cancellation", () => {
+  it("abandons a pairing nobody answered, without building a connection", async () => {
     const hub = new SocketHub();
     const network = new FakeRtcNetwork();
     const a = await partyFor(hub);

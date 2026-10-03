@@ -20,10 +20,10 @@
  * Nothing here reads a clock, generates an id, or touches storage.
  */
 
-import type { EntityType, FinanceEntity } from '@/domain/models';
-import { OP_SCHEMA_VERSION } from '@/sync/crypto';
-import { canonicalJson } from '@/utils/canonical-json';
-import { hlcToIso, maxHlc, type Hlc } from '@/sync/oplog/hlc';
+import type { EntityType, FinanceEntity } from "@/domain/models";
+import { OP_SCHEMA_VERSION } from "@/sync/crypto";
+import { canonicalJson } from "@/utils/canonical-json";
+import { hlcToIso, maxHlc, type Hlc } from "@/sync/oplog/hlc";
 import {
   createOnlyFieldsOf,
   deviceLocalFieldsOf,
@@ -34,7 +34,7 @@ import {
   registersOf,
   writePath,
   type RegisterSpec,
-} from '@/sync/oplog/registry';
+} from "@/sync/oplog/registry";
 import {
   OP_KINDS,
   emptyMeta,
@@ -45,7 +45,7 @@ import {
   type MapEntryState,
   type RegisterState,
   type SyncOpBody,
-} from '@/sync/oplog/types';
+} from "@/sync/oplog/types";
 
 /**
  * Every register value is an object keyed by field path, even a register with one field.
@@ -67,7 +67,7 @@ const pickRegister = (
 ): RegisterState => {
   if (!existing) return incoming;
   switch (spec.strategy.kind) {
-    case 'monotoneMax': {
+    case "monotoneMax": {
       // The larger value wins outright, whatever the clocks say. `nextDueDate` under plain
       // LWW would rewind whenever a device that had not yet advanced it reconnected, and
       // `generateRecurring` would re-walk the same span on every launch, forever.
@@ -76,15 +76,19 @@ const pickRegister = (
       const incomingValue = incoming.value as RegisterValue;
       const left = existingValue[field];
       const right = incomingValue[field];
-      if (left === right) return existing.hlc >= incoming.hlc ? existing : incoming;
+      if (left === right)
+        return existing.hlc >= incoming.hlc ? existing : incoming;
       return compareScalar(left, right) >= 0 ? existing : incoming;
     }
-    case 'monotoneTrue': {
+    case "monotoneTrue": {
       const field = spec.fields[0];
       const value =
         (existing.value as RegisterValue)[field] === true ||
         (incoming.value as RegisterValue)[field] === true;
-      return { hlc: maxHlc(existing.hlc, incoming.hlc), value: { [field]: value } };
+      return {
+        hlc: maxHlc(existing.hlc, incoming.hlc),
+        value: { [field]: value },
+      };
     }
     default:
       return incoming.hlc > existing.hlc ? incoming : existing;
@@ -96,13 +100,17 @@ const compareScalar = (left: unknown, right: unknown): number => {
   if (left === right) return 0;
   if (left === null || left === undefined) return -1;
   if (right === null || right === undefined) return 1;
-  if (typeof left === 'number' && typeof right === 'number') return left - right;
+  if (typeof left === "number" && typeof right === "number")
+    return left - right;
   const leftText = String(left);
   const rightText = String(right);
   return leftText < rightText ? -1 : leftText > rightText ? 1 : 0;
 };
 
-const pickElement = (existing: ElementState | undefined, incoming: ElementState): ElementState => {
+const pickElement = (
+  existing: ElementState | undefined,
+  incoming: ElementState,
+): ElementState => {
   if (!existing) return incoming;
   return {
     addHlc: laterOrNull(existing.addHlc, incoming.addHlc),
@@ -118,12 +126,14 @@ const laterOrNull = (first: Hlc | null, second: Hlc | null): Hlc | null => {
 
 /** Add-wins: an element added and removed at the same reading stays. */
 export const isElementPresent = (state: ElementState) =>
-  state.addHlc !== null && (state.removeHlc === null || state.addHlc >= state.removeHlc);
+  state.addHlc !== null &&
+  (state.removeHlc === null || state.addHlc >= state.removeHlc);
 
 const pickMapEntry = (
   existing: MapEntryState | undefined,
   incoming: MapEntryState,
-): MapEntryState => (!existing || incoming.hlc > existing.hlc ? incoming : existing);
+): MapEntryState =>
+  !existing || incoming.hlc > existing.hlc ? incoming : existing;
 
 /**
  * Deletion, biased to delete only on an exact tie.
@@ -146,22 +156,33 @@ const pickDeletion = (
 // Reading an entity into register / set / map shape
 // ---------------------------------------------------------------------------
 
-export const registerValueOf = (spec: RegisterSpec, source: unknown): RegisterValue =>
-  Object.fromEntries(spec.fields.map((field) => [field, readPath(source, field) ?? null]));
+export const registerValueOf = (
+  spec: RegisterSpec,
+  source: unknown,
+): RegisterValue =>
+  Object.fromEntries(
+    spec.fields.map((field) => [field, readPath(source, field) ?? null]),
+  );
 
 const elementsOf = (source: unknown, path: string): string[] => {
   const value = readPath(source, path);
-  return Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : [];
+  return Array.isArray(value)
+    ? value.filter((each): each is string => typeof each === "string")
+    : [];
 };
 
-const mapEntriesOf = (source: unknown, path: string, key: string): Record<string, unknown> => {
+const mapEntriesOf = (
+  source: unknown,
+  path: string,
+  key: string,
+): Record<string, unknown> => {
   const value = readPath(source, path);
   if (!Array.isArray(value)) return {};
   const entries: Record<string, unknown> = {};
   for (const entry of value) {
-    if (typeof entry !== 'object' || entry === null) continue;
+    if (typeof entry !== "object" || entry === null) continue;
     const id = (entry as Record<string, unknown>)[key];
-    if (typeof id === 'string') entries[id] = entry;
+    if (typeof id === "string") entries[id] = entry;
   }
   return entries;
 };
@@ -170,7 +191,11 @@ const mapEntriesOf = (source: unknown, path: string, key: string): Record<string
 // Applying one op
 // ---------------------------------------------------------------------------
 
-const withRegister = (meta: CausalMeta, spec: RegisterSpec, incoming: RegisterState): CausalMeta => {
+const withRegister = (
+  meta: CausalMeta,
+  spec: RegisterSpec,
+  incoming: RegisterState,
+): CausalMeta => {
   const picked = pickRegister(spec, meta.registers[spec.name], incoming);
   if (picked === meta.registers[spec.name]) return meta;
   return { ...meta, registers: { ...meta.registers, [spec.name]: picked } };
@@ -203,12 +228,14 @@ const withMapEntries = (
 };
 
 const asRecord = (value: unknown): Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value)
+  typeof value === "object" && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
 
 const asStrings = (value: unknown): string[] =>
-  Array.isArray(value) ? value.filter((each): each is string => typeof each === 'string') : [];
+  Array.isArray(value)
+    ? value.filter((each): each is string => typeof each === "string")
+    : [];
 
 /**
  * True when this build can interpret the op at all.
@@ -219,7 +246,9 @@ const asStrings = (value: unknown): string[] =>
  * carries reappears intact the moment this device is updated.
  */
 const isInterpretable = (op: SyncOpBody) =>
-  op.schema <= OP_SCHEMA_VERSION && isEntityType(op.entityType) && OP_KINDS.includes(op.kind);
+  op.schema <= OP_SCHEMA_VERSION &&
+  isEntityType(op.entityType) &&
+  OP_KINDS.includes(op.kind);
 
 /**
  * A grouped register is atomic on the wire as well as during local diffing. Without this
@@ -229,32 +258,34 @@ const isInterpretable = (op: SyncOpBody) =>
  */
 export const hasCompleteKnownRegisters = (op: SyncOpBody): boolean => {
   if (!isInterpretable(op)) return true;
-  if (op.kind === 'create') {
+  if (op.kind === "create") {
     const entity = asRecord(op.payload.entity);
     // Older wire fixtures and forward-compatible entities may omit the immutable id; when it
     // is present, however, it must agree with the authenticated entity key.
     return entity.id === undefined || entity.id === op.entityId;
   }
-  if (op.kind !== 'set') return true;
+  if (op.kind !== "set") return true;
   const registers = asRecord(op.payload.registers);
   for (const spec of registersOf(op.entityType)) {
     if (!(spec.name in registers)) continue;
     const value = registers[spec.name];
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+    if (typeof value !== "object" || value === null || Array.isArray(value))
+      return false;
     if (spec.fields.some((field) => !(field in value))) return false;
   }
   return true;
 };
 
 /** Identity of an uninterpretable op within one entity, including its payload. */
-const unknownKey = (op: SyncOpBody) => canonicalJson({
-  entityId: op.entityId,
-  entityType: op.entityType,
-  hlc: op.hlc,
-  kind: op.kind,
-  payload: op.payload,
-  schema: op.schema,
-});
+const unknownKey = (op: SyncOpBody) =>
+  canonicalJson({
+    entityId: op.entityId,
+    entityType: op.entityType,
+    hlc: op.hlc,
+    kind: op.kind,
+    payload: op.payload,
+    schema: op.schema,
+  });
 
 const sortUnknown = (ops: readonly SyncOpBody[]): SyncOpBody[] =>
   [...ops].sort((first, second) => {
@@ -273,49 +304,65 @@ export function applyOp(meta: CausalMeta | null, op: SyncOpBody): CausalMeta {
     // and sorted rather than appended so that two devices which received the same unknown
     // ops in different orders still hold byte-identical state. Arrival order is not
     // something either of them can observe about the other.
-    const seen = advanced.unknown.some((each) => unknownKey(each) === unknownKey(op));
-    return seen ? advanced : { ...advanced, unknown: sortUnknown([...advanced.unknown, op]) };
+    const seen = advanced.unknown.some(
+      (each) => unknownKey(each) === unknownKey(op),
+    );
+    return seen
+      ? advanced
+      : { ...advanced, unknown: sortUnknown([...advanced.unknown, op]) };
   }
 
   switch (op.kind) {
-    case 'create':
+    case "create":
       return applyCreate(advanced, op);
-    case 'set':
+    case "set":
       return applySet(advanced, op);
-    case 'setAdd':
-    case 'setRemove': {
-      const path = String(op.payload.field ?? '');
+    case "setAdd":
+    case "setRemove": {
+      const path = String(op.payload.field ?? "");
       if (!elementSetsOf(op.entityType).includes(path)) return advanced;
       const state: ElementState =
-        op.kind === 'setAdd' ? { addHlc: op.hlc, removeHlc: null } : { addHlc: null, removeHlc: op.hlc };
+        op.kind === "setAdd"
+          ? { addHlc: op.hlc, removeHlc: null }
+          : { addHlc: null, removeHlc: op.hlc };
       const updates = Object.fromEntries(
         asStrings(op.payload.elements).map((element) => [element, state]),
       );
       return withElements(advanced, path, updates);
     }
-    case 'mapUpsert':
-    case 'mapRemove': {
-      const path = String(op.payload.field ?? '');
-      if (!keyedMapsOf(op.entityType).some((each) => each.path === path)) return advanced;
+    case "mapUpsert":
+    case "mapRemove": {
+      const path = String(op.payload.field ?? "");
+      if (!keyedMapsOf(op.entityType).some((each) => each.path === path))
+        return advanced;
       const updates: Record<string, MapEntryState> =
-        op.kind === 'mapUpsert'
+        op.kind === "mapUpsert"
           ? Object.fromEntries(
-              Object.entries(asRecord(op.payload.entries)).map(([key, value]) => [
-                key,
-                { hlc: op.hlc, value },
-              ]),
+              Object.entries(asRecord(op.payload.entries)).map(
+                ([key, value]) => [key, { hlc: op.hlc, value }],
+              ),
             )
           : Object.fromEntries(
-              asStrings(op.payload.keys).map((key) => [key, { hlc: op.hlc, value: null }]),
+              asStrings(op.payload.keys).map((key) => [
+                key,
+                { hlc: op.hlc, value: null },
+              ]),
             );
       return withMapEntries(advanced, path, updates);
     }
-    case 'delete': {
-      const at = typeof op.payload.at === 'string' ? op.payload.at : hlcToIso(op.hlc);
-      return { ...advanced, deleted: pickDeletion(advanced.deleted, { hlc: op.hlc, at }) };
+    case "delete": {
+      const at =
+        typeof op.payload.at === "string" ? op.payload.at : hlcToIso(op.hlc);
+      return {
+        ...advanced,
+        deleted: pickDeletion(advanced.deleted, { hlc: op.hlc, at }),
+      };
     }
-    case 'restore':
-      return { ...advanced, deleted: pickDeletion(advanced.deleted, { hlc: op.hlc, at: null }) };
+    case "restore":
+      return {
+        ...advanced,
+        deleted: pickDeletion(advanced.deleted, { hlc: op.hlc, at: null }),
+      };
     default:
       return advanced;
   }
@@ -328,12 +375,14 @@ function applyCreate(meta: CausalMeta, op: SyncOpBody): CausalMeta {
   // *some* value or the projection is missing a field the model requires. `materialize`
   // overrides the seed with the local value the moment one exists.
   const pinned = [
-    'id',
-    'createdAt',
+    "id",
+    "createdAt",
     ...createOnlyFieldsOf(op.entityType),
     ...deviceLocalFieldsOf(op.entityType),
   ];
-  const fields = Object.fromEntries(pinned.map((field) => [field, readPath(entity, field) ?? null]));
+  const fields = Object.fromEntries(
+    pinned.map((field) => [field, readPath(entity, field) ?? null]),
+  );
 
   // Two creates for the same id are ordinary, not a fault: §2.10 derives ids from the
   // occurrence key and the budget period precisely so that two devices generating the same
@@ -341,27 +390,35 @@ function applyCreate(meta: CausalMeta, op: SyncOpBody): CausalMeta {
   // stable, arbitrary choice both devices reach independently — while the mutable registers
   // below merge by the usual rules, so the later create's edits still win.
   const created =
-    !meta.created || op.hlc < meta.created.hlc ? { hlc: op.hlc, fields } : meta.created;
+    !meta.created || op.hlc < meta.created.hlc
+      ? { hlc: op.hlc, fields }
+      : meta.created;
 
   let next: CausalMeta = { ...meta, created };
 
   for (const spec of registersOf(op.entityType)) {
     // A malformed sparse create must not erase fields a complete create already supplied.
-    if (spec.fields.some((field) => readPath(entity, field) === undefined)) continue;
-    next = withRegister(next, spec, { hlc: op.hlc, value: registerValueOf(spec, entity) });
+    if (spec.fields.some((field) => readPath(entity, field) === undefined))
+      continue;
+    next = withRegister(next, spec, {
+      hlc: op.hlc,
+      value: registerValueOf(spec, entity),
+    });
   }
   for (const path of elementSetsOf(op.entityType)) {
     const updates = Object.fromEntries(
-      elementsOf(entity, path).map((element) => [element, { addHlc: op.hlc, removeHlc: null }]),
+      elementsOf(entity, path).map((element) => [
+        element,
+        { addHlc: op.hlc, removeHlc: null },
+      ]),
     );
     next = withElements(next, path, updates);
   }
   for (const { path, key } of keyedMapsOf(op.entityType)) {
     const updates = Object.fromEntries(
-      Object.entries(mapEntriesOf(entity, path, key)).map(([entryKey, value]) => [
-        entryKey,
-        { hlc: op.hlc, value },
-      ]),
+      Object.entries(mapEntriesOf(entity, path, key)).map(
+        ([entryKey, value]) => [entryKey, { hlc: op.hlc, value }],
+      ),
     );
     next = withMapEntries(next, path, updates);
   }
@@ -369,15 +426,20 @@ function applyCreate(meta: CausalMeta, op: SyncOpBody): CausalMeta {
   // A tombstone converted by the genesis migration arrives as create-then-delete, but a
   // create that already carries `deletedAt` must not quietly lose it.
   const deletedAt = entity.deletedAt;
-  if (typeof deletedAt === 'string') {
-    next = { ...next, deleted: pickDeletion(next.deleted, { hlc: op.hlc, at: deletedAt }) };
+  if (typeof deletedAt === "string") {
+    next = {
+      ...next,
+      deleted: pickDeletion(next.deleted, { hlc: op.hlc, at: deletedAt }),
+    };
   }
   return next;
 }
 
 function applySet(meta: CausalMeta, op: SyncOpBody): CausalMeta {
   const registers = asRecord(op.payload.registers);
-  const known = new Map(registersOf(op.entityType).map((spec) => [spec.name, spec]));
+  const known = new Map(
+    registersOf(op.entityType).map((spec) => [spec.name, spec]),
+  );
   let next = meta;
   for (const [name, value] of Object.entries(registers)) {
     const spec = known.get(name);
@@ -423,7 +485,9 @@ export function applyOps(
  * values for some registers keeps them and only takes what is genuinely ahead.
  */
 export function mergeMeta(local: CausalMeta, remote: CausalMeta): CausalMeta {
-  const specs = new Map(registersOf(local.entityType).map((spec) => [spec.name, spec]));
+  const specs = new Map(
+    registersOf(local.entityType).map((spec) => [spec.name, spec]),
+  );
 
   const registers: Record<string, RegisterState> = { ...local.registers };
   for (const [name, incoming] of Object.entries(remote.registers)) {
@@ -437,8 +501,13 @@ export function mergeMeta(local: CausalMeta, remote: CausalMeta): CausalMeta {
   }
 
   const sets: Record<string, Record<string, ElementState>> = {};
-  for (const path of new Set([...Object.keys(local.sets), ...Object.keys(remote.sets)])) {
-    const merged: Record<string, ElementState> = { ...(local.sets[path] ?? {}) };
+  for (const path of new Set([
+    ...Object.keys(local.sets),
+    ...Object.keys(remote.sets),
+  ])) {
+    const merged: Record<string, ElementState> = {
+      ...(local.sets[path] ?? {}),
+    };
     for (const [element, state] of Object.entries(remote.sets[path] ?? {})) {
       merged[element] = pickElement(merged[element], state);
     }
@@ -446,8 +515,13 @@ export function mergeMeta(local: CausalMeta, remote: CausalMeta): CausalMeta {
   }
 
   const maps: Record<string, Record<string, MapEntryState>> = {};
-  for (const path of new Set([...Object.keys(local.maps), ...Object.keys(remote.maps)])) {
-    const merged: Record<string, MapEntryState> = { ...(local.maps[path] ?? {}) };
+  for (const path of new Set([
+    ...Object.keys(local.maps),
+    ...Object.keys(remote.maps),
+  ])) {
+    const merged: Record<string, MapEntryState> = {
+      ...(local.maps[path] ?? {}),
+    };
     for (const [key, state] of Object.entries(remote.maps[path] ?? {})) {
       merged[key] = pickMapEntry(merged[key], state);
     }
@@ -459,7 +533,9 @@ export function mergeMeta(local: CausalMeta, remote: CausalMeta): CausalMeta {
       ? (remote.created ?? local.created)
       : local.created;
 
-  const unknownByKey = new Map([...local.unknown, ...remote.unknown].map((op) => [unknownKey(op), op]));
+  const unknownByKey = new Map(
+    [...local.unknown, ...remote.unknown].map((op) => [unknownKey(op), op]),
+  );
 
   return {
     entityType: local.entityType,
@@ -469,7 +545,9 @@ export function mergeMeta(local: CausalMeta, remote: CausalMeta): CausalMeta {
     registers,
     sets,
     maps,
-    deleted: remote.deleted ? pickDeletion(local.deleted, remote.deleted) : local.deleted,
+    deleted: remote.deleted
+      ? pickDeletion(local.deleted, remote.deleted)
+      : local.deleted,
     unknown: sortUnknown([...unknownByKey.values()]),
   };
 }
@@ -491,7 +569,7 @@ export function mergeMetaMaps(
 // ---------------------------------------------------------------------------
 
 /** Fields the projection derives rather than merges; excluded when comparing for change. */
-const DERIVED_FIELDS = ['revision', 'updatedAt'] as const;
+const DERIVED_FIELDS = ["revision", "updatedAt"] as const;
 
 const withoutDerived = (entity: Record<string, unknown>) => {
   const copy = { ...entity };
@@ -515,7 +593,10 @@ const withoutDerived = (entity: Record<string, unknown>) => {
  * has had its say would bump the revision of every repaired record on every single merge,
  * forever, because the repair's output differs from the raw projection by construction.
  */
-export function materialize(meta: CausalMeta, previous: FinanceEntity | null): FinanceEntity | null {
+export function materialize(
+  meta: CausalMeta,
+  previous: FinanceEntity | null,
+): FinanceEntity | null {
   if (!meta.created) return null;
 
   let entity: Record<string, unknown> = { ...meta.created.fields };
@@ -543,7 +624,9 @@ export function materialize(meta: CausalMeta, previous: FinanceEntity | null): F
   for (const { path } of keyedMapsOf(meta.entityType)) {
     const entries = Object.entries(meta.maps[path] ?? {})
       .filter(([, state]) => state.value !== null)
-      .sort(([first], [second]) => (first < second ? -1 : first > second ? 1 : 0))
+      .sort(([first], [second]) =>
+        first < second ? -1 : first > second ? 1 : 0,
+      )
       .map(([, state]) => state.value);
     entity = writePath(entity, path, entries);
   }
@@ -560,7 +643,8 @@ export function materialize(meta: CausalMeta, previous: FinanceEntity | null): F
   entity.deletedAt = meta.deleted?.at ?? null;
 
   const stamp = hlcToIso(meta.maxHlc);
-  entity.updatedAt = previous && previous.updatedAt > stamp ? previous.updatedAt : stamp;
+  entity.updatedAt =
+    previous && previous.updatedAt > stamp ? previous.updatedAt : stamp;
   entity.revision = previous?.revision ?? 1;
 
   return entity as unknown as FinanceEntity;
@@ -581,21 +665,32 @@ export interface Finalized {
  * for it to be strictly locally monotone rather than merged. A stale form is then always
  * rejected, whether the newer write came from this device or another one.
  */
-export function finalize(next: FinanceEntity, previous: FinanceEntity | null): Finalized {
+export function finalize(
+  next: FinanceEntity,
+  previous: FinanceEntity | null,
+): Finalized {
   if (previous) {
-    const before = canonicalJson(withoutDerived(previous as unknown as Record<string, unknown>));
-    const after = canonicalJson(withoutDerived(next as unknown as Record<string, unknown>));
+    const before = canonicalJson(
+      withoutDerived(previous as unknown as Record<string, unknown>),
+    );
+    const after = canonicalJson(
+      withoutDerived(next as unknown as Record<string, unknown>),
+    );
     // Returning `previous` verbatim rather than a fresh equal object keeps `updatedAt`
     // pinned to when the record last genuinely changed, instead of creeping forward every
     // time an unrelated op advances this entity's clock.
     if (before === after) return { entity: previous, changed: false };
   }
-  return { entity: { ...next, revision: (previous?.revision ?? 0) + 1 }, changed: true };
+  return {
+    entity: { ...next, revision: (previous?.revision ?? 0) + 1 },
+    changed: true,
+  };
 }
 
 /** The entity types a batch touched, so the caller can hydrate only what moved. */
 export function changedTypes(ops: readonly SyncOpBody[]): EntityType[] {
   const types = new Set<EntityType>();
-  for (const op of ops) if (isEntityType(op.entityType)) types.add(op.entityType);
+  for (const op of ops)
+    if (isEntityType(op.entityType)) types.add(op.entityType);
   return [...types].sort();
 }

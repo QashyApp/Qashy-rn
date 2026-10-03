@@ -1,3 +1,3 @@
-import { ExchangeRatesScreen } from '@/features/more/exchange-rates-screen';
+import { ExchangeRatesScreen } from "@/features/more/exchange-rates-screen";
 
 export default ExchangeRatesScreen;

@@ -26,21 +26,26 @@
  * so a pass that stops halfway merely restarts from the first chunk on the next foreground.
  */
 
-import type { StorageAdapter, StorageTx } from '@/data/storage-adapter';
+import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
 import {
   SYNC_META,
   deriveOutbox,
   readAllStates,
   readMeta,
-} from '@/data/sync-store';
-import type { SyncOpRow } from '@/data/sync-tables';
-import type { SigningSecretKey } from '@/sync/crypto';
-import { canServeDelta, type CausalMeta } from '@/sync/oplog';
-import { authenticateBatch } from '@/sync/engine/batch';
-import { headsRecord } from '@/sync/engine/receive';
-import { readRoster, toRosterMember, type Peer, type Roster } from '@/sync/engine/roster';
-import { BATCH_FORMAT_VERSION } from '@/sync/engine/types';
-import type { SyncBatch } from '@/sync/engine/types';
+} from "@/data/sync-store";
+import type { SyncOpRow } from "@/data/sync-tables";
+import type { SigningSecretKey } from "@/sync/crypto";
+import { canServeDelta, type CausalMeta } from "@/sync/oplog";
+import { authenticateBatch } from "@/sync/engine/batch";
+import { headsRecord } from "@/sync/engine/receive";
+import {
+  readRoster,
+  toRosterMember,
+  type Peer,
+  type Roster,
+} from "@/sync/engine/roster";
+import { BATCH_FORMAT_VERSION } from "@/sync/engine/types";
+import type { SyncBatch } from "@/sync/engine/types";
 
 /**
  * How many ops one batch carries.
@@ -141,7 +146,8 @@ const chunkStates = (
     const size = JSON.stringify(state).length;
     if (
       entries.length &&
-      (entries.length >= FULL_STATE_ENTRY_CAP || chars + size > FULL_STATE_CHUNK_CHARS)
+      (entries.length >= FULL_STATE_ENTRY_CAP ||
+        chars + size > FULL_STATE_CHUNK_CHARS)
     ) {
       break;
     }
@@ -173,7 +179,8 @@ export async function buildBatch(
   // already cut into that chain's history — in which case the ops that would bridge the gap
   // no longer exist and the honest answer is full state, not a delta with a hole in it.
   const needsFullState = [...outbox.heads.keys()].filter(
-    (chain) => !canServeDelta(peer.acked[chain] ?? 0, chain, outbox.compactedBelow),
+    (chain) =>
+      !canServeDelta(peer.acked[chain] ?? 0, chain, outbox.compactedBelow),
   );
 
   let fullState: readonly CausalMeta[] | undefined;
@@ -184,7 +191,9 @@ export async function buildBatch(
     if (!snapshot.states) {
       const states = await storage.transact((tx) => readAllStates(tx));
       snapshot.states = [...states.entries()]
-        .sort(([first], [second]) => (first < second ? -1 : first > second ? 1 : 0))
+        .sort(([first], [second]) =>
+          first < second ? -1 : first > second ? 1 : 0,
+        )
         .map(([, state]) => state);
     }
     const chunk = chunkStates(snapshot.states, stateOffset);
@@ -196,8 +205,8 @@ export async function buildBatch(
     batch: authenticateBatch(
       {
         version: BATCH_FORMAT_VERSION,
-        epoch: Number(meta.get(SYNC_META.epoch) ?? '1'),
-        baseCurrency: meta.get(SYNC_META.baseCurrency) ?? '',
+        epoch: Number(meta.get(SYNC_META.epoch) ?? "1"),
+        baseCurrency: meta.get(SYNC_META.baseCurrency) ?? "",
         sender: deviceId,
         // A state snapshot replaces the unusable suffix. Sending both would still make the
         // receiver verify a chain whose compacted prefix no longer exists.
@@ -219,10 +228,12 @@ export async function buildBatch(
  * Loads the send snapshot: one scan of the op table plus the two preconditions and the
  * roster, in a single transaction.
  */
-export async function loadSendSnapshot(storage: StorageAdapter): Promise<SendSnapshot> {
+export async function loadSendSnapshot(
+  storage: StorageAdapter,
+): Promise<SendSnapshot> {
   return storage.transact(async (tx: StorageTx) => {
     const [rows, meta, roster] = await Promise.all([
-      tx.table('syncOps').all(),
+      tx.table("syncOps").all(),
       readMeta(tx, [SYNC_META.epoch, SYNC_META.baseCurrency]),
       readRoster(tx),
     ]);

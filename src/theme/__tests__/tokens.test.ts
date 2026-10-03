@@ -6,43 +6,56 @@ import {
   ensureContrast,
   lightTokens,
   readableTextColor,
-} from '@/theme/tokens';
+} from "@/theme/tokens";
 
-describe('transfer color', () => {
+describe("transfer color", () => {
   it.each([
-    ['light', lightTokens],
-    ['dark', darkTokens],
-  ] as const)('clears 4.5:1 against the %s surface', (_mode, tokens) => {
-    expect(contrastRatio(tokens.transfer, tokens.surface)).toBeGreaterThanOrEqual(4.5);
+    ["light", lightTokens],
+    ["dark", darkTokens],
+  ] as const)("clears 4.5:1 against the %s surface", (_mode, tokens) => {
+    expect(
+      contrastRatio(tokens.transfer, tokens.surface),
+    ).toBeGreaterThanOrEqual(4.5);
   });
 });
 
-describe('theme contrast', () => {
-  it.each(['#E7892C', '#36A852', '#FF8F96', '#5966E9'])(
-    'chooses readable text for %s',
+describe("theme contrast", () => {
+  it.each(["#E7892C", "#36A852", "#FF8F96", "#5966E9"])(
+    "chooses readable text for %s",
     (background) => {
-      expect(contrastRatio(readableTextColor(background), background)).toBeGreaterThanOrEqual(4.5);
+      expect(
+        contrastRatio(readableTextColor(background), background),
+      ).toBeGreaterThanOrEqual(4.5);
     },
   );
 
-  it('adjusts accents that disappear into their surface', () => {
-    const accent = accessibleAccentColor('#FFFFFF', '#FFFFFF', '#191B20');
-    expect(contrastRatio(accent, '#FFFFFF')).toBeGreaterThanOrEqual(3);
+  it("adjusts accents that disappear into their surface", () => {
+    const accent = accessibleAccentColor("#FFFFFF", "#FFFFFF", "#191B20");
+    expect(contrastRatio(accent, "#FFFFFF")).toBeGreaterThanOrEqual(3);
   });
 
-  it('preserves hue as far as possible while meeting text contrast', () => {
-    const foreground = ensureContrast('#E7892C', '#FFF4E9', '#191B20');
-    expect(contrastRatio(foreground, '#FFF4E9')).toBeGreaterThanOrEqual(4.5);
-    expect(foreground).not.toBe('#191B20');
+  it("preserves hue as far as possible while meeting text contrast", () => {
+    const foreground = ensureContrast("#E7892C", "#FFF4E9", "#191B20");
+    expect(contrastRatio(foreground, "#FFF4E9")).toBeGreaterThanOrEqual(4.5);
+    expect(foreground).not.toBe("#191B20");
   });
 
   it.each([
-    ['light', lightTokens],
-    ['dark', darkTokens],
-  ] as const)('keeps every curated accent label AA-readable in %s mode', (_mode, tokens) => {
-    ACCENT_PRESETS.forEach((preset) => {
-      const accent = accessibleAccentColor(preset, tokens.surface, tokens.text);
-      expect(contrastRatio(readableTextColor(accent), accent)).toBeGreaterThanOrEqual(4.5);
-    });
-  });
+    ["light", lightTokens],
+    ["dark", darkTokens],
+  ] as const)(
+    "keeps every curated accent label AA-readable in %s mode",
+    (_mode, tokens) => {
+      ACCENT_PRESETS.forEach((preset) => {
+        const accent = accessibleAccentColor(
+          preset,
+          tokens.surface,
+          tokens.text,
+        );
+        expect(
+          contrastRatio(readableTextColor(accent), accent),
+        ).toBeGreaterThanOrEqual(4.5);
+      });
+    },
+  );
 });

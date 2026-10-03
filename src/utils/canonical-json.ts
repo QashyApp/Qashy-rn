@@ -19,9 +19,12 @@
  */
 
 export class CanonicalJsonError extends Error {
-  constructor(message: string, readonly path: string) {
+  constructor(
+    message: string,
+    readonly path: string,
+  ) {
     super(path ? `${message} (at ${path})` : message);
-    this.name = 'CanonicalJsonError';
+    this.name = "CanonicalJsonError";
   }
 }
 
@@ -31,37 +34,50 @@ const isPlainObject = (value: object) => {
 };
 
 const describe = (value: unknown) => {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'an array';
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "an array";
   const type = typeof value;
-  if (type !== 'object') return `a ${type}`;
+  if (type !== "object") return `a ${type}`;
   const name = (value as object).constructor?.name;
-  return name ? `a ${name}` : 'an object';
+  return name ? `a ${name}` : "an object";
 };
 
-const encodeValue = (value: unknown, path: string, seen: Set<object>): string => {
-  if (value === null) return 'null';
+const encodeValue = (
+  value: unknown,
+  path: string,
+  seen: Set<object>,
+): string => {
+  if (value === null) return "null";
 
   switch (typeof value) {
-    case 'boolean':
-      return value ? 'true' : 'false';
-    case 'string':
+    case "boolean":
+      return value ? "true" : "false";
+    case "string":
       return JSON.stringify(value);
-    case 'number':
+    case "number":
       // NaN and ±Infinity stringify to `null`, which would make two structurally different
       // payloads hash identically. Money is stored in minor units precisely so this never
       // comes up in practice, and a value that reaches here is a bug worth surfacing.
       if (!Number.isFinite(value)) {
-        throw new CanonicalJsonError(`${String(value)} has no JSON representation`, path);
+        throw new CanonicalJsonError(
+          `${String(value)} has no JSON representation`,
+          path,
+        );
       }
       return JSON.stringify(value);
-    case 'undefined':
-      throw new CanonicalJsonError('undefined has no JSON representation', path);
-    case 'bigint':
-      throw new CanonicalJsonError('bigint has no JSON representation', path);
-    case 'function':
-    case 'symbol':
-      throw new CanonicalJsonError(`${describe(value)} cannot be encoded`, path);
+    case "undefined":
+      throw new CanonicalJsonError(
+        "undefined has no JSON representation",
+        path,
+      );
+    case "bigint":
+      throw new CanonicalJsonError("bigint has no JSON representation", path);
+    case "function":
+    case "symbol":
+      throw new CanonicalJsonError(
+        `${describe(value)} cannot be encoded`,
+        path,
+      );
     default:
       break;
   }
@@ -69,17 +85,26 @@ const encodeValue = (value: unknown, path: string, seen: Set<object>): string =>
   const object = value as object;
   // A cycle would otherwise recurse until the stack gives out, which reports the wrong
   // problem in the wrong place.
-  if (seen.has(object)) throw new CanonicalJsonError('a circular reference cannot be encoded', path);
+  if (seen.has(object))
+    throw new CanonicalJsonError(
+      "a circular reference cannot be encoded",
+      path,
+    );
 
   if (Array.isArray(object)) {
     seen.add(object);
-    const parts = object.map((element, index) => encodeValue(element, `${path}[${index}]`, seen));
+    const parts = object.map((element, index) =>
+      encodeValue(element, `${path}[${index}]`, seen),
+    );
     seen.delete(object);
-    return `[${parts.join(',')}]`;
+    return `[${parts.join(",")}]`;
   }
 
   if (!isPlainObject(object)) {
-    throw new CanonicalJsonError(`${describe(object)} cannot be encoded; convert it first`, path);
+    throw new CanonicalJsonError(
+      `${describe(object)} cannot be encoded; convert it first`,
+      path,
+    );
   }
 
   seen.add(object);
@@ -95,15 +120,18 @@ const encodeValue = (value: unknown, path: string, seen: Set<object>): string =>
     // is the difference between "this field is unset" and "this field was never in the op",
     // so it has to be a decision the caller makes with `null`.
     if (child === undefined) {
-      throw new CanonicalJsonError('undefined has no JSON representation', childPath);
+      throw new CanonicalJsonError(
+        "undefined has no JSON representation",
+        childPath,
+      );
     }
     parts.push(`${JSON.stringify(key)}:${encodeValue(child, childPath, seen)}`);
   }
   seen.delete(object);
-  return `{${parts.join(',')}}`;
+  return `{${parts.join(",")}}`;
 };
 
 /** Encodes `value` to the one string every Qashy device produces for it. */
 export function canonicalJson(value: unknown): string {
-  return encodeValue(value, '', new Set<object>());
+  return encodeValue(value, "", new Set<object>());
 }

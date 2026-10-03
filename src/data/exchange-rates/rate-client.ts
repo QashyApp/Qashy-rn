@@ -13,8 +13,8 @@ import {
   parseRatesResponse,
   type FrankfurterRow,
   type RatesUrlParams,
-} from '@/data/exchange-rates/frankfurter';
-import { addRecurrence, isLocalDate } from '@/utils/date';
+} from "@/data/exchange-rates/frankfurter";
+import { addRecurrence, isLocalDate } from "@/utils/date";
 
 /** How long a single request is allowed to take before it counts as a timeout. */
 const DEFAULT_TIMEOUT_MS = 10_000;
@@ -28,7 +28,7 @@ export interface RateClientDeps {
   readonly timeoutMs?: number;
 }
 
-export type RateFetchErrorCode = 'offline' | 'timeout' | 'http' | 'malformed';
+export type RateFetchErrorCode = "offline" | "timeout" | "http" | "malformed";
 
 export class RateFetchError extends Error {
   constructor(
@@ -38,7 +38,7 @@ export class RateFetchError extends Error {
     readonly status?: number,
   ) {
     super(message);
-    this.name = 'RateFetchError';
+    this.name = "RateFetchError";
   }
 }
 
@@ -49,7 +49,8 @@ export class RateFetchError extends Error {
  * optimistic (it reports `true` behind a captive portal) and RN does not define it at all, so
  * it is trustworthy in one direction only.
  */
-const looksOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+const looksOffline = () =>
+  typeof navigator !== "undefined" && navigator.onLine === false;
 
 /**
  * Splits an inclusive `[from, to]` range into chunks no longer than `maxDays`, so a range
@@ -63,17 +64,17 @@ export function chunkDateRange(
   maxDays = MAX_RANGE_DAYS,
 ): { readonly from: string; readonly to: string }[] {
   if (!isLocalDate(from) || !isLocalDate(to)) {
-    throw new RangeError('chunkDateRange requires real calendar dates.');
+    throw new RangeError("chunkDateRange requires real calendar dates.");
   }
-  if (from > to) throw new RangeError('Range start must not be after its end.');
+  if (from > to) throw new RangeError("Range start must not be after its end.");
   const chunks: { from: string; to: string }[] = [];
   let chunkStart = from;
   while (true) {
-    const naturalEnd = addRecurrence(chunkStart, 'day', maxDays - 1);
+    const naturalEnd = addRecurrence(chunkStart, "day", maxDays - 1);
     const chunkEnd = naturalEnd < to ? naturalEnd : to;
     chunks.push({ from: chunkStart, to: chunkEnd });
     if (chunkEnd >= to) break;
-    chunkStart = addRecurrence(chunkEnd, 'day', 1);
+    chunkStart = addRecurrence(chunkEnd, "day", 1);
   }
   return chunks;
 }
@@ -84,9 +85,15 @@ export function chunkDateRange(
  * refused rather than followed, and nothing is cached. Never logs the URL or the response body
  * — both go straight into the return value or a generic, fixed error message.
  */
-async function requestJson(deps: RateClientDeps, url: string): Promise<unknown> {
+async function requestJson(
+  deps: RateClientDeps,
+  url: string,
+): Promise<unknown> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  const timeout = setTimeout(
+    () => controller.abort(),
+    deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+  );
   let response: Response;
   try {
     // A browser's native `window.fetch` is branded: calling it as `deps.fetch(...)` makes
@@ -94,35 +101,44 @@ async function requestJson(deps: RateClientDeps, url: string): Promise<unknown> 
     // device. Bind it explicitly, as `http.ts` does, so injected browser fetch, Expo's fetch,
     // and test doubles all run with the platform global as their receiver.
     response = await deps.fetch.call(globalThis, url, {
-      method: 'GET',
+      method: "GET",
       signal: controller.signal,
-      credentials: 'omit',
-      cache: 'no-store',
-      redirect: 'error',
-      referrerPolicy: 'no-referrer',
-      headers: { accept: 'application/json' },
+      credentials: "omit",
+      cache: "no-store",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+      headers: { accept: "application/json" },
     });
   } catch {
     // Every network-layer failure lands here indistinguishably. The only distinction worth
     // making is whether *our own* timeout fired the abort, since nothing else here ever calls
     // `controller.abort()`.
     if (controller.signal.aborted) {
-      throw new RateFetchError('Timed out reaching Frankfurter.', 'timeout');
+      throw new RateFetchError("Timed out reaching Frankfurter.", "timeout");
     }
     throw new RateFetchError(
-      looksOffline() ? 'This device is offline.' : 'Could not reach Frankfurter.',
-      'offline',
+      looksOffline()
+        ? "This device is offline."
+        : "Could not reach Frankfurter.",
+      "offline",
     );
   } finally {
     clearTimeout(timeout);
   }
   if (!response.ok) {
-    throw new RateFetchError(`Frankfurter answered ${response.status}.`, 'http', response.status);
+    throw new RateFetchError(
+      `Frankfurter answered ${response.status}.`,
+      "http",
+      response.status,
+    );
   }
   try {
     return await response.json();
   } catch {
-    throw new RateFetchError('Frankfurter sent something that was not JSON.', 'malformed');
+    throw new RateFetchError(
+      "Frankfurter sent something that was not JSON.",
+      "malformed",
+    );
   }
 }
 
@@ -138,9 +154,13 @@ export async function fetchEurRates(
   deps: RateClientDeps,
   params: RatesUrlParams,
 ): Promise<FrankfurterRow[]> {
-  const requests: RatesUrlParams[] = 'from' in params
-    ? chunkDateRange(params.from, params.to).map((chunk) => ({ quotes: params.quotes, ...chunk }))
-    : [params];
+  const requests: RatesUrlParams[] =
+    "from" in params
+      ? chunkDateRange(params.from, params.to).map((chunk) => ({
+          quotes: params.quotes,
+          ...chunk,
+        }))
+      : [params];
 
   const rows: FrankfurterRow[] = [];
   for (const request of requests) {
@@ -152,7 +172,10 @@ export async function fetchEurRates(
       // Never surface `error.message` here: on a malformed body it can echo back whatever the
       // response actually contained, and "never log response bodies" applies to error text
       // just as much as to a console.log.
-      throw new RateFetchError('Frankfurter sent a response Qashy does not understand.', 'malformed');
+      throw new RateFetchError(
+        "Frankfurter sent a response Qashy does not understand.",
+        "malformed",
+      );
     }
   }
   return rows;

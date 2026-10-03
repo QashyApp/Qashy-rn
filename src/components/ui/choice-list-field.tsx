@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState } from "react";
 import {
   FlatList,
   Modal,
@@ -6,18 +6,18 @@ import {
   TextInput,
   View,
   useWindowDimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { IconButton } from '@/components/ui/icon-button';
-import { MotionPressable, MotionView } from '@/components/ui/motion';
-import { useLocalization } from '@/localization/localization';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { fontStyle } from '@/theme/typography';
-import { hapticSelection } from '@/utils/haptics';
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { IconButton } from "@/components/ui/icon-button";
+import { MotionPressable, MotionView } from "@/components/ui/motion";
+import { useLocalization } from "@/localization/localization";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { fontStyle } from "@/theme/typography";
+import { hapticSelection } from "@/utils/haptics";
 
 export type ChoiceListOption = {
   value: string;
@@ -33,7 +33,7 @@ export function ChoiceListField({
   hint,
   searchable = false,
   literalOptions = false,
-  searchPlaceholder = 'Search',
+  searchPlaceholder = "Search",
 }: {
   label: string;
   value: string;
@@ -54,11 +54,11 @@ export function ChoiceListField({
   const { isRtl, t } = useLocalization();
   const { height } = useWindowDimensions();
   const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState("");
   // Falling back to options[0] used to show the first option as if it were
   // chosen while the list rendered no checkmark anywhere.
   const selected = options.find((option) => option.value === value);
-  const placeholder = t('Select an option');
+  const placeholder = t("Select an option");
   const optionText = (text: string) => (literalOptions ? text : t(text));
   // Resolved here rather than in AppText so the placeholder (already
   // translated) and a data-backed option label can share one text node.
@@ -67,7 +67,7 @@ export function ChoiceListField({
     const normalizedQuery = query.trim().toLocaleLowerCase();
     if (!normalizedQuery) return options;
     return options.filter((option) =>
-      `${option.label} ${option.description ?? ''} ${option.value}`
+      `${option.label} ${option.description ?? ""} ${option.value}`
         .toLocaleLowerCase()
         .includes(normalizedQuery),
     );
@@ -75,7 +75,7 @@ export function ChoiceListField({
 
   const close = () => {
     setOpen(false);
-    setQuery('');
+    setQuery("");
   };
 
   return (
@@ -83,7 +83,7 @@ export function ChoiceListField({
       <AppText variant="label">{label}</AppText>
       <MotionPressable
         accessibilityLabel={t(label)}
-        accessibilityHint={t('Opens a list of choices')}
+        accessibilityHint={t("Opens a list of choices")}
         accessibilityRole="button"
         accessibilityValue={{ text: triggerText }}
         onPress={() => setOpen(true)}
@@ -93,28 +93,37 @@ export function ChoiceListField({
             paddingHorizontal: space.lg - 2,
             paddingVertical: space.md - 2,
             borderRadius: radius.tile,
-            borderCurve: 'continuous',
+            borderCurve: "continuous",
             borderWidth: open ? 2 : 0,
-            borderColor: open ? theme.accent : 'transparent',
+            borderColor: open ? theme.accent : "transparent",
             opacity: pressed ? 0.8 : 1,
-            flexDirection: 'row',
-            alignItems: 'center',
+            flexDirection: "row",
+            alignItems: "center",
             gap: 12,
           },
           // Same raised control silhouette as any other trigger; the accent
           // ring on open replaces the previous filled-border affordance.
-          materialStyle(theme, 'control'),
-        ]}>
+          materialStyle(theme, "control"),
+        ]}
+      >
         <View style={{ flex: 1, gap: 1 }}>
-          <AppText literal muted={!selected}>{triggerText}</AppText>
-          {selected?.description ? <AppText literal={literalOptions} variant="caption" muted>{selected.description}</AppText> : null}
+          <AppText literal muted={!selected}>
+            {triggerText}
+          </AppText>
+          {selected?.description ? (
+            <AppText literal={literalOptions} variant="caption" muted>
+              {selected.description}
+            </AppText>
+          ) : null}
         </View>
         <AppIcon name="chevron.down" color={theme.textMuted} size={18} />
       </MotionPressable>
 
       {hint ? (
         <MotionView key={hint} variant="right" exit animateLayout>
-          <AppText selectable variant="caption" muted>{hint}</AppText>
+          <AppText selectable variant="caption" muted>
+            {hint}
+          </AppText>
         </MotionView>
       ) : null}
 
@@ -122,15 +131,21 @@ export function ChoiceListField({
         animationType="fade"
         transparent
         visible={open}
-        onRequestClose={close}>
+        onRequestClose={close}
+      >
         <SafeAreaView
-          edges={['top', 'right', 'bottom', 'left']}
-          style={{ flex: 1, justifyContent: 'center', padding: 18 }}>
+          edges={["top", "right", "bottom", "left"]}
+          style={{ flex: 1, justifyContent: "center", padding: 18 }}
+        >
           <Pressable
             accessibilityLabel={t(`Close ${label.toLocaleLowerCase()} choices`)}
             accessibilityRole="button"
             onPress={close}
-            style={{ position: 'absolute', inset: 0, backgroundColor: theme.scrim }}
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: theme.scrim,
+            }}
           />
           <MotionView
             accessibilityViewIsModal
@@ -138,32 +153,51 @@ export function ChoiceListField({
             variant="zoom"
             style={[
               {
-                width: '100%',
+                width: "100%",
                 maxWidth: 520,
                 maxHeight: Math.max(320, height - 72),
-                alignSelf: 'center',
+                alignSelf: "center",
                 padding: 18,
                 gap: 14,
                 borderRadius: radius.card,
-                borderCurve: 'continuous',
+                borderCurve: "continuous",
               },
-              materialStyle(theme, 'overlay'),
-            ]}>
-            <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              materialStyle(theme, "overlay"),
+            ]}
+          >
+            <View
+              style={{
+                minHeight: 44,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
               <View style={{ flex: 1, gap: 2 }}>
                 {/* Built as one string: separate children are translated
                     individually, so "Choose " and "language" would each miss
                     the dictionary and never resolve. */}
                 <AppText variant="headline">{`Choose ${label.toLocaleLowerCase()}`}</AppText>
-                <AppText variant="caption" muted>{`${options.length} choices available`}</AppText>
+                <AppText
+                  variant="caption"
+                  muted
+                >{`${options.length} choices available`}</AppText>
               </View>
-              <IconButton label={`Close ${label.toLocaleLowerCase()} choices`} icon="xmark" onPress={close} />
+              <IconButton
+                label={`Close ${label.toLocaleLowerCase()} choices`}
+                icon="xmark"
+                onPress={close}
+              />
             </View>
 
             {searchable ? (
-              <View style={{ position: 'relative', justifyContent: 'center' }}>
-                <View style={{ position: 'absolute', start: 14, zIndex: 1 }}>
-                  <AppIcon name="magnifyingglass" color={theme.textMuted} size={18} />
+              <View style={{ position: "relative", justifyContent: "center" }}>
+                <View style={{ position: "absolute", start: 14, zIndex: 1 }}>
+                  <AppIcon
+                    name="magnifyingglass"
+                    color={theme.textMuted}
+                    size={18}
+                  />
                 </View>
                 <TextInput
                   accessibilityLabel={t(`Search ${label.toLocaleLowerCase()}`)}
@@ -178,13 +212,13 @@ export function ChoiceListField({
                     paddingStart: 42,
                     paddingEnd: 14,
                     borderRadius: radius.tile,
-                    borderCurve: 'continuous',
+                    borderCurve: "continuous",
                     backgroundColor: theme.surfaceMuted,
                     color: theme.text,
                     fontSize: 16,
-                    ...fontStyle('regular', theme.type),
-                    writingDirection: isRtl ? 'rtl' : 'ltr',
-                    textAlign: isRtl ? 'right' : 'left',
+                    ...fontStyle("regular", theme.type),
+                    writingDirection: isRtl ? "rtl" : "ltr",
+                    textAlign: isRtl ? "right" : "left",
                   }}
                 />
               </View>
@@ -201,18 +235,19 @@ export function ChoiceListField({
               // narrows the list, including when it empties out.
               accessibilityLiveRegion="polite"
               aria-live="polite"
-              style={{ flexShrink: 1 }}>
+              style={{ flexShrink: 1 }}
+            >
               <FlatList
                 data={filteredOptions}
                 keyExtractor={(option) => option.value}
                 keyboardShouldPersistTaps="handled"
                 initialNumToRender={18}
                 ItemSeparatorComponent={() => <View style={{ height: 6 }} />}
-                ListEmptyComponent={(
-                  <View style={{ paddingVertical: 28, alignItems: 'center' }}>
+                ListEmptyComponent={
+                  <View style={{ paddingVertical: 28, alignItems: "center" }}>
                     <AppText muted>No matching choices</AppText>
                   </View>
-                )}
+                }
                 renderItem={({ item }) => {
                   const isSelected = item.value === value;
                   return (
@@ -230,21 +265,41 @@ export function ChoiceListField({
                         paddingHorizontal: 14,
                         paddingVertical: 10,
                         borderRadius: radius.control,
-                        borderCurve: 'continuous',
+                        borderCurve: "continuous",
                         backgroundColor: isSelected
                           ? theme.accentContainer
                           : pressed
                             ? theme.surfaceMuted
-                            : 'transparent',
-                        flexDirection: 'row',
-                        alignItems: 'center',
+                            : "transparent",
+                        flexDirection: "row",
+                        alignItems: "center",
                         gap: 12,
-                      })}>
+                      })}
+                    >
                       <View style={{ flex: 1, gap: 1 }}>
-                        <AppText literal={literalOptions} variant={isSelected ? 'label' : 'body'}>{item.label}</AppText>
-                        {item.description ? <AppText literal={literalOptions} variant="caption" muted>{item.description}</AppText> : null}
+                        <AppText
+                          literal={literalOptions}
+                          variant={isSelected ? "label" : "body"}
+                        >
+                          {item.label}
+                        </AppText>
+                        {item.description ? (
+                          <AppText
+                            literal={literalOptions}
+                            variant="caption"
+                            muted
+                          >
+                            {item.description}
+                          </AppText>
+                        ) : null}
                       </View>
-                      {isSelected ? <AppIcon name="checkmark" color={theme.accent} size={20} /> : null}
+                      {isSelected ? (
+                        <AppIcon
+                          name="checkmark"
+                          color={theme.accent}
+                          size={20}
+                        />
+                      ) : null}
                     </MotionPressable>
                   );
                 }}

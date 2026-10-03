@@ -1,11 +1,17 @@
-import { Children, Fragment, type ReactNode } from 'react';
-import { StyleSheet, View, type ColorValue, type ViewProps, type ViewStyle } from 'react-native';
+import { Children, Fragment, type ReactNode } from "react";
+import {
+  StyleSheet,
+  View,
+  type ColorValue,
+  type ViewProps,
+  type ViewStyle,
+} from "react-native";
 
-import { MotionPressable } from '@/components/ui/motion';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
+import { MotionPressable } from "@/components/ui/motion";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
 
-export type CardVariant = 'default' | 'list' | 'inset' | 'emphasized';
+export type CardVariant = "default" | "list" | "inset" | "emphasized";
 
 export interface CardProps extends ViewProps {
   /**
@@ -41,7 +47,7 @@ export interface CardProps extends ViewProps {
  * outranks everything with it.
  */
 export function Card({
-  variant = 'default',
+  variant = "default",
   dividerInset = 0,
   onPress,
   style,
@@ -52,33 +58,43 @@ export function Card({
   const { radius, space } = theme;
 
   const base: ViewStyle = {
-    borderRadius: variant === 'inset' ? radius.tile : radius.card,
-    borderCurve: 'continuous',
+    borderRadius: variant === "inset" ? radius.tile : radius.card,
+    borderCurve: "continuous",
     // Card edges are drawn with box-shadow, which Windows High Contrast (forced-colors) strips. A
     // transparent outline is invisible normally but is repainted in a system colour there, and
     // unlike a border it takes no layout space.
-    ...(process.env.EXPO_OS === 'web'
-      ? { outlineWidth: 1, outlineStyle: 'solid' as const, outlineColor: 'transparent' }
+    ...(process.env.EXPO_OS === "web"
+      ? {
+          outlineWidth: 1,
+          outlineStyle: "solid" as const,
+          outlineColor: "transparent",
+        }
       : null),
-    ...(variant === 'inset'
-      ? materialStyle(theme, 'sunken')
-      : variant === 'emphasized'
-        // Same raised shadow as `card`, but an accent tint instead of the
-        // neutral gradient — a flat tint reads as intentionally accented,
-        // where a gradient over a tint would just look like a mistake.
-        ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowCard }
-        : materialStyle(theme, 'card')),
+    ...(variant === "inset"
+      ? materialStyle(theme, "sunken")
+      : variant === "emphasized"
+        ? // Same raised shadow as `card`, but an accent tint instead of the
+          // neutral gradient — a flat tint reads as intentionally accented,
+          // where a gradient over a tint would just look like a mistake.
+          {
+            backgroundColor: theme.accentContainer,
+            boxShadow: theme.shadowCard,
+          }
+        : materialStyle(theme, "card")),
   };
 
-  if (variant === 'list') {
+  if (variant === "list") {
     base.paddingVertical = space.xs;
     base.paddingHorizontal = space.lg;
-    base.overflow = 'hidden';
+    base.overflow = "hidden";
   } else {
-    base.padding = variant === 'inset' ? space.md : space.lg;
+    base.padding = variant === "inset" ? space.md : space.lg;
   }
 
-  const content = variant === 'list' ? withDividers(children, theme.border, dividerInset) : children;
+  const content =
+    variant === "list"
+      ? withDividers(children, theme.border, dividerInset)
+      : children;
   const pressable = Boolean(onPress);
 
   if (pressable) {
@@ -91,7 +107,8 @@ export function Card({
           base,
           pressed ? { boxShadow: theme.shadowControlPressed } : null,
           style,
-        ]}>
+        ]}
+      >
         {content}
       </MotionPressable>
     );
@@ -110,7 +127,13 @@ function withDividers(children: ReactNode, color: ColorValue, inset: number) {
   return items.map((child, index) => (
     <Fragment key={index}>
       {index > 0 ? (
-        <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: color, marginStart: inset }} />
+        <View
+          style={{
+            height: StyleSheet.hairlineWidth,
+            backgroundColor: color,
+            marginStart: inset,
+          }}
+        />
       ) : null}
       {child}
     </Fragment>

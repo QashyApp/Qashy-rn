@@ -17,13 +17,25 @@
 import {
   deriveBaseRates,
   FRANKFURTER_UNSUPPORTED,
-} from '@/data/exchange-rates/frankfurter';
-import { fetchEurRates, RateFetchError, type RateFetchErrorCode } from '@/data/exchange-rates/rate-client';
-import { readRatesFlag, writeRatesFlag } from '@/data/exchange-rates/rates-flag';
-import type { FetchedRateConflict, FetchedRateResult, RateInput, FinanceRepository } from '@/data/repository';
-import type { StorageAdapter } from '@/data/storage-adapter';
-import type { FinanceState } from '@/domain/models';
-import { isLocalDate, toLocalDate } from '@/utils/date';
+} from "@/data/exchange-rates/frankfurter";
+import {
+  fetchEurRates,
+  RateFetchError,
+  type RateFetchErrorCode,
+} from "@/data/exchange-rates/rate-client";
+import {
+  readRatesFlag,
+  writeRatesFlag,
+} from "@/data/exchange-rates/rates-flag";
+import type {
+  FetchedRateConflict,
+  FetchedRateResult,
+  RateInput,
+  FinanceRepository,
+} from "@/data/repository";
+import type { StorageAdapter } from "@/data/storage-adapter";
+import type { FinanceState } from "@/domain/models";
+import { isLocalDate, toLocalDate } from "@/utils/date";
 
 /** How often `refreshLatest` is willing to hit the network on its own, absent `force`. */
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -72,7 +84,7 @@ const INITIAL_STATUS: ExchangeRateStatus = {
 
 export interface ExchangeRateServiceDeps {
   readonly storage: StorageAdapter;
-  readonly repository: Pick<FinanceRepository, 'saveFetchedRates'>;
+  readonly repository: Pick<FinanceRepository, "saveFetchedRates">;
   /** Reads the one finance snapshot the repository already holds. Never duplicated here. */
   readonly getState: () => FinanceState;
   readonly fetch: typeof globalThis.fetch;
@@ -124,15 +136,22 @@ export function unsupportedCurrencies(state: FinanceState): string[] {
 }
 
 /** A live (non-tombstoned) row already answers this exact currency/date pair. */
-function isAlreadyCovered(state: FinanceState, currency: string, localDate: string): boolean {
+function isAlreadyCovered(
+  state: FinanceState,
+  currency: string,
+  localDate: string,
+): boolean {
   const base = normalizeCode(state.settings.baseCurrency);
   return state.exchangeRates.some(
     (rate) =>
-      rate.fromCurrency === currency && rate.toCurrency === base && rate.effectiveDate === localDate,
+      rate.fromCurrency === currency &&
+      rate.toCurrency === base &&
+      rate.effectiveDate === localDate,
   );
 }
 
-const pairKey = (currency: string, localDate: string) => `${currency}|${localDate}`;
+const pairKey = (currency: string, localDate: string) =>
+  `${currency}|${localDate}`;
 
 export class ExchangeRateService {
   private status: ExchangeRateStatus = INITIAL_STATUS;
@@ -195,7 +214,9 @@ export class ExchangeRateService {
 
   /** Writes the opt-in flag. Turning it on immediately forces a refresh. */
   setEnabled = async (on: boolean): Promise<void> => {
-    await this.deps.storage.transact((tx) => writeRatesFlag(tx, { enabled: on }));
+    await this.deps.storage.transact((tx) =>
+      writeRatesFlag(tx, { enabled: on }),
+    );
     this.setStatus({ enabled: on });
     if (on) await this.refreshLatest({ force: true });
   };
@@ -216,7 +237,11 @@ export class ExchangeRateService {
     return run;
   };
 
-  private async refreshLatestNow({ force }: { force?: boolean }): Promise<void> {
+  private async refreshLatestNow({
+    force,
+  }: {
+    force?: boolean;
+  }): Promise<void> {
     const state = this.deps.getState();
     this.setStatus({ unsupported: unsupportedCurrencies(state) });
 
@@ -233,7 +258,11 @@ export class ExchangeRateService {
 
     if (!force) {
       const last = flag.lastRefreshAt ? Date.parse(flag.lastRefreshAt) : NaN;
-      if (Number.isFinite(last) && this.now().getTime() - last < REFRESH_INTERVAL_MS) return;
+      if (
+        Number.isFinite(last) &&
+        this.now().getTime() - last < REFRESH_INTERVAL_MS
+      )
+        return;
     }
 
     const base = normalizeCode(state.settings.baseCurrency);
@@ -247,12 +276,20 @@ export class ExchangeRateService {
       const derived = deriveBaseRates(rows, base, needed);
       const result = await this.deps.repository.saveFetchedRates(derived);
       const at = this.now().toISOString();
-      await this.deps.storage.transact((tx) => writeRatesFlag(tx, { lastRefreshAt: at }));
-      this.setStatus({ fetching: false, lastError: null, lastRefreshAt: at, conflicts: result.conflicts, lastWritten: result.written });
+      await this.deps.storage.transact((tx) =>
+        writeRatesFlag(tx, { lastRefreshAt: at }),
+      );
+      this.setStatus({
+        fetching: false,
+        lastError: null,
+        lastRefreshAt: at,
+        conflicts: result.conflicts,
+        lastWritten: result.written,
+      });
     } catch (error) {
       this.setStatus({
         fetching: false,
-        lastError: error instanceof RateFetchError ? error.code : 'malformed',
+        lastError: error instanceof RateFetchError ? error.code : "malformed",
       });
     }
   }
@@ -263,7 +300,9 @@ export class ExchangeRateService {
    * A no-op — no fetch, nothing cached — when the flag is off, so this is always safe to call
    * from the transaction form or CSV preview without checking the flag first. Never throws.
    */
-  ensureRatesFor = async (pairs: readonly RatePair[]): Promise<EnsureRatesResult> => {
+  ensureRatesFor = async (
+    pairs: readonly RatePair[],
+  ): Promise<EnsureRatesResult> => {
     const state = this.deps.getState();
     const base = normalizeCode(state.settings.baseCurrency);
     const today = this.todayLocal();
@@ -285,7 +324,7 @@ export class ExchangeRateService {
     }
     if (!wanted.size) return { ok: true, conflicts: [] };
 
-    const dedupeKey = [...wanted.keys()].sort().join(',');
+    const dedupeKey = [...wanted.keys()].sort().join(",");
     const pending = this.inFlight.get(dedupeKey);
     if (pending) return pending;
 
@@ -311,28 +350,38 @@ export class ExchangeRateService {
       const quotes = [...new Set([...currencies, base])];
       const rows = await fetchEurRates(
         { fetch: this.deps.fetch, timeoutMs: this.deps.timeoutMs },
-        minDate === maxDate ? { quotes, date: minDate } : { quotes, from: minDate, to: maxDate },
+        minDate === maxDate
+          ? { quotes, date: minDate }
+          : { quotes, from: minDate, to: maxDate },
       );
       const derived = deriveBaseRates(rows, base, currencies);
-      const filtered = derived.filter((rate) => wanted.has(pairKey(rate.fromCurrency, rate.effectiveDate)));
+      const filtered = derived.filter((rate) =>
+        wanted.has(pairKey(rate.fromCurrency, rate.effectiveDate)),
+      );
       const result: FetchedRateResult = filtered.length
         ? await this.deps.repository.saveFetchedRates(filtered)
         : { written: 0, skippedManual: 0, conflicts: [] };
-      this.setStatus({ fetching: false, lastError: null, conflicts: result.conflicts });
+      this.setStatus({
+        fetching: false,
+        lastError: null,
+        conflicts: result.conflicts,
+      });
       return { ok: true, conflicts: result.conflicts };
     } catch (error) {
       const at = this.now().getTime();
       for (const key of wanted.keys()) this.negativeCache.set(key, at);
       this.setStatus({
         fetching: false,
-        lastError: error instanceof RateFetchError ? error.code : 'malformed',
+        lastError: error instanceof RateFetchError ? error.code : "malformed",
       });
       return { ok: false, conflicts: [] };
     }
   }
 }
 
-export function createExchangeRateService(deps: ExchangeRateServiceDeps): ExchangeRateService {
+export function createExchangeRateService(
+  deps: ExchangeRateServiceDeps,
+): ExchangeRateService {
   return new ExchangeRateService(deps);
 }
 

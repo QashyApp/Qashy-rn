@@ -1,3 +1,3 @@
-import { PairScreen } from '@/features/sync/pair-screen';
+import { PairScreen } from "@/features/sync/pair-screen";
 
 export default PairScreen;

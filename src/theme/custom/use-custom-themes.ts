@@ -12,16 +12,20 @@
  * contents are never logged.
  */
 
-import { useCallback, useSyncExternalStore } from 'react';
+import { useCallback, useSyncExternalStore } from "react";
 
-import { deleteCustomThemeFile, loadCustomThemeFiles, saveCustomThemeFile } from '@/data/custom-themes-store';
-import { syncingStorage } from '@/data/local-finance-repository';
-import type { StorageAdapter, StorageTx } from '@/data/storage-adapter';
-import { parseCustomTheme, type CustomThemeFile } from '@/theme/custom/schema';
-import type { ThemeDefinition } from '@/theme/themes/types';
+import {
+  deleteCustomThemeFile,
+  loadCustomThemeFiles,
+  saveCustomThemeFile,
+} from "@/data/custom-themes-store";
+import { syncingStorage } from "@/data/local-finance-repository";
+import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
+import { parseCustomTheme, type CustomThemeFile } from "@/theme/custom/schema";
+import type { ThemeDefinition } from "@/theme/themes/types";
 
 export interface CustomThemesSnapshot {
-  readonly status: 'loading' | 'ready';
+  readonly status: "loading" | "ready";
   readonly files: readonly CustomThemeFile[];
   /** Definitions of the files that parsed. Empty until loaded. */
   readonly themes: readonly ThemeDefinition[];
@@ -30,9 +34,16 @@ export interface CustomThemesSnapshot {
 }
 
 const EMPTY: readonly never[] = [];
-const LOADING_SNAPSHOT: CustomThemesSnapshot = { status: 'loading', files: EMPTY, themes: EMPTY, warnings: EMPTY };
+const LOADING_SNAPSHOT: CustomThemesSnapshot = {
+  status: "loading",
+  files: EMPTY,
+  themes: EMPTY,
+  warnings: EMPTY,
+};
 
-function buildSnapshot(files: readonly CustomThemeFile[]): CustomThemesSnapshot {
+function buildSnapshot(
+  files: readonly CustomThemeFile[],
+): CustomThemesSnapshot {
   const kept: CustomThemeFile[] = [];
   const themes: ThemeDefinition[] = [];
   const warnings: string[] = [];
@@ -41,9 +52,10 @@ function buildSnapshot(files: readonly CustomThemeFile[]): CustomThemesSnapshot 
     if (!result.ok) continue;
     kept.push(result.file);
     themes.push(result.theme);
-    for (const warning of result.warnings) warnings.push(`${result.file.id}: ${warning}`);
+    for (const warning of result.warnings)
+      warnings.push(`${result.file.id}: ${warning}`);
   }
-  return { status: 'ready', files: kept, themes, warnings };
+  return { status: "ready", files: kept, themes, warnings };
 }
 
 export function createCustomThemesStore(deps: { storage: StorageAdapter }) {
@@ -73,9 +85,16 @@ export function createCustomThemesStore(deps: { storage: StorageAdapter }) {
   };
 
   /** Persists first and updates the snapshot only on success; rejects with the store's error otherwise. */
-  function write(work: (tx: StorageTx) => Promise<CustomThemeFile[]>): Promise<void> {
-    const attempt = writeTail.then(() => deps.storage.transact(work, { silent: true }));
-    writeTail = attempt.then(() => undefined, () => undefined);
+  function write(
+    work: (tx: StorageTx) => Promise<CustomThemeFile[]>,
+  ): Promise<void> {
+    const attempt = writeTail.then(() =>
+      deps.storage.transact(work, { silent: true }),
+    );
+    writeTail = attempt.then(
+      () => undefined,
+      () => undefined,
+    );
     return attempt.then((files) => {
       loadStarted = true;
       setSnapshot(buildSnapshot(files));
@@ -86,22 +105,32 @@ export function createCustomThemesStore(deps: { storage: StorageAdapter }) {
     load,
     getSnapshot,
     subscribe,
-    save: (file: CustomThemeFile) => write((tx) => saveCustomThemeFile(tx, file)),
+    save: (file: CustomThemeFile) =>
+      write((tx) => saveCustomThemeFile(tx, file)),
     remove: (id: string) => write((tx) => deleteCustomThemeFile(tx, id)),
   };
 }
 
 export type CustomThemesStore = ReturnType<typeof createCustomThemesStore>;
 
-export const customThemesStore = createCustomThemesStore({ storage: syncingStorage });
+export const customThemesStore = createCustomThemesStore({
+  storage: syncingStorage,
+});
 
 export function useCustomThemes(): CustomThemesSnapshot & {
   readonly save: (file: CustomThemeFile) => Promise<void>;
   readonly remove: (id: string) => Promise<void>;
 } {
   customThemesStore.load();
-  const snapshot = useSyncExternalStore(customThemesStore.subscribe, customThemesStore.getSnapshot, customThemesStore.getSnapshot);
-  const save = useCallback((file: CustomThemeFile) => customThemesStore.save(file), []);
+  const snapshot = useSyncExternalStore(
+    customThemesStore.subscribe,
+    customThemesStore.getSnapshot,
+    customThemesStore.getSnapshot,
+  );
+  const save = useCallback(
+    (file: CustomThemeFile) => customThemesStore.save(file),
+    [],
+  );
   const remove = useCallback((id: string) => customThemesStore.remove(id), []);
   return { ...snapshot, save, remove };
 }

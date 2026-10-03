@@ -1,5 +1,5 @@
-import { classicTheme } from '@/theme/themes/classic';
-import type { ThemeDefinition } from '@/theme/themes/types';
+import { classicTheme } from "@/theme/themes/classic";
+import type { ThemeDefinition } from "@/theme/themes/types";
 
 /**
  * Classic's shapes and surfaces with the Android wallpaper-derived accent. The platform
@@ -7,8 +7,8 @@ import type { ThemeDefinition } from '@/theme/themes/types';
  */
 export const materialYouTheme: ThemeDefinition = {
   ...classicTheme,
-  id: 'material-you',
-  name: 'Material You',
-  accent: { ...classicTheme.accent, mode: 'system' },
-  availableOn: ['android'],
+  id: "material-you",
+  name: "Material You",
+  accent: { ...classicTheme.accent, mode: "system" },
+  availableOn: ["android"],
 };

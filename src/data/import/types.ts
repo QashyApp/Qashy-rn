@@ -5,9 +5,9 @@ import type {
   RecurrenceUnit,
   TransactionKind,
   TransactionStatus,
-} from '@/domain/models';
+} from "@/domain/models";
 
-export type ImportSourceId = 'cashew';
+export type ImportSourceId = "cashew";
 
 export interface ImportSourceInfo {
   id: ImportSourceId;
@@ -24,13 +24,18 @@ export interface ImportSourceInfo {
   caveats: string[];
 }
 
-export type ImportErrorCode = 'not-sqlite' | 'not-cashew' | 'unsupported' | 'corrupt' | 'reconciliation-failed';
+export type ImportErrorCode =
+  | "not-sqlite"
+  | "not-cashew"
+  | "unsupported"
+  | "corrupt"
+  | "reconciliation-failed";
 
 export class ImportError extends Error {
   readonly code: ImportErrorCode;
   constructor(code: ImportErrorCode, message: string) {
     super(message);
-    this.name = 'ImportError';
+    this.name = "ImportError";
     this.code = code;
   }
 }
@@ -128,7 +133,7 @@ export interface BundleTransaction {
 
 export interface BundleRecurringRule {
   externalId: string;
-  kind: 'expense' | 'income';
+  kind: "expense" | "income";
   title: string;
   note: string;
   accountExternalId: string;
@@ -166,7 +171,7 @@ export interface ImportBundle {
   source: ImportSourceId;
   /** IANA zone actually used to turn timestamps into local dates. */
   timeZone: string;
-  timeZoneSource: 'backup' | 'device';
+  timeZoneSource: "backup" | "device";
   accounts: BundleAccount[];
   categories: BundleCategory[];
   tags: BundleTag[];
@@ -183,7 +188,7 @@ export interface ParseOptions {
   fallbackCurrency: string;
 }
 
-export type ImportMode = 'merge' | 'replace';
+export type ImportMode = "merge" | "replace";
 
 export interface ExternalImportOutcome {
   committed: boolean;
@@ -197,5 +202,5 @@ export interface ExternalImportOutcome {
   /** Anything that would make the whole import invalid, e.g. a missing exchange rate. Commit refuses if non-empty. */
   rejected: { externalId: string; reason: string }[];
   /** New entities whose name was suffixed to stay unique. */
-  renamed: { kind: 'account' | 'category' | 'tag'; from: string; to: string }[];
+  renamed: { kind: "account" | "category" | "tag"; from: string; to: string }[];
 }

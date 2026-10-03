@@ -1,47 +1,68 @@
-import { router } from 'expo-router';
-import { useMemo, useRef, useState } from 'react';
-import { Platform, Pressable, ScrollView, View, type LayoutChangeEvent } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router } from "expo-router";
+import { useMemo, useRef, useState } from "react";
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AnimatedMoney } from '@/components/finance/animated-money';
-import { Sparkline } from '@/components/finance/sparkline';
-import { ActionButton } from '@/components/ui/action-button';
-import { AppText } from '@/components/ui/app-text';
-import { EmptyState } from '@/components/ui/empty-state';
-import { FloatingActionButton } from '@/components/ui/floating-action-button';
-import { MonthSwitcher, type MonthDirection } from '@/components/ui/month-switcher';
-import { MonthSwipeView } from '@/components/ui/month-swipe-view';
-import { useMonthSwipe } from '@/components/ui/use-month-swipe';
-import { MotionView } from '@/components/ui/motion';
-import { PageHeading } from '@/components/ui/page-heading';
-import { PageHero } from '@/components/ui/page-hero';
-import { floatingActionMetrics, ScreenContainer } from '@/components/ui/screen-container';
-import { TextButton } from '@/components/ui/text-button';
-import { UndoBar } from '@/components/ui/undo-bar';
-import { useScrollHide } from '@/components/ui/use-scroll-hide';
-import { FRANKFURTER_UNSUPPORTED } from '@/data/exchange-rates/frankfurter';
-import { AddCardWell } from '@/features/overview/card-gallery-screen';
-import { EditableCardFrame } from '@/features/overview/edit/editable-card-frame';
+import { AnimatedMoney } from "@/components/finance/animated-money";
+import { Sparkline } from "@/components/finance/sparkline";
+import { ActionButton } from "@/components/ui/action-button";
+import { AppText } from "@/components/ui/app-text";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FloatingActionButton } from "@/components/ui/floating-action-button";
+import {
+  MonthSwitcher,
+  type MonthDirection,
+} from "@/components/ui/month-switcher";
+import { MonthSwipeView } from "@/components/ui/month-swipe-view";
+import { useMonthSwipe } from "@/components/ui/use-month-swipe";
+import { MotionView } from "@/components/ui/motion";
+import { PageHeading } from "@/components/ui/page-heading";
+import { PageHero } from "@/components/ui/page-hero";
+import {
+  floatingActionMetrics,
+  ScreenContainer,
+} from "@/components/ui/screen-container";
+import { TextButton } from "@/components/ui/text-button";
+import { UndoBar } from "@/components/ui/undo-bar";
+import { useScrollHide } from "@/components/ui/use-scroll-hide";
+import { FRANKFURTER_UNSUPPORTED } from "@/data/exchange-rates/frankfurter";
+import { AddCardWell } from "@/features/overview/card-gallery-screen";
+import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame";
 import {
   DEFAULT_OVERVIEW_LAYOUT,
   WIDGET_RULES,
   type OverviewCard,
   type OverviewLayoutAction,
-} from '@/features/overview/layout/overview-layout';
-import { useOverviewLayout } from '@/features/overview/layout/use-overview-layout';
-import { GRID_BREAKPOINT, packOverviewRows } from '@/features/overview/widgets/grid';
-import { WIDGET_REGISTRY } from '@/features/overview/widgets/registry';
-import { useLocalization } from '@/localization/localization';
-import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
-import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
-import { useScreenMetrics } from '@/theme/layout';
-import { useQashyTheme } from '@/theme/theme';
-import { errorMessage, showError } from '@/utils/confirm';
-import { startOfMonth } from '@/utils/date';
-import { useDashboard } from '@/features/overview/widgets/use-dashboard';
-import { hapticImpactLight } from '@/utils/haptics';
-import { amountTone } from '@/utils/labels';
-import { formatMoney } from '@/utils/money';
+} from "@/features/overview/layout/overview-layout";
+import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
+import {
+  GRID_BREAKPOINT,
+  packOverviewRows,
+} from "@/features/overview/widgets/grid";
+import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
+import { useLocalization } from "@/localization/localization";
+import {
+  useExchangeRateService,
+  useExchangeRateStatus,
+} from "@/providers/exchange-rate-provider";
+import {
+  useFinanceRepository,
+  useFinanceState,
+} from "@/providers/finance-provider";
+import { useScreenMetrics } from "@/theme/layout";
+import { useQashyTheme } from "@/theme/theme";
+import { errorMessage, showError } from "@/utils/confirm";
+import { startOfMonth } from "@/utils/date";
+import { useDashboard } from "@/features/overview/widgets/use-dashboard";
+import { hapticImpactLight } from "@/utils/haptics";
+import { amountTone } from "@/utils/labels";
+import { formatMoney } from "@/utils/money";
 
 interface UndoState {
   readonly card: OverviewCard;
@@ -74,23 +95,30 @@ export function OverviewScreen() {
   const [gridWidth, setGridWidth] = useState(0);
   const onGridLayout = (event: LayoutChangeEvent) => {
     const next = event.nativeEvent.layout.width;
-    setGridWidth((current) => (Math.abs(current - next) > 0.5 ? next : current));
+    setGridWidth((current) =>
+      Math.abs(current - next) > 0.5 ? next : current,
+    );
   };
   const [month, setMonth] = useState(startOfMonth());
   // Which way the month content slides: forward months push in from the
   // right, previous months from the left.
-  const [monthDirection, setMonthDirection] = useState<'left' | 'right'>('right');
+  const [monthDirection, setMonthDirection] = useState<"left" | "right">(
+    "right",
+  );
   const { visibility: fabVisibility, onScroll } = useScrollHide();
   const exchangeRateService = useExchangeRateService();
   const rateStatus = useExchangeRateStatus();
   const [togglingRates, setTogglingRates] = useState(false);
 
   const { layout, status, dispatch } = useOverviewLayout();
-  const cards = status === 'loading' ? DEFAULT_OVERVIEW_LAYOUT.cards : layout.cards;
+  const cards =
+    status === "loading" ? DEFAULT_OVERVIEW_LAYOUT.cards : layout.cards;
   const [editing, setEditing] = useState(false);
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
-  const cardLayoutsRef = useRef(new Map<string, { y: number; height: number }>());
+  const cardLayoutsRef = useRef(
+    new Map<string, { y: number; height: number }>(),
+  );
 
   const turnOnAutomaticRates = async () => {
     if (togglingRates) return;
@@ -101,7 +129,10 @@ export function OverviewScreen() {
       // rate, now that this may have just supplied one.
       await repository.generateRecurring();
     } catch (reason) {
-      showError('Couldn’t turn on automatic rates', errorMessage(reason, 'Try again.'));
+      showError(
+        "Couldn’t turn on automatic rates",
+        errorMessage(reason, "Try again."),
+      );
     } finally {
       setTogglingRates(false);
     }
@@ -112,18 +143,30 @@ export function OverviewScreen() {
     setMonth(next);
   };
 
-  const monthSwipe = useMonthSwipe({ month, onChange: changeMonth, disabled: editing });
+  const monthSwipe = useMonthSwipe({
+    month,
+    onChange: changeMonth,
+    disabled: editing,
+  });
   const summary = useDashboard(month);
 
   const currency = state.settings.baseCurrency;
   const locale = state.settings.locale;
-  const missingCurrencies = summary.missingExchangeRates.map((rate) => rate.fromCurrency);
-  const missingAllUnsupported = missingCurrencies.length > 0 && missingCurrencies.every((code) => FRANKFURTER_UNSUPPORTED.has(code));
+  const missingCurrencies = summary.missingExchangeRates.map(
+    (rate) => rate.fromCurrency,
+  );
+  const missingAllUnsupported =
+    missingCurrencies.length > 0 &&
+    missingCurrencies.every((code) => FRANKFURTER_UNSUPPORTED.has(code));
 
   // Zero is neutral: only a real gain is green and only a real loss is red.
   const toneColor = (minor: number) => {
     const tone = amountTone(minor);
-    return tone === 'positive' ? theme.positive : tone === 'negative' ? theme.negative : theme.text;
+    return tone === "positive"
+      ? theme.positive
+      : tone === "negative"
+        ? theme.negative
+        : theme.text;
   };
 
   // The net-worth figure is a single line at any width. `adjustsFontSizeToFit` only exists on
@@ -132,17 +175,29 @@ export function OverviewScreen() {
   // are smaller, so this errs slightly small rather than wrapping).
   const [netWorthWidth, setNetWorthWidth] = useState(0);
   const NET_WORTH_BASE_SIZE = 40;
-  const netWorthChars = formatMoney(summary.netWorthMinor, currency, locale).length;
-  const netWorthScale = netWorthWidth > 0
-    ? Math.max(0.4, Math.min(1, netWorthWidth / (netWorthChars * 0.6 * NET_WORTH_BASE_SIZE)))
-    : 1;
+  const netWorthChars = formatMoney(
+    summary.netWorthMinor,
+    currency,
+    locale,
+  ).length;
+  const netWorthScale =
+    netWorthWidth > 0
+      ? Math.max(
+          0.4,
+          Math.min(
+            1,
+            netWorthWidth / (netWorthChars * 0.6 * NET_WORTH_BASE_SIZE),
+          ),
+        )
+      : 1;
 
   const cumulativeSpend = useMemo(
-    () => summary.dailySpend.reduce<number[]>((running, day) => {
-      const previous = running.length ? running[running.length - 1] : 0;
-      running.push(previous + day.amountMinor);
-      return running;
-    }, []),
+    () =>
+      summary.dailySpend.reduce<number[]>((running, day) => {
+        const previous = running.length ? running[running.length - 1] : 0;
+        running.push(previous + day.amountMinor);
+        return running;
+      }, []),
     [summary.dailySpend],
   );
 
@@ -152,33 +207,51 @@ export function OverviewScreen() {
   // decision so all three never disagree about whether this is a "wide" layout.
   const multiColumn = contentWidth >= GRID_BREAKPOINT;
   const rows = useMemo(
-    () => (gridWidth > 0 ? packOverviewRows(cards, gridWidth, space.xl, { multiColumn }) : []),
+    () =>
+      gridWidth > 0
+        ? packOverviewRows(cards, gridWidth, space.xl, { multiColumn })
+        : [],
     [cards, gridWidth, multiColumn, space.xl],
   );
 
-  const dispatchGuarded = async (action: OverviewLayoutAction, failureTitle: string) => {
+  const dispatchGuarded = async (
+    action: OverviewLayoutAction,
+    failureTitle: string,
+  ) => {
     try {
       await dispatch(action);
     } catch (reason) {
-      showError(failureTitle, errorMessage(reason, 'Try again.'));
+      showError(failureTitle, errorMessage(reason, "Try again."));
     }
   };
 
   const moveCard = (id: string, delta: 1 | -1) => {
-    void dispatchGuarded({ type: 'moveBy', id, delta }, 'Couldn’t update your overview');
+    void dispatchGuarded(
+      { type: "moveBy", id, delta },
+      "Couldn’t update your overview",
+    );
   };
 
   const resizeCard = (card: OverviewCard) => {
-    void dispatchGuarded({ type: 'resize', id: card.id, size: nextSizeFor(card) }, 'Couldn’t update your overview');
+    void dispatchGuarded(
+      { type: "resize", id: card.id, size: nextSizeFor(card) },
+      "Couldn’t update your overview",
+    );
   };
 
   const configureCard = (id: string, config: Record<string, unknown>) => {
-    void dispatchGuarded({ type: 'configure', id, config }, 'Couldn’t update your overview');
+    void dispatchGuarded(
+      { type: "configure", id, config },
+      "Couldn’t update your overview",
+    );
   };
 
   const removeCard = (card: OverviewCard) => {
     const index = cards.findIndex((existing) => existing.id === card.id);
-    void dispatchGuarded({ type: 'remove', id: card.id }, 'Couldn’t update your overview').then(() => {
+    void dispatchGuarded(
+      { type: "remove", id: card.id },
+      "Couldn’t update your overview",
+    ).then(() => {
       setUndo({ card, index });
     });
   };
@@ -186,14 +259,26 @@ export function OverviewScreen() {
   const undoRemove = () => {
     if (!undo) return;
     void dispatchGuarded(
-      { type: 'add', card: { id: undo.card.id, type: undo.card.type, size: undo.card.size, config: undo.card.config }, index: undo.index },
-      'Couldn’t restore this card',
+      {
+        type: "add",
+        card: {
+          id: undo.card.id,
+          type: undo.card.type,
+          size: undo.card.size,
+          config: undo.card.config,
+        },
+        index: undo.index,
+      },
+      "Couldn’t restore this card",
     );
     setUndo(null);
   };
 
   const handleCardLayout = (id: string) => (event: LayoutChangeEvent) => {
-    cardLayoutsRef.current.set(id, { y: event.nativeEvent.layout.y, height: event.nativeEvent.layout.height });
+    cardLayoutsRef.current.set(id, {
+      y: event.nativeEvent.layout.y,
+      height: event.nativeEvent.layout.height,
+    });
   };
 
   const handleDragEnd = (card: OverviewCard, offsetY: number) => {
@@ -209,7 +294,10 @@ export function OverviewScreen() {
       if (layoutInfo.y + layoutInfo.height / 2 < draggedMid) targetIndex += 1;
     });
     if (targetIndex === fromIndex) return;
-    void dispatchGuarded({ type: 'move', id: card.id, toIndex: targetIndex }, 'Couldn’t update your overview');
+    void dispatchGuarded(
+      { type: "move", id: card.id, toIndex: targetIndex },
+      "Couldn’t update your overview",
+    );
   };
 
   const enterEditMode = () => {
@@ -226,35 +314,77 @@ export function OverviewScreen() {
     const definition = WIDGET_REGISTRY[card.type];
     if (!definition) return null;
     const Component = definition.Component;
-    return <Component card={card} month={month} monthDirection={monthDirection} size={size} editing={editing} />;
+    return (
+      <Component
+        card={card}
+        month={month}
+        monthDirection={monthDirection}
+        size={size}
+        editing={editing}
+      />
+    );
   };
 
   return (
-    <MonthSwipeView swipe={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
-      <ScrollView contentInsetAdjustmentBehavior="automatic" onScroll={onScroll} scrollEventThrottle={16} style={{ flex: 1, backgroundColor: theme.background }}>
+    <MonthSwipeView
+      swipe={monthSwipe}
+      style={{ flex: 1, backgroundColor: theme.background }}
+    >
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        onScroll={onScroll}
+        scrollEventThrottle={16}
+        style={{ flex: 1, backgroundColor: theme.background }}
+      >
         <ScreenContainer>
           {/* Native no longer draws its own copy of this heading: the section
               stack shows a real navigation header titled "Overview". Web keeps
               PageHeading, which is where the document's h1 lives. */}
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: space.md }}>
-            <View style={{ flex: 1 }}><PageHeading title="Overview" /></View>
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: space.md,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <PageHeading title="Overview" />
+            </View>
             {editing ? (
-              <TextButton title="Done" icon="checkmark" onPress={exitEditMode} />
+              <TextButton
+                title="Done"
+                icon="checkmark"
+                onPress={exitEditMode}
+              />
             ) : (
-              <TextButton title="Customize" icon="gear" onPress={enterEditMode} />
+              <TextButton
+                title="Customize"
+                icon="gear"
+                onPress={enterEditMode}
+              />
             )}
           </View>
 
           <PageHero
             overline="Net worth"
-            accessory={<MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} />}
-            figure={(
+            accessory={
+              <MonthSwitcher
+                value={month}
+                direction={monthDirection}
+                onChange={changeMonth}
+              />
+            }
+            figure={
               <View
                 style={{ gap: space.xs }}
                 onLayout={(event: LayoutChangeEvent) => {
                   const next = Math.floor(event.nativeEvent.layout.width);
-                  setNetWorthWidth((current) => (current === next ? current : next));
-                }}>
+                  setNetWorthWidth((current) =>
+                    current === next ? current : next,
+                  );
+                }}
+              >
                 <AnimatedMoney
                   minor={summary.netWorthMinor}
                   currency={currency}
@@ -264,49 +394,93 @@ export function OverviewScreen() {
                   numberOfLines={1}
                   adjustsFontSizeToFit
                   minimumFontScale={0.5}
-                  style={{ flexShrink: 1, ...(Platform.OS === 'web' ? ({ whiteSpace: 'nowrap' } as object) : null) }}
+                  style={{
+                    flexShrink: 1,
+                    ...(Platform.OS === "web"
+                      ? ({ whiteSpace: "nowrap" } as object)
+                      : null),
+                  }}
                 />
                 {missingCurrencies.length ? (
                   <View style={{ gap: space.xs }}>
-                    <AppText literal variant="caption" style={{ color: theme.warning }}>
-                      {`Excludes ${missingCurrencies.join(', ')} until an effective exchange rate is added.`}
+                    <AppText
+                      literal
+                      variant="caption"
+                      style={{ color: theme.warning }}
+                    >
+                      {`Excludes ${missingCurrencies.join(", ")} until an effective exchange rate is added.`}
                     </AppText>
-                    <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: space.sm,
+                        flexWrap: "wrap",
+                      }}
+                    >
                       {missingAllUnsupported ? (
                         <ActionButton
                           title="Add a manual rate"
                           variant="secondary"
-                          onPress={() => router.push({ pathname: '/exchange-rate', params: { currency: missingCurrencies[0] } })}
+                          onPress={() =>
+                            router.push({
+                              pathname: "/exchange-rate",
+                              params: { currency: missingCurrencies[0] },
+                            })
+                          }
                         />
                       ) : !rateStatus.enabled ? (
                         <>
-                          <ActionButton title="Turn on automatic rates" busy={togglingRates} disabled={togglingRates} onPress={turnOnAutomaticRates} />
+                          <ActionButton
+                            title="Turn on automatic rates"
+                            busy={togglingRates}
+                            disabled={togglingRates}
+                            onPress={turnOnAutomaticRates}
+                          />
                           <ActionButton
                             title="Add manually"
                             variant="secondary"
-                            onPress={() => router.push({ pathname: '/exchange-rate', params: { currency: missingCurrencies[0] } })}
+                            onPress={() =>
+                              router.push({
+                                pathname: "/exchange-rate",
+                                params: { currency: missingCurrencies[0] },
+                              })
+                            }
                           />
                         </>
                       ) : rateStatus.lastError ? (
                         <ActionButton
                           title="Couldn’t fetch rates — Retry"
                           variant="secondary"
-                          onPress={() => exchangeRateService.refreshLatest({ force: true }).catch(() => undefined)}
+                          onPress={() =>
+                            exchangeRateService
+                              .refreshLatest({ force: true })
+                              .catch(() => undefined)
+                          }
                         />
                       ) : null}
                     </View>
                   </View>
                 ) : null}
               </View>
-            )}
-            stats={([
-              ['Income', summary.incomeMinor, toneColor(summary.incomeMinor)],
-              ['Spent', summary.expenseMinor, theme.text],
-              ['Net flow', summary.netFlowMinor, toneColor(summary.netFlowMinor)],
-            ] as const).map(([label, amount, color]) => ({
+            }
+            stats={(
+              [
+                ["Income", summary.incomeMinor, toneColor(summary.incomeMinor)],
+                ["Spent", summary.expenseMinor, theme.text],
+                [
+                  "Net flow",
+                  summary.netFlowMinor,
+                  toneColor(summary.netFlowMinor),
+                ],
+              ] as const
+            ).map(([label, amount, color]) => ({
               label,
               value: (
-                <MotionView key={`${label}-${month}`} variant={monthDirection} exit>
+                <MotionView
+                  key={`${label}-${month}`}
+                  variant={monthDirection}
+                  exit
+                >
                   <AnimatedMoney
                     minor={amount}
                     currency={currency}
@@ -319,67 +493,108 @@ export function OverviewScreen() {
                 </MotionView>
               ),
             }))}
-            footer={cumulativeSpend.some((value) => value > 0) ? (
-              <View style={{ gap: space.sm }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', gap: space.md }}>
-                  <AppText variant="caption" muted>Cumulative spending</AppText>
-                  <AnimatedMoney
-                    minor={cumulativeSpend[cumulativeSpend.length - 1]}
-                    currency={currency}
-                    locale={locale}
-                    compact={contentWidth < 520}
-                    variant="label"
-                    numeric
+            footer={
+              cumulativeSpend.some((value) => value > 0) ? (
+                <View style={{ gap: space.sm }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "baseline",
+                      justifyContent: "space-between",
+                      gap: space.md,
+                    }}
+                  >
+                    <AppText variant="caption" muted>
+                      Cumulative spending
+                    </AppText>
+                    <AnimatedMoney
+                      minor={cumulativeSpend[cumulativeSpend.length - 1]}
+                      currency={currency}
+                      locale={locale}
+                      compact={contentWidth < 520}
+                      variant="label"
+                      numeric
+                    />
+                  </View>
+                  <Sparkline
+                    values={cumulativeSpend}
+                    label={t("Cumulative spending")}
                   />
                 </View>
-                <Sparkline values={cumulativeSpend} label={t('Cumulative spending')} />
-              </View>
-            ) : undefined}
+              ) : undefined
+            }
           />
 
           {!editing ? (
             cards.length ? (
               <View style={{ gap: space.xl }} onLayout={onGridLayout}>
-                {gridWidth === 0 ? (
-                  cards.map((card) => (
-                    <MotionView key={card.id} animateLayout style={{ width: '100%' }}>
-                      {Platform.OS === 'web' ? (
-                        renderWidget(card)
-                      ) : (
-                        <Pressable delayLongPress={450} onLongPress={enterEditMode} style={{ width: '100%' }}>
-                          {renderWidget(card)}
-                        </Pressable>
-                      )}
-                    </MotionView>
-                  ))
-                ) : (
-                  rows.map((row, rowIndex) => (
-                    <View
-                      key={rowIndex}
-                      style={multiColumn
-                        ? { flexDirection: 'row', gap: space.xl, alignItems: 'flex-start', flexWrap: 'wrap' }
-                        : { gap: space.xl }}>
-                      {row.cards.map(({ card, width }) => (
-                        <MotionView key={card.id} animateLayout style={{ width }}>
-                          {Platform.OS === 'web' ? (
-                            renderWidget(card)
-                          ) : (
-                            <Pressable delayLongPress={450} onLongPress={enterEditMode} style={{ width: '100%' }}>
-                              {renderWidget(card)}
-                            </Pressable>
-                          )}
-                        </MotionView>
-                      ))}
-                    </View>
-                  ))
-                )}
+                {gridWidth === 0
+                  ? cards.map((card) => (
+                      <MotionView
+                        key={card.id}
+                        animateLayout
+                        style={{ width: "100%" }}
+                      >
+                        {Platform.OS === "web" ? (
+                          renderWidget(card)
+                        ) : (
+                          <Pressable
+                            delayLongPress={450}
+                            onLongPress={enterEditMode}
+                            style={{ width: "100%" }}
+                          >
+                            {renderWidget(card)}
+                          </Pressable>
+                        )}
+                      </MotionView>
+                    ))
+                  : rows.map((row, rowIndex) => (
+                      <View
+                        key={rowIndex}
+                        style={
+                          multiColumn
+                            ? {
+                                flexDirection: "row",
+                                gap: space.xl,
+                                alignItems: "flex-start",
+                                flexWrap: "wrap",
+                              }
+                            : { gap: space.xl }
+                        }
+                      >
+                        {row.cards.map(({ card, width }) => (
+                          <MotionView
+                            key={card.id}
+                            animateLayout
+                            style={{ width }}
+                          >
+                            {Platform.OS === "web" ? (
+                              renderWidget(card)
+                            ) : (
+                              <Pressable
+                                delayLongPress={450}
+                                onLongPress={enterEditMode}
+                                style={{ width: "100%" }}
+                              >
+                                {renderWidget(card)}
+                              </Pressable>
+                            )}
+                          </MotionView>
+                        ))}
+                      </View>
+                    ))}
               </View>
             ) : (
               <EmptyState
                 icon="plus.circle"
                 title="Your overview is empty"
-                body="Add cards to see budgets, goals and activity here.">
-                <ActionButton title="Add cards" icon="plus" onPress={() => router.push('/overview-cards')} />
+                body="Add cards to see budgets, goals and activity here."
+              >
+                <ActionButton
+                  title="Add cards"
+                  icon="plus"
+                  onPress={() => router.push("/overview-cards")}
+                />
               </EmptyState>
             )
           ) : (
@@ -401,37 +616,59 @@ export function OverviewScreen() {
                     showSizeControl={showSizeControl}
                     hasConfigSheet={hasConfigSheet}
                     configOpen={configOpenId === card.id}
-                    onToggleConfig={() => setConfigOpenId((current) => (current === card.id ? null : card.id))}
+                    onToggleConfig={() =>
+                      setConfigOpenId((current) =>
+                        current === card.id ? null : card.id,
+                      )
+                    }
                     onMoveUp={() => moveCard(card.id, -1)}
                     onMoveDown={() => moveCard(card.id, 1)}
                     onCycleSize={() => resizeCard(card)}
                     onRemove={() => removeCard(card)}
                     onDragEnd={(offsetY) => handleDragEnd(card, offsetY)}
                     onLayout={handleCardLayout(card.id)}
-                    configSheet={ConfigSheetComponent ? (
-                      <ConfigSheetComponent card={card} onConfigure={(config) => configureCard(card.id, config)} />
-                    ) : undefined}>
+                    configSheet={
+                      ConfigSheetComponent ? (
+                        <ConfigSheetComponent
+                          card={card}
+                          onConfigure={(config) =>
+                            configureCard(card.id, config)
+                          }
+                        />
+                      ) : undefined
+                    }
+                  >
                     {renderWidget(card)}
                   </EditableCardFrame>
                 );
               })}
-              <AddCardWell onPress={() => router.push('/overview-cards')} />
+              <AddCardWell onPress={() => router.push("/overview-cards")} />
             </View>
           )}
         </ScreenContainer>
       </ScrollView>
       {undo ? (
         <UndoBar
-          message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ''} removed`}
+          message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
           onAction={undoRemove}
           onDismiss={() => setUndo(null)}
-          style={{ position: 'absolute', left: space.lg, right: space.lg, bottom: insets.bottom + space.xxl + 64 }}
+          style={{
+            position: "absolute",
+            left: space.lg,
+            right: space.lg,
+            bottom: insets.bottom + space.xxl + 64,
+          }}
         />
       ) : null}
       <FloatingActionButton
         label="Add transaction"
         visibility={fabVisibility}
-        onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/overview' } })}
+        onPress={() =>
+          router.push({
+            pathname: "/transaction",
+            params: { returnTo: "/overview" },
+          })
+        }
         style={floatingActionMetrics(metrics, insets, space)}
       />
     </MonthSwipeView>

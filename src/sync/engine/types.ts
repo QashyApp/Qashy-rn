@@ -14,7 +14,7 @@
  * edit arrives. A generic failure would collapse all of those into a shrug.
  */
 
-import type { CausalMeta, SyncOp } from '@/sync/oplog';
+import type { CausalMeta, SyncOp } from "@/sync/oplog";
 
 /** Breaking format version for authenticated sync batches, independent of stored envelopes. */
 export const BATCH_FORMAT_VERSION = 4;
@@ -83,7 +83,7 @@ export interface SyncBatch {
   readonly signature: string;
 }
 
-export type UnsignedSyncBatch = Omit<SyncBatch, 'signature'>;
+export type UnsignedSyncBatch = Omit<SyncBatch, "signature">;
 
 /**
  * Why a batch was refused.
@@ -106,9 +106,9 @@ export type UnsignedSyncBatch = Omit<SyncBatch, 'signature'>;
  */
 export type RejectionCode =
   /** The envelope refused to open: tampered bytes, the wrong key, or the wrong purpose. */
-  | 'badFrame'
+  | "badFrame"
   /** The frame opened but its contents are not a well-formed batch. */
-  | 'badBatch'
+  | "badBatch"
   /**
    * A pairing exchange did not say what a pairing exchange says.
    *
@@ -118,29 +118,29 @@ export type RejectionCode =
    * waiting, and the only sane response is to abandon the attempt and start over — so it needs
    * to be distinguishable without parsing a message.
    */
-  | 'badPairing'
+  | "badPairing"
   /** Over the frame or op-count cap. Rejected before allocating for it. */
-  | 'tooLarge'
+  | "tooLarge"
   /** The sending device is not in this vault's roster. */
-  | 'unknownPeer'
+  | "unknownPeer"
   /** The sending device was paired once and has since been revoked. */
-  | 'revokedPeer'
+  | "revokedPeer"
   /** A forwarded op is attributed to a device this vault has never heard of. */
-  | 'unknownAuthor'
+  | "unknownAuthor"
   /** An op's signature does not verify against its author's key. */
-  | 'badSignature'
+  | "badSignature"
   /** An op arrived unsealed. Only sealed ops are ever transmitted, so this is malformed. */
-  | 'unsignedOp'
+  | "unsignedOp"
   /** Missing ops between what we hold and what arrived. */
-  | 'chainBreak'
+  | "chainBreak"
   /** The sender's history disagrees with the history we already accepted from it. */
-  | 'chainFork'
+  | "chainFork"
   /** The batch was sealed under a vault epoch this device has moved past. */
-  | 'epochMismatch'
+  | "epochMismatch"
   /** The two vaults were onboarded with different base currencies. Unmergeable by design. */
-  | 'currencyMismatch'
+  | "currencyMismatch"
   /** The merged result would violate a money invariant. Quarantined, not discarded. */
-  | 'invariant';
+  | "invariant";
 
 /**
  * Thrown by the engine, and never swallowed by a generic `catch`.
@@ -153,10 +153,10 @@ export class SyncEngineError extends Error {
   constructor(
     message: string,
     readonly code: RejectionCode,
-    readonly peerId = '',
+    readonly peerId = "",
   ) {
     super(message);
-    this.name = 'SyncEngineError';
+    this.name = "SyncEngineError";
   }
 }
 
@@ -170,35 +170,35 @@ export class SyncEngineError extends Error {
  */
 export type ActivityKind =
   /** Ops handed to a peer. `count` is how many. */
-  | 'sent'
+  | "sent"
   /** Ops accepted from a peer and projected. */
-  | 'received'
+  | "received"
   /** A batch refused whole. `code` says why. */
-  | 'rejected'
+  | "rejected"
   /** Entities held back because this device cannot project them. */
-  | 'quarantined'
+  | "quarantined"
   /** Previously quarantined entities that a later op made projectable. */
-  | 'recovered'
+  | "recovered"
   /** A device joined the vault. */
-  | 'paired'
+  | "paired"
   /** A device was removed from the vault. */
-  | 'revoked'
+  | "revoked"
   /** A relay reachability change or a failed push. `detail` carries the transport error. */
-  | 'relay'
+  | "relay"
   /** A user-confirmed duplicate merge. */
-  | 'merged'
+  | "merged"
   /** Ops dropped by retention. */
-  | 'compacted';
+  | "compacted";
 
 export const ACTIVITY_KINDS: readonly ActivityKind[] = [
-  'sent',
-  'received',
-  'rejected',
-  'quarantined',
-  'recovered',
-  'paired',
-  'revoked',
-  'relay',
-  'merged',
-  'compacted',
+  "sent",
+  "received",
+  "rejected",
+  "quarantined",
+  "recovered",
+  "paired",
+  "revoked",
+  "relay",
+  "merged",
+  "compacted",
 ];

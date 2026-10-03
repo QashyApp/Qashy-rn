@@ -1,9 +1,9 @@
-import { SegmentedControl } from '@/components/ui/segmented-control';
+import { SegmentedControl } from "@/components/ui/segmented-control";
 
 /** Each language is shown in its own name so it is findable whatever the UI language is. */
 const LANGUAGES = [
-  { value: 'en-US', label: 'English', literal: true },
-  { value: 'he-IL', label: 'עברית', literal: true },
+  { value: "en-US", label: "English", literal: true },
+  { value: "he-IL", label: "עברית", literal: true },
 ] as const;
 
 /**
@@ -13,6 +13,20 @@ const LANGUAGES = [
  * The control stays left-to-right so the two options never swap places when
  * the language flips the layout.
  */
-export function LanguageSelector({ value, onChange }: { value: string; onChange: (locale: string) => void }) {
-  return <SegmentedControl label="Language" options={LANGUAGES} value={value} onChange={onChange} lockLtr />;
+export function LanguageSelector({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (locale: string) => void;
+}) {
+  return (
+    <SegmentedControl
+      label="Language"
+      options={LANGUAGES}
+      value={value}
+      onChange={onChange}
+      lockLtr
+    />
+  );
 }

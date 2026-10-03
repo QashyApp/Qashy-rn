@@ -23,10 +23,20 @@
  * two runs over the same vault produce identical ops.
  */
 
-import type { StorageTx } from '@/data/storage-adapter';
-import { compareStoredEntities } from '@/data/storage-adapter';
-import { recordOps, readChainState, writeChainState, writeMeta, SYNC_META } from '@/data/sync-store';
-import { ENTITY_TYPES, type EntityType, type FinanceEntity } from '@/domain/models';
+import type { StorageTx } from "@/data/storage-adapter";
+import { compareStoredEntities } from "@/data/storage-adapter";
+import {
+  recordOps,
+  readChainState,
+  writeChainState,
+  writeMeta,
+  SYNC_META,
+} from "@/data/sync-store";
+import {
+  ENTITY_TYPES,
+  type EntityType,
+  type FinanceEntity,
+} from "@/domain/models";
 import {
   MAX_COUNTER,
   buildOp,
@@ -35,7 +45,7 @@ import {
   hlcFromTimestamp,
   parseHlc,
   type SyncOpBody,
-} from '@/sync/oplog';
+} from "@/sync/oplog";
 
 /**
  * Every type a `records` row can hold, settings included.
@@ -68,9 +78,16 @@ const SKIPPED: GenesisResult = { ran: false, opCount: 0, entityCount: 0 };
  * `hydrateFromStorage` rebuilds `deletedOccurrenceKeys` from tombstones — a deleted
  * recurrence occurrence would regenerate on the next foreground, forever.
  */
-function genesisOps(type: EntityType, entity: FinanceEntity, deviceId: string, counter: number) {
+function genesisOps(
+  type: EntityType,
+  entity: FinanceEntity,
+  deviceId: string,
+  counter: number,
+) {
   const created = hlcFromTimestamp(entity.createdAt, counter, deviceId);
-  const live: FinanceEntity = entity.deletedAt ? { ...entity, deletedAt: null } : entity;
+  const live: FinanceEntity = entity.deletedAt
+    ? { ...entity, deletedAt: null }
+    : entity;
   const ops: SyncOpBody[] = [...diffEntity(type, null, live, created).ops];
   if (entity.deletedAt) {
     // The deletion is a later event than the creation, and the counter is what says so —
@@ -98,14 +115,17 @@ export async function runGenesisMigration(
   deviceId: string,
   nowIso: string,
 ): Promise<GenesisResult> {
-  const existing = await tx.table('syncMeta').get(SYNC_META.genesisAt);
+  const existing = await tx.table("syncMeta").get(SYNC_META.genesisAt);
   if (existing) return SKIPPED;
 
   const { head } = await readChainState(tx);
   if (head.seq > 0) return SKIPPED;
 
   const loaded = await Promise.all(
-    GENESIS_TYPES.map(async (type) => ({ type, entities: await tx.readAll(type) })),
+    GENESIS_TYPES.map(async (type) => ({
+      type,
+      entities: await tx.readAll(type),
+    })),
   );
 
   const bodies: SyncOpBody[] = [];
@@ -142,7 +162,9 @@ export async function runGenesisMigration(
   // Sorted by HLC so the chain's `seq` order matches causal order. Not required for
   // correctness — the merge sorts by HLC itself — but a log whose two orders agree is one a
   // peer can verify and replay without buffering, and one a human can read.
-  const ordered = [...bodies].sort((first, second) => compareHlc(first.hlc, second.hlc));
+  const ordered = [...bodies].sort((first, second) =>
+    compareHlc(first.hlc, second.hlc),
+  );
 
   const built = buildOp(ordered, deviceId, head.seq, head.headHash);
   await recordOps(tx, built.ops, 0);

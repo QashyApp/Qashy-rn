@@ -15,16 +15,28 @@
  * to prompt.
  */
 
-import { createPassphraseBackup, openPassphraseBackup, zeroize } from '@/sync/crypto';
+import {
+  createPassphraseBackup,
+  openPassphraseBackup,
+  zeroize,
+} from "@/sync/crypto";
 
-import { KeystoreError, type KeystoreStatus, type StoredVault, type SyncKeystore } from '@/sync/keystore/types';
-import { decodeVaultRecord, encodeVaultRecord } from '@/sync/keystore/vault-record';
+import {
+  KeystoreError,
+  type KeystoreStatus,
+  type StoredVault,
+  type SyncKeystore,
+} from "@/sync/keystore/types";
+import {
+  decodeVaultRecord,
+  encodeVaultRecord,
+} from "@/sync/keystore/vault-record";
 
 const GUARD_NONE = 0;
 const GUARD_PASSPHRASE = 1;
 
 export abstract class BaseKeystore implements SyncKeystore {
-  abstract readonly kind: SyncKeystore['kind'];
+  abstract readonly kind: SyncKeystore["kind"];
   abstract readonly supportsPassphrase: boolean;
 
   /**
@@ -62,11 +74,11 @@ export abstract class BaseKeystore implements SyncKeystore {
 
   async status(): Promise<KeystoreStatus> {
     return this.serial(async () => {
-      if (!(await this.available())) return 'unavailable';
-      if (this.record) return 'unlocked';
+      if (!(await this.available())) return "unavailable";
+      if (this.record) return "unlocked";
       const container = await this.readContainer();
-      if (!container || container.length === 0) return 'empty';
-      return container[0] === GUARD_PASSPHRASE ? 'locked' : 'unlocked';
+      if (!container || container.length === 0) return "empty";
+      return container[0] === GUARD_PASSPHRASE ? "locked" : "unlocked";
     });
   }
 
@@ -85,7 +97,10 @@ export abstract class BaseKeystore implements SyncKeystore {
       // protect. Reading the existing guard is the only way to know, so do it every time.
       const existing = await this.readContainer();
       if (existing?.[0] === GUARD_PASSPHRASE && this.passphrase === null) {
-        throw new KeystoreError('Unlock this device before changing its vault.', 'locked');
+        throw new KeystoreError(
+          "Unlock this device before changing its vault.",
+          "locked",
+        );
       }
       await this.persist(encodeVaultRecord(vault));
     });
@@ -102,13 +117,16 @@ export abstract class BaseKeystore implements SyncKeystore {
     return this.serial(async () => {
       if (!this.supportsPassphrase) {
         throw new KeystoreError(
-          'This device protects the vault with the system keychain, which cannot be replaced by a passphrase.',
-          'unsupported',
+          "This device protects the vault with the system keychain, which cannot be replaced by a passphrase.",
+          "unsupported",
         );
       }
       const record = await this.loadRecord();
       if (!record) {
-        throw new KeystoreError('There is no vault on this device to protect.', 'empty');
+        throw new KeystoreError(
+          "There is no vault on this device to protect.",
+          "empty",
+        );
       }
       const previous = this.passphrase;
       this.passphrase = next;
@@ -130,7 +148,7 @@ export abstract class BaseKeystore implements SyncKeystore {
       await this.requireAvailable();
       const container = await this.readContainer();
       if (!container || container.length === 0) {
-        throw new KeystoreError('There is no vault on this device.', 'empty');
+        throw new KeystoreError("There is no vault on this device.", "empty");
       }
       if (container[0] !== GUARD_PASSPHRASE) {
         // Already open. Idempotent rather than an error: a caller that unlocks
@@ -150,7 +168,10 @@ export abstract class BaseKeystore implements SyncKeystore {
         // Preserve the user's later lock request. The decrypted record has not entered the
         // keystore cache, so wipe it before making the cancelled state explicit.
         zeroize(record);
-        throw new KeystoreError('Unlock was cancelled because this device was locked.', 'locked');
+        throw new KeystoreError(
+          "Unlock was cancelled because this device was locked.",
+          "locked",
+        );
       }
       this.record = record;
       this.passphrase = passphrase;
@@ -171,8 +192,8 @@ export abstract class BaseKeystore implements SyncKeystore {
     if (!container || container.length === 0) return null;
     if (container[0] === GUARD_PASSPHRASE) {
       throw new KeystoreError(
-        'This vault is protected by a passphrase on this device. Enter it to continue.',
-        'locked',
+        "This vault is protected by a passphrase on this device. Enter it to continue.",
+        "locked",
       );
     }
     this.record = container.slice(1);
@@ -181,7 +202,8 @@ export abstract class BaseKeystore implements SyncKeystore {
 
   private async persist(record: Uint8Array): Promise<void> {
     const passphrase = this.passphrase;
-    const payload = passphrase === null ? record : createPassphraseBackup(passphrase, record);
+    const payload =
+      passphrase === null ? record : createPassphraseBackup(passphrase, record);
     const container = new Uint8Array(1 + payload.length);
     container[0] = passphrase === null ? GUARD_NONE : GUARD_PASSPHRASE;
     container.set(payload, 1);
@@ -202,7 +224,10 @@ export abstract class BaseKeystore implements SyncKeystore {
 
   private async requireAvailable(): Promise<void> {
     if (!(await this.available())) {
-      throw new KeystoreError('This device has no secure storage available for sync keys.', 'unavailable');
+      throw new KeystoreError(
+        "This device has no secure storage available for sync keys.",
+        "unavailable",
+      );
     }
   }
 

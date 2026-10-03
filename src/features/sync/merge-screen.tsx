@@ -29,33 +29,45 @@
  * live snapshot after every commit instead of freezing a plan at mount.
  */
 
-import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { router } from "expo-router";
+import { useMemo, useState } from "react";
+import { ScrollView, View } from "react-native";
 
-import { ActionButton } from '@/components/ui/action-button';
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { Card } from '@/components/ui/card';
-import { EmptyState } from '@/components/ui/empty-state';
-import { MotionPressable, MotionView } from '@/components/ui/motion';
-import { SectionHeader } from '@/components/ui/section-header';
-import { StatusPill } from '@/components/ui/status-pill';
-import { TextButton } from '@/components/ui/text-button';
-import { useLocalization } from '@/localization/localization';
-import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
-import { planMerge, suggestDuplicates, type DuplicateGroup, type MergeKind } from '@/sync/engine/duplicates';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import type { SpaceScale } from '@/theme/themes/types';
-import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
+import { ActionButton } from "@/components/ui/action-button";
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
+import { MotionPressable, MotionView } from "@/components/ui/motion";
+import { SectionHeader } from "@/components/ui/section-header";
+import { StatusPill } from "@/components/ui/status-pill";
+import { TextButton } from "@/components/ui/text-button";
+import { useLocalization } from "@/localization/localization";
+import {
+  useFinanceRepository,
+  useFinanceState,
+} from "@/providers/finance-provider";
+import {
+  planMerge,
+  suggestDuplicates,
+  type DuplicateGroup,
+  type MergeKind,
+} from "@/sync/engine/duplicates";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import type { SpaceScale } from "@/theme/themes/types";
+import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 
 /** Named things first — see the header. The array order is the on-screen order. */
-const SECTIONS: readonly { readonly kind: MergeKind; readonly title: string; readonly icon: string }[] = [
-  { kind: 'accounts', title: 'Accounts', icon: 'wallet' },
-  { kind: 'categories', title: 'Categories', icon: 'tag' },
-  { kind: 'tags', title: 'Tags', icon: 'tag' },
-  { kind: 'transactions', title: 'Transactions', icon: 'list.bullet' },
+const SECTIONS: readonly {
+  readonly kind: MergeKind;
+  readonly title: string;
+  readonly icon: string;
+}[] = [
+  { kind: "accounts", title: "Accounts", icon: "wallet" },
+  { kind: "categories", title: "Categories", icon: "tag" },
+  { kind: "tags", title: "Tags", icon: "tag" },
+  { kind: "transactions", title: "Transactions", icon: "list.bullet" },
 ];
 
 /** Stable across recomputes, so a selection survives the snapshot changing under it. */
@@ -70,7 +82,10 @@ export function MergeScreen() {
 
   const [selected, setSelected] = useState<readonly string[]>([]);
   const [busy, setBusy] = useState(false);
-  const [merged, setMerged] = useState<{ merged: number; retargeted: number } | null>(null);
+  const [merged, setMerged] = useState<{
+    merged: number;
+    retargeted: number;
+  } | null>(null);
 
   // Recomputed from the live snapshot rather than frozen at mount: a merge changes what else
   // looks like a duplicate, and a remote change arriving mid-review must not leave this list
@@ -97,16 +112,26 @@ export function MergeScreen() {
     if (!chosen.length) return null;
     try {
       const plan = planMerge(state, chosen);
-      return { retargeted: plan.retargeted, removed: plan.removed, error: null as string | null };
+      return {
+        retargeted: plan.retargeted,
+        removed: plan.removed,
+        error: null as string | null,
+      };
     } catch (reason) {
-      return { retargeted: 0, removed: 0, error: errorMessage(reason, 'These merges conflict.') };
+      return {
+        retargeted: 0,
+        removed: 0,
+        error: errorMessage(reason, "These merges conflict."),
+      };
     }
   }, [state, chosen]);
 
   const toggle = (group: DuplicateGroup) => {
     const key = keyOf(group);
     setSelected((current) =>
-      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
+      current.includes(key)
+        ? current.filter((item) => item !== key)
+        : [...current, key],
     );
     setMerged(null);
   };
@@ -114,12 +139,12 @@ export function MergeScreen() {
   const commit = async () => {
     if (busy || !chosen.length || preview?.error) return;
     const confirmed = await confirmDestructive({
-      title: 'Merge these records?',
+      title: "Merge these records?",
       // The second sentence is the part people do not expect. Retargeting is what makes a merge
       // safe — no transaction is orphaned — and it is also what makes it wide.
       message:
-        'The copies are deleted and everything that referred to them is pointed at the record you kept. Your totals do not change, but this cannot be undone from here.',
-      confirmLabel: 'Merge',
+        "The copies are deleted and everything that referred to them is pointed at the record you kept. Your totals do not change, but this cannot be undone from here.",
+      confirmLabel: "Merge",
     });
     if (!confirmed) return;
     setBusy(true);
@@ -128,20 +153,27 @@ export function MergeScreen() {
       setMerged(result);
       setSelected([]);
     } catch (reason) {
-      showError('Couldn’t merge those records', errorMessage(reason, 'Nothing was changed.'));
+      showError(
+        "Couldn’t merge those records",
+        errorMessage(reason, "Nothing was changed."),
+      );
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
+    <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={containerStyle(space)}
+    >
       <Card style={{ gap: space.md }}>
         <AppText variant="title">Review duplicates</AppText>
         <AppText muted>
-          When two devices that both already had data are paired, anything you created on both
-          arrives twice. Qashy renamed the collisions rather than guessing — pick the ones that
-          really are the same thing.
+          When two devices that both already had data are paired, anything you
+          created on both arrives twice. Qashy renamed the collisions rather
+          than guessing — pick the ones that really are the same thing.
         </AppText>
       </Card>
 
@@ -149,22 +181,28 @@ export function MergeScreen() {
         <MotionView variant="up" exit animateLayout>
           <Card style={{ gap: space.sm, borderColor: theme.positive }}>
             <StatusPill
-              label={t(merged.merged === 1 ? 'Merged 1 record' : `Merged ${merged.merged} records`)}
+              label={t(
+                merged.merged === 1
+                  ? "Merged 1 record"
+                  : `Merged ${merged.merged} records`,
+              )}
               icon="checkmark.circle"
               tone="positive"
               literal
             />
             <AppText variant="caption" muted>
-              {t(merged.retargeted === 1
-                ? '1 record now points at the copy you kept.'
-                : `${merged.retargeted} records now point at the copy you kept.`)}
+              {t(
+                merged.retargeted === 1
+                  ? "1 record now points at the copy you kept."
+                  : `${merged.retargeted} records now point at the copy you kept.`,
+              )}
             </AppText>
             {/* The single most useful sentence on the screen after a merge, and the one nobody
                 would guess: transaction pairs only become visible once their accounts and
                 categories are one record. */}
             <AppText variant="caption" muted>
-              Merging accounts and categories can reveal duplicate transactions that could not be
-              matched before. Check the list again below.
+              Merging accounts and categories can reveal duplicate transactions
+              that could not be matched before. Check the list again below.
             </AppText>
           </Card>
         </MotionView>
@@ -176,7 +214,11 @@ export function MergeScreen() {
           title="Nothing looks duplicated"
           body="Qashy found no records that appear twice. If you have just paired a device, sync once and check again."
         >
-          <TextButton title="Back to sync" icon="arrow.triangle.2.circlepath" onPress={() => router.replace('/sync')} />
+          <TextButton
+            title="Back to sync"
+            icon="arrow.triangle.2.circlepath"
+            onPress={() => router.replace("/sync")}
+          />
         </EmptyState>
       ) : null}
 
@@ -184,12 +226,20 @@ export function MergeScreen() {
         const rows = groups.filter((group) => group.kind === section.kind);
         if (!rows.length) return null;
         const selectable = rows.filter((group) => !group.blocked);
-        const allChosen = selectable.length > 0 && selectable.every((group) => selected.includes(keyOf(group)));
+        const allChosen =
+          selectable.length > 0 &&
+          selectable.every((group) => selected.includes(keyOf(group)));
         return (
           <View key={section.kind} style={{ gap: space.md }}>
             <SectionHeader
               title={section.title}
-              action={selectable.length ? (allChosen ? 'Clear' : 'Select all') : undefined}
+              action={
+                selectable.length
+                  ? allChosen
+                    ? "Clear"
+                    : "Select all"
+                  : undefined
+              }
               onAction={() => {
                 const keys = selectable.map(keyOf);
                 setSelected((current) =>
@@ -217,18 +267,35 @@ export function MergeScreen() {
 
       {chosen.length ? (
         <MotionView variant="up" exit animateLayout style={{ gap: space.md }}>
-          <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap' }}>
+          <View
+            style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
+          >
             <Tile value={preview?.removed ?? 0} label="Copies removed" accent />
             <Tile value={preview?.retargeted ?? 0} label="Records updated" />
-            <Tile value={mergeable.length - chosen.length} label="Kept separate" />
+            <Tile
+              value={mergeable.length - chosen.length}
+              label="Kept separate"
+            />
           </View>
           {preview?.error ? (
-            <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>
+            <AppText
+              accessibilityRole="alert"
+              variant="caption"
+              style={{ color: theme.negative }}
+            >
               {preview.error}
             </AppText>
           ) : null}
           <ActionButton
-            title={busy ? 'Merging…' : t(chosen.length === 1 ? 'Merge 1 group' : `Merge ${chosen.length} groups`)}
+            title={
+              busy
+                ? "Merging…"
+                : t(
+                    chosen.length === 1
+                      ? "Merge 1 group"
+                      : `Merge ${chosen.length} groups`,
+                  )
+            }
             icon="arrow.triangle.2.circlepath"
             size="large"
             busy={busy}
@@ -240,22 +307,24 @@ export function MergeScreen() {
 
       {groups.length ? (
         <AppText variant="caption" muted>
-          Skipping this is fine. Renamed duplicates are a valid resting state, and this screen
-          stays available from Sync whenever you want to come back to it.
+          Skipping this is fine. Renamed duplicates are a valid resting state,
+          and this screen stays available from Sync whenever you want to come
+          back to it.
         </AppText>
       ) : null}
     </ScrollView>
   );
 }
 
-const containerStyle = (space: SpaceScale) => ({
-  padding: 18,
-  paddingBottom: 40,
-  gap: space.lg,
-  width: '100%',
-  maxWidth: 720,
-  alignSelf: 'center',
-}) as const;
+const containerStyle = (space: SpaceScale) =>
+  ({
+    padding: 18,
+    paddingBottom: 40,
+    gap: space.lg,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
+  }) as const;
 
 /**
  * One suggested merge.
@@ -286,12 +355,16 @@ function GroupRow({
   const copies = group.mergeIds.length;
   const detail = blocked
     ? group.blocked!
-    : t(copies === 1 ? 'Keep this one, remove 1 copy' : `Keep this one, remove ${copies} copies`);
+    : t(
+        copies === 1
+          ? "Keep this one, remove 1 copy"
+          : `Keep this one, remove ${copies} copies`,
+      );
 
   return (
     <MotionPressable
-      accessibilityRole={blocked ? 'text' : 'checkbox'}
-      accessibilityLabel={`${group.label}, ${detail}${blocked ? '' : `, ${t(checked ? 'selected' : 'not selected')}`}`}
+      accessibilityRole={blocked ? "text" : "checkbox"}
+      accessibilityLabel={`${group.label}, ${detail}${blocked ? "" : `, ${t(checked ? "selected" : "not selected")}`}`}
       accessibilityState={blocked ? { disabled: true } : { checked }}
       aria-checked={blocked ? undefined : checked}
       disabled={blocked}
@@ -300,18 +373,46 @@ function GroupRow({
       pressedScale={0.985}
       style={({ pressed }) => ({
         minHeight: 58,
-        flexDirection: 'row',
-        alignItems: 'center',
+        flexDirection: "row",
+        alignItems: "center",
         gap: space.md,
         opacity: blocked ? 0.55 : pressed ? 0.62 : 1,
-      })}>
+      })}
+    >
       {blocked ? (
-        <View style={[{ width: 38, height: 38, borderRadius: radius.control, borderCurve: 'continuous', alignItems: 'center', justifyContent: 'center' }, materialStyle(theme, 'sunken')]}>
-          <AppIcon name="exclamationmark.triangle" color={theme.warning} size={18} />
+        <View
+          style={[
+            {
+              width: 38,
+              height: 38,
+              borderRadius: radius.control,
+              borderCurve: "continuous",
+              alignItems: "center",
+              justifyContent: "center",
+            },
+            materialStyle(theme, "sunken"),
+          ]}
+        >
+          <AppIcon
+            name="exclamationmark.triangle"
+            color={theme.warning}
+            size={18}
+          />
         </View>
       ) : (
-        <View style={{ width: 38, alignItems: 'center' }}>
-          <View style={{ width: 24, height: 24, borderRadius: radius.sm, borderWidth: 2, borderColor: checked ? theme.accent : theme.border, backgroundColor: checked ? theme.accent : theme.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <View style={{ width: 38, alignItems: "center" }}>
+          <View
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: radius.sm,
+              borderWidth: 2,
+              borderColor: checked ? theme.accent : theme.border,
+              backgroundColor: checked ? theme.accent : theme.surface,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
             {checked ? (
               <MotionView variant="zoom" exit>
                 <AppIcon name="checkmark" color={theme.onAccent} size={16} />
@@ -323,14 +424,28 @@ function GroupRow({
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
-        style={{ flex: 1, minWidth: 0, gap: space.xxs }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+        style={{ flex: 1, minWidth: 0, gap: space.xxs }}
+      >
+        <View
+          style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}
+        >
           <AppIcon name={icon} color={theme.textMuted} size={14} />
-          <AppText literal variant="label" numberOfLines={1} style={{ flexShrink: 1 }}>
-            {group.label || t('Untitled')}
+          <AppText
+            literal
+            variant="label"
+            numberOfLines={1}
+            style={{ flexShrink: 1 }}
+          >
+            {group.label || t("Untitled")}
           </AppText>
         </View>
-        <AppText literal variant="caption" muted numberOfLines={2} style={blocked ? { color: theme.warning } : undefined}>
+        <AppText
+          literal
+          variant="caption"
+          muted
+          numberOfLines={2}
+          style={blocked ? { color: theme.warning } : undefined}
+        >
           {detail}
         </AppText>
       </View>
@@ -339,7 +454,15 @@ function GroupRow({
 }
 
 /** One number from the preview. Same proportions as the CSV import summary, deliberately. */
-function Tile({ value, label, accent = false }: { readonly value: number; readonly label: string; readonly accent?: boolean }) {
+function Tile({
+  value,
+  label,
+  accent = false,
+}: {
+  readonly value: number;
+  readonly label: string;
+  readonly accent?: boolean;
+}) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
   return (
@@ -349,13 +472,20 @@ function Tile({ value, label, accent = false }: { readonly value: number; readon
         minWidth: 120,
         padding: space.md,
         borderRadius: radius.card,
-        borderCurve: 'continuous',
+        borderCurve: "continuous",
         backgroundColor: accent ? theme.accentContainer : theme.surfaceMuted,
-      }}>
-      <AppText numeric variant="headline" style={accent ? { color: theme.accentText } : undefined}>
+      }}
+    >
+      <AppText
+        numeric
+        variant="headline"
+        style={accent ? { color: theme.accentText } : undefined}
+      >
         {value}
       </AppText>
-      <AppText variant="caption" muted>{label}</AppText>
+      <AppText variant="caption" muted>
+        {label}
+      </AppText>
     </View>
   );
 }

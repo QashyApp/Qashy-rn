@@ -1,8 +1,9 @@
-import * as Haptics from 'expo-haptics';
+import * as Haptics from "expo-haptics";
 
 // Haptics are native-only; on web every helper is a silent no-op so call
 // sites never need to branch per platform.
-const supportsHaptics = process.env.EXPO_OS === 'ios' || process.env.EXPO_OS === 'android';
+const supportsHaptics =
+  process.env.EXPO_OS === "ios" || process.env.EXPO_OS === "android";
 
 function trigger(effect: () => Promise<void>) {
   if (!supportsHaptics) return;
@@ -21,10 +22,14 @@ export function hapticImpactLight() {
 
 /** Positive confirmation after a save, import, or milestone completes. */
 export function hapticSuccess() {
-  trigger(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));
+  trigger(() =>
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
+  );
 }
 
 /** Cautionary buzz when the user confirms a destructive action. */
 export function hapticWarning() {
-  trigger(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning));
+  trigger(() =>
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
+  );
 }

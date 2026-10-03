@@ -10,7 +10,7 @@ telemetry on or off. **Telemetry is off by default (opt-in)** — nothing is sen
 enabled. Feedback goes to the Expo team via PostHog. Only the skill name, your rating + note,
 platform, and a hash of a random local install id are sent — never code, prompts, file paths,
 secrets, or personal data. (A separate automatic `skill_invoked` event fires when a skill runs
-*once enabled*; the switch below controls both.)
+_once enabled_; the switch below controls both.)
 
 ## Submitting feedback
 
@@ -31,7 +31,7 @@ node "${CLAUDE_PLUGIN_ROOT}/skills/expo-skill-feedback/scripts/skill-feedback.cj
 Never include secrets, source code, long prompts, or stack traces.
 
 If the command refuses because telemetry is off, don't drop the feedback — ask the user
-once (see *Turning it on or off*), and resend the same command after they enable.
+once (see _Turning it on or off_), and resend the same command after they enable.
 
 ## Turning it on or off
 

@@ -1,8 +1,8 @@
-import { Alert } from 'react-native';
+import { Alert } from "react-native";
 
-import { translateCurrent } from '@/localization/localization';
-import { hapticWarning } from '@/utils/haptics';
-import { webDialogStore } from '@/utils/web-dialog-store';
+import { translateCurrent } from "@/localization/localization";
+import { hapticWarning } from "@/utils/haptics";
+import { webDialogStore } from "@/utils/web-dialog-store";
 
 interface ConfirmOptions {
   title: string;
@@ -11,41 +11,73 @@ interface ConfirmOptions {
 }
 
 // Alert.alert is a no-op on react-native-web, so dialogs must branch per platform.
-export function confirmDestructive({ title, message, confirmLabel = 'Delete' }: ConfirmOptions) {
+export function confirmDestructive({
+  title,
+  message,
+  confirmLabel = "Delete",
+}: ConfirmOptions) {
   const translatedTitle = translateCurrent(title);
   const translatedMessage = message ? translateCurrent(message) : undefined;
   const translatedConfirmLabel = translateCurrent(confirmLabel);
-  if (process.env.EXPO_OS === 'web') {
+  if (process.env.EXPO_OS === "web") {
     if (webDialogStore.hasHost()) {
-      return webDialogStore.open({ title: translatedTitle, message: translatedMessage, confirmLabel: translatedConfirmLabel, destructive: true });
+      return webDialogStore.open({
+        title: translatedTitle,
+        message: translatedMessage,
+        confirmLabel: translatedConfirmLabel,
+        destructive: true,
+      });
     }
-    const text = translatedMessage ? `${translatedTitle}\n\n${translatedMessage}` : translatedTitle;
-    return Promise.resolve(typeof window !== 'undefined' && window.confirm(text));
+    const text = translatedMessage
+      ? `${translatedTitle}\n\n${translatedMessage}`
+      : translatedTitle;
+    return Promise.resolve(
+      typeof window !== "undefined" && window.confirm(text),
+    );
   }
   return new Promise<boolean>((resolve) => {
-    Alert.alert(translatedTitle, translatedMessage, [
-      { text: translateCurrent('Cancel'), style: 'cancel', onPress: () => resolve(false) },
-      {
-        text: translatedConfirmLabel,
-        style: 'destructive',
-        onPress: () => {
-          hapticWarning();
-          resolve(true);
+    Alert.alert(
+      translatedTitle,
+      translatedMessage,
+      [
+        {
+          text: translateCurrent("Cancel"),
+          style: "cancel",
+          onPress: () => resolve(false),
         },
-      },
-    ], { cancelable: true, onDismiss: () => resolve(false) });
+        {
+          text: translatedConfirmLabel,
+          style: "destructive",
+          onPress: () => {
+            hapticWarning();
+            resolve(true);
+          },
+        },
+      ],
+      { cancelable: true, onDismiss: () => resolve(false) },
+    );
   });
 }
 
 export function showError(title: string, message?: string) {
   const translatedTitle = translateCurrent(title);
   const translatedMessage = message ? translateCurrent(message) : undefined;
-  if (process.env.EXPO_OS === 'web') {
+  if (process.env.EXPO_OS === "web") {
     if (webDialogStore.hasHost()) {
-      void webDialogStore.open({ title: translatedTitle, message: translatedMessage, confirmLabel: null, destructive: false });
+      void webDialogStore.open({
+        title: translatedTitle,
+        message: translatedMessage,
+        confirmLabel: null,
+        destructive: false,
+      });
       return;
     }
-    if (typeof window !== 'undefined') window.alert(translatedMessage ? `${translatedTitle}\n\n${translatedMessage}` : translatedTitle);
+    if (typeof window !== "undefined")
+      window.alert(
+        translatedMessage
+          ? `${translatedTitle}\n\n${translatedMessage}`
+          : translatedTitle,
+      );
     return;
   }
   Alert.alert(translatedTitle, translatedMessage);

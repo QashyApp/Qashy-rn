@@ -1,3 +1,3 @@
-import { GoalFormScreen } from '@/features/plan/goal-form-screen';
+import { GoalFormScreen } from "@/features/plan/goal-form-screen";
 
 export default GoalFormScreen;

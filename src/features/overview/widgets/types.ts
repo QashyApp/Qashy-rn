@@ -8,15 +8,19 @@
  * `EditableCardFrame` makes the whole card non-interactive anyway).
  */
 
-import type { ReactNode } from 'react';
+import type { ReactNode } from "react";
 
-import type { OverviewCard, OverviewWidgetType, WidgetSize } from '@/features/overview/layout/overview-layout';
+import type {
+  OverviewCard,
+  OverviewWidgetType,
+  WidgetSize,
+} from "@/features/overview/layout/overview-layout";
 
 export interface WidgetProps {
   readonly card: OverviewCard;
   /** Start-of-month ISO date, matching the screen's own `month` state. */
   readonly month: string;
-  readonly monthDirection: 'left' | 'right';
+  readonly monthDirection: "left" | "right";
   readonly size: WidgetSize;
   readonly editing: boolean;
 }

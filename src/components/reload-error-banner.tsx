@@ -1,12 +1,12 @@
-import { View, useWindowDimensions } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { View, useWindowDimensions } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AppText } from '@/components/ui/app-text';
-import { GlassSurface } from '@/components/ui/glass-surface';
-import { MotionView } from '@/components/ui/motion';
-import { TextButton } from '@/components/ui/text-button';
-import { useFinanceReload } from '@/providers/finance-provider';
-import { useQashyTheme } from '@/theme/theme';
+import { AppText } from "@/components/ui/app-text";
+import { GlassSurface } from "@/components/ui/glass-surface";
+import { MotionView } from "@/components/ui/motion";
+import { TextButton } from "@/components/ui/text-button";
+import { useFinanceReload } from "@/providers/finance-provider";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * Reports a resume-time reload failure without taking the app down with it.
@@ -32,7 +32,7 @@ export function ReloadErrorBanner() {
       accessibilityRole="alert"
       accessibilityLiveRegion="polite"
       style={{
-        position: 'absolute',
+        position: "absolute",
         left: width < 440 ? 12 + insets.left : undefined,
         right: 12 + insets.right,
         // Top, not bottom: `PwaUpdatePrompt` owns the bottom corner, and offsetting
@@ -41,15 +41,30 @@ export function ReloadErrorBanner() {
         top: 12 + insets.top,
         maxWidth: 380,
         zIndex: 1000,
-      }}>
-      <GlassSurface style={{ borderRadius: radius.sheet, borderCurve: 'continuous', borderWidth: 1, borderColor: theme.negative, padding: space.lg }}>
+      }}
+    >
+      <GlassSurface
+        style={{
+          borderRadius: radius.sheet,
+          borderCurve: "continuous",
+          borderWidth: 1,
+          borderColor: theme.negative,
+          padding: space.lg,
+        }}
+      >
         <View style={{ gap: 10 }}>
           <AppText variant="label">Qashy couldn’t refresh</AppText>
           {/* Not `literal`: the repository's own message has a translation, and an
               unrecognised storage message passes through `translateDynamic` unchanged. */}
-          <AppText variant="caption" muted>{reload.error}</AppText>
-          <AppText variant="caption" muted>What you see may be out of date. Your saved data is untouched.</AppText>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }}>
+          <AppText variant="caption" muted>
+            {reload.error}
+          </AppText>
+          <AppText variant="caption" muted>
+            What you see may be out of date. Your saved data is untouched.
+          </AppText>
+          <View
+            style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}
+          >
             <TextButton title="Dismiss" tone="muted" onPress={reload.dismiss} />
             <TextButton title="Try again" onPress={reload.retry} />
           </View>

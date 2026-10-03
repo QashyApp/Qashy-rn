@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { View, type ColorValue } from 'react-native';
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { View, type ColorValue } from "react-native";
 import Animated, {
   Easing,
   ReduceMotion,
@@ -11,14 +11,14 @@ import Animated, {
   withSequence,
   withSpring,
   withTiming,
-} from 'react-native-reanimated';
-import Svg, { Circle } from 'react-native-svg';
+} from "react-native-reanimated";
+import Svg, { Circle } from "react-native-svg";
 
-import { motionCurves } from '@/components/ui/motion';
-import { useLocalization } from '@/localization/localization';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { QASHY_INDIGO } from '@/theme/tokens';
+import { motionCurves } from "@/components/ui/motion";
+import { useLocalization } from "@/localization/localization";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { QASHY_INDIGO } from "@/theme/tokens";
 
 const fillSpring = {
   damping: 16,
@@ -35,7 +35,7 @@ export function ProgressBar({
   label,
   milestones = [1],
   onMilestone,
-  size = 'regular',
+  size = "regular",
   segments,
 }: {
   value: number;
@@ -46,7 +46,7 @@ export function ProgressBar({
   milestones?: number[];
   onMilestone?: (milestone: number) => void;
   /** `thin` is 6px tall, for a bar nested inside a denser row. */
-  size?: 'regular' | 'thin';
+  size?: "regular" | "thin";
   /** Number of equal segments to mark on the track (e.g. 7 for a week). Purely visual. */
   segments?: number;
 }) {
@@ -64,17 +64,22 @@ export function ProgressBar({
   // theme.accent is an opaque PlatformColor object under Material You, and
   // String() on it yields "[object Object]", which paints nothing. Reanimated's
   // interpolateColor needs a real parsable color, so keep a hex on both sides.
-  const staticFallback = typeof theme.staticAccent === 'string' && theme.staticAccent
-    ? theme.staticAccent
-    : QASHY_INDIGO;
-  const fillColor = typeof color === 'string'
-    ? color
-    : color === undefined && typeof theme.accent === 'string'
-      ? theme.accent
-      : staticFallback;
+  const staticFallback =
+    typeof theme.staticAccent === "string" && theme.staticAccent
+      ? theme.staticAccent
+      : QASHY_INDIGO;
+  const fillColor =
+    typeof color === "string"
+      ? color
+      : color === undefined && typeof theme.accent === "string"
+        ? theme.accent
+        : staticFallback;
   // Render-phase pair swap (same pattern as the transactions overlay state) so
   // a color change crossfades from the previously shown color.
-  const [colorPair, setColorPair] = useState({ from: fillColor, to: fillColor });
+  const [colorPair, setColorPair] = useState({
+    from: fillColor,
+    to: fillColor,
+  });
   if (colorPair.to !== fillColor) {
     setColorPair({ from: colorPair.to, to: fillColor });
   }
@@ -91,11 +96,13 @@ export function ProgressBar({
   useEffect(() => {
     if (colorPair.from === colorPair.to) return;
     colorMix.set(0);
-    colorMix.set(withTiming(1, {
-      duration: 260,
-      easing: motionCurves.standard,
-      reduceMotion: ReduceMotion.System,
-    }));
+    colorMix.set(
+      withTiming(1, {
+        duration: 260,
+        easing: motionCurves.standard,
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
   }, [colorMix, colorPair]);
 
   useEffect(() => {
@@ -103,11 +110,13 @@ export function ProgressBar({
     previousValueRef.current = safeValue;
     if (!mountedRef.current) {
       mountedRef.current = true;
-      progress.set(withTiming(clamped, {
-        duration: 420,
-        easing: motionCurves.standard,
-        reduceMotion: ReduceMotion.System,
-      }));
+      progress.set(
+        withTiming(clamped, {
+          duration: 420,
+          easing: motionCurves.standard,
+          reduceMotion: ReduceMotion.System,
+        }),
+      );
       return;
     }
     progress.set(withSpring(clamped, fillSpring));
@@ -117,10 +126,12 @@ export function ProgressBar({
     if (!crossed.length) return;
     milestoneRef.current.onMilestone?.(Math.max(...crossed));
     if (reduceMotion) return;
-    pulse.set(withSequence(
-      withTiming(1.45, { duration: 150, easing: motionCurves.standard }),
-      withTiming(1, { duration: 240, easing: motionCurves.inOut }),
-    ));
+    pulse.set(
+      withSequence(
+        withTiming(1.45, { duration: 150, easing: motionCurves.standard }),
+        withTiming(1, { duration: 240, easing: motionCurves.inOut }),
+      ),
+    );
   }, [clamped, progress, pulse, reduceMotion, safeValue]);
 
   const trackStyle = useAnimatedStyle(() => ({
@@ -130,12 +141,17 @@ export function ProgressBar({
     transform: [{ scaleX: progress.value }],
   }));
   const fillColorStyle = useAnimatedStyle(() => ({
-    backgroundColor: colorPair.from === colorPair.to
-      ? colorPair.to
-      : interpolateColor(colorMix.value, [0, 1], [colorPair.from, colorPair.to]),
+    backgroundColor:
+      colorPair.from === colorPair.to
+        ? colorPair.to
+        : interpolateColor(
+            colorMix.value,
+            [0, 1],
+            [colorPair.from, colorPair.to],
+          ),
   }));
 
-  const trackHeight = size === 'thin' ? 6 : 10;
+  const trackHeight = size === "thin" ? 6 : 10;
 
   return (
     <Animated.View
@@ -146,24 +162,36 @@ export function ProgressBar({
         {
           height: trackHeight,
           borderRadius: radius.pill,
-          overflow: 'hidden',
+          overflow: "hidden",
         },
-        materialStyle(theme, 'sunken'),
+        materialStyle(theme, "sunken"),
         trackStyle,
-      ]}>
+      ]}
+    >
       {/* The fill sits 1px inside the track on every edge, so the sunken well
           is always visible as a thin ring around a raised-looking fill. */}
-      <View style={{ position: 'absolute', top: 1, bottom: 1, start: 1, end: 1, borderRadius: radius.pill, overflow: 'hidden' }}>
+      <View
+        style={{
+          position: "absolute",
+          top: 1,
+          bottom: 1,
+          start: 1,
+          end: 1,
+          borderRadius: radius.pill,
+          overflow: "hidden",
+        }}
+      >
         <Animated.View
           style={[
             {
-              height: '100%',
-              width: '100%',
+              height: "100%",
+              width: "100%",
               // The fill grows from the reading-start edge.
-              transformOrigin: isRtl ? 'right center' : 'left center',
+              transformOrigin: isRtl ? "right center" : "left center",
             },
             fillStyle,
-          ]}>
+          ]}
+        >
           <Animated.View
             style={[
               {
@@ -171,7 +199,7 @@ export function ProgressBar({
                 borderRadius: radius.pill,
                 // Inner top highlight so the fill reads as raised material,
                 // not just a flat tinted bar inside the well.
-                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)',
+                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
               },
               fillColorStyle,
             ]}
@@ -184,7 +212,7 @@ export function ProgressBar({
               key={index}
               pointerEvents="none"
               style={{
-                position: 'absolute',
+                position: "absolute",
                 top: 0,
                 bottom: 0,
                 start: `${((index + 1) / segments) * 100}%`,
@@ -228,20 +256,31 @@ export function ProgressRing({
   const reduceMotion = useReducedMotion();
   const progress = useSharedValue(reduceMotion ? clamped : 0);
 
-  const staticFallback = typeof theme.staticAccent === 'string' && theme.staticAccent
-    ? theme.staticAccent
-    : QASHY_INDIGO;
-  const strokeColor = typeof color === 'string'
-    ? color
-    : color === undefined && typeof theme.accent === 'string'
-      ? theme.accent
+  const staticFallback =
+    typeof theme.staticAccent === "string" && theme.staticAccent
+      ? theme.staticAccent
+      : QASHY_INDIGO;
+  const strokeColor =
+    typeof color === "string"
+      ? color
+      : color === undefined && typeof theme.accent === "string"
+        ? theme.accent
+        : staticFallback;
+  const trackColor =
+    typeof theme.surfaceSunken === "string"
+      ? theme.surfaceSunken
       : staticFallback;
-  const trackColor = typeof theme.surfaceSunken === 'string' ? theme.surfaceSunken : staticFallback;
 
   useEffect(() => {
-    progress.set(reduceMotion
-      ? clamped
-      : withTiming(clamped, { duration: 420, easing: Easing.bezier(0.2, 0, 0, 1), reduceMotion: ReduceMotion.System }));
+    progress.set(
+      reduceMotion
+        ? clamped
+        : withTiming(clamped, {
+            duration: 420,
+            easing: Easing.bezier(0.2, 0, 0, 1),
+            reduceMotion: ReduceMotion.System,
+          }),
+    );
   }, [clamped, progress, reduceMotion]);
 
   const radiusPx = (size - strokeWidth) / 2;
@@ -256,8 +295,18 @@ export function ProgressRing({
       accessibilityRole="progressbar"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(clamped * 100) }}
-      style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      <Svg width={size} height={size} style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}>
+      style={{
+        width: size,
+        height: size,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Svg
+        width={size}
+        height={size}
+        style={{ position: "absolute", transform: [{ rotate: "-90deg" }] }}
+      >
         <Circle
           cx={size / 2}
           cy={size / 2}

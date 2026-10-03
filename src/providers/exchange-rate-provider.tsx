@@ -13,19 +13,23 @@
  * other browser-only global directly — only `Platform.OS`, which is safe on every platform.
  */
 
-import { useSyncExternalStore } from 'react';
-import { Platform } from 'react-native';
-import { fetch as expoFetch } from 'expo/fetch';
+import { useSyncExternalStore } from "react";
+import { Platform } from "react-native";
+import { fetch as expoFetch } from "expo/fetch";
 
 import {
   createExchangeRateService,
   type EnsureRatesResult,
   type ExchangeRateStatus,
   type RatePair,
-} from '@/data/exchange-rates/rate-service';
-import { financeRepository, syncingStorage } from '@/data/local-finance-repository';
+} from "@/data/exchange-rates/rate-service";
+import {
+  financeRepository,
+  syncingStorage,
+} from "@/data/local-finance-repository";
 
-const fetchImpl: typeof globalThis.fetch = Platform.OS === 'web' ? globalThis.fetch : expoFetch;
+const fetchImpl: typeof globalThis.fetch =
+  Platform.OS === "web" ? globalThis.fetch : expoFetch;
 
 /**
  * The one instance for the app's lifetime, exactly like `financeRepository` and
@@ -52,10 +56,14 @@ export const EXCHANGE_RATE_STARTUP_CAP_MS = 4_000;
  * Runs `refreshLatest`, but never makes a caller wait longer than the cap for it. Exported so
  * `FinanceProvider` can call it before `generateRecurring()` without inlining the race there.
  */
-export function refreshRatesWithCap(options: { force?: boolean } = {}): Promise<void> {
+export function refreshRatesWithCap(
+  options: { force?: boolean } = {},
+): Promise<void> {
   return Promise.race([
     exchangeRateService.refreshLatest(options).catch(() => undefined),
-    new Promise<void>((resolve) => setTimeout(resolve, EXCHANGE_RATE_STARTUP_CAP_MS)),
+    new Promise<void>((resolve) =>
+      setTimeout(resolve, EXCHANGE_RATE_STARTUP_CAP_MS),
+    ),
   ]);
 }
 

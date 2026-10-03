@@ -29,9 +29,11 @@ export const webDialogStore = {
   hasHost: () => hosts > 0,
   mountHost() {
     hosts += 1;
-    return () => { hosts -= 1; };
+    return () => {
+      hosts -= 1;
+    };
   },
-  open(dialog: Omit<WebDialog, 'id' | 'resolve'>) {
+  open(dialog: Omit<WebDialog, "id" | "resolve">) {
     return new Promise<boolean>((resolve) => {
       queue = [...queue, { ...dialog, id: nextId++, resolve }];
       emit();

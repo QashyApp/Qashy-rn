@@ -11,11 +11,11 @@
  * A confirmation the user learns to tap through is worth nothing.
  */
 
-import { wordlist } from '@scure/bip39/wordlists/english.js';
+import { wordlist } from "@scure/bip39/wordlists/english.js";
 
-import { LABELS } from '@/sync/crypto/labels';
-import { sha256, utf8Bytes } from '@/sync/crypto/primitives';
-import type { TranscriptHash } from '@/sync/crypto/types';
+import { LABELS } from "@/sync/crypto/labels";
+import { sha256, utf8Bytes } from "@/sync/crypto/primitives";
+import type { TranscriptHash } from "@/sync/crypto/types";
 
 /** Six words from a 2048-word list is 66 bits — far beyond what an online racing attack can search. */
 export const SAS_WORD_COUNT = 6;
@@ -59,4 +59,6 @@ export const deriveSas = (transcript: TranscriptHash): string[] => {
  * primary flow the comparison is done by a person, which is the entire point.
  */
 export const sasMatches = (a: readonly string[], b: readonly string[]) =>
-  a.length === SAS_WORD_COUNT && a.length === b.length && a.every((word, index) => word === b[index]);
+  a.length === SAS_WORD_COUNT &&
+  a.length === b.length &&
+  a.every((word, index) => word === b[index]);

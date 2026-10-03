@@ -30,7 +30,7 @@
  * everybody's history.
  */
 
-import type { StorageAdapter, StorageTx } from '@/data/storage-adapter';
+import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
 import {
   SYNC_META,
   appendActivity,
@@ -41,9 +41,9 @@ import {
   storeOps,
   writeMeta,
   type SyncActivityInput,
-} from '@/data/sync-store';
-import type { ApplyResult, FinanceRepository } from '@/data/repository';
-import type { EntityType } from '@/domain/models';
+} from "@/data/sync-store";
+import type { ApplyResult, FinanceRepository } from "@/data/repository";
+import type { EntityType } from "@/domain/models";
 import {
   GENESIS_HASH,
   MAX_CLOCK_SKEW_MS,
@@ -59,10 +59,15 @@ import {
   type ChainHead,
   type HlcClock,
   type SyncOp,
-} from '@/sync/oplog';
-import { activityEntry, rejectionEntry } from '@/sync/engine/activity';
-import { verifyBatchAuthentication } from '@/sync/engine/batch';
-import { describeFailure, healQuarantine, recordQuarantine, recordQuarantineStates } from '@/sync/engine/quarantine';
+} from "@/sync/oplog";
+import { activityEntry, rejectionEntry } from "@/sync/engine/activity";
+import { verifyBatchAuthentication } from "@/sync/engine/batch";
+import {
+  describeFailure,
+  healQuarantine,
+  recordQuarantine,
+  recordQuarantineStates,
+} from "@/sync/engine/quarantine";
 import {
   mergeAuthenticatedRoster,
   mergeHeads,
@@ -71,15 +76,23 @@ import {
   requireAuthorSequence,
   requireSender,
   writePeers,
-} from '@/sync/engine/roster';
-import { SyncEngineError, type RejectionCode, type SyncBatch } from '@/sync/engine/types';
-import { RevocationError, SYNC_CONTROL_ENTITY, deriveRevocationState } from '@/sync/revocation';
+} from "@/sync/engine/roster";
+import {
+  SyncEngineError,
+  type RejectionCode,
+  type SyncBatch,
+} from "@/sync/engine/types";
+import {
+  RevocationError,
+  SYNC_CONTROL_ENTITY,
+  deriveRevocationState,
+} from "@/sync/revocation";
 
 export interface ReceiveDeps {
   readonly storage: StorageAdapter;
   /** The state method is optional for narrow transport doubles; production repositories provide it. */
-  readonly repository: Pick<FinanceRepository, 'applyRemoteOps'> &
-    Partial<Pick<FinanceRepository, 'applyRemoteState'>>;
+  readonly repository: Pick<FinanceRepository, "applyRemoteOps"> &
+    Partial<Pick<FinanceRepository, "applyRemoteState">>;
   /** Injected so a test can advance time without waiting for it. */
   readonly now: () => number;
   readonly nowIso: () => string;
@@ -114,14 +127,18 @@ const EMPTY_APPLY: ApplyResult = { applied: 0, changedTypes: [], repairs: [] };
  * hash disagrees with its own contents and an op that was never a valid op are the same
  * problem with the same fix, which is to resend.
  */
-const CHAIN_CODES: Partial<Record<OpLogError['code'], RejectionCode>> = {
-  chainBreak: 'chainBreak',
-  chainFork: 'chainFork',
+const CHAIN_CODES: Partial<Record<OpLogError["code"], RejectionCode>> = {
+  chainBreak: "chainBreak",
+  chainFork: "chainFork",
 };
 
 function asEngineError(error: unknown, peerId: string): unknown {
   if (!(error instanceof OpLogError)) return error;
-  return new SyncEngineError(error.message, CHAIN_CODES[error.code] ?? 'badBatch', peerId);
+  return new SyncEngineError(
+    error.message,
+    CHAIN_CODES[error.code] ?? "badBatch",
+    peerId,
+  );
 }
 
 /**
@@ -145,16 +162,25 @@ export function projectableOps(
   const horizon = Math.floor(nowMs) + MAX_CLOCK_SKEW_MS;
   const ready: SyncOp[] = [];
   const deferred: SyncOp[] = [];
-  for (const op of ops) (parseHlc(op.hlc).wall > horizon ? deferred : ready).push(op);
+  for (const op of ops)
+    (parseHlc(op.hlc).wall > horizon ? deferred : ready).push(op);
   return { ready, deferred };
 }
 
 /** `{ [deviceId]: seq }`, the shape a batch header and a peer row both want. */
-export const headsRecord = (heads: ReadonlyMap<string, ChainHead>): Record<string, number> =>
-  Object.fromEntries([...heads].map(([deviceId, head]) => [deviceId, head.seq]));
+export const headsRecord = (
+  heads: ReadonlyMap<string, ChainHead>,
+): Record<string, number> =>
+  Object.fromEntries(
+    [...heads].map(([deviceId, head]) => [deviceId, head.seq]),
+  );
 
 /** Folds a batch's readings into the local clock, one op at a time. */
-const clockAfter = (clock: HlcClock, ops: readonly SyncOp[], nowMs: number): HlcClock =>
+const clockAfter = (
+  clock: HlcClock,
+  ops: readonly SyncOp[],
+  nowMs: number,
+): HlcClock =>
   ops.reduce((current, op) => observe(current, op.hlc, nowMs).clock, clock);
 
 /**
@@ -168,7 +194,10 @@ async function verifyAndStore(
   batch: SyncBatch,
   nowMs: number,
   nowIso: string,
-): Promise<{ readonly accepted: SyncOp[]; readonly fullState?: SyncBatch['fullState'] }> {
+): Promise<{
+  readonly accepted: SyncOp[];
+  readonly fullState?: SyncBatch["fullState"];
+}> {
   const meta = await readMeta(tx, [
     SYNC_META.epoch,
     SYNC_META.baseCurrency,
@@ -177,11 +206,11 @@ async function verifyAndStore(
     SYNC_META.revocationMode,
   ]);
 
-  const epoch = Number(meta.get(SYNC_META.epoch) ?? '1');
+  const epoch = Number(meta.get(SYNC_META.epoch) ?? "1");
   if (batch.epoch !== epoch) {
     throw new SyncEngineError(
       `That batch was sealed under an older version of this vault's key.`,
-      'epochMismatch',
+      "epochMismatch",
       batch.sender,
     );
   }
@@ -189,11 +218,11 @@ async function verifyAndStore(
   // An empty local base currency means this device has not been onboarded or seeded yet —
   // a fresh restore from a recovery phrase, before any settings exist. There is nothing to
   // disagree with, so there is nothing to refuse; the first batch establishes it.
-  const baseCurrency = meta.get(SYNC_META.baseCurrency) ?? '';
+  const baseCurrency = meta.get(SYNC_META.baseCurrency) ?? "";
   if (baseCurrency && baseCurrency !== batch.baseCurrency) {
     throw new SyncEngineError(
       `These devices use different base currencies — ${baseCurrency} and ${batch.baseCurrency}. Syncing would corrupt your totals.`,
-      'currencyMismatch',
+      "currencyMismatch",
       batch.sender,
     );
   }
@@ -202,8 +231,8 @@ async function verifyAndStore(
   const sender = requireSender(storedRoster, batch.sender);
   if (!verifyBatchAuthentication(batch, sender.signingKey)) {
     throw new SyncEngineError(
-      'That batch was not signed by the device it claims to come from.',
-      'badSignature',
+      "That batch was not signed by the device it claims to come from.",
+      "badSignature",
       batch.sender,
     );
   }
@@ -214,10 +243,17 @@ async function verifyAndStore(
   const existingControls = await readControlOps(tx);
   const authorizedAddIds = new Set(
     [...existingControls, ...batch.ops]
-      .filter((op) => String(op.entityType) === SYNC_CONTROL_ENTITY && op.kind === 'set')
+      .filter(
+        (op) =>
+          String(op.entityType) === SYNC_CONTROL_ENTITY && op.kind === "set",
+      )
       .map((op) => op.payload)
-      .filter((payload): payload is Record<string, unknown> =>
-        typeof payload === 'object' && payload !== null && payload.control === 'add' && typeof payload.deviceId === 'string',
+      .filter(
+        (payload): payload is Record<string, unknown> =>
+          typeof payload === "object" &&
+          payload !== null &&
+          payload.control === "add" &&
+          typeof payload.deviceId === "string",
       )
       .map((payload) => payload.deviceId as string),
   );
@@ -228,7 +264,7 @@ async function verifyAndStore(
     batch.epoch,
     batch.sender,
     held,
-    meta.get(SYNC_META.deviceId) ?? '',
+    meta.get(SYNC_META.deviceId) ?? "",
     authorizedAddIds,
   );
   const roster = rosterMerge.roster;
@@ -248,7 +284,7 @@ async function verifyAndStore(
     if (known !== undefined && known !== op.opHash) {
       throw new SyncEngineError(
         `${sender.name} sent a different version of a change this vault already accepted (${op.opId}). That device's history has been rewritten.`,
-        'chainFork',
+        "chainFork",
         batch.sender,
       );
     }
@@ -268,27 +304,33 @@ async function verifyAndStore(
       if (!op.signature) {
         throw new SyncEngineError(
           `Op ${op.opId} arrived without a signature.`,
-          'unsignedOp',
+          "unsignedOp",
           batch.sender,
         );
       }
       if (!verifyOpSignature(op, author.signingKey)) {
         throw new SyncEngineError(
           `Op ${op.opId} was not signed by the device it claims to come from.`,
-          'badSignature',
+          "badSignature",
           batch.sender,
         );
       }
       if (!hasCompleteKnownRegisters(op)) {
         throw new SyncEngineError(
           `Op ${op.opId} contains a partial field group and cannot be applied safely.`,
-          'badBatch',
+          "badBatch",
           batch.sender,
         );
       }
     }
     try {
-      held.set(deviceId, verifyChain(ops, held.get(deviceId) ?? { seq: 0, headHash: GENESIS_HASH }));
+      held.set(
+        deviceId,
+        verifyChain(
+          ops,
+          held.get(deviceId) ?? { seq: 0, headHash: GENESIS_HASH },
+        ),
+      );
     } catch (error) {
       throw asEngineError(error, batch.sender);
     }
@@ -296,26 +338,28 @@ async function verifyAndStore(
   }
 
   // Past every refusal. From here the batch is being kept.
-  let revocations: ReturnType<typeof deriveRevocationState>['revocations'];
+  let revocations: ReturnType<typeof deriveRevocationState>["revocations"];
   try {
     const existing = existingControls;
     const initial = {
-      ownerDeviceId: meta.get(SYNC_META.ownerDeviceId) ?? (meta.get(SYNC_META.deviceId) ?? ''),
-      mode: meta.get(SYNC_META.revocationMode) === 'quorum'
-        ? 'quorum' as const
-        : meta.get(SYNC_META.revocationMode) === 'owner'
-          ? 'owner' as const
-          : 'any' as const,
+      ownerDeviceId:
+        meta.get(SYNC_META.ownerDeviceId) ?? meta.get(SYNC_META.deviceId) ?? "",
+      mode:
+        meta.get(SYNC_META.revocationMode) === "quorum"
+          ? ("quorum" as const)
+          : meta.get(SYNC_META.revocationMode) === "owner"
+            ? ("owner" as const)
+            : ("any" as const),
     };
     revocations = deriveRevocationState(
       [...existing, ...accepted],
       roster,
       initial,
-      meta.get(SYNC_META.deviceId) ?? '',
+      meta.get(SYNC_META.deviceId) ?? "",
     ).revocations;
   } catch (error) {
     if (error instanceof RevocationError) {
-      throw new SyncEngineError(error.message, 'badBatch', batch.sender);
+      throw new SyncEngineError(error.message, "badBatch", batch.sender);
     }
     throw error;
   }
@@ -340,7 +384,10 @@ async function verifyAndStore(
       // cannot rewind the watermark compaction depends on.
       // A full-state batch is only acknowledged after the repository has committed its
       // snapshot. If projection fails, leave the watermark unchanged so the sender retries it.
-      acked: batch.fullState === undefined ? mergeHeads(sender.acked, batch.heads) : sender.acked,
+      acked:
+        batch.fullState === undefined
+          ? mergeHeads(sender.acked, batch.heads)
+          : sender.acked,
       // What *we* hold, so the sync screen can say how far behind a peer is without
       // rescanning the op table on every render.
       known: headsRecord(held),
@@ -349,13 +396,18 @@ async function verifyAndStore(
     ...revocations.flatMap((decision) => {
       const peer = roster.get(decision.targetId);
       return peer && !peer.revokedAt
-        ? [{
-            ...peer,
-            revokedAt: decision.at,
-            // The signed decision records what the author had seen. This receiver may already
-            // hold more of the target chain, and those earlier ops must remain replayable.
-            revokedSeq: Math.max(decision.cutoff, held.get(decision.targetId)?.seq ?? 0),
-          }]
+        ? [
+            {
+              ...peer,
+              revokedAt: decision.at,
+              // The signed decision records what the author had seen. This receiver may already
+              // hold more of the target chain, and those earlier ops must remain replayable.
+              revokedSeq: Math.max(
+                decision.cutoff,
+                held.get(decision.targetId)?.seq ?? 0,
+              ),
+            },
+          ]
         : [];
     }),
   ]);
@@ -379,31 +431,41 @@ export async function receiveBatch(
   const receivedAt = nowIso();
 
   let accepted: SyncOp[];
-  let fullState: SyncBatch['fullState'];
+  let fullState: SyncBatch["fullState"];
   try {
-    ({ accepted, fullState } = await storage.transact((tx) => verifyAndStore(tx, batch, now(), receivedAt), {
-      // Nothing a repository subscriber can observe has changed yet: `records` is untouched
-      // and the projection is the next step. Notifying here would redraw every screen with
-      // the same data and then redraw it again a moment later with the real merge.
-      silent: true,
-    }));
+    ({ accepted, fullState } = await storage.transact(
+      (tx) => verifyAndStore(tx, batch, now(), receivedAt),
+      {
+        // Nothing a repository subscriber can observe has changed yet: `records` is untouched
+        // and the projection is the next step. Notifying here would redraw every screen with
+        // the same data and then redraw it again a moment later with the real merge.
+        silent: true,
+      },
+    ));
   } catch (error) {
     const entry = rejectionEntry(error, batch.sender, receivedAt);
-    await storage.transact((tx) => appendActivity(tx, [entry]), { silent: true });
+    await storage.transact((tx) => appendActivity(tx, [entry]), {
+      silent: true,
+    });
     throw error;
   }
 
   // Membership controls are interpreted by the receive transaction and have no finance
   // projection. Keep them out of both the repository and clock-skew quarantine; otherwise a
   // control would be counted as applied by a test double and remain perpetually unprojected.
-  const projectable = accepted.filter((op) => String(op.entityType) !== SYNC_CONTROL_ENTITY);
+  const projectable = accepted.filter(
+    (op) => String(op.entityType) !== SYNC_CONTROL_ENTITY,
+  );
   const { ready, deferred } = projectableOps(projectable, now());
 
   let result = EMPTY_APPLY;
   let failure: unknown = null;
   if (fullState !== undefined) {
     if (!repository.applyRemoteState) {
-      throw new SyncEngineError('This app cannot apply a full-state sync batch.', 'badBatch');
+      throw new SyncEngineError(
+        "This app cannot apply a full-state sync batch.",
+        "badBatch",
+      );
     }
     try {
       result = await repository.applyRemoteState(fullState);
@@ -419,17 +481,22 @@ export async function receiveBatch(
   }
 
   if (fullState !== undefined && !failure) {
-    await storage.transact(async (tx) => {
-      const roster = await readRoster(tx);
-      const senderRow = roster.get(batch.sender);
-      if (senderRow) {
-        await writePeers(tx, [{
-          ...senderRow,
-          acked: mergeHeads(senderRow.acked, batch.heads),
-          lastSeenAt: receivedAt,
-        }]);
-      }
-    }, { silent: true });
+    await storage.transact(
+      async (tx) => {
+        const roster = await readRoster(tx);
+        const senderRow = roster.get(batch.sender);
+        if (senderRow) {
+          await writePeers(tx, [
+            {
+              ...senderRow,
+              acked: mergeHeads(senderRow.acked, batch.heads),
+              lastSeenAt: receivedAt,
+            },
+          ]);
+        }
+      },
+      { silent: true },
+    );
   }
 
   // Only entities the repository could actually have projected count as healed. An op naming
@@ -455,28 +522,29 @@ export async function receiveBatch(
       const recovered = await healQuarantine(tx, projected);
       let quarantined = 0;
       if (failure) {
-        quarantined += fullState !== undefined
-          ? await recordQuarantineStates(
-              tx,
-              fullState,
-              'overflow',
-              describeFailure(failure),
-              receivedAt,
-            )
-          : await recordQuarantine(
-              tx,
-              ready,
-              'overflow',
-              describeFailure(failure),
-              receivedAt,
-            );
+        quarantined +=
+          fullState !== undefined
+            ? await recordQuarantineStates(
+                tx,
+                fullState,
+                "overflow",
+                describeFailure(failure),
+                receivedAt,
+              )
+            : await recordQuarantine(
+                tx,
+                ready,
+                "overflow",
+                describeFailure(failure),
+                receivedAt,
+              );
       }
       if (deferred.length) {
         quarantined += await recordQuarantine(
           tx,
           deferred,
-          'clockSkew',
-          'clock ahead of this device',
+          "clockSkew",
+          "clock ahead of this device",
           receivedAt,
         );
       }
@@ -488,7 +556,7 @@ export async function receiveBatch(
   if (result.applied) {
     activity.push(
       activityEntry({
-        kind: 'received',
+        kind: "received",
         recordedAt: receivedAt,
         peerId: batch.sender,
         count: result.applied,
@@ -498,19 +566,19 @@ export async function receiveBatch(
   if (counts.quarantined) {
     activity.push(
       activityEntry({
-        kind: 'quarantined',
+        kind: "quarantined",
         recordedAt: receivedAt,
         peerId: batch.sender,
         count: counts.quarantined,
-        code: failure ? 'invariant' : 'clockSkew',
-        detail: failure ? describeFailure(failure) : '',
+        code: failure ? "invariant" : "clockSkew",
+        detail: failure ? describeFailure(failure) : "",
       }),
     );
   }
   if (counts.recovered) {
     activity.push(
       activityEntry({
-        kind: 'recovered',
+        kind: "recovered",
         recordedAt: receivedAt,
         peerId: batch.sender,
         count: counts.recovered,
@@ -518,7 +586,9 @@ export async function receiveBatch(
     );
   }
   if (activity.length) {
-    await storage.transact((tx) => appendActivity(tx, activity), { silent: true });
+    await storage.transact((tx) => appendActivity(tx, activity), {
+      silent: true,
+    });
   }
 
   return {

@@ -1,8 +1,8 @@
-import { router, usePathname, type Href } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { router, usePathname, type Href } from "expo-router";
+import { useEffect, useRef } from "react";
 
-import { IconButton } from '@/components/ui/icon-button';
-import { useLocalization } from '@/localization/localization';
+import { IconButton } from "@/components/ui/icon-button";
+import { useLocalization } from "@/localization/localization";
 
 /**
  * Header back control that cannot disappear.
@@ -37,7 +37,7 @@ function HeaderBackButton({ fallback }: { fallback: Href }) {
   return (
     <IconButton
       label="Back"
-      icon={isRtl ? 'chevron.right' : 'chevron.left'}
+      icon={isRtl ? "chevron.right" : "chevron.left"}
       iconSize={20}
       onPress={() => {
         if (locationChanges > 0 && router.canGoBack()) router.back();
@@ -49,6 +49,6 @@ function HeaderBackButton({ fallback }: { fallback: Href }) {
 
 /** Web-only: native keeps the platform back button, which is always present when a back stack exists. */
 export function backFallbackOptions(fallback: Href) {
-  if (process.env.EXPO_OS !== 'web') return {};
+  if (process.env.EXPO_OS !== "web") return {};
   return { headerLeft: () => <HeaderBackButton fallback={fallback} /> };
 }

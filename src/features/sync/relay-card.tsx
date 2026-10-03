@@ -21,36 +21,36 @@
  * combined message under the button.
  */
 
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useState } from "react";
+import { View } from "react-native";
 
-import { AppText } from '@/components/ui/app-text';
-import { QashySwitch } from '@/components/ui/qashy-switch';
-import { Card } from '@/components/ui/card';
-import { FormField } from '@/components/ui/form-field';
-import { MotionView } from '@/components/ui/motion';
-import { SectionHeader } from '@/components/ui/section-header';
-import { StatusPill } from '@/components/ui/status-pill';
-import { TextButton } from '@/components/ui/text-button';
-import { describeRelay } from '@/features/sync/sync-summary';
-import { useLocalization } from '@/localization/localization';
-import { useSync } from '@/providers/sync-provider';
-import { setEndpoints, type SyncStatus } from '@/sync/setup';
+import { AppText } from "@/components/ui/app-text";
+import { QashySwitch } from "@/components/ui/qashy-switch";
+import { Card } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { MotionView } from "@/components/ui/motion";
+import { SectionHeader } from "@/components/ui/section-header";
+import { StatusPill } from "@/components/ui/status-pill";
+import { TextButton } from "@/components/ui/text-button";
+import { describeRelay } from "@/features/sync/sync-summary";
+import { useLocalization } from "@/localization/localization";
+import { useSync } from "@/providers/sync-provider";
+import { setEndpoints, type SyncStatus } from "@/sync/setup";
 import {
   EndpointError,
   normalizeEndpointUrl,
   normalizeTurnUrl,
   parseStunUrls,
   type EndpointPatch,
-} from '@/sync/transport/endpoints';
-import type { RelayHealth } from '@/sync/transport/relay-health';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { errorMessage, showError } from '@/utils/confirm';
-import { relativeTime } from '@/utils/relative-time';
+} from "@/sync/transport/endpoints";
+import type { RelayHealth } from "@/sync/transport/relay-health";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { errorMessage, showError } from "@/utils/confirm";
+import { relativeTime } from "@/utils/relative-time";
 
 /** The states where the raw transport error is worth more than the summary above it. */
-const FAILING = new Set(['unreachable', 'unauthorized', 'degraded']);
+const FAILING = new Set(["unreachable", "unauthorized", "degraded"]);
 
 export function RelayCard({
   status,
@@ -89,14 +89,16 @@ export function RelayCard({
   // and echoing it back would make the user think it took.
   const [stunUrls, setStunUrls] = useState(() =>
     endpoints.iceServers
-      .filter((server) => server.urls.startsWith('stun'))
+      .filter((server) => server.urls.startsWith("stun"))
       .map((server) => server.urls)
-      .join(', '),
+      .join(", "),
   );
-  const turn = endpoints.iceServers.find((server) => server.urls.startsWith('turn'));
-  const [turnUrl, setTurnUrl] = useState(turn?.urls ?? '');
-  const [turnUsername, setTurnUsername] = useState(turn?.username ?? '');
-  const [turnCredential, setTurnCredential] = useState(turn?.credential ?? '');
+  const turn = endpoints.iceServers.find((server) =>
+    server.urls.startsWith("turn"),
+  );
+  const [turnUrl, setTurnUrl] = useState(turn?.urls ?? "");
+  const [turnUsername, setTurnUsername] = useState(turn?.username ?? "");
+  const [turnCredential, setTurnCredential] = useState(turn?.credential ?? "");
   const [errors, setErrors] = useState<Record<string, string | undefined>>({});
 
   const relay = describeRelay(health);
@@ -107,7 +109,10 @@ export function RelayCard({
       await setEndpoints(setup, change);
       await onChanged();
     } catch (reason) {
-      showError('Couldn’t save that', errorMessage(reason, 'Check the address and try again.'));
+      showError(
+        "Couldn’t save that",
+        errorMessage(reason, "Check the address and try again."),
+      );
     }
   };
 
@@ -120,7 +125,10 @@ export function RelayCard({
       // A failed probe is a verdict, not an error — it comes back as `unreachable` and lands in
       // the pill. Reaching here means something above the probe broke, and swallowing it would
       // leave the button looking like it did nothing at all.
-      showError('Couldn’t reach the relay', errorMessage(reason, 'Try again in a moment.'));
+      showError(
+        "Couldn’t reach the relay",
+        errorMessage(reason, "Try again in a moment."),
+      );
     } finally {
       setChecking(false);
     }
@@ -140,12 +148,15 @@ export function RelayCard({
       try {
         read();
       } catch (reason) {
-        next[field] = reason instanceof EndpointError ? reason.message : 'That address is not valid.';
+        next[field] =
+          reason instanceof EndpointError
+            ? reason.message
+            : "That address is not valid.";
       }
     };
-    guard('relayUrl', () => normalizeEndpointUrl(relayUrl));
-    guard('stunUrls', () => parseStunUrls(stunUrls));
-    guard('turnUrl', () => normalizeTurnUrl(turnUrl));
+    guard("relayUrl", () => normalizeEndpointUrl(relayUrl));
+    guard("stunUrls", () => parseStunUrls(stunUrls));
+    guard("turnUrl", () => normalizeTurnUrl(turnUrl));
     setErrors(next);
     if (Object.keys(next).length) return;
 
@@ -160,7 +171,10 @@ export function RelayCard({
       });
       await onChanged();
     } catch (reason) {
-      showError('Couldn’t save these addresses', errorMessage(reason, 'Check them and try again.'));
+      showError(
+        "Couldn’t save these addresses",
+        errorMessage(reason, "Check them and try again."),
+      );
     } finally {
       setSaving(false);
     }
@@ -171,7 +185,10 @@ export function RelayCard({
       <SectionHeader title="Connections" />
       <Card style={{ gap: space.lg }}>
         {!status.enabled ? (
-          <AppText variant="caption" muted>These are preferences only. Nothing connects until sync is turned on.</AppText>
+          <AppText variant="caption" muted>
+            These are preferences only. Nothing connects until sync is turned
+            on.
+          </AppText>
         ) : null}
         <ToggleRow
           title="Direct connections"
@@ -193,14 +210,22 @@ export function RelayCard({
             reading order is "relay: on, and it is unreachable" rather than the reverse. */}
         <View
           accessibilityLiveRegion="polite"
-          style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.sm }}>
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: space.sm,
+          }}
+        >
           <StatusPill label={relay.label} icon={relay.icon} tone={relay.tone} />
           {/* One assembled string, not two children: `AppText` translates whole strings, and a
               split "Checked" + time would leave the dictionary with a bare fragment to match. */}
-          {checked ? <AppText variant="caption" muted>{`Checked ${checked}`}</AppText> : null}
+          {checked ? (
+            <AppText variant="caption" muted>{`Checked ${checked}`}</AppText>
+          ) : null}
           <View style={{ flex: 1 }} />
           <TextButton
-            title={checking ? 'Checking…' : 'Check now'}
+            title={checking ? "Checking…" : "Check now"}
             icon="arrow.clockwise"
             disabled={checking || !endpoints.relayUrl}
             onPress={() => void check()}
@@ -209,26 +234,41 @@ export function RelayCard({
 
         {!endpoints.relayUrl ? (
           <AppText variant="caption" muted>
-            No relay address is set, so this device only syncs when another one is open at the same time.
+            No relay address is set, so this device only syncs when another one
+            is open at the same time.
           </AppText>
         ) : null}
 
         {FAILING.has(health.status) && health.detail ? (
           <MotionView key={health.detail} variant="up" exit animateLayout>
-            <View style={[{ borderRadius: radius.tile, borderCurve: 'continuous', padding: space.md, gap: space.xs }, materialStyle(theme, 'sunken')]}>
-              <AppText variant="caption" muted>What the server said</AppText>
+            <View
+              style={[
+                {
+                  borderRadius: radius.tile,
+                  borderCurve: "continuous",
+                  padding: space.md,
+                  gap: space.xs,
+                },
+                materialStyle(theme, "sunken"),
+              ]}
+            >
+              <AppText variant="caption" muted>
+                What the server said
+              </AppText>
               {/* Verbatim and selectable. Whoever runs this relay needs the actual error. */}
-              <AppText literal selectable variant="caption">{health.detail}</AppText>
+              <AppText literal selectable variant="caption">
+                {health.detail}
+              </AppText>
             </View>
           </MotionView>
         ) : null}
 
         <TextButton
-          title={advanced ? 'Hide addresses' : 'Change addresses'}
-          icon={advanced ? 'chevron.down' : 'chevron.right'}
+          title={advanced ? "Hide addresses" : "Change addresses"}
+          icon={advanced ? "chevron.down" : "chevron.right"}
           tone="muted"
           accessibilityState={{ expanded: advanced }}
-          style={{ alignSelf: 'flex-start' }}
+          style={{ alignSelf: "flex-start" }}
           onPress={() => setAdvanced((open) => !open)}
         />
 
@@ -268,15 +308,28 @@ export function RelayCard({
             />
             {turnUrl ? (
               <>
-                <FormField label="TURN username" value={turnUsername} onChangeText={setTurnUsername} autoCapitalize="none" autoCorrect={false} />
-                <FormField label="TURN password" value={turnCredential} onChangeText={setTurnCredential} autoCapitalize="none" autoCorrect={false} secureTextEntry />
+                <FormField
+                  label="TURN username"
+                  value={turnUsername}
+                  onChangeText={setTurnUsername}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+                <FormField
+                  label="TURN password"
+                  value={turnCredential}
+                  onChangeText={setTurnCredential}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                />
               </>
             ) : null}
             <TextButton
-              title={saving ? 'Saving…' : 'Save addresses'}
+              title={saving ? "Saving…" : "Save addresses"}
               icon="checkmark"
               disabled={saving}
-              style={{ alignSelf: 'flex-start' }}
+              style={{ alignSelf: "flex-start" }}
               onPress={() => void save()}
             />
           </MotionView>
@@ -301,10 +354,14 @@ function ToggleRow({
   const { space } = useQashyTheme();
   const { t } = useLocalization();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.lg }}>
+    <View
+      style={{ flexDirection: "row", alignItems: "flex-start", gap: space.lg }}
+    >
       <View style={{ flex: 1, gap: space.xxs }}>
         <AppText variant="label">{title}</AppText>
-        <AppText variant="caption" muted>{body}</AppText>
+        <AppText variant="caption" muted>
+          {body}
+        </AppText>
       </View>
       <QashySwitch
         accessibilityLabel={t(title)}

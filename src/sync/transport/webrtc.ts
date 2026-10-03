@@ -7,6 +7,6 @@
  * handle everywhere else.
  */
 
-import { UNAVAILABLE_RTC, type RtcFactory } from '@/sync/transport/webrtc-core';
+import { UNAVAILABLE_RTC, type RtcFactory } from "@/sync/transport/webrtc-core";
 
 export const rtcFactory: RtcFactory = UNAVAILABLE_RTC;

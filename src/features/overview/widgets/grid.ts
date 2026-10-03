@@ -10,7 +10,10 @@
  * remaining on the current one.
  */
 
-import type { OverviewCard, WidgetSize } from '@/features/overview/layout/overview-layout';
+import type {
+  OverviewCard,
+  WidgetSize,
+} from "@/features/overview/layout/overview-layout";
 
 export const GRID_BREAKPOINT = 900;
 const TOTAL_COLUMNS = 6;
@@ -69,14 +72,18 @@ export function packOverviewRows(
   }
 
   const columnWidth = (layoutWidth - gap * (TOTAL_COLUMNS - 1)) / TOTAL_COLUMNS;
-  const widthForUnits = (units: number) => Math.floor(units * columnWidth + (units - 1) * gap);
+  const widthForUnits = (units: number) =>
+    Math.floor(units * columnWidth + (units - 1) * gap);
 
   const rows: PackedRow[] = [];
   let currentRow: PackedCard[] = [];
   let currentUnits = 0;
 
   for (const card of cards) {
-    const units = Math.min(COLUMN_UNITS[card.size] ?? TOTAL_COLUMNS, TOTAL_COLUMNS);
+    const units = Math.min(
+      COLUMN_UNITS[card.size] ?? TOTAL_COLUMNS,
+      TOTAL_COLUMNS,
+    );
     if (currentRow.length > 0 && currentUnits + units > TOTAL_COLUMNS) {
       rows.push({ cards: currentRow });
       currentRow = [];

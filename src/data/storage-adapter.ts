@@ -3,8 +3,8 @@ import {
   syncRowKey,
   type SyncRow,
   type SyncTableName,
-} from '@/data/sync-tables';
-import type { EntityType, FinanceEntity } from '@/domain/models';
+} from "@/data/sync-tables";
+import type { EntityType, FinanceEntity } from "@/domain/models";
 
 export interface StoredEntity {
   type: EntityType;
@@ -14,16 +14,23 @@ export interface StoredEntity {
 /** The primary key of a `records` row, on every platform. */
 export const recordKey = (type: EntityType, id: string) => `${type}:${id}`;
 
-export function compareStoredEntities(first: FinanceEntity, second: FinanceEntity) {
+export function compareStoredEntities(
+  first: FinanceEntity,
+  second: FinanceEntity,
+) {
   const createdOrder = first.createdAt.localeCompare(second.createdAt);
   if (createdOrder) return createdOrder;
-  const firstName = 'name' in first && typeof first.name === 'string'
-    ? first.name.trim().toLowerCase()
-    : '';
-  const secondName = 'name' in second && typeof second.name === 'string'
-    ? second.name.trim().toLowerCase()
-    : '';
-  return firstName.localeCompare(secondName) || first.id.localeCompare(second.id);
+  const firstName =
+    "name" in first && typeof first.name === "string"
+      ? first.name.trim().toLowerCase()
+      : "";
+  const secondName =
+    "name" in second && typeof second.name === "string"
+      ? second.name.trim().toLowerCase()
+      : "";
+  return (
+    firstName.localeCompare(secondName) || first.id.localeCompare(second.id)
+  );
 }
 
 /**
@@ -86,7 +93,10 @@ export interface StorageAdapter {
    * and the next write either throws TransactionInactiveError or silently lands outside the
    * transaction. Do all async work before calling transact and pass the results in.
    */
-  transact<T>(work: (tx: StorageTx) => Promise<T>, options?: TransactOptions): Promise<T>;
+  transact<T>(
+    work: (tx: StorageTx) => Promise<T>,
+    options?: TransactOptions,
+  ): Promise<T>;
 }
 
 /**
@@ -101,6 +111,7 @@ export async function clearSyncTables(tx: StorageTx) {
   for (const name of SYNC_TABLE_NAMES) {
     const table = tx.table(name);
     const rows = await table.all();
-    if (rows.length) await table.delete(rows.map((row) => syncRowKey(name, row)));
+    if (rows.length)
+      await table.delete(rows.map((row) => syncRowKey(name, row)));
   }
 }

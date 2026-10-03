@@ -14,7 +14,7 @@
  * arrives when a timer runs. Promise continuations are never faked.
  */
 
-import { PEER_READY_MESSAGE, type RawSocket } from '@/sync/transport/signaling';
+import { PEER_READY_MESSAGE, type RawSocket } from "@/sync/transport/signaling";
 
 const soon = (work: () => void) => {
   void Promise.resolve().then(work);
@@ -35,7 +35,7 @@ export class FakeSocket implements RawSocket {
   ) {}
 
   send(data: string): void {
-    if (this.closed) throw new Error('That socket is closed.');
+    if (this.closed) throw new Error("That socket is closed.");
     this.sent.push(data);
     this.hub?.route(this, data);
   }
@@ -101,7 +101,9 @@ export class SocketHub {
     this.opened.push(socket);
     // Deferred, because `SignalingClient.open` attaches its handlers *after* calling this.
     if (this.autoAccept) soon(() => socket.accept());
-    const peers = this.sockets.filter((candidate) => candidate.url === url && !candidate.closed);
+    const peers = this.sockets.filter(
+      (candidate) => candidate.url === url && !candidate.closed,
+    );
     if (peers.length === 2) {
       for (const peer of peers) soon(() => peer.emit(PEER_READY_MESSAGE));
     }
@@ -123,7 +125,7 @@ export class SocketHub {
   /** The socket most recently handed out, which is the one a single-client test wants. */
   get latest(): FakeSocket {
     const socket = this.sockets.at(-1);
-    if (!socket) throw new Error('No socket has been opened.');
+    if (!socket) throw new Error("No socket has been opened.");
     return socket;
   }
 }

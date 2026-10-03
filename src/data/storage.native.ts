@@ -1,4 +1,4 @@
-import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
+import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 
 import {
   clearSyncTables,
@@ -8,9 +8,9 @@ import {
   type StoredEntity,
   type SyncTable,
   type TransactOptions,
-} from '@/data/storage-adapter';
-import type { SyncRow, SyncTableName } from '@/data/sync-tables';
-import type { EntityType, FinanceEntity } from '@/domain/models';
+} from "@/data/storage-adapter";
+import type { SyncRow, SyncTableName } from "@/data/sync-tables";
+import type { EntityType, FinanceEntity } from "@/domain/models";
 
 /** Under SQLite's default `SQLITE_MAX_VARIABLE_NUMBER` of 999, with room to spare. */
 const MAX_PARAMETERS = 900;
@@ -33,7 +33,10 @@ const chunk = <T>(items: readonly T[], size: number) => {
  * Steps are append-only. Editing one that has already shipped changes nothing on a device
  * that has run it.
  */
-const MIGRATIONS: readonly { readonly version: number; readonly sql: string }[] = [
+const MIGRATIONS: readonly {
+  readonly version: number;
+  readonly sql: string;
+}[] = [
   {
     version: 1,
     sql: `
@@ -154,84 +157,84 @@ interface SqlTableSpec {
  */
 const SQL_TABLES = {
   syncOps: {
-    table: 'sync_ops',
-    key: 'op_id',
+    table: "sync_ops",
+    key: "op_id",
     columns: [
-      ['op_id', 'opId'],
-      ['device_id', 'deviceId'],
-      ['seq', 'seq'],
-      ['prev_hash', 'prevHash'],
-      ['op_hash', 'opHash'],
-      ['hlc', 'hlc'],
-      ['entity_type', 'entityType'],
-      ['entity_id', 'entityId'],
-      ['kind', 'kind'],
-      ['payload', 'payload'],
-      ['schema', 'schema'],
-      ['signature', 'signature'],
-      ['sealed', 'sealed'],
-      ['origin', 'origin'],
+      ["op_id", "opId"],
+      ["device_id", "deviceId"],
+      ["seq", "seq"],
+      ["prev_hash", "prevHash"],
+      ["op_hash", "opHash"],
+      ["hlc", "hlc"],
+      ["entity_type", "entityType"],
+      ["entity_id", "entityId"],
+      ["kind", "kind"],
+      ["payload", "payload"],
+      ["schema", "schema"],
+      ["signature", "signature"],
+      ["sealed", "sealed"],
+      ["origin", "origin"],
     ],
   },
   syncState: {
-    table: 'sync_state',
-    key: 'record_key',
+    table: "sync_state",
+    key: "record_key",
     columns: [
-      ['record_key', 'key'],
-      ['entity_type', 'type'],
-      ['meta', 'meta'],
-      ['max_hlc', 'maxHlc'],
-      ['deleted_hlc', 'deletedHlc'],
+      ["record_key", "key"],
+      ["entity_type", "type"],
+      ["meta", "meta"],
+      ["max_hlc", "maxHlc"],
+      ["deleted_hlc", "deletedHlc"],
     ],
   },
   syncPeers: {
-    table: 'sync_peers',
-    key: 'device_id',
+    table: "sync_peers",
+    key: "device_id",
     columns: [
-      ['device_id', 'peerId'],
-      ['name', 'name'],
-      ['platform', 'platform'],
-      ['ed25519_pub', 'signingKey'],
-      ['x25519_pub', 'agreementKey'],
-      ['epoch', 'epoch'],
-      ['added_at', 'addedAt'],
-      ['revoked_at', 'revokedAt'],
-      ['revoked_seq', 'revokedSeq'],
-      ['acked', 'acked'],
-      ['known', 'known'],
-      ['last_seen_at', 'lastSeenAt'],
+      ["device_id", "peerId"],
+      ["name", "name"],
+      ["platform", "platform"],
+      ["ed25519_pub", "signingKey"],
+      ["x25519_pub", "agreementKey"],
+      ["epoch", "epoch"],
+      ["added_at", "addedAt"],
+      ["revoked_at", "revokedAt"],
+      ["revoked_seq", "revokedSeq"],
+      ["acked", "acked"],
+      ["known", "known"],
+      ["last_seen_at", "lastSeenAt"],
     ],
   },
   syncMeta: {
-    table: 'sync_meta',
-    key: 'key',
+    table: "sync_meta",
+    key: "key",
     columns: [
-      ['key', 'key'],
-      ['value', 'value'],
+      ["key", "key"],
+      ["value", "value"],
     ],
   },
   syncActivity: {
-    table: 'sync_activity',
-    key: 'key',
+    table: "sync_activity",
+    key: "key",
     columns: [
-      ['key', 'key'],
-      ['kind', 'kind'],
-      ['peer_id', 'peerId'],
-      ['count', 'count'],
-      ['code', 'code'],
-      ['detail', 'detail'],
-      ['recorded_at', 'recordedAt'],
+      ["key", "key"],
+      ["kind", "kind"],
+      ["peer_id", "peerId"],
+      ["count", "count"],
+      ["code", "code"],
+      ["detail", "detail"],
+      ["recorded_at", "recordedAt"],
     ],
   },
   syncQuarantine: {
-    table: 'sync_quarantine',
-    key: 'record_key',
+    table: "sync_quarantine",
+    key: "record_key",
     columns: [
-      ['record_key', 'key'],
-      ['reason', 'reason'],
-      ['detail', 'detail'],
-      ['hlc', 'hlc'],
-      ['recorded_at', 'recordedAt'],
+      ["record_key", "key"],
+      ["reason", "reason"],
+      ["detail", "detail"],
+      ["hlc", "hlc"],
+      ["recorded_at", "recordedAt"],
     ],
   },
 } as const satisfies Record<SyncTableName, SqlTableSpec>;
@@ -251,18 +254,23 @@ class SqliteTx implements StorageTx {
 
   async readAll(type: EntityType) {
     const rows = await this.database.getAllAsync<{ payload: string }>(
-      'SELECT payload FROM records WHERE entity_type = ? ORDER BY updated_at ASC, record_key ASC',
+      "SELECT payload FROM records WHERE entity_type = ? ORDER BY updated_at ASC, record_key ASC",
       type,
     );
-    return rows.map((row) => JSON.parse(row.payload) as FinanceEntity).sort(compareStoredEntities);
+    return rows
+      .map((row) => JSON.parse(row.payload) as FinanceEntity)
+      .sort(compareStoredEntities);
   }
 
   async readKeys(keys: readonly string[]) {
     const found: StoredEntity[] = [];
     for (const batch of chunk(keys, MAX_PARAMETERS)) {
-      const rows = await this.database.getAllAsync<{ entity_type: string; payload: string }>(
+      const rows = await this.database.getAllAsync<{
+        entity_type: string;
+        payload: string;
+      }>(
         `SELECT entity_type, payload FROM records
-         WHERE record_key IN (${batch.map(() => '?').join(', ')})`,
+         WHERE record_key IN (${batch.map(() => "?").join(", ")})`,
         ...batch,
       );
       for (const row of rows) {
@@ -299,7 +307,7 @@ class SqliteTx implements StorageTx {
     if (keys.length) this.dirty = true;
     for (const batch of chunk(keys, MAX_PARAMETERS)) {
       await this.database.runAsync(
-        `DELETE FROM records WHERE record_key IN (${batch.map(() => '?').join(', ')})`,
+        `DELETE FROM records WHERE record_key IN (${batch.map(() => "?").join(", ")})`,
         ...batch,
       );
     }
@@ -307,13 +315,13 @@ class SqliteTx implements StorageTx {
 
   async clearRecords() {
     this.dirty = true;
-    await this.database.runAsync('DELETE FROM records');
+    await this.database.runAsync("DELETE FROM records");
   }
 
   table<Name extends SyncTableName>(name: Name): SyncTable<SyncRow<Name>> {
     const spec: SqlTableSpec = SQL_TABLES[name];
     const database = this.database;
-    const selection = spec.columns.map(([column]) => column).join(', ');
+    const selection = spec.columns.map(([column]) => column).join(", ");
     const markDirty = () => {
       this.dirty = true;
     };
@@ -337,7 +345,7 @@ class SqliteTx implements StorageTx {
         for (const batch of chunk(keys, MAX_PARAMETERS)) {
           const raws = await database.getAllAsync<Record<string, SqlValue>>(
             `SELECT ${selection} FROM ${spec.table}
-             WHERE ${spec.key} IN (${batch.map(() => '?').join(', ')})`,
+             WHERE ${spec.key} IN (${batch.map(() => "?").join(", ")})`,
             ...batch,
           );
           for (const raw of raws) found.push(toRow(raw));
@@ -355,13 +363,13 @@ class SqliteTx implements StorageTx {
         const assignments = spec.columns
           .filter(([column]) => column !== spec.key)
           .map(([column]) => `${column} = excluded.${column}`)
-          .join(', ');
+          .join(", ");
         for (const row of rows) {
           const fields = row as unknown as Record<string, SqlValue>;
           const values = spec.columns.map(([, field]) => fields[field] ?? null);
           await database.runAsync(
             `INSERT INTO ${spec.table} (${selection})
-             VALUES (${spec.columns.map(() => '?').join(', ')})
+             VALUES (${spec.columns.map(() => "?").join(", ")})
              ON CONFLICT(${spec.key}) DO UPDATE SET ${assignments}`,
             ...values,
           );
@@ -371,7 +379,7 @@ class SqliteTx implements StorageTx {
         if (keys.length) markDirty();
         for (const batch of chunk(keys, MAX_PARAMETERS)) {
           await database.runAsync(
-            `DELETE FROM ${spec.table} WHERE ${spec.key} IN (${batch.map(() => '?').join(', ')})`,
+            `DELETE FROM ${spec.table} WHERE ${spec.key} IN (${batch.map(() => "?").join(", ")})`,
             ...batch,
           );
         }
@@ -403,16 +411,18 @@ export class PlatformStorageAdapter implements StorageAdapter {
   }
 
   private async openDatabase() {
-    const database = await openDatabaseAsync('qashy.db');
+    const database = await openDatabaseAsync("qashy.db");
     try {
       // All three are per-connection, which is the reason this adapter keeps one connection
       // and manages transactions on it by hand. `busy_timeout` matters now that reads and
       // writes share a transaction: without it a lock contended by the OS's own WAL
       // checkpointer fails immediately instead of waiting.
       await database.execAsync(
-        'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;',
+        "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
       );
-      const row = await database.getFirstAsync<{ user_version: number }>('PRAGMA user_version');
+      const row = await database.getFirstAsync<{ user_version: number }>(
+        "PRAGMA user_version",
+      );
       const current = row?.user_version ?? 0;
       if (current < DATABASE_VERSION) {
         for (const migration of MIGRATIONS) {
@@ -435,34 +445,39 @@ export class PlatformStorageAdapter implements StorageAdapter {
     // on a connection of its own: a deferred transaction that upgrades a read lock to a write
     // lock fails outright with SQLITE_BUSY_SNAPSHOT under WAL rather than waiting, and cannot
     // be retried in place.
-    await database.execAsync('BEGIN IMMEDIATE');
+    await database.execAsync("BEGIN IMMEDIATE");
     try {
       await database.execAsync(migration.sql);
       // Transactional, because `user_version` lives in the database header. That is what makes
       // a half-applied ladder impossible.
       await database.execAsync(`PRAGMA user_version = ${migration.version}`);
-      await database.execAsync('COMMIT');
+      await database.execAsync("COMMIT");
     } catch (reason) {
-      await database.execAsync('ROLLBACK').catch(() => undefined);
+      await database.execAsync("ROLLBACK").catch(() => undefined);
       throw reason;
     }
   }
 
   async readAll(type: EntityType) {
-    return this.enqueue(async () => new SqliteTx(this.getDatabase()).readAll(type));
+    return this.enqueue(async () =>
+      new SqliteTx(this.getDatabase()).readAll(type),
+    );
   }
 
-  async transact<T>(work: (tx: StorageTx) => Promise<T>, options?: TransactOptions): Promise<T> {
+  async transact<T>(
+    work: (tx: StorageTx) => Promise<T>,
+    options?: TransactOptions,
+  ): Promise<T> {
     const { result, dirty } = await this.enqueue(async () => {
       const database = this.getDatabase();
       const tx = new SqliteTx(database);
-      await database.execAsync('BEGIN IMMEDIATE');
+      await database.execAsync("BEGIN IMMEDIATE");
       try {
         const value = await work(tx);
-        await database.execAsync('COMMIT');
+        await database.execAsync("COMMIT");
         return { result: value, dirty: tx.dirty };
       } catch (reason) {
-        await database.execAsync('ROLLBACK').catch(() => undefined);
+        await database.execAsync("ROLLBACK").catch(() => undefined);
         throw reason;
       }
     });
@@ -480,10 +495,13 @@ export class PlatformStorageAdapter implements StorageAdapter {
   }
 
   async clear(source?: object) {
-    await this.transact(async (tx) => {
-      await tx.clearRecords();
-      await clearSyncTables(tx);
-    }, { source });
+    await this.transact(
+      async (tx) => {
+        await tx.clearRecords();
+        await clearSyncTables(tx);
+      },
+      { source },
+    );
   }
 
   subscribe(listener: (source?: object) => void) {
@@ -512,7 +530,8 @@ export class PlatformStorageAdapter implements StorageAdapter {
   }
 
   private getDatabase() {
-    if (!this.database) throw new Error('Qashy database has not been initialized.');
+    if (!this.database)
+      throw new Error("Qashy database has not been initialized.");
     return this.database;
   }
 }

@@ -18,7 +18,7 @@
  * routes, the CSV export — so they are kept opaque.
  */
 
-import { sha256, toHex, utf8Bytes } from '@/sync/crypto';
+import { sha256, toHex, utf8Bytes } from "@/sync/crypto";
 
 /**
  * Namespaces, so two different key spaces can never derive the same id.
@@ -28,10 +28,10 @@ import { sha256, toHex, utf8Bytes } from '@/sync/crypto';
  * be the same entity id in two different tables.
  */
 export const ID_NAMESPACES = {
-  budgetPeriod: 'qashy/id/v1/budget-period',
-  occurrence: 'qashy/id/v1/occurrence',
-  fetchedRate: 'qashy/id/v1/fetched-rate',
-  externalImport: 'qashy/id/v1/external-import',
+  budgetPeriod: "qashy/id/v1/budget-period",
+  occurrence: "qashy/id/v1/occurrence",
+  fetchedRate: "qashy/id/v1/fetched-rate",
+  externalImport: "qashy/id/v1/external-import",
 } as const;
 
 export type IdNamespace = (typeof ID_NAMESPACES)[keyof typeof ID_NAMESPACES];
@@ -51,8 +51,13 @@ export type IdNamespace = (typeof ID_NAMESPACES)[keyof typeof ID_NAMESPACES];
  * makes it impossible to collide with a version 4 id from `makeId()`, so a derived id and a
  * random one can always be told apart after the fact.
  */
-export function deterministicId(namespace: IdNamespace, ...parts: readonly string[]) {
-  const framed = [namespace, ...parts].map((part) => `${part.length}:${part}`).join('');
+export function deterministicId(
+  namespace: IdNamespace,
+  ...parts: readonly string[]
+) {
+  const framed = [namespace, ...parts]
+    .map((part) => `${part.length}:${part}`)
+    .join("");
   const digest = toHex(sha256(utf8Bytes(framed)));
   const variant = ((parseInt(digest[16], 16) & 0b0011) | 0b1000).toString(16);
   return [
@@ -61,7 +66,7 @@ export function deterministicId(namespace: IdNamespace, ...parts: readonly strin
     `8${digest.slice(13, 16)}`,
     `${variant}${digest.slice(17, 20)}`,
     digest.slice(20, 32),
-  ].join('-');
+  ].join("-");
 }
 
 /** The id every device gives the transaction generated for one recurrence occurrence. */
@@ -82,8 +87,11 @@ export const budgetPeriodId = (budgetId: string, periodStart: string) =>
  * `fetchedRateId(row.fromCurrency, row.toCurrency, row.effectiveDate)`. There is no separate
  * model field for it.
  */
-export const fetchedRateId = (from: string, to: string, effectiveDate: string) =>
-  deterministicId(ID_NAMESPACES.fetchedRate, from, to, effectiveDate);
+export const fetchedRateId = (
+  from: string,
+  to: string,
+  effectiveDate: string,
+) => deterministicId(ID_NAMESPACES.fetchedRate, from, to, effectiveDate);
 
 /**
  * True exactly when `rate` is one `saveFetchedRates` wrote — its id is the deterministic hash
@@ -91,19 +99,27 @@ export const fetchedRateId = (from: string, to: string, effectiveDate: string) =
  * every caller that needs to tell an automatic row from a legacy manual one (the "Exchange
  * rates" screen, `appliedRateFor`) checks it this way instead.
  */
-export function isFetchedRate(rate: { readonly id: string; readonly fromCurrency: string; readonly toCurrency: string; readonly effectiveDate: string }): boolean {
-  return rate.id === fetchedRateId(rate.fromCurrency, rate.toCurrency, rate.effectiveDate);
+export function isFetchedRate(rate: {
+  readonly id: string;
+  readonly fromCurrency: string;
+  readonly toCurrency: string;
+  readonly effectiveDate: string;
+}): boolean {
+  return (
+    rate.id ===
+    fetchedRateId(rate.fromCurrency, rate.toCurrency, rate.effectiveDate)
+  );
 }
 
 /** Entity kinds an import derives ids for; part of the id, so an account and a tag can share an external id. */
 export type ExternalImportEntityType =
-  | 'account'
-  | 'category'
-  | 'tag'
-  | 'transaction'
-  | 'recurringRule'
-  | 'budget'
-  | 'transfer-group';
+  | "account"
+  | "category"
+  | "tag"
+  | "transaction"
+  | "recurringRule"
+  | "budget"
+  | "transfer-group";
 
 /**
  * The id every device gives the entity an import of `source` derived from `externalId`.
@@ -112,5 +128,9 @@ export type ExternalImportEntityType =
  * second copy, and two devices that each import the same file mint the same rows, which the
  * sync merge folds into one by construction rather than by a duplicate repair.
  */
-export const externalImportId = (source: string, entityType: ExternalImportEntityType, externalId: string) =>
+export const externalImportId = (
+  source: string,
+  entityType: ExternalImportEntityType,
+  externalId: string,
+) =>
   deterministicId(ID_NAMESPACES.externalImport, source, entityType, externalId);

@@ -27,27 +27,45 @@
  * sync stops working the moment it is most needed.
  */
 
-import type { StorageAdapter } from '@/data/storage-adapter';
+import type { StorageAdapter } from "@/data/storage-adapter";
 import {
   SYNC_META,
   appendActivity,
   findUnprojected,
   readMeta,
   type SyncActivityInput,
-} from '@/data/sync-store';
-import type { FinanceRepository } from '@/data/repository';
-import type { SigningSecretKey } from '@/sync/crypto';
-import { isEntityType, metaKey } from '@/sync/oplog';
-import { activityEntry, activityCode, rejectionEntry, transportDetail } from '@/sync/engine/activity';
-import { describeFailure, healQuarantine, recordQuarantine } from '@/sync/engine/quarantine';
-import { compactSyncOps } from '@/sync/engine/compaction';
-import { openBatch, sealBatch, type FrameContext } from '@/sync/engine/frame';
-import { projectableOps, receiveBatch, type ReceiveOutcome } from '@/sync/engine/receive';
-import { activePeers, readRoster, type Peer } from '@/sync/engine/roster';
-import { sealPending } from '@/sync/engine/sealer';
-import { buildBatch, loadSendSnapshot, SEND_BATCH_OPS, type SendSnapshot } from '@/sync/engine/send';
-import type { SyncChannel, SyncTransport } from '@/sync/engine/transport';
-import type { SyncBatch } from '@/sync/engine/types';
+} from "@/data/sync-store";
+import type { FinanceRepository } from "@/data/repository";
+import type { SigningSecretKey } from "@/sync/crypto";
+import { isEntityType, metaKey } from "@/sync/oplog";
+import {
+  activityEntry,
+  activityCode,
+  rejectionEntry,
+  transportDetail,
+} from "@/sync/engine/activity";
+import {
+  describeFailure,
+  healQuarantine,
+  recordQuarantine,
+} from "@/sync/engine/quarantine";
+import { compactSyncOps } from "@/sync/engine/compaction";
+import { openBatch, sealBatch, type FrameContext } from "@/sync/engine/frame";
+import {
+  projectableOps,
+  receiveBatch,
+  type ReceiveOutcome,
+} from "@/sync/engine/receive";
+import { activePeers, readRoster, type Peer } from "@/sync/engine/roster";
+import { sealPending } from "@/sync/engine/sealer";
+import {
+  buildBatch,
+  loadSendSnapshot,
+  SEND_BATCH_OPS,
+  type SendSnapshot,
+} from "@/sync/engine/send";
+import type { SyncChannel, SyncTransport } from "@/sync/engine/transport";
+import type { SyncBatch } from "@/sync/engine/types";
 
 /**
  * How many batches one peer gets in a single pass.
@@ -61,7 +79,10 @@ export const MAX_BATCHES_PER_PASS = 20;
 
 export interface SyncSessionDeps {
   readonly storage: StorageAdapter;
-  readonly repository: Pick<FinanceRepository, 'applyRemoteOps' | 'repairProjection'>;
+  readonly repository: Pick<
+    FinanceRepository,
+    "applyRemoteOps" | "repairProjection"
+  >;
   readonly deviceId: string;
   /** This device's Ed25519 secret half. Used only by the sealer, never transmitted. */
   readonly signingKey: SigningSecretKey;
@@ -170,7 +191,11 @@ export class SyncSession {
    * free to lie about it and the only outcome is a frame that fails to open, because the
    * sequence is bound into the envelope's associated data.
    */
-  async absorb(channel: SyncChannel, frame: Uint8Array, seq: number): Promise<ReceiveOutcome | null> {
+  async absorb(
+    channel: SyncChannel,
+    frame: Uint8Array,
+    seq: number,
+  ): Promise<ReceiveOutcome | null> {
     let batch: SyncBatch;
     try {
       batch = openBatch(this.deps.frame, frame, channel.peerId, seq);
@@ -180,7 +205,9 @@ export class SyncSession {
       // activity log is the only persistent trace a peer's repeated resend can be traced to.
       const entry = rejectionEntry(error, channel.peerId, this.deps.nowIso());
       try {
-        await this.deps.storage.transact((tx) => appendActivity(tx, [entry]), { silent: true });
+        await this.deps.storage.transact((tx) => appendActivity(tx, [entry]), {
+          silent: true,
+        });
       } finally {
         this.deps.onError?.(error, channel.peerId);
       }
@@ -240,7 +267,10 @@ export class SyncSession {
         stateOffset,
       );
       needsFullState = outgoing.needsFullState;
-      if (!outgoing.batch.ops.length && outgoing.batch.fullState === undefined) {
+      if (
+        !outgoing.batch.ops.length &&
+        outgoing.batch.fullState === undefined
+      ) {
         // Still worth one frame: the header is this device's acknowledgement, and a peer that
         // never hears our position is a peer whose compaction can never advance.
         if (!batches) {
@@ -271,7 +301,13 @@ export class SyncSession {
       more = outgoing.more;
     }
 
-    return { peerId: peer.deviceId, batches, ops, needsFullState, truncated: more };
+    return {
+      peerId: peer.deviceId,
+      batches,
+      ops,
+      needsFullState,
+      truncated: more,
+    };
   }
 
   /**
@@ -284,14 +320,18 @@ export class SyncSession {
   async reconcile(signal?: AbortSignal): Promise<ReconcileOutcome> {
     const { storage, deviceId, signingKey, nowIso, onError } = this.deps;
 
-    const meta = await storage.transact((tx) => readMeta(tx, [SYNC_META.enabled]));
-    if (meta.get(SYNC_META.enabled) !== '1') return IDLE;
+    const meta = await storage.transact((tx) =>
+      readMeta(tx, [SYNC_META.enabled]),
+    );
+    if (meta.get(SYNC_META.enabled) !== "1") return IDLE;
 
     const sealed = await sealPending({ storage, deviceId, signingKey });
     const repair = await this.reproject();
 
     const roster = await storage.transact((tx) => readRoster(tx));
-    const peers = activePeers(roster).filter((peer) => peer.deviceId !== deviceId);
+    const peers = activePeers(roster).filter(
+      (peer) => peer.deviceId !== deviceId,
+    );
 
     const pushed: PushOutcome[] = [];
     const activity: SyncActivityInput[] = [];
@@ -310,7 +350,7 @@ export class SyncSession {
         if (outcome.ops) {
           activity.push(
             activityEntry({
-              kind: 'sent',
+              kind: "sent",
               recordedAt: nowIso(),
               peerId: peer.deviceId,
               count: outcome.ops,
@@ -322,11 +362,11 @@ export class SyncSession {
           // express, and the reason is that retention dropped the ops that would bridge it.
           activity.push(
             activityEntry({
-              kind: 'compacted',
+              kind: "compacted",
               recordedAt: nowIso(),
               peerId: peer.deviceId,
               count: outcome.needsFullState.length,
-              code: 'needsFullState',
+              code: "needsFullState",
             }),
           );
         }
@@ -335,7 +375,7 @@ export class SyncSession {
         onError?.(error, peer.deviceId);
         activity.push(
           activityEntry({
-            kind: 'relay',
+            kind: "relay",
             recordedAt: nowIso(),
             peerId: peer.deviceId,
             code: activityCode(error),
@@ -349,16 +389,18 @@ export class SyncSession {
     if (compacted.dropped) {
       activity.push(
         activityEntry({
-          kind: 'compacted',
+          kind: "compacted",
           recordedAt: nowIso(),
           count: compacted.dropped,
-          code: 'retention',
+          code: "retention",
         }),
       );
     }
 
     if (activity.length) {
-      await storage.transact((tx) => appendActivity(tx, activity), { silent: true });
+      await storage.transact((tx) => appendActivity(tx, activity), {
+        silent: true,
+      });
     }
 
     return {
@@ -430,7 +472,7 @@ export class SyncSession {
           quarantined += await recordQuarantine(
             tx,
             ready,
-            'overflow',
+            "overflow",
             describeFailure(failure),
             recordedAt,
           );
@@ -439,8 +481,8 @@ export class SyncSession {
           quarantined += await recordQuarantine(
             tx,
             deferred,
-            'clockSkew',
-            'clock ahead of this device',
+            "clockSkew",
+            "clock ahead of this device",
             recordedAt,
           );
         }
@@ -457,16 +499,18 @@ export class SyncSession {
         if (quarantined) {
           activity.push(
             activityEntry({
-              kind: 'quarantined',
+              kind: "quarantined",
               recordedAt,
               count: quarantined,
-              code: failure ? 'invariant' : 'clockSkew',
-              detail: failure ? describeFailure(failure) : '',
+              code: failure ? "invariant" : "clockSkew",
+              detail: failure ? describeFailure(failure) : "",
             }),
           );
         }
         if (recovered) {
-          activity.push(activityEntry({ kind: 'recovered', recordedAt, count: recovered }));
+          activity.push(
+            activityEntry({ kind: "recovered", recordedAt, count: recovered }),
+          );
         }
         await appendActivity(tx, activity);
 
@@ -477,7 +521,10 @@ export class SyncSession {
   }
 
   /** The first transport that yields a channel, or null when the peer is simply not there. */
-  private async reach(peer: Peer, signal?: AbortSignal): Promise<SyncChannel | null> {
+  private async reach(
+    peer: Peer,
+    signal?: AbortSignal,
+  ): Promise<SyncChannel | null> {
     const effective = signal ?? new AbortController().signal;
     for (const transport of this.deps.transports) {
       try {

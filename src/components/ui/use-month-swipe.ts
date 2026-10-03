@@ -1,19 +1,19 @@
-import { useMemo } from 'react';
-import { Gesture } from 'react-native-gesture-handler';
+import { useMemo } from "react";
+import { Gesture } from "react-native-gesture-handler";
 import {
   ReduceMotion,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from 'react-native-reanimated';
+} from "react-native-reanimated";
 
-import { motionCurves } from '@/components/ui/motion';
-import type { MonthDirection } from '@/components/ui/month-switcher';
-import { useLocalization } from '@/localization/localization';
-import { useFinanceState } from '@/providers/finance-provider';
-import { moveMonth } from '@/utils/date';
-import { hapticSelection } from '@/utils/haptics';
+import { motionCurves } from "@/components/ui/motion";
+import type { MonthDirection } from "@/components/ui/month-switcher";
+import { useLocalization } from "@/localization/localization";
+import { useFinanceState } from "@/providers/finance-provider";
+import { moveMonth } from "@/utils/date";
+import { hapticSelection } from "@/utils/haptics";
 
 const SWIPE_DISTANCE = 64;
 const SWIPE_VELOCITY = 600;
@@ -49,7 +49,7 @@ export function useMonthSwipe({
   const { settings } = useFinanceState();
   const { isRtl } = useLocalization();
   const translateX = useSharedValue(0);
-  const supported = process.env.EXPO_OS !== 'web';
+  const supported = process.env.EXPO_OS !== "web";
   const active = Boolean(settings.swipeBetweenMonths) && !disabled;
 
   const style = useAnimatedStyle(() => ({
@@ -62,16 +62,22 @@ export function useMonthSwipe({
     const canForward = !(max != null && moveMonth(month, 1) > max);
     const step = (delta: number) => {
       hapticSelection();
-      onChange(moveMonth(month, delta), delta > 0 ? 'right' : 'left');
+      onChange(moveMonth(month, delta), delta > 0 ? "right" : "left");
     };
     const settle = () => {
-      'worklet';
-      translateX.set(withTiming(0, { duration: 220, easing: motionCurves.standard, reduceMotion: ReduceMotion.System }));
+      "worklet";
+      translateX.set(
+        withTiming(0, {
+          duration: 220,
+          easing: motionCurves.standard,
+          reduceMotion: ReduceMotion.System,
+        }),
+      );
     };
     // +1 forward / -1 back for a drag of `dx` pixels.
     const directionOf = (dx: number) => {
-      'worklet';
-      return (dx > 0) === isRtl ? 1 : -1;
+      "worklet";
+      return dx > 0 === isRtl ? 1 : -1;
     };
     return Gesture.Pan()
       .enabled(active)
@@ -79,10 +85,14 @@ export function useMonthSwipe({
       .failOffsetY([-14, 14])
       .onUpdate((event) => {
         const blocked = directionOf(event.translationX) > 0 && !canForward;
-        translateX.set(event.translationX * (blocked ? BLOCKED_FOLLOW : FOLLOW));
+        translateX.set(
+          event.translationX * (blocked ? BLOCKED_FOLLOW : FOLLOW),
+        );
       })
       .onEnd((event) => {
-        const far = Math.abs(event.translationX) >= SWIPE_DISTANCE || Math.abs(event.velocityX) >= SWIPE_VELOCITY;
+        const far =
+          Math.abs(event.translationX) >= SWIPE_DISTANCE ||
+          Math.abs(event.velocityX) >= SWIPE_VELOCITY;
         const delta = directionOf(event.translationX);
         if (!far || (delta > 0 && !canForward)) return;
         runOnJS(step)(delta);

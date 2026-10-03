@@ -26,7 +26,8 @@ const MONTHS_BEFORE_YEARS = 12;
 /** A month, for the purpose of "about two months ago". Not a calendar month, and need not be. */
 const MONTH = DAYS_BEFORE_MONTHS * DAY;
 
-const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ? '' : 's'} ago`;
+const plural = (count: number, unit: string) =>
+  `${count} ${unit}${count === 1 ? "" : "s"} ago`;
 
 /**
  * A past instant, described relative to now.
@@ -40,19 +41,19 @@ const plural = (count: number, unit: string) => `${count} ${unit}${count === 1 ?
  * quarantines the genuinely wrong ones (§2.6), and this is a status line, not a detector.
  */
 export function relativeTime(iso: string, now: number): string {
-  if (!iso) return '';
+  if (!iso) return "";
   const at = Date.parse(iso);
-  if (!Number.isFinite(at)) return '';
+  if (!Number.isFinite(at)) return "";
 
   const elapsed = Math.max(0, now - at);
-  if (elapsed < MINUTE) return 'just now';
-  if (elapsed < HOUR) return plural(Math.floor(elapsed / MINUTE), 'minute');
-  if (elapsed < DAY) return plural(Math.floor(elapsed / HOUR), 'hour');
+  if (elapsed < MINUTE) return "just now";
+  if (elapsed < HOUR) return plural(Math.floor(elapsed / MINUTE), "minute");
+  if (elapsed < DAY) return plural(Math.floor(elapsed / HOUR), "hour");
 
   const days = Math.floor(elapsed / DAY);
-  if (days < DAYS_BEFORE_MONTHS) return plural(days, 'day');
+  if (days < DAYS_BEFORE_MONTHS) return plural(days, "day");
 
   const months = Math.floor(elapsed / MONTH);
-  if (months < MONTHS_BEFORE_YEARS) return plural(months, 'month');
-  return 'over a year ago';
+  if (months < MONTHS_BEFORE_YEARS) return plural(months, "month");
+  return "over a year ago";
 }

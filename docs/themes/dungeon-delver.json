@@ -36,15 +36,33 @@
   "accent": {
     "mode": "user",
     "default": "#F28A2E",
-    "presets": ["#F28A2E", "#3FC8F0", "#B15CE8", "#4CD98A", "#E5534B", "#E9C23B"]
+    "presets": [
+      "#F28A2E",
+      "#3FC8F0",
+      "#B15CE8",
+      "#4CD98A",
+      "#E5534B",
+      "#E9C23B"
+    ]
   },
   "shape": {
-    "radius": { "sm": 0, "control": 0, "tile": 0, "card": 0, "sheet": 0, "nav": 0, "pill": 0 },
+    "radius": {
+      "sm": 0,
+      "control": 0,
+      "tile": 0,
+      "card": 0,
+      "sheet": 0,
+      "nav": 0,
+      "pill": 0
+    },
     "tile": { "size": 44, "icon": 24, "compactSize": 34, "compactIcon": 18 }
   },
   "material": { "engine": "bevel", "gradients": false, "bevelDepth": 2 },
   "motion": { "press": "translate", "pressTranslate": 2, "durationScale": 0.8 },
-  "type": { "text": { "family": "pixelify-sans" }, "numeric": { "family": "pixelify-sans" } },
+  "type": {
+    "text": { "family": "pixelify-sans" },
+    "numeric": { "family": "pixelify-sans" }
+  },
   "icons": { "set": "pixel" },
   "charts": {
     "patterns": true,
@@ -52,6 +70,15 @@
     "donutThickness": 18,
     "gridDash": "2 2",
     "lineCap": "butt",
-    "categoryPalette": ["#F28A2E", "#3FC8F0", "#B15CE8", "#4CD98A", "#E5534B", "#E9C23B", "#5C86FF", "#D96FA8"]
+    "categoryPalette": [
+      "#F28A2E",
+      "#3FC8F0",
+      "#B15CE8",
+      "#4CD98A",
+      "#E5534B",
+      "#E9C23B",
+      "#5C86FF",
+      "#D96FA8"
+    ]
   }
 }

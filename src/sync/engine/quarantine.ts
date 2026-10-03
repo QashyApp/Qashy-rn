@@ -26,11 +26,16 @@
  * came out of a record — no entity name, no amount, no note.
  */
 
-import type { StorageTx } from '@/data/storage-adapter';
-import type { SyncQuarantineRow } from '@/data/sync-tables';
-import { clearQuarantine, readQuarantine, writeQuarantine, type QuarantineReason } from '@/data/sync-store';
-import { metaKey, type CausalMeta, type SyncOp } from '@/sync/oplog';
-import type { RejectionCode } from '@/sync/engine/types';
+import type { StorageTx } from "@/data/storage-adapter";
+import type { SyncQuarantineRow } from "@/data/sync-tables";
+import {
+  clearQuarantine,
+  readQuarantine,
+  writeQuarantine,
+  type QuarantineReason,
+} from "@/data/sync-store";
+import { metaKey, type CausalMeta, type SyncOp } from "@/sync/oplog";
+import type { RejectionCode } from "@/sync/engine/types";
 
 /**
  * Which rejections are survivable.
@@ -40,10 +45,12 @@ import type { RejectionCode } from '@/sync/engine/types';
  * batch itself and no future op will make it valid, so quarantining it would mean re-checking
  * forever. Those are rejected outright and recorded in the activity log instead.
  */
-export const QUARANTINE_REASON_BY_CODE: Partial<Record<RejectionCode, QuarantineReason>> = {
-  invariant: 'overflow',
-  epochMismatch: 'epochMismatch',
-  currencyMismatch: 'epochMismatch',
+export const QUARANTINE_REASON_BY_CODE: Partial<
+  Record<RejectionCode, QuarantineReason>
+> = {
+  invariant: "overflow",
+  epochMismatch: "epochMismatch",
+  currencyMismatch: "epochMismatch",
 };
 
 /**
@@ -55,9 +62,11 @@ export const QUARANTINE_REASON_BY_CODE: Partial<Record<RejectionCode, Quarantine
  * and they cannot leak anything.
  */
 export function describeFailure(error: unknown): string {
-  if (!(error instanceof Error)) return 'unknown';
+  if (!(error instanceof Error)) return "unknown";
   const code = (error as { code?: unknown }).code;
-  return typeof code === 'string' && code ? `${error.name}:${code}` : error.name;
+  return typeof code === "string" && code
+    ? `${error.name}:${code}`
+    : error.name;
 }
 
 /**
@@ -84,7 +93,13 @@ export function quarantineRows(
     // order equals causal order without parsing.
     if (current === undefined || op.hlc > current) newest.set(key, op.hlc);
   }
-  return [...newest.entries()].map(([key, hlc]) => ({ key, reason, detail, hlc, recordedAt }));
+  return [...newest.entries()].map(([key, hlc]) => ({
+    key,
+    reason,
+    detail,
+    hlc,
+    recordedAt,
+  }));
 }
 
 /**
@@ -158,10 +173,13 @@ export async function healQuarantine(
 ): Promise<number> {
   if (!projected.size) return 0;
   const existing = await readQuarantine(tx);
-  const healed = existing.filter((row) => projected.has(row.key)).map((row) => row.key);
+  const healed = existing
+    .filter((row) => projected.has(row.key))
+    .map((row) => row.key);
   await clearQuarantine(tx, healed);
   return healed.length;
 }
 
 /** How many entities are currently stuck, for the count the sync screen shows. */
-export const quarantineCount = async (tx: StorageTx) => (await readQuarantine(tx)).length;
+export const quarantineCount = async (tx: StorageTx) =>
+  (await readQuarantine(tx)).length;

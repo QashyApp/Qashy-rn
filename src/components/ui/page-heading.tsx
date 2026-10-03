@@ -1,7 +1,7 @@
-import { View } from 'react-native';
+import { View } from "react-native";
 
-import { AppText } from '@/components/ui/app-text';
-import { useQashyTheme } from '@/theme/theme';
+import { AppText } from "@/components/ui/app-text";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * The document heading for a section, on web only.
@@ -23,14 +23,26 @@ export function PageHeading({
 }) {
   const theme = useQashyTheme();
   const { space } = theme;
-  if (process.env.EXPO_OS !== 'web') return null;
-  const headingLevelProps = { 'aria-level': 1 } as object;
+  if (process.env.EXPO_OS !== "web") return null;
+  const headingLevelProps = { "aria-level": 1 } as object;
   return (
     <View style={{ gap: space.xxs }}>
       {overline ? (
-        <AppText variant="overline" style={{ color: theme.textMuted, paddingBottom: space.xxs }}>{overline}</AppText>
+        <AppText
+          variant="overline"
+          style={{ color: theme.textMuted, paddingBottom: space.xxs }}
+        >
+          {overline}
+        </AppText>
       ) : null}
-      <AppText {...headingLevelProps} accessibilityRole="header" role="heading" variant="title">{title}</AppText>
+      <AppText
+        {...headingLevelProps}
+        accessibilityRole="header"
+        role="heading"
+        variant="title"
+      >
+        {title}
+      </AppText>
       {subtitle ? <AppText muted>{subtitle}</AppText> : null}
     </View>
   );

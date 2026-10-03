@@ -1,13 +1,13 @@
-import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { CameraView, useCameraPermissions } from "expo-camera";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { View } from "react-native";
 
-import { cameraSupported } from '@/components/sync/camera-support';
-import { ActionButton } from '@/components/ui/action-button';
-import { AppText } from '@/components/ui/app-text';
-import { FormField } from '@/components/ui/form-field';
-import { TextButton } from '@/components/ui/text-button';
-import { useQashyTheme } from '@/theme/theme';
+import { cameraSupported } from "@/components/sync/camera-support";
+import { ActionButton } from "@/components/ui/action-button";
+import { AppText } from "@/components/ui/app-text";
+import { FormField } from "@/components/ui/form-field";
+import { TextButton } from "@/components/ui/text-button";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * Reads a pairing code, by camera or by hand.
@@ -45,8 +45,9 @@ export function QrScanner({
   const [permission, requestPermission] = useCameraPermissions();
   // The typed text remembers which re-arm it was typed under, so a spent code is dropped from the
   // field (derived, not an effect) while a mistyped one can be kept for correction.
-  const [typed, setTyped] = useState({ text: '', token: rearm?.token });
-  const manual = typed.token === rearm?.token || rearm?.keepManual ? typed.text : '';
+  const [typed, setTyped] = useState({ text: "", token: rearm?.token });
+  const manual =
+    typed.token === rearm?.token || rearm?.keepManual ? typed.text : "";
   const setManual = (text: string) => setTyped({ text, token: rearm?.token });
   const [showManual, setShowManual] = useState(!cameraSupported());
 
@@ -83,19 +84,20 @@ export function QrScanner({
         <View
           style={{
             aspectRatio: 1,
-            overflow: 'hidden',
+            overflow: "hidden",
             borderRadius: radius.card,
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surfaceMuted,
-          }}>
+          }}
+        >
           <CameraView
             style={{ flex: 1 }}
             facing="back"
             // QR only. Every other symbology is a format this app cannot act on, and
             // narrowing the list is what stops a barcode on a nearby object from firing the
             // handler and burning the one claim above.
-            barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
             onBarcodeScanned={({ data }) => claim(data)}
           />
         </View>
@@ -110,14 +112,21 @@ export function QrScanner({
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.surfaceMuted,
-          }}>
-          <AppText variant="label">Qashy needs the camera to scan the code</AppText>
+          }}
+        >
+          <AppText variant="label">
+            Qashy needs the camera to scan the code
+          </AppText>
           <AppText variant="caption" muted>
-            The camera is used only to read the pairing code on your other device. No photo is
-            taken and nothing is uploaded.
+            The camera is used only to read the pairing code on your other
+            device. No photo is taken and nothing is uploaded.
           </AppText>
           <ActionButton
-            title={permission?.canAskAgain === false ? 'Open settings' : 'Allow camera'}
+            title={
+              permission?.canAskAgain === false
+                ? "Open settings"
+                : "Allow camera"
+            }
             icon="magnifyingglass"
             // `canAskAgain: false` means the OS will not show a prompt again, so calling
             // `requestPermission` resolves instantly as denied and looks like a dead button.
@@ -163,13 +172,16 @@ export function QrScanner({
 
       {cameraSupported() ? (
         <TextButton
-          title={showManual ? 'Scan a code instead' : 'Can’t scan? Enter the code'}
+          title={
+            showManual ? "Scan a code instead" : "Can’t scan? Enter the code"
+          }
           tone="muted"
           onPress={() => setShowManual((shown) => !shown)}
         />
       ) : (
         <AppText variant="caption" muted>
-          This device can’t use a camera here, so enter the code shown on your other device.
+          This device can’t use a camera here, so enter the code shown on your
+          other device.
         </AppText>
       )}
     </View>

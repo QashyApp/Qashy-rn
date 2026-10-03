@@ -1,11 +1,11 @@
-import type { ReactNode } from 'react';
-import { View } from 'react-native';
+import type { ReactNode } from "react";
+import { View } from "react-native";
 
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { MotionPressable, MotionView } from '@/components/ui/motion';
-import { useLocalization } from '@/localization/localization';
-import { useQashyTheme } from '@/theme/theme';
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { MotionPressable, MotionView } from "@/components/ui/motion";
+import { useLocalization } from "@/localization/localization";
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * A collapsible "More details" section: title, date, tags, exchange rate, and
@@ -31,21 +31,22 @@ export function MoreDetails({
     <View style={{ gap: space.md }}>
       <MotionPressable
         accessibilityRole="button"
-        accessibilityLabel={t('More details')}
+        accessibilityLabel={t("More details")}
         accessibilityState={{ expanded }}
         onPress={onToggle}
         style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
           minHeight: 44,
-        }}>
+        }}
+      >
         <AppText variant="label">More details</AppText>
         {/* There is no "chevron up" glyph in the shared icon map (only
             `chevron.down`), so the open state is the same glyph rotated
             rather than a different one, which also reads as a smoother
             state change than swapping icons. */}
-        <View style={{ transform: [{ rotate: expanded ? '180deg' : '0deg' }] }}>
+        <View style={{ transform: [{ rotate: expanded ? "180deg" : "0deg" }] }}>
           <AppIcon name="chevron.down" size={16} color={theme.textMuted} />
         </View>
       </MotionPressable>

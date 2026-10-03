@@ -1,6 +1,6 @@
-import { Switch, type SwitchProps } from 'react-native';
+import { Switch, type SwitchProps } from "react-native";
 
-import { useQashyTheme } from '@/theme/theme';
+import { useQashyTheme } from "@/theme/theme";
 
 /**
  * The app's one toggle. React Native Web paints an unset `false` track color as
@@ -15,7 +15,9 @@ export function QashySwitch({ trackColor, thumbColor, ...props }: SwitchProps) {
       {...props}
       trackColor={{ false: theme.textMuted, true: theme.accent, ...trackColor }}
       thumbColor={thumbColor ?? theme.surface}
-      {...(process.env.EXPO_OS === 'web' ? { activeThumbColor: theme.onAccent } : null)}
+      {...(process.env.EXPO_OS === "web"
+        ? { activeThumbColor: theme.onAccent }
+        : null)}
     />
   );
 }

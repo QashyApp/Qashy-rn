@@ -62,17 +62,17 @@ import {
   type PendingHandshake,
   type SessionKey,
   type VaultRootKey,
-} from '@/sync/crypto';
-import { normalizeEndpointUrl } from '@/sync/transport/endpoints';
-import type { Peer } from '@/sync/engine/roster';
-import type { RevocationMode } from '@/sync/revocation';
-import { SyncEngineError } from '@/sync/engine/types';
+} from "@/sync/crypto";
+import { normalizeEndpointUrl } from "@/sync/transport/endpoints";
+import type { Peer } from "@/sync/engine/roster";
+import type { RevocationMode } from "@/sync/revocation";
+import { SyncEngineError } from "@/sync/engine/types";
 import {
   SignalingClient,
   platformSocket,
   type RawSocket,
-} from '@/sync/transport/signaling';
-import { canonicalJson } from '@/utils/canonical-json';
+} from "@/sync/transport/signaling";
+import { canonicalJson } from "@/utils/canonical-json";
 
 /**
  * The epoch the two pairing frames are sealed under.
@@ -207,10 +207,18 @@ type HostAnswer =
       readonly baseCurrency: string;
       readonly ownerDeviceId: string;
       readonly revocationMode: RevocationMode;
-      readonly host: { readonly name: string; readonly platform: string; readonly agreementKey: string };
+      readonly host: {
+        readonly name: string;
+        readonly platform: string;
+        readonly agreementKey: string;
+      };
       readonly peers: readonly WirePeer[];
     }
-  | { readonly ok: false; readonly reason: 'currencyMismatch'; readonly baseCurrency: string };
+  | {
+      readonly ok: false;
+      readonly reason: "currencyMismatch";
+      readonly baseCurrency: string;
+    };
 
 interface WirePeer {
   readonly deviceId: string;
@@ -225,19 +233,19 @@ interface WirePeer {
 }
 
 const fail = (message: string): never => {
-  throw new SyncEngineError(message, 'badPairing');
+  throw new SyncEngineError(message, "badPairing");
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const text = (value: unknown, what: string): string => {
-  if (typeof value !== 'string' || !value) fail(`${what} is missing.`);
+  if (typeof value !== "string" || !value) fail(`${what} is missing.`);
   return value as string;
 };
 
 const optionalText = (value: unknown, what: string): string => {
-  if (typeof value !== 'string') fail(`${what} is not a string.`);
+  if (typeof value !== "string") fail(`${what} is not a string.`);
   return value as string;
 };
 
@@ -261,7 +269,8 @@ const parse = (payload: Uint8Array, what: string): Record<string, unknown> => {
   return parsed;
 };
 
-const encode = (payload: JoinerHello | HostAnswer) => utf8Bytes(canonicalJson(payload));
+const encode = (payload: JoinerHello | HostAnswer) =>
+  utf8Bytes(canonicalJson(payload));
 
 const toWirePeer = (peer: Peer): WirePeer => ({
   deviceId: peer.deviceId,
@@ -284,30 +293,29 @@ const toWirePeer = (peer: Peer): WirePeer => ({
  * *not* ask for it. Every new roster row starts at zero on both sides.
  */
 const fromWirePeer = (value: unknown, index: number, nowIso: string): Peer => {
-  if (!isRecord(value)) return fail(`Device ${index} in that roster is not an object.`);
+  if (!isRecord(value))
+    return fail(`Device ${index} in that roster is not an object.`);
   const keys = restorePeerKeys(
     bytes(value.signingKey, `Device ${index}'s signing key`),
     bytes(value.agreementKey, `Device ${index}'s agreement key`),
   );
   const epoch = value.epoch;
-  if (typeof epoch !== 'number' || !Number.isSafeInteger(epoch) || epoch < 1) {
+  if (typeof epoch !== "number" || !Number.isSafeInteger(epoch) || epoch < 1) {
     fail(`Device ${index} in that roster has no vault epoch.`);
   }
   const revokedAt = value.revokedAt;
-  if (revokedAt !== null && typeof revokedAt !== 'string') {
+  if (revokedAt !== null && typeof revokedAt !== "string") {
     fail(`Device ${index} in that roster has a malformed revocation.`);
   }
   const rawRevokedSeq = value.revokedSeq;
   const revokedSeq =
-    rawRevokedSeq === undefined
-      ? revokedAt
-        ? 0
-        : null
-      : rawRevokedSeq;
+    rawRevokedSeq === undefined ? (revokedAt ? 0 : null) : rawRevokedSeq;
   if (
     (revokedAt === null && revokedSeq !== null) ||
     (revokedAt !== null &&
-      (typeof revokedSeq !== 'number' || !Number.isSafeInteger(revokedSeq) || revokedSeq < 0))
+      (typeof revokedSeq !== "number" ||
+        !Number.isSafeInteger(revokedSeq) ||
+        revokedSeq < 0))
   ) {
     fail(`Device ${index} in that roster has a malformed revocation cutoff.`);
   }
@@ -336,12 +344,13 @@ const fromWirePeer = (value: unknown, index: number, nowIso: string): Peer => {
  * means the device is not onboarded and has nothing to re-base, so it accepts whatever it is
  * given — the same rule `receive.ts` applies to a batch.
  */
-const currenciesAgree = (mine: string, theirs: string) => !mine || !theirs || mine === theirs;
+const currenciesAgree = (mine: string, theirs: string) =>
+  !mine || !theirs || mine === theirs;
 
 const currencyRefusal = (mine: string, theirs: string) =>
   new SyncEngineError(
     `These devices use different base currencies — ${theirs} and ${mine}. Syncing would corrupt your totals.`,
-    'currencyMismatch',
+    "currencyMismatch",
   );
 
 // ---------------------------------------------------------------------------
@@ -349,7 +358,7 @@ const currencyRefusal = (mine: string, theirs: string) =>
 // ---------------------------------------------------------------------------
 
 const context = (
-  purpose: 'vault' | 'roster',
+  purpose: "vault" | "roster",
   senderDeviceId: string,
   recipientDeviceId: string,
 ): EnvelopeContext => ({
@@ -384,7 +393,7 @@ const receiveSealed = async (
     // restarted — which is what this says.
     throw new SyncEngineError(
       `${what} could not be verified. Start the pairing again on both devices.`,
-      'badFrame',
+      "badFrame",
     );
   }
   return parse(payload, what);
@@ -417,18 +426,24 @@ async function negotiate(
     // screen. It is not actionable there, and the only safe recovery is to abandon this
     // single-use attempt and mint a new code on both devices.
     throw new SyncEngineError(
-      'The other device sent an invalid pairing message. Start pairing again on both devices.',
-      'badPairing',
+      "The other device sent an invalid pairing message. Start pairing again on both devices.",
+      "badPairing",
     );
   }
-  if (expected && !constantTimeEqual(peerHello.ephemeralPublicKey, expected.ephemeralPublicKey)) {
+  if (
+    expected &&
+    !constantTimeEqual(
+      peerHello.ephemeralPublicKey,
+      expected.ephemeralPublicKey,
+    )
+  ) {
     // Free, and strictly narrowing: the QR named one ephemeral key, so anything else answering
     // is caught here rather than surviving to the SAS. It does not help against someone who
     // photographed the code — that is what the SAS is for — but it removes every case where the
     // rendezvous itself was the only thing substituted.
     throw new SyncEngineError(
-      'A different device answered than the one on the code.',
-      'badPairing',
+      "A different device answered than the one on the code.",
+      "badPairing",
     );
   }
 
@@ -502,11 +517,19 @@ export class PairingHost {
   }
 
   /** Waits for the other device and runs the handshake. Resolves when there are words to show. */
-  async handshake(signal?: AbortSignal): Promise<PairingConfirmation<HostPairingResult>> {
+  async handshake(
+    signal?: AbortSignal,
+  ): Promise<PairingConfirmation<HostPairingResult>> {
     let session: HandshakeSession;
     try {
       this.assertFresh();
-      session = await negotiate(this.signaling, this.pending, this.secret, null, signal);
+      session = await negotiate(
+        this.signaling,
+        this.pending,
+        this.secret,
+        null,
+        signal,
+      );
       this.assertFresh();
     } catch (error) {
       // A handshake that failed cannot be retried with this code — the secret is single use,
@@ -531,12 +554,13 @@ export class PairingHost {
   }
 
   private assertFresh(): void {
-    if (!this.expired && !this.closed && this.deps.now() < this.expiresAt) return;
+    if (!this.expired && !this.closed && this.deps.now() < this.expiresAt)
+      return;
     this.expired = true;
     this.close();
     throw new SyncEngineError(
-      'That pairing code has expired. Generate a new one and start again.',
-      'badPairing',
+      "That pairing code has expired. Generate a new one and start again.",
+      "badPairing",
     );
   }
 
@@ -553,7 +577,11 @@ export class PairingHost {
   ): Promise<HostPairingResult> {
     try {
       this.assertFresh();
-      const toJoiner = context('vault', this.deps.identity.deviceId, session.peerDeviceId);
+      const toJoiner = context(
+        "vault",
+        this.deps.identity.deviceId,
+        session.peerDeviceId,
+      );
       const hello = await this.readJoinerHello(session, signal);
       // The key must not leave after the advertised deadline, even if the handshake and human
       // confirmation began while the code was still fresh.
@@ -565,7 +593,7 @@ export class PairingHost {
         // different problem with a different fix.
         sendSealed(this.signaling, session.sendKey, toJoiner, {
           ok: false,
-          reason: 'currencyMismatch',
+          reason: "currencyMismatch",
           baseCurrency: this.deps.baseCurrency,
         });
         throw currencyRefusal(this.deps.baseCurrency, hello.baseCurrency);
@@ -573,7 +601,10 @@ export class PairingHost {
 
       // This becomes a durable roster key immediately after the vault key crosses the
       // channel. Validate it first: an authenticated hello is not automatically a valid key.
-      const keys = restorePeerKeys(session.peerSigningPublicKey, hello.agreementKey);
+      const keys = restorePeerKeys(
+        session.peerSigningPublicKey,
+        hello.agreementKey,
+      );
 
       sendSealed(this.signaling, session.sendKey, toJoiner, {
         ok: true,
@@ -581,7 +612,7 @@ export class PairingHost {
         epoch: this.deps.epoch,
         baseCurrency: this.deps.baseCurrency,
         ownerDeviceId: this.deps.ownerDeviceId ?? this.deps.identity.deviceId,
-        revocationMode: this.deps.revocationMode ?? 'any',
+        revocationMode: this.deps.revocationMode ?? "any",
         host: {
           name: this.deps.self.name,
           platform: this.deps.self.platform,
@@ -613,19 +644,28 @@ export class PairingHost {
     }
   }
 
-  private async readJoinerHello(session: HandshakeSession, signal?: AbortSignal) {
+  private async readJoinerHello(
+    session: HandshakeSession,
+    signal?: AbortSignal,
+  ) {
     const payload = await receiveSealed(
       this.signaling,
       session.receiveKey,
-      context('roster', session.peerDeviceId, this.deps.identity.deviceId),
+      context("roster", session.peerDeviceId, this.deps.identity.deviceId),
       "The other device's details",
       signal,
     );
     return {
       name: optionalText(payload.name, "The other device's name"),
       platform: optionalText(payload.platform, "The other device's platform"),
-      agreementKey: bytes(payload.agreementKey, "The other device's agreement key"),
-      baseCurrency: optionalText(payload.baseCurrency, "The other device's base currency"),
+      agreementKey: bytes(
+        payload.agreementKey,
+        "The other device's agreement key",
+      ),
+      baseCurrency: optionalText(
+        payload.baseCurrency,
+        "The other device's base currency",
+      ),
     };
   }
 }
@@ -657,14 +697,19 @@ export class PairingJoiner {
     });
   }
 
-  async handshake(signal?: AbortSignal): Promise<PairingConfirmation<JoinPairingResult>> {
+  async handshake(
+    signal?: AbortSignal,
+  ): Promise<PairingConfirmation<JoinPairingResult>> {
     let session: HandshakeSession;
     try {
       session = await negotiate(
         this.signaling,
         this.pending,
         this.deps.code.pairingSecret,
-        { deviceId: this.deps.code.deviceId, ephemeralPublicKey: this.deps.code.ephemeralPublicKey },
+        {
+          deviceId: this.deps.code.deviceId,
+          ephemeralPublicKey: this.deps.code.ephemeralPublicKey,
+        },
         signal,
       );
     } catch (error) {
@@ -684,12 +729,15 @@ export class PairingJoiner {
     wipe(this.pending, this.deps.code.pairingSecret);
   }
 
-  private async take(session: HandshakeSession, signal?: AbortSignal): Promise<JoinPairingResult> {
+  private async take(
+    session: HandshakeSession,
+    signal?: AbortSignal,
+  ): Promise<JoinPairingResult> {
     try {
       sendSealed(
         this.signaling,
         session.sendKey,
-        context('roster', this.deps.identity.deviceId, session.peerDeviceId),
+        context("roster", this.deps.identity.deviceId, session.peerDeviceId),
         {
           name: this.deps.self.name,
           platform: this.deps.self.platform,
@@ -701,8 +749,8 @@ export class PairingJoiner {
       const answer = await receiveSealed(
         this.signaling,
         session.receiveKey,
-        context('vault', session.peerDeviceId, this.deps.identity.deviceId),
-        'The vault the other device sent',
+        context("vault", session.peerDeviceId, this.deps.identity.deviceId),
+        "The vault the other device sent",
         signal,
       );
       return this.adopt(session, answer);
@@ -711,25 +759,42 @@ export class PairingJoiner {
     }
   }
 
-  private adopt(session: HandshakeSession, answer: Record<string, unknown>): JoinPairingResult {
+  private adopt(
+    session: HandshakeSession,
+    answer: Record<string, unknown>,
+  ): JoinPairingResult {
     if (answer.ok !== true) {
-      if (answer.reason === 'currencyMismatch') {
+      if (answer.reason === "currencyMismatch") {
         throw currencyRefusal(
           this.deps.baseCurrency,
-          typeof answer.baseCurrency === 'string' ? answer.baseCurrency : '',
+          typeof answer.baseCurrency === "string" ? answer.baseCurrency : "",
         );
       }
-      return fail('The other device refused to complete pairing.');
+      return fail("The other device refused to complete pairing.");
     }
 
     const epoch = answer.epoch;
-    if (typeof epoch !== 'number' || !Number.isSafeInteger(epoch) || epoch < 1) {
-      fail('That vault did not say which epoch it is on.');
+    if (
+      typeof epoch !== "number" ||
+      !Number.isSafeInteger(epoch) ||
+      epoch < 1
+    ) {
+      fail("That vault did not say which epoch it is on.");
     }
-    const baseCurrency = optionalText(answer.baseCurrency, "That vault's base currency");
-    const ownerDeviceId = optionalText(answer.ownerDeviceId, "That vault's owner");
+    const baseCurrency = optionalText(
+      answer.baseCurrency,
+      "That vault's base currency",
+    );
+    const ownerDeviceId = optionalText(
+      answer.ownerDeviceId,
+      "That vault's owner",
+    );
     const revocationMode = answer.revocationMode;
-    if (revocationMode !== 'any' && revocationMode !== 'quorum' && revocationMode !== 'owner') {
+    if (
+      revocationMode !== "any" &&
+      revocationMode !== "quorum" &&
+      revocationMode !== "owner"
+    ) {
       fail("That vault did not say which removal policy it uses.");
     }
     // Checked again on this side even though the host checks it first. The host's check
@@ -739,7 +804,8 @@ export class PairingJoiner {
       throw currencyRefusal(this.deps.baseCurrency, baseCurrency);
     }
 
-    if (!isRecord(answer.host)) fail('That vault did not identify the device that sent it.');
+    if (!isRecord(answer.host))
+      fail("That vault did not identify the device that sent it.");
     const host = answer.host as Record<string, unknown>;
     const hostKeys = restorePeerKeys(
       session.peerSigningPublicKey,
@@ -747,7 +813,8 @@ export class PairingJoiner {
     );
 
     const wirePeers = answer.peers;
-    if (!Array.isArray(wirePeers)) return fail('That vault sent no device list.');
+    if (!Array.isArray(wirePeers))
+      return fail("That vault sent no device list.");
     const nowIso = this.deps.nowIso();
 
     const peers: Peer[] = [
@@ -777,7 +844,7 @@ export class PairingJoiner {
     }
 
     return {
-      vaultKey: restoreVaultRootKey(bytes(answer.vaultKey, 'That vault key')),
+      vaultKey: restoreVaultRootKey(bytes(answer.vaultKey, "That vault key")),
       epoch: epoch as number,
       baseCurrency,
       ownerDeviceId,

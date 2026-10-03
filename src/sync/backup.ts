@@ -31,8 +31,12 @@
  * derived or disposable, and carrying them would be two more shapes to keep in step.
  */
 
-import { clearSyncTables, type StorageTx, type StoredEntity } from '@/data/storage-adapter';
-import { SYNC_META, appendActivity } from '@/data/sync-store';
+import {
+  clearSyncTables,
+  type StorageTx,
+  type StoredEntity,
+} from "@/data/storage-adapter";
+import { SYNC_META, appendActivity } from "@/data/sync-store";
 import type {
   SyncMetaRow,
   SyncOpRow,
@@ -40,8 +44,8 @@ import type {
   SyncRow,
   SyncStateRow,
   SyncTableName,
-} from '@/data/sync-tables';
-import { ENTITY_TYPES, type EntityType } from '@/domain/models';
+} from "@/data/sync-tables";
+import { ENTITY_TYPES, type EntityType } from "@/domain/models";
 import {
   bytesToUtf8,
   createPassphraseBackup,
@@ -53,23 +57,23 @@ import {
   recoveryPhraseToVaultKey,
   toBase64Url,
   utf8Bytes,
-} from '@/sync/crypto';
-import { activityEntry } from '@/sync/engine';
+} from "@/sync/crypto";
+import { activityEntry } from "@/sync/engine";
 import {
   KeystoreError,
   decodeVaultRecord,
   encodeVaultRecord,
   type StoredVault,
   type SyncKeystore,
-} from '@/sync/keystore';
-import type { SyncSetupDeps } from '@/sync/setup';
-import { nowIso as defaultNowIso } from '@/utils/entity';
+} from "@/sync/keystore";
+import type { SyncSetupDeps } from "@/sync/setup";
+import { nowIso as defaultNowIso } from "@/utils/entity";
 
 /** Bumped only when the archive body's shape changes. An older build refuses a newer number. */
 export const ARCHIVE_FORMAT = 1;
 
-export const BACKUP_EXTENSION = '.qashyvault';
-export const BACKUP_MIME = 'application/octet-stream';
+export const BACKUP_EXTENSION = ".qashyvault";
+export const BACKUP_MIME = "application/octet-stream";
 
 /** The name to suggest when saving. Dated so a folder of them is orderable by eye. */
 export const backupFileName = (isoDate: string) =>
@@ -78,11 +82,11 @@ export const backupFileName = (isoDate: string) =>
 export class BackupError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'BackupError';
+    this.name = "BackupError";
   }
 }
 
-const DAMAGED = 'That backup file is damaged.';
+const DAMAGED = "That backup file is damaged.";
 
 /**
  * Meta keys the archive deliberately drops.
@@ -113,13 +117,13 @@ const ENTITY_TYPE_SET = new Set<string>(ENTITY_TYPES);
  * that nothing can open, which is the worst possible failure for a backup.
  */
 export type BackupLock =
-  | { readonly kind: 'passphrase'; readonly passphrase: string }
-  | { readonly kind: 'recoveryPhrase' };
+  | { readonly kind: "passphrase"; readonly passphrase: string }
+  | { readonly kind: "recoveryPhrase" };
 
 /** How an archive is opened when it is read. Here the phrase is the whole input. */
 export type BackupKeySource =
-  | { readonly kind: 'passphrase'; readonly passphrase: string }
-  | { readonly kind: 'recoveryPhrase'; readonly phrase: string };
+  | { readonly kind: "passphrase"; readonly passphrase: string }
+  | { readonly kind: "recoveryPhrase"; readonly phrase: string };
 
 /**
  * The archive body, after decryption and before it is written anywhere.
@@ -173,7 +177,7 @@ export const summarizeArchive = (archive: VaultArchive): ArchiveSummary => ({
   opCount: archive.ops.length,
   recordCount: archive.records.length,
   transactionCount: archive.records.filter(
-    (row) => row.type === 'transactions' && !row.entity.deletedAt,
+    (row) => row.type === "transactions" && !row.entity.deletedAt,
   ).length,
 });
 
@@ -189,9 +193,11 @@ export const summarizeArchive = (archive: VaultArchive): ArchiveSummary => ({
  * A routing hint, not a check. The magic bytes are unauthenticated; what actually decides
  * whether a file opens is the AEAD tag, several steps later.
  */
-export const readBackupLock = (file: Uint8Array): BackupKeySource['kind'] | null => {
+export const readBackupLock = (
+  file: Uint8Array,
+): BackupKeySource["kind"] | null => {
   const kind = readBackupKind(file);
-  return kind === 'vaultKey' ? 'recoveryPhrase' : kind;
+  return kind === "vaultKey" ? "recoveryPhrase" : kind;
 };
 
 /**
@@ -223,40 +229,51 @@ export async function exportVaultBackup(
   // either inside `work` would leave Dexie's promise zone mid-transaction.
   const vault = await deps.keystore.read();
   if (!vault) {
-    throw new KeystoreError('There is no vault on this device to back up.', 'empty');
+    throw new KeystoreError(
+      "There is no vault on this device to back up.",
+      "empty",
+    );
   }
 
   const at = (deps.nowIso ?? defaultNowIso)();
-  const body = await deps.storage.transact(async (tx): Promise<VaultArchive> => {
-    const meta = (await tx.table('syncMeta').all()).filter((row) => !TRANSIENT_META.has(row.key));
-    const value = (key: string) => meta.find((row) => row.key === key)?.value ?? '';
-    const loaded = await Promise.all(
-      ENTITY_TYPES.map(async (type) => ({ type, entities: await tx.readAll(type) })),
-    );
+  const body = await deps.storage.transact(
+    async (tx): Promise<VaultArchive> => {
+      const meta = (await tx.table("syncMeta").all()).filter(
+        (row) => !TRANSIENT_META.has(row.key),
+      );
+      const value = (key: string) =>
+        meta.find((row) => row.key === key)?.value ?? "";
+      const loaded = await Promise.all(
+        ENTITY_TYPES.map(async (type) => ({
+          type,
+          entities: await tx.readAll(type),
+        })),
+      );
 
-    return {
-      format: ARCHIVE_FORMAT,
-      createdAt: at,
-      vault: toBase64Url(encodeVaultRecord(vault)),
-      deviceId: vault.identity.deviceId,
-      deviceName: value(SYNC_META.deviceName),
-      baseCurrency: value(SYNC_META.baseCurrency),
-      meta,
-      peers: await tx.table('syncPeers').all(),
-      ops: await tx.table('syncOps').all(),
-      state: await tx.table('syncState').all(),
-      // Tombstones included, and they are not optional: `hydrateFromStorage` rebuilds
-      // `deletedOccurrenceKeys` from them, so an archive without them restores a device that
-      // regenerates every recurrence the user has ever deleted, on every foreground.
-      records: loaded.flatMap(({ type, entities }) =>
-        entities.map((entity) => ({ type: type as EntityType, entity })),
-      ),
-    };
-  });
+      return {
+        format: ARCHIVE_FORMAT,
+        createdAt: at,
+        vault: toBase64Url(encodeVaultRecord(vault)),
+        deviceId: vault.identity.deviceId,
+        deviceName: value(SYNC_META.deviceName),
+        baseCurrency: value(SYNC_META.baseCurrency),
+        meta,
+        peers: await tx.table("syncPeers").all(),
+        ops: await tx.table("syncOps").all(),
+        state: await tx.table("syncState").all(),
+        // Tombstones included, and they are not optional: `hydrateFromStorage` rebuilds
+        // `deletedOccurrenceKeys` from them, so an archive without them restores a device that
+        // regenerates every recurrence the user has ever deleted, on every foreground.
+        records: loaded.flatMap(({ type, entities }) =>
+          entities.map((entity) => ({ type: type as EntityType, entity })),
+        ),
+      };
+    },
+  );
 
   const payload = utf8Bytes(JSON.stringify(body));
   await yieldToUi();
-  return lock.kind === 'passphrase'
+  return lock.kind === "passphrase"
     ? createPassphraseBackup(lock.passphrase, payload)
     : createVaultKeyBackup(vault.vaultKey, payload);
 }
@@ -277,26 +294,30 @@ export async function readVaultBackup(
   secret: BackupKeySource,
 ): Promise<VaultArchive> {
   const kind = readBackupKind(file);
-  if (!kind) throw new BackupError('That file is not a Qashy vault backup.');
+  if (!kind) throw new BackupError("That file is not a Qashy vault backup.");
   // Checked before the expensive part, so a user who picked the wrong file is told which secret
   // it wants rather than being asked to wait for a key derivation that was never going to work.
-  if (kind === 'passphrase' && secret.kind !== 'passphrase') {
-    throw new BackupError('That backup is protected by a passphrase, not a recovery phrase.');
+  if (kind === "passphrase" && secret.kind !== "passphrase") {
+    throw new BackupError(
+      "That backup is protected by a passphrase, not a recovery phrase.",
+    );
   }
-  if (kind === 'vaultKey' && secret.kind !== 'recoveryPhrase') {
-    throw new BackupError('That backup is opened with a recovery phrase, not a passphrase.');
+  if (kind === "vaultKey" && secret.kind !== "recoveryPhrase") {
+    throw new BackupError(
+      "That backup is opened with a recovery phrase, not a passphrase.",
+    );
   }
 
   await yieldToUi();
   const payload =
-    secret.kind === 'passphrase'
+    secret.kind === "passphrase"
       ? openPassphraseBackup(secret.passphrase, file)
       : openVaultKeyBackup(recoveryPhraseToVaultKey(secret.phrase), file);
   return parseArchive(bytesToUtf8(payload));
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null && !Array.isArray(value);
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 /**
  * Checks every row of one table, or refuses the whole file.
@@ -307,7 +328,10 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
  * change that slipped past `ARCHIVE_FORMAT`. Refusing whole rather than per-row for the reason
  * `decodeBundle` does: a half-restored vault leaves nobody able to say which half.
  */
-function table<Row>(value: unknown, valid: (row: Record<string, unknown>) => boolean): Row[] {
+function table<Row>(
+  value: unknown,
+  valid: (row: Record<string, unknown>) => boolean,
+): Row[] {
   if (!Array.isArray(value)) throw new BackupError(DAMAGED);
   for (const row of value) {
     if (!isRecord(row) || !valid(row)) throw new BackupError(DAMAGED);
@@ -324,22 +348,26 @@ function peerTable(value: unknown): SyncPeerRow[] {
   return table<SyncPeerRow & { readonly revokedSeq?: unknown }>(
     value,
     (row) =>
-      typeof row.peerId === 'string' &&
-      typeof row.signingKey === 'string' &&
-      typeof row.agreementKey === 'string' &&
-      typeof row.acked === 'string' &&
-      typeof row.known === 'string' &&
-      (row.revokedAt === null || typeof row.revokedAt === 'string') &&
+      typeof row.peerId === "string" &&
+      typeof row.signingKey === "string" &&
+      typeof row.agreementKey === "string" &&
+      typeof row.acked === "string" &&
+      typeof row.known === "string" &&
+      (row.revokedAt === null || typeof row.revokedAt === "string") &&
       (row.revokedSeq === undefined ||
         (row.revokedAt === null
           ? row.revokedSeq === null
-          : typeof row.revokedSeq === 'number' &&
+          : typeof row.revokedSeq === "number" &&
             Number.isSafeInteger(row.revokedSeq) &&
             row.revokedSeq >= 0)),
   ).map((row) => ({
     ...row,
     revokedSeq:
-      row.revokedSeq === undefined ? (row.revokedAt ? 0 : null) : (row.revokedSeq as number | null),
+      row.revokedSeq === undefined
+        ? row.revokedAt
+          ? 0
+          : null
+        : (row.revokedSeq as number | null),
   }));
 }
 
@@ -352,13 +380,13 @@ function parseArchive(text: string): VaultArchive {
   }
   if (!isRecord(parsed)) throw new BackupError(DAMAGED);
 
-  if (typeof parsed.format !== 'number') throw new BackupError(DAMAGED);
+  if (typeof parsed.format !== "number") throw new BackupError(DAMAGED);
   if (parsed.format !== ARCHIVE_FORMAT) {
     throw new BackupError(
       `That backup was written by a different version of Qashy (format v${String(parsed.format)}). Update this device before restoring it.`,
     );
   }
-  if (typeof parsed.vault !== 'string' || typeof parsed.deviceId !== 'string') {
+  if (typeof parsed.vault !== "string" || typeof parsed.deviceId !== "string") {
     throw new BackupError(DAMAGED);
   }
   // Decoded here purely to fail early. A key that will not decode is the one defect that must
@@ -367,39 +395,42 @@ function parseArchive(text: string): VaultArchive {
 
   return {
     format: ARCHIVE_FORMAT,
-    createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : '',
+    createdAt: typeof parsed.createdAt === "string" ? parsed.createdAt : "",
     vault: parsed.vault,
     deviceId: parsed.deviceId,
-    deviceName: typeof parsed.deviceName === 'string' ? parsed.deviceName : '',
-    baseCurrency: typeof parsed.baseCurrency === 'string' ? parsed.baseCurrency : '',
+    deviceName: typeof parsed.deviceName === "string" ? parsed.deviceName : "",
+    baseCurrency:
+      typeof parsed.baseCurrency === "string" ? parsed.baseCurrency : "",
     meta: table<SyncMetaRow>(
       parsed.meta,
-      (row) => typeof row.key === 'string' && typeof row.value === 'string',
+      (row) => typeof row.key === "string" && typeof row.value === "string",
     ),
     peers: peerTable(parsed.peers),
     ops: table<SyncOpRow>(
       parsed.ops,
       (row) =>
-        typeof row.opId === 'string' &&
-        typeof row.deviceId === 'string' &&
+        typeof row.opId === "string" &&
+        typeof row.deviceId === "string" &&
         Number.isSafeInteger(row.seq) &&
-        typeof row.opHash === 'string' &&
-        typeof row.hlc === 'string' &&
-        typeof row.payload === 'string' &&
+        typeof row.opHash === "string" &&
+        typeof row.hlc === "string" &&
+        typeof row.payload === "string" &&
         (row.sealed === 0 || row.sealed === 1),
     ),
     state: table<SyncStateRow>(
       parsed.state,
       (row) =>
-        typeof row.key === 'string' && typeof row.meta === 'string' && typeof row.maxHlc === 'string',
+        typeof row.key === "string" &&
+        typeof row.meta === "string" &&
+        typeof row.maxHlc === "string",
     ),
     records: table<StoredEntity>(
       parsed.records,
       (row) =>
-        typeof row.type === 'string' &&
+        typeof row.type === "string" &&
         ENTITY_TYPE_SET.has(row.type) &&
         isRecord(row.entity) &&
-        typeof row.entity.id === 'string',
+        typeof row.entity.id === "string",
     ),
   };
 }
@@ -408,7 +439,7 @@ function readVault(encoded: string): StoredVault {
   try {
     return decodeVaultRecord(fromBase64Url(encoded));
   } catch {
-    throw new BackupError('That backup does not contain a usable vault key.');
+    throw new BackupError("That backup does not contain a usable vault key.");
   }
 }
 
@@ -445,7 +476,7 @@ export async function restoreVaultBackup(
 ): Promise<RestoreResult> {
   if (await vaultPresent(deps.keystore)) {
     throw new BackupError(
-      'This device is already part of a vault. Leave it from Sync → Danger zone before restoring a backup.',
+      "This device is already part of a vault. Leave it from Sync → Danger zone before restoring a backup.",
     );
   }
 
@@ -457,14 +488,18 @@ export async function restoreVaultBackup(
     await clearSyncTables(tx);
     await tx.clearRecords();
 
-    await put(tx, 'syncMeta', archive.meta);
-    await put(tx, 'syncPeers', archive.peers);
-    await put(tx, 'syncOps', archive.ops);
-    await put(tx, 'syncState', archive.state);
+    await put(tx, "syncMeta", archive.meta);
+    await put(tx, "syncPeers", archive.peers);
+    await put(tx, "syncOps", archive.ops);
+    await put(tx, "syncState", archive.state);
     if (archive.records.length) await tx.putMany(archive.records);
 
     await appendActivity(tx, [
-      activityEntry({ kind: 'recovered', recordedAt: at, count: archive.records.length }),
+      activityEntry({
+        kind: "recovered",
+        recordedAt: at,
+        count: archive.records.length,
+      }),
     ]);
   });
 
@@ -488,8 +523,8 @@ async function vaultPresent(keystore: SyncKeystore): Promise<boolean> {
     return Boolean(await keystore.read());
   } catch (error) {
     if (error instanceof KeystoreError) {
-      if (error.code === 'locked') return true;
-      if (error.code === 'empty') return false;
+      if (error.code === "locked") return true;
+      if (error.code === "empty") return false;
     }
     throw error;
   }

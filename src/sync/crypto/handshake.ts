@@ -28,8 +28,8 @@
  * collision structurally impossible rather than merely unlikely.
  */
 
-import { LABELS, PROTOCOL_VERSION } from '@/sync/crypto/labels';
-import { deriveDeviceId, type DeviceIdentity } from '@/sync/crypto/keys';
+import { LABELS, PROTOCOL_VERSION } from "@/sync/crypto/labels";
+import { deriveDeviceId, type DeviceIdentity } from "@/sync/crypto/keys";
 import {
   KEY_LENGTH,
   SIGNATURE_LENGTH,
@@ -46,8 +46,8 @@ import {
   utf8Bytes,
   verify,
   zeroize,
-} from '@/sync/crypto/primitives';
-import { deriveSas } from '@/sync/crypto/sas';
+} from "@/sync/crypto/primitives";
+import { deriveSas } from "@/sync/crypto/sas";
 import {
   SyncCryptoError,
   brand,
@@ -56,7 +56,7 @@ import {
   type SessionKey,
   type TranscriptHash,
   type VaultRootKey,
-} from '@/sync/crypto/types';
+} from "@/sync/crypto/types";
 
 const HELLO_NONCE_LENGTH = 32;
 
@@ -102,23 +102,26 @@ export const encodeHello = (hello: HandshakeHello) =>
   );
 
 const readField = (bytes: Uint8Array, offset: number) => {
-  if (offset + 4 > bytes.length) throw new SyncCryptoError('Hello is truncated.', 'badFormat');
+  if (offset + 4 > bytes.length)
+    throw new SyncCryptoError("Hello is truncated.", "badFormat");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const length = view.getUint32(offset, false);
   const start = offset + 4;
-  if (start + length > bytes.length) throw new SyncCryptoError('Hello is truncated.', 'badFormat');
+  if (start + length > bytes.length)
+    throw new SyncCryptoError("Hello is truncated.", "badFormat");
   return { value: bytes.slice(start, start + length), next: start + length };
 };
 
 export const decodeHello = (bytes: Uint8Array): HandshakeHello => {
-  if (bytes.length < 1) throw new SyncCryptoError('Hello is empty.', 'badFormat');
+  if (bytes.length < 1)
+    throw new SyncCryptoError("Hello is empty.", "badFormat");
   const version = bytes[0];
   const deviceIdField = readField(bytes, 1);
   const signingField = readField(bytes, deviceIdField.next);
   const ephemeralField = readField(bytes, signingField.next);
   const nonceField = readField(bytes, ephemeralField.next);
   if (nonceField.next !== bytes.length) {
-    throw new SyncCryptoError('Hello has trailing bytes.', 'badFormat');
+    throw new SyncCryptoError("Hello has trailing bytes.", "badFormat");
   }
   return {
     version,
@@ -152,7 +155,8 @@ const computeTranscript = (a: HandshakeHello, b: HandshakeHello) => {
   );
 };
 
-const authMessage = (transcript: TranscriptHash) => concatBytes(utf8Bytes(LABELS.auth), transcript);
+const authMessage = (transcript: TranscriptHash) =>
+  concatBytes(utf8Bytes(LABELS.auth), transcript);
 
 // ---------------------------------------------------------------------------
 // Flow
@@ -204,30 +208,56 @@ export const completeHandshake = ({
   if (peerHello.version !== PROTOCOL_VERSION) {
     throw new SyncCryptoError(
       `The other device speaks sync protocol v${peerHello.version}; this one speaks v${PROTOCOL_VERSION}. Update whichever is older.`,
-      'badVersion',
+      "badVersion",
     );
   }
-  if (peerHello.signingPublicKey.length !== KEY_LENGTH || peerHello.ephemeralPublicKey.length !== KEY_LENGTH) {
-    throw new SyncCryptoError('The other device sent a malformed key.', 'badLength');
+  if (
+    peerHello.signingPublicKey.length !== KEY_LENGTH ||
+    peerHello.ephemeralPublicKey.length !== KEY_LENGTH
+  ) {
+    throw new SyncCryptoError(
+      "The other device sent a malformed key.",
+      "badLength",
+    );
   }
   if (peerHello.nonce.length !== HELLO_NONCE_LENGTH) {
-    throw new SyncCryptoError('The other device sent a malformed nonce.', 'badLength');
+    throw new SyncCryptoError(
+      "The other device sent a malformed nonce.",
+      "badLength",
+    );
   }
   // The device id is a hash of the signing key, so this catches a peer claiming an
   // identity it does not hold the private key for — before the roster is consulted.
   if (deriveDeviceId(peerHello.signingPublicKey) !== peerHello.deviceId) {
-    throw new SyncCryptoError('The other device presented an identity that does not match its key.', 'badIdentity');
+    throw new SyncCryptoError(
+      "The other device presented an identity that does not match its key.",
+      "badIdentity",
+    );
   }
   if (peerHello.deviceId === pending.identity.deviceId) {
-    throw new SyncCryptoError('That device has the same identity as this one.', 'badIdentity');
+    throw new SyncCryptoError(
+      "That device has the same identity as this one.",
+      "badIdentity",
+    );
   }
   if (expectedPeerDeviceId && expectedPeerDeviceId !== peerHello.deviceId) {
-    throw new SyncCryptoError('A different device answered than the one expected.', 'badIdentity');
+    throw new SyncCryptoError(
+      "A different device answered than the one expected.",
+      "badIdentity",
+    );
   }
 
   const transcript = computeTranscript(pending.hello, peerHello);
-  const secret = sharedSecret(pending.ephemeralSecret, peerHello.ephemeralPublicKey);
-  const material = hkdf(concatBytes(secret, psk), transcript, LABELS.session, KEY_LENGTH * 2);
+  const secret = sharedSecret(
+    pending.ephemeralSecret,
+    peerHello.ephemeralPublicKey,
+  );
+  const material = hkdf(
+    concatBytes(secret, psk),
+    transcript,
+    LABELS.session,
+    KEY_LENGTH * 2,
+  );
   zeroize(secret);
 
   // The device with the lexicographically lower id owns the first half as its send key.
@@ -255,14 +285,26 @@ export const completeHandshake = ({
  * failed handshake is a recoverable condition — the only correct response is to abandon
  * the session.
  */
-export const acceptPeerAuth = (session: HandshakeSession, peerAuth: Uint8Array) => {
+export const acceptPeerAuth = (
+  session: HandshakeSession,
+  peerAuth: Uint8Array,
+) => {
   if (peerAuth.length !== SIGNATURE_LENGTH) {
-    throw new SyncCryptoError('The other device sent a malformed proof of identity.', 'badLength');
-  }
-  if (!verify(peerAuth, authMessage(session.transcript), session.peerSigningPublicKey)) {
     throw new SyncCryptoError(
-      'The other device could not prove its identity. Something is intercepting this connection.',
-      'badSignature',
+      "The other device sent a malformed proof of identity.",
+      "badLength",
+    );
+  }
+  if (
+    !verify(
+      peerAuth,
+      authMessage(session.transcript),
+      session.peerSigningPublicKey,
+    )
+  ) {
+    throw new SyncCryptoError(
+      "The other device could not prove its identity. Something is intercepting this connection.",
+      "badSignature",
     );
   }
 };

@@ -9,17 +9,20 @@
  * constructs an adapter.
  */
 
-export { BaseKeystore } from '@/sync/keystore/base';
-export { MemoryKeystore, type MemoryKeystoreCell } from '@/sync/keystore/memory';
+export { BaseKeystore } from "@/sync/keystore/base";
+export {
+  MemoryKeystore,
+  type MemoryKeystoreCell,
+} from "@/sync/keystore/memory";
 export {
   KeystoreError,
   type KeystoreErrorCode,
   type KeystoreStatus,
   type StoredVault,
   type SyncKeystore,
-} from '@/sync/keystore/types';
+} from "@/sync/keystore/types";
 export {
   VAULT_RECORD_BYTES,
   decodeVaultRecord,
   encodeVaultRecord,
-} from '@/sync/keystore/vault-record';
+} from "@/sync/keystore/vault-record";

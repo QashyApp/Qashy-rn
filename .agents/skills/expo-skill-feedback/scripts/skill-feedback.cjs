@@ -24,18 +24,38 @@ const ABOUT_VALUES = ["skill", "expo"];
 const MAX_FEEDBACK_CHARS = 4000;
 
 function parseArgs(argv) {
-  const args = { skill: "", rating: "", text: "", about: "skill", agentHarness: "", dryRun: false };
+  const args = {
+    skill: "",
+    rating: "",
+    text: "",
+    about: "skill",
+    agentHarness: "",
+    dryRun: false,
+  };
   for (let i = 0; i < argv.length; i++) {
     const flag = argv[i];
     const next = () => argv[++i] || "";
     switch (flag) {
-      case "--skill": args.skill = next(); break;
-      case "--rating": args.rating = next(); break;
-      case "--text": args.text = next(); break;
-      case "--about": args.about = next(); break;
-      case "--agent-harness": args.agentHarness = next(); break;
-      case "--dry-run": args.dryRun = true; break;
-      default: break;
+      case "--skill":
+        args.skill = next();
+        break;
+      case "--rating":
+        args.rating = next();
+        break;
+      case "--text":
+        args.text = next();
+        break;
+      case "--about":
+        args.about = next();
+        break;
+      case "--agent-harness":
+        args.agentHarness = next();
+        break;
+      case "--dry-run":
+        args.dryRun = true;
+        break;
+      default:
+        break;
     }
   }
   return args;
@@ -48,12 +68,16 @@ function eventPayload(args) {
 
   if (!feedback) throw new Error("--text cannot be empty");
   if (!skill) throw new Error("--skill cannot be empty");
-  if (!RATINGS.includes(args.rating)) throw new Error(`--rating must be one of: ${RATINGS.join(", ")}`);
+  if (!RATINGS.includes(args.rating))
+    throw new Error(`--rating must be one of: ${RATINGS.join(", ")}`);
   const about = (args.about || "skill").trim() || "skill";
-  if (!ABOUT_VALUES.includes(about)) throw new Error(`--about must be one of: ${ABOUT_VALUES.join(", ")}`);
+  if (!ABOUT_VALUES.includes(about))
+    throw new Error(`--about must be one of: ${ABOUT_VALUES.join(", ")}`);
 
   const timestamp = new Date().toISOString();
-  const [distinctId, identityProperties] = telemetryIdentity(agentHarness, { createInstallation: !args.dryRun });
+  const [distinctId, identityProperties] = telemetryIdentity(agentHarness, {
+    createInstallation: !args.dryRun,
+  });
 
   return {
     api_key: POSTHOG_PROJECT_API_KEY,
@@ -78,11 +102,15 @@ async function main(argv) {
   const args = parseArgs(argv);
 
   if (!args.dryRun && !telemetryActive()) {
-    console.debug("skill-feedback: telemetry is off (opt-in, off by default); nothing sent. Enable with `telemetry.cjs --on` or EXPO_SKILLS_TELEMETRY=1.");
+    console.debug(
+      "skill-feedback: telemetry is off (opt-in, off by default); nothing sent. Enable with `telemetry.cjs --on` or EXPO_SKILLS_TELEMETRY=1.",
+    );
     return 0;
   }
   if (!telemetryConfigured() && !args.dryRun) {
-    console.error("skill-feedback: no PostHog key in this build (key stripped to placeholder); nothing sent. Set EXPO_SKILLS_POSTHOG_KEY or restore the key in telemetry_common.cjs.");
+    console.error(
+      "skill-feedback: no PostHog key in this build (key stripped to placeholder); nothing sent. Set EXPO_SKILLS_POSTHOG_KEY or restore the key in telemetry_common.cjs.",
+    );
     return 0;
   }
 
@@ -100,7 +128,10 @@ async function main(argv) {
   }
 
   try {
-    await sendToPosthog(payload, { userAgent: "expo-skills/skill-feedback", timeoutMs: 10000 });
+    await sendToPosthog(payload, {
+      userAgent: "expo-skills/skill-feedback",
+      timeoutMs: 10000,
+    });
   } catch (err) {
     console.error(`skill-feedback: ${err.message}`);
     return 1;

@@ -34,10 +34,12 @@
 
 /// <reference types="@cloudflare/workers-types" />
 
-import { readBoundedRequestBody } from './body';
+import { readBoundedRequestBody } from "./body";
 
 interface RateLimitBinding {
-  limit(input: { readonly key: string }): Promise<{ readonly success: boolean }>;
+  limit(input: {
+    readonly key: string;
+  }): Promise<{ readonly success: boolean }>;
 }
 
 export interface Env {
@@ -63,7 +65,7 @@ export interface Env {
 const RELAY_API_VERSION = 2;
 
 /** Non-secret liveness marker that tells both sockets their peer has arrived. */
-const PEER_READY_MESSAGE = 'qashy-rendezvous-ready:1';
+const PEER_READY_MESSAGE = "qashy-rendezvous-ready:1";
 
 /**
  * Ids are 52 base32 characters today. The bounds are wider than that on purpose — this file
@@ -119,20 +121,20 @@ const DEFAULT_RETENTION_DAYS = 14;
  * stranger with `curl` learns, which is nothing.
  */
 const CORS: Record<string, string> = {
-  'access-control-allow-origin': '*',
-  'access-control-allow-methods': 'GET, PUT, DELETE, OPTIONS',
-  'access-control-allow-headers': 'authorization, content-type',
-  'access-control-max-age': '86400',
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, PUT, DELETE, OPTIONS",
+  "access-control-allow-headers": "authorization, content-type",
+  "access-control-max-age": "86400",
 };
 
 const json = (status: number, body: unknown, extra?: Record<string, string>) =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
-      'content-type': 'application/json; charset=utf-8',
+      "content-type": "application/json; charset=utf-8",
       // Nothing this server returns may be cached by anything, ever. A shared cache holding a
       // bucket page would hand one vault's ciphertext to whoever asked next.
-      'cache-control': 'no-store',
+      "cache-control": "no-store",
       ...CORS,
       ...extra,
     },
@@ -154,14 +156,14 @@ const fail = (status: number, code: string, extra?: Record<string, string>) =>
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
-    const path = url.pathname.replace(/\/+$/, '') || '/';
+    const path = url.pathname.replace(/\/+$/, "") || "/";
 
-    if (request.method === 'OPTIONS') {
+    if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS });
     }
 
-    if (path === '/health') {
-      if (request.method !== 'GET') return fail(405, 'method');
+    if (path === "/health") {
+      if (request.method !== "GET") return fail(405, "method");
       // Static, unauthenticated, and identical for every caller. That is the entire design:
       // a health check that carried a bucket id would tell the relay which vault is asking
       // every single time the app is opened, which is worse metadata than sync itself emits.
@@ -171,10 +173,12 @@ export default {
     const rendezvous = /^\/rendezvous\/([^/]+)$/.exec(path);
     if (rendezvous) {
       const id = decodePathSegment(rendezvous[1]);
-      if (id === null) return fail(400, 'id');
-      if (!ID_PATTERN.test(id)) return fail(400, 'id');
-      const allowed = await env.RENDEZVOUS_RATE_LIMITER.limit({ key: 'all-rendezvous-requests' });
-      if (!allowed.success) return fail(429, 'rate', { 'retry-after': '60' });
+      if (id === null) return fail(400, "id");
+      if (!ID_PATTERN.test(id)) return fail(400, "id");
+      const allowed = await env.RENDEZVOUS_RATE_LIMITER.limit({
+        key: "all-rendezvous-requests",
+      });
+      if (!allowed.success) return fail(429, "rate", { "retry-after": "60" });
       // Named by the id itself, so two devices computing the same HKDF output land in the same
       // object without either of them ever telling the server who they are.
       const stub = env.RENDEZVOUS.get(env.RENDEZVOUS.idFromName(id));
@@ -184,27 +188,29 @@ export default {
     const bucket = /^\/bucket\/([^/]+)$/.exec(path);
     if (bucket) {
       const id = decodePathSegment(bucket[1]);
-      if (id === null) return fail(400, 'id');
-      if (!ID_PATTERN.test(id)) return fail(400, 'id');
+      if (id === null) return fail(400, "id");
+      if (!ID_PATTERN.test(id)) return fail(400, "id");
       // An untrusted id can still name a new Durable Object, so keep a per-source allocation
       // brake. This is intentionally separate from the authenticated shared quota below: a
       // caller with a made-up bearer token must not spend the quota legitimate vaults share.
-      const allocated = await env.ALLOCATION_RATE_LIMITER.limit({ key: allocationKey(request) });
-      if (!allocated.success) return fail(429, 'rate', { 'retry-after': '60' });
-      if (!bearer(request)) return fail(401, 'token');
+      const allocated = await env.ALLOCATION_RATE_LIMITER.limit({
+        key: allocationKey(request),
+      });
+      if (!allocated.success) return fail(429, "rate", { "retry-after": "60" });
+      if (!bearer(request)) return fail(401, "token");
 
       let forwarded = request;
-      if (request.method === 'PUT') {
+      if (request.method === "PUT") {
         let bounded;
         try {
           bounded = await readBoundedRequestBody(request, MAX_BODY_BYTES);
         } catch {
-          return fail(400, 'body');
+          return fail(400, "body");
         }
-        if (!bounded.ok) return fail(413, 'size');
+        if (!bounded.ok) return fail(413, "size");
         const headers = new Headers(request.headers);
         // Never carry an attacker-supplied length into the trusted inner request.
-        headers.delete('content-length');
+        headers.delete("content-length");
         forwarded = new Request(request, { body: bounded.bytes, headers });
       }
 
@@ -212,7 +218,7 @@ export default {
       return stub.fetch(forwarded);
     }
 
-    return fail(404, 'route');
+    return fail(404, "route");
   },
 };
 
@@ -270,40 +276,48 @@ export class BucketRoom {
         )
       `);
       try {
-        this.sql.exec(`ALTER TABLE blobs ADD COLUMN sender TEXT NOT NULL DEFAULT ''`);
+        this.sql.exec(
+          `ALTER TABLE blobs ADD COLUMN sender TEXT NOT NULL DEFAULT ''`,
+        );
       } catch {
         // Existing Durable Objects already have the column.
       }
-      this.sql.exec(`CREATE INDEX IF NOT EXISTS blobs_stored_at ON blobs(stored_at)`);
-      this.sql.exec(`CREATE TABLE IF NOT EXISTS vault (k TEXT PRIMARY KEY, v TEXT NOT NULL)`);
+      this.sql.exec(
+        `CREATE INDEX IF NOT EXISTS blobs_stored_at ON blobs(stored_at)`,
+      );
+      this.sql.exec(
+        `CREATE TABLE IF NOT EXISTS vault (k TEXT PRIMARY KEY, v TEXT NOT NULL)`,
+      );
     });
   }
 
   async fetch(request: Request): Promise<Response> {
-    if (!this.allow()) return fail(429, 'rate', { 'retry-after': '60' });
+    if (!this.allow()) return fail(429, "rate", { "retry-after": "60" });
 
     const token = bearer(request);
-    if (!token) return fail(401, 'token');
+    if (!token) return fail(401, "token");
 
     const authorized = await this.authorize(token);
-    if (!authorized) return fail(401, 'token');
+    if (!authorized) return fail(401, "token");
 
     // Capability verification must happen before the shared edge quota. Otherwise a caller can
     // submit syntactically valid random bearer strings and make legitimate vaults at the same
     // Cloudflare location receive 429 responses without ever knowing a real token.
-    const allowed = await this.env.REQUEST_RATE_LIMITER.limit({ key: 'all-bucket-requests' });
-    if (!allowed.success) return fail(429, 'rate', { 'retry-after': '60' });
+    const allowed = await this.env.REQUEST_RATE_LIMITER.limit({
+      key: "all-bucket-requests",
+    });
+    if (!allowed.success) return fail(429, "rate", { "retry-after": "60" });
 
     switch (request.method) {
-      case 'PUT':
+      case "PUT":
         return this.put(request);
-      case 'GET':
+      case "GET":
         return this.get(new URL(request.url));
-      case 'DELETE':
+      case "DELETE":
         this.sql.exec(`DELETE FROM blobs`);
         return json(200, { ok: true });
       default:
-        return fail(405, 'method');
+        return fail(405, "method");
     }
   }
 
@@ -321,7 +335,9 @@ export class BucketRoom {
    */
   private async authorize(token: string): Promise<boolean> {
     const digest = await sha256Hex(token);
-    const rows = this.sql.exec<{ v: string }>(`SELECT v FROM vault WHERE k = 'token'`).toArray();
+    const rows = this.sql
+      .exec<{ v: string }>(`SELECT v FROM vault WHERE k = 'token'`)
+      .toArray();
 
     if (!rows.length) {
       this.sql.exec(`INSERT INTO vault (k, v) VALUES ('token', ?)`, digest);
@@ -335,21 +351,29 @@ export class BucketRoom {
     try {
       body = await request.json();
     } catch {
-      return fail(400, 'body');
+      return fail(400, "body");
     }
-    if (!body || typeof body !== 'object' || Array.isArray(body)) return fail(400, 'body');
+    if (!body || typeof body !== "object" || Array.isArray(body))
+      return fail(400, "body");
 
     const row = body as Record<string, unknown>;
-    if (typeof row.from !== 'string' || !TAG_PATTERN.test(row.from)) return fail(400, 'from');
-    if (typeof row.to !== 'string' || !TAG_PATTERN.test(row.to)) return fail(400, 'to');
-    if (typeof row.seq !== 'number' || !Number.isSafeInteger(row.seq) || row.seq < 0) {
-      return fail(400, 'seq');
+    if (typeof row.from !== "string" || !TAG_PATTERN.test(row.from))
+      return fail(400, "from");
+    if (typeof row.to !== "string" || !TAG_PATTERN.test(row.to))
+      return fail(400, "to");
+    if (
+      typeof row.seq !== "number" ||
+      !Number.isSafeInteger(row.seq) ||
+      row.seq < 0
+    ) {
+      return fail(400, "seq");
     }
-    if (typeof row.frame !== 'string' || !row.frame.length) return fail(400, 'frame');
-    if (row.frame.length > MAX_FRAME_CHARS) return fail(413, 'size');
+    if (typeof row.frame !== "string" || !row.frame.length)
+      return fail(400, "frame");
+    if (row.frame.length > MAX_FRAME_CHARS) return fail(413, "size");
     // Checked, not decoded. The server has no business looking inside a frame, and refusing
     // anything that is not base64url is the whole of the validation it is entitled to do.
-    if (!/^[A-Za-z0-9_-]+$/.test(row.frame)) return fail(400, 'frame');
+    if (!/^[A-Za-z0-9_-]+$/.test(row.frame)) return fail(400, "frame");
 
     const held = this.count();
     if (held >= MAX_BLOBS_PER_BUCKET) {
@@ -357,7 +381,7 @@ export class BucketRoom {
       // waiting for would look, from that device's side, exactly like a sync that worked —
       // and the whole design refuses to let a relay cause a silent divergence. A visible 429
       // sends the user to the sync screen, which tells them a device has been away too long.
-      return fail(429, 'full', { 'retry-after': '3600' });
+      return fail(429, "full", { "retry-after": "3600" });
     }
 
     this.sql.exec(
@@ -374,8 +398,12 @@ export class BucketRoom {
   }
 
   private get(url: URL): Response {
-    const after = integer(url.searchParams.get('after'), 0);
-    const limit = Math.min(integer(url.searchParams.get('limit'), DEFAULT_PAGE_SIZE) || DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE);
+    const after = integer(url.searchParams.get("after"), 0);
+    const limit = Math.min(
+      integer(url.searchParams.get("limit"), DEFAULT_PAGE_SIZE) ||
+        DEFAULT_PAGE_SIZE,
+      MAX_PAGE_SIZE,
+    );
 
     // One row over the page size, so `more` is a fact rather than a second query.
     const rows = this.sql
@@ -408,7 +436,10 @@ export class BucketRoom {
    * sender's outbox, which never acknowledged them.
    */
   async alarm(): Promise<void> {
-    this.sql.exec(`DELETE FROM blobs WHERE stored_at < ?`, Date.now() - this.retentionMs());
+    this.sql.exec(
+      `DELETE FROM blobs WHERE stored_at < ?`,
+      Date.now() - this.retentionMs(),
+    );
     if (this.count() > 0) {
       await this.state.storage.setAlarm(Date.now() + this.retentionMs());
     }
@@ -416,17 +447,22 @@ export class BucketRoom {
 
   private async scheduleSweep(): Promise<void> {
     const existing = await this.state.storage.getAlarm();
-    if (existing === null) await this.state.storage.setAlarm(Date.now() + this.retentionMs());
+    if (existing === null)
+      await this.state.storage.setAlarm(Date.now() + this.retentionMs());
   }
 
   private retentionMs(): number {
     const days = Number(this.env.RETENTION_DAYS);
-    const safe = Number.isFinite(days) && days > 0 && days <= 365 ? days : DEFAULT_RETENTION_DAYS;
+    const safe =
+      Number.isFinite(days) && days > 0 && days <= 365
+        ? days
+        : DEFAULT_RETENTION_DAYS;
     return safe * 24 * 60 * 60 * 1000;
   }
 
   private count(): number {
-    return this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM blobs`).one().n;
+    return this.sql.exec<{ n: number }>(`SELECT COUNT(*) AS n FROM blobs`).one()
+      .n;
   }
 
   private allow(): boolean {
@@ -463,15 +499,15 @@ export class RendezvousRoom {
   ) {}
 
   async fetch(request: Request): Promise<Response> {
-    if (request.headers.get('upgrade')?.toLowerCase() !== 'websocket') {
-      return fail(426, 'upgrade');
+    if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
+      return fail(426, "upgrade");
     }
 
     // A rendezvous is a two-party meeting point by definition. A third socket is either a
     // mistake or somebody who guessed the id, and in both cases the right answer is to refuse
     // rather than to broadcast — the handshake would fail anyway, but not before both real
     // parties had wasted a transcript on it.
-    if (this.state.getWebSockets().length >= 2) return fail(409, 'occupied');
+    if (this.state.getWebSockets().length >= 2) return fail(409, "occupied");
 
     const pair = new WebSocketPair();
     const client = pair[0];
@@ -495,12 +531,12 @@ export class RendezvousRoom {
     // Text only, and opaque. The app base64url-encodes its frames precisely so this server
     // never has to have an opinion about binary framing, and so a proxy in the middle cannot
     // mangle them.
-    if (typeof message !== 'string') {
-      ws.close(1003, 'text only');
+    if (typeof message !== "string") {
+      ws.close(1003, "text only");
       return;
     }
     if (message.length > MAX_SIGNAL_CHARS) {
-      ws.close(1009, 'too large');
+      ws.close(1009, "too large");
       return;
     }
 
@@ -523,7 +559,7 @@ export class RendezvousRoom {
     for (const other of this.state.getWebSockets()) {
       if (other === ws) continue;
       try {
-        other.close(1000, 'peer left');
+        other.close(1000, "peer left");
       } catch {
         // Already gone.
       }
@@ -537,7 +573,7 @@ export class RendezvousRoom {
   async alarm(): Promise<void> {
     for (const ws of this.state.getWebSockets()) {
       try {
-        ws.close(1000, 'rendezvous expired');
+        ws.close(1000, "rendezvous expired");
       } catch {
         // Already gone.
       }
@@ -551,7 +587,7 @@ export class RendezvousRoom {
 // ---------------------------------------------------------------------------
 
 function bearer(request: Request): string | null {
-  const header = request.headers.get('authorization');
+  const header = request.headers.get("authorization");
   if (!header) return null;
   const match = /^Bearer (.+)$/.exec(header.trim());
   if (!match) return null;
@@ -569,8 +605,10 @@ function decodePathSegment(raw: string): string | null {
 }
 
 function allocationKey(request: Request): string {
-  const source = request.headers.get('CF-Connecting-IP')?.trim();
-  return source && source.length <= 128 ? `allocation:${source}` : 'allocation:unknown';
+  const source = request.headers.get("CF-Connecting-IP")?.trim();
+  return source && source.length <= 128
+    ? `allocation:${source}`
+    : "allocation:unknown";
 }
 
 function integer(raw: string | null, fallback: number): number {
@@ -580,8 +618,13 @@ function integer(raw: string | null, fallback: number): number {
 }
 
 async function sha256Hex(value: string): Promise<string> {
-  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(value),
+  );
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 /**

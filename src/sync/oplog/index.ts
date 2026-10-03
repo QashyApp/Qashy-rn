@@ -29,7 +29,7 @@ export {
   verifyChain,
   verifyOpSignature,
   type ChainHead,
-} from '@/sync/oplog/chain';
+} from "@/sync/oplog/chain";
 
 export {
   RETENTION_MS,
@@ -40,9 +40,14 @@ export {
   safeSeq,
   type CompactionPlan,
   type PeerAcks,
-} from '@/sync/oplog/compaction';
+} from "@/sync/oplog/compaction";
 
-export { diffEntity, diffRecords, type DiffInput, type DiffResult } from '@/sync/oplog/diff';
+export {
+  diffEntity,
+  diffRecords,
+  type DiffInput,
+  type DiffResult,
+} from "@/sync/oplog/diff";
 
 export {
   HLC_LENGTH,
@@ -61,7 +66,7 @@ export {
   tick,
   type Hlc,
   type HlcClock,
-} from '@/sync/oplog/hlc';
+} from "@/sync/oplog/hlc";
 
 export {
   applyOp,
@@ -76,7 +81,7 @@ export {
   registerValueOf,
   type Finalized,
   type RegisterValue,
-} from '@/sync/oplog/merge';
+} from "@/sync/oplog/merge";
 
 export {
   ENTITY_TYPES,
@@ -93,7 +98,7 @@ export {
   type EntitySpec,
   type FieldStrategy,
   type RegisterSpec,
-} from '@/sync/oplog/registry';
+} from "@/sync/oplog/registry";
 
 export {
   repairMergedState,
@@ -102,7 +107,7 @@ export {
   type RepairNote,
   type RepairOutput,
   type RepairedRecord,
-} from '@/sync/oplog/repair';
+} from "@/sync/oplog/repair";
 
 // `OP_SCHEMA_VERSION` is deliberately not re-exported here — it lives in `@/sync/crypto`
 // alongside the protocol version and the HKDF labels, because they are one wire contract
@@ -121,4 +126,4 @@ export {
   type RegisterState,
   type SyncOp,
   type SyncOpBody,
-} from '@/sync/oplog/types';
+} from "@/sync/oplog/types";

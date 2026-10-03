@@ -37,19 +37,22 @@ import {
   useRef,
   useState,
   type ReactNode,
-} from 'react';
-import { AppState } from 'react-native';
+} from "react";
+import { AppState } from "react-native";
 
-import { financeRepository, syncingStorage } from '@/data/local-finance-repository';
-import { createPlatformKeystore } from '@/sync/keystore/platform';
-import type { SyncKeystore } from '@/sync/keystore';
-import { SyncRuntime, type SyncPass } from '@/sync/runtime';
+import {
+  financeRepository,
+  syncingStorage,
+} from "@/data/local-finance-repository";
+import { createPlatformKeystore } from "@/sync/keystore/platform";
+import type { SyncKeystore } from "@/sync/keystore";
+import { SyncRuntime, type SyncPass } from "@/sync/runtime";
 import {
   readSyncStatus,
   type SyncSetupDeps,
   type SyncStatus,
-} from '@/sync/setup';
-import type { RelayHealth } from '@/sync/transport/relay-health';
+} from "@/sync/setup";
+import type { RelayHealth } from "@/sync/transport/relay-health";
 
 export interface SyncContextValue {
   /** Null until the first read completes. Screens render a spinner rather than empty state. */
@@ -85,7 +88,11 @@ export interface SyncProviderProps {
   readonly runtime?: SyncRuntime;
 }
 
-export function SyncProvider({ children, keystore, runtime }: SyncProviderProps) {
+export function SyncProvider({
+  children,
+  keystore,
+  runtime,
+}: SyncProviderProps) {
   const [status, setStatus] = useState<SyncStatus | null>(null);
   const [pass, setPass] = useState<SyncPass | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -129,7 +136,9 @@ export function SyncProvider({ children, keystore, runtime }: SyncProviderProps)
     // ops signed under a key this device can no longer produce are ops no peer will ever
     // accept, and they would sit in the outbox forever.
     syncingStorage.setDeviceId(
-      next.enabled && next.keystore === 'unlocked' && next.deviceId ? next.deviceId : null,
+      next.enabled && next.keystore === "unlocked" && next.deviceId
+        ? next.deviceId
+        : null,
     );
   }, []);
 
@@ -154,7 +163,7 @@ export function SyncProvider({ children, keystore, runtime }: SyncProviderProps)
       setPass(result);
       // Only a pass that actually ran clears the banner. A pass that returned `disabled` or
       // `unpaired` did no work, so it is no evidence that whatever failed last time is fixed.
-      if (result.reason === 'ok') setError(null);
+      if (result.reason === "ok") setError(null);
     } catch (reason: unknown) {
       setError(describe(reason));
     } finally {
@@ -176,7 +185,9 @@ export function SyncProvider({ children, keystore, runtime }: SyncProviderProps)
   // First read, and teardown. `close()` on unmount matters on web, where a hot reload would
   // otherwise leave the previous runtime's data channel and socket open alongside the new one.
   useEffect(() => {
-    const unregisterReset = syncingStorage.setResetHandler(() => deps.keystore.erase());
+    const unregisterReset = syncingStorage.setResetHandler(() =>
+      deps.keystore.erase(),
+    );
     return unregisterReset;
   }, [deps]);
 
@@ -194,22 +205,22 @@ export function SyncProvider({ children, keystore, runtime }: SyncProviderProps)
   // every screen depends on.
   useEffect(() => {
     const onResume = () => void reconcile();
-    if (typeof document !== 'undefined') {
+    if (typeof document !== "undefined") {
       const onVisibilityChange = () => {
-        if (document.visibilityState === 'visible') onResume();
+        if (document.visibilityState === "visible") onResume();
       };
-      document.addEventListener('visibilitychange', onVisibilityChange);
-      globalThis.addEventListener('focus', onResume);
-      globalThis.addEventListener('pageshow', onResume);
+      document.addEventListener("visibilitychange", onVisibilityChange);
+      globalThis.addEventListener("focus", onResume);
+      globalThis.addEventListener("pageshow", onResume);
       return () => {
-        document.removeEventListener('visibilitychange', onVisibilityChange);
-        globalThis.removeEventListener('focus', onResume);
-        globalThis.removeEventListener('pageshow', onResume);
+        document.removeEventListener("visibilitychange", onVisibilityChange);
+        globalThis.removeEventListener("focus", onResume);
+        globalThis.removeEventListener("pageshow", onResume);
       };
     }
     let previous = AppState.currentState;
-    const subscription = AppState.addEventListener('change', (next) => {
-      if (previous !== 'active' && next === 'active') onResume();
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (previous !== "active" && next === "active") onResume();
       previous = next;
     });
     return () => subscription.remove();
@@ -227,7 +238,17 @@ export function SyncProvider({ children, keystore, runtime }: SyncProviderProps)
       setup: deps,
       runtime: engine,
     }),
-    [status, pass, syncing, error, refresh, reconcile, checkRelay, deps, engine],
+    [
+      status,
+      pass,
+      syncing,
+      error,
+      refresh,
+      reconcile,
+      checkRelay,
+      deps,
+      engine,
+    ],
   );
 
   return <SyncContext value={value}>{children}</SyncContext>;
@@ -248,9 +269,9 @@ export function useSyncState() {
 /** For the sync screens themselves, which genuinely cannot work without it. */
 export function useSync(): SyncContextValue {
   const context = use(SyncContext);
-  if (!context) throw new Error('useSync must be used inside SyncProvider.');
+  if (!context) throw new Error("useSync must be used inside SyncProvider.");
   return context;
 }
 
 const describe = (reason: unknown) =>
-  reason instanceof Error ? reason.message : 'Sync could not complete.';
+  reason instanceof Error ? reason.message : "Sync could not complete.";

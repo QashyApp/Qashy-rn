@@ -22,10 +22,16 @@
  * installing it and adding it to `app.json` is the whole of the work.
  */
 
-import type { IceServer } from '@/sync/transport/endpoints';
-import { UNAVAILABLE_RTC, type RtcConnection, type RtcFactory } from '@/sync/transport/webrtc-core';
+import type { IceServer } from "@/sync/transport/endpoints";
+import {
+  UNAVAILABLE_RTC,
+  type RtcConnection,
+  type RtcFactory,
+} from "@/sync/transport/webrtc-core";
 
-type PeerConnectionCtor = new (config: { iceServers: IceServer[] }) => RtcConnection;
+type PeerConnectionCtor = new (config: {
+  iceServers: IceServer[];
+}) => RtcConnection;
 
 /**
  * Resolves the native module, once, without letting its absence propagate.
@@ -37,8 +43,12 @@ type PeerConnectionCtor = new (config: { iceServers: IceServer[] }) => RtcConnec
 const load = (): PeerConnectionCtor | null => {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const module = require('react-native-webrtc') as { RTCPeerConnection?: PeerConnectionCtor };
-    return typeof module.RTCPeerConnection === 'function' ? module.RTCPeerConnection : null;
+    const module = require("react-native-webrtc") as {
+      RTCPeerConnection?: PeerConnectionCtor;
+    };
+    return typeof module.RTCPeerConnection === "function"
+      ? module.RTCPeerConnection
+      : null;
   } catch {
     return null;
   }
@@ -50,6 +60,8 @@ export const rtcFactory: RtcFactory = PeerConnection
   ? {
       available: true,
       create: (iceServers: readonly IceServer[]) =>
-        new PeerConnection({ iceServers: iceServers.map((server) => ({ ...server })) }),
+        new PeerConnection({
+          iceServers: iceServers.map((server) => ({ ...server })),
+        }),
     }
   : UNAVAILABLE_RTC;

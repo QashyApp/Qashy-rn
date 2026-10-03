@@ -1,11 +1,11 @@
-import { router, useNavigation } from 'expo-router';
-import { usePreventRemove } from 'expo-router/react-navigation';
-import { useCallback, useEffect, useState } from 'react';
+import { router, useNavigation } from "expo-router";
+import { usePreventRemove } from "expo-router/react-navigation";
+import { useCallback, useEffect, useState } from "react";
 
-import { confirmDestructive } from '@/utils/confirm';
-import { stableSerialize } from '@/utils/form-state';
+import { confirmDestructive } from "@/utils/confirm";
+import { stableSerialize } from "@/utils/form-state";
 
-export type OwnerRoute = '/overview' | '/transactions' | '/plan' | '/more';
+export type OwnerRoute = "/overview" | "/transactions" | "/plan" | "/more";
 
 /**
  * Shared behaviour for the create/edit sheets.
@@ -23,7 +23,13 @@ export type OwnerRoute = '/overview' | '/transactions' | '/plan' | '/more';
  * baseline; anything different afterwards counts as dirty. Pass plain,
  * JSON-serializable state, and pass it on every render.
  */
-export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; values: unknown }) {
+export function useFormSheet({
+  ownerRoute,
+  values,
+}: {
+  ownerRoute: OwnerRoute;
+  values: unknown;
+}) {
   const navigation = useNavigation();
   const serialized = stableSerialize(values);
   const [baseline] = useState(() => serialized);
@@ -35,14 +41,17 @@ export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; v
 
   // `params` carries view state for the owner, never finance data — for example
   // the month the transaction list should open on after a save.
-  const closeToOwner = useCallback((params?: Record<string, string>) => {
-    setLeaving(true);
-    const href = params ? { pathname: ownerRoute, params } : ownerRoute;
-    router.dismissTo(href);
-    if (process.env.EXPO_OS === 'web' && typeof window !== 'undefined') {
-      window.requestAnimationFrame(() => router.replace(href));
-    }
-  }, [ownerRoute]);
+  const closeToOwner = useCallback(
+    (params?: Record<string, string>) => {
+      setLeaving(true);
+      const href = params ? { pathname: ownerRoute, params } : ownerRoute;
+      router.dismissTo(href);
+      if (process.env.EXPO_OS === "web" && typeof window !== "undefined") {
+        window.requestAnimationFrame(() => router.replace(href));
+      }
+    },
+    [ownerRoute],
+  );
 
   // Lets a screen leave by a route of its own (the account sheet returns to the
   // transaction sheet that opened it) without tripping the guard.
@@ -67,16 +76,16 @@ export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; v
     // runs) rather than asking. Hardware back is unaffected: native-stack
     // disables native back-button dismissal, so it arrives as a JS GO_BACK
     // and the confirmation below still runs for it and for in-app exits.
-    if (process.env.EXPO_OS === 'android' && event.data.action.type === 'POP') {
+    if (process.env.EXPO_OS === "android" && event.data.action.type === "POP") {
       setLeaving(true);
       navigation.dispatch(event.data.action);
       return;
     }
 
     void confirmDestructive({
-      title: 'Discard changes?',
-      message: 'This form has unsaved changes.',
-      confirmLabel: 'Discard',
+      title: "Discard changes?",
+      message: "This form has unsaved changes.",
+      confirmLabel: "Discard",
     }).then((confirmed) => {
       if (!confirmed) return;
       setLeaving(true);
@@ -86,7 +95,10 @@ export function useFormSheet({ ownerRoute, values }: { ownerRoute: OwnerRoute; v
 
   // A hand-off (transaction sheet -> recurring sheet) disables the guard only while
   // the sheet is buried; coming back to it re-arms the guard.
-  useEffect(() => navigation.addListener('focus', () => setLeaving(false)), [navigation]);
+  useEffect(
+    () => navigation.addListener("focus", () => setLeaving(false)),
+    [navigation],
+  );
 
   return { closeToOwner, allowLeave, dirty };
 }

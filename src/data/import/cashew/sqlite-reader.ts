@@ -1,4 +1,4 @@
-import { ImportError, type RawRow, type RawValue } from '../types';
+import { ImportError, type RawRow, type RawValue } from "../types";
 
 /**
  * A dependency-free, read-only reader for the SQLite file format
@@ -9,7 +9,7 @@ import { ImportError, type RawRow, type RawValue } from '../types';
  * implemented: the header, table b-tree pages, overflow chains and record decoding.
  */
 
-const MAGIC = 'SQLite format 3\0';
+const MAGIC = "SQLite format 3\0";
 const HEADER_SIZE = 100;
 const PAGE_INTERIOR_TABLE = 0x05;
 const PAGE_LEAF_TABLE = 0x0d;
@@ -18,7 +18,10 @@ const PAGE_LEAF_TABLE = 0x0d;
 const MAX_TREE_DEPTH = 32;
 
 const corrupt = (detail: string) =>
-  new ImportError('corrupt', `This SQLite file looks damaged or incomplete (${detail}).`);
+  new ImportError(
+    "corrupt",
+    `This SQLite file looks damaged or incomplete (${detail}).`,
+  );
 
 interface Header {
   pageSize: number;
@@ -42,43 +45,56 @@ function readHeader(bytes: Uint8Array): Header {
   for (let i = 0; i < MAGIC.length; i += 1) {
     if (bytes[i] !== MAGIC.charCodeAt(i)) throw notSqlite();
   }
-  if (bytes.length < HEADER_SIZE) throw corrupt('the header is cut short');
+  if (bytes.length < HEADER_SIZE) throw corrupt("the header is cut short");
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   // The page size is a u16, so 65536 cannot be stored directly; the format uses 1 for it.
   const rawPageSize = view.getUint16(16, false);
   const pageSize = rawPageSize === 1 ? 65536 : rawPageSize;
-  if (pageSize < 512 || (pageSize & (pageSize - 1)) !== 0) throw corrupt('invalid page size');
+  if (pageSize < 512 || (pageSize & (pageSize - 1)) !== 0)
+    throw corrupt("invalid page size");
 
   // 0 means "not set yet" and behaves as UTF-8; 2 and 3 are the two UTF-16 flavours.
   const encoding = view.getUint32(56, false);
   if (encoding !== 0 && encoding !== 1) {
-    throw new ImportError('unsupported', 'This SQLite file uses UTF-16 text, which is not supported.');
+    throw new ImportError(
+      "unsupported",
+      "This SQLite file uses UTF-16 text, which is not supported.",
+    );
   }
 
   const reserved = view.getUint8(20);
   const usableSize = pageSize - reserved;
-  if (usableSize < 480) throw corrupt('invalid reserved space');
+  if (usableSize < 480) throw corrupt("invalid reserved space");
 
   // The in-header page count is only trustworthy when the change counter (offset 24)
   // matches "version-valid-for" (offset 92); otherwise derive it from the file length.
   const headerPages = view.getUint32(28, false);
-  const trusted = headerPages > 0 && view.getUint32(24, false) === view.getUint32(92, false);
+  const trusted =
+    headerPages > 0 && view.getUint32(24, false) === view.getUint32(92, false);
   const pageCount = trusted ? headerPages : Math.floor(bytes.length / pageSize);
-  if (pageCount < 1) throw corrupt('no pages');
-  if (bytes.length < pageCount * pageSize) throw corrupt('the file is shorter than its header says');
+  if (pageCount < 1) throw corrupt("no pages");
+  if (bytes.length < pageCount * pageSize)
+    throw corrupt("the file is shorter than its header says");
 
   return { pageSize, usableSize, pageCount };
 }
 
 function notSqlite(): ImportError {
-  return new ImportError('not-sqlite', 'This file is not a SQLite database, so it cannot be imported.');
+  return new ImportError(
+    "not-sqlite",
+    "This file is not a SQLite database, so it cannot be imported.",
+  );
 }
 
 /** `user_version` from the database header (Cashew stores its schema version here). */
 export function readSqliteUserVersion(bytes: Uint8Array): number {
   readHeader(bytes);
-  return new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength).getUint32(60, false);
+  return new DataView(
+    bytes.buffer,
+    bytes.byteOffset,
+    bytes.byteLength,
+  ).getUint32(60, false);
 }
 
 // Varints are 1-9 bytes, big-endian, 7 bits per byte with the high bit meaning "more".
@@ -88,14 +104,16 @@ function readVarint(bytes: Uint8Array, offset: number): Varint {
   let value = 0;
   for (let i = 0; i < 8; i += 1) {
     const byte = bytes[offset + i];
-    if (byte === undefined) throw corrupt('a number runs past the end of the page');
+    if (byte === undefined)
+      throw corrupt("a number runs past the end of the page");
     value = value * 128 + (byte & 0x7f);
     if ((byte & 0x80) === 0) return { value, next: offset + i + 1 };
   }
   const last = bytes[offset + 8];
-  if (last === undefined) throw corrupt('a number runs past the end of the page');
+  if (last === undefined)
+    throw corrupt("a number runs past the end of the page");
   value = value * 256 + last;
-  if (!Number.isSafeInteger(value)) throw corrupt('a number is too large');
+  if (!Number.isSafeInteger(value)) throw corrupt("a number is too large");
   return { value, next: offset + 9 };
 }
 
@@ -130,7 +148,8 @@ function decodeUtf8(bytes: Uint8Array, start: number, end: number): string {
       const b1 = bytes[i + 1];
       const b2 = bytes[i + 2];
       if (i + 2 < end && (b1 & 0xc0) === 0x80 && (b2 & 0xc0) === 0x80) {
-        const candidate = ((b0 & 0x0f) << 12) | ((b1 & 0x3f) << 6) | (b2 & 0x3f);
+        const candidate =
+          ((b0 & 0x0f) << 12) | ((b1 & 0x3f) << 6) | (b2 & 0x3f);
         // Reject overlong forms and lone surrogates.
         if (candidate >= 0x800 && (candidate < 0xd800 || candidate > 0xdfff)) {
           codePoint = candidate;
@@ -141,8 +160,17 @@ function decodeUtf8(bytes: Uint8Array, start: number, end: number): string {
       const b1 = bytes[i + 1];
       const b2 = bytes[i + 2];
       const b3 = bytes[i + 3];
-      if (i + 3 < end && (b1 & 0xc0) === 0x80 && (b2 & 0xc0) === 0x80 && (b3 & 0xc0) === 0x80) {
-        const candidate = ((b0 & 0x07) << 18) | ((b1 & 0x3f) << 12) | ((b2 & 0x3f) << 6) | (b3 & 0x3f);
+      if (
+        i + 3 < end &&
+        (b1 & 0xc0) === 0x80 &&
+        (b2 & 0xc0) === 0x80 &&
+        (b3 & 0xc0) === 0x80
+      ) {
+        const candidate =
+          ((b0 & 0x07) << 18) |
+          ((b1 & 0x3f) << 12) |
+          ((b2 & 0x3f) << 6) |
+          (b3 & 0x3f);
         if (candidate >= 0x10000 && candidate <= 0x10ffff) {
           codePoint = candidate;
           length = 4;
@@ -159,18 +187,24 @@ function decodeUtf8(bytes: Uint8Array, start: number, end: number): string {
     i += length;
   }
   flush();
-  return chunks.join('');
+  return chunks.join("");
 }
 
 // Serial types 1-6 are signed big-endian integers of 1, 2, 3, 4, 6 and 8 bytes. Up to six
 // bytes a running total stays exact; eight bytes are split into a signed high word and an
 // unsigned low word, and rejected if they leave the safe-integer range rather than
 // silently losing digits (money amounts here are minor units, which always fit).
-function readSignedInt(bytes: Uint8Array, offset: number, width: number): number {
+function readSignedInt(
+  bytes: Uint8Array,
+  offset: number,
+  width: number,
+): number {
   if (width === 8) {
     const view = new DataView(bytes.buffer, bytes.byteOffset + offset, 8);
-    const value = view.getInt32(0, false) * 4294967296 + view.getUint32(4, false);
-    if (!Number.isSafeInteger(value)) throw corrupt('an integer is outside the supported range');
+    const value =
+      view.getInt32(0, false) * 4294967296 + view.getUint32(4, false);
+    if (!Number.isSafeInteger(value))
+      throw corrupt("an integer is outside the supported range");
     return value;
   }
   let value = 0;
@@ -183,7 +217,8 @@ function readSignedInt(bytes: Uint8Array, offset: number, width: number): number
 function decodeRecord(payload: Uint8Array): RawValue[] {
   const header = readVarint(payload, 0);
   const headerEnd = header.value;
-  if (headerEnd > payload.length) throw corrupt('a row header runs past its data');
+  if (headerEnd > payload.length)
+    throw corrupt("a row header runs past its data");
   const serialTypes: number[] = [];
   let pos = header.next;
   while (pos < headerEnd) {
@@ -192,11 +227,16 @@ function decodeRecord(payload: Uint8Array): RawValue[] {
     pos = serial.next;
   }
 
-  const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
+  const view = new DataView(
+    payload.buffer,
+    payload.byteOffset,
+    payload.byteLength,
+  );
   const values: RawValue[] = [];
   let offset = headerEnd;
   const need = (size: number) => {
-    if (offset + size > payload.length) throw corrupt('a row is shorter than its header says');
+    if (offset + size > payload.length)
+      throw corrupt("a row is shorter than its header says");
   };
   for (const type of serialTypes) {
     if (type === 0) {
@@ -215,7 +255,7 @@ function decodeRecord(payload: Uint8Array): RawValue[] {
     } else if (type === 9) {
       values.push(1);
     } else if (type === 10 || type === 11) {
-      throw corrupt('a row uses a reserved value type');
+      throw corrupt("a row uses a reserved value type");
     } else if (type % 2 === 0) {
       // A BLOB. Cashew stores none, and nothing downstream can use raw bytes, so it is
       // skipped but still measured so the following columns stay aligned.
@@ -243,7 +283,11 @@ class SqliteFile {
   }
 
   private page(pageNumber: number): Uint8Array {
-    if (!Number.isInteger(pageNumber) || pageNumber < 1 || pageNumber > this.header.pageCount) {
+    if (
+      !Number.isInteger(pageNumber) ||
+      pageNumber < 1 ||
+      pageNumber > this.header.pageCount
+    ) {
       throw corrupt(`page ${pageNumber} does not exist`);
     }
     const start = (pageNumber - 1) * this.header.pageSize;
@@ -257,10 +301,15 @@ class SqliteFile {
     return rows;
   }
 
-  private walk(pageNumber: number, depth: number, seen: Set<number>, out: RawRecord[]): void {
-    if (depth > MAX_TREE_DEPTH) throw corrupt('the table is nested too deeply');
+  private walk(
+    pageNumber: number,
+    depth: number,
+    seen: Set<number>,
+    out: RawRecord[],
+  ): void {
+    if (depth > MAX_TREE_DEPTH) throw corrupt("the table is nested too deeply");
     // A page reachable twice means a loop or two branches sharing a page: never valid.
-    if (seen.has(pageNumber)) throw corrupt('a page is referenced twice');
+    if (seen.has(pageNumber)) throw corrupt("a page is referenced twice");
     seen.add(pageNumber);
 
     const page = this.page(pageNumber);
@@ -274,7 +323,8 @@ class SqliteFile {
       const pointerArray = base + 12;
       for (let i = 0; i < cellCount; i += 1) {
         const cell = view.getUint16(pointerArray + i * 2, false);
-        if (cell + 4 > page.length) throw corrupt('a cell points outside its page');
+        if (cell + 4 > page.length)
+          throw corrupt("a cell points outside its page");
         // The rowid key after the child pointer is only needed to search; a full scan
         // just visits children left to right, then the right-most pointer.
         this.walk(view.getUint32(cell, false), depth + 1, seen, out);
@@ -284,11 +334,12 @@ class SqliteFile {
       const pointerArray = base + 8;
       for (let i = 0; i < cellCount; i += 1) {
         const cell = view.getUint16(pointerArray + i * 2, false);
-        if (cell >= page.length) throw corrupt('a cell points outside its page');
+        if (cell >= page.length)
+          throw corrupt("a cell points outside its page");
         out.push(this.readLeafCell(page, cell));
       }
     } else {
-      throw corrupt('unexpected page type');
+      throw corrupt("unexpected page type");
     }
   }
 
@@ -296,7 +347,8 @@ class SqliteFile {
     const size = readVarint(page, offset);
     const rowid = readVarint(page, size.next);
     const payloadSize = size.value;
-    if (payloadSize > this.bytes.length) throw corrupt('a row is larger than the file');
+    if (payloadSize > this.bytes.length)
+      throw corrupt("a row is larger than the file");
 
     // Exact local-payload rule from the format spec: rows that do not fit keep only
     // enough bytes on the b-tree page that the rest fills whole overflow pages.
@@ -310,24 +362,33 @@ class SqliteFile {
     }
 
     const localStart = rowid.next;
-    if (localStart + local > page.length) throw corrupt('a row runs past its page');
+    if (localStart + local > page.length)
+      throw corrupt("a row runs past its page");
     if (local === payloadSize) {
-      return { rowid: rowid.value, values: decodeRecord(page.subarray(localStart, localStart + local)) };
+      return {
+        rowid: rowid.value,
+        values: decodeRecord(page.subarray(localStart, localStart + local)),
+      };
     }
 
-    if (localStart + local + 4 > page.length) throw corrupt('a row runs past its page');
+    if (localStart + local + 4 > page.length)
+      throw corrupt("a row runs past its page");
     const payload = new Uint8Array(payloadSize);
     payload.set(page.subarray(localStart, localStart + local), 0);
     const view = new DataView(page.buffer, page.byteOffset, page.byteLength);
     let next = view.getUint32(localStart + local, false);
     let filled = local;
     while (filled < payloadSize) {
-      if (next === 0) throw corrupt('an overflow chain ends early');
+      if (next === 0) throw corrupt("an overflow chain ends early");
       const overflow = this.page(next);
       const take = Math.min(usable - 4, payloadSize - filled);
       payload.set(overflow.subarray(4, 4 + take), filled);
       filled += take;
-      next = new DataView(overflow.buffer, overflow.byteOffset, overflow.byteLength).getUint32(0, false);
+      next = new DataView(
+        overflow.buffer,
+        overflow.byteOffset,
+        overflow.byteLength,
+      ).getUint32(0, false);
     }
     return { rowid: rowid.value, values: decodeRecord(payload) };
   }
@@ -339,35 +400,41 @@ interface TableSchema {
   rowidAlias: number;
 }
 
-const TABLE_CONSTRAINT_KEYWORDS = new Set(['PRIMARY', 'FOREIGN', 'UNIQUE', 'CHECK', 'CONSTRAINT']);
+const TABLE_CONSTRAINT_KEYWORDS = new Set([
+  "PRIMARY",
+  "FOREIGN",
+  "UNIQUE",
+  "CHECK",
+  "CONSTRAINT",
+]);
 
 // Splits the body of a CREATE TABLE on top-level commas, honouring nesting and the four
 // quoting styles SQLite accepts, and dropping comments.
 function splitColumnDefinitions(sql: string): string[] {
-  const open = sql.indexOf('(');
+  const open = sql.indexOf("(");
   if (open === -1) return [];
   const entries: string[] = [];
-  let current = '';
+  let current = "";
   let depth = 1;
   let i = open + 1;
   while (i < sql.length) {
     const ch = sql[i];
-    if (ch === '-' && sql[i + 1] === '-') {
-      while (i < sql.length && sql[i] !== '\n') i += 1;
+    if (ch === "-" && sql[i + 1] === "-") {
+      while (i < sql.length && sql[i] !== "\n") i += 1;
       continue;
     }
-    if (ch === '/' && sql[i + 1] === '*') {
-      const close = sql.indexOf('*/', i + 2);
+    if (ch === "/" && sql[i + 1] === "*") {
+      const close = sql.indexOf("*/", i + 2);
       i = close === -1 ? sql.length : close + 2;
       continue;
     }
-    if (ch === "'" || ch === '"' || ch === '`' || ch === '[') {
-      const closer = ch === '[' ? ']' : ch;
+    if (ch === "'" || ch === '"' || ch === "`" || ch === "[") {
+      const closer = ch === "[" ? "]" : ch;
       let j = i + 1;
       while (j < sql.length) {
         if (sql[j] === closer) {
           // A doubled quote is an escaped quote (brackets have no escape).
-          if (closer !== ']' && sql[j + 1] === closer) {
+          if (closer !== "]" && sql[j + 1] === closer) {
             j += 2;
             continue;
           }
@@ -379,14 +446,14 @@ function splitColumnDefinitions(sql: string): string[] {
       i = j + 1;
       continue;
     }
-    if (ch === '(') depth += 1;
-    if (ch === ')') {
+    if (ch === "(") depth += 1;
+    if (ch === ")") {
       depth -= 1;
       if (depth === 0) break;
     }
-    if (ch === ',' && depth === 1) {
+    if (ch === "," && depth === 1) {
       entries.push(current);
-      current = '';
+      current = "";
     } else {
       current += ch;
     }
@@ -396,17 +463,19 @@ function splitColumnDefinitions(sql: string): string[] {
   return entries;
 }
 
-function firstIdentifier(entry: string): { name: string; quoted: boolean; rest: string } | null {
+function firstIdentifier(
+  entry: string,
+): { name: string; quoted: boolean; rest: string } | null {
   const text = entry.trimStart();
   if (!text) return null;
   const ch = text[0];
-  if (ch === '"' || ch === '`' || ch === "'" || ch === '[') {
-    const closer = ch === '[' ? ']' : ch;
-    let name = '';
+  if (ch === '"' || ch === "`" || ch === "'" || ch === "[") {
+    const closer = ch === "[" ? "]" : ch;
+    let name = "";
     let j = 1;
     while (j < text.length) {
       if (text[j] === closer) {
-        if (closer !== ']' && text[j + 1] === closer) {
+        if (closer !== "]" && text[j + 1] === closer) {
           name += closer;
           j += 2;
           continue;
@@ -429,7 +498,11 @@ function parseTableSchema(sql: string): TableSchema {
   for (const entry of splitColumnDefinitions(sql)) {
     const identifier = firstIdentifier(entry);
     if (!identifier) continue;
-    if (!identifier.quoted && TABLE_CONSTRAINT_KEYWORDS.has(identifier.name.toUpperCase())) continue;
+    if (
+      !identifier.quoted &&
+      TABLE_CONSTRAINT_KEYWORDS.has(identifier.name.toUpperCase())
+    )
+      continue;
     // Only the exact declared type INTEGER makes a column an alias of the rowid; `INT`,
     // `BIGINT` or `PRIMARY KEY DESC` do not.
     if (
@@ -445,7 +518,7 @@ function parseTableSchema(sql: string): TableSchema {
 }
 
 function asText(value: RawValue): string {
-  return typeof value === 'string' ? value : '';
+  return typeof value === "string" ? value : "";
 }
 
 function readAllTables(bytes: Uint8Array): Record<string, RawRow[]> {
@@ -454,9 +527,14 @@ function readAllTables(bytes: Uint8Array): Record<string, RawRow[]> {
   // The schema table is always rooted at page 1: type, name, tbl_name, rootpage, sql.
   for (const entry of file.readTable(1)) {
     const [type, name, , rootpage, sql] = entry.values;
-    if (type !== 'table' || typeof name !== 'string' || name.startsWith('sqlite_')) continue;
+    if (
+      type !== "table" ||
+      typeof name !== "string" ||
+      name.startsWith("sqlite_")
+    )
+      continue;
     // Virtual tables have no b-tree (rootpage 0); WITHOUT ROWID tables use index pages.
-    if (typeof rootpage !== 'number' || rootpage < 1) continue;
+    if (typeof rootpage !== "number" || rootpage < 1) continue;
     const definition = asText(sql);
     if (/\bwithout\s+rowid\b/i.test(definition)) continue;
 
@@ -469,7 +547,8 @@ function readAllTables(bytes: Uint8Array): Record<string, RawRow[]> {
         // Columns added later with ALTER TABLE are absent from older rows.
         const key = schema.columns[i] ?? `column_${i}`;
         const value = record.values[i] ?? null;
-        row[key] = i === schema.rowidAlias && value === null ? record.rowid : value;
+        row[key] =
+          i === schema.rowidAlias && value === null ? record.rowid : value;
       }
       rows.push(row);
     }
@@ -486,6 +565,6 @@ export function readSqliteTables(bytes: Uint8Array): Record<string, RawRow[]> {
     if (error instanceof ImportError) throw error;
     // RangeErrors from reading past a truncated buffer, and anything else unexpected,
     // mean the bytes were not a well-formed database.
-    throw corrupt('unreadable data');
+    throw corrupt("unreadable data");
   }
 }

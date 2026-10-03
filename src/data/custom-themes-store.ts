@@ -15,9 +15,13 @@
  * custom theme falls back to the built-in default instead of crashing.
  */
 
-import type { StorageAdapter, StorageTx } from '@/data/storage-adapter';
-import { SYNC_META, readMeta, writeMeta } from '@/data/sync-store';
-import { canonicalizeCustomThemeFile, parseCustomTheme, type CustomThemeFile } from '@/theme/custom/schema';
+import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
+import { SYNC_META, readMeta, writeMeta } from "@/data/sync-store";
+import {
+  canonicalizeCustomThemeFile,
+  parseCustomTheme,
+  type CustomThemeFile,
+} from "@/theme/custom/schema";
 
 export const MAX_CUSTOM_THEMES = 8;
 /** Total size of the stored JSON document, in characters. */
@@ -25,7 +29,7 @@ export const MAX_CUSTOM_THEMES_BYTES = 128 * 1024;
 
 const STORE_VERSION = 1;
 
-export type CustomThemeStoreErrorCode = 'invalid' | 'limit' | 'size';
+export type CustomThemeStoreErrorCode = "invalid" | "limit" | "size";
 
 export class CustomThemeStoreError extends Error {
   constructor(
@@ -33,7 +37,7 @@ export class CustomThemeStoreError extends Error {
     readonly code: CustomThemeStoreErrorCode,
   ) {
     super(message);
-    this.name = 'CustomThemeStoreError';
+    this.name = "CustomThemeStoreError";
   }
 }
 
@@ -47,7 +51,7 @@ function normalize(raw: string | undefined): CustomThemeFile[] {
     return [];
   }
   const entries =
-    typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed)
+    typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
       ? (parsed as { themes?: unknown }).themes
       : undefined;
   if (!Array.isArray(entries)) return [];
@@ -65,17 +69,24 @@ function normalize(raw: string | undefined): CustomThemeFile[] {
 }
 
 function serialize(files: readonly CustomThemeFile[]): string {
-  return JSON.stringify({ version: STORE_VERSION, themes: files.map(canonicalizeCustomThemeFile) });
+  return JSON.stringify({
+    version: STORE_VERSION,
+    themes: files.map(canonicalizeCustomThemeFile),
+  });
 }
 
 /** Reads inside an open transaction. Absent, corrupt, oversized or stale data degrades to "no custom themes". */
-export async function readCustomThemeFiles(tx: StorageTx): Promise<CustomThemeFile[]> {
+export async function readCustomThemeFiles(
+  tx: StorageTx,
+): Promise<CustomThemeFile[]> {
   const meta = await readMeta(tx, [SYNC_META.customThemes]);
   return normalize(meta.get(SYNC_META.customThemes));
 }
 
 /** Reads the stored theme files. Never throws on bad data; the read notifies no subscriber. */
-export function loadCustomThemeFiles(storage: StorageAdapter): Promise<CustomThemeFile[]> {
+export function loadCustomThemeFiles(
+  storage: StorageAdapter,
+): Promise<CustomThemeFile[]> {
   return storage.transact((tx) => readCustomThemeFiles(tx), { silent: true });
 }
 
@@ -84,26 +95,45 @@ export function loadCustomThemeFiles(storage: StorageAdapter): Promise<CustomThe
  * be persisted; throws `CustomThemeStoreError` when it is invalid or a cap would be exceeded.
  * Returns the stored list.
  */
-export async function saveCustomThemeFile(tx: StorageTx, file: CustomThemeFile): Promise<CustomThemeFile[]> {
+export async function saveCustomThemeFile(
+  tx: StorageTx,
+  file: CustomThemeFile,
+): Promise<CustomThemeFile[]> {
   const result = parseCustomTheme(file);
-  if (!result.ok) throw new CustomThemeStoreError(`Invalid custom theme: ${result.errors.join('; ')}`, 'invalid');
+  if (!result.ok)
+    throw new CustomThemeStoreError(
+      `Invalid custom theme: ${result.errors.join("; ")}`,
+      "invalid",
+    );
 
   const existing = await readCustomThemeFiles(tx);
   const index = existing.findIndex((entry) => entry.id === result.file.id);
   if (index < 0 && existing.length >= MAX_CUSTOM_THEMES) {
-    throw new CustomThemeStoreError(`At most ${MAX_CUSTOM_THEMES} custom themes can be stored; delete one first.`, 'limit');
+    throw new CustomThemeStoreError(
+      `At most ${MAX_CUSTOM_THEMES} custom themes can be stored; delete one first.`,
+      "limit",
+    );
   }
-  const next = index < 0 ? [...existing, result.file] : existing.map((entry, at) => (at === index ? result.file : entry));
+  const next =
+    index < 0
+      ? [...existing, result.file]
+      : existing.map((entry, at) => (at === index ? result.file : entry));
   const json = serialize(next);
   if (json.length > MAX_CUSTOM_THEMES_BYTES) {
-    throw new CustomThemeStoreError('Custom themes take too much space; delete one first.', 'size');
+    throw new CustomThemeStoreError(
+      "Custom themes take too much space; delete one first.",
+      "size",
+    );
   }
   await writeMeta(tx, { [SYNC_META.customThemes]: json });
   return next;
 }
 
 /** Removes a theme by id. A missing id is a no-op. Returns the stored list. */
-export async function deleteCustomThemeFile(tx: StorageTx, id: string): Promise<CustomThemeFile[]> {
+export async function deleteCustomThemeFile(
+  tx: StorageTx,
+  id: string,
+): Promise<CustomThemeFile[]> {
   const existing = await readCustomThemeFiles(tx);
   const next = existing.filter((entry) => entry.id !== id);
   if (next.length === existing.length) return existing;

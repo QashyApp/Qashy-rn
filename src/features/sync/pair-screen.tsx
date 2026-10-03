@@ -38,32 +38,32 @@
  * abandon the vault it was already part of, taking its peers with it.
  */
 
-import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useRef, useState } from 'react';
-import { Platform, ScrollView, View } from 'react-native';
+import { router, useLocalSearchParams } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Platform, ScrollView, View } from "react-native";
 
-import { QrCode } from '@/components/sync/qr-code';
-import { QrScanner } from '@/components/sync/qr-scanner';
-import { SasDisplay } from '@/components/sync/sas-display';
-import { ActionButton } from '@/components/ui/action-button';
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { Card } from '@/components/ui/card';
-import { FormField } from '@/components/ui/form-field';
-import { MotionPressable, MotionView } from '@/components/ui/motion';
-import { ProgressBar } from '@/components/ui/progress-bar';
-import { StatusPill } from '@/components/ui/status-pill';
-import { TextButton } from '@/components/ui/text-button';
-import { useLocalization } from '@/localization/localization';
-import { useFinanceState } from '@/providers/finance-provider';
-import { useSync } from '@/providers/sync-provider';
+import { QrCode } from "@/components/sync/qr-code";
+import { QrScanner } from "@/components/sync/qr-scanner";
+import { SasDisplay } from "@/components/sync/sas-display";
+import { ActionButton } from "@/components/ui/action-button";
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { MotionPressable, MotionView } from "@/components/ui/motion";
+import { ProgressBar } from "@/components/ui/progress-bar";
+import { StatusPill } from "@/components/ui/status-pill";
+import { TextButton } from "@/components/ui/text-button";
+import { useLocalization } from "@/localization/localization";
+import { useFinanceState } from "@/providers/finance-provider";
+import { useSync } from "@/providers/sync-provider";
 import {
   createDeviceIdentity,
   decodePairingCode,
   formatPairingCodeForTyping,
   normalizeTypedPairingCode,
-} from '@/sync/crypto';
-import { PairingHost, PairingJoiner } from '@/sync/pairing';
+} from "@/sync/crypto";
+import { PairingHost, PairingJoiner } from "@/sync/pairing";
 import {
   adoptVault,
   disableSync,
@@ -73,15 +73,15 @@ import {
   resumeSync,
   type DeviceProfile,
   type SyncStatus,
-} from '@/sync/setup';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import type { SpaceScale } from '@/theme/themes/types';
-import { errorMessage } from '@/utils/confirm';
-import { nowIso } from '@/utils/entity';
+} from "@/sync/setup";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import type { SpaceScale } from "@/theme/themes/types";
+import { errorMessage } from "@/utils/confirm";
+import { nowIso } from "@/utils/entity";
 
-type Role = 'host' | 'join';
-type Stage = 'role' | 'code' | 'confirm' | 'done';
+type Role = "host" | "join";
+type Stage = "role" | "code" | "confirm" | "done";
 
 /**
  * A code is no longer safe to offer once its handshake has failed, even if its wall-clock
@@ -94,7 +94,7 @@ interface DisplayedPairingCode {
   readonly unusable?: boolean;
 }
 
-const STAGES: readonly Stage[] = ['role', 'code', 'confirm', 'done'];
+const STAGES: readonly Stage[] = ["role", "code", "confirm", "done"];
 
 /** `HostPairingDeps.now` is unix **seconds**, unlike everything else in the app. */
 const unixSeconds = () => Math.floor(Date.now() / 1000);
@@ -102,12 +102,12 @@ const unixSeconds = () => Math.floor(Date.now() / 1000);
 /** A first guess at a device name, so nobody has to invent one to get past the first screen. */
 function defaultDeviceName() {
   switch (Platform.OS) {
-    case 'ios':
-      return 'My iPhone';
-    case 'android':
-      return 'My Android';
+    case "ios":
+      return "My iPhone";
+    case "android":
+      return "My Android";
     default:
-      return 'My browser';
+      return "My browser";
   }
 }
 
@@ -125,11 +125,12 @@ export function PairScreen() {
   const { t } = useLocalization();
   // Reached from onboarding's "I already use Qashy". This device has nothing yet, so it can
   // only join: hosting would mint a vault around an empty ledger.
-  const firstRun = useLocalSearchParams<{ onboarding?: string }>().onboarding === '1';
+  const firstRun =
+    useLocalSearchParams<{ onboarding?: string }>().onboarding === "1";
 
-  const [stage, setStage] = useState<Stage>('role');
-  const [direction, setDirection] = useState<'forward' | 'back'>('forward');
-  const [role, setRole] = useState<Role>(firstRun ? 'join' : 'host');
+  const [stage, setStage] = useState<Stage>("role");
+  const [direction, setDirection] = useState<"forward" | "back">("forward");
+  const [role, setRole] = useState<Role>(firstRun ? "join" : "host");
   const [deviceName, setDeviceName] = useState(defaultDeviceName);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -137,8 +138,14 @@ export function PairScreen() {
   const [code, setCode] = useState<DisplayedPairingCode | null>(null);
   const [remaining, setRemaining] = useState(0);
   const [sas, setSas] = useState<readonly string[] | null>(null);
-  const [outcome, setOutcome] = useState<{ headline: string; body: string } | null>(null);
-  const [scannerRearm, setScannerRearm] = useState({ token: 0, keepManual: false });
+  const [outcome, setOutcome] = useState<{
+    headline: string;
+    body: string;
+  } | null>(null);
+  const [scannerRearm, setScannerRearm] = useState({
+    token: 0,
+    keepManual: false,
+  });
 
   const session = useRef<Session | null>(null);
   // Held apart from `sas` because the confirmation closure differs by role while the words
@@ -156,44 +163,50 @@ export function PairScreen() {
   // Hosting turns sync on (or back on) before any peer exists. If the attempt ends without a
   // device ever being added, undo exactly that, so abandoning the screen cannot leave sync
   // enabled — or an activity log claiming a pairing — with nobody on the other end.
-  const startedSync = useRef<'created' | 'resumed' | null>(null);
+  const startedSync = useRef<"created" | "resumed" | null>(null);
   const pairedPeer = useRef(false);
   const rollbackAbandonedSetup = () => {
     const started = startedSync.current;
     if (!started || pairedPeer.current) return;
     startedSync.current = null;
-    void disableSync(setup, { forget: started === 'created' })
+    void disableSync(setup, { forget: started === "created" })
       .then(() => refresh())
       .catch(() => undefined);
   };
 
   // Unmount is a cancellation like any other: a socket left open on a rendezvous the user
   // navigated away from would keep a pairing window alive with nobody watching the words.
-  useEffect(() => () => {
-    closeSession();
-    rollbackAbandonedSetup();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only; must run once, on unmount
-  }, []);
+  useEffect(
+    () => () => {
+      closeSession();
+      rollbackAbandonedSetup();
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only; must run once, on unmount
+    },
+    [],
+  );
 
   // First run ends when the vault's own settings arrive: they carry `onboardingComplete`, which
   // is what opens the rest of the app. Until then the done step says it is still receiving.
-  const received = firstRun && stage === 'done' && settings.onboardingComplete;
+  const received = firstRun && stage === "done" && settings.onboardingComplete;
   useEffect(() => {
-    if (received) router.replace('/overview');
+    if (received) router.replace("/overview");
   }, [received]);
 
   // Only while a code is on screen, and only to redraw the countdown. The pairing code is the
   // one thing in the sync stack with a wall-clock deadline the user has to act inside.
   useEffect(() => {
-    if (stage !== 'code' || !code) return;
-    const tick = () => setRemaining(Math.max(0, code.expiresAt - unixSeconds()));
+    if (stage !== "code" || !code) return;
+    const tick = () =>
+      setRemaining(Math.max(0, code.expiresAt - unixSeconds()));
     tick();
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
   }, [stage, code]);
 
   const move = (next: Stage) => {
-    setDirection(STAGES.indexOf(next) >= STAGES.indexOf(stage) ? 'forward' : 'back');
+    setDirection(
+      STAGES.indexOf(next) >= STAGES.indexOf(stage) ? "forward" : "back",
+    );
     setStage(next);
     setError(null);
   };
@@ -216,20 +229,20 @@ export function PairScreen() {
       // host attempt created its vault, especially after that attempt expires and the user tries
       // again. Calling enableSync from that stale render would refuse a perfectly valid vault.
       const currentBeforeStart = await readSyncStatus(setup);
-      if (currentBeforeStart.keystore === 'empty') {
+      if (currentBeforeStart.keystore === "empty") {
         // A device that has never synced becomes a vault first. This is the only place a
         // `VaultRootKey` is ever minted, and doing it here rather than on the sync screen means
         // a key only exists once somebody has actually started adding a second device.
         await enableSync(setup, profile());
-        startedSync.current = 'created';
+        startedSync.current = "created";
       } else if (!currentBeforeStart.enabled) {
         // Hosting is an explicit sync action. It also repairs the useful case where a reset or
         // an older build left the device key intact but removed the enabled metadata.
         await resumeSync(setup);
-        startedSync.current = 'resumed';
+        startedSync.current = "resumed";
       }
       const vault = await setup.keystore.read();
-      if (!vault) throw new Error('This device’s vault key could not be read.');
+      if (!vault) throw new Error("This device’s vault key could not be read.");
       // Read straight from storage rather than trusting `status`: `enableSync` has usually just
       // rewritten `sync_meta`, and the `status` in this closure is from the render that queued
       // this press. Hosting off a stale roster would omit a peer from the set the joiner is
@@ -254,7 +267,7 @@ export function PairScreen() {
       closeSession();
       session.current = { close: () => host.close(), abort };
       setCode({ value: host.code, expiresAt: host.expiresAt });
-      move('code');
+      move("code");
 
       // Deliberately not awaited: the code has to be readable *while* this waits for the other
       // device to show up. Failures land in `error` on the code step, where the user is.
@@ -267,13 +280,13 @@ export function PairScreen() {
             pairedPeer.current = true;
             await refresh();
             setOutcome({
-              headline: 'Device added',
-              body: 'Both devices now hold the same vault key. Changes flow in both directions from here.',
+              headline: "Device added",
+              body: "Both devices now hold the same vault key. Changes flow in both directions from here.",
             });
           };
           session.current = { close: () => confirmation.cancel(), abort };
           setSas(confirmation.sas);
-          move('confirm');
+          move("confirm");
         })
         .catch((reason: unknown) => {
           if (abort.signal.aborted) return;
@@ -283,12 +296,18 @@ export function PairScreen() {
           session.current = null;
           accept.current = null;
           setSas(null);
-          setCode((current) => (current ? { ...current, unusable: true } : null));
-          setError(errorMessage(reason, 'The other device did not complete pairing.'));
+          setCode((current) =>
+            current ? { ...current, unusable: true } : null,
+          );
+          setError(
+            errorMessage(reason, "The other device did not complete pairing."),
+          );
           rollbackAbandonedSetup();
         });
     } catch (reason) {
-      setError(errorMessage(reason, 'Sync could not be set up on this device.'));
+      setError(
+        errorMessage(reason, "Sync could not be set up on this device."),
+      );
     } finally {
       setBusy(false);
     }
@@ -304,10 +323,10 @@ export function PairScreen() {
     setCode(null);
     setSas(null);
     setOutcome(null);
-    if (role === 'host') {
+    if (role === "host") {
       void startHosting();
     } else {
-      move('role');
+      move("role");
     }
   };
 
@@ -325,11 +344,22 @@ export function PairScreen() {
       // debugging a network that is fine.
       let decoded: ReturnType<typeof decodePairingCode>;
       try {
-        decoded = decodePairingCode(normalizeTypedPairingCode(scanned), unixSeconds());
+        decoded = decodePairingCode(
+          normalizeTypedPairingCode(scanned),
+          unixSeconds(),
+        );
       } catch (reason) {
         // Rejected on this device before anything was sent, so what was typed is only a typo.
-        setScannerRearm((value) => ({ token: value.token + 1, keepManual: false }));
-        setError(errorMessage(reason, 'That code could not be used. Show a fresh one and try again.'));
+        setScannerRearm((value) => ({
+          token: value.token + 1,
+          keepManual: false,
+        }));
+        setError(
+          errorMessage(
+            reason,
+            "That code could not be used. Show a fresh one and try again.",
+          ),
+        );
         return;
       }
       const identity = createDeviceIdentity();
@@ -368,18 +398,26 @@ export function PairScreen() {
         });
         await refresh();
         setOutcome({
-          headline: 'This device joined the vault',
-          body: 'Your data from both devices is being combined. Anything you created on both will show up twice until you review it.',
+          headline: "This device joined the vault",
+          body: "Your data from both devices is being combined. Anything you created on both will show up twice until you review it.",
         });
       };
       session.current = { close: () => confirmation.cancel(), abort };
       setSas(confirmation.sas);
-      move('confirm');
+      move("confirm");
     } catch (reason) {
       // QrScanner claims one code per mount so a camera frame cannot start a dozen handshakes.
       // A failed or expired code is a new attempt, so give the scanner a fresh claim slot.
-      setScannerRearm((value) => ({ token: value.token + 1, keepManual: false }));
-      setError(errorMessage(reason, 'That code could not be used. Show a fresh one and try again.'));
+      setScannerRearm((value) => ({
+        token: value.token + 1,
+        keepManual: false,
+      }));
+      setError(
+        errorMessage(
+          reason,
+          "That code could not be used. Show a fresh one and try again.",
+        ),
+      );
     } finally {
       setBusy(false);
     }
@@ -397,13 +435,13 @@ export function PairScreen() {
       await accept.current();
       session.current = null;
       accept.current = null;
-      move('done');
+      move("done");
       // Pull the vault now rather than on the next scheduled pass, so a first-run device is not
       // left on "receiving" for a timer's length. A failure here is advisory; the provider
       // retries and reports it on its own.
       if (firstRun) void reconcile().catch(() => undefined);
     } catch (reason) {
-      setError(errorMessage(reason, 'Pairing could not be completed.'));
+      setError(errorMessage(reason, "Pairing could not be completed."));
     } finally {
       setBusy(false);
     }
@@ -415,9 +453,9 @@ export function PairScreen() {
     setSas(null);
     setCode(null);
     setError(
-      'Pairing was stopped and nothing was sent. Different words on the two screens can mean someone else tried to join — start again, and keep the code on screen only while the other device is scanning it.',
+      "Pairing was stopped and nothing was sent. Different words on the two screens can mean someone else tried to join — start again, and keep the code on screen only while the other device is scanning it.",
     );
-    move('role');
+    move("role");
   };
 
   // -------------------------------------------------------------------------
@@ -426,7 +464,11 @@ export function PairScreen() {
 
   if (!status) {
     return (
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
+      <ScrollView
+        contentInsetAdjustmentBehavior="automatic"
+        style={{ flex: 1, backgroundColor: theme.background }}
+        contentContainerStyle={containerStyle(space)}
+      >
         <AppText muted>Reading this device’s sync state…</AppText>
       </ScrollView>
     );
@@ -435,27 +477,43 @@ export function PairScreen() {
   const blocked = blockingReason(status);
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
+    <ScrollView
+      contentInsetAdjustmentBehavior="automatic"
+      keyboardShouldPersistTaps="handled"
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={containerStyle(space)}
+    >
       <View style={{ gap: space.sm }}>
-        <AppText literal variant="caption" muted style={{ textAlign: 'center' }}>
+        <AppText
+          literal
+          variant="caption"
+          muted
+          style={{ textAlign: "center" }}
+        >
           {t(`Step ${STAGES.indexOf(stage) + 1} of ${STAGES.length}`)}
         </AppText>
         <ProgressBar
           value={(STAGES.indexOf(stage) + 1) / STAGES.length}
           segments={STAGES.length}
-          label={t('Pairing progress')}
+          label={t("Pairing progress")}
         />
       </View>
 
       {error ? (
         <MotionView variant="up" exit animateLayout>
           <Card style={{ gap: space.xs, borderColor: theme.negative }}>
-            <AppText accessibilityRole="alert" variant="label" style={{ color: theme.negative }}>
+            <AppText
+              accessibilityRole="alert"
+              variant="label"
+              style={{ color: theme.negative }}
+            >
               Pairing stopped
             </AppText>
             {/* `literal`: these sentences come from a caught error, so they are already the
                 final copy and there is nothing in the dictionary to match them against. */}
-            <AppText literal variant="caption" muted>{error}</AppText>
+            <AppText literal variant="caption" muted>
+              {error}
+            </AppText>
           </Card>
         </MotionView>
       ) : null}
@@ -464,16 +522,21 @@ export function PairScreen() {
         <Card style={{ gap: space.md }}>
           <AppText variant="headline">{blocked.title}</AppText>
           <AppText muted>{blocked.body}</AppText>
-          <TextButton title="Open sync settings" icon="gear" onPress={() => router.replace('/sync')} />
+          <TextButton
+            title="Open sync settings"
+            icon="gear"
+            onPress={() => router.replace("/sync")}
+          />
         </Card>
       ) : (
         <MotionView
           key={`${stage}-${direction}`}
-          variant={direction === 'forward' ? 'right' : 'left'}
+          variant={direction === "forward" ? "right" : "left"}
           exit
           animateLayout
-          style={{ gap: space.lg }}>
-          {stage === 'role' ? (
+          style={{ gap: space.lg }}
+        >
+          {stage === "role" ? (
             <RoleStep
               role={role}
               onRole={setRole}
@@ -484,51 +547,67 @@ export function PairScreen() {
               onDeviceName={setDeviceName}
               busy={busy}
               onContinue={() => {
-                if (role === 'host') void startHosting();
-                else move('code');
+                if (role === "host") void startHosting();
+                else move("code");
               }}
             />
           ) : null}
 
-          {stage === 'code' && role === 'host' ? (
-            <HostCodeStep code={code} remaining={remaining} onRestart={restart} />
+          {stage === "code" && role === "host" ? (
+            <HostCodeStep
+              code={code}
+              remaining={remaining}
+              onRestart={restart}
+            />
           ) : null}
 
-          {stage === 'code' && role === 'join' ? (
+          {stage === "code" && role === "join" ? (
             <>
               <AppText variant="title">Scan the other device</AppText>
               <AppText muted>
-                Open Sync → Add device on the device that already has your data, and point this
-                one at the code it shows.
+                Open Sync → Add device on the device that already has your data,
+                and point this one at the code it shows.
               </AppText>
               <QrScanner
                 rearm={scannerRearm}
                 onCode={(value) => void startJoining(value)}
                 hint="The code works once and expires after a minute and a half."
               />
-              <TextButton title="Back" tone="muted" onPress={() => move('role')} />
+              <TextButton
+                title="Back"
+                tone="muted"
+                onPress={() => move("role")}
+              />
             </>
           ) : null}
 
-          {stage === 'confirm' && sas ? (
-            <ConfirmStep sas={sas} busy={busy} onMatch={() => void confirmMatch()} onReject={rejectMatch} />
+          {stage === "confirm" && sas ? (
+            <ConfirmStep
+              sas={sas}
+              busy={busy}
+              onMatch={() => void confirmMatch()}
+              onReject={rejectMatch}
+            />
           ) : null}
 
-          {stage === 'done' ? <DoneStep outcome={outcome} firstRun={firstRun} /> : null}
+          {stage === "done" ? (
+            <DoneStep outcome={outcome} firstRun={firstRun} />
+          ) : null}
         </MotionView>
       )}
     </ScrollView>
   );
 }
 
-const containerStyle = (space: SpaceScale) => ({
-  padding: 18,
-  paddingBottom: 40,
-  gap: space.lg,
-  width: '100%',
-  maxWidth: 720,
-  alignSelf: 'center',
-}) as const;
+const containerStyle = (space: SpaceScale) =>
+  ({
+    padding: 18,
+    paddingBottom: 40,
+    gap: space.lg,
+    width: "100%",
+    maxWidth: 720,
+    alignSelf: "center",
+  }) as const;
 
 /**
  * The states in which pairing cannot start at all, with the fix.
@@ -543,16 +622,16 @@ const containerStyle = (space: SpaceScale) => ({
  * device unable to be added to a vault that is perfectly well configured.
  */
 function blockingReason(status: SyncStatus) {
-  if (status.keystore === 'unavailable') {
+  if (status.keystore === "unavailable") {
     return {
-      title: 'This device can’t store a key safely',
-      body: 'Qashy could not reach secure storage, so it has nowhere to keep the vault key. Pairing is disabled here. Your finance data is untouched.',
+      title: "This device can’t store a key safely",
+      body: "Qashy could not reach secure storage, so it has nowhere to keep the vault key. Pairing is disabled here. Your finance data is untouched.",
     };
   }
-  if (status.keystore === 'locked') {
+  if (status.keystore === "locked") {
     return {
-      title: 'Unlock this device first',
-      body: 'The vault key on this device is behind a passphrase. Unlock it from the sync screen, then come back.',
+      title: "Unlock this device first",
+      body: "The vault key on this device is behind a passphrase. Unlock it from the sync screen, then come back.",
     };
   }
   return null;
@@ -581,40 +660,42 @@ function RoleStep({
 }) {
   const theme = useQashyTheme();
   const { space } = theme;
-  const blockedHost = role === 'host' && !canHost;
+  const blockedHost = role === "host" && !canHost;
 
   return (
     <>
-      <AppText variant="title">{joinOnly ? 'Join your other device' : 'Add a device'}</AppText>
+      <AppText variant="title">
+        {joinOnly ? "Join your other device" : "Add a device"}
+      </AppText>
       <AppText muted>
         {joinOnly
-          ? 'On the device that already has your data, open More → Sync → Add device. It will show a code for this one to scan.'
-          : 'Both devices end up holding the same key, and only those two can read anything. Start on whichever one has the data you want to keep.'}
+          ? "On the device that already has your data, open More → Sync → Add device. It will show a code for this one to scan."
+          : "Both devices end up holding the same key, and only those two can read anything. Start on whichever one has the data you want to keep."}
       </AppText>
 
-      <View style={{ gap: space.sm, display: joinOnly ? 'none' : 'flex' }}>
+      <View style={{ gap: space.sm, display: joinOnly ? "none" : "flex" }}>
         <RoleOption
           icon="iphone"
           title="This device has my data"
           body={
             canHost
-              ? 'Shows a code for the other device to scan.'
-              : 'Needs a relay address first — the two devices have nowhere to meet without one.'
+              ? "Shows a code for the other device to scan."
+              : "Needs a relay address first — the two devices have nowhere to meet without one."
           }
-          selected={role === 'host'}
-          onPress={() => onRole('host')}
+          selected={role === "host"}
+          onPress={() => onRole("host")}
         />
         <RoleOption
           icon="qrcode.viewfinder"
           title="Add this device to a vault"
           body={
             canJoin
-              ? 'Scans a code shown by a device that is already set up.'
-              : 'Not available — this device is already part of a vault. Removing it from the other device is the way out.'
+              ? "Scans a code shown by a device that is already set up."
+              : "Not available — this device is already part of a vault. Removing it from the other device is the way out."
           }
-          selected={role === 'join'}
+          selected={role === "join"}
           disabled={!canJoin}
-          onPress={() => onRole('join')}
+          onPress={() => onRole("join")}
         />
       </View>
 
@@ -631,16 +712,21 @@ function RoleStep({
         <Card style={{ gap: space.sm, borderColor: theme.warning }}>
           <AppText variant="label">Set a relay address first</AppText>
           <AppText variant="caption" muted>
-            Showing a code needs somewhere the two devices can agree to meet. The relay never sees
-            your data — it forwards sealed bytes between devices that already hold each other’s
-            keys. Add its address under Connections in Sync settings.
+            Showing a code needs somewhere the two devices can agree to meet.
+            The relay never sees your data — it forwards sealed bytes between
+            devices that already hold each other’s keys. Add its address under
+            Connections in Sync settings.
           </AppText>
-          <TextButton title="Open sync settings" icon="gear" onPress={() => router.replace('/sync')} />
+          <TextButton
+            title="Open sync settings"
+            icon="gear"
+            onPress={() => router.replace("/sync")}
+          />
         </Card>
       ) : null}
 
       <ActionButton
-        title={busy ? 'Preparing…' : 'Continue'}
+        title={busy ? "Preparing…" : "Continue"}
         icon="arrow.right"
         size="large"
         busy={busy}
@@ -684,18 +770,29 @@ function RoleOption({
           gap: space.xs,
           padding: space.lg,
           borderRadius: radius.card,
-          borderCurve: 'continuous',
+          borderCurve: "continuous",
           opacity: disabled ? 0.5 : 1,
         },
         selected && !disabled
-          ? materialStyle(theme, 'selected')
-          : materialStyle(theme, 'control'),
-      ]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-        <AppIcon name={icon} color={selected && !disabled ? theme.onAccentContainer : theme.textMuted} size={18} />
+          ? materialStyle(theme, "selected")
+          : materialStyle(theme, "control"),
+      ]}
+    >
+      <View
+        style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}
+      >
+        <AppIcon
+          name={icon}
+          color={
+            selected && !disabled ? theme.onAccentContainer : theme.textMuted
+          }
+          size={18}
+        />
         <AppText variant="label">{title}</AppText>
       </View>
-      <AppText variant="caption" muted>{body}</AppText>
+      <AppText variant="caption" muted>
+        {body}
+      </AppText>
     </MotionPressable>
   );
 }
@@ -721,30 +818,45 @@ function HostCodeStep({
     <>
       <AppText variant="title">Scan this on the other device</AppText>
       <AppText muted>
-        Open Qashy there, go to More → Sync → Add device, and choose “Add this device to a vault”.
+        Open Qashy there, go to More → Sync → Add device, and choose “Add this
+        device to a vault”.
       </AppText>
 
-      <Card style={{ alignItems: 'center', gap: space.md }}>
+      <Card style={{ alignItems: "center", gap: space.md }}>
         {code.unusable || expired ? (
-          <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xl }}>
+          <View
+            style={{
+              alignItems: "center",
+              gap: space.md,
+              paddingVertical: space.xl,
+            }}
+          >
             <AppIcon name="clock" color={theme.textMuted} size={28} />
-            <AppText muted style={{ textAlign: 'center' }}>
+            <AppText muted style={{ textAlign: "center" }}>
               {code.unusable
-                ? 'This pairing attempt has ended. Its code cannot be used again, even before the countdown ends.'
-                : 'This code has expired. Codes are single use and short-lived on purpose.'}
+                ? "This pairing attempt has ended. Its code cannot be used again, even before the countdown ends."
+                : "This code has expired. Codes are single use and short-lived on purpose."}
             </AppText>
-            <ActionButton title="Show a new code" icon="arrow.triangle.2.circlepath" size="large" onPress={onRestart} />
+            <ActionButton
+              title="Show a new code"
+              icon="arrow.triangle.2.circlepath"
+              size="large"
+              onPress={onRestart}
+            />
           </View>
         ) : (
           <>
-            <QrCode value={code.value} label={t('Pairing code for the other device to scan')} />
+            <QrCode
+              value={code.value}
+              label={t("Pairing code for the other device to scan")}
+            />
             {/* Counted down rather than shown as a deadline: "44 seconds left" is actionable
                 where a timestamp is arithmetic somebody has to do while holding two phones. */}
             <StatusPill
               literal
               label={t(`${remaining} seconds left`)}
               icon="clock"
-              tone={remaining < 20 ? 'warning' : 'neutral'}
+              tone={remaining < 20 ? "warning" : "neutral"}
             />
           </>
         )}
@@ -753,18 +865,32 @@ function HostCodeStep({
       {!code.unusable && !expired ? (
         <>
           <TextButton
-            title={showTyped ? 'Hide the typed code' : 'Can’t scan?'}
-            icon={showTyped ? 'eye.slash' : 'keyboard'}
+            title={showTyped ? "Hide the typed code" : "Can’t scan?"}
+            icon={showTyped ? "eye.slash" : "keyboard"}
             tone="muted"
             accessibilityState={{ expanded: showTyped }}
             onPress={() => setShowTyped((open) => !open)}
           />
           {showTyped ? (
-            <MotionView variant="up" exit animateLayout style={{ gap: space.sm }}>
+            <MotionView
+              variant="up"
+              exit
+              animateLayout
+              style={{ gap: space.sm }}
+            >
               {/* A sunken well, like the six-word confirmation below: this string is looked at
                   and copied by eye, not tapped, so it reads better carved into the page than
                   floating above it. */}
-              <View style={[{ padding: space.lg, borderRadius: radius.card, borderCurve: 'continuous' }, materialStyle(theme, 'sunken')]}>
+              <View
+                style={[
+                  {
+                    padding: space.lg,
+                    borderRadius: radius.card,
+                    borderCurve: "continuous",
+                  },
+                  materialStyle(theme, "sunken"),
+                ]}
+              >
                 {/* Selectable, and that is the only concession made here. The code carries the
                     pairing secret, so there is no copy button and it is never persisted or
                     logged — a selection the user makes and pastes once is the shortest life
@@ -773,13 +899,19 @@ function HostCodeStep({
                   literal
                   selectable
                   variant="label"
-                  style={{ fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', letterSpacing: 1, lineHeight: 26 }}>
+                  style={{
+                    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+                    letterSpacing: 1,
+                    lineHeight: 26,
+                  }}
+                >
                   {formatPairingCodeForTyping(code.value)}
                 </AppText>
               </View>
               <AppText variant="caption" muted>
-                Type or paste this into the other device instead of scanning. Treat it like the
-                code itself — it works once, and only for the next minute or so.
+                Type or paste this into the other device instead of scanning.
+                Treat it like the code itself — it works once, and only for the
+                next minute or so.
               </AppText>
             </MotionView>
           ) : null}
@@ -787,8 +919,9 @@ function HostCodeStep({
       ) : null}
 
       <AppText variant="caption" muted>
-        Waiting for the other device. The next screen shows six words that must be identical on
-        both — that comparison is what makes a photographed code useless.
+        Waiting for the other device. The next screen shows six words that must
+        be identical on both — that comparison is what makes a photographed code
+        useless.
       </AppText>
       <TextButton title="Start over" tone="muted" onPress={onRestart} />
     </>
@@ -812,22 +945,31 @@ function ConfirmStep({
     <>
       <AppText variant="title">Do these words match?</AppText>
       <AppText muted>
-        The other device is showing six words too. Compare them now, in the same order. If even
-        one differs, stop — someone else may be trying to join.
+        The other device is showing six words too. Compare them now, in the same
+        order. If even one differs, stop — someone else may be trying to join.
       </AppText>
 
       {/* A larger, better-spaced sunken well around the six words — the single most important
           comparison in the app deserves more room than the cramped tiles the words render as
           on their own. */}
-      <View style={[{ padding: space.lg, borderRadius: radius.card, borderCurve: 'continuous' }, materialStyle(theme, 'sunken')]}>
+      <View
+        style={[
+          {
+            padding: space.lg,
+            borderRadius: radius.card,
+            borderCurve: "continuous",
+          },
+          materialStyle(theme, "sunken"),
+        ]}
+      >
         <SasDisplay words={sas} />
       </View>
 
       {/* Equal weight, deliberately. The dangerous answer is "yes" given reflexively, so "yes"
           gets no visual advantage over "no" and neither is the default focus target. */}
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
         <ActionButton
-          title={busy ? 'Pairing…' : 'They match'}
+          title={busy ? "Pairing…" : "They match"}
           icon="checkmark"
           size="large"
           busy={busy}
@@ -847,7 +989,8 @@ function ConfirmStep({
       </View>
 
       <AppText variant="caption" muted>
-        Nothing has been sent yet. Your vault key only leaves this device after you confirm.
+        Nothing has been sent yet. Your vault key only leaves this device after
+        you confirm.
       </AppText>
     </>
   );
@@ -864,41 +1007,91 @@ function DoneStep({
   const { radius, space } = theme;
   if (firstRun) {
     return (
-      <View accessibilityLiveRegion="polite" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>
-        <View style={{ width: 56, height: 56, borderRadius: radius.card, borderCurve: 'continuous', backgroundColor: theme.accentContainer, alignItems: 'center', justifyContent: 'center' }}>
-          <AppIcon name="arrow.triangle.2.circlepath" color={theme.onAccentContainer} size={24} />
+      <View
+        accessibilityLiveRegion="polite"
+        style={{
+          alignItems: "center",
+          gap: space.md,
+          paddingVertical: space.xxl,
+        }}
+      >
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: radius.card,
+            borderCurve: "continuous",
+            backgroundColor: theme.accentContainer,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <AppIcon
+            name="arrow.triangle.2.circlepath"
+            color={theme.onAccentContainer}
+            size={24}
+          />
         </View>
-        <AppText variant="title" style={{ textAlign: 'center' }}>Receiving your data…</AppText>
-        <AppText muted style={{ textAlign: 'center', maxWidth: 420 }}>
-          This device joined your vault. Keep the other device open nearby — Qashy opens as soon as your accounts arrive.
+        <AppText variant="title" style={{ textAlign: "center" }}>
+          Receiving your data…
+        </AppText>
+        <AppText muted style={{ textAlign: "center", maxWidth: 420 }}>
+          This device joined your vault. Keep the other device open nearby —
+          Qashy opens as soon as your accounts arrive.
         </AppText>
       </View>
     );
   }
   return (
     <>
-      <View style={{ alignItems: 'center', gap: space.md, paddingVertical: space.lg }}>
-        <View style={{ width: 56, height: 56, borderRadius: radius.card, borderCurve: 'continuous', backgroundColor: theme.accentContainer, alignItems: 'center', justifyContent: 'center' }}>
+      <View
+        style={{
+          alignItems: "center",
+          gap: space.md,
+          paddingVertical: space.lg,
+        }}
+      >
+        <View
+          style={{
+            width: 56,
+            height: 56,
+            borderRadius: radius.card,
+            borderCurve: "continuous",
+            backgroundColor: theme.accentContainer,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
           <AppIcon name="checkmark" color={theme.onAccentContainer} size={24} />
         </View>
-        <AppText variant="title" style={{ textAlign: 'center' }}>
-          {outcome?.headline ?? 'Paired'}
+        <AppText variant="title" style={{ textAlign: "center" }}>
+          {outcome?.headline ?? "Paired"}
         </AppText>
-        <AppText muted style={{ textAlign: 'center', maxWidth: 420 }}>
-          {outcome?.body ?? 'Both devices now hold the same vault key.'}
+        <AppText muted style={{ textAlign: "center", maxWidth: 420 }}>
+          {outcome?.body ?? "Both devices now hold the same vault key."}
         </AppText>
       </View>
 
       <Card style={{ gap: space.sm }}>
         <AppText variant="label">If both devices already had data</AppText>
         <AppText variant="caption" muted>
-          Anything you created on both is now in the vault twice. Qashy renamed the collisions
-          rather than guessing which are the same — the review screen is where you decide.
+          Anything you created on both is now in the vault twice. Qashy renamed
+          the collisions rather than guessing which are the same — the review
+          screen is where you decide.
         </AppText>
       </Card>
 
-      <ActionButton title="Review duplicates" icon="arrow.triangle.2.circlepath" size="large" onPress={() => router.replace('/sync-merge')} />
-      <TextButton title="Done" tone="muted" onPress={() => router.replace('/sync')} />
+      <ActionButton
+        title="Review duplicates"
+        icon="arrow.triangle.2.circlepath"
+        size="large"
+        onPress={() => router.replace("/sync-merge")}
+      />
+      <TextButton
+        title="Done"
+        tone="muted"
+        onPress={() => router.replace("/sync")}
+      />
     </>
   );
 }

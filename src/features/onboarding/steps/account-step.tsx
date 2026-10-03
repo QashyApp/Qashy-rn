@@ -1,24 +1,28 @@
-import { useRef } from 'react';
-import { TextInput, View } from 'react-native';
+import { useRef } from "react";
+import { TextInput, View } from "react-native";
 
-import { AmountHero } from '@/components/finance/amount-hero';
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { Card } from '@/components/ui/card';
-import { FormField } from '@/components/ui/form-field';
-import { MotionPressable } from '@/components/ui/motion';
-import type { AccountType } from '@/domain/models';
-import { StepHeading } from '@/features/onboarding/onboarding-shell';
-import type { OnboardingDraft } from '@/features/onboarding/use-onboarding-flow';
-import { useLocalization } from '@/localization/localization';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { hapticSelection } from '@/utils/haptics';
-import { ACCOUNT_TYPE_INFO } from '@/utils/labels';
+import { AmountHero } from "@/components/finance/amount-hero";
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
+import { FormField } from "@/components/ui/form-field";
+import { MotionPressable } from "@/components/ui/motion";
+import type { AccountType } from "@/domain/models";
+import { StepHeading } from "@/features/onboarding/onboarding-shell";
+import type { OnboardingDraft } from "@/features/onboarding/use-onboarding-flow";
+import { useLocalization } from "@/localization/localization";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { hapticSelection } from "@/utils/haptics";
+import { ACCOUNT_TYPE_INFO } from "@/utils/labels";
 
 const ACCOUNT_TYPES: { value: AccountType; label: string; icon: string }[] = (
-  ['checking', 'cash', 'savings', 'credit', 'wallet'] as const
-).map((value) => ({ value, label: ACCOUNT_TYPE_INFO[value].label, icon: ACCOUNT_TYPE_INFO[value].icon }));
+  ["checking", "cash", "savings", "credit", "wallet"] as const
+).map((value) => ({
+  value,
+  label: ACCOUNT_TYPE_INFO[value].label,
+  icon: ACCOUNT_TYPE_INFO[value].icon,
+}));
 
 export function AccountStep({
   draft,
@@ -44,8 +48,9 @@ export function AccountStep({
       />
       <View
         accessibilityRole="radiogroup"
-        accessibilityLabel={t('Account type')}
-        style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
+        accessibilityLabel={t("Account type")}
+        style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}
+      >
         {ACCOUNT_TYPES.map((item) => {
           const selected = draft.accountType === item.value;
           return (
@@ -66,19 +71,33 @@ export function AccountStep({
                   flexGrow: 1,
                   flexBasis: 96,
                   minHeight: 84,
-                  alignItems: 'center',
-                  justifyContent: 'center',
+                  alignItems: "center",
+                  justifyContent: "center",
                   gap: space.xs,
                   padding: space.sm,
                   borderRadius: radius.card,
-                  borderCurve: 'continuous',
+                  borderCurve: "continuous",
                 },
                 selected
-                  ? materialStyle(theme, 'selected')
-                  : materialStyle(theme, 'control'),
-              ]}>
-              <AppIcon name={item.icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={tile.icon + 2} />
-              <AppText variant="caption" numberOfLines={1} style={{ color: selected ? theme.onAccentContainer : theme.text, fontWeight: '500' }}>{item.label}</AppText>
+                  ? materialStyle(theme, "selected")
+                  : materialStyle(theme, "control"),
+              ]}
+            >
+              <AppIcon
+                name={item.icon}
+                color={selected ? theme.onAccentContainer : theme.textMuted}
+                size={tile.icon + 2}
+              />
+              <AppText
+                variant="caption"
+                numberOfLines={1}
+                style={{
+                  color: selected ? theme.onAccentContainer : theme.text,
+                  fontWeight: "500",
+                }}
+              >
+                {item.label}
+              </AppText>
             </MotionPressable>
           );
         })}

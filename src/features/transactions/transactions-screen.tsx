@@ -1,47 +1,73 @@
-import { router, useLocalSearchParams } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { ScrollView, SectionList, StyleSheet, TextInput, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { router, useLocalSearchParams } from "expo-router";
+import { useMemo, useState } from "react";
+import {
+  ScrollView,
+  SectionList,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AnimatedMoney } from '@/components/finance/animated-money';
-import { StatTile } from '@/components/finance/stat-tile';
-import { TransactionRow } from '@/components/finance/transaction-row';
-import { ActionButton } from '@/components/ui/action-button';
-import { AppIcon } from '@/components/ui/app-icon';
-import { AppText } from '@/components/ui/app-text';
-import { ChoiceChip } from '@/components/ui/choice-chip';
-import { EmptyState } from '@/components/ui/empty-state';
-import { FloatingActionButton } from '@/components/ui/floating-action-button';
-import { IconButton } from '@/components/ui/icon-button';
-import { MonthSwitcher, type MonthDirection } from '@/components/ui/month-switcher';
-import { MonthSwipeView } from '@/components/ui/month-swipe-view';
-import { useMonthSwipe } from '@/components/ui/use-month-swipe';
-import { MotionView, ScreenTransition } from '@/components/ui/motion';
-import { PageHeading } from '@/components/ui/page-heading';
-import { floatingActionMetrics, screenContentMetrics } from '@/components/ui/screen-container';
-import { TextButton } from '@/components/ui/text-button';
-import { useScrollHide } from '@/components/ui/use-scroll-hide';
-import { dayNetMinor } from '@/features/transactions/list/summary';
-import { useLocalization } from '@/localization/localization';
-import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
-import { useScreenMetrics } from '@/theme/layout';
-import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { fontStyle } from '@/theme/typography';
-import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
-import { endOfMonth, monthKey, monthLabel, parseLocalDate, parseMonthKey, startOfMonth } from '@/utils/date';
-import { useDashboardRange } from '@/features/overview/widgets/use-dashboard';
-import { formatMoney } from '@/utils/money';
-import { hapticImpactLight, hapticSelection, hapticSuccess } from '@/utils/haptics';
+import { AnimatedMoney } from "@/components/finance/animated-money";
+import { StatTile } from "@/components/finance/stat-tile";
+import { TransactionRow } from "@/components/finance/transaction-row";
+import { ActionButton } from "@/components/ui/action-button";
+import { AppIcon } from "@/components/ui/app-icon";
+import { AppText } from "@/components/ui/app-text";
+import { ChoiceChip } from "@/components/ui/choice-chip";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FloatingActionButton } from "@/components/ui/floating-action-button";
+import { IconButton } from "@/components/ui/icon-button";
+import {
+  MonthSwitcher,
+  type MonthDirection,
+} from "@/components/ui/month-switcher";
+import { MonthSwipeView } from "@/components/ui/month-swipe-view";
+import { useMonthSwipe } from "@/components/ui/use-month-swipe";
+import { MotionView, ScreenTransition } from "@/components/ui/motion";
+import { PageHeading } from "@/components/ui/page-heading";
+import {
+  floatingActionMetrics,
+  screenContentMetrics,
+} from "@/components/ui/screen-container";
+import { TextButton } from "@/components/ui/text-button";
+import { useScrollHide } from "@/components/ui/use-scroll-hide";
+import { dayNetMinor } from "@/features/transactions/list/summary";
+import { useLocalization } from "@/localization/localization";
+import {
+  useFinanceRepository,
+  useFinanceState,
+} from "@/providers/finance-provider";
+import { useScreenMetrics } from "@/theme/layout";
+import { materialStyle } from "@/theme/materials";
+import { useQashyTheme } from "@/theme/theme";
+import { fontStyle } from "@/theme/typography";
+import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import {
+  endOfMonth,
+  monthKey,
+  monthLabel,
+  parseLocalDate,
+  parseMonthKey,
+  startOfMonth,
+} from "@/utils/date";
+import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
+import { formatMoney } from "@/utils/money";
+import {
+  hapticImpactLight,
+  hapticSelection,
+  hapticSuccess,
+} from "@/utils/haptics";
 
-type KindFilter = 'all' | 'expense' | 'income' | 'transfer' | 'upcoming';
+type KindFilter = "all" | "expense" | "income" | "transfer" | "upcoming";
 
 const KIND_OPTIONS = [
-  { value: 'all', label: 'All', icon: 'list.bullet.rectangle' },
-  { value: 'expense', label: 'Expense', icon: 'arrow.up' },
-  { value: 'income', label: 'Income', icon: 'arrow.down' },
-  { value: 'transfer', label: 'Transfer', icon: 'arrow.left.arrow.right' },
-  { value: 'upcoming', label: 'Upcoming', icon: 'clock' },
+  { value: "all", label: "All", icon: "list.bullet.rectangle" },
+  { value: "expense", label: "Expense", icon: "arrow.up" },
+  { value: "income", label: "Income", icon: "arrow.down" },
+  { value: "transfer", label: "Transfer", icon: "arrow.left.arrow.right" },
+  { value: "upcoming", label: "Upcoming", icon: "clock" },
 ] as const;
 
 /**
@@ -67,12 +93,14 @@ export function TransactionsScreen() {
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ month?: string }>();
-  const [month, setMonth] = useState(() => parseMonthKey(params.month) ?? startOfMonth());
-  const [monthDirection, setMonthDirection] = useState<MonthDirection>('right');
-  const [search, setSearch] = useState('');
+  const [month, setMonth] = useState(
+    () => parseMonthKey(params.month) ?? startOfMonth(),
+  );
+  const [monthDirection, setMonthDirection] = useState<MonthDirection>("right");
+  const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchAllMonths, setSearchAllMonths] = useState(false);
-  const [kind, setKind] = useState<KindFilter>('all');
+  const [kind, setKind] = useState<KindFilter>("all");
   const { visibility: fabVisibility, onScroll } = useScrollHide();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
@@ -88,7 +116,7 @@ export function TransactionsScreen() {
   if (paramMonth !== followedParam) {
     setFollowedParam(paramMonth);
     if (paramMonth && paramMonth !== month) {
-      setMonthDirection(paramMonth > month ? 'right' : 'left');
+      setMonthDirection(paramMonth > month ? "right" : "left");
       setMonth(paramMonth);
       setSelectedIds([]);
     }
@@ -102,16 +130,29 @@ export function TransactionsScreen() {
   };
 
   const allMonths = searchAllMonths && search.trim().length > 0;
-  const monthSwipe = useMonthSwipe({ month, onChange: changeMonth, disabled: allMonths || selectionMode });
+  const monthSwipe = useMonthSwipe({
+    month,
+    onChange: changeMonth,
+    disabled: allMonths || selectionMode,
+  });
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
-  const selectedTransactions = state.transactions.filter((item) => selectedIds.includes(item.id));
-  const hasSelectedTransfers = selectedTransactions.some((item) => item.kind === 'transfer');
-  const selectedKinds = [...new Set(selectedTransactions
-    .filter((item) => item.kind !== 'transfer')
-    .map((item) => item.kind))];
-  const compatibleCategoryKind = selectedKinds.length === 1 ? selectedKinds[0] : null;
+  const selectedTransactions = state.transactions.filter((item) =>
+    selectedIds.includes(item.id),
+  );
+  const hasSelectedTransfers = selectedTransactions.some(
+    (item) => item.kind === "transfer",
+  );
+  const selectedKinds = [
+    ...new Set(
+      selectedTransactions
+        .filter((item) => item.kind !== "transfer")
+        .map((item) => item.kind),
+    ),
+  ];
+  const compatibleCategoryKind =
+    selectedKinds.length === 1 ? selectedKinds[0] : null;
 
   // `state.categories` is listed because the repository reads it internally for
   // hierarchy-aware search; the snapshot argument alone would not re-run this
@@ -119,16 +160,33 @@ export function TransactionsScreen() {
   const categoriesVersion = state.categories;
   const transactions = useMemo(() => {
     void categoriesVersion;
-    return repository.queryTransactions({
-      search,
-      kinds: kind !== 'all' && kind !== 'upcoming' ? [kind] : undefined,
-      statuses: kind === 'upcoming' ? ['upcoming'] : kind === 'all' ? ['posted', 'upcoming'] : ['posted'],
-      fromDate: allMonths || kind === 'upcoming' ? undefined : fromDate,
-      toDate: allMonths || kind === 'upcoming' ? undefined : toDate,
-      // Soonest due first: the next thing to deal with belongs at the top of an Upcoming list.
-      sort: kind === 'upcoming' ? 'oldest' : undefined,
-    }, state.transactions);
-  }, [repository, search, kind, allMonths, fromDate, toDate, state.transactions, categoriesVersion]);
+    return repository.queryTransactions(
+      {
+        search,
+        kinds: kind !== "all" && kind !== "upcoming" ? [kind] : undefined,
+        statuses:
+          kind === "upcoming"
+            ? ["upcoming"]
+            : kind === "all"
+              ? ["posted", "upcoming"]
+              : ["posted"],
+        fromDate: allMonths || kind === "upcoming" ? undefined : fromDate,
+        toDate: allMonths || kind === "upcoming" ? undefined : toDate,
+        // Soonest due first: the next thing to deal with belongs at the top of an Upcoming list.
+        sort: kind === "upcoming" ? "oldest" : undefined,
+      },
+      state.transactions,
+    );
+  }, [
+    repository,
+    search,
+    kind,
+    allMonths,
+    fromDate,
+    toDate,
+    state.transactions,
+    categoriesVersion,
+  ]);
 
   // Totals come from the dashboard aggregate rather than from summing the rows
   // here: it already excludes transfers, uses each transaction's snapshotted
@@ -137,7 +195,10 @@ export function TransactionsScreen() {
 
   // Where "Go to latest" leads when this month is empty.
   const latestMonth = useMemo(() => {
-    const [latest] = repository.queryTransactions({ statuses: ['posted'], limit: 1 }, state.transactions);
+    const [latest] = repository.queryTransactions(
+      { statuses: ["posted"], limit: 1 },
+      state.transactions,
+    );
     return latest ? startOfMonth(latest.localDate) : null;
   }, [repository, state.transactions]);
 
@@ -152,9 +213,18 @@ export function TransactionsScreen() {
   }, [transactions]);
 
   const dayFormat = useMemo(
-    () => new Intl.DateTimeFormat(locale, allMonths
-      ? { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' }
-      : { weekday: 'long', month: 'short', day: 'numeric' }),
+    () =>
+      new Intl.DateTimeFormat(
+        locale,
+        allMonths
+          ? {
+              weekday: "short",
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            }
+          : { weekday: "long", month: "short", day: "numeric" },
+      ),
     [allMonths, locale],
   );
 
@@ -162,7 +232,11 @@ export function TransactionsScreen() {
 
   const toggleSelected = (id: string, options?: { silent?: boolean }) => {
     if (!options?.silent) hapticSelection();
-    setSelectedIds((current) => current.includes(id) ? current.filter((item) => item !== id) : [...current, id]);
+    setSelectedIds((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
   };
 
   // Guards a double-tap on a category chip or "Delete selected" from firing two
@@ -178,7 +252,10 @@ export function TransactionsScreen() {
       setSelectedIds([]);
       setSelectionMode(false);
     } catch (reason) {
-      showError('Couldn’t change category', errorMessage(reason, 'Try a compatible category.'));
+      showError(
+        "Couldn’t change category",
+        errorMessage(reason, "Try a compatible category."),
+      );
     } finally {
       setBusy(false);
     }
@@ -187,45 +264,67 @@ export function TransactionsScreen() {
   const deleteSelected = async () => {
     if (busy) return;
     const ids = [...selectedIds];
-    if (!(await confirmDestructive({ title: ids.length === 1 ? 'Delete 1 transaction?' : `Delete ${ids.length} transactions?`, message: 'They will be removed from your ledger.' }))) return;
+    if (
+      !(await confirmDestructive({
+        title:
+          ids.length === 1
+            ? "Delete 1 transaction?"
+            : `Delete ${ids.length} transactions?`,
+        message: "They will be removed from your ledger.",
+      }))
+    )
+      return;
     setBusy(true);
     try {
-      await repository.deleteEntities('transactions', ids);
+      await repository.deleteEntities("transactions", ids);
       hapticSuccess();
       setSelectedIds([]);
       setSelectionMode(false);
     } catch (reason) {
-      showError('Couldn’t delete transactions', errorMessage(reason, 'Try again.'));
+      showError(
+        "Couldn’t delete transactions",
+        errorMessage(reason, "Try again."),
+      );
     } finally {
       setBusy(false);
     }
   };
 
-  const resolveUpcoming = async (id: string, action: 'skip' | 'confirm') => {
+  const resolveUpcoming = async (id: string, action: "skip" | "confirm") => {
     if (resolvingId) return;
     setResolvingId(id);
     try {
-      await (action === 'skip' ? repository.skipUpcoming(id) : repository.confirmUpcoming(id));
-      if (action === 'confirm') hapticSuccess();
+      await (action === "skip"
+        ? repository.skipUpcoming(id)
+        : repository.confirmUpcoming(id));
+      if (action === "confirm") hapticSuccess();
       else hapticSelection();
     } catch (reason) {
-      showError(action === 'skip' ? 'Couldn’t skip this item' : 'Couldn’t mark this item paid', errorMessage(reason, 'Try again.'));
+      showError(
+        action === "skip"
+          ? "Couldn’t skip this item"
+          : "Couldn’t mark this item paid",
+        errorMessage(reason, "Try again."),
+      );
     } finally {
       setResolvingId(null);
     }
   };
 
   const clearFilters = () => {
-    setSearch('');
+    setSearch("");
     setSearchAllMonths(false);
-    setKind('all');
+    setKind("all");
     clearSelection();
   };
 
   // The list content and the pinned toolbar have to occupy the same column, so
   // both derive their width and gutters from one call.
   // A ledger is a reading column: past this width amounts drift far from their titles.
-  const content = { ...screenContentMetrics(metrics, insets, space), maxWidth: 860 };
+  const content = {
+    ...screenContentMetrics(metrics, insets, space),
+    maxWidth: 860,
+  };
   const toolbarStyle = {
     width: content.width,
     maxWidth: content.maxWidth,
@@ -240,243 +339,424 @@ export function TransactionsScreen() {
   const gutter = Number(content.paddingLeft ?? 0);
   const currency = state.settings.baseCurrency;
   const compactFigures = metrics.contentWidth < 520;
-  const filtered = search.trim().length > 0 || kind !== 'all';
+  const filtered = search.trim().length > 0 || kind !== "all";
   // The floating batch bar takes the FAB's usual spot while it is open, so the
   // two never compete for the same corner of the screen — adding a transaction
   // mid-selection is also just confusing.
-  const batchBarBottom = metrics.hasBottomNavigation ? 92 + insets.bottom : space.xxl + insets.bottom;
+  const batchBarBottom = metrics.hasBottomNavigation
+    ? 92 + insets.bottom
+    : space.xxl + insets.bottom;
 
   return (
-    <MonthSwipeView swipe={monthSwipe} style={{ flex: 1, backgroundColor: theme.background }}>
+    <MonthSwipeView
+      swipe={monthSwipe}
+      style={{ flex: 1, backgroundColor: theme.background }}
+    >
       <ScreenTransition style={{ flex: 1 }}>
-      {/* Month, search and filters sit outside the list, not inside its header.
+        {/* Month, search and filters sit outside the list, not inside its header.
           Scrolled away, they made the ledger's most-used controls unreachable
           exactly when a long list made them necessary. Pinned, the list becomes
           a result set that responds under a control surface that stays put. */}
-      <View style={{ borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border, backgroundColor: theme.background, zIndex: 2 }}>
-        <View style={toolbarStyle}>
-          <PageHeading title="Transactions" />
-          <View style={{ gap: space.md }}>
-            <View style={{ alignSelf: 'flex-start' }}>
-              <MonthSwitcher value={month} direction={monthDirection} onChange={changeMonth} disabled={allMonths} />
-            </View>
-            <MotionView
-              key={`${month}-${allMonths}`}
-              variant={monthDirection}
-              accessibilityLabel={allMonths ? undefined : `${monthLabel(month, locale)} ${t('summary')}`}
-              style={{ flexDirection: 'row', gap: space.sm, opacity: allMonths ? 0.45 : 1 }}>
-              {([
-                ['Income', summary.incomeMinor, theme.positive],
-                ['Spent', summary.expenseMinor, theme.text],
-                ['Net', summary.netFlowMinor, summary.netFlowMinor > 0 ? theme.positive : summary.netFlowMinor < 0 ? theme.negative : theme.text],
-              ] as const).map(([label, amount, color]) => (
-                <View key={label} style={{ flex: 1, minWidth: 0 }}>
-                  <StatTile
-                    variant="sunken"
-                    label={label}
-                    value={(
-                      <AnimatedMoney minor={amount} currency={currency} locale={locale} compact={compactFigures} variant="label" numeric style={{ color }} />
-                    )}
-                  />
-                </View>
-              ))}
-            </MotionView>
-          </View>
-          <View style={{ minHeight: 44, borderRadius: radius.pill, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, gap: space.sm, ...materialStyle(theme, 'sunken'), ...(searchFocused ? { boxShadow: `inset 0 0 0 2px ${String(theme.accent)}` } : null) }}>
-            <AppIcon name="magnifyingglass" color={theme.textMuted} size={18} />
-            <TextInput
-              accessibilityLabel={t('Search transactions')}
-              placeholder={t(searchAllMonths ? 'Search all months' : 'Search this month')}
-              placeholderTextColor={theme.textMuted}
-              value={search}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              onChangeText={(value) => {
-                setSearch(value);
-                clearSelection();
-              }}
-              style={{ flex: 1, minHeight: 44, color: theme.text, fontSize: 16, ...fontStyle('regular', theme.type), writingDirection: isRtl ? 'rtl' : 'ltr', textAlign: isRtl ? 'right' : 'left' }}
-            />
-            {search ? <IconButton label="Clear search" icon="xmark" iconSize={17} enteringVariant="zoom" onPress={() => {
-              setSearch('');
-              clearSelection();
-            }} style={{ marginEnd: -space.sm }} /> : null}
-          </View>
-          {search ? (
-            <MotionView variant="down" exit animateLayout style={{ flexDirection: 'row' }}>
-              <ChoiceChip
-                mode="checkbox"
-                icon="calendar"
-                label="Search all months"
-                selected={searchAllMonths}
-                onPress={() => {
-                  setSearchAllMonths((current) => !current);
-                  clearSelection();
-                }}
-              />
-            </MotionView>
-          ) : null}
-          {/* Five options do not fit a segmented control on a phone without
-              truncating, so they scroll sideways as one row instead of wrapping. */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            accessibilityRole="radiogroup"
-            accessibilityLabel={t('Transaction type filter')}
-            // Bleeds to the screen edge so chips scroll out from under the gutter.
-            style={{ marginHorizontal: -gutter }}
-            contentContainerStyle={{ gap: space.sm, paddingHorizontal: gutter }}>
-            {KIND_OPTIONS.map((option) => (
-              <ChoiceChip
-                key={option.value}
-                label={option.label}
-                icon={option.icon}
-                selected={kind === option.value}
-                onPress={() => {
-                  setKind(option.value);
-                  clearSelection();
-                }}
-              />
-            ))}
-          </ScrollView>
-        </View>
-      </View>
-      <SectionList
-        contentInsetAdjustmentBehavior="automatic"
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        style={{ flex: 1, backgroundColor: theme.background }}
-        contentContainerStyle={[content, { paddingTop: 0, paddingBottom: (Number(content.paddingBottom) || 0) + (selectionMode ? 140 : 0) }]}
-        sections={sections}
-        extraData={`${selectedIds.join(',')}|${selectionMode}|${state.transactions.map((item) => `${item.id}:${item.revision}`).join(',')}`}
-        keyExtractor={(item) => `${item.id}:${item.revision}`}
-        // The day a row belongs to stays on screen for as long as that day's
-        // rows do, so a fast scroll through a busy month never loses its place.
-        stickySectionHeadersEnabled
-        ListHeaderComponent={
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: space.md, alignItems: 'center', paddingTop: space.md }}>
-            {/* One string so the dictionary's count patterns can match; split
-                children would leave "transactions" on its own with no key. */}
-            <AppText literal variant="caption" muted>{t(`${transactions.length} ${transactions.length === 1 ? 'transaction' : 'transactions'}`)}</AppText>
-            <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {transactions.length ? (
-                <TextButton
-                  title={selectionMode ? 'Done selecting' : 'Select'}
-                  tone={selectionMode ? 'muted' : 'accent'}
-                  onPress={() => {
-                    setSelectionMode((current) => !current);
-                    setSelectedIds([]);
-                  }}
+        <View
+          style={{
+            borderBottomWidth: StyleSheet.hairlineWidth,
+            borderBottomColor: theme.border,
+            backgroundColor: theme.background,
+            zIndex: 2,
+          }}
+        >
+          <View style={toolbarStyle}>
+            <PageHeading title="Transactions" />
+            <View style={{ gap: space.md }}>
+              <View style={{ alignSelf: "flex-start" }}>
+                <MonthSwitcher
+                  value={month}
+                  direction={monthDirection}
+                  onChange={changeMonth}
+                  disabled={allMonths}
                 />
-              ) : null}
-              <TextButton title="Import or export" onPress={() => router.push('/csv')} />
+              </View>
+              <MotionView
+                key={`${month}-${allMonths}`}
+                variant={monthDirection}
+                accessibilityLabel={
+                  allMonths
+                    ? undefined
+                    : `${monthLabel(month, locale)} ${t("summary")}`
+                }
+                style={{
+                  flexDirection: "row",
+                  gap: space.sm,
+                  opacity: allMonths ? 0.45 : 1,
+                }}
+              >
+                {(
+                  [
+                    ["Income", summary.incomeMinor, theme.positive],
+                    ["Spent", summary.expenseMinor, theme.text],
+                    [
+                      "Net",
+                      summary.netFlowMinor,
+                      summary.netFlowMinor > 0
+                        ? theme.positive
+                        : summary.netFlowMinor < 0
+                          ? theme.negative
+                          : theme.text,
+                    ],
+                  ] as const
+                ).map(([label, amount, color]) => (
+                  <View key={label} style={{ flex: 1, minWidth: 0 }}>
+                    <StatTile
+                      variant="sunken"
+                      label={label}
+                      value={
+                        <AnimatedMoney
+                          minor={amount}
+                          currency={currency}
+                          locale={locale}
+                          compact={compactFigures}
+                          variant="label"
+                          numeric
+                          style={{ color }}
+                        />
+                      }
+                    />
+                  </View>
+                ))}
+              </MotionView>
             </View>
-          </View>
-        }
-        renderSectionHeader={({ section }) => {
-          const net = dayNetMinor(section.data);
-          const netText = formatMoney(net, currency, locale, { sign: true });
-          return (
-            // Opaque, because a sticky header scrolls over live content. The
-            // negative margins let the fill reach the column's gutters so rows do
-            // not slide past it in the margin.
             <View
               style={{
-                flexDirection: 'row',
-                alignItems: 'baseline',
-                justifyContent: 'space-between',
+                minHeight: 44,
+                borderRadius: radius.pill,
+                borderCurve: "continuous",
+                flexDirection: "row",
+                alignItems: "center",
+                paddingHorizontal: space.lg,
                 gap: space.sm,
-                backgroundColor: theme.background,
-                paddingTop: space.lg,
-                paddingBottom: space.sm,
-                marginHorizontal: -space.xs,
-                paddingHorizontal: space.xs,
-              }}>
-              <AppText literal variant="overline" muted>{dayFormat.format(parseLocalDate(section.title))}</AppText>
-              <AppText literal figure variant="caption" muted numeric>{netText}</AppText>
+                ...materialStyle(theme, "sunken"),
+                ...(searchFocused
+                  ? { boxShadow: `inset 0 0 0 2px ${String(theme.accent)}` }
+                  : null),
+              }}
+            >
+              <AppIcon
+                name="magnifyingglass"
+                color={theme.textMuted}
+                size={18}
+              />
+              <TextInput
+                accessibilityLabel={t("Search transactions")}
+                placeholder={t(
+                  searchAllMonths ? "Search all months" : "Search this month",
+                )}
+                placeholderTextColor={theme.textMuted}
+                value={search}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
+                onChangeText={(value) => {
+                  setSearch(value);
+                  clearSelection();
+                }}
+                style={{
+                  flex: 1,
+                  minHeight: 44,
+                  color: theme.text,
+                  fontSize: 16,
+                  ...fontStyle("regular", theme.type),
+                  writingDirection: isRtl ? "rtl" : "ltr",
+                  textAlign: isRtl ? "right" : "left",
+                }}
+              />
+              {search ? (
+                <IconButton
+                  label="Clear search"
+                  icon="xmark"
+                  iconSize={17}
+                  enteringVariant="zoom"
+                  onPress={() => {
+                    setSearch("");
+                    clearSelection();
+                  }}
+                  style={{ marginEnd: -space.sm }}
+                />
+              ) : null}
             </View>
-          );
-        }}
-        // Each day is one grouped surface with hairlines between its rows,
-        // rather than a separate card per transaction. A true nested `Card`
-        // can't wrap a section's rows here — `SectionList` virtualises each
-        // row independently, so there is no single element spanning a whole
-        // day to attach one shadow to. Every row instead carries the same
-        // flat `card` background and shadow (no gradient, which would band
-        // visibly repeating down a multi-row day); stacked with no gap and
-        // rounded only at the day's first/last row, they read as one raised
-        // slab per day rather than as N separate rows happening to touch.
-        renderItem={({ item, index, section }) => {
-          const selected = selectedIds.includes(item.id);
-          const first = index === 0;
-          const last = index === section.data.length - 1;
-          return (
-            <MotionView entrance={false} animateLayout exit>
+            {search ? (
+              <MotionView
+                variant="down"
+                exit
+                animateLayout
+                style={{ flexDirection: "row" }}
+              >
+                <ChoiceChip
+                  mode="checkbox"
+                  icon="calendar"
+                  label="Search all months"
+                  selected={searchAllMonths}
+                  onPress={() => {
+                    setSearchAllMonths((current) => !current);
+                    clearSelection();
+                  }}
+                />
+              </MotionView>
+            ) : null}
+            {/* Five options do not fit a segmented control on a phone without
+              truncating, so they scroll sideways as one row instead of wrapping. */}
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              accessibilityRole="radiogroup"
+              accessibilityLabel={t("Transaction type filter")}
+              // Bleeds to the screen edge so chips scroll out from under the gutter.
+              style={{ marginHorizontal: -gutter }}
+              contentContainerStyle={{
+                gap: space.sm,
+                paddingHorizontal: gutter,
+              }}
+            >
+              {KIND_OPTIONS.map((option) => (
+                <ChoiceChip
+                  key={option.value}
+                  label={option.label}
+                  icon={option.icon}
+                  selected={kind === option.value}
+                  onPress={() => {
+                    setKind(option.value);
+                    clearSelection();
+                  }}
+                />
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+        <SectionList
+          contentInsetAdjustmentBehavior="automatic"
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+          style={{ flex: 1, backgroundColor: theme.background }}
+          contentContainerStyle={[
+            content,
+            {
+              paddingTop: 0,
+              paddingBottom:
+                (Number(content.paddingBottom) || 0) +
+                (selectionMode ? 140 : 0),
+            },
+          ]}
+          sections={sections}
+          extraData={`${selectedIds.join(",")}|${selectionMode}|${state.transactions.map((item) => `${item.id}:${item.revision}`).join(",")}`}
+          keyExtractor={(item) => `${item.id}:${item.revision}`}
+          // The day a row belongs to stays on screen for as long as that day's
+          // rows do, so a fast scroll through a busy month never loses its place.
+          stickySectionHeadersEnabled
+          ListHeaderComponent={
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                gap: space.md,
+                alignItems: "center",
+                paddingTop: space.md,
+              }}
+            >
+              {/* One string so the dictionary's count patterns can match; split
+                children would leave "transactions" on its own with no key. */}
+              <AppText literal variant="caption" muted>
+                {t(
+                  `${transactions.length} ${transactions.length === 1 ? "transaction" : "transactions"}`,
+                )}
+              </AppText>
               <View
                 style={{
-                  paddingHorizontal: space.md,
-                  backgroundColor: selected ? theme.accentContainer : theme.surface,
-                  boxShadow: theme.shadowCard,
-                  borderTopLeftRadius: first ? radius.card : 0,
-                  borderTopRightRadius: first ? radius.card : 0,
-                  borderBottomLeftRadius: last ? radius.card : 0,
-                  borderBottomRightRadius: last ? radius.card : 0,
-                  borderCurve: 'continuous',
-                }}>
-                {first ? null : <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginStart: 52 }} />}
-                <TransactionRow
-                  transaction={item}
-                  showDate={false}
-                  selectionMode={selectionMode}
-                  selected={selected}
-                  onLongPress={() => {
-                    if (!selectionMode) hapticImpactLight();
-                    setSelectionMode(true);
-                    toggleSelected(item.id, { silent: !selectionMode });
-                  }}
-                  onPress={selectionMode ? () => toggleSelected(item.id) : undefined}
-                />
-                {item.status === 'upcoming' && !selectionMode ? (
-                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm, paddingBottom: space.xs }}>
-                    <TextButton title="Skip" tone="muted" disabled={resolvingId !== null} onPress={() => resolveUpcoming(item.id, 'skip')} />
-                    <TextButton title="Mark paid" disabled={resolvingId !== null} onPress={() => resolveUpcoming(item.id, 'confirm')} />
-                  </View>
+                  flexDirection: "row",
+                  gap: space.sm,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                }}
+              >
+                {transactions.length ? (
+                  <TextButton
+                    title={selectionMode ? "Done selecting" : "Select"}
+                    tone={selectionMode ? "muted" : "accent"}
+                    onPress={() => {
+                      setSelectionMode((current) => !current);
+                      setSelectedIds([]);
+                    }}
+                  />
                 ) : null}
+                <TextButton
+                  title="Import or export"
+                  onPress={() => router.push("/csv")}
+                />
               </View>
-            </MotionView>
-          );
-        }}
-        ListEmptyComponent={
-          <MotionView key={`${month}-${filtered}`} variant={monthDirection}>
-            {filtered ? (
-              <EmptyState
-                icon="magnifyingglass"
-                title="Nothing matches"
-                body={allMonths ? 'Try another search or filter.' : `Nothing in ${monthLabel(month, locale)} matches. Try another filter, or search all months.`}>
-                <ActionButton title="Clear filters" variant="secondary" onPress={clearFilters} />
-              </EmptyState>
-            ) : state.transactions.length ? (
-              <EmptyState
-                icon="calendar"
-                title={`No transactions in ${monthLabel(month, locale)}`}
-                body="Add one for this month, or jump to your latest activity.">
-                <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', justifyContent: 'center' }}>
-                  {latestMonth && latestMonth !== month ? (
-                    <ActionButton
-                      title="Go to latest"
-                      variant="secondary"
-                      onPress={() => changeMonth(latestMonth, latestMonth > month ? 'right' : 'left')}
+            </View>
+          }
+          renderSectionHeader={({ section }) => {
+            const net = dayNetMinor(section.data);
+            const netText = formatMoney(net, currency, locale, { sign: true });
+            return (
+              // Opaque, because a sticky header scrolls over live content. The
+              // negative margins let the fill reach the column's gutters so rows do
+              // not slide past it in the margin.
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "baseline",
+                  justifyContent: "space-between",
+                  gap: space.sm,
+                  backgroundColor: theme.background,
+                  paddingTop: space.lg,
+                  paddingBottom: space.sm,
+                  marginHorizontal: -space.xs,
+                  paddingHorizontal: space.xs,
+                }}
+              >
+                <AppText literal variant="overline" muted>
+                  {dayFormat.format(parseLocalDate(section.title))}
+                </AppText>
+                <AppText literal figure variant="caption" muted numeric>
+                  {netText}
+                </AppText>
+              </View>
+            );
+          }}
+          // Each day is one grouped surface with hairlines between its rows,
+          // rather than a separate card per transaction. A true nested `Card`
+          // can't wrap a section's rows here — `SectionList` virtualises each
+          // row independently, so there is no single element spanning a whole
+          // day to attach one shadow to. Every row instead carries the same
+          // flat `card` background and shadow (no gradient, which would band
+          // visibly repeating down a multi-row day); stacked with no gap and
+          // rounded only at the day's first/last row, they read as one raised
+          // slab per day rather than as N separate rows happening to touch.
+          renderItem={({ item, index, section }) => {
+            const selected = selectedIds.includes(item.id);
+            const first = index === 0;
+            const last = index === section.data.length - 1;
+            return (
+              <MotionView entrance={false} animateLayout exit>
+                <View
+                  style={{
+                    paddingHorizontal: space.md,
+                    backgroundColor: selected
+                      ? theme.accentContainer
+                      : theme.surface,
+                    boxShadow: theme.shadowCard,
+                    borderTopLeftRadius: first ? radius.card : 0,
+                    borderTopRightRadius: first ? radius.card : 0,
+                    borderBottomLeftRadius: last ? radius.card : 0,
+                    borderBottomRightRadius: last ? radius.card : 0,
+                    borderCurve: "continuous",
+                  }}
+                >
+                  {first ? null : (
+                    <View
+                      style={{
+                        height: StyleSheet.hairlineWidth,
+                        backgroundColor: theme.border,
+                        marginStart: 52,
+                      }}
                     />
+                  )}
+                  <TransactionRow
+                    transaction={item}
+                    showDate={false}
+                    selectionMode={selectionMode}
+                    selected={selected}
+                    onLongPress={() => {
+                      if (!selectionMode) hapticImpactLight();
+                      setSelectionMode(true);
+                      toggleSelected(item.id, { silent: !selectionMode });
+                    }}
+                    onPress={
+                      selectionMode ? () => toggleSelected(item.id) : undefined
+                    }
+                  />
+                  {item.status === "upcoming" && !selectionMode ? (
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        justifyContent: "flex-end",
+                        gap: space.sm,
+                        paddingBottom: space.xs,
+                      }}
+                    >
+                      <TextButton
+                        title="Skip"
+                        tone="muted"
+                        disabled={resolvingId !== null}
+                        onPress={() => resolveUpcoming(item.id, "skip")}
+                      />
+                      <TextButton
+                        title="Mark paid"
+                        disabled={resolvingId !== null}
+                        onPress={() => resolveUpcoming(item.id, "confirm")}
+                      />
+                    </View>
                   ) : null}
                 </View>
-              </EmptyState>
-            ) : (
-              <EmptyState icon="arrow.left.arrow.right" title="No transactions yet" body="Add your first income, expense, or transfer." />
-            )}
-          </MotionView>
-        }
-        ListFooterComponent={<View style={{ height: 88 }} />}
-      />
+              </MotionView>
+            );
+          }}
+          ListEmptyComponent={
+            <MotionView key={`${month}-${filtered}`} variant={monthDirection}>
+              {filtered ? (
+                <EmptyState
+                  icon="magnifyingglass"
+                  title="Nothing matches"
+                  body={
+                    allMonths
+                      ? "Try another search or filter."
+                      : `Nothing in ${monthLabel(month, locale)} matches. Try another filter, or search all months.`
+                  }
+                >
+                  <ActionButton
+                    title="Clear filters"
+                    variant="secondary"
+                    onPress={clearFilters}
+                  />
+                </EmptyState>
+              ) : state.transactions.length ? (
+                <EmptyState
+                  icon="calendar"
+                  title={`No transactions in ${monthLabel(month, locale)}`}
+                  body="Add one for this month, or jump to your latest activity."
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      gap: space.sm,
+                      flexWrap: "wrap",
+                      justifyContent: "center",
+                    }}
+                  >
+                    {latestMonth && latestMonth !== month ? (
+                      <ActionButton
+                        title="Go to latest"
+                        variant="secondary"
+                        onPress={() =>
+                          changeMonth(
+                            latestMonth,
+                            latestMonth > month ? "right" : "left",
+                          )
+                        }
+                      />
+                    ) : null}
+                  </View>
+                </EmptyState>
+              ) : (
+                <EmptyState
+                  icon="arrow.left.arrow.right"
+                  title="No transactions yet"
+                  body="Add your first income, expense, or transfer."
+                />
+              )}
+            </MotionView>
+          }
+          ListFooterComponent={<View style={{ height: 88 }} />}
+        />
       </ScreenTransition>
       {selectionMode ? (
         <MotionView
@@ -484,56 +764,131 @@ export function TransactionsScreen() {
           exit
           animateLayout
           style={{
-            position: 'absolute',
+            position: "absolute",
             left: gutter,
             right: gutter,
             bottom: batchBarBottom,
             maxWidth: content.maxWidth,
-            alignSelf: 'center',
-          }}>
+            alignSelf: "center",
+          }}
+        >
           <View
             style={{
               gap: space.md,
               padding: space.lg,
               borderRadius: radius.sheet,
-              borderCurve: 'continuous',
-              ...materialStyle(theme, 'overlay'),
-            }}>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
-              <MotionView key={selectedIds.length} variant="fade" animateLayout style={{ flexShrink: 1 }}>
-                <AppText literal variant="headline">{t(`${selectedIds.length} selected`)}</AppText>
+              borderCurve: "continuous",
+              ...materialStyle(theme, "overlay"),
+            }}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: space.md,
+              }}
+            >
+              <MotionView
+                key={selectedIds.length}
+                variant="fade"
+                animateLayout
+                style={{ flexShrink: 1 }}
+              >
+                <AppText literal variant="headline">
+                  {t(`${selectedIds.length} selected`)}
+                </AppText>
               </MotionView>
-              <TextButton title="Cancel" tone="muted" onPress={() => {
-                setSelectedIds([]);
-                setSelectionMode(false);
-              }} />
+              <TextButton
+                title="Cancel"
+                tone="muted"
+                onPress={() => {
+                  setSelectedIds([]);
+                  setSelectionMode(false);
+                }}
+              />
             </View>
             {selectedIds.length ? (
               <>
                 {hasSelectedTransfers ? (
-                  <AppText variant="caption" muted>Transfers do not have categories. Select only income or expense transactions to change categories.</AppText>
+                  <AppText variant="caption" muted>
+                    Transfers do not have categories. Select only income or
+                    expense transactions to change categories.
+                  </AppText>
                 ) : (
                   <>
-                    <AppText variant="caption" muted>Change category</AppText>
-                    {selectedKinds.length > 1 ? <AppText variant="caption" muted>Select only income or only expense transactions to assign a category.</AppText> : null}
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: space.sm }}>
-                      <ChoiceChip mode="button" icon="questionmark.circle" label="Uncategorized" selected={false} disabled={busy} onPress={() => changeCategory(null)} />
-                      {state.categories.filter((item) => item.kind === compatibleCategoryKind && !item.archived).map((category) => (
-                        <ChoiceChip mode="button" key={category.id} literal icon={category.icon} label={category.name} selected={false} disabled={busy} onPress={() => changeCategory(category.id)} />
-                      ))}
+                    <AppText variant="caption" muted>
+                      Change category
+                    </AppText>
+                    {selectedKinds.length > 1 ? (
+                      <AppText variant="caption" muted>
+                        Select only income or only expense transactions to
+                        assign a category.
+                      </AppText>
+                    ) : null}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={{
+                        flexDirection: "row",
+                        gap: space.sm,
+                      }}
+                    >
+                      <ChoiceChip
+                        mode="button"
+                        icon="questionmark.circle"
+                        label="Uncategorized"
+                        selected={false}
+                        disabled={busy}
+                        onPress={() => changeCategory(null)}
+                      />
+                      {state.categories
+                        .filter(
+                          (item) =>
+                            item.kind === compatibleCategoryKind &&
+                            !item.archived,
+                        )
+                        .map((category) => (
+                          <ChoiceChip
+                            mode="button"
+                            key={category.id}
+                            literal
+                            icon={category.icon}
+                            label={category.name}
+                            selected={false}
+                            disabled={busy}
+                            onPress={() => changeCategory(category.id)}
+                          />
+                        ))}
                     </ScrollView>
                   </>
                 )}
-                <ActionButton title="Delete selected" icon="trash" variant="danger" disabled={busy} onPress={deleteSelected} />
+                <ActionButton
+                  title="Delete selected"
+                  icon="trash"
+                  variant="danger"
+                  disabled={busy}
+                  onPress={deleteSelected}
+                />
               </>
-            ) : <AppText variant="caption" muted>Choose one or more transactions below.</AppText>}
+            ) : (
+              <AppText variant="caption" muted>
+                Choose one or more transactions below.
+              </AppText>
+            )}
           </View>
         </MotionView>
       ) : (
         <FloatingActionButton
           label="Add transaction"
           visibility={fabVisibility}
-          onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/transactions' } })}
+          onPress={() =>
+            router.push({
+              pathname: "/transaction",
+              params: { returnTo: "/transactions" },
+            })
+          }
           style={floatingActionMetrics(metrics, insets, space)}
         />
       )}

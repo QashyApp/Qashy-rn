@@ -18,8 +18,14 @@
  * until the user tries to change something.
  */
 
-import type { Account, Budget, FinanceState, Goal, RecurringRule } from '@/domain/models';
-import { todayLocal } from '@/utils/date';
+import type {
+  Account,
+  Budget,
+  FinanceState,
+  Goal,
+  RecurringRule,
+} from "@/domain/models";
+import { todayLocal } from "@/utils/date";
 import {
   BASE_CURRENCY,
   expectConverged,
@@ -32,9 +38,9 @@ import {
   sync,
   transactionInputOf,
   type VaultDevice,
-} from '@/sync/engine/__tests__/vault';
+} from "@/sync/engine/__tests__/vault";
 
-const TODAY = '2026-07-15';
+const TODAY = "2026-07-15";
 
 /**
  * A vault with history, shared by every device.
@@ -60,26 +66,27 @@ interface Action {
   run: (device: VaultDevice, tick: number) => Promise<boolean>;
 }
 
-const liveAccounts = (state: FinanceState) => state.accounts.filter((row) => !row.archived);
+const liveAccounts = (state: FinanceState) =>
+  state.accounts.filter((row) => !row.archived);
 
 const ACTIONS: readonly Action[] = [
   {
-    name: 'addAccount',
+    name: "addAccount",
     async run(device, tick) {
       await device.repository.saveAccount({
         name: `Account ${tick}`,
-        type: 'checking',
+        type: "checking",
         currency: BASE_CURRENCY,
         openingBalanceMinor: 1000 * (tick % 7),
-        icon: 'wallet',
-        color: '#00A58E',
+        icon: "wallet",
+        color: "#00A58E",
         archived: false,
       });
       return true;
     },
   },
   {
-    name: 'renameAccount',
+    name: "renameAccount",
     async run(device, tick) {
       const [account] = liveAccounts(device.state);
       if (!account) return false;
@@ -91,13 +98,13 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'addCategory',
+    name: "addCategory",
     async run(device, tick) {
       await device.repository.saveCategory({
         name: `Category ${tick}`,
-        kind: 'expense',
-        icon: 'tag',
-        color: '#5B8DEF',
+        kind: "expense",
+        icon: "tag",
+        color: "#5B8DEF",
         parentId: null,
         archived: false,
       });
@@ -105,20 +112,25 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'addTag',
+    name: "addTag",
     async run(device, tick) {
-      await device.repository.saveTag({ name: `Tag ${tick}`, color: '#C47ED0' });
+      await device.repository.saveTag({
+        name: `Tag ${tick}`,
+        color: "#C47ED0",
+      });
       return true;
     },
   },
   {
-    name: 'addTransaction',
+    name: "addTransaction",
     async run(device, tick) {
       const accounts = liveAccounts(device.state);
       if (!accounts.length) return false;
-      const category = device.state.categories.find((row) => row.kind === 'expense');
+      const category = device.state.categories.find(
+        (row) => row.kind === "expense",
+      );
       await device.repository.saveTransaction({
-        kind: 'expense',
+        kind: "expense",
         title: `Spend ${tick}`,
         localDate: TODAY,
         accountId: accounts[tick % accounts.length].id,
@@ -129,7 +141,7 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'editTransaction',
+    name: "editTransaction",
     async run(device, tick) {
       const [transaction] = device.state.transactions;
       if (!transaction) return false;
@@ -141,10 +153,14 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'categorizeTransaction',
+    name: "categorizeTransaction",
     async run(device, tick) {
-      const transactions = device.state.transactions.filter((row) => row.kind !== 'transfer');
-      const categories = device.state.categories.filter((row) => row.kind === 'expense');
+      const transactions = device.state.transactions.filter(
+        (row) => row.kind !== "transfer",
+      );
+      const categories = device.state.categories.filter(
+        (row) => row.kind === "expense",
+      );
       if (!transactions.length || !categories.length) return false;
       await device.repository.updateTransactionsCategory(
         [transactions[tick % transactions.length].id],
@@ -154,28 +170,35 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'deleteTransaction',
+    name: "deleteTransaction",
     async run(device, tick) {
       const transactions = device.state.transactions;
       if (transactions.length < 2) return false;
-      await device.repository.deleteEntities('transactions', [
+      await device.repository.deleteEntities("transactions", [
         transactions[tick % transactions.length].id,
       ]);
       return true;
     },
   },
   {
-    name: 'addBudget',
+    name: "addBudget",
     async run(device, tick) {
-      const categories = device.state.categories.filter((row) => row.kind === 'expense');
+      const categories = device.state.categories.filter(
+        (row) => row.kind === "expense",
+      );
       if (!categories.length) return false;
       const category = categories[tick % categories.length];
       await device.repository.saveBudget({
         name: `Budget ${tick}`,
-        icon: 'chart.pie',
-        color: '#E08C5A',
+        icon: "chart.pie",
+        color: "#E08C5A",
         limitMinor: 50_000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-07-01",
+          endDate: null,
+        },
         rollover: tick % 2 === 0,
         filters: { accountIds: [], categoryIds: [category.id], tagIds: [] },
         categoryLimits: [{ categoryId: category.id, limitMinor: 10_000 }],
@@ -185,11 +208,13 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'editBudgetFilters',
+    name: "editBudgetFilters",
     async run(device, tick) {
       const [budget] = device.state.budgets;
       if (!budget) return false;
-      const categories = device.state.categories.filter((row) => row.kind === 'expense');
+      const categories = device.state.categories.filter(
+        (row) => row.kind === "expense",
+      );
       if (!categories.length) return false;
       const category = categories[tick % categories.length];
       await device.repository.saveBudget(
@@ -205,7 +230,7 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'addBudgetAdjustment',
+    name: "addBudgetAdjustment",
     async run(device, tick) {
       const budget = device.state.budgets.find((row) => !row.archived);
       if (!budget) return false;
@@ -220,13 +245,16 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'removeBudgetAdjustment',
+    name: "removeBudgetAdjustment",
     async run(device) {
       const today = todayLocal();
-      const adjustment = device.state.budgetAdjustments.find((row) =>
-        row.amountMinor > 0 &&
-        row.date === today &&
-        device.state.budgets.some((budget) => budget.id === row.budgetId && !budget.archived),
+      const adjustment = device.state.budgetAdjustments.find(
+        (row) =>
+          row.amountMinor > 0 &&
+          row.date === today &&
+          device.state.budgets.some(
+            (budget) => budget.id === row.budgetId && !budget.archived,
+          ),
       );
       if (!adjustment) return false;
       await device.repository.deleteBudgetAdjustment(adjustment.id);
@@ -234,13 +262,13 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'addGoalAndContribution',
+    name: "addGoalAndContribution",
     async run(device, tick) {
       const goal = await device.repository.saveGoal({
         name: `Goal ${tick}`,
-        kind: 'saving',
-        icon: 'target',
-        color: '#3B9A69',
+        kind: "saving",
+        icon: "target",
+        color: "#3B9A69",
         targetMinor: 100_000,
         initialMinor: 0,
         targetDate: null,
@@ -253,32 +281,32 @@ const ACTIONS: readonly Action[] = [
         amountMinor: 1_000 + tick,
         localDate: TODAY,
         transactionId: null,
-        note: '',
+        note: "",
       });
       return true;
     },
   },
   {
-    name: 'addRecurringRule',
+    name: "addRecurringRule",
     async run(device, tick) {
       const accounts = liveAccounts(device.state);
       if (!accounts.length) return false;
       await device.repository.saveRecurringRule({
         template: {
-          kind: 'expense',
+          kind: "expense",
           title: `Subscription ${tick}`,
-          note: '',
+          note: "",
           accountId: accounts[tick % accounts.length].id,
           categoryId: null,
           tagIds: [],
           amountMinor: 999,
           currency: BASE_CURRENCY,
         },
-        unit: 'month',
+        unit: "month",
         interval: 1,
-        startDate: '2026-07-01',
+        startDate: "2026-07-01",
         endDate: null,
-        nextDueDate: '2026-08-01',
+        nextDueDate: "2026-08-01",
         autoPost: true,
         active: true,
       });
@@ -286,123 +314,143 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: 'generateRecurring',
+    name: "generateRecurring",
     async run(device) {
-      await device.repository.generateRecurring('2026-09-30');
+      await device.repository.generateRecurring("2026-09-30");
       return true;
     },
   },
   {
-    name: 'archiveAccount',
+    name: "archiveAccount",
     async run(device, tick) {
       const accounts = liveAccounts(device.state);
       // Never the last one: an account-less vault cannot book anything, and the run would
       // spend its remaining operations bailing out rather than exercising the merge.
       if (accounts.length < 3) return false;
       const account = accounts[tick % accounts.length];
-      await device.repository.saveAccount({ ...inputOf(account), archived: true }, account.id);
+      await device.repository.saveAccount(
+        { ...inputOf(account), archived: true },
+        account.id,
+      );
       return true;
     },
   },
 ];
 
-describe('convergence — three devices, random edits', () => {
+describe("convergence — three devices, random edits", () => {
   // Fixed seeds rather than a random one per run: a property test nobody can replay reports
   // failures as folklore. New seeds are added by hand, after being watched to pass.
-  it.each([11, 4242, 90210])('converges and stays writable (seed %i)', async (seed) => {
-    // 60 ticks of real crypto sync across three devices comfortably clears the
-    // default 5s Jest timeout on a loaded machine — this is a slow property
-    // test, not a hang.
-    const random = randomSource(seed);
-    const devices = await populatedVault(3);
-    const wires = [
-      devices[0].wireTo(devices[1]),
-      devices[0].wireTo(devices[2]),
-      devices[1].wireTo(devices[2]),
-    ];
+  it.each([11, 4242, 90210])(
+    "converges and stays writable (seed %i)",
+    async (seed) => {
+      // 60 ticks of real crypto sync across three devices comfortably clears the
+      // default 5s Jest timeout on a loaded machine — this is a slow property
+      // test, not a hang.
+      const random = randomSource(seed);
+      const devices = await populatedVault(3);
+      const wires = [
+        devices[0].wireTo(devices[1]),
+        devices[0].wireTo(devices[2]),
+        devices[1].wireTo(devices[2]),
+      ];
 
-    for (let tick = 0; tick < 60; tick += 1) {
-      const device = random.pick(devices);
-      const action = random.pick(ACTIONS);
-      await action.run(device, tick);
+      for (let tick = 0; tick < 60; tick += 1) {
+        const device = random.pick(devices);
+        const action = random.pick(ACTIONS);
+        await action.run(device, tick);
 
-      // Cut and restore links as the run goes, so edits are made against genuinely stale
-      // views of the vault rather than against a state everyone already agreed on.
-      const wire = random.pick(wires);
-      if (random.next() < 0.2) wire.partition();
-      else if (random.next() < 0.3) wire.heal();
+        // Cut and restore links as the run goes, so edits are made against genuinely stale
+        // views of the vault rather than against a state everyone already agreed on.
+        const wire = random.pick(wires);
+        if (random.next() < 0.2) wire.partition();
+        else if (random.next() < 0.3) wire.heal();
 
-      // Sync some of the time, so edits pile up unsynced and land in bursts — which is what a
-      // phone that was in a pocket for an hour actually does.
-      if (random.next() < 0.3) await sync([device], 1);
-    }
-
-    expectDiverged(devices);
-    for (const wire of wires) wire.heal();
-    await settle();
-
-    // Twice, in a different order each time. The second pass must be a pure no-op: if
-    // re-delivery is not idempotent, the two passes disagree and this fails.
-    await sync(random.shuffle(devices), 3);
-    await sync(random.shuffle(devices), 3);
-
-    const converged = expectConverged(devices);
-    expect(converged.transactions.length).toBeGreaterThan(0);
-    for (const device of devices) expect(device.errors).toEqual([]);
-
-    // Writable, on every device, against the merged state — the assertion the whole file is
-    // built around. `saveBudget` re-validates filters against category limits, `saveAccount`
-    // re-validates name uniqueness, and `saveRecurringRule` re-validates its template's
-    // references, so re-saving what a device already holds is a full invariant sweep.
-    for (const device of devices) {
-      const state = device.state;
-      for (const account of state.accounts) {
-        await device.repository.saveAccount(inputOf(account) as Account, account.id);
+        // Sync some of the time, so edits pile up unsynced and land in bursts — which is what a
+        // phone that was in a pocket for an hour actually does.
+        if (random.next() < 0.3) await sync([device], 1);
       }
-      for (const budget of state.budgets) {
-        await device.repository.saveBudget(inputOf(budget) as Budget, budget.id);
-      }
-      const adjustable = state.budgets.find((budget) => !budget.archived);
-      if (adjustable) {
-        await device.repository.addBudgetAdjustment({
-          budgetId: adjustable.id,
-          amountMinor: 1_00,
-          note: 'After the merge',
+
+      expectDiverged(devices);
+      for (const wire of wires) wire.heal();
+      await settle();
+
+      // Twice, in a different order each time. The second pass must be a pure no-op: if
+      // re-delivery is not idempotent, the two passes disagree and this fails.
+      await sync(random.shuffle(devices), 3);
+      await sync(random.shuffle(devices), 3);
+
+      const converged = expectConverged(devices);
+      expect(converged.transactions.length).toBeGreaterThan(0);
+      for (const device of devices) expect(device.errors).toEqual([]);
+
+      // Writable, on every device, against the merged state — the assertion the whole file is
+      // built around. `saveBudget` re-validates filters against category limits, `saveAccount`
+      // re-validates name uniqueness, and `saveRecurringRule` re-validates its template's
+      // references, so re-saving what a device already holds is a full invariant sweep.
+      for (const device of devices) {
+        const state = device.state;
+        for (const account of state.accounts) {
+          await device.repository.saveAccount(
+            inputOf(account) as Account,
+            account.id,
+          );
+        }
+        for (const budget of state.budgets) {
+          await device.repository.saveBudget(
+            inputOf(budget) as Budget,
+            budget.id,
+          );
+        }
+        const adjustable = state.budgets.find((budget) => !budget.archived);
+        if (adjustable) {
+          await device.repository.addBudgetAdjustment({
+            budgetId: adjustable.id,
+            amountMinor: 1_00,
+            note: "After the merge",
+          });
+        }
+        for (const goal of state.goals) {
+          await device.repository.saveGoal(inputOf(goal) as Goal, goal.id);
+        }
+        for (const rule of state.recurringRules) {
+          const { pausedByDependency, ...input } = inputOf(
+            rule,
+          ) as RecurringRule;
+          void pausedByDependency;
+          await device.repository.saveRecurringRule(input, rule.id);
+        }
+        await device.repository.saveTransaction({
+          kind: "expense",
+          title: "After the merge",
+          localDate: TODAY,
+          accountId: liveAccounts(state)[0].id,
+          amountMinor: 1_23,
         });
+        await expect(
+          device.repository.generateRecurring("2026-10-31"),
+        ).resolves.toBeGreaterThanOrEqual(0);
       }
-      for (const goal of state.goals) {
-        await device.repository.saveGoal(inputOf(goal) as Goal, goal.id);
-      }
-      for (const rule of state.recurringRules) {
-        const { pausedByDependency, ...input } = inputOf(rule) as RecurringRule;
-        void pausedByDependency;
-        await device.repository.saveRecurringRule(input, rule.id);
-      }
-      await device.repository.saveTransaction({
-        kind: 'expense',
-        title: 'After the merge',
-        localDate: TODAY,
-        accountId: liveAccounts(state)[0].id,
-        amountMinor: 1_23,
-      });
-      await expect(device.repository.generateRecurring('2026-10-31')).resolves.toBeGreaterThanOrEqual(
-        0,
-      );
-    }
 
-    await sync(devices, 3);
-    expectConverged(devices);
-  }, 30_000);
+      await sync(devices, 3);
+      expectConverged(devices);
+    },
+    30_000,
+  );
 
-  it('counts one-time budget adjustments that two devices add while partitioned', async () => {
+  it("counts one-time budget adjustments that two devices add while partitioned", async () => {
     const [alice, bob] = await populatedVault(2);
     const budget = await alice.repository.saveBudget({
-      name: 'Groceries',
-      icon: 'chart.pie',
-      color: '#E08C5A',
+      name: "Groceries",
+      icon: "chart.pie",
+      color: "#E08C5A",
       limitMinor: 50_000,
       // Anchored long ago so the current window contains today whenever this runs.
-      period: { unit: 'month', interval: 1, anchorDate: '2020-01-01', endDate: null },
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2020-01-01",
+        endDate: null,
+      },
       rollover: true,
       filters: { accountIds: [], categoryIds: [], tagIds: [] },
       categoryLimits: [],
@@ -412,8 +460,16 @@ describe('convergence — three devices, random edits', () => {
     const wire = alice.wireTo(bob);
     wire.partition();
 
-    await alice.repository.addBudgetAdjustment({ budgetId: budget.id, amountMinor: 10_000, note: 'Bonus' });
-    await bob.repository.addBudgetAdjustment({ budgetId: budget.id, amountMinor: -2_500, note: 'Cut' });
+    await alice.repository.addBudgetAdjustment({
+      budgetId: budget.id,
+      amountMinor: 10_000,
+      note: "Bonus",
+    });
+    await bob.repository.addBudgetAdjustment({
+      budgetId: budget.id,
+      amountMinor: -2_500,
+      note: "Cut",
+    });
     await sync([alice, bob], 2);
 
     expect(wire.heal()).toBeGreaterThan(0);
@@ -425,33 +481,40 @@ describe('convergence — three devices, random edits', () => {
     // Two create-only rows, not one register two devices fought over: neither add is lost.
     for (const device of [alice, bob]) {
       const [status] = device.repository.getBudgetStatuses(todayLocal());
-      expect(status).toMatchObject({ adjustmentMinor: 7_500, effectiveLimitMinor: 57_500 });
+      expect(status).toMatchObject({
+        adjustmentMinor: 7_500,
+        effectiveLimitMinor: 57_500,
+      });
       expect(device.errors).toEqual([]);
     }
 
     // Deleting on one device removes it everywhere.
-    const bonus = alice.state.budgetAdjustments.find((row) => row.amountMinor === 10_000)!;
+    const bonus = alice.state.budgetAdjustments.find(
+      (row) => row.amountMinor === 10_000,
+    )!;
     await alice.repository.deleteBudgetAdjustment(bonus.id);
     await sync([alice, bob], 3);
     expectConverged([alice, bob]);
-    expect(bob.repository.getBudgetStatuses(todayLocal())[0].adjustmentMinor).toBe(-2_500);
+    expect(
+      bob.repository.getBudgetStatuses(todayLocal())[0].adjustmentMinor,
+    ).toBe(-2_500);
   });
 
-  it('loses nothing across a partition and a heal', async () => {
+  it("loses nothing across a partition and a heal", async () => {
     const [alice, bob] = await populatedVault(2);
     const wire = alice.wireTo(bob);
     wire.partition();
 
     await alice.repository.saveTransaction({
-      kind: 'expense',
-      title: 'Coffee',
+      kind: "expense",
+      title: "Coffee",
       localDate: TODAY,
       accountId: alice.state.accounts[0].id,
       amountMinor: 450,
     });
     await bob.repository.saveTransaction({
-      kind: 'income',
-      title: 'Refund',
+      kind: "income",
+      title: "Refund",
       localDate: TODAY,
       accountId: bob.state.accounts[0].id,
       amountMinor: 1_200,
@@ -468,12 +531,15 @@ describe('convergence — three devices, random edits', () => {
     await sync([alice, bob], 3);
 
     const converged = expectConverged([alice, bob]);
-    expect(converged.transactions.map((row) => row.title).sort()).toEqual(['Coffee', 'Refund']);
+    expect(converged.transactions.map((row) => row.title).sort()).toEqual([
+      "Coffee",
+      "Refund",
+    ]);
     // Balances are derived from the merged ledger rather than replicated, so agreeing on them
     // is a second, independent check that the same ops landed on both sides.
     const balance = (device: VaultDevice) =>
       device.repository
-        .getDashboard('2026-07-01', '2026-07-31')
+        .getDashboard("2026-07-01", "2026-07-31")
         .accountBalances.map((row) => row.balanceMinor);
     expect(balance(alice)).toEqual(balance(bob));
   });

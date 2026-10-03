@@ -5,13 +5,13 @@ export function todayLocal() {
 
 export function toLocalDate(date: Date) {
   const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 }
 
 export function parseLocalDate(value: string) {
-  const [year, month, day] = value.split('-').map(Number);
+  const [year, month, day] = value.split("-").map(Number);
   return new Date(year, month - 1, day, 12);
 }
 
@@ -45,28 +45,32 @@ export function monthKey(value: string) {
  * not round-trip exactly is rejected rather than coerced.
  */
 export function parseMonthKey(key: unknown): string | null {
-  if (typeof key !== 'string' || !/^\d{4}-\d{2}$/.test(key)) return null;
+  if (typeof key !== "string" || !/^\d{4}-\d{2}$/.test(key)) return null;
   const first = `${key}-01`;
   return isLocalDate(first) ? first : null;
 }
 
 export function isLocalDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [year] = value.split('-').map(Number);
+  const [year] = value.split("-").map(Number);
   return year >= 1000 && toLocalDate(parseLocalDate(value)) === value;
 }
 
 export function addRecurrence(
   value: string,
-  unit: 'day' | 'week' | 'month' | 'year',
+  unit: "day" | "week" | "month" | "year",
   interval: number,
   anchorValue = value,
 ) {
   if (!Number.isSafeInteger(interval) || interval < 1) {
-    throw new RangeError('Recurrence interval must be a positive safe integer.');
+    throw new RangeError(
+      "Recurrence interval must be a positive safe integer.",
+    );
   }
   if (!isLocalDate(value) || !isLocalDate(anchorValue)) {
-    throw new RangeError('Recurrence dates must be valid local calendar dates.');
+    throw new RangeError(
+      "Recurrence dates must be valid local calendar dates.",
+    );
   }
   const date = parseLocalDate(value);
   const anchor = parseLocalDate(anchorValue);
@@ -75,28 +79,34 @@ export function addRecurrence(
   // Day 31 is the explicit month-end convention. A schedule that happens to
   // start on February 28 or April 30 should keep that numbered day later.
   const anchorWasMonthEnd = anchorDay === 31;
-  if (unit === 'day') date.setDate(date.getDate() + interval);
-  if (unit === 'week') date.setDate(date.getDate() + interval * 7);
-  if (unit === 'month') {
+  if (unit === "day") date.setDate(date.getDate() + interval);
+  if (unit === "week") date.setDate(date.getDate() + interval * 7);
+  if (unit === "month") {
     date.setDate(1);
     date.setMonth(date.getMonth() + interval);
-    const maxDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+    const maxDay = new Date(
+      date.getFullYear(),
+      date.getMonth() + 1,
+      0,
+    ).getDate();
     date.setDate(anchorWasMonthEnd ? maxDay : Math.min(anchorDay, maxDay));
   }
-  if (unit === 'year') {
+  if (unit === "year") {
     date.setFullYear(date.getFullYear() + interval, anchorMonth, 1);
     const maxDay = new Date(date.getFullYear(), anchorMonth + 1, 0).getDate();
     date.setDate(anchorWasMonthEnd ? maxDay : Math.min(anchorDay, maxDay));
   }
   if (!Number.isFinite(date.getTime())) {
-    throw new RangeError('Recurrence interval is outside the supported calendar range.');
+    throw new RangeError(
+      "Recurrence interval is outside the supported calendar range.",
+    );
   }
   return toLocalDate(date);
 }
 
 export function firstRecurrenceOnOrAfter(
   startValue: string,
-  unit: 'day' | 'week' | 'month' | 'year',
+  unit: "day" | "week" | "month" | "year",
   interval: number,
   minimumValue: string,
 ) {
@@ -105,24 +115,38 @@ export function firstRecurrenceOnOrAfter(
   const minimum = parseLocalDate(minimumValue);
   const normalizedInterval = Math.max(1, Math.floor(interval));
   let cycles = 0;
-  if (unit === 'day' || unit === 'week') {
-    const startUtc = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
-    const minimumUtc = Date.UTC(minimum.getFullYear(), minimum.getMonth(), minimum.getDate());
-    const stepDays = normalizedInterval * (unit === 'week' ? 7 : 1);
+  if (unit === "day" || unit === "week") {
+    const startUtc = Date.UTC(
+      start.getFullYear(),
+      start.getMonth(),
+      start.getDate(),
+    );
+    const minimumUtc = Date.UTC(
+      minimum.getFullYear(),
+      minimum.getMonth(),
+      minimum.getDate(),
+    );
+    const stepDays = normalizedInterval * (unit === "week" ? 7 : 1);
     cycles = Math.ceil((minimumUtc - startUtc) / 86_400_000 / stepDays);
-  } else if (unit === 'month') {
-    const months = (minimum.getFullYear() - start.getFullYear()) * 12 +
-      minimum.getMonth() - start.getMonth();
+  } else if (unit === "month") {
+    const months =
+      (minimum.getFullYear() - start.getFullYear()) * 12 +
+      minimum.getMonth() -
+      start.getMonth();
     cycles = Math.max(0, Math.floor(months / normalizedInterval));
   } else {
-    cycles = Math.max(0, Math.floor(
-      (minimum.getFullYear() - start.getFullYear()) / normalizedInterval,
-    ));
+    cycles = Math.max(
+      0,
+      Math.floor(
+        (minimum.getFullYear() - start.getFullYear()) / normalizedInterval,
+      ),
+    );
   }
   const cycleSteps = Math.max(0, cycles) * normalizedInterval;
-  let candidate = cycleSteps > 0
-    ? addRecurrence(startValue, unit, cycleSteps, startValue)
-    : startValue;
+  let candidate =
+    cycleSteps > 0
+      ? addRecurrence(startValue, unit, cycleSteps, startValue)
+      : startValue;
   if (candidate < minimumValue) {
     candidate = addRecurrence(candidate, unit, normalizedInterval, startValue);
   }
@@ -130,20 +154,24 @@ export function firstRecurrenceOnOrAfter(
 }
 
 export function monthLabel(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' }).format(
-    parseLocalDate(value),
-  );
+  return new Intl.DateTimeFormat(locale, {
+    month: "long",
+    year: "numeric",
+  }).format(parseLocalDate(value));
 }
 
 export function shortDate(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(
-    parseLocalDate(value),
-  );
+  return new Intl.DateTimeFormat(locale, {
+    month: "short",
+    day: "numeric",
+  }).format(parseLocalDate(value));
 }
 
 /** Adds the year to `shortDate` — for a rate or a rule that may be read back long after the fact. */
 export function mediumDate(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, { day: 'numeric', month: 'short', year: 'numeric' }).format(
-    parseLocalDate(value),
-  );
+  return new Intl.DateTimeFormat(locale, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(parseLocalDate(value));
 }

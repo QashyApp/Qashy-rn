@@ -1,6 +1,6 @@
-import { Decimal } from 'decimal.js';
+import { Decimal } from "decimal.js";
 
-import { mapCashewCategoryIcon } from '@/data/import/cashew/icon-map';
+import { mapCashewCategoryIcon } from "@/data/import/cashew/icon-map";
 import {
   ImportError,
   type BalanceCheck,
@@ -15,16 +15,21 @@ import {
   type ImportWarning,
   type ParseOptions,
   type RawRow,
-} from '@/data/import/types';
-import type { CategoryKind, PeriodDefinition, RecurrenceUnit, TransactionStatus } from '@/domain/models';
-import { ACCENT_PRESETS, CATEGORY_PALETTE } from '@/theme/tokens';
-import { isLocalDate } from '@/utils/date';
-import { currencyDigits, isSupportedCurrencyCode } from '@/utils/money';
-import { compareInvariant, normalizeName } from '@/utils/naming';
+} from "@/data/import/types";
+import type {
+  CategoryKind,
+  PeriodDefinition,
+  RecurrenceUnit,
+  TransactionStatus,
+} from "@/domain/models";
+import { ACCENT_PRESETS, CATEGORY_PALETTE } from "@/theme/tokens";
+import { isLocalDate } from "@/utils/date";
+import { currencyDigits, isSupportedCurrencyCode } from "@/utils/money";
+import { compareInvariant, normalizeName } from "@/utils/naming";
 
-const DEFAULT_ACCOUNT_ICON = 'wallet.bifold';
-const DEFAULT_BUDGET_ICON = 'chart.pie';
-const DEFAULT_TAG_COLOR = '#6D7885';
+const DEFAULT_ACCOUNT_ICON = "wallet.bifold";
+const DEFAULT_BUDGET_ICON = "chart.pie";
+const DEFAULT_TAG_COLOR = "#6D7885";
 const DEFAULT_ACCOUNT_COLOR: string = ACCENT_PRESETS[0];
 const DEFAULT_BUDGET_COLOR: string = ACCENT_PRESETS[0];
 
@@ -38,15 +43,15 @@ function text(row: RawRow, key: string): string | null {
   const value = row[key];
   if (value === undefined || value === null) return null;
   const trimmed = String(value).trim();
-  return trimmed === '' ? null : trimmed;
+  return trimmed === "" ? null : trimmed;
 }
 
 function num(row: RawRow, key: string): number | null {
   const value = row[key];
   if (value === undefined || value === null) return null;
-  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
   const trimmed = value.trim();
-  if (trimmed === '') return null;
+  if (trimmed === "") return null;
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : null;
 }
@@ -65,7 +70,7 @@ function jsonList(row: RawRow, key: string): string[] {
   const value = row[key];
   if (value === undefined || value === null) return [];
   let parsed: unknown = value;
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     try {
       parsed = JSON.parse(value);
     } catch {
@@ -75,9 +80,9 @@ function jsonList(row: RawRow, key: string): string[] {
   if (!Array.isArray(parsed)) return [];
   const items: string[] = [];
   for (const item of parsed) {
-    if (typeof item === 'string' || typeof item === 'number') {
+    if (typeof item === "string" || typeof item === "number") {
       const asText = String(item).trim();
-      if (asText !== '') items.push(asText);
+      if (asText !== "") items.push(asText);
     }
   }
   return items;
@@ -117,36 +122,42 @@ function dateFormatter(timeZone: string): Intl.DateTimeFormat {
   if (cached) return cached;
   let formatter: Intl.DateTimeFormat;
   try {
-    formatter = new Intl.DateTimeFormat('en-CA', {
+    formatter = new Intl.DateTimeFormat("en-CA", {
       timeZone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
     });
   } catch {
-    throw new ImportError('unsupported', `The time zone "${timeZone}" is not supported on this device.`);
+    throw new ImportError(
+      "unsupported",
+      `The time zone "${timeZone}" is not supported on this device.`,
+    );
   }
   formatterCache.set(timeZone, formatter);
   return formatter;
 }
 
 /** Unix seconds -> `YYYY-MM-DD` in `timeZone`, or `null` when the value is not a usable date. */
-function localDateFromSeconds(value: number | null, timeZone: string): string | null {
+function localDateFromSeconds(
+  value: number | null,
+  timeZone: string,
+): string | null {
   if (value === null || !Number.isFinite(value)) return null;
   // Real backups store seconds. A value this large can only be milliseconds.
   const milliseconds = Math.abs(value) > 1e11 ? value : value * 1000;
   const date = new Date(milliseconds);
   if (Number.isNaN(date.getTime())) return null;
-  let year = '';
-  let month = '';
-  let day = '';
+  let year = "";
+  let month = "";
+  let day = "";
   for (const part of dateFormatter(timeZone).formatToParts(date)) {
-    if (part.type === 'year') year = part.value;
-    else if (part.type === 'month') month = part.value;
-    else if (part.type === 'day') day = part.value;
+    if (part.type === "year") year = part.value;
+    else if (part.type === "month") month = part.value;
+    else if (part.type === "day") day = part.value;
   }
   if (!year || !month || !day) return null;
-  const result = `${year.padStart(4, '0')}-${month}-${day}`;
+  const result = `${year.padStart(4, "0")}-${month}-${day}`;
   return isLocalDate(result) ? result : null;
 }
 
@@ -155,13 +166,16 @@ function resolveTimeZone(raw: CashewRawData, options: ParseOptions) {
   if (detected) {
     try {
       dateFormatter(detected);
-      return { timeZone: detected, timeZoneSource: 'backup' as const };
+      return { timeZone: detected, timeZoneSource: "backup" as const };
     } catch {
       // A zone the backup recorded but this runtime cannot resolve: use the device's instead.
     }
   }
   dateFormatter(options.fallbackTimeZone);
-  return { timeZone: options.fallbackTimeZone, timeZoneSource: 'device' as const };
+  return {
+    timeZone: options.fallbackTimeZone,
+    timeZoneSource: "device" as const,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -177,7 +191,10 @@ function exponentFor(currency: string): number {
   try {
     exponent = currencyDigits(currency);
   } catch {
-    throw new ImportError('unsupported', `The currency ${currency} is not supported.`);
+    throw new ImportError(
+      "unsupported",
+      `The currency ${currency} is not supported.`,
+    );
   }
   exponentCache.set(currency, exponent);
   return exponent;
@@ -197,7 +214,9 @@ interface MinorConversion {
 function toMinor(amount: number, exponent: number): MinorConversion {
   let scaled: Decimal;
   try {
-    scaled = new Decimal(String(amount)).abs().mul(new Decimal(10).pow(exponent));
+    scaled = new Decimal(String(amount))
+      .abs()
+      .mul(new Decimal(10).pow(exponent));
   } catch {
     return { minor: null, rounded: false };
   }
@@ -270,22 +289,21 @@ interface SourceTransaction {
 }
 
 type RowRejection =
-  | 'invalid-transaction'
-  | 'loans-skipped'
-  | 'missing-wallet'
-  | 'invalid-amount'
-  | 'zero-amount'
-  | 'invalid-date';
+  | "invalid-transaction"
+  | "loans-skipped"
+  | "missing-wallet"
+  | "invalid-amount"
+  | "zero-amount"
+  | "invalid-date";
 
 type RowParse =
-  | { ok: true; row: SourceTransaction }
-  | { ok: false; reason: RowRejection };
+  { ok: true; row: SourceTransaction } | { ok: false; reason: RowRejection };
 
 const PREDICT_SUFFIX = /::predict::\d+$/;
 
 function statusOf(paid: boolean, skipPaid: boolean): TransactionStatus {
-  if (paid) return 'posted';
-  return skipPaid ? 'skipped' : 'upcoming';
+  if (paid) return "posted";
+  return skipPaid ? "skipped" : "upcoming";
 }
 
 /**
@@ -299,50 +317,53 @@ function parseTransactionRow(
   wallets: ReadonlyMap<string, WalletInfo>,
   timeZone: string,
 ): RowParse {
-  const pk = text(row, 'transaction_pk');
-  if (pk === null) return { ok: false, reason: 'invalid-transaction' };
-  const type = num(row, 'type');
-  if (type === 3 || type === 4 || text(row, 'objective_loan_fk') !== null) {
-    return { ok: false, reason: 'loans-skipped' };
+  const pk = text(row, "transaction_pk");
+  if (pk === null) return { ok: false, reason: "invalid-transaction" };
+  const type = num(row, "type");
+  if (type === 3 || type === 4 || text(row, "objective_loan_fk") !== null) {
+    return { ok: false, reason: "loans-skipped" };
   }
-  const walletPk = text(row, 'wallet_fk');
+  const walletPk = text(row, "wallet_fk");
   const wallet = walletPk === null ? undefined : wallets.get(walletPk);
-  if (walletPk === null || !wallet) return { ok: false, reason: 'missing-wallet' };
-  const amount = num(row, 'amount');
-  if (amount === null) return { ok: false, reason: 'invalid-amount' };
-  if (amount === 0) return { ok: false, reason: 'zero-amount' };
+  if (walletPk === null || !wallet)
+    return { ok: false, reason: "missing-wallet" };
+  const amount = num(row, "amount");
+  if (amount === null) return { ok: false, reason: "invalid-amount" };
+  if (amount === 0) return { ok: false, reason: "zero-amount" };
   const converted = toMinor(amount, wallet.exponent);
-  if (converted.minor === null || converted.minor <= 0) return { ok: false, reason: 'invalid-amount' };
-  const dateSec = num(row, 'date_created');
+  if (converted.minor === null || converted.minor <= 0)
+    return { ok: false, reason: "invalid-amount" };
+  const dateSec = num(row, "date_created");
   const localDate = localDateFromSeconds(dateSec, timeZone);
-  if (dateSec === null || localDate === null) return { ok: false, reason: 'invalid-date' };
-  const paid = flag(row, 'paid');
-  const skipPaid = flag(row, 'skip_paid');
-  const endDateSec = num(row, 'end_date');
+  if (dateSec === null || localDate === null)
+    return { ok: false, reason: "invalid-date" };
+  const paid = flag(row, "paid");
+  const skipPaid = flag(row, "skip_paid");
+  const endDateSec = num(row, "end_date");
   return {
     ok: true,
     row: {
       pk,
-      basePk: pk.replace(PREDICT_SUFFIX, ''),
+      basePk: pk.replace(PREDICT_SUFFIX, ""),
       index,
       walletPk,
       sign: amount < 0 ? -1 : 1,
       amountMinor: converted.minor,
       rounded: converted.rounded,
-      title: text(row, 'name'),
-      note: text(row, 'note') ?? '',
-      categoryFk: text(row, 'category_fk'),
-      subCategoryFk: text(row, 'sub_category_fk'),
+      title: text(row, "name"),
+      note: text(row, "note") ?? "",
+      categoryFk: text(row, "category_fk"),
+      subCategoryFk: text(row, "sub_category_fk"),
       dateSec,
       localDate,
       paid,
       skipPaid,
       status: statusOf(paid, skipPaid),
       type,
-      reoccurrence: num(row, 'reoccurrence'),
-      periodLength: num(row, 'period_length'),
+      reoccurrence: num(row, "reoccurrence"),
+      periodLength: num(row, "period_length"),
       endDateSec,
-      pairedFk: text(row, 'paired_transaction_fk'),
+      pairedFk: text(row, "paired_transaction_fk"),
     },
   };
 }
@@ -352,15 +373,20 @@ function periodOf(
   periodLength: number | null,
 ): { unit: RecurrenceUnit; interval: number } | null {
   const unit: RecurrenceUnit | null =
-    reoccurrence === 1 ? 'day'
-    : reoccurrence === 2 ? 'week'
-    : reoccurrence === 3 ? 'month'
-    : reoccurrence === 4 ? 'year'
-    : null;
+    reoccurrence === 1
+      ? "day"
+      : reoccurrence === 2
+        ? "week"
+        : reoccurrence === 3
+          ? "month"
+          : reoccurrence === 4
+            ? "year"
+            : null;
   if (unit === null) return null;
-  const interval = periodLength !== null && Number.isFinite(periodLength)
-    ? Math.max(1, Math.floor(periodLength))
-    : 1;
+  const interval =
+    periodLength !== null && Number.isFinite(periodLength)
+      ? Math.max(1, Math.floor(periodLength))
+      : 1;
   return { unit, interval };
 }
 
@@ -383,7 +409,7 @@ export function computeSourceBalances(
 ): Map<string, number> {
   const wallets = new Map<string, WalletInfo>();
   for (const account of accounts) {
-    const pk = account.externalId.replace(/^wallet:/, '');
+    const pk = account.externalId.replace(/^wallet:/, "");
     wallets.set(pk, {
       pk,
       externalId: account.externalId,
@@ -391,13 +417,17 @@ export function computeSourceBalances(
       exponent: exponentFor(account.currency),
     });
   }
-  const balances = new Map<string, number>(accounts.map((account) => [account.externalId, 0]));
-  tableRows(raw, 'transactions').forEach((row, index) => {
+  const balances = new Map<string, number>(
+    accounts.map((account) => [account.externalId, 0]),
+  );
+  tableRows(raw, "transactions").forEach((row, index) => {
     const parsed = parseTransactionRow(row, index, wallets, timeZone);
     if (!parsed.ok || !parsed.row.paid) return;
     const wallet = wallets.get(parsed.row.walletPk);
     if (!wallet) return;
-    const next = (balances.get(wallet.externalId) ?? 0) + parsed.row.sign * parsed.row.amountMinor;
+    const next =
+      (balances.get(wallet.externalId) ?? 0) +
+      parsed.row.sign * parsed.row.amountMinor;
     if (!Number.isSafeInteger(next)) throw tooLarge();
     balances.set(wallet.externalId, next);
   });
@@ -405,7 +435,10 @@ export function computeSourceBalances(
 }
 
 function tooLarge() {
-  return new ImportError('unsupported', 'Amounts in this backup are too large to import.');
+  return new ImportError(
+    "unsupported",
+    "Amounts in this backup are too large to import.",
+  );
 }
 
 /** Signed sum of an account's posted transactions in the bundle. */
@@ -413,7 +446,9 @@ function importedBalances(
   accounts: readonly BundleAccount[],
   transactions: readonly BundleTransaction[],
 ): Map<string, number> {
-  const balances = new Map<string, number>(accounts.map((account) => [account.externalId, 0]));
+  const balances = new Map<string, number>(
+    accounts.map((account) => [account.externalId, 0]),
+  );
   const apply = (accountExternalId: string | null, delta: number) => {
     if (accountExternalId === null || !balances.has(accountExternalId)) return;
     const next = (balances.get(accountExternalId) ?? 0) + delta;
@@ -421,12 +456,17 @@ function importedBalances(
     balances.set(accountExternalId, next);
   };
   for (const transaction of transactions) {
-    if (transaction.status !== 'posted') continue;
-    if (transaction.kind === 'income') apply(transaction.accountExternalId, transaction.amountMinor);
-    else if (transaction.kind === 'expense') apply(transaction.accountExternalId, -transaction.amountMinor);
+    if (transaction.status !== "posted") continue;
+    if (transaction.kind === "income")
+      apply(transaction.accountExternalId, transaction.amountMinor);
+    else if (transaction.kind === "expense")
+      apply(transaction.accountExternalId, -transaction.amountMinor);
     else {
       apply(transaction.accountExternalId, -transaction.amountMinor);
-      apply(transaction.destinationAccountExternalId, transaction.destinationAmountMinor ?? 0);
+      apply(
+        transaction.destinationAccountExternalId,
+        transaction.destinationAmountMinor ?? 0,
+      );
     }
   }
   return balances;
@@ -450,10 +490,14 @@ export function reconcileBalances(
     sourceBalanceMinor: sourceBalances.get(account.externalId) ?? 0,
     importedBalanceMinor: imported.get(account.externalId) ?? 0,
   }));
-  if (checks.some((check) => check.sourceBalanceMinor !== check.importedBalanceMinor)) {
+  if (
+    checks.some(
+      (check) => check.sourceBalanceMinor !== check.importedBalanceMinor,
+    )
+  ) {
     throw new ImportError(
-      'reconciliation-failed',
-      'Account balances did not match the backup, so nothing was imported.',
+      "reconciliation-failed",
+      "Account balances did not match the backup, so nothing was imported.",
     );
   }
   return checks;
@@ -464,39 +508,63 @@ export function reconcileBalances(
 // ---------------------------------------------------------------------------
 
 const WARNING_MESSAGES: Record<string, string> = {
-  'rounded-amounts': 'Some amounts had more decimal places than their currency allows and were rounded.',
-  'zero-amount': 'Transactions with a zero amount were not imported.',
-  'invalid-amount': 'Transactions with an unreadable or out-of-range amount were not imported.',
-  'invalid-date': 'Transactions with an unreadable date were not imported.',
-  'invalid-transaction': 'Transaction rows without an identifier were not imported.',
-  'missing-wallet': 'Transactions that belong to an account missing from the backup were not imported.',
-  'missing-category': 'Some transactions reference a category missing from the backup and were imported without one.',
-  'empty-title': 'Transactions without a name were titled after their category.',
-  'category-split': 'Some transactions did not match their category’s type, so a matching category was created for them.',
-  'subcategory-flattened': 'Some subcategories could not keep their parent and were imported as top-level categories.',
-  'wallet-currency-default': 'Accounts with a missing or unsupported currency use your base currency.',
-  'loans-skipped': 'Loans and credit/debt entries were not imported.',
-  'objectives-not-imported': 'Cashew objectives were not imported; their transactions were kept without the objective link.',
-  'transfer-unpaired': 'Some transfers could not be matched to both accounts and were imported as regular transactions.',
-  'recurring-custom-period': 'Recurring transactions with a custom period cannot be scheduled and were imported as regular transactions.',
-  'recurring-ended': 'Subscriptions and repeating transactions with no upcoming entry in Cashew were treated as ended: their past payments were imported, but no schedule was created.',
-  'recurring-review': 'Recurring transactions were imported as schedules that ask for your review before posting.',
-  'shared-budget-flattened': 'Shared budgets were imported as ordinary budgets without sharing.',
-  'invalid-budget': 'Budgets with an invalid limit, period or category selection were not imported.',
-  'budget-exclusions-flattened': 'Budget category exclusions were converted into an explicit category list.',
-  'budget-filters-dropped': 'Budget transaction-type filters were not imported.',
-  'budget-manual-only': 'Budgets that only count manually added transactions now count all matching transactions.',
-  'budget-absolute-limit': 'Budgets with an absolute spending limit were imported as regular budgets.',
-  'budget-currency': 'Budget limits were imported in your base currency, which differs from some account currencies.',
-  'associated-titles-dropped': 'Cashew’s remembered title suggestions were not imported.',
-  'scanner-templates-dropped': 'Cashew’s email scanner templates were not imported.',
+  "rounded-amounts":
+    "Some amounts had more decimal places than their currency allows and were rounded.",
+  "zero-amount": "Transactions with a zero amount were not imported.",
+  "invalid-amount":
+    "Transactions with an unreadable or out-of-range amount were not imported.",
+  "invalid-date": "Transactions with an unreadable date were not imported.",
+  "invalid-transaction":
+    "Transaction rows without an identifier were not imported.",
+  "missing-wallet":
+    "Transactions that belong to an account missing from the backup were not imported.",
+  "missing-category":
+    "Some transactions reference a category missing from the backup and were imported without one.",
+  "empty-title":
+    "Transactions without a name were titled after their category.",
+  "category-split":
+    "Some transactions did not match their category’s type, so a matching category was created for them.",
+  "subcategory-flattened":
+    "Some subcategories could not keep their parent and were imported as top-level categories.",
+  "wallet-currency-default":
+    "Accounts with a missing or unsupported currency use your base currency.",
+  "loans-skipped": "Loans and credit/debt entries were not imported.",
+  "objectives-not-imported":
+    "Cashew objectives were not imported; their transactions were kept without the objective link.",
+  "transfer-unpaired":
+    "Some transfers could not be matched to both accounts and were imported as regular transactions.",
+  "recurring-custom-period":
+    "Recurring transactions with a custom period cannot be scheduled and were imported as regular transactions.",
+  "recurring-ended":
+    "Subscriptions and repeating transactions with no upcoming entry in Cashew were treated as ended: their past payments were imported, but no schedule was created.",
+  "recurring-review":
+    "Recurring transactions were imported as schedules that ask for your review before posting.",
+  "shared-budget-flattened":
+    "Shared budgets were imported as ordinary budgets without sharing.",
+  "invalid-budget":
+    "Budgets with an invalid limit, period or category selection were not imported.",
+  "budget-exclusions-flattened":
+    "Budget category exclusions were converted into an explicit category list.",
+  "budget-filters-dropped":
+    "Budget transaction-type filters were not imported.",
+  "budget-manual-only":
+    "Budgets that only count manually added transactions now count all matching transactions.",
+  "budget-absolute-limit":
+    "Budgets with an absolute spending limit were imported as regular budgets.",
+  "budget-currency":
+    "Budget limits were imported in your base currency, which differs from some account currencies.",
+  "associated-titles-dropped":
+    "Cashew’s remembered title suggestions were not imported.",
+  "scanner-templates-dropped":
+    "Cashew’s email scanner templates were not imported.",
 };
 
 class WarningCounter {
   private readonly counts = new Map<string, number>();
 
   add(code: string, amount = 1) {
-    if (amount > 0) this.counts.set(code, (this.counts.get(code) ?? 0) + amount);
+    if (amount > 0)
+      this.counts.set(code, (this.counts.get(code) ?? 0) + amount);
   }
 
   toList(): ImportWarning[] {
@@ -506,7 +574,11 @@ class WarningCounter {
         message: WARNING_MESSAGES[code] ?? code,
         count,
       }))
-      .sort((first, second) => second.count - first.count || compareInvariant(first.code, second.code));
+      .sort(
+        (first, second) =>
+          second.count - first.count ||
+          compareInvariant(first.code, second.code),
+      );
   }
 }
 
@@ -529,17 +601,23 @@ interface CategoryInfo {
 }
 
 interface GroupPlan {
-  mode: 'rule' | 'finished' | 'custom';
+  mode: "rule" | "finished" | "custom";
   ruleExternalId: string | null;
 }
 
-export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): ImportBundle {
+export function mapCashewBackup(
+  raw: CashewRawData,
+  options: ParseOptions,
+): ImportBundle {
   const warnings = new WarningCounter();
   const { timeZone, timeZoneSource } = resolveTimeZone(raw, options);
 
   const fallbackCurrency = normalizeCurrency(options.fallbackCurrency);
   if (!fallbackCurrency) {
-    throw new ImportError('unsupported', `The currency ${options.fallbackCurrency} is not supported.`);
+    throw new ImportError(
+      "unsupported",
+      `The currency ${options.fallbackCurrency} is not supported.`,
+    );
   }
 
   // Accounts ---------------------------------------------------------------
@@ -547,46 +625,51 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
   const accounts: BundleAccount[] = [];
   const wallets = new Map<string, WalletInfo>();
   let walletCurrencyDefaults = 0;
-  for (const row of tableRows(raw, 'wallets')) {
-    const pk = text(row, 'wallet_pk');
+  for (const row of tableRows(raw, "wallets")) {
+    const pk = text(row, "wallet_pk");
     if (pk === null || wallets.has(pk)) continue;
-    const declared = normalizeCurrency(text(row, 'currency'));
+    const declared = normalizeCurrency(text(row, "currency"));
     if (!declared) walletCurrencyDefaults += 1;
     const currency = declared ?? fallbackCurrency;
     const externalId = `wallet:${pk}`;
     accounts.push({
       externalId,
-      name: accountNames.claim(text(row, 'name') ?? 'Account'),
-      type: 'checking',
+      name: accountNames.claim(text(row, "name") ?? "Account"),
+      type: "checking",
       currency,
       openingBalanceMinor: 0,
       icon: DEFAULT_ACCOUNT_ICON,
-      color: convertColor(text(row, 'colour')) ?? DEFAULT_ACCOUNT_COLOR,
-      archived: flag(row, 'archived'),
+      color: convertColor(text(row, "colour")) ?? DEFAULT_ACCOUNT_COLOR,
+      archived: flag(row, "archived"),
     });
-    wallets.set(pk, { pk, externalId, currency, exponent: exponentFor(currency) });
+    wallets.set(pk, {
+      pk,
+      externalId,
+      currency,
+      exponent: exponentFor(currency),
+    });
   }
-  warnings.add('wallet-currency-default', walletCurrencyDefaults);
+  warnings.add("wallet-currency-default", walletCurrencyDefaults);
 
   // Categories -------------------------------------------------------------
   const categoryNames = new NameRegistry();
   const categoryInfos = new Map<string, CategoryInfo>();
-  const categoryRows = tableRows(raw, 'categories');
+  const categoryRows = tableRows(raw, "categories");
   for (const row of categoryRows) {
-    const pk = text(row, 'category_pk');
+    const pk = text(row, "category_pk");
     if (pk === null || categoryInfos.has(pk)) continue;
-    const kind: CategoryKind = flag(row, 'income') ? 'income' : 'expense';
-    const sourceName = text(row, 'name') ?? 'Category';
+    const kind: CategoryKind = flag(row, "income") ? "income" : "expense";
+    const sourceName = text(row, "name") ?? "Category";
     categoryInfos.set(pk, {
       pk,
       externalId: `category:${pk}`,
       kind,
       sourceName,
       name: categoryNames.claim(sourceName),
-      icon: mapCashewCategoryIcon(text(row, 'icon_name'), kind),
-      color: convertColor(text(row, 'colour')) ?? paletteColor(sourceName),
-      archived: flag(row, 'archived'),
-      parentPk: text(row, 'main_category_pk'),
+      icon: mapCashewCategoryIcon(text(row, "icon_name"), kind),
+      color: convertColor(text(row, "colour")) ?? paletteColor(sourceName),
+      archived: flag(row, "archived"),
+      parentPk: text(row, "main_category_pk"),
       parentExternalId: null,
     });
   }
@@ -595,13 +678,18 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
     if (info.parentPk === null) continue;
     const parent = categoryInfos.get(info.parentPk);
     const parentIsTopLevel = parent !== undefined && parent.parentPk === null;
-    if (parent && parent.pk !== info.pk && parent.kind === info.kind && parentIsTopLevel) {
+    if (
+      parent &&
+      parent.pk !== info.pk &&
+      parent.kind === info.kind &&
+      parentIsTopLevel
+    ) {
       info.parentExternalId = parent.externalId;
     } else {
       flattenedSubcategories += 1;
     }
   }
-  warnings.add('subcategory-flattened', flattenedSubcategories);
+  warnings.add("subcategory-flattened", flattenedSubcategories);
 
   const twinCategories = new Map<string, BundleCategory>();
   let categorySplits = 0;
@@ -611,14 +699,19 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
     row: SourceTransaction,
     kind: CategoryKind,
   ): { externalId: string | null; sourceName: string | null } => {
-    const sub = row.subCategoryFk === null ? undefined : categoryInfos.get(row.subCategoryFk);
-    const main = row.categoryFk === null ? undefined : categoryInfos.get(row.categoryFk);
+    const sub =
+      row.subCategoryFk === null
+        ? undefined
+        : categoryInfos.get(row.subCategoryFk);
+    const main =
+      row.categoryFk === null ? undefined : categoryInfos.get(row.categoryFk);
     const info = sub ?? main;
     if (!info) {
-      warnings.add('missing-category');
+      warnings.add("missing-category");
       return { externalId: null, sourceName: null };
     }
-    if (info.kind === kind) return { externalId: info.externalId, sourceName: info.sourceName };
+    if (info.kind === kind)
+      return { externalId: info.externalId, sourceName: info.sourceName };
     const externalId = `${info.externalId}:${kind}`;
     if (!twinCategories.has(externalId)) {
       twinCategories.set(externalId, {
@@ -639,21 +732,22 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
   const tagNames = new NameRegistry();
   const tags: BundleTag[] = [];
   const tagPks = new Set<string>();
-  for (const row of tableRows(raw, 'tags')) {
-    const pk = text(row, 'tag_pk');
+  for (const row of tableRows(raw, "tags")) {
+    const pk = text(row, "tag_pk");
     if (pk === null || tagPks.has(pk)) continue;
     tagPks.add(pk);
     tags.push({
       externalId: `tag:${pk}`,
-      name: tagNames.claim(text(row, 'name') ?? 'Tag'),
-      color: convertColor(text(row, 'colour')) ?? DEFAULT_TAG_COLOR,
+      name: tagNames.claim(text(row, "name") ?? "Tag"),
+      color: convertColor(text(row, "colour")) ?? DEFAULT_TAG_COLOR,
     });
   }
   const tagLinks = new Map<string, string[]>();
-  for (const row of tableRows(raw, 'transaction_to_tag_links')) {
-    const transactionPk = text(row, 'transaction_pk');
-    const tagPk = text(row, 'tag_pk');
-    if (transactionPk === null || tagPk === null || !tagPks.has(tagPk)) continue;
+  for (const row of tableRows(raw, "transaction_to_tag_links")) {
+    const transactionPk = text(row, "transaction_pk");
+    const tagPk = text(row, "tag_pk");
+    if (transactionPk === null || tagPk === null || !tagPks.has(tagPk))
+      continue;
     const externalId = `tag:${tagPk}`;
     const existing = tagLinks.get(transactionPk);
     if (!existing) tagLinks.set(transactionPk, [externalId]);
@@ -665,24 +759,25 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
   const sourceRows: SourceTransaction[] = [];
   const seenPks = new Set<string>();
   const roundedRows = { count: 0 };
-  tableRows(raw, 'transactions').forEach((row, index) => {
+  tableRows(raw, "transactions").forEach((row, index) => {
     const parsed = parseTransactionRow(row, index, wallets, timeZone);
     if (!parsed.ok) {
       warnings.add(parsed.reason);
       return;
     }
     if (seenPks.has(parsed.row.pk)) {
-      warnings.add('invalid-transaction');
+      warnings.add("invalid-transaction");
       return;
     }
     seenPks.add(parsed.row.pk);
     if (parsed.row.rounded) roundedRows.count += 1;
     sourceRows.push(parsed.row);
   });
-  warnings.add('rounded-amounts', roundedRows.count);
+  warnings.add("rounded-amounts", roundedRows.count);
 
   const rowsByPk = new Map(sourceRows.map((row) => [row.pk, row]));
-  const walletOf = (row: SourceTransaction) => wallets.get(row.walletPk) as WalletInfo;
+  const walletOf = (row: SourceTransaction) =>
+    wallets.get(row.walletPk) as WalletInfo;
 
   // Transfers: a pair of opposite-signed rows in different accounts becomes one transfer.
   const claimed = new Set<string>();
@@ -690,7 +785,8 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
   for (const first of sourceRows) {
     if (first.pairedFk === null || claimed.has(first.pk)) continue;
     const second = rowsByPk.get(first.pairedFk);
-    const valid = second !== undefined &&
+    const valid =
+      second !== undefined &&
       second.pk !== first.pk &&
       !claimed.has(second.pk) &&
       (second.pairedFk === first.pk || second.pairedFk === null) &&
@@ -703,10 +799,13 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
     const source = first.sign < 0 ? first : second;
     transferDestinations.set(source.pk, source === first ? second : first);
   }
-  const destinationPks = new Set([...transferDestinations.values()].map((row) => row.pk));
+  const destinationPks = new Set(
+    [...transferDestinations.values()].map((row) => row.pk),
+  );
   warnings.add(
-    'transfer-unpaired',
-    sourceRows.filter((row) => row.pairedFk !== null && !claimed.has(row.pk)).length,
+    "transfer-unpaired",
+    sourceRows.filter((row) => row.pairedFk !== null && !claimed.has(row.pk))
+      .length,
   );
 
   // Recurring series --------------------------------------------------------
@@ -722,8 +821,11 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
   const plans = new Map<string, GroupPlan>();
   let customPeriodGroups = 0;
   let endedGroups = 0;
-  const titleFor = (row: SourceTransaction, categoryName: string | null, fallback: string) =>
-    row.title ?? categoryName ?? fallback;
+  const titleFor = (
+    row: SourceTransaction,
+    categoryName: string | null,
+    fallback: string,
+  ) => row.title ?? categoryName ?? fallback;
 
   for (const [basePk, members] of groups) {
     const ordered = [...members].sort(compareByDate);
@@ -731,7 +833,7 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
     const period = periodOf(latest.reoccurrence, latest.periodLength);
     if (!period) {
       customPeriodGroups += 1;
-      plans.set(basePk, { mode: 'custom', ruleExternalId: null });
+      plans.set(basePk, { mode: "custom", ruleExternalId: null });
       continue;
     }
     // Cashew cancels a series by deleting its upcoming entry, so a series with none is ended.
@@ -739,23 +841,26 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
     const unpaid = ordered.filter((row) => !row.paid && !row.skipPaid);
     if (unpaid.length === 0) {
       endedGroups += 1;
-      plans.set(basePk, { mode: 'finished', ruleExternalId: null });
+      plans.set(basePk, { mode: "finished", ruleExternalId: null });
       continue;
     }
     const nextDueDate = unpaid[0].localDate;
-    const endSeconds = latest.endDateSec ?? ordered.find((row) => row.endDateSec !== null)?.endDateSec ?? null;
+    const endSeconds =
+      latest.endDateSec ??
+      ordered.find((row) => row.endDateSec !== null)?.endDateSec ??
+      null;
     const endDate = localDateFromSeconds(endSeconds, timeZone);
     if (endDate !== null && nextDueDate > endDate) {
-      plans.set(basePk, { mode: 'finished', ruleExternalId: null });
+      plans.set(basePk, { mode: "finished", ruleExternalId: null });
       continue;
     }
-    const kind = latest.sign < 0 ? 'expense' : 'income';
+    const kind = latest.sign < 0 ? "expense" : "income";
     const category = resolveCategory(latest, kind);
     const externalId = `recurring:${basePk}`;
     recurringRules.push({
       externalId,
       kind,
-      title: titleFor(latest, category.sourceName, 'Recurring transaction'),
+      title: titleFor(latest, category.sourceName, "Recurring transaction"),
       note: latest.note,
       accountExternalId: walletOf(latest).externalId,
       categoryExternalId: category.externalId,
@@ -770,11 +875,11 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
       autoPost: false,
       active: true,
     });
-    plans.set(basePk, { mode: 'rule', ruleExternalId: externalId });
+    plans.set(basePk, { mode: "rule", ruleExternalId: externalId });
   }
-  warnings.add('recurring-custom-period', customPeriodGroups);
-  warnings.add('recurring-ended', endedGroups);
-  warnings.add('recurring-review', recurringRules.length);
+  warnings.add("recurring-custom-period", customPeriodGroups);
+  warnings.add("recurring-ended", endedGroups);
+  warnings.add("recurring-review", recurringRules.length);
 
   // Transactions -----------------------------------------------------------
   const transactions: BundleTransaction[] = [];
@@ -788,9 +893,9 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
       if (row.title === null) emptyTitles += 1;
       transactions.push({
         externalId: `transaction:${row.pk}`,
-        kind: 'transfer',
+        kind: "transfer",
         status: row.status,
-        title: row.title ?? 'Transfer',
+        title: row.title ?? "Transfer",
         note: row.note,
         localDate: row.localDate,
         accountExternalId: wallet.externalId,
@@ -803,17 +908,18 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
       });
       continue;
     }
-    const plan = row.type === 1 || row.type === 2 ? plans.get(row.basePk) : undefined;
+    const plan =
+      row.type === 1 || row.type === 2 ? plans.get(row.basePk) : undefined;
     // A live series regenerates its own unpaid occurrences, and a finished series has none left.
-    if (plan && plan.mode !== 'custom' && row.status === 'upcoming') continue;
-    const kind = row.sign < 0 ? 'expense' : 'income';
+    if (plan && plan.mode !== "custom" && row.status === "upcoming") continue;
+    const kind = row.sign < 0 ? "expense" : "income";
     const category = resolveCategory(row, kind);
     if (row.title === null) emptyTitles += 1;
     transactions.push({
       externalId: `transaction:${row.pk}`,
       kind,
       status: row.status,
-      title: titleFor(row, category.sourceName, 'Transaction'),
+      title: titleFor(row, category.sourceName, "Transaction"),
       note: row.note,
       localDate: row.localDate,
       accountExternalId: wallet.externalId,
@@ -822,37 +928,46 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
       tagExternalIds: tagsOf(row),
       amountMinor: row.amountMinor,
       destinationAmountMinor: null,
-      recurringRuleExternalId: plan?.mode === 'rule' && row.status === 'posted' ? plan.ruleExternalId : null,
+      recurringRuleExternalId:
+        plan?.mode === "rule" && row.status === "posted"
+          ? plan.ruleExternalId
+          : null,
     });
   }
-  warnings.add('empty-title', emptyTitles);
-  warnings.add('category-split', categorySplits);
+  warnings.add("empty-title", emptyTitles);
+  warnings.add("category-split", categorySplits);
 
   // Emitted categories: parents before children, then twins.
-  const sourceCategories: BundleCategory[] = [...categoryInfos.values()].map((info) => ({
-    externalId: info.externalId,
-    name: info.name,
-    kind: info.kind,
-    icon: info.icon,
-    color: info.color,
-    parentExternalId: info.parentExternalId,
-    archived: info.archived,
-  }));
+  const sourceCategories: BundleCategory[] = [...categoryInfos.values()].map(
+    (info) => ({
+      externalId: info.externalId,
+      name: info.name,
+      kind: info.kind,
+      icon: info.icon,
+      color: info.color,
+      parentExternalId: info.parentExternalId,
+      archived: info.archived,
+    }),
+  );
   const categories: BundleCategory[] = [
-    ...sourceCategories.filter((category) => category.parentExternalId === null),
-    ...sourceCategories.filter((category) => category.parentExternalId !== null),
+    ...sourceCategories.filter(
+      (category) => category.parentExternalId === null,
+    ),
+    ...sourceCategories.filter(
+      (category) => category.parentExternalId !== null,
+    ),
     ...twinCategories.values(),
   ];
 
   // Budgets ----------------------------------------------------------------
   const expenseCategoryIds = categories
-    .filter((category) => category.kind === 'expense')
+    .filter((category) => category.kind === "expense")
     .map((category) => category.externalId);
   const expenseCategorySet = new Set(expenseCategoryIds);
   const budgetLimitExponent = exponentFor(fallbackCurrency);
   const limitRowsByBudget = new Map<string, RawRow[]>();
-  for (const row of tableRows(raw, 'category_budget_limits')) {
-    const budgetPk = text(row, 'budget_fk');
+  for (const row of tableRows(raw, "category_budget_limits")) {
+    const budgetPk = text(row, "budget_fk");
     if (budgetPk === null) continue;
     const list = limitRowsByBudget.get(budgetPk);
     if (list) list.push(row);
@@ -868,41 +983,61 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
     manualOnly: 0,
     absolute: 0,
   };
-  for (const row of tableRows(raw, 'budgets')) {
-    const pk = text(row, 'budget_pk');
+  for (const row of tableRows(raw, "budgets")) {
+    const pk = text(row, "budget_pk");
     if (pk === null || budgetPks.has(pk)) continue;
     budgetPks.add(pk);
 
-    const amount = num(row, 'amount');
+    const amount = num(row, "amount");
     const limit = amount === null ? null : toMinor(amount, budgetLimitExponent);
-    const startSec = num(row, 'start_date');
+    const startSec = num(row, "start_date");
     const anchorDate = localDateFromSeconds(startSec, timeZone);
-    if (amount === null || amount <= 0 || limit === null || limit.minor === null || limit.minor <= 0 || anchorDate === null) {
+    if (
+      amount === null ||
+      amount <= 0 ||
+      limit === null ||
+      limit.minor === null ||
+      limit.minor <= 0 ||
+      anchorDate === null
+    ) {
       budgetCounters.invalid += 1;
       continue;
     }
 
-    const recurrence = periodOf(num(row, 'reoccurrence'), num(row, 'period_length'));
+    const recurrence = periodOf(
+      num(row, "reoccurrence"),
+      num(row, "period_length"),
+    );
     let period: PeriodDefinition;
     if (recurrence) {
-      period = { unit: recurrence.unit, interval: recurrence.interval, anchorDate, endDate: null };
+      period = {
+        unit: recurrence.unit,
+        interval: recurrence.interval,
+        anchorDate,
+        endDate: null,
+      };
     } else {
-      const endDate = localDateFromSeconds(num(row, 'end_date'), timeZone);
+      const endDate = localDateFromSeconds(num(row, "end_date"), timeZone);
       if (endDate === null || endDate < anchorDate) {
         budgetCounters.invalid += 1;
         continue;
       }
-      period = { unit: 'custom', interval: 1, anchorDate, endDate };
+      period = { unit: "custom", interval: 1, anchorDate, endDate };
     }
 
-    const accountExternalIds = jsonList(row, 'wallet_fks')
+    const accountExternalIds = jsonList(row, "wallet_fks")
       .filter((walletPk) => wallets.has(walletPk))
       .map((walletPk) => `wallet:${walletPk}`);
 
-    const listed = jsonList(row, 'category_fks');
-    const listedExpense = [...new Set(listed.map((categoryPk) => `category:${categoryPk}`))]
-      .filter((externalId) => expenseCategorySet.has(externalId));
-    const excluded = new Set(jsonList(row, 'category_fks_exclude').map((categoryPk) => `category:${categoryPk}`));
+    const listed = jsonList(row, "category_fks");
+    const listedExpense = [
+      ...new Set(listed.map((categoryPk) => `category:${categoryPk}`)),
+    ].filter((externalId) => expenseCategorySet.has(externalId));
+    const excluded = new Set(
+      jsonList(row, "category_fks_exclude").map(
+        (categoryPk) => `category:${categoryPk}`,
+      ),
+    );
     if (listed.length > 0 && listedExpense.length === 0) {
       budgetCounters.invalid += 1;
       continue;
@@ -910,7 +1045,9 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
     let categoryExternalIds = listed.length > 0 ? listedExpense : [];
     if (excluded.size > 0) {
       const pool = listed.length > 0 ? listedExpense : expenseCategoryIds;
-      categoryExternalIds = pool.filter((externalId) => !excluded.has(externalId));
+      categoryExternalIds = pool.filter(
+        (externalId) => !excluded.has(externalId),
+      );
       if (categoryExternalIds.length === 0) {
         budgetCounters.invalid += 1;
         continue;
@@ -918,14 +1055,21 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
       budgetCounters.exclusions += 1;
     }
 
-    const categoryLimits: { categoryExternalId: string; limitMinor: number }[] = [];
+    const categoryLimits: { categoryExternalId: string; limitMinor: number }[] =
+      [];
     for (const limitRow of limitRowsByBudget.get(pk) ?? []) {
-      const categoryPk = text(limitRow, 'category_fk');
-      const limitAmount = num(limitRow, 'amount');
-      if (categoryPk === null || limitAmount === null || limitAmount <= 0) continue;
+      const categoryPk = text(limitRow, "category_fk");
+      const limitAmount = num(limitRow, "amount");
+      if (categoryPk === null || limitAmount === null || limitAmount <= 0)
+        continue;
       const categoryExternalId = `category:${categoryPk}`;
       if (!expenseCategorySet.has(categoryExternalId)) continue;
-      if (categoryLimits.some((entry) => entry.categoryExternalId === categoryExternalId)) continue;
+      if (
+        categoryLimits.some(
+          (entry) => entry.categoryExternalId === categoryExternalId,
+        )
+      )
+        continue;
       const converted = toMinor(limitAmount, budgetLimitExponent);
       if (converted.minor === null || converted.minor <= 0) continue;
       categoryLimits.push({ categoryExternalId, limitMinor: converted.minor });
@@ -942,39 +1086,49 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
       }
     }
 
-    if (text(row, 'shared_key') !== null) budgetCounters.shared += 1;
-    if (jsonList(row, 'budget_transaction_filters').length > 0) budgetCounters.filters += 1;
-    if (flag(row, 'added_transactions_only')) budgetCounters.manualOnly += 1;
-    if (flag(row, 'is_absolute_spending_limit')) budgetCounters.absolute += 1;
+    if (text(row, "shared_key") !== null) budgetCounters.shared += 1;
+    if (jsonList(row, "budget_transaction_filters").length > 0)
+      budgetCounters.filters += 1;
+    if (flag(row, "added_transactions_only")) budgetCounters.manualOnly += 1;
+    if (flag(row, "is_absolute_spending_limit")) budgetCounters.absolute += 1;
 
     budgets.push({
       externalId: `budget:${pk}`,
-      name: text(row, 'name') ?? 'Budget',
+      name: text(row, "name") ?? "Budget",
       icon: DEFAULT_BUDGET_ICON,
-      color: convertColor(text(row, 'colour')) ?? DEFAULT_BUDGET_COLOR,
+      color: convertColor(text(row, "colour")) ?? DEFAULT_BUDGET_COLOR,
       limitMinor: limit.minor,
       period,
       accountExternalIds: [...new Set(accountExternalIds)],
       categoryExternalIds,
       tagExternalIds: [],
       categoryLimits,
-      archived: flag(row, 'archived'),
+      archived: flag(row, "archived"),
     });
   }
-  warnings.add('invalid-budget', budgetCounters.invalid);
-  warnings.add('shared-budget-flattened', budgetCounters.shared);
-  warnings.add('budget-exclusions-flattened', budgetCounters.exclusions);
-  warnings.add('budget-filters-dropped', budgetCounters.filters);
-  warnings.add('budget-manual-only', budgetCounters.manualOnly);
-  warnings.add('budget-absolute-limit', budgetCounters.absolute);
-  if (budgets.length > 0 && accounts.some((account) => account.currency !== fallbackCurrency)) {
-    warnings.add('budget-currency', budgets.length);
+  warnings.add("invalid-budget", budgetCounters.invalid);
+  warnings.add("shared-budget-flattened", budgetCounters.shared);
+  warnings.add("budget-exclusions-flattened", budgetCounters.exclusions);
+  warnings.add("budget-filters-dropped", budgetCounters.filters);
+  warnings.add("budget-manual-only", budgetCounters.manualOnly);
+  warnings.add("budget-absolute-limit", budgetCounters.absolute);
+  if (
+    budgets.length > 0 &&
+    accounts.some((account) => account.currency !== fallbackCurrency)
+  ) {
+    warnings.add("budget-currency", budgets.length);
   }
 
   // Dropped data -----------------------------------------------------------
-  warnings.add('objectives-not-imported', tableRows(raw, 'objectives').length);
-  warnings.add('associated-titles-dropped', tableRows(raw, 'associated_titles').length);
-  warnings.add('scanner-templates-dropped', tableRows(raw, 'scanner_templates').length);
+  warnings.add("objectives-not-imported", tableRows(raw, "objectives").length);
+  warnings.add(
+    "associated-titles-dropped",
+    tableRows(raw, "associated_titles").length,
+  );
+  warnings.add(
+    "scanner-templates-dropped",
+    tableRows(raw, "scanner_templates").length,
+  );
 
   // Reconciliation ---------------------------------------------------------
   const balanceChecks = reconcileBalances(
@@ -984,7 +1138,7 @@ export function mapCashewBackup(raw: CashewRawData, options: ParseOptions): Impo
   );
 
   return {
-    source: 'cashew',
+    source: "cashew",
     timeZone,
     timeZoneSource,
     accounts,

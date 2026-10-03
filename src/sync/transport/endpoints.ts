@@ -14,8 +14,8 @@
  * Everything else is rejected with a reason a person can act on.
  */
 
-import type { StorageTx } from '@/data/storage-adapter';
-import { SYNC_META, readMeta, writeMeta } from '@/data/sync-store';
+import type { StorageTx } from "@/data/storage-adapter";
+import { SYNC_META, readMeta, writeMeta } from "@/data/sync-store";
 
 /**
  * The relay this build points at out of the box: the project's own deployment from
@@ -25,7 +25,7 @@ import { SYNC_META, readMeta, writeMeta } from '@/data/sync-store';
  * device at a self-hosted relay — or at nothing, which keeps sync direct-only — is one field in
  * More → Sync → Advanced, and a stored blank always wins over this default.
  */
-export const DEFAULT_RELAY_URL = 'https://qashy-relay.qashy.workers.dev';
+export const DEFAULT_RELAY_URL = "https://qashy-relay.qashy.workers.dev";
 
 /**
  * Optional STUN servers for direct connections.
@@ -35,7 +35,7 @@ export const DEFAULT_RELAY_URL = 'https://qashy-relay.qashy.workers.dev';
  * app use and the device's public address without an explicit choice. LAN sync remains available;
  * cross-network direct sync requires the user to configure STUN or TURN.
  */
-export const DEFAULT_STUN_URLS = '';
+export const DEFAULT_STUN_URLS = "";
 
 export interface IceServer {
   readonly urls: string;
@@ -54,11 +54,11 @@ export interface SyncEndpoints {
 export class EndpointError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'EndpointError';
+    this.name = "EndpointError";
   }
 }
 
-const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
+const LOOPBACK = new Set(["localhost", "127.0.0.1", "[::1]", "::1"]);
 
 /**
  * Validates and canonicalises an endpoint the user typed.
@@ -67,33 +67,41 @@ const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]', '::1']);
  */
 export function normalizeEndpointUrl(raw: string): string {
   const trimmed = raw.trim();
-  if (!trimmed) return '';
+  if (!trimmed) return "";
 
   let url: URL;
   try {
     url = new URL(trimmed);
   } catch {
-    throw new EndpointError('That is not a complete address. It should start with https://.');
+    throw new EndpointError(
+      "That is not a complete address. It should start with https://.",
+    );
   }
 
-  if (url.protocol === 'http:' && !LOOPBACK.has(url.hostname)) {
-    throw new EndpointError('Use https:// — an http:// address would send your data unprotected.');
+  if (url.protocol === "http:" && !LOOPBACK.has(url.hostname)) {
+    throw new EndpointError(
+      "Use https:// — an http:// address would send your data unprotected.",
+    );
   }
-  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
-    throw new EndpointError('Only https:// addresses can be used here.');
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    throw new EndpointError("Only https:// addresses can be used here.");
   }
   if (url.username || url.password) {
-    throw new EndpointError('Remove the username and password from the address.');
+    throw new EndpointError(
+      "Remove the username and password from the address.",
+    );
   }
   if (url.search || url.hash) {
-    throw new EndpointError('Remove everything after the path from the address.');
+    throw new EndpointError(
+      "Remove everything after the path from the address.",
+    );
   }
 
   // `origin + pathname` rather than `href`, so a pasted address with a trailing slash and one
   // without produce the same stored value. A path is allowed — a relay behind a shared domain
   // legitimately lives at `/qashy` — but it is normalised to have no trailing slash so the
   // callers can append `/health` without ever producing a double separator.
-  const path = url.pathname.replace(/\/+$/, '');
+  const path = url.pathname.replace(/\/+$/, "");
   return `${url.origin}${path}`;
 }
 
@@ -105,12 +113,14 @@ export function normalizeEndpointUrl(raw: string): string {
  */
 export function parseStunUrls(raw: string): string[] {
   return raw
-    .split(',')
+    .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean)
     .map((entry) => {
       if (!/^stuns?:[^\s/?#]+$/.test(entry)) {
-        throw new EndpointError(`"${entry}" is not a STUN address. They look like stun:host:3478.`);
+        throw new EndpointError(
+          `"${entry}" is not a STUN address. They look like stun:host:3478.`,
+        );
       }
       return entry;
     });
@@ -119,15 +129,17 @@ export function parseStunUrls(raw: string): string[] {
 /** A user-supplied TURN address. Same shape as STUN, different scheme. */
 export function normalizeTurnUrl(raw: string): string {
   const trimmed = raw.trim();
-  if (!trimmed) return '';
+  if (!trimmed) return "";
   if (!/^turns?:[^\s/?#]+(\?transport=(udp|tcp))?$/.test(trimmed)) {
-    throw new EndpointError('That is not a TURN address. They look like turn:host:3478.');
+    throw new EndpointError(
+      "That is not a TURN address. They look like turn:host:3478.",
+    );
   }
   return trimmed;
 }
 
 const flag = (value: string | undefined, fallback: boolean) =>
-  value === undefined ? fallback : value === '1';
+  value === undefined ? fallback : value === "1";
 
 /**
  * Reads the transport configuration.
@@ -157,21 +169,25 @@ export async function readEndpoints(tx: StorageTx): Promise<SyncEndpoints> {
   };
 
   const relayUrl = safely(
-    () => normalizeEndpointUrl(meta.get(SYNC_META.relayUrl) ?? DEFAULT_RELAY_URL),
-    '',
+    () =>
+      normalizeEndpointUrl(meta.get(SYNC_META.relayUrl) ?? DEFAULT_RELAY_URL),
+    "",
   );
   const stun = safely(
     () => parseStunUrls(meta.get(SYNC_META.stunUrls) ?? DEFAULT_STUN_URLS),
     [] as string[],
   );
-  const turnUrl = safely(() => normalizeTurnUrl(meta.get(SYNC_META.turnUrl) ?? ''), '');
+  const turnUrl = safely(
+    () => normalizeTurnUrl(meta.get(SYNC_META.turnUrl) ?? ""),
+    "",
+  );
 
   const iceServers: IceServer[] = stun.map((urls) => ({ urls }));
   if (turnUrl) {
     iceServers.push({
       urls: turnUrl,
-      username: meta.get(SYNC_META.turnUsername) ?? '',
-      credential: meta.get(SYNC_META.turnCredential) ?? '',
+      username: meta.get(SYNC_META.turnUsername) ?? "",
+      credential: meta.get(SYNC_META.turnCredential) ?? "",
     });
   }
 
@@ -200,34 +216,39 @@ export interface EndpointPatch {
  * a good relay URL and a bad STUN list leaves neither behind. A half-applied endpoint change
  * is exactly the state that produces "it worked yesterday" bug reports.
  */
-export async function writeEndpoints(tx: StorageTx, patch: EndpointPatch): Promise<void> {
+export async function writeEndpoints(
+  tx: StorageTx,
+  patch: EndpointPatch,
+): Promise<void> {
   const entries: Partial<Record<string, string>> = {};
 
   if (patch.relayUrl !== undefined) {
     entries[SYNC_META.relayUrl] = normalizeEndpointUrl(patch.relayUrl);
     // A relay that has just been pointed somewhere else has no measured health, and showing
     // the previous host's verdict against the new address is worse than showing nothing.
-    entries[SYNC_META.relayStatus] = '';
-    entries[SYNC_META.relayCheckedAt] = '';
-    entries[SYNC_META.relayDetail] = '';
-    entries[SYNC_META.relayFailures] = '0';
+    entries[SYNC_META.relayStatus] = "";
+    entries[SYNC_META.relayCheckedAt] = "";
+    entries[SYNC_META.relayDetail] = "";
+    entries[SYNC_META.relayFailures] = "0";
     // The cursor counts slots in the *old* bucket on the *old* host. Carrying it over would
     // make this device skip the first N blobs it is ever offered by the new one.
-    entries[SYNC_META.relayCursor] = '0';
+    entries[SYNC_META.relayCursor] = "0";
   }
   if (patch.stunUrls !== undefined) {
-    entries[SYNC_META.stunUrls] = parseStunUrls(patch.stunUrls).join(',');
+    entries[SYNC_META.stunUrls] = parseStunUrls(patch.stunUrls).join(",");
   }
-  if (patch.turnUrl !== undefined) entries[SYNC_META.turnUrl] = normalizeTurnUrl(patch.turnUrl);
-  if (patch.turnUsername !== undefined) entries[SYNC_META.turnUsername] = patch.turnUsername.trim();
+  if (patch.turnUrl !== undefined)
+    entries[SYNC_META.turnUrl] = normalizeTurnUrl(patch.turnUrl);
+  if (patch.turnUsername !== undefined)
+    entries[SYNC_META.turnUsername] = patch.turnUsername.trim();
   if (patch.turnCredential !== undefined) {
     entries[SYNC_META.turnCredential] = patch.turnCredential.trim();
   }
   if (patch.relayEnabled !== undefined) {
-    entries[SYNC_META.relayEnabled] = patch.relayEnabled ? '1' : '0';
+    entries[SYNC_META.relayEnabled] = patch.relayEnabled ? "1" : "0";
   }
   if (patch.directEnabled !== undefined) {
-    entries[SYNC_META.directEnabled] = patch.directEnabled ? '1' : '0';
+    entries[SYNC_META.directEnabled] = patch.directEnabled ? "1" : "0";
   }
 
   await writeMeta(tx, entries);

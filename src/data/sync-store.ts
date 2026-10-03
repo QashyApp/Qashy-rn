@@ -15,14 +15,14 @@
  * peer ever hears about.
  */
 
-import type { StorageTx } from '@/data/storage-adapter';
+import type { StorageTx } from "@/data/storage-adapter";
 import type {
   SyncActivityRow,
   SyncOpRow,
   SyncQuarantineRow,
   SyncStateRow,
-} from '@/data/sync-tables';
-import type { EntityType } from '@/domain/models';
+} from "@/data/sync-tables";
+import type { EntityType } from "@/domain/models";
 import {
   GENESIS_HASH,
   applyOps,
@@ -33,8 +33,8 @@ import {
   type HlcClock,
   type OpKind,
   type SyncOp,
-} from '@/sync/oplog';
-import { canonicalJson } from '@/utils/canonical-json';
+} from "@/sync/oplog";
+import { canonicalJson } from "@/utils/canonical-json";
 
 /**
  * Every key `sync_meta` holds.
@@ -45,34 +45,34 @@ import { canonicalJson } from '@/utils/canonical-json';
  */
 export const SYNC_META = {
   /** This device's identity, derived from its Ed25519 public key. */
-  deviceId: 'deviceId',
+  deviceId: "deviceId",
   /** Bumped by a vault-key rotation; mirrors the epoch stored beside the key. */
-  epoch: 'epoch',
+  epoch: "epoch",
   /** The highest `seq` this device has issued on its own chain. */
-  seq: 'seq',
+  seq: "seq",
   /** The `opHash` of this device's newest op — what the next op chains onto. */
-  headHash: 'headHash',
-  hlcWall: 'hlcWall',
-  hlcCounter: 'hlcCounter',
+  headHash: "headHash",
+  hlcWall: "hlcWall",
+  hlcCounter: "hlcCounter",
   /**
    * The vault's base currency, checked before any op is applied.
    *
    * Divergence is not merge-able: every transaction's `baseAmountMinor` is snapshotted
    * against it, and re-basing would need a historical rate matrix the app does not have.
    */
-  baseCurrency: 'baseCurrency',
+  baseCurrency: "baseCurrency",
   /** Set once the genesis migration has converted pre-sync rows into ops. */
-  genesisAt: 'genesisAt',
+  genesisAt: "genesisAt",
   /** Written by every commit so other tabs can tell a foreign write from their own echo. */
-  lastWrite: 'lastWrite',
+  lastWrite: "lastWrite",
   /** `'1'` once the user has switched sync on. Absent means off, which is the default. */
-  enabled: 'enabled',
+  enabled: "enabled",
   /** What this device calls itself in another device's list. Chosen by the user at pairing. */
-  deviceName: 'deviceName',
+  deviceName: "deviceName",
   /** Set by the first device; later transfers are signed control events in the op log. */
-  ownerDeviceId: 'ownerDeviceId',
+  ownerDeviceId: "ownerDeviceId",
   /** The product-selected default is immediate removal by any paired device. */
-  revocationMode: 'revocationMode',
+  revocationMode: "revocationMode",
 
   // -- Automatic exchange rates. Device-local opt-in; see `data/exchange-rates/rates-flag.ts`.
 
@@ -85,9 +85,9 @@ export const SYNC_META = {
    * consent is exactly the kind of value that must not silently follow another device's choice.
    * It lives here, beside the rest of this device's own transport and membership state.
    */
-  ratesAutoFetch: 'ratesAutoFetch',
+  ratesAutoFetch: "ratesAutoFetch",
   /** When `refreshLatest` last completed a fetch (successful or not). ISO timestamp, or absent. */
-  ratesLastRefreshAt: 'ratesLastRefreshAt',
+  ratesLastRefreshAt: "ratesLastRefreshAt",
 
   // -- Presentation preferences. Device-local; see `features/overview/layout`.
 
@@ -101,7 +101,7 @@ export const SYNC_META = {
    * state, and a write to it goes through `syncingStorage.transact` directly rather than
    * `putMany`, so it never diffs into an op and never leaves this device.
    */
-  overviewLayout: 'overviewLayout',
+  overviewLayout: "overviewLayout",
 
   /**
    * The user-authored themes on this device, as one JSON document of validated theme FILES
@@ -110,18 +110,18 @@ export const SYNC_META = {
    * Device-local like `overviewLayout`: written through `transact` so it never diffs into a
    * sync op, never held in `AppSettings` (which replicates), and never near the keystore.
    */
-  customThemes: 'customThemes',
+  customThemes: "customThemes",
 
   // -- Transport configuration. Non-secret by construction; see `sync/transport/endpoints.ts`.
 
   /** Origin of the relay and signaling service, without a trailing slash. `''` means none. */
-  relayUrl: 'relayUrl',
+  relayUrl: "relayUrl",
   /** `'0'` disables the drop-box. Absent means on, because a configured relay is meant to be used. */
-  relayEnabled: 'relayEnabled',
+  relayEnabled: "relayEnabled",
   /** `'0'` disables direct connections, leaving the drop-box. Absent means on. */
-  directEnabled: 'directEnabled',
+  directEnabled: "directEnabled",
   /** Comma-separated STUN URLs. `''` means none, which still leaves LAN sync working. */
-  stunUrls: 'stunUrls',
+  stunUrls: "stunUrls",
   /**
    * A user-supplied TURN server, and the credentials it issued them.
    *
@@ -129,22 +129,22 @@ export const SYNC_META = {
    * byte's worth of traffic volume, which is strictly more than the drop-box sees, so it is
    * only ever something the user deliberately opts into for their own infrastructure.
    */
-  turnUrl: 'turnUrl',
-  turnUsername: 'turnUsername',
-  turnCredential: 'turnCredential',
+  turnUrl: "turnUrl",
+  turnUsername: "turnUsername",
+  turnCredential: "turnCredential",
 
   // -- Relay health cache. Advisory, never consulted before syncing.
 
   /** The last `RelayStatus`, so the More screen reads a value rather than flickering to unknown. */
-  relayStatus: 'relayStatus',
+  relayStatus: "relayStatus",
   /** When that status was measured. */
-  relayCheckedAt: 'relayCheckedAt',
+  relayCheckedAt: "relayCheckedAt",
   /** Why it failed, in transport terms. Shown verbatim, so it may never carry finance data. */
-  relayDetail: 'relayDetail',
+  relayDetail: "relayDetail",
   /** Consecutive failed pushes. Turns a reachable-but-erroring relay into `degraded`. */
-  relayFailures: 'relayFailures',
+  relayFailures: "relayFailures",
   /** The highest drop-box slot this device has consumed. Blobs at or below it are never re-read. */
-  relayCursor: 'relayCursor',
+  relayCursor: "relayCursor",
 } as const;
 
 export type SyncMetaKey = (typeof SYNC_META)[keyof typeof SYNC_META];
@@ -153,15 +153,18 @@ export async function readMeta(
   tx: StorageTx,
   keys: readonly SyncMetaKey[],
 ): Promise<Map<string, string>> {
-  const rows = await tx.table('syncMeta').getMany(keys);
+  const rows = await tx.table("syncMeta").getMany(keys);
   return new Map(rows.map((row) => [row.key, row.value]));
 }
 
-export async function writeMeta(tx: StorageTx, entries: Partial<Record<SyncMetaKey, string>>) {
+export async function writeMeta(
+  tx: StorageTx,
+  entries: Partial<Record<SyncMetaKey, string>>,
+) {
   const rows = Object.entries(entries)
     .filter((entry): entry is [SyncMetaKey, string] => entry[1] !== undefined)
     .map(([key, value]) => ({ key, value }));
-  if (rows.length) await tx.table('syncMeta').put(rows);
+  if (rows.length) await tx.table("syncMeta").put(rows);
 }
 
 const toInt = (value: string | undefined, fallback: number) => {
@@ -259,8 +262,10 @@ export const fromOpRow = (row: SyncOpRow): SyncOp => ({
 
 /** Membership controls are the only stored ops with no finance projection. */
 export async function readControlOps(tx: StorageTx): Promise<SyncOp[]> {
-  const rows = await tx.table('syncOps').all();
-  return rows.filter((row) => row.entityType === SYNC_CONTROL_ENTITY).map(fromOpRow);
+  const rows = await tx.table("syncOps").all();
+  return rows
+    .filter((row) => row.entityType === SYNC_CONTROL_ENTITY)
+    .map(fromOpRow);
 }
 
 // ---------------------------------------------------------------------------
@@ -282,18 +287,26 @@ export async function readStates(
   keys: readonly string[],
 ): Promise<Map<string, CausalMeta>> {
   if (!keys.length) return new Map();
-  const rows = await tx.table('syncState').getMany(keys);
-  return new Map(rows.map((row) => [row.key, JSON.parse(row.meta) as CausalMeta]));
+  const rows = await tx.table("syncState").getMany(keys);
+  return new Map(
+    rows.map((row) => [row.key, JSON.parse(row.meta) as CausalMeta]),
+  );
 }
 
 /** Every entity's causal state. Used by the full-state path and by hydration. */
-export async function readAllStates(tx: StorageTx): Promise<Map<string, CausalMeta>> {
-  const rows = await tx.table('syncState').all();
-  return new Map(rows.map((row) => [row.key, JSON.parse(row.meta) as CausalMeta]));
+export async function readAllStates(
+  tx: StorageTx,
+): Promise<Map<string, CausalMeta>> {
+  const rows = await tx.table("syncState").all();
+  return new Map(
+    rows.map((row) => [row.key, JSON.parse(row.meta) as CausalMeta]),
+  );
 }
 
 export const writeStates = (tx: StorageTx, metas: readonly CausalMeta[]) =>
-  metas.length ? tx.table('syncState').put(metas.map(toStateRow)) : Promise.resolve();
+  metas.length
+    ? tx.table("syncState").put(metas.map(toStateRow))
+    : Promise.resolve();
 
 // ---------------------------------------------------------------------------
 // The combined write
@@ -321,10 +334,12 @@ export async function recordOps(
 ): Promise<RecordedOps> {
   if (!ops.length) return { states: new Map() };
 
-  const keys = [...new Set(ops.map((op) => metaKey(op.entityType, op.entityId)))];
+  const keys = [
+    ...new Set(ops.map((op) => metaKey(op.entityType, op.entityId))),
+  ];
   const states = applyOps(await readStates(tx, keys), ops);
 
-  await tx.table('syncOps').put(ops.map((op) => toOpRow(op, origin)));
+  await tx.table("syncOps").put(ops.map((op) => toOpRow(op, origin)));
   await writeStates(
     tx,
     keys.map((key) => states.get(key)!),
@@ -346,8 +361,14 @@ export async function recordOps(
  * so they must keep flowing to other peers even when this device cannot project them. That
  * is what stops one device's disagreement from truncating everyone else's history.
  */
-export const storeOps = (tx: StorageTx, ops: readonly SyncOp[], origin: OpOrigin) =>
-  ops.length ? tx.table('syncOps').put(ops.map((op) => toOpRow(op, origin))) : Promise.resolve();
+export const storeOps = (
+  tx: StorageTx,
+  ops: readonly SyncOp[],
+  origin: OpOrigin,
+) =>
+  ops.length
+    ? tx.table("syncOps").put(ops.map((op) => toOpRow(op, origin)))
+    : Promise.resolve();
 
 export interface HeldChains {
   /** The head of every chain this device holds. */
@@ -388,7 +409,7 @@ export async function readHeldChains(
 ): Promise<HeldChains> {
   const heads = new Map<string, ChainHead>();
   const hashes = new Map<string, string>();
-  for (const row of await tx.table('syncOps').all()) {
+  for (const row of await tx.table("syncOps").all()) {
     const current = heads.get(row.deviceId);
     if (!current || row.seq > current.seq) {
       heads.set(row.deviceId, { seq: row.seq, headHash: row.opHash });
@@ -443,10 +464,13 @@ export function deriveOutbox(
 
   for (const row of rows) {
     const head = heads.get(row.deviceId);
-    if (!head || row.seq > head.seq) heads.set(row.deviceId, { seq: row.seq, headHash: row.opHash });
+    if (!head || row.seq > head.seq)
+      heads.set(row.deviceId, { seq: row.seq, headHash: row.opHash });
     const lowest = compactedBelow[row.deviceId];
-    if (lowest === undefined || row.seq < lowest) compactedBelow[row.deviceId] = row.seq;
-    if (row.sealed === 1 && row.seq > (acked[row.deviceId] ?? 0)) pending.push(row);
+    if (lowest === undefined || row.seq < lowest)
+      compactedBelow[row.deviceId] = row.seq;
+    if (row.sealed === 1 && row.seq > (acked[row.deviceId] ?? 0))
+      pending.push(row);
   }
 
   pending.sort((first, second) =>
@@ -469,7 +493,7 @@ export async function readOutbox(
   acked: Readonly<Record<string, number>>,
   limit: number,
 ): Promise<Outbox> {
-  return deriveOutbox(await tx.table('syncOps').all(), acked, limit);
+  return deriveOutbox(await tx.table("syncOps").all(), acked, limit);
 }
 
 /**
@@ -488,10 +512,12 @@ export async function readOutbox(
  * missing — is the kind of cleverness that fails quietly on the one case nobody tested.
  */
 export async function findUnprojected(tx: StorageTx): Promise<SyncOp[]> {
-  const rows = await tx.table('syncOps').all();
+  const rows = await tx.table("syncOps").all();
   if (!rows.length) return [];
 
-  const applied = new Map((await tx.table('syncState').all()).map((row) => [row.key, row.maxHlc]));
+  const applied = new Map(
+    (await tx.table("syncState").all()).map((row) => [row.key, row.maxHlc]),
+  );
   const byKey = new Map<string, SyncOpRow[]>();
   for (const row of rows) {
     if (row.entityType === SYNC_CONTROL_ENTITY) continue;
@@ -504,7 +530,10 @@ export async function findUnprojected(tx: StorageTx): Promise<SyncOp[]> {
   const pending: SyncOp[] = [];
   for (const [key, list] of byKey) {
     const seen = applied.get(key);
-    const newest = list.reduce((highest, row) => (row.hlc > highest ? row.hlc : highest), '');
+    const newest = list.reduce(
+      (highest, row) => (row.hlc > highest ? row.hlc : highest),
+      "",
+    );
     if (seen !== undefined && newest <= seen) continue;
     for (const row of list) pending.push(fromOpRow(row));
   }
@@ -517,15 +546,18 @@ export async function findUnprojected(tx: StorageTx): Promise<SyncOp[]> {
 // Quarantine
 // ---------------------------------------------------------------------------
 
-export type QuarantineReason = SyncQuarantineRow['reason'];
+export type QuarantineReason = SyncQuarantineRow["reason"];
 
-export const readQuarantine = (tx: StorageTx) => tx.table('syncQuarantine').all();
+export const readQuarantine = (tx: StorageTx) =>
+  tx.table("syncQuarantine").all();
 
-export const writeQuarantine = (tx: StorageTx, rows: readonly SyncQuarantineRow[]) =>
-  rows.length ? tx.table('syncQuarantine').put(rows) : Promise.resolve();
+export const writeQuarantine = (
+  tx: StorageTx,
+  rows: readonly SyncQuarantineRow[],
+) => (rows.length ? tx.table("syncQuarantine").put(rows) : Promise.resolve());
 
 export const clearQuarantine = (tx: StorageTx, keys: readonly string[]) =>
-  keys.length ? tx.table('syncQuarantine').delete(keys) : Promise.resolve();
+  keys.length ? tx.table("syncQuarantine").delete(keys) : Promise.resolve();
 
 // ---------------------------------------------------------------------------
 // Activity
@@ -540,7 +572,7 @@ export const clearQuarantine = (tx: StorageTx, keys: readonly string[]) =>
  */
 export const ACTIVITY_LIMIT = 200;
 
-export type SyncActivityInput = Omit<SyncActivityRow, 'key'>;
+export type SyncActivityInput = Omit<SyncActivityRow, "key">;
 
 /**
  * Appends events and trims the oldest beyond the cap.
@@ -550,22 +582,33 @@ export type SyncActivityInput = Omit<SyncActivityRow, 'key'>;
  * the next number from the table rather than a counter in `sync_meta` keeps it correct across
  * two tabs without a second row to keep in step.
  */
-export async function appendActivity(tx: StorageTx, entries: readonly SyncActivityInput[]) {
+export async function appendActivity(
+  tx: StorageTx,
+  entries: readonly SyncActivityInput[],
+) {
   if (!entries.length) return;
-  const table = tx.table('syncActivity');
+  const table = tx.table("syncActivity");
   const existing = (await table.all()).sort((first, second) =>
     first.key < second.key ? -1 : 1,
   );
-  let sequence = existing.length ? Number(existing[existing.length - 1].key) : 0;
+  let sequence = existing.length
+    ? Number(existing[existing.length - 1].key)
+    : 0;
   await table.put(
-    entries.map((entry) => ({ ...entry, key: String((sequence += 1)).padStart(12, '0') })),
+    entries.map((entry) => ({
+      ...entry,
+      key: String((sequence += 1)).padStart(12, "0"),
+    })),
   );
   const overflow = existing.length + entries.length - ACTIVITY_LIMIT;
-  if (overflow > 0) await table.delete(existing.slice(0, overflow).map((row) => row.key));
+  if (overflow > 0)
+    await table.delete(existing.slice(0, overflow).map((row) => row.key));
 }
 
 /** Newest first, which is the order every surface that shows it wants. */
 export async function readActivity(tx: StorageTx, limit = ACTIVITY_LIMIT) {
-  const rows = await tx.table('syncActivity').all();
-  return rows.sort((first, second) => (first.key < second.key ? 1 : -1)).slice(0, limit);
+  const rows = await tx.table("syncActivity").all();
+  return rows
+    .sort((first, second) => (first.key < second.key ? 1 : -1))
+    .slice(0, limit);
 }

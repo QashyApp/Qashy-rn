@@ -1,17 +1,17 @@
-const { defineConfig } = require('eslint/config');
-const expoConfig = require('eslint-config-expo/flat');
+const { defineConfig } = require("eslint/config");
+const expoConfig = require("eslint-config-expo/flat");
 
 // Cryptography is quarantined in `src/sync/crypto/`. Everything else consumes it
 // through that directory's documented API, so there is exactly one place to review
 // when asking "can this construction be attacked?" — and a stray
 // `import { gcm } from '@noble/ciphers/aes'` somewhere in a screen cannot quietly
 // introduce a second, unreviewed cryptosystem.
-const CRYPTO_PACKAGES = ['@noble/*', '@scure/*'];
+const CRYPTO_PACKAGES = ["@noble/*", "@scure/*"];
 
 // Shape and rhythm belong to the active theme, so a component reads them from `useQashyTheme()`
 // (`const { space, radius } = useQashyTheme()`) rather than importing the classic constants,
 // which would silently ignore every other theme. Only `src/theme/**` defines them.
-const THEME_SCALES = ['space', 'radius', 'tile', 'iconSize', 'motion'];
+const THEME_SCALES = ["space", "radius", "tile", "iconSize", "motion"];
 
 const RESTRICTED_PATHS = [
   {
@@ -23,8 +23,9 @@ const RESTRICTED_PATHS = [
     // a pattern with no slash matches *any* path segment, so `'zod'` also flags
     // `@/utils/zod` — the one import that has to be allowed. `paths` compares the module
     // name exactly. The subpath entry below carries a slash, so it anchors to the root.
-    name: 'zod',
-    message: "Import { z } from '@/utils/zod' so the jitless configuration applies.",
+    name: "zod",
+    message:
+      "Import { z } from '@/utils/zod' so the jitless configuration applies.",
   },
 ];
 
@@ -32,11 +33,12 @@ const RESTRICTED_PATTERNS = [
   {
     group: CRYPTO_PACKAGES,
     message:
-      'Cryptographic primitives may only be imported inside src/sync/crypto/. Use the API that directory exports.',
+      "Cryptographic primitives may only be imported inside src/sync/crypto/. Use the API that directory exports.",
   },
   {
-    group: ['zod/**'],
-    message: "Import { z } from '@/utils/zod' so the jitless configuration applies.",
+    group: ["zod/**"],
+    message:
+      "Import { z } from '@/utils/zod' so the jitless configuration applies.",
   },
 ];
 
@@ -46,22 +48,22 @@ module.exports = defineConfig([
     // `server/` is the relay worker: a separate deployment target with Cloudflare Workers
     // globals, its own tsconfig, and its own `npm run typecheck`. Linting it with the Expo
     // config would only produce noise about an environment it does not run in.
-    ignores: ['dist/**', 'coverage/**', 'node_modules/**', 'server/**'],
+    ignores: ["dist/**", "coverage/**", "node_modules/**", "server/**"],
   },
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ["src/**/*.{ts,tsx}"],
     // Each exemption is the one file whose entire purpose is the import it is exempt from:
     // `src/sync/crypto/**` is the quarantine itself, and `src/utils/zod.ts` exists only to
     // configure zod before re-exporting it.
-    ignores: ['src/sync/crypto/**', 'src/utils/zod.ts'],
+    ignores: ["src/sync/crypto/**", "src/utils/zod.ts"],
     rules: {
-      'no-restricted-imports': [
-        'error',
+      "no-restricted-imports": [
+        "error",
         {
           paths: [
             ...RESTRICTED_PATHS,
             {
-              name: '@/theme/tokens',
+              name: "@/theme/tokens",
               importNames: THEME_SCALES,
               message:
                 "Read space, radius, tile, iconSize and motion from useQashyTheme() so the active theme applies.",
@@ -73,19 +75,22 @@ module.exports = defineConfig([
     },
   },
   {
-    files: ['src/theme/**/*.{ts,tsx}'],
+    files: ["src/theme/**/*.{ts,tsx}"],
     rules: {
-      'no-restricted-imports': ['error', { paths: RESTRICTED_PATHS, patterns: RESTRICTED_PATTERNS }],
+      "no-restricted-imports": [
+        "error",
+        { paths: RESTRICTED_PATHS, patterns: RESTRICTED_PATTERNS },
+      ],
     },
   },
   {
     // The sync layer must not log. Op payloads, device ids, and handshake material all
     // pass through it, and a stray `console.log` while debugging is how key material
     // ends up in a crash report.
-    files: ['src/sync/**/*.{ts,tsx}'],
-    ignores: ['src/sync/**/__tests__/**'],
+    files: ["src/sync/**/*.{ts,tsx}"],
+    ignores: ["src/sync/**/__tests__/**"],
     rules: {
-      'no-console': 'error',
+      "no-console": "error",
     },
   },
 ]);

@@ -18,9 +18,9 @@
  * something you can only observe by waiting 90 days.
  */
 
-import { MAX_WALL_MS, compareHlc, parseHlc } from '@/sync/oplog/hlc';
-import type { ChainHead } from '@/sync/oplog/chain';
-import type { SyncOp } from '@/sync/oplog/types';
+import { MAX_WALL_MS, compareHlc, parseHlc } from "@/sync/oplog/hlc";
+import type { ChainHead } from "@/sync/oplog/chain";
+import type { SyncOp } from "@/sync/oplog/types";
 
 /** How long an op survives when a peer never comes back to ack it. */
 export const RETENTION_MS = 90 * 24 * 60 * 60_000;
@@ -41,7 +41,11 @@ export interface CompactionPlan {
   readonly waitingOn: readonly string[];
 }
 
-const EMPTY_PLAN: CompactionPlan = { dropOpIds: [], compactedBelow: {}, waitingOn: [] };
+const EMPTY_PLAN: CompactionPlan = {
+  dropOpIds: [],
+  compactedBelow: {},
+  waitingOn: [],
+};
 
 /**
  * The highest `seq` of chain `deviceId` that every live peer has acknowledged.
@@ -94,8 +98,8 @@ export function planCompaction(
   const compactedBelow: Record<string, number> = {};
   const waitingOn: string[] = [];
 
-  for (const [deviceId, chain] of [...byDevice.entries()].sort(([first], [second]) =>
-    first < second ? -1 : 1,
+  for (const [deviceId, chain] of [...byDevice.entries()].sort(
+    ([first], [second]) => (first < second ? -1 : 1),
   )) {
     chain.sort((first, second) => first.seq - second.seq);
     const head = chain[chain.length - 1];
@@ -151,7 +155,8 @@ export function chainHeads(ops: readonly SyncOp[]): Map<string, ChainHead> {
   const heads = new Map<string, ChainHead>();
   for (const op of ops) {
     const current = heads.get(op.deviceId);
-    if (!current || op.seq > current.seq) heads.set(op.deviceId, { seq: op.seq, headHash: op.opHash });
+    if (!current || op.seq > current.seq)
+      heads.set(op.deviceId, { seq: op.seq, headHash: op.opHash });
   }
   return heads;
 }

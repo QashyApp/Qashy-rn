@@ -1,5 +1,5 @@
-import type { TransactionRecord } from '@/domain/models';
-import { addMinor, subtractMinor } from '@/utils/money';
+import type { TransactionRecord } from "@/domain/models";
+import { addMinor, subtractMinor } from "@/utils/money";
 
 /**
  * The net flow of one day's transactions, in the base currency's minor units.
@@ -16,13 +16,15 @@ import { addMinor, subtractMinor } from '@/utils/money';
  * transactions when the "Upcoming" or "All" filter is active), and the header
  * should total the rows actually listed beneath it.
  */
-export function dayNetMinor(transactions: readonly TransactionRecord[]): number {
+export function dayNetMinor(
+  transactions: readonly TransactionRecord[],
+): number {
   let net = 0;
   for (const transaction of transactions) {
-    if (transaction.kind === 'income') {
-      net = addMinor(net, transaction.baseAmountMinor, 'Daily net');
-    } else if (transaction.kind === 'expense') {
-      net = subtractMinor(net, transaction.baseAmountMinor, 'Daily net');
+    if (transaction.kind === "income") {
+      net = addMinor(net, transaction.baseAmountMinor, "Daily net");
+    } else if (transaction.kind === "expense") {
+      net = subtractMinor(net, transaction.baseAmountMinor, "Daily net");
     }
   }
   return net;

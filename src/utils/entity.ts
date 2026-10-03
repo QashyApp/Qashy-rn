@@ -1,6 +1,6 @@
-import * as Crypto from 'expo-crypto';
+import * as Crypto from "expo-crypto";
 
-import type { SyncEntity } from '@/domain/models';
+import type { SyncEntity } from "@/domain/models";
 
 export function nowIso() {
   return new Date().toISOString();
@@ -24,7 +24,10 @@ export function createEntity<T extends object>(
   };
 }
 
-export function updateEntity<T extends SyncEntity>(entity: T, patch: Partial<T>): T {
+export function updateEntity<T extends SyncEntity>(
+  entity: T,
+  patch: Partial<T>,
+): T {
   return {
     ...entity,
     ...patch,

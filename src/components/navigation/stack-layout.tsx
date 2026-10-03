@@ -1,10 +1,10 @@
-import { Stack } from 'expo-router/stack';
-import { Platform } from 'react-native';
+import { Stack } from "expo-router/stack";
+import { Platform } from "react-native";
 
-import { useLocalization } from '@/localization/localization';
-import { useQashyTheme } from '@/theme/theme';
+import { useLocalization } from "@/localization/localization";
+import { useQashyTheme } from "@/theme/theme";
 
-const IS_WEB = process.env.EXPO_OS === 'web';
+const IS_WEB = process.env.EXPO_OS === "web";
 
 /**
  * Shared stack for the four tab sections.
@@ -23,7 +23,13 @@ const IS_WEB = process.env.EXPO_OS === 'web';
  * `title` is registered either way: the root layout mirrors the focused screen's
  * `title` into `document.title` on web.
  */
-export function TabStackLayout({ title, largeTitle = true }: { title: string; largeTitle?: boolean }) {
+export function TabStackLayout({
+  title,
+  largeTitle = true,
+}: {
+  title: string;
+  largeTitle?: boolean;
+}) {
   const theme = useQashyTheme();
   const { t } = useLocalization();
   return (
@@ -33,9 +39,10 @@ export function TabStackLayout({ title, largeTitle = true }: { title: string; la
         headerShadowVisible: false,
         headerStyle: { backgroundColor: theme.background },
         headerTintColor: theme.staticAccent,
-        headerTitleStyle: { color: theme.staticText, fontWeight: '600' },
+        headerTitleStyle: { color: theme.staticText, fontWeight: "600" },
         contentStyle: { backgroundColor: theme.background },
-      }}>
+      }}
+    >
       <Stack.Screen
         name="index"
         options={{
@@ -45,7 +52,7 @@ export function TabStackLayout({ title, largeTitle = true }: { title: string; la
           // screens do. Opted out where a pinned toolbar sits between the header
           // and the scroll view, since the title then has nothing to collapse
           // against and would just eat a permanent 52pt of a phone screen.
-          headerLargeTitleEnabled: Platform.OS === 'ios' && largeTitle,
+          headerLargeTitleEnabled: Platform.OS === "ios" && largeTitle,
           headerLargeTitleShadowVisible: false,
           headerLargeStyle: { backgroundColor: theme.background },
           headerLargeTitleStyle: { color: theme.staticText },

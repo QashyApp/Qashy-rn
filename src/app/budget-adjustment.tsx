@@ -1,3 +1,3 @@
-import { BudgetAdjustmentScreen } from '@/features/plan/budget-adjustment-screen';
+import { BudgetAdjustmentScreen } from "@/features/plan/budget-adjustment-screen";
 
 export default BudgetAdjustmentScreen;

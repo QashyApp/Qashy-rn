@@ -6,17 +6,20 @@
  * one copy instead of many, all reading the same state slices the repository consults internally.
  */
 
-import { useMemo } from 'react';
+import { useMemo } from "react";
 
-import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
-import { endOfMonth, startOfMonth } from '@/utils/date';
+import {
+  useFinanceRepository,
+  useFinanceState,
+} from "@/providers/finance-provider";
+import { endOfMonth, startOfMonth } from "@/utils/date";
 
 export function useDashboardRange(fromDate: string, toDate: string) {
   // The React Compiler drops the `void state.x` reads below as dead code and then memoizes on
   // `repository` and the dates alone, so the summary (and the Coming up / Recent lists built from
   // it) never recomputed after a mutation until a reload. The explicit dependency list is the
   // contract here; keep the compiler out of this hook.
-  'use no memo';
+  "use no memo";
   const repository = useFinanceRepository();
   const state = useFinanceState();
   return useMemo(() => {
@@ -30,7 +33,19 @@ export function useDashboardRange(fromDate: string, toDate: string) {
     void state.settings;
     void state.transactions;
     return repository.getDashboard(fromDate, toDate);
-  }, [repository, fromDate, toDate, state.accounts, state.budgetPeriods, state.budgetAdjustments, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
+  }, [
+    repository,
+    fromDate,
+    toDate,
+    state.accounts,
+    state.budgetPeriods,
+    state.budgetAdjustments,
+    state.budgets,
+    state.categories,
+    state.exchangeRates,
+    state.settings,
+    state.transactions,
+  ]);
 }
 
 export function useDashboard(month: string) {

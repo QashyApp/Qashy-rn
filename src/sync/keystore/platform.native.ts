@@ -22,26 +22,26 @@
  * consequence spelled out, not on by default.
  */
 
-import * as SecureStore from 'expo-secure-store';
+import * as SecureStore from "expo-secure-store";
 
-import { fromBase64Url, toBase64Url } from '@/sync/crypto';
+import { fromBase64Url, toBase64Url } from "@/sync/crypto";
 
-import { BaseKeystore } from '@/sync/keystore/base';
-import type { SyncKeystore } from '@/sync/keystore/types';
+import { BaseKeystore } from "@/sync/keystore/base";
+import type { SyncKeystore } from "@/sync/keystore/types";
 
 /**
  * Keys may only contain alphanumerics, `.`, `-` and `_`. The `v1` suffix is the escape
  * hatch for a future record format that cannot be migrated in place.
  */
-const STORE_KEY = 'qashy.sync.vault.v1';
+const STORE_KEY = "qashy.sync.vault.v1";
 
 const OPTIONS: SecureStore.SecureStoreOptions = {
-  keychainService: 'app.qashy.sync',
+  keychainService: "app.qashy.sync",
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
 };
 
 class SecureStoreKeystore extends BaseKeystore {
-  readonly kind: SyncKeystore['kind'] = 'secure-store';
+  readonly kind: SyncKeystore["kind"] = "secure-store";
 
   /** The OS unlock is already the gate. See `SyncKeystore.supportsPassphrase`. */
   readonly supportsPassphrase = false;
@@ -66,4 +66,5 @@ class SecureStoreKeystore extends BaseKeystore {
   }
 }
 
-export const createPlatformKeystore = (): SyncKeystore => new SecureStoreKeystore();
+export const createPlatformKeystore = (): SyncKeystore =>
+  new SecureStoreKeystore();

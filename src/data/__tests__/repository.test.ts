@@ -1,5 +1,5 @@
-import { LocalFinanceRepository } from '@/data/local-finance-repository';
-import { MemoryStorageAdapter } from '@/data/memory-storage';
+import { LocalFinanceRepository } from "@/data/local-finance-repository";
+import { MemoryStorageAdapter } from "@/data/memory-storage";
 import type {
   CsvImportRow,
   EntityType,
@@ -7,114 +7,213 @@ import type {
   RecurringRule,
   TransactionKind,
   TransactionStatus,
-} from '@/domain/models';
-import { diffEntity, hlcFromTimestamp } from '@/sync/oplog';
-import type { StorageTx, TransactOptions } from '@/data/storage-adapter';
-import { parseCsvTable } from '@/utils/csv';
-import { fetchedRateId } from '@/utils/deterministic-id';
+} from "@/domain/models";
+import { diffEntity, hlcFromTimestamp } from "@/sync/oplog";
+import type { StorageTx, TransactOptions } from "@/data/storage-adapter";
+import { parseCsvTable } from "@/utils/csv";
+import { fetchedRateId } from "@/utils/deterministic-id";
 
-async function createRepository(storage = new MemoryStorageAdapter(), locale = 'en-US') {
+async function createRepository(
+  storage = new MemoryStorageAdapter(),
+  locale = "en-US",
+) {
   const repository = new LocalFinanceRepository(storage);
   await repository.initialize();
   await repository.completeOnboarding({
     locale,
-    baseCurrency: 'USD',
-    accountName: 'Everyday',
-    accountType: 'checking',
+    baseCurrency: "USD",
+    accountName: "Everyday",
+    accountType: "checking",
     openingBalanceMinor: 0,
-    themeMode: 'system',
-    accentSource: 'system',
-    accentHex: '#5966E9',
+    themeMode: "system",
+    accentSource: "system",
+    accentHex: "#5966E9",
   });
   return { repository, storage };
 }
 
-describe('FinanceRepository contract', () => {
-  it('bounds a transaction query to one calendar month, edges included', async () => {
+describe("FinanceRepository contract", () => {
+  it("bounds a transaction query to one calendar month, edges included", async () => {
     const { repository } = await createRepository();
     const accountId = repository.getSnapshot().accounts[0].id;
-    for (const localDate of ['2026-01-31', '2026-02-01', '2026-02-28', '2026-03-01']) {
-      await repository.saveTransaction({ kind: 'expense', title: localDate, localDate, accountId, amountMinor: 100 });
+    for (const localDate of [
+      "2026-01-31",
+      "2026-02-01",
+      "2026-02-28",
+      "2026-03-01",
+    ]) {
+      await repository.saveTransaction({
+        kind: "expense",
+        title: localDate,
+        localDate,
+        accountId,
+        amountMinor: 100,
+      });
     }
-    const february = repository.queryTransactions({ fromDate: '2026-02-01', toDate: '2026-02-28' });
-    expect(february.map((row) => row.localDate)).toEqual(['2026-02-28', '2026-02-01']);
+    const february = repository.queryTransactions({
+      fromDate: "2026-02-01",
+      toDate: "2026-02-28",
+    });
+    expect(february.map((row) => row.localDate)).toEqual([
+      "2026-02-28",
+      "2026-02-01",
+    ]);
     // The month view's search stays inside the month unless it is widened explicitly.
-    expect(repository.queryTransactions({ search: '2026-03', fromDate: '2026-02-01', toDate: '2026-02-28' })).toEqual([]);
-    expect(repository.queryTransactions({ search: '2026-03' }).map((row) => row.title)).toEqual(['2026-03-01']);
+    expect(
+      repository.queryTransactions({
+        search: "2026-03",
+        fromDate: "2026-02-01",
+        toDate: "2026-02-28",
+      }),
+    ).toEqual([]);
+    expect(
+      repository
+        .queryTransactions({ search: "2026-03" })
+        .map((row) => row.title),
+    ).toEqual(["2026-03-01"]);
   });
 
-  it('persists onboarding, derives balances, and excludes transfers from cash flow', async () => {
+  it("persists onboarding, derives balances, and excludes transfers from cash flow", async () => {
     const storage = new MemoryStorageAdapter();
     const repository = new LocalFinanceRepository(storage);
     await repository.initialize();
     await repository.completeOnboarding({
-      locale: 'en-US',
-      baseCurrency: 'USD',
-      accountName: 'Everyday',
-      accountType: 'checking',
+      locale: "en-US",
+      baseCurrency: "USD",
+      accountName: "Everyday",
+      accountType: "checking",
       openingBalanceMinor: 100_00,
-      themeMode: 'system',
-      accentSource: 'system',
-      accentHex: '#5966E9',
+      themeMode: "system",
+      accentSource: "system",
+      accentHex: "#5966E9",
     });
     const first = repository.getSnapshot().accounts[0];
     const second = await repository.saveAccount({
-      name: 'Savings',
-      type: 'savings',
-      currency: 'USD',
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
       openingBalanceMinor: 0,
-      icon: 'wallet',
-      color: '#00A58E',
+      icon: "wallet",
+      color: "#00A58E",
       archived: false,
     });
-    const expense = await repository.saveTransaction({ kind: 'expense', title: 'Groceries', localDate: '2026-07-10', accountId: first.id, amountMinor: 2500 });
-    const transfer = await repository.saveTransaction({ kind: 'transfer', title: 'Save', localDate: '2026-07-11', accountId: first.id, destinationAccountId: second.id, amountMinor: 3000 });
+    const expense = await repository.saveTransaction({
+      kind: "expense",
+      title: "Groceries",
+      localDate: "2026-07-10",
+      accountId: first.id,
+      amountMinor: 2500,
+    });
+    const transfer = await repository.saveTransaction({
+      kind: "transfer",
+      title: "Save",
+      localDate: "2026-07-11",
+      accountId: first.id,
+      destinationAccountId: second.id,
+      amountMinor: 3000,
+    });
 
-    const summary = repository.getDashboard('2026-07-01', '2026-07-31');
+    const summary = repository.getDashboard("2026-07-01", "2026-07-31");
     expect(summary.expenseMinor).toBe(2500);
     expect(summary.netFlowMinor).toBe(-2500);
     expect(summary.dailySpend).toHaveLength(31);
-    expect(summary.dailySpend.find((item) => item.date === '2026-07-10')?.amountMinor).toBe(2500);
-    expect(summary.dailySpend.find((item) => item.date === '2026-07-09')?.amountMinor).toBe(0);
-    expect(summary.accountBalances.find((item) => item.account.id === first.id)?.balanceMinor).toBe(4500);
-    expect(summary.accountBalances.find((item) => item.account.id === second.id)?.balanceMinor).toBe(3000);
+    expect(
+      summary.dailySpend.find((item) => item.date === "2026-07-10")
+        ?.amountMinor,
+    ).toBe(2500);
+    expect(
+      summary.dailySpend.find((item) => item.date === "2026-07-09")
+        ?.amountMinor,
+    ).toBe(0);
+    expect(
+      summary.accountBalances.find((item) => item.account.id === first.id)
+        ?.balanceMinor,
+    ).toBe(4500);
+    expect(
+      summary.accountBalances.find((item) => item.account.id === second.id)
+        ?.balanceMinor,
+    ).toBe(3000);
 
-    const groceries = repository.getSnapshot().categories.find((item) => item.name === 'Groceries')!;
-    await expect(repository.updateTransactionsCategory([expense.id, transfer.id], groceries.id))
-      .rejects.toThrow('Transfers do not have categories');
-    expect(repository.getSnapshot().transactions.find((item) => item.id === expense.id)?.categoryId).toBeNull();
+    const groceries = repository
+      .getSnapshot()
+      .categories.find((item) => item.name === "Groceries")!;
+    await expect(
+      repository.updateTransactionsCategory(
+        [expense.id, transfer.id],
+        groceries.id,
+      ),
+    ).rejects.toThrow("Transfers do not have categories");
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.find((item) => item.id === expense.id)?.categoryId,
+    ).toBeNull();
     await repository.updateTransactionsCategory([expense.id], groceries.id);
-    expect(repository.getSnapshot().transactions.find((item) => item.id === expense.id)?.categoryId).toBe(groceries.id);
-    expect(repository.getSnapshot().transactions.find((item) => item.id === transfer.id)?.categoryId).toBeNull();
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.find((item) => item.id === expense.id)?.categoryId,
+    ).toBe(groceries.id);
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.find((item) => item.id === transfer.id)?.categoryId,
+    ).toBeNull();
 
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
     expect(reloaded.queryTransactions()).toHaveLength(2);
   });
 
-  it('generates recurring occurrences idempotently', async () => {
+  it("generates recurring occurrences idempotently", async () => {
     const repository = new LocalFinanceRepository(new MemoryStorageAdapter());
     await repository.initialize();
-    await repository.completeOnboarding({ locale: 'en-US', baseCurrency: 'USD', accountName: 'Everyday', accountType: 'checking', openingBalanceMinor: 0, themeMode: 'system', accentSource: 'system', accentHex: '#5966E9' });
+    await repository.completeOnboarding({
+      locale: "en-US",
+      baseCurrency: "USD",
+      accountName: "Everyday",
+      accountType: "checking",
+      openingBalanceMinor: 0,
+      themeMode: "system",
+      accentSource: "system",
+      accentHex: "#5966E9",
+    });
     const account = repository.getSnapshot().accounts[0];
     await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Rent', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 120000, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2026-01-31', endDate: '2026-03-31', nextDueDate: '2026-01-31', autoPost: false, active: true,
+      template: {
+        kind: "expense",
+        title: "Rent",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 120000,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2026-01-31",
+      endDate: "2026-03-31",
+      nextDueDate: "2026-01-31",
+      autoPost: false,
+      active: true,
     });
-    await repository.generateRecurring('2026-03-31');
-    await repository.generateRecurring('2026-03-31');
-    expect(repository.getSnapshot().transactions.map((item) => item.localDate)).toEqual(['2026-01-31', '2026-02-28', '2026-03-31']);
+    await repository.generateRecurring("2026-03-31");
+    await repository.generateRecurring("2026-03-31");
+    expect(
+      repository.getSnapshot().transactions.map((item) => item.localDate),
+    ).toEqual(["2026-01-31", "2026-02-28", "2026-03-31"]);
   });
 
-  it('commits a CSV batch atomically when storage fails', async () => {
+  it("commits a CSV batch atomically when storage fails", async () => {
     class FailingStorage extends MemoryStorageAdapter {
       fail = false;
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
-        if (this.fail) throw new Error('simulated disk failure');
+        if (this.fail) throw new Error("simulated disk failure");
         // `source` identifies the writer so a repository ignores its own change
         // notification. Dropping it here made every local write look like it
         // came from another window.
@@ -125,111 +224,287 @@ describe('FinanceRepository contract', () => {
     const storage = new FailingStorage();
     const repository = new LocalFinanceRepository(storage);
     await repository.initialize();
-    await repository.completeOnboarding({ locale: 'en-US', baseCurrency: 'USD', accountName: 'Everyday', accountType: 'checking', openingBalanceMinor: 0, themeMode: 'system', accentSource: 'system', accentHex: '#5966E9' });
+    await repository.completeOnboarding({
+      locale: "en-US",
+      baseCurrency: "USD",
+      accountName: "Everyday",
+      accountType: "checking",
+      openingBalanceMinor: 0,
+      themeMode: "system",
+      accentSource: "system",
+      accentHex: "#5966E9",
+    });
     const rows = [
-      { rowNumber: 2, date: '2026-07-10', type: 'expense' as const, title: 'Coffee', amount: '4.50', currency: 'USD', account: 'Everyday', category: 'Dining', tags: 'Work', note: '', exchangeRate: '1', destinationAccount: '', destinationAmount: '' },
-      { rowNumber: 3, date: '2026-07-11', type: 'expense' as const, title: 'Lunch', amount: '12.00', currency: 'USD', account: 'Everyday', category: 'Dining', tags: 'Work', note: '', exchangeRate: '1', destinationAccount: '', destinationAmount: '' },
+      {
+        rowNumber: 2,
+        date: "2026-07-10",
+        type: "expense" as const,
+        title: "Coffee",
+        amount: "4.50",
+        currency: "USD",
+        account: "Everyday",
+        category: "Dining",
+        tags: "Work",
+        note: "",
+        exchangeRate: "1",
+        destinationAccount: "",
+        destinationAmount: "",
+      },
+      {
+        rowNumber: 3,
+        date: "2026-07-11",
+        type: "expense" as const,
+        title: "Lunch",
+        amount: "12.00",
+        currency: "USD",
+        account: "Everyday",
+        category: "Dining",
+        tags: "Work",
+        note: "",
+        exchangeRate: "1",
+        destinationAccount: "",
+        destinationAmount: "",
+      },
     ];
 
     expect((await repository.importCsv(rows, false)).validRows).toHaveLength(2);
     storage.fail = true;
-    await expect(repository.importCsv(rows, true)).rejects.toThrow('simulated disk failure');
+    await expect(repository.importCsv(rows, true)).rejects.toThrow(
+      "simulated disk failure",
+    );
     expect(repository.getSnapshot().transactions).toHaveLength(0);
     expect(repository.getSnapshot().tags).toHaveLength(0);
   });
 
-  it('derives cross-currency transfers through base rates and reports missing net-worth rates', async () => {
+  it("derives cross-currency transfers through base rates and reports missing net-worth rates", async () => {
     const { repository } = await createRepository();
-    const eur = await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const gbp = await repository.saveAccount({ name: 'Pounds', type: 'checking', currency: 'GBP', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
-    await repository.saveExchangeRate({ fromCurrency: 'GBP', toCurrency: 'USD', rate: '4', effectiveDate: '2026-01-01' });
+    const eur = await repository.saveAccount({
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    const gbp = await repository.saveAccount({
+      name: "Pounds",
+      type: "checking",
+      currency: "GBP",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "2",
+      effectiveDate: "2026-01-01",
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "GBP",
+      toCurrency: "USD",
+      rate: "4",
+      effectiveDate: "2026-01-01",
+    });
 
-    const transfer = await repository.saveTransaction({ kind: 'transfer', title: 'Cross rate', localDate: '2026-07-15', accountId: eur.id, destinationAccountId: gbp.id, amountMinor: 10000 });
+    const transfer = await repository.saveTransaction({
+      kind: "transfer",
+      title: "Cross rate",
+      localDate: "2026-07-15",
+      accountId: eur.id,
+      destinationAccountId: gbp.id,
+      amountMinor: 10000,
+    });
     expect(transfer.destinationAmountMinor).toBe(5000);
 
-    await expect(repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '-1', effectiveDate: '2026-02-01' })).rejects.toThrow('positive');
-    const yen = await repository.saveAccount({ name: 'Yen', type: 'checking', currency: 'JPY', openingBalanceMinor: 1000, icon: 'wallet', color: '#5966E9', archived: false });
-    await expect(repository.saveTransaction({ kind: 'expense', title: 'No rate', localDate: '2026-07-15', accountId: yen.id, amountMinor: 100 })).rejects.toThrow('Missing exchange rate');
-    expect(repository.getDashboard('2026-07-01', '2026-07-31').missingExchangeRates).toEqual([{ fromCurrency: 'JPY', toCurrency: 'USD' }]);
+    await expect(
+      repository.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "-1",
+        effectiveDate: "2026-02-01",
+      }),
+    ).rejects.toThrow("positive");
+    const yen = await repository.saveAccount({
+      name: "Yen",
+      type: "checking",
+      currency: "JPY",
+      openingBalanceMinor: 1000,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await expect(
+      repository.saveTransaction({
+        kind: "expense",
+        title: "No rate",
+        localDate: "2026-07-15",
+        accountId: yen.id,
+        amountMinor: 100,
+      }),
+    ).rejects.toThrow("Missing exchange rate");
+    expect(
+      repository.getDashboard("2026-07-01", "2026-07-31").missingExchangeRates,
+    ).toEqual([{ fromCurrency: "JPY", toCurrency: "USD" }]);
   });
 
-  it('locks account currency after finance records reference it', async () => {
+  it("locks account currency after finance records reference it", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    await repository.saveTransaction({ kind: 'expense', title: 'Coffee', localDate: '2026-07-15', accountId: account.id, amountMinor: 500 });
-    await expect(repository.saveAccount({ name: account.name, type: account.type, currency: 'JPY', openingBalanceMinor: account.openingBalanceMinor, icon: account.icon, color: account.color, archived: false }, account.id)).rejects.toThrow('currency cannot change');
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Coffee",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      amountMinor: 500,
+    });
+    await expect(
+      repository.saveAccount(
+        {
+          name: account.name,
+          type: account.type,
+          currency: "JPY",
+          openingBalanceMinor: account.openingBalanceMinor,
+          icon: account.icon,
+          color: account.color,
+          archived: false,
+        },
+        account.id,
+      ),
+    ).rejects.toThrow("currency cannot change");
   });
 
-  it('locks the base currency as soon as onboarding creates base-denominated records', async () => {
+  it("locks the base currency as soon as onboarding creates base-denominated records", async () => {
     const { repository } = await createRepository();
 
-    await expect(repository.updateSettings({ baseCurrency: 'EUR' }))
-      .rejects.toThrow('cannot change after setup');
-    expect(repository.getSnapshot().settings.baseCurrency).toBe('USD');
+    await expect(
+      repository.updateSettings({ baseCurrency: "EUR" }),
+    ).rejects.toThrow("cannot change after setup");
+    expect(repository.getSnapshot().settings.baseCurrency).toBe("USD");
   });
 
-  it('auto-posts an existing recurring occurrence after its due date', async () => {
+  it("auto-posts an existing recurring occurrence after its due date", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const { repository } = await createRepository();
       const account = repository.getSnapshot().accounts[0];
       await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Auto', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-16', endDate: null, nextDueDate: '2026-07-16', autoPost: true, active: true,
+        template: {
+          kind: "expense",
+          title: "Auto",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-07-16",
+        endDate: null,
+        nextDueDate: "2026-07-16",
+        autoPost: true,
+        active: true,
       });
-      await repository.generateRecurring('2026-07-31');
-      expect(repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-16')?.status).toBe('upcoming');
+      await repository.generateRecurring("2026-07-31");
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.find((item) => item.localDate === "2026-07-16")?.status,
+      ).toBe("upcoming");
 
-      jest.setSystemTime(new Date('2026-07-17T09:00:00Z'));
-      await repository.generateRecurring('2026-08-31');
-      expect(repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-16')?.status).toBe('posted');
+      jest.setSystemTime(new Date("2026-07-17T09:00:00Z"));
+      await repository.generateRecurring("2026-08-31");
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.find((item) => item.localDate === "2026-07-16")?.status,
+      ).toBe("posted");
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('carries budget rollover forward and preserves prior snapshots', async () => {
+  it("carries budget rollover forward and preserves prior snapshots", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-06-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-06-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const account = repository.getSnapshot().accounts[0];
       const budget = await repository.saveBudget({
-        name: 'Monthly', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-06-01', endDate: null },
-        rollover: true, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+        name: "Monthly",
+        icon: "chart",
+        color: "#5966E9",
+        limitMinor: 1000,
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-06-01",
+          endDate: null,
+        },
+        rollover: true,
+        filters: { accountIds: [], categoryIds: [], tagIds: [] },
+        categoryLimits: [],
+        archived: false,
       });
-      await repository.saveTransaction({ kind: 'expense', title: 'June', localDate: '2026-06-20', accountId: account.id, amountMinor: 400 });
+      await repository.saveTransaction({
+        kind: "expense",
+        title: "June",
+        localDate: "2026-06-20",
+        accountId: account.id,
+        amountMinor: 400,
+      });
 
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getBudgetStatuses('2026-07-15')[0]).toMatchObject({ effectiveLimitMinor: 1600, spentMinor: 0 });
+      expect(reloaded.getBudgetStatuses("2026-07-15")[0]).toMatchObject({
+        effectiveLimitMinor: 1600,
+        spentMinor: 0,
+      });
 
-      await reloaded.saveBudget({
-        name: budget.name, icon: budget.icon, color: budget.color, limitMinor: 2000,
-        period: budget.period, rollover: budget.rollover, filters: budget.filters,
-        categoryLimits: budget.categoryLimits, archived: false,
-      }, budget.id);
-      expect(reloaded.getSnapshot().budgetPeriods.find((item) => item.periodStart === '2026-06-01')?.limitMinor).toBe(1000);
-      expect(reloaded.getBudgetStatuses('2026-07-15')[0].effectiveLimitMinor).toBe(2600);
+      await reloaded.saveBudget(
+        {
+          name: budget.name,
+          icon: budget.icon,
+          color: budget.color,
+          limitMinor: 2000,
+          period: budget.period,
+          rollover: budget.rollover,
+          filters: budget.filters,
+          categoryLimits: budget.categoryLimits,
+          archived: false,
+        },
+        budget.id,
+      );
+      expect(
+        reloaded
+          .getSnapshot()
+          .budgetPeriods.find((item) => item.periodStart === "2026-06-01")
+          ?.limitMinor,
+      ).toBe(1000);
+      expect(
+        reloaded.getBudgetStatuses("2026-07-15")[0].effectiveLimitMinor,
+      ).toBe(2600);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('saves a budget and its period snapshot atomically', async () => {
+  it("saves a budget and its period snapshot atomically", async () => {
     class FailingStorage extends MemoryStorageAdapter {
       fail = false;
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
-        if (this.fail) throw new Error('simulated disk failure');
+        if (this.fail) throw new Error("simulated disk failure");
         // `source` identifies the writer so a repository ignores its own change
         // notification. Dropping it here made every local write look like it
         // came from another window.
@@ -239,80 +514,206 @@ describe('FinanceRepository contract', () => {
     const storage = new FailingStorage();
     const { repository } = await createRepository(storage);
     storage.fail = true;
-    await expect(repository.saveBudget({
-      name: 'Atomic', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
-      rollover: false, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
-    })).rejects.toThrow('simulated disk failure');
+    await expect(
+      repository.saveBudget({
+        name: "Atomic",
+        icon: "chart",
+        color: "#5966E9",
+        limitMinor: 1000,
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-07-01",
+          endDate: null,
+        },
+        rollover: false,
+        filters: { accountIds: [], categoryIds: [], tagIds: [] },
+        categoryLimits: [],
+        archived: false,
+      }),
+    ).rejects.toThrow("simulated disk failure");
     expect(repository.getSnapshot().budgets).toHaveLength(0);
     expect(repository.getSnapshot().budgetPeriods).toHaveLength(0);
   });
 
-  it('tracks linked savings goals with transfer-aware net movement', async () => {
+  it("tracks linked savings goals with transfer-aware net movement", async () => {
     const { repository } = await createRepository();
     const checking = repository.getSnapshot().accounts[0];
-    const savings = await repository.saveAccount({ name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    await repository.saveTransaction({ kind: 'transfer', title: 'Save', localDate: '2026-07-10', accountId: checking.id, destinationAccountId: savings.id, amountMinor: 3000 });
-    await repository.saveTransaction({ kind: 'expense', title: 'Withdrawal', localDate: '2026-07-11', accountId: savings.id, amountMinor: 500 });
-    const goal = await repository.saveGoal({ name: 'Fund', kind: 'saving', icon: 'target', color: '#5966E9', targetMinor: 10000, initialMinor: 0, targetDate: null, linkedAccountId: savings.id, linkedCategoryId: null, archived: false });
+    const savings = await repository.saveAccount({
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveTransaction({
+      kind: "transfer",
+      title: "Save",
+      localDate: "2026-07-10",
+      accountId: checking.id,
+      destinationAccountId: savings.id,
+      amountMinor: 3000,
+    });
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Withdrawal",
+      localDate: "2026-07-11",
+      accountId: savings.id,
+      amountMinor: 500,
+    });
+    const goal = await repository.saveGoal({
+      name: "Fund",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
+      targetMinor: 10000,
+      initialMinor: 0,
+      targetDate: null,
+      linkedAccountId: savings.id,
+      linkedCategoryId: null,
+      archived: false,
+    });
     expect(repository.getGoalProgress(goal.id)).toBe(2500);
   });
 
-  it('uses semantic CSV duplicates and preserves transaction status on round-trip', async () => {
+  it("uses semantic CSV duplicates and preserves transaction status on round-trip", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    await repository.saveTransaction({ kind: 'expense', title: 'Same', localDate: '2026-07-15', accountId: account.id, amountMinor: 500 });
-    const incomeRow: CsvImportRow = { rowNumber: 2, date: '2026-07-15', type: 'income', status: 'posted', title: 'Same', amount: '5.00', currency: 'USD', account: 'Everyday', category: '', tags: '', note: '', exchangeRate: '', destinationAccount: '', destinationAmount: '' };
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Same",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      amountMinor: 500,
+    });
+    const incomeRow: CsvImportRow = {
+      rowNumber: 2,
+      date: "2026-07-15",
+      type: "income",
+      status: "posted",
+      title: "Same",
+      amount: "5.00",
+      currency: "USD",
+      account: "Everyday",
+      category: "",
+      tags: "",
+      note: "",
+      exchangeRate: "",
+      destinationAccount: "",
+      destinationAmount: "",
+    };
     const preview = await repository.importCsv([incomeRow], false);
     expect(preview.validRows).toHaveLength(1);
     expect(preview.duplicateRows).toHaveLength(0);
-    await repository.saveTransaction({ kind: 'expense', status: 'upcoming', title: 'Future', localDate: '2026-08-01', accountId: account.id, amountMinor: 900 });
+    await repository.saveTransaction({
+      kind: "expense",
+      status: "upcoming",
+      title: "Future",
+      localDate: "2026-08-01",
+      accountId: account.id,
+      amountMinor: 900,
+    });
 
     const table = parseCsvTable(repository.exportCsv());
-    const rows = table.rows.map((record) => ({
-      rowNumber: Number(record.rowNumber),
-      date: String(record.date), type: String(record.type) as TransactionKind,
-      status: String(record.status) as TransactionStatus, title: String(record.title), amount: String(record.amount),
-      currency: String(record.currency), account: String(record.account), category: String(record.category),
-      tags: String(record.tags), note: String(record.note), exchangeRate: String(record.exchange_rate),
-      destinationAccount: String(record.destination_account), destinationAmount: String(record.destination_amount),
-      destinationBaseAmountMinor: String(record.destination_base_amount_minor),
-    } satisfies CsvImportRow));
+    const rows = table.rows.map(
+      (record) =>
+        ({
+          rowNumber: Number(record.rowNumber),
+          date: String(record.date),
+          type: String(record.type) as TransactionKind,
+          status: String(record.status) as TransactionStatus,
+          title: String(record.title),
+          amount: String(record.amount),
+          currency: String(record.currency),
+          account: String(record.account),
+          category: String(record.category),
+          tags: String(record.tags),
+          note: String(record.note),
+          exchangeRate: String(record.exchange_rate),
+          destinationAccount: String(record.destination_account),
+          destinationAmount: String(record.destination_amount),
+          destinationBaseAmountMinor: String(
+            record.destination_base_amount_minor,
+          ),
+        }) satisfies CsvImportRow,
+    );
     const { repository: imported } = await createRepository();
     await imported.importCsv(rows, true);
-    expect(imported.queryTransactions({ statuses: ['upcoming'] }).map((item) => item.title)).toEqual(['Future']);
+    expect(
+      imported
+        .queryTransactions({ statuses: ["upcoming"] })
+        .map((item) => item.title),
+    ).toEqual(["Future"]);
   });
 
-  it('deactivates recurring rules when their account or category is deleted', async () => {
+  it("deactivates recurring rules when their account or category is deleted", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
-    const account = await repository.saveAccount({ name: 'Doomed', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Sub', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: null, nextDueDate: '2099-01-01', autoPost: false, active: true,
+    const account = await repository.saveAccount({
+      name: "Doomed",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
     });
-    await repository.deleteEntities('accounts', [account.id]);
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)?.active).toBe(false);
+    const rule = await repository.saveRecurringRule({
+      template: {
+        kind: "expense",
+        title: "Sub",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 100,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: null,
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: true,
+    });
+    await repository.deleteEntities("accounts", [account.id]);
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id)?.active,
+    ).toBe(false);
 
     const reloaded = new LocalFinanceRepository(storage);
     await expect(reloaded.initialize()).resolves.toBeUndefined();
   });
 
-  it('removes a recurring rule from memory and persisted storage', async () => {
+  it("removes a recurring rule from memory and persisted storage", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
     const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Temporary', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-      unit: 'month',
+      template: {
+        kind: "expense",
+        title: "Temporary",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 100,
+        currency: "USD",
+      },
+      unit: "month",
       interval: 1,
-      startDate: '2099-01-01',
+      startDate: "2099-01-01",
       endDate: null,
-      nextDueDate: '2099-01-01',
+      nextDueDate: "2099-01-01",
       autoPost: false,
       active: true,
     });
-    await repository.deleteEntities('recurringRules', [rule.id]);
+    await repository.deleteEntities("recurringRules", [rule.id]);
     expect(repository.getSnapshot().recurringRules).toHaveLength(0);
 
     const reloaded = new LocalFinanceRepository(storage);
@@ -320,47 +721,100 @@ describe('FinanceRepository contract', () => {
     expect(reloaded.getSnapshot().recurringRules).toHaveLength(0);
   });
 
-  it('skips a poisoned recurring rule without blocking startup or healthy rules', async () => {
+  it("skips a poisoned recurring rule without blocking startup or healthy rules", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const usd = repository.getSnapshot().accounts[0];
-      const eur = await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-      const rate = await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
-      await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Foreign', note: '', accountId: eur.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'EUR' },
-        unit: 'month', interval: 1, startDate: '2026-09-01', endDate: '2026-09-01', nextDueDate: '2026-09-01', autoPost: false, active: true,
+      const eur = await repository.saveAccount({
+        name: "Euro",
+        type: "checking",
+        currency: "EUR",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      });
+      const rate = await repository.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "2",
+        effectiveDate: "2026-01-01",
       });
       await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Healthy', note: '', accountId: usd.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-09-01', endDate: '2026-09-01', nextDueDate: '2026-09-01', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Foreign",
+          note: "",
+          accountId: eur.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "EUR",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-09-01",
+        endDate: "2026-09-01",
+        nextDueDate: "2026-09-01",
+        autoPost: false,
+        active: true,
       });
-      await repository.deleteEntities('exchangeRates', [rate.id]);
+      await repository.saveRecurringRule({
+        template: {
+          kind: "expense",
+          title: "Healthy",
+          note: "",
+          accountId: usd.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-09-01",
+        endDate: "2026-09-01",
+        nextDueDate: "2026-09-01",
+        autoPost: false,
+        active: true,
+      });
+      await repository.deleteEntities("exchangeRates", [rate.id]);
 
-      jest.setSystemTime(new Date('2026-09-02T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-09-02T09:00:00Z"));
       const reloaded = new LocalFinanceRepository(storage);
       await expect(reloaded.initialize()).resolves.toBeUndefined();
-      expect(reloaded.getSnapshot().transactions.some((item) => item.title === 'Healthy')).toBe(true);
-      expect(reloaded.getSnapshot().transactions.some((item) => item.title === 'Foreign')).toBe(false);
+      expect(
+        reloaded
+          .getSnapshot()
+          .transactions.some((item) => item.title === "Healthy"),
+      ).toBe(true);
+      expect(
+        reloaded
+          .getSnapshot()
+          .transactions.some((item) => item.title === "Foreign"),
+      ).toBe(false);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('does not drop a transaction saved while recurring generation is persisting', async () => {
+  it("does not drop a transaction saved while recurring generation is persisting", async () => {
     class PausableStorage extends MemoryStorageAdapter {
       pauseNext = false;
       private release: (() => void) | null = null;
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
         if (this.pauseNext) {
           this.pauseNext = false;
-          await new Promise<void>((resolve) => { this.release = resolve; });
+          await new Promise<void>((resolve) => {
+            this.release = resolve;
+          });
         }
         // `source` identifies the writer so a repository ignores its own change
         // notification. Dropping it here made every local write look like it
@@ -378,189 +832,376 @@ describe('FinanceRepository contract', () => {
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
     await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Rent', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 1000, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: '2099-01-31', nextDueDate: '2099-01-01', autoPost: false, active: true,
+      template: {
+        kind: "expense",
+        title: "Rent",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 1000,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: "2099-01-31",
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: true,
     });
 
     storage.pauseNext = true;
-    const generation = repository.generateRecurring('2099-01-31');
+    const generation = repository.generateRecurring("2099-01-31");
     await Promise.resolve();
     await Promise.resolve();
-    const concurrentSave = repository.saveTransaction({ kind: 'expense', title: 'Concurrent', localDate: '2026-07-15', accountId: account.id, amountMinor: 500 });
+    const concurrentSave = repository.saveTransaction({
+      kind: "expense",
+      title: "Concurrent",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      amountMinor: 500,
+    });
     storage.releasePaused();
     await Promise.all([generation, concurrentSave]);
 
-    const titles = repository.getSnapshot().transactions.map((item) => item.title);
-    expect(titles).toContain('Concurrent');
-    expect(titles).toContain('Rent');
+    const titles = repository
+      .getSnapshot()
+      .transactions.map((item) => item.title);
+    expect(titles).toContain("Concurrent");
+    expect(titles).toContain("Rent");
   });
 
-  it('measures linked-goal inflows by the destination leg of cross-currency transfers', async () => {
+  it("measures linked-goal inflows by the destination leg of cross-currency transfers", async () => {
     const { repository } = await createRepository();
-    const savings = await repository.saveAccount({ name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const eur = await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
+    const savings = await repository.saveAccount({
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    const eur = await repository.saveAccount({
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "2",
+      effectiveDate: "2026-01-01",
+    });
     // Manual destination amount disagrees with the source-leg conversion (20000).
-    await repository.saveTransaction({ kind: 'transfer', title: 'Move', localDate: '2026-07-10', accountId: eur.id, destinationAccountId: savings.id, amountMinor: 10000, destinationAmountMinor: 19500 });
-    const goal = await repository.saveGoal({ name: 'Fund', kind: 'saving', icon: 'target', color: '#5966E9', targetMinor: 100000, initialMinor: 0, targetDate: null, linkedAccountId: savings.id, linkedCategoryId: null, archived: false });
+    await repository.saveTransaction({
+      kind: "transfer",
+      title: "Move",
+      localDate: "2026-07-10",
+      accountId: eur.id,
+      destinationAccountId: savings.id,
+      amountMinor: 10000,
+      destinationAmountMinor: 19500,
+    });
+    const goal = await repository.saveGoal({
+      name: "Fund",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
+      targetMinor: 100000,
+      initialMinor: 0,
+      targetDate: null,
+      linkedAccountId: savings.id,
+      linkedCategoryId: null,
+      archived: false,
+    });
     expect(repository.getGoalProgress(goal.id)).toBe(19500);
   });
 
-  it('reports budget statuses across a period rollover without reinitializing', async () => {
+  it("reports budget statuses across a period rollover without reinitializing", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-06-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-06-15T09:00:00Z"));
       const { repository } = await createRepository();
       const account = repository.getSnapshot().accounts[0];
       await repository.saveBudget({
-        name: 'Monthly', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-06-01', endDate: null },
-        rollover: true, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+        name: "Monthly",
+        icon: "chart",
+        color: "#5966E9",
+        limitMinor: 1000,
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-06-01",
+          endDate: null,
+        },
+        rollover: true,
+        filters: { accountIds: [], categoryIds: [], tagIds: [] },
+        categoryLimits: [],
+        archived: false,
       });
-      await repository.saveTransaction({ kind: 'expense', title: 'June', localDate: '2026-06-20', accountId: account.id, amountMinor: 400 });
+      await repository.saveTransaction({
+        kind: "expense",
+        title: "June",
+        localDate: "2026-06-20",
+        accountId: account.id,
+        amountMinor: 400,
+      });
 
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
-      expect(repository.getBudgetStatuses('2026-07-15')[0]).toMatchObject({ effectiveLimitMinor: 1600, spentMinor: 0 });
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
+      expect(repository.getBudgetStatuses("2026-07-15")[0]).toMatchObject({
+        effectiveLimitMinor: 1600,
+        spentMinor: 0,
+      });
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('reserves archived names so CSV lookups and restoration stay unambiguous', async () => {
+  it("reserves archived names so CSV lookups and restoration stay unambiguous", async () => {
     const { repository } = await createRepository();
-    const original = await repository.saveAccount({ name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    await repository.saveAccount({ name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: true }, original.id);
-    await expect(repository.saveAccount({ name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false })).rejects.toThrow('already in use');
-    await expect(repository.saveAccount({ ...original, archived: false }, original.id)).resolves.toMatchObject({ archived: false });
+    const original = await repository.saveAccount({
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveAccount(
+      {
+        name: "Savings",
+        type: "savings",
+        currency: "USD",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: true,
+      },
+      original.id,
+    );
+    await expect(
+      repository.saveAccount({
+        name: "Savings",
+        type: "savings",
+        currency: "USD",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      }),
+    ).rejects.toThrow("already in use");
+    await expect(
+      repository.saveAccount({ ...original, archived: false }, original.id),
+    ).resolves.toMatchObject({ archived: false });
   });
 
-  it('rejects invalid dates, zero targets, and incompatible batch categories', async () => {
+  it("rejects invalid dates, zero targets, and incompatible batch categories", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    await expect(repository.saveGoal({ name: 'Zero', kind: 'saving', icon: 'target', color: '#5966E9', targetMinor: 0, initialMinor: 0, targetDate: null, linkedAccountId: null, linkedCategoryId: null, archived: false })).rejects.toThrow('greater than zero');
-    const invalid = await repository.importCsv([{ rowNumber: 2, date: '2026-99-99', type: 'expense', title: 'Bad', amount: '5.00', currency: 'USD', account: 'Everyday', category: '', tags: '', note: '', exchangeRate: '', destinationAccount: '', destinationAmount: '' }], false);
+    await expect(
+      repository.saveGoal({
+        name: "Zero",
+        kind: "saving",
+        icon: "target",
+        color: "#5966E9",
+        targetMinor: 0,
+        initialMinor: 0,
+        targetDate: null,
+        linkedAccountId: null,
+        linkedCategoryId: null,
+        archived: false,
+      }),
+    ).rejects.toThrow("greater than zero");
+    const invalid = await repository.importCsv(
+      [
+        {
+          rowNumber: 2,
+          date: "2026-99-99",
+          type: "expense",
+          title: "Bad",
+          amount: "5.00",
+          currency: "USD",
+          account: "Everyday",
+          category: "",
+          tags: "",
+          note: "",
+          exchangeRate: "",
+          destinationAccount: "",
+          destinationAmount: "",
+        },
+      ],
+      false,
+    );
     expect(invalid.rejectedRows).toHaveLength(1);
-    const income = await repository.saveTransaction({ kind: 'income', title: 'Salary', localDate: '2026-07-15', accountId: account.id, amountMinor: 1000 });
-    const expenseCategory = repository.getSnapshot().categories.find((item) => item.kind === 'expense')!;
-    await expect(repository.updateTransactionsCategory([income.id], expenseCategory.id)).rejects.toThrow('only be assigned');
+    const income = await repository.saveTransaction({
+      kind: "income",
+      title: "Salary",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      amountMinor: 1000,
+    });
+    const expenseCategory = repository
+      .getSnapshot()
+      .categories.find((item) => item.kind === "expense")!;
+    await expect(
+      repository.updateTransactionsCategory([income.id], expenseCategory.id),
+    ).rejects.toThrow("only be assigned");
   });
 
-  it('round-trips exported money and formula-guarded text independently of locale', async () => {
-    const { repository } = await createRepository(new MemoryStorageAdapter(), 'de-DE');
+  it("round-trips exported money and formula-guarded text independently of locale", async () => {
+    const { repository } = await createRepository(
+      new MemoryStorageAdapter(),
+      "de-DE",
+    );
     const sourceAccount = await repository.saveAccount({
-      name: '=Cash',
-      type: 'cash',
-      currency: 'EUR',
+      name: "=Cash",
+      type: "cash",
+      currency: "EUR",
       openingBalanceMinor: 0,
-      icon: 'wallet',
-      color: '#5966E9',
+      icon: "wallet",
+      color: "#5966E9",
       archived: false,
     });
     await repository.saveExchangeRate({
-      fromCurrency: 'EUR',
-      toCurrency: 'USD',
-      rate: '1.125',
-      effectiveDate: '2026-01-01',
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.125",
+      effectiveDate: "2026-01-01",
     });
     await repository.saveTransaction({
-      kind: 'expense',
-      title: '+Coffee',
-      note: '@morning',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "+Coffee",
+      note: "@morning",
+      localDate: "2026-07-15",
       accountId: sourceAccount.id,
       amountMinor: 1250,
     });
 
     const table = parseCsvTable(repository.exportCsv());
-    const rows = table.rows.map((record) => ({
-      rowNumber: Number(record.rowNumber),
-      date: String(record.date),
-      type: String(record.type) as TransactionKind,
-      status: String(record.status) as TransactionStatus,
-      title: String(record.title),
-      amount: String(record.amount),
-      currency: String(record.currency),
-      account: String(record.account),
-      category: String(record.category),
-      tags: String(record.tags),
-      note: String(record.note),
-      exchangeRate: String(record.exchange_rate),
-      destinationAccount: String(record.destination_account),
-      destinationAmount: String(record.destination_amount),
-      destinationBaseAmountMinor: String(record.destination_base_amount_minor),
-    } satisfies CsvImportRow));
+    const rows = table.rows.map(
+      (record) =>
+        ({
+          rowNumber: Number(record.rowNumber),
+          date: String(record.date),
+          type: String(record.type) as TransactionKind,
+          status: String(record.status) as TransactionStatus,
+          title: String(record.title),
+          amount: String(record.amount),
+          currency: String(record.currency),
+          account: String(record.account),
+          category: String(record.category),
+          tags: String(record.tags),
+          note: String(record.note),
+          exchangeRate: String(record.exchange_rate),
+          destinationAccount: String(record.destination_account),
+          destinationAmount: String(record.destination_amount),
+          destinationBaseAmountMinor: String(
+            record.destination_base_amount_minor,
+          ),
+        }) satisfies CsvImportRow,
+    );
 
-    const { repository: imported } = await createRepository(new MemoryStorageAdapter(), 'de-DE');
+    const { repository: imported } = await createRepository(
+      new MemoryStorageAdapter(),
+      "de-DE",
+    );
     await imported.saveAccount({
-      name: '=Cash',
-      type: 'cash',
-      currency: 'EUR',
+      name: "=Cash",
+      type: "cash",
+      currency: "EUR",
       openingBalanceMinor: 0,
-      icon: 'wallet',
-      color: '#5966E9',
+      icon: "wallet",
+      color: "#5966E9",
       archived: false,
     });
     await imported.saveExchangeRate({
-      fromCurrency: 'EUR',
-      toCurrency: 'USD',
-      rate: '1.125',
-      effectiveDate: '2026-01-01',
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.125",
+      effectiveDate: "2026-01-01",
     });
     const result = await imported.importCsv(rows, true);
     expect(result.rejectedRows).toHaveLength(0);
     expect(imported.getSnapshot().transactions[0]).toMatchObject({
-      title: '+Coffee',
-      note: '@morning',
+      title: "+Coffee",
+      note: "@morning",
       amountMinor: 1250,
     });
   });
 
-  it('keeps recurring schedule edits from generating historical auto-posts', async () => {
+  it("keeps recurring schedule edits from generating historical auto-posts", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const { repository } = await createRepository();
       const account = repository.getSnapshot().accounts[0];
       const rule = await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Subscription', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month',
+        template: {
+          kind: "expense",
+          title: "Subscription",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
         interval: 1,
-        startDate: '2026-01-01',
+        startDate: "2026-01-01",
         endDate: null,
-        nextDueDate: '2026-08-01',
+        nextDueDate: "2026-08-01",
         autoPost: true,
         active: true,
       });
-      const edited = await repository.saveRecurringRule({
-        ...rule,
-        unit: 'week',
-        nextDueDate: rule.startDate,
-      }, rule.id);
-      expect(edited.nextDueDate).toBe('2026-08-06');
+      const edited = await repository.saveRecurringRule(
+        {
+          ...rule,
+          unit: "week",
+          nextDueDate: rule.startDate,
+        },
+        rule.id,
+      );
+      expect(edited.nextDueDate).toBe("2026-08-06");
 
-      await repository.generateRecurring('2026-08-31');
-      expect(repository.getSnapshot().transactions.every((item) => item.localDate >= '2026-08-01')).toBe(true);
-      expect(repository.getSnapshot().transactions.every((item) => item.status === 'upcoming')).toBe(true);
+      await repository.generateRecurring("2026-08-31");
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.every((item) => item.localDate >= "2026-08-01"),
+      ).toBe(true);
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.every((item) => item.status === "upcoming"),
+      ).toBe(true);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('does not count unrelated expenses toward an unlinked spending goal', async () => {
+  it("does not count unrelated expenses toward an unlinked spending goal", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Unrelated',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Unrelated",
+      localDate: "2026-07-15",
       accountId: account.id,
       amountMinor: 5000,
     });
     const goal = await repository.saveGoal({
-      name: 'Planned purchase',
-      kind: 'spending',
-      icon: 'target',
-      color: '#5966E9',
+      name: "Planned purchase",
+      kind: "spending",
+      icon: "target",
+      color: "#5966E9",
       targetMinor: 10000,
       initialMinor: 250,
       targetDate: null,
@@ -571,22 +1212,22 @@ describe('FinanceRepository contract', () => {
     expect(repository.getGoalProgress(goal.id)).toBe(250);
   });
 
-  it('forces same-currency transfers to conserve value', async () => {
+  it("forces same-currency transfers to conserve value", async () => {
     const { repository } = await createRepository();
     const source = repository.getSnapshot().accounts[0];
     const destination = await repository.saveAccount({
-      name: 'Savings',
-      type: 'savings',
-      currency: 'USD',
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
       openingBalanceMinor: 0,
-      icon: 'wallet',
-      color: '#5966E9',
+      icon: "wallet",
+      color: "#5966E9",
       archived: false,
     });
     const transfer = await repository.saveTransaction({
-      kind: 'transfer',
-      title: 'Move',
-      localDate: '2026-07-15',
+      kind: "transfer",
+      title: "Move",
+      localDate: "2026-07-15",
       accountId: source.id,
       destinationAccountId: destination.id,
       amountMinor: 1000,
@@ -595,53 +1236,67 @@ describe('FinanceRepository contract', () => {
     expect(transfer.destinationAmountMinor).toBe(1000);
   });
 
-  it('keeps inactive custom budgets manageable without adding them to dashboards', async () => {
+  it("keeps inactive custom budgets manageable without adding them to dashboards", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const { repository } = await createRepository();
       await repository.saveBudget({
-        name: 'January trip',
-        icon: 'chart',
-        color: '#5966E9',
+        name: "January trip",
+        icon: "chart",
+        color: "#5966E9",
         limitMinor: 10000,
-        period: { unit: 'custom', interval: 1, anchorDate: '2026-01-01', endDate: '2026-01-31' },
+        period: {
+          unit: "custom",
+          interval: 1,
+          anchorDate: "2026-01-01",
+          endDate: "2026-01-31",
+        },
         rollover: false,
         filters: { accountIds: [], categoryIds: [], tagIds: [] },
         categoryLimits: [],
         archived: false,
       });
-      expect(repository.getBudgetStatuses('2026-07-15')).toHaveLength(0);
-      expect(repository.getBudgetStatuses('2026-07-15', { includeInactiveCustom: true })).toHaveLength(1);
+      expect(repository.getBudgetStatuses("2026-07-15")).toHaveLength(0);
+      expect(
+        repository.getBudgetStatuses("2026-07-15", {
+          includeInactiveCustom: true,
+        }),
+      ).toHaveLength(1);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('accounts for uncategorized expenses in the dashboard breakdown', async () => {
+  it("accounts for uncategorized expenses in the dashboard breakdown", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Uncategorized',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Uncategorized",
+      localDate: "2026-07-15",
       accountId: account.id,
       categoryId: null,
       amountMinor: 725,
     });
-    const summary = repository.getDashboard('2026-07-01', '2026-07-31');
-    expect(summary.categorySpend.reduce((sum, item) => sum + item.amountMinor, 0)).toBe(summary.expenseMinor);
-    expect(summary.categorySpend).toContainEqual({ category: null, amountMinor: 725 });
+    const summary = repository.getDashboard("2026-07-01", "2026-07-31");
+    expect(
+      summary.categorySpend.reduce((sum, item) => sum + item.amountMinor, 0),
+    ).toBe(summary.expenseMinor);
+    expect(summary.categorySpend).toContainEqual({
+      category: null,
+      amountMinor: 725,
+    });
   });
 
-  it('cascades goal contributions and budget snapshots through one atomic delete', async () => {
+  it("cascades goal contributions and budget snapshots through one atomic delete", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const goal = await repository.saveGoal({
-      name: 'Fund',
-      kind: 'saving',
-      icon: 'target',
-      color: '#5966E9',
+      name: "Fund",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
       targetMinor: 10000,
       initialMinor: 0,
       targetDate: null,
@@ -652,23 +1307,28 @@ describe('FinanceRepository contract', () => {
     await repository.saveContribution({
       goalId: goal.id,
       amountMinor: 500,
-      localDate: '2026-07-15',
+      localDate: "2026-07-15",
       transactionId: null,
-      note: '',
+      note: "",
     });
     const budget = await repository.saveBudget({
-      name: 'Monthly',
-      icon: 'chart',
-      color: '#5966E9',
+      name: "Monthly",
+      icon: "chart",
+      color: "#5966E9",
       limitMinor: 10000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: null,
+      },
       rollover: false,
       filters: { accountIds: [], categoryIds: [], tagIds: [] },
       categoryLimits: [],
       archived: false,
     });
-    await repository.deleteEntities('goals', [goal.id]);
-    await repository.deleteEntities('budgets', [budget.id]);
+    await repository.deleteEntities("goals", [goal.id]);
+    await repository.deleteEntities("budgets", [budget.id]);
     expect(repository.getSnapshot().contributions).toHaveLength(0);
     expect(repository.getSnapshot().budgetPeriods).toHaveLength(0);
 
@@ -678,18 +1338,20 @@ describe('FinanceRepository contract', () => {
     expect(reloaded.getSnapshot().budgetPeriods).toHaveLength(0);
   });
 
-  it('preserves a concurrent save while another entity is being deleted', async () => {
+  it("preserves a concurrent save while another entity is being deleted", async () => {
     class PausableStorage extends MemoryStorageAdapter {
       pauseNext = false;
       private release: (() => void) | null = null;
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
         if (this.pauseNext) {
           this.pauseNext = false;
-          await new Promise<void>((resolve) => { this.release = resolve; });
+          await new Promise<void>((resolve) => {
+            this.release = resolve;
+          });
         }
         // `source` identifies the writer so a repository ignores its own change
         // notification. Dropping it here made every local write look like it
@@ -707,169 +1369,231 @@ describe('FinanceRepository contract', () => {
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
     const doomed = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Doomed',
-      localDate: '2026-07-14',
+      kind: "expense",
+      title: "Doomed",
+      localDate: "2026-07-14",
       accountId: account.id,
       amountMinor: 100,
     });
     storage.pauseNext = true;
-    const deletion = repository.deleteEntities('transactions', [doomed.id]);
+    const deletion = repository.deleteEntities("transactions", [doomed.id]);
     await Promise.resolve();
     await Promise.resolve();
     const concurrentSave = repository.saveTransaction({
-      kind: 'expense',
-      title: 'Concurrent',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Concurrent",
+      localDate: "2026-07-15",
       accountId: account.id,
       amountMinor: 200,
     });
     storage.releasePaused();
     await Promise.all([deletion, concurrentSave]);
-    expect(repository.getSnapshot().transactions.map((item) => item.title)).toEqual(['Concurrent']);
+    expect(
+      repository.getSnapshot().transactions.map((item) => item.title),
+    ).toEqual(["Concurrent"]);
   });
 
-  it('derives account balances from every posted transaction, not the browsed month', async () => {
+  it("derives account balances from every posted transaction, not the browsed month", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     await repository.saveTransaction({
-      kind: 'income',
-      title: 'Later',
-      localDate: '2026-08-01',
+      kind: "income",
+      title: "Later",
+      localDate: "2026-08-01",
       accountId: account.id,
       amountMinor: 1000,
     });
-    const july = repository.getDashboard('2026-07-01', '2026-07-31');
+    const july = repository.getDashboard("2026-07-01", "2026-07-31");
     expect(july.incomeMinor).toBe(0);
     expect(july.accountBalances[0].balanceMinor).toBe(1000);
     expect(july.netWorthMinor).toBe(1000);
   });
 
-  it('builds transient budget status for the date being browsed', async () => {
+  it("builds transient budget status for the date being browsed", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const { repository } = await createRepository();
       await repository.saveBudget({
-        name: 'Monthly',
-        icon: 'chart',
-        color: '#5966E9',
+        name: "Monthly",
+        icon: "chart",
+        color: "#5966E9",
         limitMinor: 1000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-07-01",
+          endDate: null,
+        },
         rollover: false,
         filters: { accountIds: [], categoryIds: [], tagIds: [] },
         categoryLimits: [],
         archived: false,
       });
-      expect(repository.getBudgetStatuses('2026-06-15')[0]?.snapshot.periodStart).toBe('2026-06-01');
+      expect(
+        repository.getBudgetStatuses("2026-06-15")[0]?.snapshot.periodStart,
+      ).toBe("2026-06-01");
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('uses base-currency values for amount filters', async () => {
+  it("uses base-currency values for amount filters", async () => {
     const { repository } = await createRepository();
     const euro = await repository.saveAccount({
-      name: 'Euro',
-      type: 'checking',
-      currency: 'EUR',
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
       openingBalanceMinor: 0,
-      icon: 'wallet',
-      color: '#5966E9',
+      icon: "wallet",
+      color: "#5966E9",
       archived: false,
     });
     await repository.saveExchangeRate({
-      fromCurrency: 'EUR',
-      toCurrency: 'USD',
-      rate: '2',
-      effectiveDate: '2026-01-01',
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "2",
+      effectiveDate: "2026-01-01",
     });
     const transaction = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Foreign',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Foreign",
+      localDate: "2026-07-15",
       accountId: euro.id,
       amountMinor: 10000,
     });
-    expect(repository.queryTransactions({ minMinor: 15000 }).map((item) => item.id)).toEqual([transaction.id]);
+    expect(
+      repository.queryTransactions({ minMinor: 15000 }).map((item) => item.id),
+    ).toEqual([transaction.id]);
     expect(repository.queryTransactions({ minMinor: 25000 })).toHaveLength(0);
   });
 
-  it('rejects syntactically valid but unsupported currency codes', async () => {
+  it("rejects syntactically valid but unsupported currency codes", async () => {
     const { repository } = await createRepository();
-    await expect(repository.saveAccount({
-      name: 'Typo',
-      type: 'cash',
-      currency: 'ZZZ',
-      openingBalanceMinor: 0,
-      icon: 'wallet',
-      color: '#5966E9',
-      archived: false,
-    })).rejects.toThrow('ISO 4217');
+    await expect(
+      repository.saveAccount({
+        name: "Typo",
+        type: "cash",
+        currency: "ZZZ",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      }),
+    ).rejects.toThrow("ISO 4217");
   });
 
-  it('sorts equal-timestamp memory records semantically like production adapters', async () => {
+  it("sorts equal-timestamp memory records semantically like production adapters", async () => {
     const storage = new MemoryStorageAdapter();
-    const timestamp = '2026-07-15T00:00:00.000Z';
+    const timestamp = "2026-07-15T00:00:00.000Z";
     await storage.putMany([
-      { type: 'tags', entity: { id: 'a', revision: 1, createdAt: timestamp, updatedAt: timestamp, deletedAt: null, name: 'Zulu', color: '#5966E9' } },
-      { type: 'tags', entity: { id: 'z', revision: 1, createdAt: timestamp, updatedAt: timestamp, deletedAt: null, name: 'Alpha', color: '#5966E9' } },
+      {
+        type: "tags",
+        entity: {
+          id: "a",
+          revision: 1,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          deletedAt: null,
+          name: "Zulu",
+          color: "#5966E9",
+        },
+      },
+      {
+        type: "tags",
+        entity: {
+          id: "z",
+          revision: 1,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          deletedAt: null,
+          name: "Alpha",
+          color: "#5966E9",
+        },
+      },
     ]);
-    expect((await storage.readAll('tags')).map((item) => item.id)).toEqual(['z', 'a']);
+    expect((await storage.readAll("tags")).map((item) => item.id)).toEqual([
+      "z",
+      "a",
+    ]);
   });
 
-  it('preserves curated starter-category order after reload', async () => {
+  it("preserves curated starter-category order after reload", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
-    const initialOrder = repository.getSnapshot().categories.map((item) => item.name);
+    const initialOrder = repository
+      .getSnapshot()
+      .categories.map((item) => item.name);
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
-    expect(reloaded.getSnapshot().categories.map((item) => item.name)).toEqual(initialOrder);
+    expect(reloaded.getSnapshot().categories.map((item) => item.name)).toEqual(
+      initialOrder,
+    );
   });
 
-  it('persists the onboarding theme choice and rejects a malformed theme id', async () => {
-    const onboarding = { locale: 'en-US', baseCurrency: 'USD', accountName: 'Everyday', accountType: 'checking', openingBalanceMinor: 0, themeMode: 'system', accentSource: 'system', accentHex: '#5966E9' } as const;
+  it("persists the onboarding theme choice and rejects a malformed theme id", async () => {
+    const onboarding = {
+      locale: "en-US",
+      baseCurrency: "USD",
+      accountName: "Everyday",
+      accountType: "checking",
+      openingBalanceMinor: 0,
+      themeMode: "system",
+      accentSource: "system",
+      accentHex: "#5966E9",
+    } as const;
     const chosen = new LocalFinanceRepository(new MemoryStorageAdapter());
     await chosen.initialize();
-    await chosen.completeOnboarding({ ...onboarding, themeId: 'high-contrast' });
-    expect(chosen.getSnapshot().settings.themeId).toBe('high-contrast');
+    await chosen.completeOnboarding({
+      ...onboarding,
+      themeId: "high-contrast",
+    });
+    expect(chosen.getSnapshot().settings.themeId).toBe("high-contrast");
 
     const omitted = new LocalFinanceRepository(new MemoryStorageAdapter());
     await omitted.initialize();
     await omitted.completeOnboarding(onboarding);
-    expect(omitted.getSnapshot().settings.themeId).toBe('classic');
+    expect(omitted.getSnapshot().settings.themeId).toBe("classic");
 
     const invalid = new LocalFinanceRepository(new MemoryStorageAdapter());
     await invalid.initialize();
-    await expect(invalid.completeOnboarding({ ...onboarding, themeId: 'Not A Theme' })).rejects.toThrow('valid theme');
+    await expect(
+      invalid.completeOnboarding({ ...onboarding, themeId: "Not A Theme" }),
+    ).rejects.toThrow("valid theme");
     expect(invalid.getSnapshot().settings.onboardingComplete).toBe(false);
   });
 
-  it('rejects repeated onboarding without creating duplicate starter data', async () => {
+  it("rejects repeated onboarding without creating duplicate starter data", async () => {
     const { repository } = await createRepository();
     const before = repository.getSnapshot();
-    await expect(repository.completeOnboarding({
-      locale: 'en-US',
-      baseCurrency: 'USD',
-      accountName: 'Duplicate',
-      accountType: 'cash',
-      openingBalanceMinor: 0,
-      themeMode: 'system',
-      accentSource: 'system',
-      accentHex: '#5966E9',
-    })).rejects.toThrow('already complete');
-    expect(repository.getSnapshot().accounts).toHaveLength(before.accounts.length);
-    expect(repository.getSnapshot().categories).toHaveLength(before.categories.length);
+    await expect(
+      repository.completeOnboarding({
+        locale: "en-US",
+        baseCurrency: "USD",
+        accountName: "Duplicate",
+        accountType: "cash",
+        openingBalanceMinor: 0,
+        themeMode: "system",
+        accentSource: "system",
+        accentHex: "#5966E9",
+      }),
+    ).rejects.toThrow("already complete");
+    expect(repository.getSnapshot().accounts).toHaveLength(
+      before.accounts.length,
+    );
+    expect(repository.getSnapshot().categories).toHaveLength(
+      before.categories.length,
+    );
   });
 
-  it('resets every persisted entity and returns to pre-onboarding settings', async () => {
+  it("resets every persisted entity and returns to pre-onboarding settings", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
     await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Erase me',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Erase me",
+      localDate: "2026-07-15",
       accountId: account.id,
       amountMinor: 500,
     });
@@ -895,59 +1619,108 @@ describe('FinanceRepository contract', () => {
     });
   });
 
-  it('keeps a deleted recurring occurrence deleted across regeneration and reload', async () => {
+  it("keeps a deleted recurring occurrence deleted across regeneration and reload", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const account = repository.getSnapshot().accounts[0];
       const created = await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Optional', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Optional",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-07-15",
+        endDate: null,
+        nextDueDate: "2026-07-15",
+        autoPost: false,
+        active: true,
       });
-      const occurrence = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-15')!;
-      await repository.deleteEntities('transactions', [occurrence.id]);
-      const currentRule = repository.getSnapshot().recurringRules.find((item) => item.id === created.id)!;
-      await repository.saveRecurringRule({ ...currentRule, nextDueDate: '2026-07-15' }, currentRule.id);
-      expect(repository.getSnapshot().transactions.some((item) => item.localDate === '2026-07-15')).toBe(false);
+      const occurrence = repository
+        .getSnapshot()
+        .transactions.find((item) => item.localDate === "2026-07-15")!;
+      await repository.deleteEntities("transactions", [occurrence.id]);
+      const currentRule = repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === created.id)!;
+      await repository.saveRecurringRule(
+        { ...currentRule, nextDueDate: "2026-07-15" },
+        currentRule.id,
+      );
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.some((item) => item.localDate === "2026-07-15"),
+      ).toBe(false);
 
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getSnapshot().transactions.some((item) => item.localDate === '2026-07-20')).toBe(false);
+      expect(
+        reloaded
+          .getSnapshot()
+          .transactions.some((item) => item.localDate === "2026-07-20"),
+      ).toBe(false);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('keeps archived dependencies editable and reactivates schedules after restoration', async () => {
+  it("keeps archived dependencies editable and reactivates schedules after restoration", async () => {
     const { repository } = await createRepository();
-    const account = await repository.saveAccount({ name: 'Projects', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const category = repository.getSnapshot().categories.find((item) => item.kind === 'expense')!;
+    const account = await repository.saveAccount({
+      name: "Projects",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    const category = repository
+      .getSnapshot()
+      .categories.find((item) => item.kind === "expense")!;
     const transaction = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Supplies',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Supplies",
+      localDate: "2026-07-15",
       accountId: account.id,
       categoryId: category.id,
       amountMinor: 500,
     });
     const budget = await repository.saveBudget({
-      name: 'Projects',
-      icon: 'chart',
-      color: '#5966E9',
+      name: "Projects",
+      icon: "chart",
+      color: "#5966E9",
       limitMinor: 10000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: null,
+      },
       rollover: false,
-      filters: { accountIds: [account.id], categoryIds: [category.id], tagIds: [] },
+      filters: {
+        accountIds: [account.id],
+        categoryIds: [category.id],
+        tagIds: [],
+      },
       categoryLimits: [{ categoryId: category.id, limitMinor: 5000 }],
       archived: false,
     });
     const goal = await repository.saveGoal({
-      name: 'Project purchase',
-      kind: 'spending',
-      icon: 'target',
-      color: '#5966E9',
+      name: "Project purchase",
+      kind: "spending",
+      icon: "target",
+      color: "#5966E9",
       targetMinor: 10000,
       initialMinor: 0,
       targetDate: null,
@@ -956,156 +1729,341 @@ describe('FinanceRepository contract', () => {
       archived: false,
     });
     const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Hosting', note: '', accountId: account.id, categoryId: category.id, tagIds: [], amountMinor: 100, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: null, nextDueDate: '2099-01-01', autoPost: false, active: true,
+      template: {
+        kind: "expense",
+        title: "Hosting",
+        note: "",
+        accountId: account.id,
+        categoryId: category.id,
+        tagIds: [],
+        amountMinor: 100,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: null,
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: true,
     });
 
     await repository.saveAccount({ ...account, archived: true }, account.id);
     await repository.saveCategory({ ...category, archived: true }, category.id);
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)?.active).toBe(false);
-    await expect(repository.saveTransaction({
-      kind: transaction.kind,
-      status: transaction.status,
-      title: 'Updated supplies',
-      note: transaction.note,
-      localDate: transaction.localDate,
-      accountId: transaction.accountId,
-      categoryId: transaction.categoryId,
-      amountMinor: transaction.amountMinor,
-    }, transaction.id)).resolves.toMatchObject({ title: 'Updated supplies' });
-    await expect(repository.saveBudget({ ...budget, name: 'Updated projects' }, budget.id)).resolves.toMatchObject({ name: 'Updated projects' });
-    await expect(repository.saveGoal({ ...goal, name: 'Updated purchase' }, goal.id)).resolves.toMatchObject({ name: 'Updated purchase' });
-    await expect(repository.saveRecurringRule({
-      ...repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)!,
-      template: { ...rule.template, title: 'Updated hosting' },
-      active: true,
-    }, rule.id)).resolves.toMatchObject({ active: false });
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id)?.active,
+    ).toBe(false);
+    await expect(
+      repository.saveTransaction(
+        {
+          kind: transaction.kind,
+          status: transaction.status,
+          title: "Updated supplies",
+          note: transaction.note,
+          localDate: transaction.localDate,
+          accountId: transaction.accountId,
+          categoryId: transaction.categoryId,
+          amountMinor: transaction.amountMinor,
+        },
+        transaction.id,
+      ),
+    ).resolves.toMatchObject({ title: "Updated supplies" });
+    await expect(
+      repository.saveBudget({ ...budget, name: "Updated projects" }, budget.id),
+    ).resolves.toMatchObject({ name: "Updated projects" });
+    await expect(
+      repository.saveGoal({ ...goal, name: "Updated purchase" }, goal.id),
+    ).resolves.toMatchObject({ name: "Updated purchase" });
+    await expect(
+      repository.saveRecurringRule(
+        {
+          ...repository
+            .getSnapshot()
+            .recurringRules.find((item) => item.id === rule.id)!,
+          template: { ...rule.template, title: "Updated hosting" },
+          active: true,
+        },
+        rule.id,
+      ),
+    ).resolves.toMatchObject({ active: false });
 
     await repository.saveAccount({ ...account, archived: false }, account.id);
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)?.active).toBe(false);
-    await repository.saveCategory({ ...category, archived: false }, category.id);
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)?.active).toBe(true);
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id)?.active,
+    ).toBe(false);
+    await repository.saveCategory(
+      { ...category, archived: false },
+      category.id,
+    );
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id)?.active,
+    ).toBe(true);
   });
 
-  it('does not reactivate a schedule that was already paused before its account was archived', async () => {
+  it("does not reactivate a schedule that was already paused before its account was archived", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Paused', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: null, nextDueDate: '2099-01-01', autoPost: false, active: false,
+      template: {
+        kind: "expense",
+        title: "Paused",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 100,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: null,
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: false,
     });
 
     await repository.saveAccount({ ...account, archived: true }, account.id);
     await repository.saveAccount({ ...account, archived: false }, account.id);
 
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id))
-      .toMatchObject({ active: false, pausedByDependency: false });
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id),
+    ).toMatchObject({ active: false, pausedByDependency: false });
   });
 
-  it('migrates legacy recurring schedules without pause provenance', async () => {
+  it("migrates legacy recurring schedules without pause provenance", async () => {
     const { repository, storage } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Legacy', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: null, nextDueDate: '2099-01-01', autoPost: false, active: false,
+      template: {
+        kind: "expense",
+        title: "Legacy",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 100,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: null,
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: false,
     });
     const { pausedByDependency: _legacyField, ...legacyRule } = rule;
-    await storage.putMany([{ type: 'recurringRules', entity: legacyRule as RecurringRule }]);
+    await storage.putMany([
+      { type: "recurringRules", entity: legacyRule as RecurringRule },
+    ]);
 
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
 
-    expect(reloaded.getSnapshot().recurringRules.find((item) => item.id === rule.id))
-      .toMatchObject({ active: false, pausedByDependency: false });
-    expect((await storage.readAll('recurringRules')).find((item) => item.id === rule.id))
-      .toMatchObject({ pausedByDependency: false });
+    expect(
+      reloaded.getSnapshot().recurringRules.find((item) => item.id === rule.id),
+    ).toMatchObject({ active: false, pausedByDependency: false });
+    expect(
+      (await storage.readAll("recurringRules")).find(
+        (item) => item.id === rule.id,
+      ),
+    ).toMatchObject({ pausedByDependency: false });
   });
 
-  it('updates generated upcoming transactions when a recurring template changes', async () => {
+  it("updates generated upcoming transactions when a recurring template changes", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const { repository } = await createRepository();
       const account = repository.getSnapshot().accounts[0];
       const rule = await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Old title', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Old title",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-07-15",
+        endDate: null,
+        nextDueDate: "2026-07-15",
+        autoPost: false,
+        active: true,
       });
-      const before = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-15')!;
-      const currentRule = repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)!;
-      await repository.saveRecurringRule({
-        ...currentRule,
-        template: { ...currentRule.template, title: 'New title', amountMinor: 250 },
-      }, rule.id);
-      const after = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-15')!;
-      expect(after).toMatchObject({ id: before.id, title: 'New title', amountMinor: 250 });
+      const before = repository
+        .getSnapshot()
+        .transactions.find((item) => item.localDate === "2026-07-15")!;
+      const currentRule = repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id)!;
+      await repository.saveRecurringRule(
+        {
+          ...currentRule,
+          template: {
+            ...currentRule.template,
+            title: "New title",
+            amountMinor: 250,
+          },
+        },
+        rule.id,
+      );
+      const after = repository
+        .getSnapshot()
+        .transactions.find((item) => item.localDate === "2026-07-15")!;
+      expect(after).toMatchObject({
+        id: before.id,
+        title: "New title",
+        amountMinor: 250,
+      });
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('generates the next occurrence when a due one is skipped or confirmed', async () => {
+  it("generates the next occurrence when a due one is skipped or confirmed", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const { repository } = await createRepository();
       const account = repository.getSnapshot().accounts[0];
       const rule = await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Gym', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Gym",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-07-15",
+        endDate: null,
+        nextDueDate: "2026-07-15",
+        autoPost: false,
+        active: true,
       });
-      const dates = (status: string) => repository.getSnapshot().transactions
-        .filter((item) => item.recurringRuleId === rule.id && item.status === status).map((item) => item.localDate);
-      expect(dates('upcoming')).toEqual(['2026-07-15']);
-      await repository.skipUpcoming(repository.getSnapshot().transactions.find((item) => item.recurringRuleId === rule.id)!.id);
-      expect(dates('skipped')).toEqual(['2026-07-15']);
-      expect(dates('upcoming')).toEqual(['2026-08-15']);
+      const dates = (status: string) =>
+        repository
+          .getSnapshot()
+          .transactions.filter(
+            (item) =>
+              item.recurringRuleId === rule.id && item.status === status,
+          )
+          .map((item) => item.localDate);
+      expect(dates("upcoming")).toEqual(["2026-07-15"]);
+      await repository.skipUpcoming(
+        repository
+          .getSnapshot()
+          .transactions.find((item) => item.recurringRuleId === rule.id)!.id,
+      );
+      expect(dates("skipped")).toEqual(["2026-07-15"]);
+      expect(dates("upcoming")).toEqual(["2026-08-15"]);
       // Resolving again while a future one exists must not run ahead.
       await repository.generateRecurring();
-      expect(dates('upcoming')).toEqual(['2026-08-15']);
+      expect(dates("upcoming")).toEqual(["2026-08-15"]);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('generates more than 366 missed recurring occurrences in one catch-up', async () => {
+  it("generates more than 366 missed recurring occurrences in one catch-up", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2025-01-01T09:00:00Z'));
+      jest.setSystemTime(new Date("2025-01-01T09:00:00Z"));
       const { repository } = await createRepository();
       const account = repository.getSnapshot().accounts[0];
       await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Daily', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 1, currency: 'USD' },
-        unit: 'day', interval: 1, startDate: '2025-01-01', endDate: '2026-06-30', nextDueDate: '2025-01-01', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Daily",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 1,
+          currency: "USD",
+        },
+        unit: "day",
+        interval: 1,
+        startDate: "2025-01-01",
+        endDate: "2026-06-30",
+        nextDueDate: "2025-01-01",
+        autoPost: false,
+        active: true,
       });
-      await repository.generateRecurring('2026-06-30');
-      const occurrences = repository.getSnapshot().transactions.filter((item) => item.title === 'Daily');
+      await repository.generateRecurring("2026-06-30");
+      const occurrences = repository
+        .getSnapshot()
+        .transactions.filter((item) => item.title === "Daily");
       expect(occurrences.length).toBeGreaterThan(366);
-      expect(occurrences.at(-1)?.localDate).toBe('2026-06-30');
+      expect(occurrences.at(-1)?.localDate).toBe("2026-06-30");
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('snapshots the destination base value used by cross-currency goal progress', async () => {
+  it("snapshots the destination base value used by cross-currency goal progress", async () => {
     const { repository } = await createRepository();
-    const eur = await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const gbp = await repository.saveAccount({ name: 'Pounds', type: 'savings', currency: 'GBP', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
-    const gbpRate = await repository.saveExchangeRate({ fromCurrency: 'GBP', toCurrency: 'USD', rate: '4', effectiveDate: '2026-01-01' });
+    const eur = await repository.saveAccount({
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    const gbp = await repository.saveAccount({
+      name: "Pounds",
+      type: "savings",
+      currency: "GBP",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "2",
+      effectiveDate: "2026-01-01",
+    });
+    const gbpRate = await repository.saveExchangeRate({
+      fromCurrency: "GBP",
+      toCurrency: "USD",
+      rate: "4",
+      effectiveDate: "2026-01-01",
+    });
     const transfer = await repository.saveTransaction({
-      kind: 'transfer',
-      title: 'Move',
-      localDate: '2026-07-15',
+      kind: "transfer",
+      title: "Move",
+      localDate: "2026-07-15",
       accountId: eur.id,
       destinationAccountId: gbp.id,
       amountMinor: 10000,
     });
     const goal = await repository.saveGoal({
-      name: 'Pounds goal',
-      kind: 'saving',
-      icon: 'target',
-      color: '#5966E9',
+      name: "Pounds goal",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
       targetMinor: 100000,
       initialMinor: 0,
       targetDate: null,
@@ -1115,144 +2073,202 @@ describe('FinanceRepository contract', () => {
     });
     expect(transfer.destinationBaseAmountMinor).toBe(20000);
     expect(repository.getGoalProgress(goal.id)).toBe(20000);
-    await repository.saveExchangeRate({ ...gbpRate, rate: '8' }, gbpRate.id);
+    await repository.saveExchangeRate({ ...gbpRate, rate: "8" }, gbpRate.id);
     expect(repository.getGoalProgress(goal.id)).toBe(20000);
-    const edited = await repository.saveTransaction({
-      kind: transfer.kind,
-      status: transfer.status,
-      title: 'Move renamed',
-      note: transfer.note,
-      localDate: transfer.localDate,
-      accountId: transfer.accountId,
-      destinationAccountId: transfer.destinationAccountId,
-      destinationAmountMinor: transfer.destinationAmountMinor,
-      amountMinor: transfer.amountMinor,
-      exchangeRate: transfer.exchangeRate,
-    }, transfer.id);
+    const edited = await repository.saveTransaction(
+      {
+        kind: transfer.kind,
+        status: transfer.status,
+        title: "Move renamed",
+        note: transfer.note,
+        localDate: transfer.localDate,
+        accountId: transfer.accountId,
+        destinationAccountId: transfer.destinationAccountId,
+        destinationAmountMinor: transfer.destinationAmountMinor,
+        amountMinor: transfer.amountMinor,
+        exchangeRate: transfer.exchangeRate,
+      },
+      transfer.id,
+    );
     expect(edited.destinationBaseAmountMinor).toBe(20000);
     expect(repository.getGoalProgress(goal.id)).toBe(20000);
-    await repository.deleteEntities('exchangeRates', [gbpRate.id]);
+    await repository.deleteEntities("exchangeRates", [gbpRate.id]);
     expect(repository.getGoalProgress(goal.id)).toBe(20000);
-    await expect(repository.saveTransaction({
-      kind: edited.kind,
-      status: edited.status,
-      title: 'Move renamed again',
-      note: edited.note,
-      localDate: edited.localDate,
-      accountId: edited.accountId,
-      destinationAccountId: edited.destinationAccountId,
-      destinationAmountMinor: edited.destinationAmountMinor,
-      amountMinor: edited.amountMinor,
-      exchangeRate: edited.exchangeRate,
-    }, edited.id)).resolves.toMatchObject({ destinationBaseAmountMinor: 20000 });
+    await expect(
+      repository.saveTransaction(
+        {
+          kind: edited.kind,
+          status: edited.status,
+          title: "Move renamed again",
+          note: edited.note,
+          localDate: edited.localDate,
+          accountId: edited.accountId,
+          destinationAccountId: edited.destinationAccountId,
+          destinationAmountMinor: edited.destinationAmountMinor,
+          amountMinor: edited.amountMinor,
+          exchangeRate: edited.exchangeRate,
+        },
+        edited.id,
+      ),
+    ).resolves.toMatchObject({ destinationBaseAmountMinor: 20000 });
   });
 
-  it('rejects a forged destination base snapshot during CSV import', async () => {
+  it("rejects a forged destination base snapshot during CSV import", async () => {
     const { repository } = await createRepository();
-    const eur = await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const savings = await repository.saveAccount({ name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
+    const eur = await repository.saveAccount({
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    const savings = await repository.saveAccount({
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "2",
+      effectiveDate: "2026-01-01",
+    });
 
-    const result = await repository.importCsv([{
-      rowNumber: 2,
-      date: '2026-07-15',
-      type: 'transfer',
-      status: 'posted',
-      title: 'Forged snapshot',
-      amount: '10.00',
-      currency: 'EUR',
-      account: eur.name,
-      category: '',
-      tags: '',
-      note: '',
-      exchangeRate: '2',
-      destinationAccount: savings.name,
-      destinationAmount: '20.00',
-      destinationBaseAmountMinor: '900000000',
-    }], false);
+    const result = await repository.importCsv(
+      [
+        {
+          rowNumber: 2,
+          date: "2026-07-15",
+          type: "transfer",
+          status: "posted",
+          title: "Forged snapshot",
+          amount: "10.00",
+          currency: "EUR",
+          account: eur.name,
+          category: "",
+          tags: "",
+          note: "",
+          exchangeRate: "2",
+          destinationAccount: savings.name,
+          destinationAmount: "20.00",
+          destinationBaseAmountMinor: "900000000",
+        },
+      ],
+      false,
+    );
 
     expect(result.validRows).toEqual([]);
-    expect(result.rejectedRows[0]?.reason).toContain('Destination base amount');
+    expect(result.rejectedRows[0]?.reason).toContain("Destination base amount");
 
-    const valid = await repository.importCsv([{
-      rowNumber: 3,
-      date: '2026-07-15',
-      type: 'transfer',
-      status: 'posted',
-      title: 'Verified snapshot',
-      amount: '10.00',
-      currency: 'EUR',
-      account: eur.name,
-      category: '',
-      tags: '',
-      note: '',
-      exchangeRate: '2',
-      destinationAccount: savings.name,
-      destinationAmount: '20.00',
-      destinationBaseAmountMinor: '2000',
-    }], false);
+    const valid = await repository.importCsv(
+      [
+        {
+          rowNumber: 3,
+          date: "2026-07-15",
+          type: "transfer",
+          status: "posted",
+          title: "Verified snapshot",
+          amount: "10.00",
+          currency: "EUR",
+          account: eur.name,
+          category: "",
+          tags: "",
+          note: "",
+          exchangeRate: "2",
+          destinationAccount: savings.name,
+          destinationAmount: "20.00",
+          destinationBaseAmountMinor: "2000",
+        },
+      ],
+      false,
+    );
     expect(valid.validRows).toHaveLength(1);
   });
 
-  it('preserves existing tags when an edit payload omits tagIds', async () => {
+  it("preserves existing tags when an edit payload omits tagIds", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const tag = await repository.saveTag({ name: 'Work', color: '#5966E9' });
+    const tag = await repository.saveTag({ name: "Work", color: "#5966E9" });
     const transaction = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Coffee',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Coffee",
+      localDate: "2026-07-15",
       accountId: account.id,
       tagIds: [tag.id],
       amountMinor: 500,
     });
-    const edited = await repository.saveTransaction({
-      kind: transaction.kind,
-      status: transaction.status,
-      title: 'Coffee renamed',
-      note: transaction.note,
-      localDate: transaction.localDate,
-      accountId: transaction.accountId,
-      categoryId: transaction.categoryId,
-      amountMinor: transaction.amountMinor,
-      exchangeRate: transaction.exchangeRate,
-    }, transaction.id);
+    const edited = await repository.saveTransaction(
+      {
+        kind: transaction.kind,
+        status: transaction.status,
+        title: "Coffee renamed",
+        note: transaction.note,
+        localDate: transaction.localDate,
+        accountId: transaction.accountId,
+        categoryId: transaction.categoryId,
+        amountMinor: transaction.amountMinor,
+        exchangeRate: transaction.exchangeRate,
+      },
+      transaction.id,
+    );
     expect(edited.tagIds).toEqual([tag.id]);
-    await expect(repository.saveTransaction({
-      kind: edited.kind,
-      status: edited.status,
-      title: edited.title,
-      note: edited.note,
-      localDate: edited.localDate,
-      accountId: edited.accountId,
-      categoryId: edited.categoryId,
-      tagIds: [],
-      amountMinor: edited.amountMinor,
-      exchangeRate: edited.exchangeRate,
-    }, edited.id)).resolves.toMatchObject({ tagIds: [] });
+    await expect(
+      repository.saveTransaction(
+        {
+          kind: edited.kind,
+          status: edited.status,
+          title: edited.title,
+          note: edited.note,
+          localDate: edited.localDate,
+          accountId: edited.accountId,
+          categoryId: edited.categoryId,
+          tagIds: [],
+          amountMinor: edited.amountMinor,
+          exchangeRate: edited.exchangeRate,
+        },
+        edited.id,
+      ),
+    ).resolves.toMatchObject({ tagIds: [] });
   });
 
-  it('clears transfer-only fields when a transaction becomes non-transfer', async () => {
+  it("clears transfer-only fields when a transaction becomes non-transfer", async () => {
     const { repository } = await createRepository();
     const source = repository.getSnapshot().accounts[0];
-    const destination = await repository.saveAccount({ name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
+    const destination = await repository.saveAccount({
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
     const transfer = await repository.saveTransaction({
-      kind: 'transfer',
-      title: 'Move',
-      localDate: '2026-07-15',
+      kind: "transfer",
+      title: "Move",
+      localDate: "2026-07-15",
       accountId: source.id,
       destinationAccountId: destination.id,
       amountMinor: 1000,
     });
-    const expense = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Spent instead',
-      localDate: transfer.localDate,
-      accountId: source.id,
-      destinationAccountId: destination.id,
-      destinationAmountMinor: 1000,
-      amountMinor: transfer.amountMinor,
-    }, transfer.id);
+    const expense = await repository.saveTransaction(
+      {
+        kind: "expense",
+        title: "Spent instead",
+        localDate: transfer.localDate,
+        accountId: source.id,
+        destinationAccountId: destination.id,
+        destinationAmountMinor: 1000,
+        amountMinor: transfer.amountMinor,
+      },
+      transfer.id,
+    );
     expect(expense).toMatchObject({
       destinationAccountId: null,
       destinationAmountMinor: null,
@@ -1262,36 +2278,48 @@ describe('FinanceRepository contract', () => {
     });
   });
 
-  it('clears an existing transaction category when passed an explicit null', async () => {
+  it("clears an existing transaction category when passed an explicit null", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const category = repository.getSnapshot().categories.find((item) => item.name === 'Dining')!;
+    const category = repository
+      .getSnapshot()
+      .categories.find((item) => item.name === "Dining")!;
     const transaction = await repository.saveTransaction({
-      kind: 'expense', title: 'Categorized', localDate: '2026-07-15', accountId: account.id, categoryId: category.id, amountMinor: 100,
+      kind: "expense",
+      title: "Categorized",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      categoryId: category.id,
+      amountMinor: 100,
     });
 
-    await expect(repository.saveTransaction({
-      kind: transaction.kind,
-      status: transaction.status,
-      title: transaction.title,
-      note: transaction.note,
-      localDate: transaction.localDate,
-      accountId: transaction.accountId,
-      categoryId: null,
-      amountMinor: transaction.amountMinor,
-      exchangeRate: transaction.exchangeRate,
-    }, transaction.id)).resolves.toMatchObject({ categoryId: null });
+    await expect(
+      repository.saveTransaction(
+        {
+          kind: transaction.kind,
+          status: transaction.status,
+          title: transaction.title,
+          note: transaction.note,
+          localDate: transaction.localDate,
+          accountId: transaction.accountId,
+          categoryId: null,
+          amountMinor: transaction.amountMinor,
+          exchangeRate: transaction.exchangeRate,
+        },
+        transaction.id,
+      ),
+    ).resolves.toMatchObject({ categoryId: null });
   });
 
-  it('saves a goal edit and manual contribution atomically', async () => {
+  it("saves a goal edit and manual contribution atomically", async () => {
     class FailingStorage extends MemoryStorageAdapter {
       fail = false;
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
-        if (this.fail) throw new Error('simulated disk failure');
+        if (this.fail) throw new Error("simulated disk failure");
         // `source` identifies the writer so a repository ignores its own change
         // notification. Dropping it here made every local write look like it
         // came from another window.
@@ -1301,10 +2329,10 @@ describe('FinanceRepository contract', () => {
     const storage = new FailingStorage();
     const { repository } = await createRepository(storage);
     const goal = await repository.saveGoal({
-      name: 'Original',
-      kind: 'saving',
-      icon: 'target',
-      color: '#5966E9',
+      name: "Original",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
       targetMinor: 10000,
       initialMinor: 0,
       targetDate: null,
@@ -1313,148 +2341,219 @@ describe('FinanceRepository contract', () => {
       archived: false,
     });
     storage.fail = true;
-    await expect(repository.saveGoalAndContribution(
-      { ...goal, name: 'Changed' },
-      { amountMinor: 500, localDate: '2026-07-15', transactionId: null, note: '' },
-      goal.id,
-    )).rejects.toThrow('simulated disk failure');
-    expect(repository.getSnapshot().goals.find((item) => item.id === goal.id)?.name).toBe('Original');
+    await expect(
+      repository.saveGoalAndContribution(
+        { ...goal, name: "Changed" },
+        {
+          amountMinor: 500,
+          localDate: "2026-07-15",
+          transactionId: null,
+          note: "",
+        },
+        goal.id,
+      ),
+    ).rejects.toThrow("simulated disk failure");
+    expect(
+      repository.getSnapshot().goals.find((item) => item.id === goal.id)?.name,
+    ).toBe("Original");
     expect(repository.getSnapshot().contributions).toHaveLength(0);
   });
 
-  it('migrates legacy duplicate names to unique values', async () => {
+  it("migrates legacy duplicate names to unique values", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
-    await storage.putMany([{
-      type: 'accounts',
-      entity: {
-        ...account,
-        id: 'legacy-duplicate-account',
-        archived: true,
-        revision: 1,
+    await storage.putMany([
+      {
+        type: "accounts",
+        entity: {
+          ...account,
+          id: "legacy-duplicate-account",
+          archived: true,
+          revision: 1,
+        },
       },
-    }]);
+    ]);
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
-    const normalizedNames = reloaded.getSnapshot().accounts.map((item) => item.name.toLocaleLowerCase());
+    const normalizedNames = reloaded
+      .getSnapshot()
+      .accounts.map((item) => item.name.toLocaleLowerCase());
     expect(new Set(normalizedNames).size).toBe(normalizedNames.length);
-    expect(reloaded.getSnapshot().accounts.find((item) => item.id === 'legacy-duplicate-account')?.name).toContain('(archived');
+    expect(
+      reloaded
+        .getSnapshot()
+        .accounts.find((item) => item.id === "legacy-duplicate-account")?.name,
+    ).toContain("(archived");
   });
 
-  it('rejects transactions whose account or analytics totals exceed safe integers', async () => {
+  it("rejects transactions whose account or analytics totals exceed safe integers", async () => {
     const { repository } = await createRepository();
-    const first = await repository.saveAccount({ name: 'Large one', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const second = await repository.saveAccount({ name: 'Large two', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
+    const first = await repository.saveAccount({
+      name: "Large one",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    const second = await repository.saveAccount({
+      name: "Large two",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
     await repository.saveTransaction({
-      kind: 'income',
-      title: 'Large',
-      localDate: '2026-07-15',
+      kind: "income",
+      title: "Large",
+      localDate: "2026-07-15",
       accountId: first.id,
       amountMinor: Number.MAX_SAFE_INTEGER - 50,
     });
-    await expect(repository.saveTransaction({
-      kind: 'income',
-      title: 'Overflow',
-      localDate: '2026-07-15',
-      accountId: second.id,
-      amountMinor: 100,
-    })).rejects.toThrow('outside the supported range');
+    await expect(
+      repository.saveTransaction({
+        kind: "income",
+        title: "Overflow",
+        localDate: "2026-07-15",
+        accountId: second.id,
+        amountMinor: 100,
+      }),
+    ).rejects.toThrow("outside the supported range");
     expect(repository.getSnapshot().transactions).toHaveLength(1);
   });
 
-  it('rejects account changes that would overflow net worth', async () => {
+  it("rejects account changes that would overflow net worth", async () => {
     const { repository } = await createRepository();
     await repository.saveAccount({
-      name: 'Almost maximum',
-      type: 'checking',
-      currency: 'USD',
+      name: "Almost maximum",
+      type: "checking",
+      currency: "USD",
       openingBalanceMinor: Number.MAX_SAFE_INTEGER - 50,
-      icon: 'wallet',
-      color: '#5966E9',
+      icon: "wallet",
+      color: "#5966E9",
       archived: false,
     });
-    await expect(repository.saveAccount({
-      name: 'Overflowing account',
-      type: 'checking',
-      currency: 'USD',
-      openingBalanceMinor: 100,
-      icon: 'wallet',
-      color: '#5966E9',
-      archived: false,
-    })).rejects.toThrow('Net worth is outside the supported range');
+    await expect(
+      repository.saveAccount({
+        name: "Overflowing account",
+        type: "checking",
+        currency: "USD",
+        openingBalanceMinor: 100,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      }),
+    ).rejects.toThrow("Net worth is outside the supported range");
   });
 
-  it('keeps entity order stable after an edit and reload', async () => {
+  it("keeps entity order stable after an edit and reload", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
-      const first = await repository.saveTag({ name: 'First', color: '#5966E9' });
-      jest.setSystemTime(new Date('2026-07-15T09:00:01Z'));
-      await repository.saveTag({ name: 'Second', color: '#5966E9' });
-      jest.setSystemTime(new Date('2026-07-15T09:00:02Z'));
-      await repository.saveTag({ name: 'First updated', color: '#5966E9' }, first.id);
-      expect(repository.getSnapshot().tags.map((item) => item.name)).toEqual(['First updated', 'Second']);
+      const first = await repository.saveTag({
+        name: "First",
+        color: "#5966E9",
+      });
+      jest.setSystemTime(new Date("2026-07-15T09:00:01Z"));
+      await repository.saveTag({ name: "Second", color: "#5966E9" });
+      jest.setSystemTime(new Date("2026-07-15T09:00:02Z"));
+      await repository.saveTag(
+        { name: "First updated", color: "#5966E9" },
+        first.id,
+      );
+      expect(repository.getSnapshot().tags.map((item) => item.name)).toEqual([
+        "First updated",
+        "Second",
+      ]);
 
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getSnapshot().tags.map((item) => item.name)).toEqual(['First updated', 'Second']);
+      expect(reloaded.getSnapshot().tags.map((item) => item.name)).toEqual([
+        "First updated",
+        "Second",
+      ]);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('rejects an exchange rate that contradicts its existing reciprocal', async () => {
+  it("rejects an exchange rate that contradicts its existing reciprocal", async () => {
     const { repository } = await createRepository();
-    await repository.saveExchangeRate({ fromCurrency: 'USD', toCurrency: 'EUR', rate: '0.5', effectiveDate: '2026-01-01' });
+    await repository.saveExchangeRate({
+      fromCurrency: "USD",
+      toCurrency: "EUR",
+      rate: "0.5",
+      effectiveDate: "2026-01-01",
+    });
     // 1 / 0.5 === 2, so the opposite direction agrees exactly.
-    const reciprocal = await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
-    expect(reciprocal.rate).toBe('2');
+    const reciprocal = await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "2",
+      effectiveDate: "2026-01-01",
+    });
+    expect(reciprocal.rate).toBe("2");
 
-    await expect(repository.saveExchangeRate({
-      fromCurrency: 'EUR',
-      toCurrency: 'USD',
-      rate: '2.5',
-      effectiveDate: '2026-02-01',
-    })).rejects.toThrow('contradicts');
+    await expect(
+      repository.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "2.5",
+        effectiveDate: "2026-02-01",
+      }),
+    ).rejects.toThrow("contradicts");
     expect(repository.getSnapshot().exchangeRates).toHaveLength(2);
 
     // Editing a stored rate compares against the opposite direction only, so an
     // in-place edit that stays inside the tolerance must not trip the check.
-    await expect(repository.saveExchangeRate({ ...reciprocal, rate: '2.02' }, reciprocal.id))
-      .resolves.toMatchObject({ id: reciprocal.id, rate: '2.02' });
-    await expect(repository.saveExchangeRate({ ...reciprocal, rate: '2.5' }, reciprocal.id))
-      .rejects.toThrow('contradicts');
+    await expect(
+      repository.saveExchangeRate(
+        { ...reciprocal, rate: "2.02" },
+        reciprocal.id,
+      ),
+    ).resolves.toMatchObject({ id: reciprocal.id, rate: "2.02" });
+    await expect(
+      repository.saveExchangeRate(
+        { ...reciprocal, rate: "2.5" },
+        reciprocal.id,
+      ),
+    ).rejects.toThrow("contradicts");
   });
 
-  it('rejects an older rate that would contradict a reciprocal entered for a later date', async () => {
+  it("rejects an older rate that would contradict a reciprocal entered for a later date", async () => {
     const { repository } = await createRepository();
     await repository.saveExchangeRate({
-      fromCurrency: 'USD',
-      toCurrency: 'EUR',
-      rate: '0.5',
-      effectiveDate: '2026-02-01',
+      fromCurrency: "USD",
+      toCurrency: "EUR",
+      rate: "0.5",
+      effectiveDate: "2026-02-01",
     });
 
-    await expect(repository.saveExchangeRate({
-      fromCurrency: 'EUR',
-      toCurrency: 'USD',
-      rate: '3',
-      effectiveDate: '2026-01-01',
-    })).rejects.toThrow('contradicts');
+    await expect(
+      repository.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "3",
+        effectiveDate: "2026-01-01",
+      }),
+    ).rejects.toThrow("contradicts");
   });
 
-  it('retires goal contributions funded by a deleted transaction', async () => {
+  it("retires goal contributions funded by a deleted transaction", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
     const goal = await repository.saveGoal({
-      name: 'Fund',
-      kind: 'saving',
-      icon: 'target',
-      color: '#5966E9',
+      name: "Fund",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
       targetMinor: 10000,
       initialMinor: 0,
       targetDate: null,
@@ -1463,248 +2562,450 @@ describe('FinanceRepository contract', () => {
       archived: false,
     });
     const funding = await repository.saveTransaction({
-      kind: 'income',
-      title: 'Bonus',
-      localDate: '2026-07-15',
+      kind: "income",
+      title: "Bonus",
+      localDate: "2026-07-15",
       accountId: account.id,
       amountMinor: 500,
     });
-    await repository.saveContribution({ goalId: goal.id, amountMinor: 500, localDate: '2026-07-15', transactionId: funding.id, note: '' });
-    const unrelated = await repository.saveContribution({ goalId: goal.id, amountMinor: 250, localDate: '2026-07-16', transactionId: null, note: '' });
+    await repository.saveContribution({
+      goalId: goal.id,
+      amountMinor: 500,
+      localDate: "2026-07-15",
+      transactionId: funding.id,
+      note: "",
+    });
+    const unrelated = await repository.saveContribution({
+      goalId: goal.id,
+      amountMinor: 250,
+      localDate: "2026-07-16",
+      transactionId: null,
+      note: "",
+    });
     expect(repository.getGoalProgress(goal.id)).toBe(750);
 
-    await repository.deleteEntities('transactions', [funding.id]);
-    expect(repository.getSnapshot().contributions.map((item) => item.id)).toEqual([unrelated.id]);
+    await repository.deleteEntities("transactions", [funding.id]);
+    expect(
+      repository.getSnapshot().contributions.map((item) => item.id),
+    ).toEqual([unrelated.id]);
     expect(repository.getGoalProgress(goal.id)).toBe(250);
 
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
-    expect(reloaded.getSnapshot().contributions.map((item) => item.id)).toEqual([unrelated.id]);
+    expect(reloaded.getSnapshot().contributions.map((item) => item.id)).toEqual(
+      [unrelated.id],
+    );
   });
 
-  it('releases generated transactions when their recurring rule is deleted', async () => {
+  it("releases generated transactions when their recurring rule is deleted", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-29T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-29T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const account = repository.getSnapshot().accounts[0];
       const rule = await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Streaming', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'week', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Streaming",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "week",
+        interval: 1,
+        startDate: "2026-07-15",
+        endDate: null,
+        nextDueDate: "2026-07-15",
+        autoPost: false,
+        active: true,
       });
-      const generated = repository.getSnapshot().transactions.find((item) => item.recurringRuleId === rule.id)!;
+      const generated = repository
+        .getSnapshot()
+        .transactions.find((item) => item.recurringRuleId === rule.id)!;
       expect(generated).toBeDefined();
 
       // Posted history is kept, detached from the rule; unconfirmed ones go with it.
       await repository.confirmUpcoming(generated.id);
-      const upcoming = repository.getSnapshot().transactions.filter((item) => item.recurringRuleId === rule.id && item.status === 'upcoming');
+      const upcoming = repository
+        .getSnapshot()
+        .transactions.filter(
+          (item) =>
+            item.recurringRuleId === rule.id && item.status === "upcoming",
+        );
       expect(upcoming.length).toBeGreaterThan(0);
 
-      await repository.deleteEntities('recurringRules', [rule.id]);
+      await repository.deleteEntities("recurringRules", [rule.id]);
       expect(repository.getSnapshot().recurringRules).toHaveLength(0);
-      expect(repository.getSnapshot().transactions.find((item) => item.id === generated.id)).toMatchObject({
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.find((item) => item.id === generated.id),
+      ).toMatchObject({
         id: generated.id,
         recurringRuleId: null,
       });
       for (const item of upcoming) {
-        expect(repository.getSnapshot().transactions.find((entry) => entry.id === item.id)).toBeUndefined();
+        expect(
+          repository
+            .getSnapshot()
+            .transactions.find((entry) => entry.id === item.id),
+        ).toBeUndefined();
       }
 
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getSnapshot().transactions.find((item) => item.id === generated.id)?.recurringRuleId).toBeNull();
+      expect(
+        reloaded
+          .getSnapshot()
+          .transactions.find((item) => item.id === generated.id)
+          ?.recurringRuleId,
+      ).toBeNull();
       for (const item of upcoming) {
-        expect(reloaded.getSnapshot().transactions.find((entry) => entry.id === item.id)).toBeUndefined();
+        expect(
+          reloaded
+            .getSnapshot()
+            .transactions.find((entry) => entry.id === item.id),
+        ).toBeUndefined();
       }
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('strips a deleted tag from the transactions that carried it', async () => {
+  it("strips a deleted tag from the transactions that carried it", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
-    const doomed = await repository.saveTag({ name: 'Work', color: '#5966E9' });
-    const kept = await repository.saveTag({ name: 'Travel', color: '#5966E9' });
+    const doomed = await repository.saveTag({ name: "Work", color: "#5966E9" });
+    const kept = await repository.saveTag({ name: "Travel", color: "#5966E9" });
     const transaction = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Taxi',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Taxi",
+      localDate: "2026-07-15",
       accountId: account.id,
       tagIds: [doomed.id, kept.id],
       amountMinor: 500,
     });
 
-    await repository.deleteEntities('tags', [doomed.id]);
-    expect(repository.getSnapshot().transactions.find((item) => item.id === transaction.id)?.tagIds).toEqual([kept.id]);
+    await repository.deleteEntities("tags", [doomed.id]);
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.find((item) => item.id === transaction.id)?.tagIds,
+    ).toEqual([kept.id]);
 
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
-    const current = reloaded.getSnapshot().transactions.find((item) => item.id === transaction.id)!;
+    const current = reloaded
+      .getSnapshot()
+      .transactions.find((item) => item.id === transaction.id)!;
     expect(current.tagIds).toEqual([kept.id]);
     // A leftover tag id would fail tag validation the next time the row is saved.
-    await expect(reloaded.saveTransaction({
-      kind: current.kind,
-      title: current.title,
-      localDate: current.localDate,
-      accountId: current.accountId,
-      tagIds: current.tagIds,
-      amountMinor: current.amountMinor,
-    }, current.id)).resolves.toMatchObject({ tagIds: [kept.id] });
+    await expect(
+      reloaded.saveTransaction(
+        {
+          kind: current.kind,
+          title: current.title,
+          localDate: current.localDate,
+          accountId: current.accountId,
+          tagIds: current.tagIds,
+          amountMinor: current.amountMinor,
+        },
+        current.id,
+      ),
+    ).resolves.toMatchObject({ tagIds: [kept.id] });
   });
 
-  it('refuses a soft-deleted tag id on a new transaction', async () => {
+  it("refuses a soft-deleted tag id on a new transaction", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const doomed = await repository.saveTag({ name: 'Work', color: '#5966E9' });
-    await repository.deleteEntities('tags', [doomed.id]);
+    const doomed = await repository.saveTag({ name: "Work", color: "#5966E9" });
+    await repository.deleteEntities("tags", [doomed.id]);
 
-    await expect(repository.saveTransaction({
-      kind: 'expense',
-      title: 'Taxi',
-      localDate: '2026-07-15',
-      accountId: account.id,
-      tagIds: [doomed.id],
-      amountMinor: 500,
-    })).rejects.toThrow('Choose valid tags.');
+    await expect(
+      repository.saveTransaction({
+        kind: "expense",
+        title: "Taxi",
+        localDate: "2026-07-15",
+        accountId: account.id,
+        tagIds: [doomed.id],
+        amountMinor: 500,
+      }),
+    ).rejects.toThrow("Choose valid tags.");
   });
 
-  it('clears a deleted category from the transactions that used it', async () => {
+  it("clears a deleted category from the transactions that used it", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
-    const categories = repository.getSnapshot().categories.filter((item) => item.kind === 'expense');
+    const categories = repository
+      .getSnapshot()
+      .categories.filter((item) => item.kind === "expense");
     const doomed = categories[0];
     const kept = categories[1];
     const affected = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Taxi',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Taxi",
+      localDate: "2026-07-15",
       accountId: account.id,
       categoryId: doomed.id,
       amountMinor: 500,
     });
     const untouched = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Coffee',
-      localDate: '2026-07-15',
+      kind: "expense",
+      title: "Coffee",
+      localDate: "2026-07-15",
       accountId: account.id,
       categoryId: kept.id,
       amountMinor: 300,
     });
 
-    await repository.deleteEntities('categories', [doomed.id]);
+    await repository.deleteEntities("categories", [doomed.id]);
     const snapshot = repository.getSnapshot().transactions;
-    expect(snapshot.find((item) => item.id === affected.id)?.categoryId).toBeNull();
-    expect(snapshot.find((item) => item.id === untouched.id)?.categoryId).toBe(kept.id);
+    expect(
+      snapshot.find((item) => item.id === affected.id)?.categoryId,
+    ).toBeNull();
+    expect(snapshot.find((item) => item.id === untouched.id)?.categoryId).toBe(
+      kept.id,
+    );
 
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
-    const current = reloaded.getSnapshot().transactions.find((item) => item.id === affected.id)!;
+    const current = reloaded
+      .getSnapshot()
+      .transactions.find((item) => item.id === affected.id)!;
     expect(current.categoryId).toBeNull();
     // A leftover category id made every later save throw "Choose a valid
     // expense category.", which the UI gave no way to recover from.
-    await expect(reloaded.saveTransaction({
-      kind: current.kind,
-      title: current.title,
-      localDate: current.localDate,
-      accountId: current.accountId,
-      categoryId: current.categoryId,
-      amountMinor: current.amountMinor,
-    }, current.id)).resolves.toMatchObject({ categoryId: null });
+    await expect(
+      reloaded.saveTransaction(
+        {
+          kind: current.kind,
+          title: current.title,
+          localDate: current.localDate,
+          accountId: current.accountId,
+          categoryId: current.categoryId,
+          amountMinor: current.amountMinor,
+        },
+        current.id,
+      ),
+    ).resolves.toMatchObject({ categoryId: null });
   });
 
-  it('clamps a carried budget deficit at a single period limit', async () => {
+  it("clamps a carried budget deficit at a single period limit", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-06-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-06-15T09:00:00Z"));
       const { repository } = await createRepository();
-      const heavy = await repository.saveAccount({ name: 'Heavy', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-      const mild = await repository.saveAccount({ name: 'Mild', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-      const saver = await repository.saveAccount({ name: 'Saver', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-      const saveBudget = (name: string, accountId: string) => repository.saveBudget({
-        name, icon: 'chart', color: '#5966E9', limitMinor: 1000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-06-01', endDate: null },
-        rollover: true, filters: { accountIds: [accountId], categoryIds: [], tagIds: [] },
-        categoryLimits: [], archived: false,
+      const heavy = await repository.saveAccount({
+        name: "Heavy",
+        type: "checking",
+        currency: "USD",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
       });
-      await saveBudget('Heavy deficit', heavy.id);
-      await saveBudget('Mild deficit', mild.id);
-      await saveBudget('Surplus', saver.id);
-      await repository.saveTransaction({ kind: 'expense', title: 'Heavy June', localDate: '2026-06-20', accountId: heavy.id, amountMinor: 5000 });
-      await repository.saveTransaction({ kind: 'expense', title: 'Mild June', localDate: '2026-06-20', accountId: mild.id, amountMinor: 1500 });
-      await repository.saveTransaction({ kind: 'expense', title: 'Saver June', localDate: '2026-06-20', accountId: saver.id, amountMinor: 400 });
+      const mild = await repository.saveAccount({
+        name: "Mild",
+        type: "checking",
+        currency: "USD",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      });
+      const saver = await repository.saveAccount({
+        name: "Saver",
+        type: "checking",
+        currency: "USD",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      });
+      const saveBudget = (name: string, accountId: string) =>
+        repository.saveBudget({
+          name,
+          icon: "chart",
+          color: "#5966E9",
+          limitMinor: 1000,
+          period: {
+            unit: "month",
+            interval: 1,
+            anchorDate: "2026-06-01",
+            endDate: null,
+          },
+          rollover: true,
+          filters: { accountIds: [accountId], categoryIds: [], tagIds: [] },
+          categoryLimits: [],
+          archived: false,
+        });
+      await saveBudget("Heavy deficit", heavy.id);
+      await saveBudget("Mild deficit", mild.id);
+      await saveBudget("Surplus", saver.id);
+      await repository.saveTransaction({
+        kind: "expense",
+        title: "Heavy June",
+        localDate: "2026-06-20",
+        accountId: heavy.id,
+        amountMinor: 5000,
+      });
+      await repository.saveTransaction({
+        kind: "expense",
+        title: "Mild June",
+        localDate: "2026-06-20",
+        accountId: mild.id,
+        amountMinor: 1500,
+      });
+      await repository.saveTransaction({
+        kind: "expense",
+        title: "Saver June",
+        localDate: "2026-06-20",
+        accountId: saver.id,
+        amountMinor: 400,
+      });
 
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
-      const statuses = repository.getBudgetStatuses('2026-07-15');
-      const status = (name: string) => statuses.find((item) => item.budget.name === name)!;
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
+      const statuses = repository.getBudgetStatuses("2026-07-15");
+      const status = (name: string) =>
+        statuses.find((item) => item.budget.name === name)!;
       // 1000 limit minus 5000 spent carries -4000, floored at one period limit.
-      expect(status('Heavy deficit').snapshot.rolloverMinor).toBe(-1000);
-      expect(status('Heavy deficit').effectiveLimitMinor).toBe(0);
+      expect(status("Heavy deficit").snapshot.rolloverMinor).toBe(-1000);
+      expect(status("Heavy deficit").effectiveLimitMinor).toBe(0);
       // -500 sits inside the floor and passes through untouched.
-      expect(status('Mild deficit').snapshot.rolloverMinor).toBe(-500);
-      expect(status('Mild deficit').effectiveLimitMinor).toBe(500);
+      expect(status("Mild deficit").snapshot.rolloverMinor).toBe(-500);
+      expect(status("Mild deficit").effectiveLimitMinor).toBe(500);
       // A surplus is never clamped.
-      expect(status('Surplus').snapshot.rolloverMinor).toBe(600);
-      expect(status('Surplus').effectiveLimitMinor).toBe(1600);
+      expect(status("Surplus").snapshot.rolloverMinor).toBe(600);
+      expect(status("Surplus").effectiveLimitMinor).toBe(1600);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('keeps a rule active and retries it when only its exchange rate is missing', async () => {
+  it("keeps a rule active and retries it when only its exchange rate is missing", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const usd = repository.getSnapshot().accounts[0];
-      const eur = await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-      const rate = await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
+      const eur = await repository.saveAccount({
+        name: "Euro",
+        type: "checking",
+        currency: "EUR",
+        openingBalanceMinor: 0,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      });
+      const rate = await repository.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "2",
+        effectiveDate: "2026-01-01",
+      });
       const poisoned = await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Foreign', note: '', accountId: eur.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'EUR' },
-        unit: 'month', interval: 1, startDate: '2026-09-01', endDate: null, nextDueDate: '2026-09-01', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Foreign",
+          note: "",
+          accountId: eur.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "EUR",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-09-01",
+        endDate: null,
+        nextDueDate: "2026-09-01",
+        autoPost: false,
+        active: true,
       });
       const healthy = await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Healthy', note: '', accountId: usd.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-09-01', endDate: null, nextDueDate: '2026-09-01', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Healthy",
+          note: "",
+          accountId: usd.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-09-01",
+        endDate: null,
+        nextDueDate: "2026-09-01",
+        autoPost: false,
+        active: true,
       });
       // Removing the rate leaves the EUR rule unable to build its occurrence.
-      await repository.deleteEntities('exchangeRates', [rate.id]);
+      await repository.deleteEntities("exchangeRates", [rate.id]);
 
-      await expect(repository.generateRecurring('2026-09-30')).resolves.toBe(1);
+      await expect(repository.generateRecurring("2026-09-30")).resolves.toBe(1);
       const rules = repository.getSnapshot().recurringRules;
-      expect(rules.find((item) => item.id === poisoned.id)).toMatchObject({ active: true, nextDueDate: '2026-09-01' });
-      expect(rules.find((item) => item.id === healthy.id)).toMatchObject({ active: true, nextDueDate: '2026-10-01' });
-      expect(repository.getSnapshot().transactions.map((item) => item.title)).toEqual(['Healthy']);
+      expect(rules.find((item) => item.id === poisoned.id)).toMatchObject({
+        active: true,
+        nextDueDate: "2026-09-01",
+      });
+      expect(rules.find((item) => item.id === healthy.id)).toMatchObject({
+        active: true,
+        nextDueDate: "2026-10-01",
+      });
+      expect(
+        repository.getSnapshot().transactions.map((item) => item.title),
+      ).toEqual(["Healthy"]);
 
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getSnapshot().recurringRules.find((item) => item.id === poisoned.id)?.active).toBe(true);
+      expect(
+        reloaded
+          .getSnapshot()
+          .recurringRules.find((item) => item.id === poisoned.id)?.active,
+      ).toBe(true);
 
       // Once the rate is back, the next pass posts the blocked occurrence.
-      await reloaded.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' });
-      await reloaded.generateRecurring('2026-09-30');
-      expect(reloaded.getSnapshot().transactions.map((item) => item.title).sort()).toEqual(['Foreign', 'Healthy']);
+      await reloaded.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "2",
+        effectiveDate: "2026-01-01",
+      });
+      await reloaded.generateRecurring("2026-09-30");
+      expect(
+        reloaded
+          .getSnapshot()
+          .transactions.map((item) => item.title)
+          .sort(),
+      ).toEqual(["Foreign", "Healthy"]);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('serialises concurrent name validation with repository writes', async () => {
+  it("serialises concurrent name validation with repository writes", async () => {
     class PausableStorage extends MemoryStorageAdapter {
       pauseNext = false;
       private release: (() => void) | null = null;
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
         if (this.pauseNext) {
           this.pauseNext = false;
-          await new Promise<void>((resolve) => { this.release = resolve; });
+          await new Promise<void>((resolve) => {
+            this.release = resolve;
+          });
         }
         // `source` identifies the writer so a repository ignores its own change
         // notification. Dropping it here made every local write look like it
@@ -1720,7 +3021,15 @@ describe('FinanceRepository contract', () => {
 
     const storage = new PausableStorage();
     const { repository } = await createRepository(storage);
-    const input = { name: 'Race account', type: 'checking' as const, currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false };
+    const input = {
+      name: "Race account",
+      type: "checking" as const,
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    };
     storage.pauseNext = true;
     const first = repository.saveAccount(input);
     await Promise.resolve();
@@ -1729,111 +3038,249 @@ describe('FinanceRepository contract', () => {
     storage.releasePaused();
     const results = await Promise.allSettled([first, second]);
 
-    expect(results.map((result) => result.status)).toEqual(['fulfilled', 'rejected']);
-    expect(repository.getSnapshot().accounts.filter((item) => item.name === input.name)).toHaveLength(1);
+    expect(results.map((result) => result.status)).toEqual([
+      "fulfilled",
+      "rejected",
+    ]);
+    expect(
+      repository
+        .getSnapshot()
+        .accounts.filter((item) => item.name === input.name),
+    ).toHaveLength(1);
   });
 
-  it('prevents a category with children from being reparented', async () => {
+  it("prevents a category with children from being reparented", async () => {
     const { repository } = await createRepository();
-    const parent = await repository.saveCategory({ name: 'Parent', kind: 'expense', color: '#5966E9', icon: 'house', parentId: null, archived: false });
-    await repository.saveCategory({ name: 'Child', kind: 'expense', color: '#5966E9', icon: 'house', parentId: parent.id, archived: false });
-    const otherParent = await repository.saveCategory({ name: 'Other parent', kind: 'expense', color: '#5966E9', icon: 'house', parentId: null, archived: false });
-
-    await expect(repository.saveCategory({ ...parent, parentId: otherParent.id }, parent.id))
-      .rejects.toThrow('child categories');
-    expect(repository.getSnapshot().categories.find((item) => item.id === parent.id)?.parentId).toBeNull();
-  });
-
-  it('accepts catalog and emoji category icons and rejects malformed ones', async () => {
-    const { repository } = await createRepository();
-    const base = { kind: 'expense' as const, color: '#5966E9', parentId: null, archived: false };
-    await expect(repository.saveCategory({ ...base, name: 'Catalog', icon: 'ion:beer-outline' })).resolves.toMatchObject({ icon: 'ion:beer-outline' });
-    await expect(repository.saveCategory({ ...base, name: 'Emoji', icon: 'emoji:🍕' })).resolves.toMatchObject({ icon: 'emoji:🍕' });
-    await expect(repository.saveCategory({ ...base, name: 'Bad', icon: 'emoji:ab' })).rejects.toThrow('valid icon');
-    await expect(repository.saveCategory({ ...base, name: 'Empty', icon: '' })).rejects.toThrow('valid icon');
-  });
-
-  it('validates a reactivated foreign schedule at its next due date', async () => {
-    const { repository } = await createRepository();
-    const account = await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false });
-    const oldRate = await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2099-01-01' });
-    const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Foreign', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'EUR' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: null, nextDueDate: '2099-09-01', autoPost: false, active: false,
+    const parent = await repository.saveCategory({
+      name: "Parent",
+      kind: "expense",
+      color: "#5966E9",
+      icon: "house",
+      parentId: null,
+      archived: false,
     });
-    await repository.deleteEntities('exchangeRates', [oldRate.id]);
-    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.2', effectiveDate: '2099-07-01' });
+    await repository.saveCategory({
+      name: "Child",
+      kind: "expense",
+      color: "#5966E9",
+      icon: "house",
+      parentId: parent.id,
+      archived: false,
+    });
+    const otherParent = await repository.saveCategory({
+      name: "Other parent",
+      kind: "expense",
+      color: "#5966E9",
+      icon: "house",
+      parentId: null,
+      archived: false,
+    });
 
-    await expect(repository.saveRecurringRule({ ...rule, active: true }, rule.id))
-      .resolves.toMatchObject({ active: true });
+    await expect(
+      repository.saveCategory(
+        { ...parent, parentId: otherParent.id },
+        parent.id,
+      ),
+    ).rejects.toThrow("child categories");
+    expect(
+      repository.getSnapshot().categories.find((item) => item.id === parent.id)
+        ?.parentId,
+    ).toBeNull();
   });
 
-  it('catches up a dependency-paused schedule as soon as its account is restored', async () => {
+  it("accepts catalog and emoji category icons and rejects malformed ones", async () => {
+    const { repository } = await createRepository();
+    const base = {
+      kind: "expense" as const,
+      color: "#5966E9",
+      parentId: null,
+      archived: false,
+    };
+    await expect(
+      repository.saveCategory({
+        ...base,
+        name: "Catalog",
+        icon: "ion:beer-outline",
+      }),
+    ).resolves.toMatchObject({ icon: "ion:beer-outline" });
+    await expect(
+      repository.saveCategory({ ...base, name: "Emoji", icon: "emoji:🍕" }),
+    ).resolves.toMatchObject({ icon: "emoji:🍕" });
+    await expect(
+      repository.saveCategory({ ...base, name: "Bad", icon: "emoji:ab" }),
+    ).rejects.toThrow("valid icon");
+    await expect(
+      repository.saveCategory({ ...base, name: "Empty", icon: "" }),
+    ).rejects.toThrow("valid icon");
+  });
+
+  it("validates a reactivated foreign schedule at its next due date", async () => {
+    const { repository } = await createRepository();
+    const account = await repository.saveAccount({
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    const oldRate = await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.1",
+      effectiveDate: "2099-01-01",
+    });
+    const rule = await repository.saveRecurringRule({
+      template: {
+        kind: "expense",
+        title: "Foreign",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 100,
+        currency: "EUR",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: null,
+      nextDueDate: "2099-09-01",
+      autoPost: false,
+      active: false,
+    });
+    await repository.deleteEntities("exchangeRates", [oldRate.id]);
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.2",
+      effectiveDate: "2099-07-01",
+    });
+
+    await expect(
+      repository.saveRecurringRule({ ...rule, active: true }, rule.id),
+    ).resolves.toMatchObject({ active: true });
+  });
+
+  it("catches up a dependency-paused schedule as soon as its account is restored", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-01-01T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-01-01T09:00:00Z"));
       const { repository } = await createRepository();
       const account = repository.getSnapshot().accounts[0];
       await repository.saveRecurringRule({
-        template: { kind: 'expense', title: 'Restored', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-02-01', endDate: '2026-05-01', nextDueDate: '2026-02-01', autoPost: false, active: true,
+        template: {
+          kind: "expense",
+          title: "Restored",
+          note: "",
+          accountId: account.id,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 100,
+          currency: "USD",
+        },
+        unit: "month",
+        interval: 1,
+        startDate: "2026-02-01",
+        endDate: "2026-05-01",
+        nextDueDate: "2026-02-01",
+        autoPost: false,
+        active: true,
       });
       await repository.saveAccount({ ...account, archived: true }, account.id);
-      jest.setSystemTime(new Date('2026-04-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-04-15T09:00:00Z"));
 
       await repository.saveAccount({ ...account, archived: false }, account.id);
 
-      expect(repository.getSnapshot().transactions
-        .filter((item) => item.title === 'Restored')
-        .map((item) => item.localDate)).toEqual([
-        '2026-02-01',
-        '2026-03-01',
-        '2026-04-01',
-      ]);
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.filter((item) => item.title === "Restored")
+          .map((item) => item.localDate),
+      ).toEqual(["2026-02-01", "2026-03-01", "2026-04-01"]);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('includes an overlapping short custom budget in the dashboard period', async () => {
+  it("includes an overlapping short custom budget in the dashboard period", async () => {
     const { repository } = await createRepository();
     await repository.saveBudget({
-      name: 'First half', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-      period: { unit: 'custom', interval: 1, anchorDate: '2026-01-01', endDate: '2026-01-15' },
-      rollover: false, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+      name: "First half",
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: 1000,
+      period: {
+        unit: "custom",
+        interval: 1,
+        anchorDate: "2026-01-01",
+        endDate: "2026-01-15",
+      },
+      rollover: false,
+      filters: { accountIds: [], categoryIds: [], tagIds: [] },
+      categoryLimits: [],
+      archived: false,
     });
 
-    expect(repository.getDashboard('2026-01-01', '2026-01-31').budgetLimitMinor).toBe(1000);
-    expect(repository.getDashboard('2026-02-01', '2026-02-28').budgetLimitMinor).toBe(0);
+    expect(
+      repository.getDashboard("2026-01-01", "2026-01-31").budgetLimitMinor,
+    ).toBe(1000);
+    expect(
+      repository.getDashboard("2026-02-01", "2026-02-28").budgetLimitMinor,
+    ).toBe(0);
   });
 
-  it('rejects a transaction deletion that would make derived totals unsafe', async () => {
+  it("rejects a transaction deletion that would make derived totals unsafe", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
-    await repository.saveAccount({ ...account, openingBalanceMinor: Number.MAX_SAFE_INTEGER - 50 }, account.id);
-    const offset = await repository.saveTransaction({ kind: 'expense', title: 'Offset', localDate: '2026-07-14', accountId: account.id, amountMinor: 100 });
-    await repository.saveTransaction({ kind: 'income', title: 'Income', localDate: '2026-07-15', accountId: account.id, amountMinor: 100 });
+    await repository.saveAccount(
+      { ...account, openingBalanceMinor: Number.MAX_SAFE_INTEGER - 50 },
+      account.id,
+    );
+    const offset = await repository.saveTransaction({
+      kind: "expense",
+      title: "Offset",
+      localDate: "2026-07-14",
+      accountId: account.id,
+      amountMinor: 100,
+    });
+    await repository.saveTransaction({
+      kind: "income",
+      title: "Income",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      amountMinor: 100,
+    });
 
-    await expect(repository.deleteEntities('transactions', [offset.id])).rejects.toThrow('supported range');
-    expect(repository.getSnapshot().transactions.map((item) => item.title)).toEqual(['Offset', 'Income']);
+    await expect(
+      repository.deleteEntities("transactions", [offset.id]),
+    ).rejects.toThrow("supported range");
+    expect(
+      repository.getSnapshot().transactions.map((item) => item.title),
+    ).toEqual(["Offset", "Income"]);
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
-    expect(reloaded.getSnapshot().transactions.map((item) => item.title)).toEqual(['Offset', 'Income']);
+    expect(
+      reloaded.getSnapshot().transactions.map((item) => item.title),
+    ).toEqual(["Offset", "Income"]);
   });
 
-  it('serialises a reset behind recurring generation that is already in flight', async () => {
+  it("serialises a reset behind recurring generation that is already in flight", async () => {
     class PausableStorage extends MemoryStorageAdapter {
       pauseNext = false;
       private release: (() => void) | null = null;
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
         if (this.pauseNext) {
           this.pauseNext = false;
-          await new Promise<void>((resolve) => { this.release = resolve; });
+          await new Promise<void>((resolve) => {
+            this.release = resolve;
+          });
         }
         // `source` identifies the writer so a repository ignores its own change
         // notification. Dropping it here made every local write look like it
@@ -1851,20 +3298,39 @@ describe('FinanceRepository contract', () => {
     const { repository } = await createRepository(storage);
     const account = repository.getSnapshot().accounts[0];
     await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Rent', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 1000, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: '2099-01-31', nextDueDate: '2099-01-01', autoPost: false, active: true,
+      template: {
+        kind: "expense",
+        title: "Rent",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [],
+        amountMinor: 1000,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: "2099-01-31",
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: true,
     });
 
     const settled: string[] = [];
     storage.pauseNext = true;
-    const generation = repository.generateRecurring('2099-01-31').then(() => { settled.push('generation'); });
+    const generation = repository.generateRecurring("2099-01-31").then(() => {
+      settled.push("generation");
+    });
     await Promise.resolve();
     await Promise.resolve();
-    const reset = repository.resetAllData().then(() => { settled.push('reset'); });
+    const reset = repository.resetAllData().then(() => {
+      settled.push("reset");
+    });
     storage.releasePaused();
     await Promise.all([generation, reset]);
 
-    expect(settled).toEqual(['generation', 'reset']);
+    expect(settled).toEqual(["generation", "reset"]);
     expect(repository.getSnapshot()).toMatchObject({
       ready: true,
       settings: { onboardingComplete: false },
@@ -1885,121 +3351,284 @@ describe('FinanceRepository contract', () => {
     });
   });
 
-  it('reconciles shared storage and rejects a stale entity revision', async () => {
+  it("reconciles shared storage and rejects a stale entity revision", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository: first } = await createRepository(storage);
     const second = new LocalFinanceRepository(storage);
     await second.initialize();
-    const stale = second.getSnapshot().categories.find((item) => item.name === 'Groceries')!;
-    const current = first.getSnapshot().categories.find((item) => item.id === stale.id)!;
+    const stale = second
+      .getSnapshot()
+      .categories.find((item) => item.name === "Groceries")!;
+    const current = first
+      .getSnapshot()
+      .categories.find((item) => item.id === stale.id)!;
 
-    await first.saveCategory({ ...current, name: 'Food' }, current.id, current.revision);
+    await first.saveCategory(
+      { ...current, name: "Food" },
+      current.id,
+      current.revision,
+    );
     await second.refresh();
-    expect(second.getSnapshot().categories.find((item) => item.id === stale.id)?.name).toBe('Food');
+    expect(
+      second.getSnapshot().categories.find((item) => item.id === stale.id)
+        ?.name,
+    ).toBe("Food");
 
-    await expect(second.saveCategory({ ...stale, name: 'Old form value' }, stale.id, stale.revision))
-      .rejects.toThrow('changed in another window');
-    expect(first.getSnapshot().categories.find((item) => item.id === stale.id)?.name).toBe('Food');
+    await expect(
+      second.saveCategory(
+        { ...stale, name: "Old form value" },
+        stale.id,
+        stale.revision,
+      ),
+    ).rejects.toThrow("changed in another window");
+    expect(
+      first.getSnapshot().categories.find((item) => item.id === stale.id)?.name,
+    ).toBe("Food");
   });
 
-  it('does not allow settings updates to reopen onboarding', async () => {
+  it("does not allow settings updates to reopen onboarding", async () => {
     const { repository } = await createRepository();
     await repository.updateSettings({ onboardingComplete: false } as never);
     expect(repository.getSnapshot().settings.onboardingComplete).toBe(true);
-    await expect(repository.completeOnboarding({
-      locale: 'en-US', baseCurrency: 'EUR', accountName: 'Second', accountType: 'checking',
-      openingBalanceMinor: 0, themeMode: 'system', accentSource: 'system', accentHex: '#5966E9',
-    })).rejects.toThrow('already complete');
+    await expect(
+      repository.completeOnboarding({
+        locale: "en-US",
+        baseCurrency: "EUR",
+        accountName: "Second",
+        accountType: "checking",
+        openingBalanceMinor: 0,
+        themeMode: "system",
+        accentSource: "system",
+        accentHex: "#5966E9",
+      }),
+    ).rejects.toThrow("already complete");
   });
 
-  it('includes child-category activity in parent budgets and goals', async () => {
+  it("includes child-category activity in parent budgets and goals", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const parent = await repository.saveCategory({ name: 'Household', kind: 'expense', icon: 'house', color: '#5966E9', parentId: null, archived: false });
-    const child = await repository.saveCategory({ name: 'Repairs', kind: 'expense', icon: 'wrench', color: '#5966E9', parentId: parent.id, archived: false });
-    await repository.saveTransaction({ kind: 'expense', title: 'Fix', localDate: '2026-07-15', accountId: account.id, categoryId: child.id, amountMinor: 400 });
+    const parent = await repository.saveCategory({
+      name: "Household",
+      kind: "expense",
+      icon: "house",
+      color: "#5966E9",
+      parentId: null,
+      archived: false,
+    });
+    const child = await repository.saveCategory({
+      name: "Repairs",
+      kind: "expense",
+      icon: "wrench",
+      color: "#5966E9",
+      parentId: parent.id,
+      archived: false,
+    });
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Fix",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      categoryId: child.id,
+      amountMinor: 400,
+    });
     await repository.saveBudget({
-      name: 'Home', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-      period: { unit: 'custom', interval: 1, anchorDate: '2026-07-01', endDate: '2026-07-31' },
-      rollover: false, filters: { accountIds: [], categoryIds: [parent.id], tagIds: [] }, categoryLimits: [], archived: false,
+      name: "Home",
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: 1000,
+      period: {
+        unit: "custom",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: "2026-07-31",
+      },
+      rollover: false,
+      filters: { accountIds: [], categoryIds: [parent.id], tagIds: [] },
+      categoryLimits: [],
+      archived: false,
     });
     const goal = await repository.saveGoal({
-      name: 'Renovation', kind: 'spending', icon: 'target', color: '#5966E9', targetMinor: 1000,
-      initialMinor: 0, targetDate: null, linkedAccountId: null, linkedCategoryId: parent.id, archived: false,
+      name: "Renovation",
+      kind: "spending",
+      icon: "target",
+      color: "#5966E9",
+      targetMinor: 1000,
+      initialMinor: 0,
+      targetDate: null,
+      linkedAccountId: null,
+      linkedCategoryId: parent.id,
+      archived: false,
     });
 
-    expect(repository.getBudgetStatuses('2026-07-15')[0].spentMinor).toBe(400);
+    expect(repository.getBudgetStatuses("2026-07-15")[0].spentMinor).toBe(400);
     expect(repository.getGoalProgress(goal.id)).toBe(400);
   });
 
-  it('removes a deleted tag from editable budgets and recurring templates', async () => {
+  it("removes a deleted tag from editable budgets and recurring templates", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const tag = await repository.saveTag({ name: 'Work', color: '#5966E9' });
+    const tag = await repository.saveTag({ name: "Work", color: "#5966E9" });
     const budget = await repository.saveBudget({
-      name: 'Work', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
-      rollover: false, filters: { accountIds: [], categoryIds: [], tagIds: [tag.id] }, categoryLimits: [], archived: false,
+      name: "Work",
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: 1000,
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: null,
+      },
+      rollover: false,
+      filters: { accountIds: [], categoryIds: [], tagIds: [tag.id] },
+      categoryLimits: [],
+      archived: false,
     });
     const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Tool', note: '', accountId: account.id, categoryId: null, tagIds: [tag.id], amountMinor: 100, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: null, nextDueDate: '2099-01-01', autoPost: false, active: true,
+      template: {
+        kind: "expense",
+        title: "Tool",
+        note: "",
+        accountId: account.id,
+        categoryId: null,
+        tagIds: [tag.id],
+        amountMinor: 100,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: null,
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: true,
     });
 
-    await repository.deleteEntities('tags', [tag.id]);
-    const cleanedBudget = repository.getSnapshot().budgets.find((item) => item.id === budget.id)!;
-    const cleanedRule = repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)!;
+    await repository.deleteEntities("tags", [tag.id]);
+    const cleanedBudget = repository
+      .getSnapshot()
+      .budgets.find((item) => item.id === budget.id)!;
+    const cleanedRule = repository
+      .getSnapshot()
+      .recurringRules.find((item) => item.id === rule.id)!;
     expect(cleanedBudget.filters.tagIds).toEqual([]);
     expect(cleanedRule.template.tagIds).toEqual([]);
     // Losing its only filter would otherwise widen this budget to match every
     // expense in the app with no warning, so it must be archived instead.
     expect(cleanedBudget.archived).toBe(true);
-    await expect(repository.saveBudget(cleanedBudget, cleanedBudget.id, cleanedBudget.revision)).resolves.toBeDefined();
-    await expect(repository.saveRecurringRule(cleanedRule, cleanedRule.id, cleanedRule.revision)).resolves.toBeDefined();
+    await expect(
+      repository.saveBudget(
+        cleanedBudget,
+        cleanedBudget.id,
+        cleanedBudget.revision,
+      ),
+    ).resolves.toBeDefined();
+    await expect(
+      repository.saveRecurringRule(
+        cleanedRule,
+        cleanedRule.id,
+        cleanedRule.revision,
+      ),
+    ).resolves.toBeDefined();
   });
 
-  it('keeps a budget active when a deleted filter still leaves an account restriction', async () => {
+  it("keeps a budget active when a deleted filter still leaves an account restriction", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const tag = await repository.saveTag({ name: 'Work', color: '#5966E9' });
+    const tag = await repository.saveTag({ name: "Work", color: "#5966E9" });
     const budget = await repository.saveBudget({
-      name: 'Work', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
-      rollover: false, filters: { accountIds: [account.id], categoryIds: [], tagIds: [tag.id] }, categoryLimits: [], archived: false,
+      name: "Work",
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: 1000,
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: null,
+      },
+      rollover: false,
+      filters: { accountIds: [account.id], categoryIds: [], tagIds: [tag.id] },
+      categoryLimits: [],
+      archived: false,
     });
 
-    await repository.deleteEntities('tags', [tag.id]);
-    const cleanedBudget = repository.getSnapshot().budgets.find((item) => item.id === budget.id)!;
+    await repository.deleteEntities("tags", [tag.id]);
+    const cleanedBudget = repository
+      .getSnapshot()
+      .budgets.find((item) => item.id === budget.id)!;
     expect(cleanedBudget.filters.tagIds).toEqual([]);
     expect(cleanedBudget.archived).toBe(false);
   });
 
-  it('does not count contributions whose linked transaction is skipped', async () => {
+  it("does not count contributions whose linked transaction is skipped", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const goal = await repository.saveGoal({
-      name: 'Fund', kind: 'saving', icon: 'target', color: '#5966E9', targetMinor: 1000,
-      initialMinor: 0, targetDate: null, linkedAccountId: null, linkedCategoryId: null, archived: false,
+      name: "Fund",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
+      targetMinor: 1000,
+      initialMinor: 0,
+      targetDate: null,
+      linkedAccountId: null,
+      linkedCategoryId: null,
+      archived: false,
     });
-    const upcoming = await repository.saveTransaction({ kind: 'income', status: 'upcoming', title: 'Future', localDate: '2026-08-01', accountId: account.id, amountMinor: 100 });
-    await repository.saveContribution({ goalId: goal.id, amountMinor: 100, localDate: '2026-08-01', transactionId: upcoming.id, note: '' });
+    const upcoming = await repository.saveTransaction({
+      kind: "income",
+      status: "upcoming",
+      title: "Future",
+      localDate: "2026-08-01",
+      accountId: account.id,
+      amountMinor: 100,
+    });
+    await repository.saveContribution({
+      goalId: goal.id,
+      amountMinor: 100,
+      localDate: "2026-08-01",
+      transactionId: upcoming.id,
+      note: "",
+    });
     expect(repository.getGoalProgress(goal.id)).toBe(0);
     await repository.skipUpcoming(upcoming.id);
     expect(repository.getGoalProgress(goal.id)).toBe(0);
   });
 
-  it('rejects an unsafe recurring rule before persisting it', async () => {
+  it("rejects an unsafe recurring rule before persisting it", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const account = repository.getSnapshot().accounts[0];
-      await repository.saveAccount({ ...account, openingBalanceMinor: Number.MAX_SAFE_INTEGER }, account.id, account.revision);
-      await expect(repository.saveRecurringRule({
-        template: { kind: 'income', title: 'Overflow', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 1, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-15', endDate: '2026-07-15', nextDueDate: '2026-07-15', autoPost: true, active: true,
-      })).rejects.toThrow('supported range');
+      await repository.saveAccount(
+        { ...account, openingBalanceMinor: Number.MAX_SAFE_INTEGER },
+        account.id,
+        account.revision,
+      );
+      await expect(
+        repository.saveRecurringRule({
+          template: {
+            kind: "income",
+            title: "Overflow",
+            note: "",
+            accountId: account.id,
+            categoryId: null,
+            tagIds: [],
+            amountMinor: 1,
+            currency: "USD",
+          },
+          unit: "month",
+          interval: 1,
+          startDate: "2026-07-15",
+          endDate: "2026-07-15",
+          nextDueDate: "2026-07-15",
+          autoPost: true,
+          active: true,
+        }),
+      ).rejects.toThrow("supported range");
       expect(repository.getSnapshot().recurringRules).toEqual([]);
       const reloaded = new LocalFinanceRepository(storage);
       await expect(reloaded.initialize()).resolves.toBeUndefined();
@@ -2009,33 +3638,89 @@ describe('FinanceRepository contract', () => {
     }
   });
 
-  it('prevents a parent category kind change while it has children', async () => {
+  it("prevents a parent category kind change while it has children", async () => {
     const { repository } = await createRepository();
-    const parent = await repository.saveCategory({ name: 'Parent', kind: 'expense', icon: 'house', color: '#5966E9', parentId: null, archived: false });
-    await repository.saveCategory({ name: 'Child', kind: 'expense', icon: 'wrench', color: '#5966E9', parentId: parent.id, archived: false });
-    await expect(repository.saveCategory({ ...parent, kind: 'income' }, parent.id, parent.revision))
-      .rejects.toThrow('kind cannot change');
+    const parent = await repository.saveCategory({
+      name: "Parent",
+      kind: "expense",
+      icon: "house",
+      color: "#5966E9",
+      parentId: null,
+      archived: false,
+    });
+    await repository.saveCategory({
+      name: "Child",
+      kind: "expense",
+      icon: "wrench",
+      color: "#5966E9",
+      parentId: parent.id,
+      archived: false,
+    });
+    await expect(
+      repository.saveCategory(
+        { ...parent, kind: "income" },
+        parent.id,
+        parent.revision,
+      ),
+    ).rejects.toThrow("kind cannot change");
   });
 
-  it('validates linked-goal ranges before batch category changes persist', async () => {
+  it("validates linked-goal ranges before batch category changes persist", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const salary = repository.getSnapshot().categories.find((item) => item.name === 'Salary')!;
-    const other = repository.getSnapshot().categories.find((item) => item.name === 'Other income')!;
+    const salary = repository
+      .getSnapshot()
+      .categories.find((item) => item.name === "Salary")!;
+    const other = repository
+      .getSnapshot()
+      .categories.find((item) => item.name === "Other income")!;
     await repository.saveGoal({
-      name: 'Maximum', kind: 'saving', icon: 'target', color: '#5966E9', targetMinor: Number.MAX_SAFE_INTEGER,
-      initialMinor: Number.MAX_SAFE_INTEGER - 50, targetDate: null, linkedAccountId: null, linkedCategoryId: salary.id, archived: false,
+      name: "Maximum",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
+      targetMinor: Number.MAX_SAFE_INTEGER,
+      initialMinor: Number.MAX_SAFE_INTEGER - 50,
+      targetDate: null,
+      linkedAccountId: null,
+      linkedCategoryId: salary.id,
+      archived: false,
     });
-    const transaction = await repository.saveTransaction({ kind: 'income', title: 'Bonus', localDate: '2026-07-15', accountId: account.id, categoryId: other.id, amountMinor: 100 });
-    await expect(repository.updateTransactionsCategory([transaction.id], salary.id)).rejects.toThrow('supported range');
-    expect(repository.getSnapshot().transactions.find((item) => item.id === transaction.id)?.categoryId).toBe(other.id);
+    const transaction = await repository.saveTransaction({
+      kind: "income",
+      title: "Bonus",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      categoryId: other.id,
+      amountMinor: 100,
+    });
+    await expect(
+      repository.updateTransactionsCategory([transaction.id], salary.id),
+    ).rejects.toThrow("supported range");
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.find((item) => item.id === transaction.id)?.categoryId,
+    ).toBe(other.id);
   });
 
-  it('deduplicates repeated CSV tag names before building duplicate keys', async () => {
+  it("deduplicates repeated CSV tag names before building duplicate keys", async () => {
     const { repository } = await createRepository();
     const row: CsvImportRow = {
-      rowNumber: 2, date: '2026-07-15', type: 'expense', status: 'posted', title: 'Taxi', amount: '10.00',
-      currency: 'USD', account: 'Everyday', category: '', tags: 'Work|Work', note: '', exchangeRate: '', destinationAccount: '', destinationAmount: '',
+      rowNumber: 2,
+      date: "2026-07-15",
+      type: "expense",
+      status: "posted",
+      title: "Taxi",
+      amount: "10.00",
+      currency: "USD",
+      account: "Everyday",
+      category: "",
+      tags: "Work|Work",
+      note: "",
+      exchangeRate: "",
+      destinationAccount: "",
+      destinationAmount: "",
     };
     await repository.importCsv([row], true);
     const preview = await repository.importCsv([row], false);
@@ -2043,21 +3728,32 @@ describe('FinanceRepository contract', () => {
     expect(preview.duplicateRows).toEqual([2]);
   });
 
-  it('caps positive rollover so a valid budget remains renderable next period', async () => {
+  it("caps positive rollover so a valid budget remains renderable next period", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       await repository.saveBudget({
-        name: 'Boundary', icon: 'chart', color: '#5966E9', limitMinor: Number.MAX_SAFE_INTEGER,
-        period: { unit: 'day', interval: 1, anchorDate: '2026-07-15', endDate: null },
-        rollover: true, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+        name: "Boundary",
+        icon: "chart",
+        color: "#5966E9",
+        limitMinor: Number.MAX_SAFE_INTEGER,
+        period: {
+          unit: "day",
+          interval: 1,
+          anchorDate: "2026-07-15",
+          endDate: null,
+        },
+        rollover: true,
+        filters: { accountIds: [], categoryIds: [], tagIds: [] },
+        categoryLimits: [],
+        archived: false,
       });
-      jest.setSystemTime(new Date('2026-07-16T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-16T09:00:00Z"));
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getBudgetStatuses('2026-07-16')[0]).toMatchObject({
+      expect(reloaded.getBudgetStatuses("2026-07-16")[0]).toMatchObject({
         effectiveLimitMinor: Number.MAX_SAFE_INTEGER,
         snapshot: { rolloverMinor: 0 },
       });
@@ -2066,297 +3762,688 @@ describe('FinanceRepository contract', () => {
     }
   });
 
-  it('rejects a rate edit that would overflow net worth', async () => {
+  it("rejects a rate edit that would overflow net worth", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const { repository } = await createRepository();
-      const rate = await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '1', effectiveDate: '2026-01-01' });
-      await repository.saveAccount({ name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: Number.MAX_SAFE_INTEGER, icon: 'wallet', color: '#5966E9', archived: false });
-      await expect(repository.saveExchangeRate({ ...rate, rate: '2' }, rate.id, rate.revision)).rejects.toThrow('supported range');
-      expect(repository.getSnapshot().exchangeRates.find((item) => item.id === rate.id)?.rate).toBe('1');
-      expect(repository.getDashboard('2026-07-01', '2026-07-31').netWorthMinor).toBe(Number.MAX_SAFE_INTEGER);
+      const rate = await repository.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1",
+        effectiveDate: "2026-01-01",
+      });
+      await repository.saveAccount({
+        name: "Euro",
+        type: "checking",
+        currency: "EUR",
+        openingBalanceMinor: Number.MAX_SAFE_INTEGER,
+        icon: "wallet",
+        color: "#5966E9",
+        archived: false,
+      });
+      await expect(
+        repository.saveExchangeRate(
+          { ...rate, rate: "2" },
+          rate.id,
+          rate.revision,
+        ),
+      ).rejects.toThrow("supported range");
+      expect(
+        repository
+          .getSnapshot()
+          .exchangeRates.find((item) => item.id === rate.id)?.rate,
+      ).toBe("1");
+      expect(
+        repository.getDashboard("2026-07-01", "2026-07-31").netWorthMinor,
+      ).toBe(Number.MAX_SAFE_INTEGER);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('rejects budget sets whose maximum aggregate limit is unsafe', async () => {
+  it("rejects budget sets whose maximum aggregate limit is unsafe", async () => {
     const { repository } = await createRepository();
     const input = {
-      icon: 'chart', color: '#5966E9', limitMinor: Number.MAX_SAFE_INTEGER,
-      period: { unit: 'custom' as const, interval: 1, anchorDate: '2026-07-01', endDate: '2026-07-31' },
-      rollover: false, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: Number.MAX_SAFE_INTEGER,
+      period: {
+        unit: "custom" as const,
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: "2026-07-31",
+      },
+      rollover: false,
+      filters: { accountIds: [], categoryIds: [], tagIds: [] },
+      categoryLimits: [],
+      archived: false,
     };
-    await repository.saveBudget({ ...input, name: 'First' });
-    await expect(repository.saveBudget({ ...input, name: 'Second' })).rejects.toThrow('supported range');
+    await repository.saveBudget({ ...input, name: "First" });
+    await expect(
+      repository.saveBudget({ ...input, name: "Second" }),
+    ).rejects.toThrow("supported range");
     expect(repository.getSnapshot().budgets).toHaveLength(1);
   });
 
-  it('cleans category references atomically and archives referenced accounts', async () => {
+  it("cleans category references atomically and archives referenced accounts", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const category = await repository.saveCategory({ name: 'Project', kind: 'expense', icon: 'house', color: '#5966E9', parentId: null, archived: false });
-    const child = await repository.saveCategory({ name: 'Project child', kind: 'expense', icon: 'wrench', color: '#5966E9', parentId: category.id, archived: false });
-    const transaction = await repository.saveTransaction({ kind: 'expense', title: 'Project', localDate: '2026-07-15', accountId: account.id, categoryId: category.id, amountMinor: 100 });
+    const category = await repository.saveCategory({
+      name: "Project",
+      kind: "expense",
+      icon: "house",
+      color: "#5966E9",
+      parentId: null,
+      archived: false,
+    });
+    const child = await repository.saveCategory({
+      name: "Project child",
+      kind: "expense",
+      icon: "wrench",
+      color: "#5966E9",
+      parentId: category.id,
+      archived: false,
+    });
+    const transaction = await repository.saveTransaction({
+      kind: "expense",
+      title: "Project",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      categoryId: category.id,
+      amountMinor: 100,
+    });
     const budget = await repository.saveBudget({
-      name: 'Project', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null }, rollover: false,
-      filters: { accountIds: [], categoryIds: [category.id], tagIds: [] }, categoryLimits: [{ categoryId: category.id, limitMinor: 500 }], archived: false,
+      name: "Project",
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: 1000,
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: null,
+      },
+      rollover: false,
+      filters: { accountIds: [], categoryIds: [category.id], tagIds: [] },
+      categoryLimits: [{ categoryId: category.id, limitMinor: 500 }],
+      archived: false,
     });
     const goal = await repository.saveGoal({
-      name: 'Project', kind: 'spending', icon: 'target', color: '#5966E9', targetMinor: 1000, initialMinor: 0,
-      targetDate: null, linkedAccountId: null, linkedCategoryId: category.id, archived: false,
+      name: "Project",
+      kind: "spending",
+      icon: "target",
+      color: "#5966E9",
+      targetMinor: 1000,
+      initialMinor: 0,
+      targetDate: null,
+      linkedAccountId: null,
+      linkedCategoryId: category.id,
+      archived: false,
     });
     const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Project', note: '', accountId: account.id, categoryId: category.id, tagIds: [], amountMinor: 100, currency: 'USD' },
-      unit: 'month', interval: 1, startDate: '2099-01-01', endDate: null, nextDueDate: '2099-01-01', autoPost: false, active: true,
+      template: {
+        kind: "expense",
+        title: "Project",
+        note: "",
+        accountId: account.id,
+        categoryId: category.id,
+        tagIds: [],
+        amountMinor: 100,
+        currency: "USD",
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2099-01-01",
+      endDate: null,
+      nextDueDate: "2099-01-01",
+      autoPost: false,
+      active: true,
     });
 
-    await repository.deleteEntities('categories', [category.id]);
-    expect(repository.getSnapshot().categories.find((item) => item.id === child.id)?.parentId).toBeNull();
-    expect(repository.getSnapshot().transactions.find((item) => item.id === transaction.id)?.categoryId).toBeNull();
-    expect(repository.getSnapshot().budgets.find((item) => item.id === budget.id)).toMatchObject({ filters: { categoryIds: [] }, categoryLimits: [] });
-    expect(repository.getSnapshot().goals.find((item) => item.id === goal.id)?.linkedCategoryId).toBeNull();
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)?.template.categoryId).toBeNull();
+    await repository.deleteEntities("categories", [category.id]);
+    expect(
+      repository.getSnapshot().categories.find((item) => item.id === child.id)
+        ?.parentId,
+    ).toBeNull();
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.find((item) => item.id === transaction.id)?.categoryId,
+    ).toBeNull();
+    expect(
+      repository.getSnapshot().budgets.find((item) => item.id === budget.id),
+    ).toMatchObject({ filters: { categoryIds: [] }, categoryLimits: [] });
+    expect(
+      repository.getSnapshot().goals.find((item) => item.id === goal.id)
+        ?.linkedCategoryId,
+    ).toBeNull();
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id)?.template
+        .categoryId,
+    ).toBeNull();
 
-    await repository.saveAccount({ name: 'Other', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
-    await repository.deleteEntities('accounts', [account.id]);
-    expect(repository.getSnapshot().accounts.find((item) => item.id === account.id)?.archived).toBe(true);
-    expect(repository.getSnapshot().transactions.find((item) => item.id === transaction.id)?.accountId).toBe(account.id);
+    await repository.saveAccount({
+      name: "Other",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#00A58E",
+      archived: false,
+    });
+    await repository.deleteEntities("accounts", [account.id]);
+    expect(
+      repository.getSnapshot().accounts.find((item) => item.id === account.id)
+        ?.archived,
+    ).toBe(true);
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.find((item) => item.id === transaction.id)?.accountId,
+    ).toBe(account.id);
   });
 
-  it('edits a foreign-currency transaction using its own rate snapshot after the rate is deleted', async () => {
+  it("edits a foreign-currency transaction using its own rate snapshot after the rate is deleted", async () => {
     const { repository } = await createRepository();
-    const euro = await repository.saveAccount({ name: 'Euro', type: 'savings', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
-    const rate = await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.10', effectiveDate: '2026-01-01' });
-    const original = await repository.saveTransaction({ kind: 'expense', title: 'Cheese', localDate: '2026-07-01', accountId: euro.id, amountMinor: 10000 });
-    expect(original).toMatchObject({ exchangeRate: '1.1', baseAmountMinor: 11000 });
+    const euro = await repository.saveAccount({
+      name: "Euro",
+      type: "savings",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#00A58E",
+      archived: false,
+    });
+    const rate = await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.10",
+      effectiveDate: "2026-01-01",
+    });
+    const original = await repository.saveTransaction({
+      kind: "expense",
+      title: "Cheese",
+      localDate: "2026-07-01",
+      accountId: euro.id,
+      amountMinor: 10000,
+    });
+    expect(original).toMatchObject({
+      exchangeRate: "1.1",
+      baseAmountMinor: 11000,
+    });
 
-    await repository.deleteEntities('exchangeRates', [rate.id]);
+    await repository.deleteEntities("exchangeRates", [rate.id]);
 
     const renamed = await repository.saveTransaction(
-      { kind: 'expense', title: 'Fromage', localDate: '2026-07-01', accountId: euro.id, amountMinor: 10000 },
+      {
+        kind: "expense",
+        title: "Fromage",
+        localDate: "2026-07-01",
+        accountId: euro.id,
+        amountMinor: 10000,
+      },
       original.id,
     );
-    expect(renamed).toMatchObject({ title: 'Fromage', exchangeRate: '1.1', baseAmountMinor: 11000 });
+    expect(renamed).toMatchObject({
+      title: "Fromage",
+      exchangeRate: "1.1",
+      baseAmountMinor: 11000,
+    });
 
     // Moving the transaction to a date the rate table can no longer price must
     // still fail rather than silently reusing an unrelated day's rate.
-    await expect(repository.saveTransaction(
-      { kind: 'expense', title: 'Fromage', localDate: '2026-07-02', accountId: euro.id, amountMinor: 10000 },
-      original.id,
-    )).rejects.toThrow('Missing exchange rate');
+    await expect(
+      repository.saveTransaction(
+        {
+          kind: "expense",
+          title: "Fromage",
+          localDate: "2026-07-02",
+          accountId: euro.id,
+          amountMinor: 10000,
+        },
+        original.id,
+      ),
+    ).rejects.toThrow("Missing exchange rate");
   });
 
-  it('applies a change from another window that arrives while a local mutation is in flight', async () => {
+  it("applies a change from another window that arrives while a local mutation is in flight", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository: windowA } = await createRepository(storage);
     const windowB = new LocalFinanceRepository(storage);
     await windowB.initialize();
     const account = windowA.getSnapshot().accounts[0];
 
-    const localWrite = windowB.saveTransaction({ kind: 'expense', title: 'From B', localDate: '2026-07-02', accountId: account.id, amountMinor: 500 });
-    await windowA.saveTransaction({ kind: 'expense', title: 'From A', localDate: '2026-07-01', accountId: account.id, amountMinor: 1000 });
+    const localWrite = windowB.saveTransaction({
+      kind: "expense",
+      title: "From B",
+      localDate: "2026-07-02",
+      accountId: account.id,
+      amountMinor: 500,
+    });
+    await windowA.saveTransaction({
+      kind: "expense",
+      title: "From A",
+      localDate: "2026-07-01",
+      accountId: account.id,
+      amountMinor: 1000,
+    });
     await localWrite;
     // The dropped refresh used to leave window B stale indefinitely, so assert
     // it reconciles without any further local activity to nudge it.
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    expect(windowB.queryTransactions().map((item) => item.title).sort()).toEqual(['From A', 'From B']);
-    expect(windowB.getDashboard('2026-07-01', '2026-07-31').accountBalances[0].balanceMinor).toBe(-1500);
+    expect(
+      windowB
+        .queryTransactions()
+        .map((item) => item.title)
+        .sort(),
+    ).toEqual(["From A", "From B"]);
+    expect(
+      windowB.getDashboard("2026-07-01", "2026-07-31").accountBalances[0]
+        .balanceMinor,
+    ).toBe(-1500);
   });
 
-  it('drops a deleted account from net worth while its history still counts', async () => {
+  it("drops a deleted account from net worth while its history still counts", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    await repository.saveAccount({ name: 'Other', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
-    await repository.saveTransaction({ kind: 'income', title: 'Salary', localDate: '2026-07-01', accountId: account.id, amountMinor: 50000 });
-    expect(repository.getDashboard('2026-07-01', '2026-07-31').netWorthMinor).toBe(50000);
+    await repository.saveAccount({
+      name: "Other",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#00A58E",
+      archived: false,
+    });
+    await repository.saveTransaction({
+      kind: "income",
+      title: "Salary",
+      localDate: "2026-07-01",
+      accountId: account.id,
+      amountMinor: 50000,
+    });
+    expect(
+      repository.getDashboard("2026-07-01", "2026-07-31").netWorthMinor,
+    ).toBe(50000);
 
-    await repository.deleteEntities('accounts', [account.id]);
-    const after = repository.getDashboard('2026-07-01', '2026-07-31');
+    await repository.deleteEntities("accounts", [account.id]);
+    const after = repository.getDashboard("2026-07-01", "2026-07-31");
     expect(after.netWorthMinor).toBe(0);
-    expect(after.accountBalances.map((item) => item.account.id)).not.toContain(account.id);
+    expect(after.accountBalances.map((item) => item.account.id)).not.toContain(
+      account.id,
+    );
     expect(after.incomeMinor).toBe(50000);
   });
 
-  it('returns a stable identity for a budget period that is not persisted yet', async () => {
+  it("returns a stable identity for a budget period that is not persisted yet", async () => {
     const { repository } = await createRepository();
     await repository.saveBudget({
-      name: 'Food', icon: 'chart', color: '#5966E9', limitMinor: 10000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null }, rollover: false,
-      filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+      name: "Food",
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: 10000,
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: null,
+      },
+      rollover: false,
+      filters: { accountIds: [], categoryIds: [], tagIds: [] },
+      categoryLimits: [],
+      archived: false,
     });
 
     // Far enough in the future that this period can never have been saved by
     // an earlier run of the app, regardless of when this test itself runs.
-    const [first] = repository.getBudgetStatuses('2099-09-15');
-    const [second] = repository.getBudgetStatuses('2099-09-15');
-    expect(first.snapshot.periodStart).toBe('2099-09-01');
+    const [first] = repository.getBudgetStatuses("2099-09-15");
+    const [second] = repository.getBudgetStatuses("2099-09-15");
+    expect(first.snapshot.periodStart).toBe("2099-09-01");
     expect(second.snapshot.id).toBe(first.snapshot.id);
     expect(second.snapshot).toEqual(first.snapshot);
     // A transient snapshot must never be mistaken for a stored one.
-    expect(repository.getSnapshot().budgetPeriods.some((item) => item.id === first.snapshot.id)).toBe(false);
+    expect(
+      repository
+        .getSnapshot()
+        .budgetPeriods.some((item) => item.id === first.snapshot.id),
+    ).toBe(false);
   });
 
-  it('rejects a dashboard range too wide to chart instead of truncating it', async () => {
+  it("rejects a dashboard range too wide to chart instead of truncating it", async () => {
     const { repository } = await createRepository();
-    expect(repository.getDashboard('2026-01-01', '2026-12-31').dailySpend).toHaveLength(365);
-    expect(() => repository.getDashboard('1900-01-01', '2026-07-22')).toThrow('no longer than a century');
+    expect(
+      repository.getDashboard("2026-01-01", "2026-12-31").dailySpend,
+    ).toHaveLength(365);
+    expect(() => repository.getDashboard("1900-01-01", "2026-07-22")).toThrow(
+      "no longer than a century",
+    );
   });
 
-  it('rejects a mistyped manual transfer amount but keeps existing transfers editable', async () => {
+  it("rejects a mistyped manual transfer amount but keeps existing transfers editable", async () => {
     const { repository } = await createRepository();
     const usd = repository.getSnapshot().accounts[0];
-    const euro = await repository.saveAccount({ name: 'Euro', type: 'savings', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
-    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.10', effectiveDate: '2026-01-01' });
-    await repository.saveTransaction({ kind: 'income', title: 'Salary', localDate: '2026-07-01', accountId: usd.id, amountMinor: 1000000 });
+    const euro = await repository.saveAccount({
+      name: "Euro",
+      type: "savings",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#00A58E",
+      archived: false,
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.10",
+      effectiveDate: "2026-01-01",
+    });
+    await repository.saveTransaction({
+      kind: "income",
+      title: "Salary",
+      localDate: "2026-07-01",
+      accountId: usd.id,
+      amountMinor: 1000000,
+    });
 
     // $110.00 is worth about €100.00; a misplaced decimal point is not spread.
-    await expect(repository.saveTransaction({
-      kind: 'transfer', title: 'Move', localDate: '2026-07-02', accountId: usd.id,
-      destinationAccountId: euro.id, amountMinor: 11000, destinationAmountMinor: 1,
-    })).rejects.toThrow('far from the known USD → EUR rate');
+    await expect(
+      repository.saveTransaction({
+        kind: "transfer",
+        title: "Move",
+        localDate: "2026-07-02",
+        accountId: usd.id,
+        destinationAccountId: euro.id,
+        amountMinor: 11000,
+        destinationAmountMinor: 1,
+      }),
+    ).rejects.toThrow("far from the known USD → EUR rate");
 
     // Real spread and fees stay acceptable.
     const transfer = await repository.saveTransaction({
-      kind: 'transfer', title: 'Move', localDate: '2026-07-02', accountId: usd.id,
-      destinationAccountId: euro.id, amountMinor: 11000, destinationAmountMinor: 9700,
+      kind: "transfer",
+      title: "Move",
+      localDate: "2026-07-02",
+      accountId: usd.id,
+      destinationAccountId: euro.id,
+      amountMinor: 11000,
+      destinationAmountMinor: 9700,
     });
     expect(transfer.destinationAmountMinor).toBe(9700);
 
-    const retitled = await repository.saveTransaction({
-      kind: 'transfer', title: 'Moved', localDate: '2026-07-02', accountId: usd.id,
-      destinationAccountId: euro.id, amountMinor: 11000, destinationAmountMinor: 9700,
-    }, transfer.id);
-    expect(retitled.title).toBe('Moved');
+    const retitled = await repository.saveTransaction(
+      {
+        kind: "transfer",
+        title: "Moved",
+        localDate: "2026-07-02",
+        accountId: usd.id,
+        destinationAccountId: euro.id,
+        amountMinor: 11000,
+        destinationAmountMinor: 9700,
+      },
+      transfer.id,
+    );
+    expect(retitled.title).toBe("Moved");
   });
 
-  it('does not inherit rollover from a window the new period definition would not produce', async () => {
+  it("does not inherit rollover from a window the new period definition would not produce", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-06-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-06-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const account = repository.getSnapshot().accounts[0];
       const budget = await repository.saveBudget({
-        name: 'Monthly', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-06-01', endDate: null },
-        rollover: true, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+        name: "Monthly",
+        icon: "chart",
+        color: "#5966E9",
+        limitMinor: 1000,
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-06-01",
+          endDate: null,
+        },
+        rollover: true,
+        filters: { accountIds: [], categoryIds: [], tagIds: [] },
+        categoryLimits: [],
+        archived: false,
       });
-      await repository.saveTransaction({ kind: 'expense', title: 'June', localDate: '2026-06-20', accountId: account.id, amountMinor: 400 });
+      await repository.saveTransaction({
+        kind: "expense",
+        title: "June",
+        localDate: "2026-06-20",
+        accountId: account.id,
+        amountMinor: 400,
+      });
 
       // Settle June so a completed monthly snapshot exists to roll over from.
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      expect(reloaded.getBudgetStatuses('2026-07-15')[0]).toMatchObject({ effectiveLimitMinor: 1600 });
+      expect(reloaded.getBudgetStatuses("2026-07-15")[0]).toMatchObject({
+        effectiveLimitMinor: 1600,
+      });
 
       // Switching the period mid-July moves the current window off every stored
       // snapshot. The June monthly one is no longer a window this definition would
       // produce, so its unspent remainder must not seed the first weekly window.
-      await reloaded.saveBudget({
-        name: budget.name, icon: budget.icon, color: budget.color, limitMinor: budget.limitMinor,
-        period: { unit: 'week', interval: 1, anchorDate: '2026-07-20', endDate: null },
-        rollover: true, filters: budget.filters, categoryLimits: budget.categoryLimits, archived: false,
-      }, budget.id);
+      await reloaded.saveBudget(
+        {
+          name: budget.name,
+          icon: budget.icon,
+          color: budget.color,
+          limitMinor: budget.limitMinor,
+          period: {
+            unit: "week",
+            interval: 1,
+            anchorDate: "2026-07-20",
+            endDate: null,
+          },
+          rollover: true,
+          filters: budget.filters,
+          categoryLimits: budget.categoryLimits,
+          archived: false,
+        },
+        budget.id,
+      );
       // Week of 2026-07-13: bare limit, not limit + the 600 left over from June.
-      expect(reloaded.getBudgetStatuses('2026-07-15')[0].effectiveLimitMinor).toBe(1000);
+      expect(
+        reloaded.getBudgetStatuses("2026-07-15")[0].effectiveLimitMinor,
+      ).toBe(1000);
       // The following week legitimately inherits that untouched weekly limit, which
       // confirms rollover still works — it is only the mismatched window that is skipped.
-      expect(reloaded.getBudgetStatuses('2026-07-24')[0].effectiveLimitMinor).toBe(2000);
+      expect(
+        reloaded.getBudgetStatuses("2026-07-24")[0].effectiveLimitMinor,
+      ).toBe(2000);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('resets current rollover when an edited period keeps its start but changes its end', async () => {
+  it("resets current rollover when an edited period keeps its start but changes its end", async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-06-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-06-15T09:00:00Z"));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const budget = await repository.saveBudget({
-        name: 'Monthly', icon: 'chart', color: '#5966E9', limitMinor: 1000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-06-01', endDate: null },
-        rollover: true, filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+        name: "Monthly",
+        icon: "chart",
+        color: "#5966E9",
+        limitMinor: 1000,
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-06-01",
+          endDate: null,
+        },
+        rollover: true,
+        filters: { accountIds: [], categoryIds: [], tagIds: [] },
+        categoryLimits: [],
+        archived: false,
       });
 
       // Opening in July creates a July monthly snapshot with June's unused
       // limit. Switch to a two-month window that starts on the same day; its
       // rollover must not belong to the now-invalid monthly snapshot.
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-07-15T09:00:00Z"));
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
-      await reloaded.saveBudget({
-        name: budget.name, icon: budget.icon, color: budget.color, limitMinor: budget.limitMinor,
-        period: { unit: 'month', interval: 2, anchorDate: '2026-07-01', endDate: null },
-        rollover: true, filters: budget.filters, categoryLimits: budget.categoryLimits, archived: false,
-      }, budget.id);
+      await reloaded.saveBudget(
+        {
+          name: budget.name,
+          icon: budget.icon,
+          color: budget.color,
+          limitMinor: budget.limitMinor,
+          period: {
+            unit: "month",
+            interval: 2,
+            anchorDate: "2026-07-01",
+            endDate: null,
+          },
+          rollover: true,
+          filters: budget.filters,
+          categoryLimits: budget.categoryLimits,
+          archived: false,
+        },
+        budget.id,
+      );
 
-      expect(reloaded.getBudgetStatuses('2026-07-15')[0].effectiveLimitMinor).toBe(1000);
+      expect(
+        reloaded.getBudgetStatuses("2026-07-15")[0].effectiveLimitMinor,
+      ).toBe(1000);
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('keeps a rule paused by an archived account when an unrelated category is deleted', async () => {
+  it("keeps a rule paused by an archived account when an unrelated category is deleted", async () => {
     const { repository } = await createRepository();
-    const spare = await repository.saveAccount({ name: 'Spare', type: 'cash', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
-    const category = repository.getSnapshot().categories.find((item) => item.kind === 'expense')!;
+    const spare = await repository.saveAccount({
+      name: "Spare",
+      type: "cash",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#00A58E",
+      archived: false,
+    });
+    const category = repository
+      .getSnapshot()
+      .categories.find((item) => item.kind === "expense")!;
     const rule = await repository.saveRecurringRule({
-      template: { kind: 'expense', title: 'Rent', note: '', amountMinor: 50_00, currency: 'USD', accountId: spare.id, categoryId: category.id, tagIds: [] },
-      unit: 'month', interval: 1, startDate: '2026-07-01', endDate: null, nextDueDate: '2026-07-01', autoPost: false, active: true,
+      template: {
+        kind: "expense",
+        title: "Rent",
+        note: "",
+        amountMinor: 50_00,
+        currency: "USD",
+        accountId: spare.id,
+        categoryId: category.id,
+        tagIds: [],
+      },
+      unit: "month",
+      interval: 1,
+      startDate: "2026-07-01",
+      endDate: null,
+      nextDueDate: "2026-07-01",
+      autoPost: false,
+      active: true,
     });
 
     await repository.saveAccount({ ...spare, archived: true }, spare.id);
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)).toMatchObject({ active: false, pausedByDependency: true });
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id),
+    ).toMatchObject({ active: false, pausedByDependency: true });
 
-    await repository.deleteEntities('categories', [category.id]);
-    const afterDelete = repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)!;
+    await repository.deleteEntities("categories", [category.id]);
+    const afterDelete = repository
+      .getSnapshot()
+      .recurringRules.find((item) => item.id === rule.id)!;
     // The account is still archived, so the rule must stay recoverable rather than
     // losing the flag both reactivation gates key off.
     expect(afterDelete.template.categoryId).toBeNull();
-    expect(afterDelete).toMatchObject({ active: false, pausedByDependency: true });
+    expect(afterDelete).toMatchObject({
+      active: false,
+      pausedByDependency: true,
+    });
 
     await repository.saveAccount({ ...spare, archived: false }, spare.id);
-    expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)).toMatchObject({ active: true, pausedByDependency: false });
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id),
+    ).toMatchObject({ active: true, pausedByDependency: false });
   });
 
-  it('filters transactions by parent category the same way budgets aggregate them', async () => {
+  it("filters transactions by parent category the same way budgets aggregate them", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    const parent = repository.getSnapshot().categories.find((item) => item.kind === 'expense')!;
-    const child = await repository.saveCategory({ name: 'Corner shop', kind: 'expense', color: '#5F9F78', icon: 'cart', parentId: parent.id, archived: false });
-    await repository.saveTransaction({ kind: 'expense', title: 'Milk', localDate: '2026-07-10', accountId: account.id, amountMinor: 4_00, categoryId: child.id });
+    const parent = repository
+      .getSnapshot()
+      .categories.find((item) => item.kind === "expense")!;
+    const child = await repository.saveCategory({
+      name: "Corner shop",
+      kind: "expense",
+      color: "#5F9F78",
+      icon: "cart",
+      parentId: parent.id,
+      archived: false,
+    });
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Milk",
+      localDate: "2026-07-10",
+      accountId: account.id,
+      amountMinor: 4_00,
+      categoryId: child.id,
+    });
 
     const byParent = repository.queryTransactions({ categoryIds: [parent.id] });
-    expect(byParent.map((item) => item.title)).toEqual(['Milk']);
+    expect(byParent.map((item) => item.title)).toEqual(["Milk"]);
   });
 
-  it('reports an archived account by name instead of claiming the CSV is unknown', async () => {
+  it("reports an archived account by name instead of claiming the CSV is unknown", async () => {
     const { repository } = await createRepository();
-    const spare = await repository.saveAccount({ name: 'Spare', type: 'cash', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
+    const spare = await repository.saveAccount({
+      name: "Spare",
+      type: "cash",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#00A58E",
+      archived: false,
+    });
     await repository.saveAccount({ ...spare, archived: true }, spare.id);
 
-    const result = await repository.importCsv([{
-      rowNumber: 2,
-      date: '2026-07-10',
-      type: 'expense' as TransactionKind,
-      title: 'Old purchase',
-      amount: '10.00',
-      currency: 'USD',
-      account: 'Spare',
-      category: '',
-      tags: '',
-      note: '',
-      exchangeRate: '',
-      destinationAccount: '',
-      destinationAmount: '',
-    }], false);
+    const result = await repository.importCsv(
+      [
+        {
+          rowNumber: 2,
+          date: "2026-07-10",
+          type: "expense" as TransactionKind,
+          title: "Old purchase",
+          amount: "10.00",
+          currency: "USD",
+          account: "Spare",
+          category: "",
+          tags: "",
+          note: "",
+          exchangeRate: "",
+          destinationAccount: "",
+          destinationAmount: "",
+        },
+      ],
+      false,
+    );
 
-    expect(result.rejectedRows[0].reason).toBe('Account Spare is archived.');
+    expect(result.rejectedRows[0].reason).toBe("Account Spare is archived.");
   });
 });
 
@@ -2369,28 +4456,48 @@ describe('FinanceRepository contract', () => {
  * These tests fail without the deterministic ids — not with an exception, but with two rows
  * where there should be one, which is the shape of bug that only shows up as a wrong number.
  */
-describe('generation is stable across devices', () => {
+describe("generation is stable across devices", () => {
   // Dated far enough out that `saveRecurringRule`'s own generation — which reaches
   // only today — produces nothing. Every occurrence in these tests is then created by an
   // explicit `generateRecurring`, where the test says it is, whatever day the suite runs on.
-  const FIRST_DUE = '2099-01-31';
-  const HORIZON = '2099-02-28';
+  const FIRST_DUE = "2099-01-31";
+  const HORIZON = "2099-02-28";
 
   const RULE = (accountId: string) => ({
     template: {
-      kind: 'expense' as const, title: 'Rent', note: '', accountId,
-      categoryId: null, tagIds: [], amountMinor: 120000, currency: 'USD' as const,
+      kind: "expense" as const,
+      title: "Rent",
+      note: "",
+      accountId,
+      categoryId: null,
+      tagIds: [],
+      amountMinor: 120000,
+      currency: "USD" as const,
     },
-    unit: 'month' as const, interval: 1,
-    startDate: FIRST_DUE, endDate: '2099-03-31', nextDueDate: FIRST_DUE,
-    autoPost: false, active: true,
+    unit: "month" as const,
+    interval: 1,
+    startDate: FIRST_DUE,
+    endDate: "2099-03-31",
+    nextDueDate: FIRST_DUE,
+    autoPost: false,
+    active: true,
   });
 
   // Compile-time exhaustive: a twelfth `EntityType` fails the build here rather than
   // silently making the clone below skip a table.
   const ALL_TYPES = Object.keys({
-    settings: 0, accounts: 0, categories: 0, tags: 0, transactions: 0, budgets: 0,
-    budgetPeriods: 0, budgetAdjustments: 0, goals: 0, contributions: 0, recurringRules: 0, exchangeRates: 0,
+    settings: 0,
+    accounts: 0,
+    categories: 0,
+    tags: 0,
+    transactions: 0,
+    budgets: 0,
+    budgetPeriods: 0,
+    budgetAdjustments: 0,
+    goals: 0,
+    contributions: 0,
+    recurringRules: 0,
+    exchangeRates: 0,
   } satisfies Record<EntityType, 0>) as EntityType[];
 
   const withRule = async () => {
@@ -2417,14 +4524,17 @@ describe('generation is stable across devices', () => {
   const secondDevice = async (source: MemoryStorageAdapter) => {
     const storage = new MemoryStorageAdapter();
     for (const type of ALL_TYPES) {
-      await storage.putMany((await source.readAll(type)).map((entity) => ({ type, entity })));
+      await storage.putMany(
+        (await source.readAll(type)).map((entity) => ({ type, entity })),
+      );
     }
     return reload(storage);
   };
 
-  const idsOf = (entities: readonly { id: string }[]) => entities.map((item) => item.id).sort();
+  const idsOf = (entities: readonly { id: string }[]) =>
+    entities.map((item) => item.id).sort();
 
-  it('gives one recurrence occurrence one id on every device', async () => {
+  it("gives one recurrence occurrence one id on every device", async () => {
     const { repository, storage } = await withRule();
     const other = await secondDevice(storage);
 
@@ -2436,31 +4546,47 @@ describe('generation is stable across devices', () => {
     // rows that a merge then has to notice and deduplicate.
     const generated = repository.getSnapshot().transactions;
     expect(generated).toHaveLength(2);
-    expect(generated.map((item) => item.localDate).sort()).toEqual([FIRST_DUE, HORIZON]);
+    expect(generated.map((item) => item.localDate).sort()).toEqual([
+      FIRST_DUE,
+      HORIZON,
+    ]);
     expect(idsOf(other.getSnapshot().transactions)).toEqual(idsOf(generated));
   });
 
-  it('keeps a deleted occurrence deleted when generation runs again', async () => {
+  it("keeps a deleted occurrence deleted when generation runs again", async () => {
     // Deletion is suppressed by `occurrenceKey`, not by id, so a derived id must not open a
     // second route back: regenerating writes the same key, and if the tombstone did not
     // cover it the transaction the user deleted would return on the next foreground.
     const { repository, storage } = await withRule();
     await repository.generateRecurring(HORIZON);
     const [first] = repository.getSnapshot().transactions;
-    await repository.deleteEntities('transactions', [first.id]);
+    await repository.deleteEntities("transactions", [first.id]);
 
     expect(await repository.generateRecurring(HORIZON)).toBe(0);
     const reloaded = await reload(storage);
-    expect(reloaded.getSnapshot().transactions.some((item) => item.id === first.id)).toBe(false);
+    expect(
+      reloaded.getSnapshot().transactions.some((item) => item.id === first.id),
+    ).toBe(false);
     expect(await reloaded.generateRecurring(HORIZON)).toBe(0);
   });
 
-  it('gives one budget period one snapshot id on every device', async () => {
+  it("gives one budget period one snapshot id on every device", async () => {
     const { repository, storage } = await withRule();
     await repository.saveBudget({
-      name: 'Food', icon: 'chart', color: '#5966E9', limitMinor: 10000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-01-01', endDate: null }, rollover: true,
-      filters: { accountIds: [], categoryIds: [], tagIds: [] }, categoryLimits: [], archived: false,
+      name: "Food",
+      icon: "chart",
+      color: "#5966E9",
+      limitMinor: 10000,
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-01-01",
+        endDate: null,
+      },
+      rollover: true,
+      filters: { accountIds: [], categoryIds: [], tagIds: [] },
+      categoryLimits: [],
+      archived: false,
     });
     const other = await secondDevice(storage);
 
@@ -2479,23 +4605,31 @@ describe('generation is stable across devices', () => {
     expect(idsOf(other.getSnapshot().budgetPeriods)).toEqual(idsOf(periods));
   });
 
-  it('leaves rows generated before the derivation shipped exactly where they are', async () => {
+  it("leaves rows generated before the derivation shipped exactly where they are", async () => {
     // Existing vaults hold occurrences and snapshots with random ids. Nothing re-keys them:
     // regeneration is suppressed by `occurrenceKey`, and a snapshot is matched by
     // `(budgetId, periodStart)` and updated in place. So there is no migration to run, and
     // nobody sees their history duplicate on upgrade.
     const { repository, storage } = await withRule();
     await repository.generateRecurring(HORIZON);
-    const before = repository.getSnapshot().transactions.map((item) => item.id).sort();
+    const before = repository
+      .getSnapshot()
+      .transactions.map((item) => item.id)
+      .sort();
 
     const reloaded = await reload(storage);
     expect(await reloaded.generateRecurring(HORIZON)).toBe(0);
-    expect(reloaded.getSnapshot().transactions.map((item) => item.id).sort()).toEqual(before);
+    expect(
+      reloaded
+        .getSnapshot()
+        .transactions.map((item) => item.id)
+        .sort(),
+    ).toEqual(before);
   });
 });
 
-describe('applyRemoteOps', () => {
-  const DEVICE_B = 'B'.repeat(26);
+describe("applyRemoteOps", () => {
+  const DEVICE_B = "B".repeat(26);
   let counter = 0;
   const at = (iso: string) => hlcFromTimestamp(iso, (counter += 1), DEVICE_B);
 
@@ -2514,16 +4648,18 @@ describe('applyRemoteOps', () => {
     next: FinanceEntity,
     iso: string,
   ) => [
-    ...(previous ? diffEntity(type, null, previous, at(previous.createdAt)).ops : []),
+    ...(previous
+      ? diffEntity(type, null, previous, at(previous.createdAt)).ops
+      : []),
     ...diffEntity(type, previous, next, at(iso)).ops,
   ];
 
   const findCategory = (repository: LocalFinanceRepository, name: string) =>
     repository.getSnapshot().categories.find((item) => item.name === name);
 
-  it('brings a remote edit into the snapshot and notifies subscribers', async () => {
+  it("brings a remote edit into the snapshot and notifies subscribers", async () => {
     const { repository } = await createRepository();
-    const category = findCategory(repository, 'Groceries')!;
+    const category = findCategory(repository, "Groceries")!;
     const listener = jest.fn();
     repository.subscribe(listener);
 
@@ -2531,33 +4667,43 @@ describe('applyRemoteOps', () => {
     // create's wall (which is `category.createdAt` → wall clock at onboarding, now
     // ~2026-08-22). Using a fixed Aug 1 date broke once wall time moved past it.
     const result = await repository.applyRemoteOps(
-      remoteOps('categories', category, { ...category, name: 'Food' }, '2100-01-01T10:00:00.000Z'),
+      remoteOps(
+        "categories",
+        category,
+        { ...category, name: "Food" },
+        "2100-01-01T10:00:00.000Z",
+      ),
     );
 
-    expect(result.changedTypes).toEqual(['categories']);
-    expect(findCategory(repository, 'Food')).toBeDefined();
-    expect(findCategory(repository, 'Groceries')).toBeUndefined();
+    expect(result.changedTypes).toEqual(["categories"]);
+    expect(findCategory(repository, "Food")).toBeDefined();
+    expect(findCategory(repository, "Groceries")).toBeUndefined();
     expect(listener).toHaveBeenCalled();
   });
 
-  it('treats a redelivered batch as a no-op rather than a second write', async () => {
+  it("treats a redelivered batch as a no-op rather than a second write", async () => {
     // The relay retries, and a peer may send the same batch down two transports. Re-applying
     // must not bump `revision` — every open form captures it and would then be rejected as
     // stale for an edit that changed nothing.
     const { repository } = await createRepository();
-    const category = findCategory(repository, 'Groceries')!;
-    const ops = remoteOps('categories', category, { ...category, name: 'Food' }, '2100-01-01T10:00:00.000Z');
+    const category = findCategory(repository, "Groceries")!;
+    const ops = remoteOps(
+      "categories",
+      category,
+      { ...category, name: "Food" },
+      "2100-01-01T10:00:00.000Z",
+    );
 
     await repository.applyRemoteOps(ops);
-    const afterFirst = findCategory(repository, 'Food')!;
+    const afterFirst = findCategory(repository, "Food")!;
     await repository.applyRemoteOps(ops);
-    const afterSecond = findCategory(repository, 'Food')!;
+    const afterSecond = findCategory(repository, "Food")!;
 
     expect(afterSecond.revision).toBe(afterFirst.revision);
     expect(afterSecond.updatedAt).toBe(afterFirst.updatedAt);
   });
 
-  it('never interleaves a merge with a local save', async () => {
+  it("never interleaves a merge with a local save", async () => {
     // The lost-update window §2.7 exists to close: a local save hands the adapter a *whole
     // entity* built from the snapshot it read, so a merge committing between that read and
     // the write would be silently reverted on every field the two disagree about. Both run
@@ -2568,19 +4714,23 @@ describe('applyRemoteOps', () => {
       pauseNext = false;
       private release: (() => void) | null = null;
 
-      override async readAll(type: Parameters<MemoryStorageAdapter['readAll']>[0]) {
-        this.calls.push('read');
+      override async readAll(
+        type: Parameters<MemoryStorageAdapter["readAll"]>[0],
+      ) {
+        this.calls.push("read");
         return super.readAll(type);
       }
 
       override async putMany(
-        records: Parameters<MemoryStorageAdapter['putMany']>[0],
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
         source?: object,
       ) {
-        this.calls.push('write');
+        this.calls.push("write");
         if (this.pauseNext) {
           this.pauseNext = false;
-          await new Promise<void>((resolve) => { this.release = resolve; });
+          await new Promise<void>((resolve) => {
+            this.release = resolve;
+          });
         }
         await super.putMany(records, source);
       }
@@ -2588,17 +4738,28 @@ describe('applyRemoteOps', () => {
       // `projectNow` performs its reads/writes inside a `transact` (see
       // LocalFinanceRepository.projectNow), so the outer `readAll`/`putMany`
       // above do not capture them. Record the inner transaction as well.
-      override async transact<T>(work: (tx: StorageTx) => Promise<T>, options?: TransactOptions): Promise<T> {
+      override async transact<T>(
+        work: (tx: StorageTx) => Promise<T>,
+        options?: TransactOptions,
+      ): Promise<T> {
         return super.transact(async (tx: StorageTx) => {
-          const originalReadAll = tx.readAll.bind(tx) as unknown as (type: unknown) => Promise<unknown>;
-          const originalPutMany = tx.putMany.bind(tx) as unknown as (records: unknown) => Promise<void>;
-          (tx as unknown as { readAll: (type: unknown) => Promise<unknown> }).readAll = async (type: unknown) => {
-            this.calls.push('read');
+          const originalReadAll = tx.readAll.bind(tx) as unknown as (
+            type: unknown,
+          ) => Promise<unknown>;
+          const originalPutMany = tx.putMany.bind(tx) as unknown as (
+            records: unknown,
+          ) => Promise<void>;
+          (
+            tx as unknown as { readAll: (type: unknown) => Promise<unknown> }
+          ).readAll = async (type: unknown) => {
+            this.calls.push("read");
             return originalReadAll(type);
           };
-          (tx as unknown as { putMany: (records: unknown) => Promise<void> }).putMany = async (records: unknown) => {
+          (
+            tx as unknown as { putMany: (records: unknown) => Promise<void> }
+          ).putMany = async (records: unknown) => {
             // `transact` writes are also logical writes; count them.
-            this.calls.push('write');
+            this.calls.push("write");
             return originalPutMany(records);
           };
           return work(tx);
@@ -2617,194 +4778,320 @@ describe('applyRemoteOps', () => {
 
     storage.calls.length = 0;
     storage.pauseNext = true;
-    const localSave = repository.saveAccount({ ...account, name: 'Everyday' }, account.id, account.revision);
+    const localSave = repository.saveAccount(
+      { ...account, name: "Everyday" },
+      account.id,
+      account.revision,
+    );
     await Promise.resolve();
     await Promise.resolve();
     const merge = repository.applyRemoteOps(
-      remoteOps('accounts', account, { ...account, color: '#112233' }, '2100-01-01T10:00:00.000Z'),
+      remoteOps(
+        "accounts",
+        account,
+        { ...account, color: "#112233" },
+        "2100-01-01T10:00:00.000Z",
+      ),
     );
     await Promise.resolve();
     await Promise.resolve();
     // The save is still mid-write. If the merge were not queued behind it, its eleven reads
     // would already be on this list and it would be diffing against a pre-save snapshot.
-    expect(storage.calls).toEqual(['write']);
+    expect(storage.calls).toEqual(["write"]);
 
     storage.releasePaused();
     await Promise.all([localSave, merge]);
-    expect(storage.calls.indexOf('read')).toBeGreaterThan(storage.calls.indexOf('write'));
+    expect(storage.calls.indexOf("read")).toBeGreaterThan(
+      storage.calls.indexOf("write"),
+    );
   });
 
-  it('writes nothing at all when the merged set would overflow', async () => {
+  it("writes nothing at all when the merged set would overflow", async () => {
     const { repository, storage } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const seed = await repository.saveTransaction({
-      kind: 'income', title: 'Salary', localDate: '2026-07-01',
-      accountId: account.id, amountMinor: 1000,
+      kind: "income",
+      title: "Salary",
+      localDate: "2026-07-01",
+      accountId: account.id,
+      amountMinor: 1000,
     });
     // Two of these sum past `Number.MAX_SAFE_INTEGER`, which is a balance no local mutation
     // could ever have produced — only a merge of two independently-legal histories.
     const huge = 5_000_000_000_000_000;
     const inflated = (id: string) => ({
-      ...seed, id, amountMinor: huge, baseAmountMinor: huge, occurrenceKey: null,
+      ...seed,
+      id,
+      amountMinor: huge,
+      baseAmountMinor: huge,
+      occurrenceKey: null,
     });
 
     const ops = [
-      ...remoteOps('accounts', account, { ...account, name: 'Renamed' }, '2100-01-01T10:00:00.000Z'),
-      ...remoteOps('transactions', null, inflated('11111111-1111-4111-8111-111111111111'), '2100-01-01T10:00:01.000Z'),
-      ...remoteOps('transactions', null, inflated('22222222-2222-4222-8222-222222222222'), '2100-01-01T10:00:02.000Z'),
+      ...remoteOps(
+        "accounts",
+        account,
+        { ...account, name: "Renamed" },
+        "2100-01-01T10:00:00.000Z",
+      ),
+      ...remoteOps(
+        "transactions",
+        null,
+        inflated("11111111-1111-4111-8111-111111111111"),
+        "2100-01-01T10:00:01.000Z",
+      ),
+      ...remoteOps(
+        "transactions",
+        null,
+        inflated("22222222-2222-4222-8222-222222222222"),
+        "2100-01-01T10:00:02.000Z",
+      ),
     ];
     await expect(repository.applyRemoteOps(ops)).rejects.toThrow();
 
     // Fail closed: the account rename shared the batch and must not have survived it either.
     const reloaded = new LocalFinanceRepository(storage);
     await reloaded.initialize();
-    expect(reloaded.getSnapshot().accounts.find((item) => item.id === account.id)!.name).toBe(account.name);
+    expect(
+      reloaded.getSnapshot().accounts.find((item) => item.id === account.id)!
+        .name,
+    ).toBe(account.name);
     expect(reloaded.getSnapshot().transactions).toHaveLength(1);
   });
 
-  it('ignores an op for an entity type this version does not know', async () => {
+  it("ignores an op for an entity type this version does not know", async () => {
     // It came from a newer app. The engine still stores and forwards it — dropping it would
     // break the hash chain for every peer downstream — but there is nothing to project.
     const { repository } = await createRepository();
     const before = repository.getSnapshot();
 
-    const result = await repository.applyRemoteOps([{
-      hlc: at('2100-01-01T10:00:00.000Z'),
-      entityType: 'receipts' as EntityType,
-      entityId: 'receipt-1',
-      kind: 'create',
-      payload: { entity: { id: 'receipt-1' } },
-      schema: 99,
-    }]);
+    const result = await repository.applyRemoteOps([
+      {
+        hlc: at("2100-01-01T10:00:00.000Z"),
+        entityType: "receipts" as EntityType,
+        entityId: "receipt-1",
+        kind: "create",
+        payload: { entity: { id: "receipt-1" } },
+        schema: 99,
+      },
+    ]);
 
     expect(result).toEqual({ applied: 0, changedTypes: [], repairs: [] });
     expect(repository.getSnapshot()).toBe(before);
   });
 
-  it('repairs the merged set instead of writing a state the finance core rejects', async () => {
+  it("repairs the merged set instead of writing a state the finance core rejects", async () => {
     // Two devices both created "Savings" offline. The merged set violates `assertUniqueName`,
     // so every later `saveAccount` on either device would throw. The repair renames one,
     // deterministically, so both devices land on the same name without emitting an op.
     const { repository } = await createRepository();
     const savings = await repository.saveAccount({
-      name: 'Savings', type: 'savings', currency: 'USD',
-      openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
     });
     const twin = {
       ...savings,
-      id: 'ffffffff-ffff-4fff-8fff-ffffffffffff',
-      createdAt: '2027-01-01T00:00:00.000Z',
+      id: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+      createdAt: "2027-01-01T00:00:00.000Z",
     };
 
     const result = await repository.applyRemoteOps(
-      remoteOps('accounts', null, twin, '2100-01-01T10:00:00.000Z'),
+      remoteOps("accounts", null, twin, "2100-01-01T10:00:00.000Z"),
     );
 
-    expect(result.repairs.map((note) => note.code)).toContain('nameDisambiguated');
+    expect(result.repairs.map((note) => note.code)).toContain(
+      "nameDisambiguated",
+    );
     const names = repository.getSnapshot().accounts.map((item) => item.name);
-    expect(names).toContain('Savings');
-    expect(names).toContain('Savings (duplicate)');
+    expect(names).toContain("Savings");
+    expect(names).toContain("Savings (duplicate)");
     // The assertion that matters: the merged set is still one the app can write to.
     await expect(
-      repository.saveAccount({ ...savings, name: 'Savings' }, savings.id, savings.revision),
+      repository.saveAccount(
+        { ...savings, name: "Savings" },
+        savings.id,
+        savings.revision,
+      ),
     ).resolves.toBeDefined();
   });
 
-  it('saves a fetched rate with a deterministic id and is a no-op on an unchanged re-fetch', async () => {
+  it("saves a fetched rate with a deterministic id and is a no-op on an unchanged re-fetch", async () => {
     const { repository } = await createRepository();
     const result = await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     expect(result).toEqual({ written: 1, skippedManual: 0, conflicts: [] });
     const saved = repository.getSnapshot().exchangeRates[0];
     // Two devices fetching the same day's rate independently must mint the same id, with
     // nothing exchanged, so the merge converges into one entity by construction.
-    expect(saved.id).toBe(fetchedRateId('EUR', 'USD', '2026-01-01'));
+    expect(saved.id).toBe(fetchedRateId("EUR", "USD", "2026-01-01"));
     expect(saved.revision).toBe(1);
 
     // An unattended re-fetch of "latest" that happens to report the same value must not bump
     // a revision or write anything — that would be a sync op for a value that did not change.
     const second = await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     expect(second).toEqual({ written: 0, skippedManual: 0, conflicts: [] });
     expect(repository.getSnapshot().exchangeRates).toHaveLength(1);
     expect(repository.getSnapshot().exchangeRates[0].revision).toBe(1);
   });
 
-  it('updates an already-fetched rate in place when a later fetch reports a different value', async () => {
+  it("updates an already-fetched rate in place when a later fetch reports a different value", async () => {
     const { repository } = await createRepository();
     await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     const result = await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.2', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.2",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     expect(result).toEqual({ written: 1, skippedManual: 0, conflicts: [] });
     expect(repository.getSnapshot().exchangeRates).toEqual([
-      expect.objectContaining({ rate: '1.2', revision: 2 }),
+      expect.objectContaining({ rate: "1.2", revision: 2 }),
     ]);
   });
 
-  it('lets an existing manual rate win over a fetched rate for the same key', async () => {
+  it("lets an existing manual rate win over a fetched rate for the same key", async () => {
     const { repository } = await createRepository();
     const manual = await repository.saveExchangeRate({
-      fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.05', effectiveDate: '2026-01-01',
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.05",
+      effectiveDate: "2026-01-01",
     });
     const result = await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     expect(result).toEqual({ written: 0, skippedManual: 1, conflicts: [] });
     expect(repository.getSnapshot().exchangeRates).toEqual([manual]);
   });
 
-  it('never resurrects a fetched rate the user deleted', async () => {
+  it("never resurrects a fetched rate the user deleted", async () => {
     const { repository, storage } = await createRepository();
     await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
     ]);
-    const id = fetchedRateId('EUR', 'USD', '2026-01-01');
-    await repository.deleteEntities('exchangeRates', [id]);
+    const id = fetchedRateId("EUR", "USD", "2026-01-01");
+    await repository.deleteEntities("exchangeRates", [id]);
     // The live snapshot drops tombstones entirely; the stored row still carries one.
-    expect(repository.getSnapshot().exchangeRates.some((item) => item.id === id)).toBe(false);
-    expect((await storage.readAll('exchangeRates')).find((item) => item.id === id)?.deletedAt).not.toBeNull();
+    expect(
+      repository.getSnapshot().exchangeRates.some((item) => item.id === id),
+    ).toBe(false);
+    expect(
+      (await storage.readAll("exchangeRates")).find((item) => item.id === id)
+        ?.deletedAt,
+    ).not.toBeNull();
 
     const result = await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     expect(result).toEqual({ written: 0, skippedManual: 0, conflicts: [] });
-    expect(repository.getSnapshot().exchangeRates.some((item) => item.id === id)).toBe(false);
-    expect((await storage.readAll('exchangeRates')).find((item) => item.id === id)?.deletedAt).not.toBeNull();
+    expect(
+      repository.getSnapshot().exchangeRates.some((item) => item.id === id),
+    ).toBe(false);
+    expect(
+      (await storage.readAll("exchangeRates")).find((item) => item.id === id)
+        ?.deletedAt,
+    ).not.toBeNull();
   });
 
-  it('reports a reciprocal conflict instead of throwing, without blocking the rest of the batch', async () => {
+  it("reports a reciprocal conflict instead of throwing, without blocking the rest of the batch", async () => {
     const { repository } = await createRepository();
     // A legacy manual rate that a fetched EUR->USD rate of 3 (implying 0.5 the other way)
     // would contradict: 1 USD = 2 EUR implies 1 EUR = 0.5 USD, not 3.
     await repository.saveExchangeRate({
-      fromCurrency: 'USD', toCurrency: 'EUR', rate: '2', effectiveDate: '2026-01-01',
+      fromCurrency: "USD",
+      toCurrency: "EUR",
+      rate: "2",
+      effectiveDate: "2026-01-01",
     });
 
     const result = await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '3', effectiveDate: '2026-01-01' },
-      { fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.3', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "3",
+        effectiveDate: "2026-01-01",
+      },
+      {
+        fromCurrency: "GBP",
+        toCurrency: "USD",
+        rate: "1.3",
+        effectiveDate: "2026-01-01",
+      },
     ]);
 
     expect(result.written).toBe(1);
     expect(result.skippedManual).toBe(0);
     expect(result.conflicts).toEqual([
-      { fromCurrency: 'EUR', toCurrency: 'USD', effectiveDate: '2026-01-01', existingRate: '2' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        effectiveDate: "2026-01-01",
+        existingRate: "2",
+      },
     ]);
     const rates = repository.getSnapshot().exchangeRates;
-    expect(rates.some((item) => item.fromCurrency === 'GBP' && item.toCurrency === 'USD')).toBe(true);
-    expect(rates.some((item) => item.fromCurrency === 'EUR' && item.toCurrency === 'USD')).toBe(false);
+    expect(
+      rates.some(
+        (item) => item.fromCurrency === "GBP" && item.toCurrency === "USD",
+      ),
+    ).toBe(true);
+    expect(
+      rates.some(
+        (item) => item.fromCurrency === "EUR" && item.toCurrency === "USD",
+      ),
+    ).toBe(false);
   });
 
-  it('persists a whole batch of fetched rates through exactly one putMany call', async () => {
+  it("persists a whole batch of fetched rates through exactly one putMany call", async () => {
     class CountingStorage extends MemoryStorageAdapter {
       putManyCalls = 0;
 
-      override async putMany(records: Parameters<MemoryStorageAdapter['putMany']>[0], source?: object) {
+      override async putMany(
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
+        source?: object,
+      ) {
         this.putManyCalls += 1;
         await super.putMany(records, source);
       }
@@ -2814,20 +5101,38 @@ describe('applyRemoteOps', () => {
     storage.putManyCalls = 0; // Onboarding itself writes once; count only the batch under test.
 
     const result = await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
-      { fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.3', effectiveDate: '2026-01-01' },
-      { fromCurrency: 'JPY', toCurrency: 'USD', rate: '0.0067', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
+      {
+        fromCurrency: "GBP",
+        toCurrency: "USD",
+        rate: "1.3",
+        effectiveDate: "2026-01-01",
+      },
+      {
+        fromCurrency: "JPY",
+        toCurrency: "USD",
+        rate: "0.0067",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     expect(result.written).toBe(3);
     expect(storage.putManyCalls).toBe(1);
   });
 
-  it('leaves the snapshot unchanged when persisting a fetched-rate batch fails', async () => {
+  it("leaves the snapshot unchanged when persisting a fetched-rate batch fails", async () => {
     class FailingStorage extends MemoryStorageAdapter {
       fail = false;
 
-      override async putMany(records: Parameters<MemoryStorageAdapter['putMany']>[0], source?: object) {
-        if (this.fail) throw new Error('simulated disk failure');
+      override async putMany(
+        records: Parameters<MemoryStorageAdapter["putMany"]>[0],
+        source?: object,
+      ) {
+        if (this.fail) throw new Error("simulated disk failure");
         await super.putMany(records, source);
       }
     }
@@ -2835,279 +5140,412 @@ describe('applyRemoteOps', () => {
     const { repository } = await createRepository(storage);
     storage.fail = true;
 
-    await expect(repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
-    ])).rejects.toThrow('simulated disk failure');
+    await expect(
+      repository.saveFetchedRates([
+        {
+          fromCurrency: "EUR",
+          toCurrency: "USD",
+          rate: "1.1",
+          effectiveDate: "2026-01-01",
+        },
+      ]),
+    ).rejects.toThrow("simulated disk failure");
     expect(repository.getSnapshot().exchangeRates).toHaveLength(0);
   });
 
-  it('validates every row before writing any of them', async () => {
+  it("validates every row before writing any of them", async () => {
     const { repository } = await createRepository();
-    await expect(repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
-      { fromCurrency: 'GBP', toCurrency: 'EUR', rate: '1.3', effectiveDate: '2026-01-01' },
-    ])).rejects.toThrow('base currency');
+    await expect(
+      repository.saveFetchedRates([
+        {
+          fromCurrency: "EUR",
+          toCurrency: "USD",
+          rate: "1.1",
+          effectiveDate: "2026-01-01",
+        },
+        {
+          fromCurrency: "GBP",
+          toCurrency: "EUR",
+          rate: "1.3",
+          effectiveDate: "2026-01-01",
+        },
+      ]),
+    ).rejects.toThrow("base currency");
     expect(repository.getSnapshot().exchangeRates).toHaveLength(0);
   });
 
-  it('refuses to create a manual rate whose key a live fetched rate already occupies', async () => {
+  it("refuses to create a manual rate whose key a live fetched rate already occupies", async () => {
     const { repository } = await createRepository();
     await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.1",
+        effectiveDate: "2026-01-01",
+      },
     ]);
-    await expect(repository.saveExchangeRate({
-      fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.2', effectiveDate: '2026-01-01',
-    })).rejects.toThrow('An automatic rate already exists for this date.');
+    await expect(
+      repository.saveExchangeRate({
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "1.2",
+        effectiveDate: "2026-01-01",
+      }),
+    ).rejects.toThrow("An automatic rate already exists for this date.");
     expect(repository.getSnapshot().exchangeRates).toHaveLength(1);
   });
 
-  it('still allows editing an existing manual rate in place', async () => {
+  it("still allows editing an existing manual rate in place", async () => {
     const { repository } = await createRepository();
     const manual = await repository.saveExchangeRate({
-      fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.3', effectiveDate: '2026-01-01',
+      fromCurrency: "GBP",
+      toCurrency: "USD",
+      rate: "1.3",
+      effectiveDate: "2026-01-01",
     });
-    await expect(repository.saveExchangeRate({ ...manual, rate: '1.35' }, manual.id))
-      .resolves.toMatchObject({ id: manual.id, rate: '1.35' });
+    await expect(
+      repository.saveExchangeRate({ ...manual, rate: "1.35" }, manual.id),
+    ).resolves.toMatchObject({ id: manual.id, rate: "1.35" });
   });
 
-  it('resolves a conversion from a fetched rate the same way it would a manual one', async () => {
+  it("resolves a conversion from a fetched rate the same way it would a manual one", async () => {
     const { repository } = await createRepository();
     const eur = await repository.saveAccount({
-      name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
     });
     await repository.saveFetchedRates([
-      { fromCurrency: 'EUR', toCurrency: 'USD', rate: '2', effectiveDate: '2026-01-01' },
+      {
+        fromCurrency: "EUR",
+        toCurrency: "USD",
+        rate: "2",
+        effectiveDate: "2026-01-01",
+      },
     ]);
     const transaction = await repository.saveTransaction({
-      kind: 'expense', title: 'Coffee', localDate: '2026-07-15', accountId: eur.id, amountMinor: 500,
+      kind: "expense",
+      title: "Coffee",
+      localDate: "2026-07-15",
+      accountId: eur.id,
+      amountMinor: 500,
     });
-    expect(transaction.exchangeRate).toBe('2');
+    expect(transaction.exchangeRate).toBe("2");
     expect(transaction.baseAmountMinor).toBe(1000);
   });
 });
 
-describe('foreign amounts and fees', () => {
-  it('prices an expense from a foreign amount using an explicit rate', async () => {
+describe("foreign amounts and fees", () => {
+  it("prices an expense from a foreign amount using an explicit rate", async () => {
     const { repository } = await createRepository();
     // The default onboarding account is USD, which is also the base currency, so this
     // exercises the foreign leg in isolation without needing an account→base rate too.
     const account = repository.getSnapshot().accounts[0];
     const transaction = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Hotel',
-      localDate: '2026-07-01',
+      kind: "expense",
+      title: "Hotel",
+      localDate: "2026-07-01",
       accountId: account.id,
       amountMinor: 1, // ignored — derived from the foreign amount instead
-      foreign: { amountMinor: 5000, currency: 'EUR', exchangeRate: '1.1' },
+      foreign: { amountMinor: 5000, currency: "EUR", exchangeRate: "1.1" },
     });
     // 50.00 EUR * 1.1 = 55.00 USD.
     expect(transaction.amountMinor).toBe(5500);
-    expect(transaction.currency).toBe('USD');
-    expect(transaction.foreign).toEqual({ amountMinor: 5000, currency: 'EUR', exchangeRate: '1.1' });
+    expect(transaction.currency).toBe("USD");
+    expect(transaction.foreign).toEqual({
+      amountMinor: 5000,
+      currency: "EUR",
+      exchangeRate: "1.1",
+    });
     // baseAmountMinor still derives from the total in account currency exactly as before.
     expect(transaction.baseAmountMinor).toBe(transaction.amountMinor);
   });
 
-  it('resolves a foreign rate from stored rates, including a pivot through the base currency', async () => {
+  it("resolves a foreign rate from stored rates, including a pivot through the base currency", async () => {
     const { repository } = await createRepository();
     const gbpAccount = await repository.saveAccount({
-      name: 'Sterling', type: 'checking', currency: 'GBP', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+      name: "Sterling",
+      type: "checking",
+      currency: "GBP",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
     });
     // Base is USD. 1 EUR = 1.1 USD, 1 GBP = 1.32 USD, so 1 EUR = 1.1/1.32 GBP.
-    await repository.saveExchangeRate({ fromCurrency: 'EUR', toCurrency: 'USD', rate: '1.1', effectiveDate: '2026-01-01' });
-    await repository.saveExchangeRate({ fromCurrency: 'GBP', toCurrency: 'USD', rate: '1.32', effectiveDate: '2026-01-01' });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.1",
+      effectiveDate: "2026-01-01",
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "GBP",
+      toCurrency: "USD",
+      rate: "1.32",
+      effectiveDate: "2026-01-01",
+    });
     const transaction = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Dinner',
-      localDate: '2026-07-01',
+      kind: "expense",
+      title: "Dinner",
+      localDate: "2026-07-01",
       accountId: gbpAccount.id,
       amountMinor: 1,
-      foreign: { amountMinor: 10000, currency: 'EUR' },
+      foreign: { amountMinor: 10000, currency: "EUR" },
     });
-    expect(transaction.foreign?.currency).toBe('EUR');
-    expect(Number(transaction.foreign?.exchangeRate)).toBeCloseTo(1.1 / 1.32, 8);
+    expect(transaction.foreign?.currency).toBe("EUR");
+    expect(Number(transaction.foreign?.exchangeRate)).toBeCloseTo(
+      1.1 / 1.32,
+      8,
+    );
     expect(transaction.amountMinor).toBe(Math.round(10000 * (1.1 / 1.32)));
   });
 
-  it('adds a percent fee to an expense and rounds half up', async () => {
+  it("adds a percent fee to an expense and rounds half up", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const transaction = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Wire transfer',
-      localDate: '2026-07-01',
+      kind: "expense",
+      title: "Wire transfer",
+      localDate: "2026-07-01",
       accountId: account.id,
       amountMinor: 10001,
-      fee: { kind: 'percent', percent: '2.5' },
+      fee: { kind: "percent", percent: "2.5" },
     });
     // 2.5% of 10001 = 250.025 -> rounds to 250; total = 10251.
-    expect(transaction.fee).toEqual({ kind: 'percent', percent: '2.5', amountMinor: 250 });
+    expect(transaction.fee).toEqual({
+      kind: "percent",
+      percent: "2.5",
+      amountMinor: 250,
+    });
     expect(transaction.amountMinor).toBe(10251);
     expect(transaction.baseAmountMinor).toBe(10251);
   });
 
-  it('subtracts a fixed fee from income', async () => {
+  it("subtracts a fixed fee from income", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const transaction = await repository.saveTransaction({
-      kind: 'income',
-      title: 'Freelance payment',
-      localDate: '2026-07-01',
+      kind: "income",
+      title: "Freelance payment",
+      localDate: "2026-07-01",
       accountId: account.id,
       amountMinor: 10000,
-      fee: { kind: 'fixed', amountMinor: 250 },
+      fee: { kind: "fixed", amountMinor: 250 },
     });
-    expect(transaction.fee).toEqual({ kind: 'fixed', percent: null, amountMinor: 250 });
+    expect(transaction.fee).toEqual({
+      kind: "fixed",
+      percent: null,
+      amountMinor: 250,
+    });
     expect(transaction.amountMinor).toBe(9750);
   });
 
-  it('rejects an income fee that would consume the entire amount or more', async () => {
+  it("rejects an income fee that would consume the entire amount or more", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    await expect(repository.saveTransaction({
-      kind: 'income',
-      title: 'Payout',
-      localDate: '2026-07-01',
-      accountId: account.id,
-      amountMinor: 10000,
-      fee: { kind: 'fixed', amountMinor: 10000 },
-    })).rejects.toThrow('Fees can’t exceed the income amount.');
+    await expect(
+      repository.saveTransaction({
+        kind: "income",
+        title: "Payout",
+        localDate: "2026-07-01",
+        accountId: account.id,
+        amountMinor: 10000,
+        fee: { kind: "fixed", amountMinor: 10000 },
+      }),
+    ).rejects.toThrow("Fees can’t exceed the income amount.");
   });
 
-  it('rejects a fee or a foreign amount on a transfer', async () => {
+  it("rejects a fee or a foreign amount on a transfer", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const second = await repository.saveAccount({
-      name: 'Savings', type: 'savings', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false,
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#00A58E",
+      archived: false,
     });
-    await expect(repository.saveTransaction({
-      kind: 'transfer',
-      title: 'Move money',
-      localDate: '2026-07-01',
-      accountId: account.id,
-      destinationAccountId: second.id,
-      amountMinor: 1000,
-      fee: { kind: 'fixed', amountMinor: 100 },
-    })).rejects.toThrow('Foreign amounts and fees apply to expenses and income only.');
-    await expect(repository.saveTransaction({
-      kind: 'transfer',
-      title: 'Move money',
-      localDate: '2026-07-01',
-      accountId: account.id,
-      destinationAccountId: second.id,
-      amountMinor: 1000,
-      foreign: { amountMinor: 1000, currency: 'EUR', exchangeRate: '1' },
-    })).rejects.toThrow('Foreign amounts and fees apply to expenses and income only.');
+    await expect(
+      repository.saveTransaction({
+        kind: "transfer",
+        title: "Move money",
+        localDate: "2026-07-01",
+        accountId: account.id,
+        destinationAccountId: second.id,
+        amountMinor: 1000,
+        fee: { kind: "fixed", amountMinor: 100 },
+      }),
+    ).rejects.toThrow(
+      "Foreign amounts and fees apply to expenses and income only.",
+    );
+    await expect(
+      repository.saveTransaction({
+        kind: "transfer",
+        title: "Move money",
+        localDate: "2026-07-01",
+        accountId: account.id,
+        destinationAccountId: second.id,
+        amountMinor: 1000,
+        foreign: { amountMinor: 1000, currency: "EUR", exchangeRate: "1" },
+      }),
+    ).rejects.toThrow(
+      "Foreign amounts and fees apply to expenses and income only.",
+    );
   });
 
-  it('rejects a foreign currency equal to the account currency', async () => {
+  it("rejects a foreign currency equal to the account currency", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
-    await expect(repository.saveTransaction({
-      kind: 'expense',
-      title: 'Coffee',
-      localDate: '2026-07-01',
-      accountId: account.id,
-      amountMinor: 1,
-      foreign: { amountMinor: 500, currency: account.currency, exchangeRate: '1' },
-    })).rejects.toThrow('Choose a foreign currency different from the account’s.');
+    await expect(
+      repository.saveTransaction({
+        kind: "expense",
+        title: "Coffee",
+        localDate: "2026-07-01",
+        accountId: account.id,
+        amountMinor: 1,
+        foreign: {
+          amountMinor: 500,
+          currency: account.currency,
+          exchangeRate: "1",
+        },
+      }),
+    ).rejects.toThrow(
+      "Choose a foreign currency different from the account’s.",
+    );
   });
 
-  it('keeps a foreign rate snapshot on an unrelated edit even after the rate row is deleted', async () => {
+  it("keeps a foreign rate snapshot on an unrelated edit even after the rate row is deleted", async () => {
     const { repository } = await createRepository();
     const euro = await repository.saveAccount({
-      name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
     });
-    const rate = await repository.saveExchangeRate({ fromCurrency: 'USD', toCurrency: 'EUR', rate: '0.9', effectiveDate: '2026-01-01' });
+    const rate = await repository.saveExchangeRate({
+      fromCurrency: "USD",
+      toCurrency: "EUR",
+      rate: "0.9",
+      effectiveDate: "2026-01-01",
+    });
     const original = await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Hotel',
-      localDate: '2026-07-01',
+      kind: "expense",
+      title: "Hotel",
+      localDate: "2026-07-01",
       accountId: euro.id,
       amountMinor: 1,
-      foreign: { amountMinor: 5000, currency: 'USD' },
+      foreign: { amountMinor: 5000, currency: "USD" },
     });
-    expect(original.foreign?.exchangeRate).toBe('0.9');
-    await repository.deleteEntities('exchangeRates', [rate.id]);
+    expect(original.foreign?.exchangeRate).toBe("0.9");
+    await repository.deleteEntities("exchangeRates", [rate.id]);
 
     const renamed = await repository.saveTransaction(
       {
-        kind: 'expense',
-        title: 'Hotel stay',
-        localDate: '2026-07-01',
+        kind: "expense",
+        title: "Hotel stay",
+        localDate: "2026-07-01",
         accountId: euro.id,
         amountMinor: 1,
-        foreign: { amountMinor: 5000, currency: 'USD' },
+        foreign: { amountMinor: 5000, currency: "USD" },
       },
       original.id,
     );
-    expect(renamed.title).toBe('Hotel stay');
-    expect(renamed.foreign?.exchangeRate).toBe('0.9');
+    expect(renamed.title).toBe("Hotel stay");
+    expect(renamed.foreign?.exchangeRate).toBe("0.9");
     expect(renamed.amountMinor).toBe(original.amountMinor);
   });
 
-  it('generates recurring occurrences from a foreign template with a percent fee, priced at each date', async () => {
+  it("generates recurring occurrences from a foreign template with a percent fee, priced at each date", async () => {
     const { repository } = await createRepository();
     const euro = await repository.saveAccount({
-      name: 'Euro', type: 'checking', currency: 'EUR', openingBalanceMinor: 0, icon: 'wallet', color: '#5966E9', archived: false,
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
     });
-    await repository.saveExchangeRate({ fromCurrency: 'USD', toCurrency: 'EUR', rate: '0.9', effectiveDate: '2026-01-01' });
-    await repository.saveExchangeRate({ fromCurrency: 'USD', toCurrency: 'EUR', rate: '0.95', effectiveDate: '2026-02-01' });
+    await repository.saveExchangeRate({
+      fromCurrency: "USD",
+      toCurrency: "EUR",
+      rate: "0.9",
+      effectiveDate: "2026-01-01",
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "USD",
+      toCurrency: "EUR",
+      rate: "0.95",
+      effectiveDate: "2026-02-01",
+    });
     await repository.saveRecurringRule({
       template: {
-        kind: 'expense',
-        title: 'Subscription',
-        note: '',
+        kind: "expense",
+        title: "Subscription",
+        note: "",
         accountId: euro.id,
         categoryId: null,
         tagIds: [],
         amountMinor: 1,
-        currency: 'EUR',
-        foreign: { amountMinor: 1000, currency: 'USD' },
-        fee: { kind: 'percent', percent: '2' },
+        currency: "EUR",
+        foreign: { amountMinor: 1000, currency: "USD" },
+        fee: { kind: "percent", percent: "2" },
       },
-      unit: 'month',
+      unit: "month",
       interval: 1,
-      startDate: '2026-01-31',
-      endDate: '2026-02-28',
-      nextDueDate: '2026-01-31',
+      startDate: "2026-01-31",
+      endDate: "2026-02-28",
+      nextDueDate: "2026-01-31",
       autoPost: false,
       active: true,
     });
-    await repository.generateRecurring('2026-02-28');
-    const generated = repository.getSnapshot().transactions
-      .filter((item) => item.recurringRuleId)
+    await repository.generateRecurring("2026-02-28");
+    const generated = repository
+      .getSnapshot()
+      .transactions.filter((item) => item.recurringRuleId)
       .sort((a, b) => a.localDate.localeCompare(b.localDate));
     expect(generated).toHaveLength(2);
     // January prices at 0.9: principal = 1000 * 0.9 = 900, fee = 2% of 900 = 18, total = 918.
-    expect(generated[0].foreign?.exchangeRate).toBe('0.9');
+    expect(generated[0].foreign?.exchangeRate).toBe("0.9");
     expect(generated[0].amountMinor).toBe(918);
     // February prices at 0.95: principal = 1000 * 0.95 = 950, fee = 2% of 950 = 19, total = 969.
-    expect(generated[1].foreign?.exchangeRate).toBe('0.95');
+    expect(generated[1].foreign?.exchangeRate).toBe("0.95");
     expect(generated[1].amountMinor).toBe(969);
   });
 
-  it('reflects foreign-and-fee totals in account balances', async () => {
+  it("reflects foreign-and-fee totals in account balances", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     await repository.saveTransaction({
-      kind: 'expense',
-      title: 'Groceries',
-      localDate: '2026-07-01',
+      kind: "expense",
+      title: "Groceries",
+      localDate: "2026-07-01",
       accountId: account.id,
       amountMinor: 10000,
-      fee: { kind: 'fixed', amountMinor: 100 },
+      fee: { kind: "fixed", amountMinor: 100 },
     });
     await repository.saveTransaction({
-      kind: 'income',
-      title: 'Payout',
-      localDate: '2026-07-02',
+      kind: "income",
+      title: "Payout",
+      localDate: "2026-07-02",
       accountId: account.id,
       amountMinor: 5000,
-      fee: { kind: 'fixed', amountMinor: 50 },
+      fee: { kind: "fixed", amountMinor: 50 },
     });
-    const summary = repository.getDashboard('2026-07-01', '2026-07-31');
-    const balance = summary.accountBalances.find((item) => item.account.id === account.id)?.balanceMinor;
+    const summary = repository.getDashboard("2026-07-01", "2026-07-31");
+    const balance = summary.accountBalances.find(
+      (item) => item.account.id === account.id,
+    )?.balanceMinor;
     // opening 0 - (10000+100 expense total) + (5000-50 income total) = -5100.
     expect(balance).toBe(0 - 10100 + 4950);
   });

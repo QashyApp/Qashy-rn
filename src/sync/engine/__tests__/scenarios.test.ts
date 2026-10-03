@@ -22,8 +22,8 @@
  * be asserting that the merge engine does what the merge engine does.
  */
 
-import type { Budget, Category, TransactionRecord } from '@/domain/models';
-import { convertMinor } from '@/utils/money';
+import type { Budget, Category, TransactionRecord } from "@/domain/models";
+import { convertMinor } from "@/utils/money";
 import {
   activityOf,
   BASE_CURRENCY,
@@ -37,9 +37,9 @@ import {
   sync,
   transactionInputOf,
   type VaultDevice,
-} from '@/sync/engine/__tests__/vault';
+} from "@/sync/engine/__tests__/vault";
 
-const TODAY = '2026-07-15';
+const TODAY = "2026-07-15";
 
 /**
  * Far enough out that saving a rule does not immediately post it.
@@ -48,8 +48,8 @@ const TODAY = '2026-07-15';
  * week is already posted by the time the test gets to partition the devices. Scheduling past
  * that window is what leaves the occurrence genuinely outstanding on both sides.
  */
-const HORIZON = '2027-03-05';
-const DUE = '2027-03-01';
+const HORIZON = "2027-03-05";
+const DUE = "2027-03-01";
 
 /** One device onboards, the rest receive the vault — pairing a new phone with an old one. */
 async function populated(count = 2) {
@@ -69,22 +69,22 @@ const named = (device: VaultDevice, name: string) =>
 // Deterministic identity
 // ---------------------------------------------------------------------------
 
-describe('merge scenarios — two devices generating the same record', () => {
-  it('produces one transaction when both devices run the same recurrence', async () => {
+describe("merge scenarios — two devices generating the same record", () => {
+  it("produces one transaction when both devices run the same recurrence", async () => {
     const [alice, bob] = await populated();
     const wire = alice.wireTo(bob);
     const rule = await alice.repository.saveRecurringRule({
       template: {
-        kind: 'expense',
-        title: 'Rent',
-        note: '',
+        kind: "expense",
+        title: "Rent",
+        note: "",
         accountId: alice.state.accounts[0].id,
         categoryId: null,
         tagIds: [],
         amountMinor: 120_000,
         currency: BASE_CURRENCY,
       },
-      unit: 'month',
+      unit: "month",
       interval: 1,
       startDate: DUE,
       endDate: null,
@@ -116,25 +116,25 @@ describe('merge scenarios — two devices generating the same record', () => {
     // so neither considers it outstanding.
     expect(await alice.repository.generateRecurring(HORIZON)).toBe(0);
     expect(await bob.repository.generateRecurring(HORIZON)).toBe(0);
-    expect(alice.state.recurringRules.find((row) => row.id === rule.id)?.nextDueDate).toBe(
-      '2027-04-01',
-    );
+    expect(
+      alice.state.recurringRules.find((row) => row.id === rule.id)?.nextDueDate,
+    ).toBe("2027-04-01");
   });
 
-  it('keeps a deleted occurrence deleted after it merges back', async () => {
+  it("keeps a deleted occurrence deleted after it merges back", async () => {
     const [alice, bob] = await populated();
     await alice.repository.saveRecurringRule({
       template: {
-        kind: 'expense',
-        title: 'Gym',
-        note: '',
+        kind: "expense",
+        title: "Gym",
+        note: "",
         accountId: alice.state.accounts[0].id,
         categoryId: null,
         tagIds: [],
         amountMinor: 4_500,
         currency: BASE_CURRENCY,
       },
-      unit: 'month',
+      unit: "month",
       interval: 1,
       startDate: DUE,
       endDate: null,
@@ -149,7 +149,7 @@ describe('merge scenarios — two devices generating the same record', () => {
     // The user cancelled the gym and deleted the posted charge. The tombstone is what tells
     // every device never to regenerate that occurrence — hard-deleting the row instead would
     // resurrect the charge on the next foreground, on every device, forever.
-    await alice.repository.deleteEntities('transactions', [generated.id]);
+    await alice.repository.deleteEntities("transactions", [generated.id]);
     await sync([alice, bob], 3);
 
     expectConverged([alice, bob]);
@@ -162,40 +162,45 @@ describe('merge scenarios — two devices generating the same record', () => {
     expect(expectConverged([alice, bob]).transactions).toHaveLength(0);
   });
 
-  it('keeps one budget period per window, with the same rollover on both', async () => {
+  it("keeps one budget period per window, with the same rollover on both", async () => {
     // The calendar is the trigger here, so it has to be controlled. `setTimeout` is left real
     // because the loopback delivers frames through it — freezing it would deadlock `settle`.
     jest.useFakeTimers({
-      now: new Date('2026-07-15T09:00:00Z'),
+      now: new Date("2026-07-15T09:00:00Z"),
       doNotFake: [
-        'setTimeout',
-        'clearTimeout',
-        'setInterval',
-        'clearInterval',
-        'setImmediate',
-        'clearImmediate',
-        'queueMicrotask',
-        'nextTick',
-        'performance',
+        "setTimeout",
+        "clearTimeout",
+        "setInterval",
+        "clearInterval",
+        "setImmediate",
+        "clearImmediate",
+        "queueMicrotask",
+        "nextTick",
+        "performance",
       ],
     });
     try {
       const [alice, bob] = await populated();
       const wire = alice.wireTo(bob);
       const category = await alice.repository.saveCategory({
-        name: 'Bakery',
-        kind: 'expense',
-        icon: 'cart',
-        color: '#5B8DEF',
+        name: "Bakery",
+        kind: "expense",
+        icon: "cart",
+        color: "#5B8DEF",
         parentId: null,
         archived: false,
       });
       const budget = await alice.repository.saveBudget({
-        name: 'Food',
-        icon: 'chart.pie',
-        color: '#E08C5A',
+        name: "Food",
+        icon: "chart.pie",
+        color: "#E08C5A",
         limitMinor: 60_000,
-        period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
+        period: {
+          unit: "month",
+          interval: 1,
+          anchorDate: "2026-07-01",
+          endDate: null,
+        },
         rollover: true,
         filters: { accountIds: [], categoryIds: [category.id], tagIds: [] },
         categoryLimits: [],
@@ -204,8 +209,8 @@ describe('merge scenarios — two devices generating the same record', () => {
       // Spend some of July, so August has a rollover worth disagreeing about. A test where
       // both devices compute zero would pass with the rollover arithmetic deleted.
       await alice.repository.saveTransaction({
-        kind: 'expense',
-        title: 'Market',
+        kind: "expense",
+        title: "Market",
         localDate: TODAY,
         accountId: alice.state.accounts[0].id,
         categoryId: category.id,
@@ -216,7 +221,7 @@ describe('merge scenarios — two devices generating the same record', () => {
 
       // The 1st of the next month, both devices offline from each other. Each one notices
       // July has closed and opens August on its own.
-      jest.setSystemTime(new Date('2026-08-03T09:00:00Z'));
+      jest.setSystemTime(new Date("2026-08-03T09:00:00Z"));
       wire.partition();
       await alice.repository.generateRecurring();
       await bob.repository.generateRecurring();
@@ -232,12 +237,14 @@ describe('merge scenarios — two devices generating the same record', () => {
       // August; the history sort then ties and `.at(-1)` picks arbitrarily, so the *rollover*
       // differs per device — a wrong number on screen with nothing to indicate it.
       expect(converged.budgetPeriods).toHaveLength(2);
-      const windows = alice.state.budgetPeriods.map((row) => `${row.budgetId}:${row.periodStart}`);
+      const windows = alice.state.budgetPeriods.map(
+        (row) => `${row.budgetId}:${row.periodStart}`,
+      );
       expect(new Set(windows).size).toBe(2);
 
       const august = (device: VaultDevice) => {
         const status = device.repository
-          .getBudgetStatuses('2026-08-03')
+          .getBudgetStatuses("2026-08-03")
           .find((row) => row.budget.id === budget.id)!;
         return {
           periodStart: status.snapshot.periodStart,
@@ -247,13 +254,16 @@ describe('merge scenarios — two devices generating the same record', () => {
         };
       };
       expect(august(alice)).toEqual(august(bob));
-      expect(august(alice)).toMatchObject({ periodStart: '2026-08-01', rolloverMinor: 38_000 });
+      expect(august(alice)).toMatchObject({
+        periodStart: "2026-08-01",
+        rolloverMinor: 38_000,
+      });
     } finally {
       jest.useRealTimers();
     }
   });
 
-  it('produces one exchange rate when both devices fetch the same day independently', async () => {
+  it("produces one exchange rate when both devices fetch the same day independently", async () => {
     const [alice, bob] = await populated();
     const wire = alice.wireTo(bob);
 
@@ -261,7 +271,12 @@ describe('merge scenarios — two devices generating the same record', () => {
     // "no rare race" situation as the recurring-generation scenario above, since automatic
     // rate refresh runs on the same schedule.
     wire.partition();
-    const fetched = { fromCurrency: 'EUR', toCurrency: BASE_CURRENCY, rate: '1.1', effectiveDate: TODAY };
+    const fetched = {
+      fromCurrency: "EUR",
+      toCurrency: BASE_CURRENCY,
+      rate: "1.1",
+      effectiveDate: TODAY,
+    };
     await alice.repository.saveFetchedRates([fetched]);
     await bob.repository.saveFetchedRates([fetched]);
     expect(alice.state.exchangeRates).toHaveLength(1);
@@ -280,8 +295,12 @@ describe('merge scenarios — two devices generating the same record', () => {
     // not "it noticed and fixed one", but nothing to fix at all.
     const aliceRepair = await alice.repository.repairProjection();
     const bobRepair = await bob.repository.repairProjection();
-    expect(aliceRepair.repairs.map((note) => note.code)).not.toContain('duplicateRate');
-    expect(bobRepair.repairs.map((note) => note.code)).not.toContain('duplicateRate');
+    expect(aliceRepair.repairs.map((note) => note.code)).not.toContain(
+      "duplicateRate",
+    );
+    expect(bobRepair.repairs.map((note) => note.code)).not.toContain(
+      "duplicateRate",
+    );
   });
 });
 
@@ -289,42 +308,42 @@ describe('merge scenarios — two devices generating the same record', () => {
 // Field groups
 // ---------------------------------------------------------------------------
 
-describe('merge scenarios — co-dependent fields', () => {
-  it('keeps a transaction’s amount, date, and applied rate consistent', async () => {
+describe("merge scenarios — co-dependent fields", () => {
+  it("keeps a transaction’s amount, date, and applied rate consistent", async () => {
     const [alice, bob] = await populated();
     const wire = alice.wireTo(bob);
     const account = await alice.repository.saveAccount({
-      name: 'Travel',
-      type: 'checking',
-      currency: 'EUR',
+      name: "Travel",
+      type: "checking",
+      currency: "EUR",
       openingBalanceMinor: 0,
-      icon: 'wallet',
-      color: '#00A58E',
+      icon: "wallet",
+      color: "#00A58E",
       archived: false,
     });
     // Two rates, so moving the date genuinely moves the rate. With one rate the group could
     // be split down the middle and the arithmetic below would still come out right.
     await alice.repository.saveExchangeRate({
-      fromCurrency: 'EUR',
+      fromCurrency: "EUR",
       toCurrency: BASE_CURRENCY,
-      rate: '1.10',
-      effectiveDate: '2026-07-01',
+      rate: "1.10",
+      effectiveDate: "2026-07-01",
     });
     await alice.repository.saveExchangeRate({
-      fromCurrency: 'EUR',
+      fromCurrency: "EUR",
       toCurrency: BASE_CURRENCY,
-      rate: '1.25',
-      effectiveDate: '2026-07-20',
+      rate: "1.25",
+      effectiveDate: "2026-07-20",
     });
     const original = await alice.repository.saveTransaction({
-      kind: 'expense',
-      title: 'Hotel',
+      kind: "expense",
+      title: "Hotel",
       localDate: TODAY,
       accountId: account.id,
       amountMinor: 40_000,
     });
     await sync([alice, bob], 3);
-    expect(bob.state.transactions[0].exchangeRate).toBe('1.1');
+    expect(bob.state.transactions[0].exchangeRate).toBe("1.1");
 
     wire.partition();
     // Bob's clock runs ahead, so his edit wins on HLC rather than on which line of this test
@@ -340,9 +359,9 @@ describe('merge scenarios — co-dependent fields', () => {
     const held = bob.state.transactions[0];
     await bob.repository.saveTransaction(
       {
-        kind: 'expense',
+        kind: "expense",
         title: held.title,
-        localDate: '2026-07-25',
+        localDate: "2026-07-25",
         accountId: held.accountId,
         amountMinor: held.amountMinor,
       },
@@ -360,19 +379,24 @@ describe('merge scenarios — co-dependent fields', () => {
     // the point: a merge that kept Alice's 55 000 alongside Bob's date and rate would be a
     // transaction no device ever held, and its base amount would be arithmetic nobody did.
     expect(merged).toMatchObject({
-      localDate: '2026-07-25',
+      localDate: "2026-07-25",
       amountMinor: 40_000,
-      currency: 'EUR',
-      exchangeRate: '1.25',
+      currency: "EUR",
+      exchangeRate: "1.25",
     });
     expect(merged.baseAmountMinor).toBe(
-      convertMinor(merged.amountMinor, 'EUR', BASE_CURRENCY, merged.exchangeRate),
+      convertMinor(
+        merged.amountMinor,
+        "EUR",
+        BASE_CURRENCY,
+        merged.exchangeRate,
+      ),
     );
     // Independently derived from the merged ledger rather than replicated, so agreement here
     // is a second check that the same group landed on both sides.
     const balances = (device: VaultDevice) =>
       device.repository
-        .getDashboard('2026-07-01', '2026-07-31')
+        .getDashboard("2026-07-01", "2026-07-31")
         .accountBalances.map((row) => row.balanceMinor);
     expect(balances(alice)).toEqual(balances(bob));
   });
@@ -382,34 +406,43 @@ describe('merge scenarios — co-dependent fields', () => {
 // Repair
 // ---------------------------------------------------------------------------
 
-describe('merge scenarios — repairing a jointly-invalid state', () => {
-  it('leaves a merged budget saveable when filters and limits were edited apart', async () => {
+describe("merge scenarios — repairing a jointly-invalid state", () => {
+  it("leaves a merged budget saveable when filters and limits were edited apart", async () => {
     const [alice, bob] = await populated();
     const wire = alice.wireTo(bob);
     const food = await alice.repository.saveCategory({
-      name: 'Food',
-      kind: 'expense',
-      icon: 'cart',
-      color: '#5B8DEF',
+      name: "Food",
+      kind: "expense",
+      icon: "cart",
+      color: "#5B8DEF",
       parentId: null,
       archived: false,
     });
     const travel = await alice.repository.saveCategory({
-      name: 'Travel',
-      kind: 'expense',
-      icon: 'airplane',
-      color: '#E08C5A',
+      name: "Travel",
+      kind: "expense",
+      icon: "airplane",
+      color: "#E08C5A",
       parentId: null,
       archived: false,
     });
     const budget = await alice.repository.saveBudget({
-      name: 'Monthly',
-      icon: 'chart.pie',
-      color: '#3B9A69',
+      name: "Monthly",
+      icon: "chart.pie",
+      color: "#3B9A69",
       limitMinor: 80_000,
-      period: { unit: 'month', interval: 1, anchorDate: '2026-07-01', endDate: null },
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-07-01",
+        endDate: null,
+      },
       rollover: false,
-      filters: { accountIds: [], categoryIds: [food.id, travel.id], tagIds: [] },
+      filters: {
+        accountIds: [],
+        categoryIds: [food.id, travel.id],
+        tagIds: [],
+      },
       categoryLimits: [{ categoryId: food.id, limitMinor: 30_000 }],
       archived: false,
     });
@@ -446,7 +479,9 @@ describe('merge scenarios — repairing a jointly-invalid state', () => {
     // The filter is kept and the orphaned limit is dropped — the same direction
     // `deleteEntities` already takes, so the repair does not invent a third behaviour.
     expect(mergedBudget.filters.categoryIds).toEqual([food.id]);
-    expect(mergedBudget.categoryLimits.map((row) => row.categoryId)).toEqual([food.id]);
+    expect(mergedBudget.categoryLimits.map((row) => row.categoryId)).toEqual([
+      food.id,
+    ]);
 
     // The assertion the whole scenario exists for. A converged-but-unsavable budget passes a
     // deep equality check on both devices and then throws the first time either opens it.
@@ -460,16 +495,16 @@ describe('merge scenarios — repairing a jointly-invalid state', () => {
     expectConverged([alice, bob]);
   });
 
-  it('resurrects an account a merged-in transaction needs, and lets it go again', async () => {
+  it("resurrects an account a merged-in transaction needs, and lets it go again", async () => {
     const [alice, bob] = await populated();
     const wire = alice.wireTo(bob);
     const savings = await alice.repository.saveAccount({
-      name: 'Savings',
-      type: 'savings',
+      name: "Savings",
+      type: "savings",
       currency: BASE_CURRENCY,
       openingBalanceMinor: 10_000,
-      icon: 'wallet',
-      color: '#3B9A69',
+      icon: "wallet",
+      color: "#3B9A69",
       archived: false,
     });
     await sync([alice, bob], 3);
@@ -477,11 +512,11 @@ describe('merge scenarios — repairing a jointly-invalid state', () => {
     wire.partition();
     // Nothing references it on Alice's side, so this is a real tombstone rather than the
     // archive `deleteEntities` falls back to. Bob, meanwhile, books against it.
-    await alice.repository.deleteEntities('accounts', [savings.id]);
+    await alice.repository.deleteEntities("accounts", [savings.id]);
     expect(alice.state.accounts.map((row) => row.id)).not.toContain(savings.id);
     const booked = await bob.repository.saveTransaction({
-      kind: 'expense',
-      title: 'Transfer fee',
+      kind: "expense",
+      title: "Transfer fee",
       localDate: TODAY,
       accountId: savings.id,
       amountMinor: 250,
@@ -499,7 +534,7 @@ describe('merge scenarios — repairing a jointly-invalid state', () => {
     expect(resurrected).toMatchObject({ deletedAt: null, archived: true });
 
     const before = await Promise.all([opsOf(alice), opsOf(bob)]);
-    await alice.repository.deleteEntities('transactions', [booked.id]);
+    await alice.repository.deleteEntities("transactions", [booked.id]);
     await sync([alice, bob], 3);
 
     const settled = expectConverged([alice, bob]);
@@ -507,7 +542,9 @@ describe('merge scenarios — repairing a jointly-invalid state', () => {
     // to the tombstone it never stopped having. Nothing un-deleted it; it was only ever being
     // shown because something needed it.
     expect(settled.accounts.map((row) => row.id)).not.toContain(savings.id);
-    expect(live(settled.transactions as { deletedAt: string | null }[])).toHaveLength(0);
+    expect(
+      live(settled.transactions as { deletedAt: string | null }[]),
+    ).toHaveLength(0);
 
     // One op — the delete Alice actually made. The repair pass emits nothing, and that is
     // load-bearing rather than tidy: a repair that emitted even one op would work on two
@@ -517,79 +554,84 @@ describe('merge scenarios — repairing a jointly-invalid state', () => {
       rows.filter((row) => !before[index].some((old) => old.opId === row.opId)),
     );
     expect(added.map((rows) => rows.length)).toEqual([1, 1]);
-    expect(added[0]).toMatchObject([{ entityType: 'transactions', kind: 'delete' }]);
+    expect(added[0]).toMatchObject([
+      { entityType: "transactions", kind: "delete" },
+    ]);
   });
 
-  it.each(['en-US', 'he-IL'])('renames colliding categories identically (%s)', async (locale) => {
-    const devices = await makeVault({ count: 2 });
-    const [alice, bob] = devices;
-    await onboard(alice, { locale });
-    await sync(devices, 3);
-    expect(bob.state.settings.locale).toBe(locale);
-    const wire = alice.wireTo(bob);
+  it.each(["en-US", "he-IL"])(
+    "renames colliding categories identically (%s)",
+    async (locale) => {
+      const devices = await makeVault({ count: 2 });
+      const [alice, bob] = devices;
+      await onboard(alice, { locale });
+      await sync(devices, 3);
+      expect(bob.state.settings.locale).toBe(locale);
+      const wire = alice.wireTo(bob);
 
-    // Both people add the bakery category on their own phone, offline. Whether these are the
-    // *same* category is a judgement only they can make, so the automatic step keeps both and
-    // makes the merged set valid; the merge review screen is where the human decides. The
-    // name is deliberately not one of the seeded starter categories, which both devices
-    // already share and which would collide before either of them typed anything.
-    wire.partition();
-    await alice.repository.saveCategory({
-      name: 'Bakery',
-      kind: 'expense',
-      icon: 'cart',
-      color: '#5B8DEF',
-      parentId: null,
-      archived: false,
-    });
-    await bob.repository.saveCategory({
-      name: 'bakery',
-      kind: 'expense',
-      icon: 'cart',
-      color: '#E08C5A',
-      parentId: null,
-      archived: false,
-    });
+      // Both people add the bakery category on their own phone, offline. Whether these are the
+      // *same* category is a judgement only they can make, so the automatic step keeps both and
+      // makes the merged set valid; the merge review screen is where the human decides. The
+      // name is deliberately not one of the seeded starter categories, which both devices
+      // already share and which would collide before either of them typed anything.
+      wire.partition();
+      await alice.repository.saveCategory({
+        name: "Bakery",
+        kind: "expense",
+        icon: "cart",
+        color: "#5B8DEF",
+        parentId: null,
+        archived: false,
+      });
+      await bob.repository.saveCategory({
+        name: "bakery",
+        kind: "expense",
+        icon: "cart",
+        color: "#E08C5A",
+        parentId: null,
+        archived: false,
+      });
 
-    wire.heal();
-    await settle();
-    await sync(devices, 3);
+      wire.heal();
+      await settle();
+      await sync(devices, 3);
 
-    const converged = expectConverged(devices);
-    const collided = (converged.categories as unknown as Category[])
-      .filter((row) => row.name.toLowerCase().startsWith('bakery'))
-      .map((row) => row.name)
-      .sort();
-    expect(collided).toHaveLength(2);
-    // Case folding is locale-dependent — `'I'.toLocaleLowerCase()` is `'ı'` in Turkish — so a
-    // repair that folded with the device's locale would compute different collision sets on
-    // two paired devices and never agree. Running this under he-IL is what pins that.
-    expect(collided).toEqual(['Bakery', 'bakery (duplicate)']);
+      const converged = expectConverged(devices);
+      const collided = (converged.categories as unknown as Category[])
+        .filter((row) => row.name.toLowerCase().startsWith("bakery"))
+        .map((row) => row.name)
+        .sort();
+      expect(collided).toHaveLength(2);
+      // Case folding is locale-dependent — `'I'.toLocaleLowerCase()` is `'ı'` in Turkish — so a
+      // repair that folded with the device's locale would compute different collision sets on
+      // two paired devices and never agree. Running this under he-IL is what pins that.
+      expect(collided).toEqual(["Bakery", "bakery (duplicate)"]);
 
-    // And the merged set is still writable, which is the invariant the rename exists to keep:
-    // `assertUniqueName` would reject two categories called "Bakery" on every save.
-    for (const device of devices) {
-      const held = named(device, 'Bakery')!;
-      await expect(
-        device.repository.saveCategory(inputOf(held) as Category, held.id),
-      ).resolves.toBeDefined();
-    }
-    await sync(devices, 3);
-    expectConverged(devices);
-  });
+      // And the merged set is still writable, which is the invariant the rename exists to keep:
+      // `assertUniqueName` would reject two categories called "Bakery" on every save.
+      for (const device of devices) {
+        const held = named(device, "Bakery")!;
+        await expect(
+          device.repository.saveCategory(inputOf(held) as Category, held.id),
+        ).resolves.toBeDefined();
+      }
+      await sync(devices, 3);
+      expectConverged(devices);
+    },
+  );
 });
 
 // ---------------------------------------------------------------------------
 // Refusals
 // ---------------------------------------------------------------------------
 
-describe('merge scenarios — states that must not merge at all', () => {
-  it('records the real base currency in the op log, not a placeholder', async () => {
-    const [alice] = await makeVault({ count: 1, baseCurrency: 'ILS' });
-    await onboard(alice, { baseCurrency: 'ILS' });
+describe("merge scenarios — states that must not merge at all", () => {
+  it("records the real base currency in the op log, not a placeholder", async () => {
+    const [alice] = await makeVault({ count: 1, baseCurrency: "ILS" });
+    await onboard(alice, { baseCurrency: "ILS" });
 
     const creates = (await opsOf(alice)).filter(
-      (row) => row.entityType === 'settings' && row.kind === 'create',
+      (row) => row.entityType === "settings" && row.kind === "create",
     );
 
     // Exactly one, carrying the currency the user actually chose.
@@ -602,17 +644,19 @@ describe('merge scenarios — states that must not merge at all', () => {
     // silently became a USD one. Deferring the first settings write to `completeOnboarding` is
     // what makes this assertion hold, and this is the assertion that keeps it holding.
     expect(creates).toHaveLength(1);
-    expect(JSON.parse(creates[0].payload)).toMatchObject({ entity: { baseCurrency: 'ILS' } });
-    expect(alice.state.settings.baseCurrency).toBe('ILS');
+    expect(JSON.parse(creates[0].payload)).toMatchObject({
+      entity: { baseCurrency: "ILS" },
+    });
+    expect(alice.state.settings.baseCurrency).toBe("ILS");
   });
 
-  it('carries a never-onboarded device through first-run setup by syncing alone', async () => {
+  it("carries a never-onboarded device through first-run setup by syncing alone", async () => {
     // The "I already use Qashy" path in onboarding pairs a brand-new install before it has
     // created anything. It must come out of the first sync fully set up — the vault's currency,
     // accounts, and a completed-onboarding flag that sends it straight past the first-run flow.
     const devices = await makeVault({ count: 2 });
     const [alice, fresh] = devices;
-    await onboard(alice, { baseCurrency: BASE_CURRENCY, accountName: 'Phone' });
+    await onboard(alice, { baseCurrency: BASE_CURRENCY, accountName: "Phone" });
     expect(fresh.state.settings.onboardingComplete).toBe(false);
     expect(fresh.state.accounts).toEqual([]);
 
@@ -620,20 +664,23 @@ describe('merge scenarios — states that must not merge at all', () => {
 
     expect(fresh.state.settings.onboardingComplete).toBe(true);
     expect(fresh.state.settings.baseCurrency).toBe(BASE_CURRENCY);
-    expect(fresh.state.accounts.map((row) => row.name)).toEqual(['Phone']);
+    expect(fresh.state.accounts.map((row) => row.name)).toEqual(["Phone"]);
     expect(fresh.state.categories.length).toBe(alice.state.categories.length);
     // And it never wrote a settings create of its own that could race the vault's.
     const creates = (await opsOf(fresh)).filter(
-      (row) => row.entityType === 'settings' && row.kind === 'create' && row.deviceId === fresh.deviceId,
+      (row) =>
+        row.entityType === "settings" &&
+        row.kind === "create" &&
+        row.deviceId === fresh.deviceId,
     );
     expect(creates).toEqual([]);
   });
 
-  it('refuses a batch from a device set up in a different base currency', async () => {
-    const devices = await makeVault({ count: 2, currencies: ['USD', 'ILS'] });
+  it("refuses a batch from a device set up in a different base currency", async () => {
+    const devices = await makeVault({ count: 2, currencies: ["USD", "ILS"] });
     const [alice, bob] = devices;
-    await onboard(alice, { baseCurrency: 'USD' });
-    await onboard(bob, { baseCurrency: 'ILS', accountName: 'Laptop' });
+    await onboard(alice, { baseCurrency: "USD" });
+    await onboard(bob, { baseCurrency: "ILS", accountName: "Laptop" });
     const before = normalize(bob.state);
 
     await sync(devices, 3);
@@ -642,17 +689,17 @@ describe('merge scenarios — states that must not merge at all', () => {
     // against the vault's base currency, and re-basing would need the full historical rate
     // matrix for every pair — which the app does not have and never will.
     expect(normalize(bob.state)).toEqual(before);
-    expect(bob.state.accounts.map((row) => row.name)).toEqual(['Laptop']);
-    expect(alice.state.accounts.map((row) => row.name)).toEqual(['Everyday']);
+    expect(bob.state.accounts.map((row) => row.name)).toEqual(["Laptop"]);
+    expect(alice.state.accounts.map((row) => row.name)).toEqual(["Everyday"]);
 
     // Loud on both sides, and in the user's terms. A refusal nobody can see is worse than the
     // corruption it prevents: the devices simply never agree and nothing ever says why.
     expect(bob.errors.length).toBeGreaterThan(0);
     for (const error of bob.errors) {
-      expect((error as Error).message).toContain('different base currencies');
+      expect((error as Error).message).toContain("different base currencies");
     }
     const rejections = await activityOf(bob);
-    expect(rejections.map((row) => row.code)).toContain('currencyMismatch');
+    expect(rejections.map((row) => row.code)).toContain("currencyMismatch");
 
     // Nothing was written on the refusing side — not the ops, not a partial projection. A
     // batch that half-applied here would leave totals converted against two different bases.
@@ -660,11 +707,11 @@ describe('merge scenarios — states that must not merge at all', () => {
     expect(stored.every((row) => row.deviceId === bob.deviceId)).toBe(true);
   });
 
-  it('leaves the other device untouched when one is reset', async () => {
+  it("leaves the other device untouched when one is reset", async () => {
     const [alice, bob] = await populated();
     await alice.repository.saveTransaction({
-      kind: 'expense',
-      title: 'Lunch',
+      kind: "expense",
+      title: "Lunch",
       localDate: TODAY,
       accountId: alice.state.accounts[0].id,
       amountMinor: 1_450,
@@ -679,7 +726,10 @@ describe('merge scenarios — states that must not merge at all', () => {
     // A reset is a *local* wipe and cannot be expressed as an op. "Delete everything" would
     // be a weapon: one compromised paired device could destroy every peer's data with a
     // single message. Reset unpairs this device instead, which is why the meta is gone.
-    expect(await alice.session.reconcile()).toMatchObject({ sealed: 0, pushed: [] });
+    expect(await alice.session.reconcile()).toMatchObject({
+      sealed: 0,
+      pushed: [],
+    });
     await sync([alice, bob], 3);
 
     expect(normalize(bob.state)).toEqual(before);
@@ -692,24 +742,24 @@ describe('merge scenarios — states that must not merge at all', () => {
 // Two vaults that both already have data
 // ---------------------------------------------------------------------------
 
-describe('merge scenarios — pairing two populated vaults', () => {
-  it('keeps both histories and stays writable', async () => {
+describe("merge scenarios — pairing two populated vaults", () => {
+  it("keeps both histories and stays writable", async () => {
     const devices = await makeVault({ count: 2 });
     const [alice, bob] = devices;
     // Neither device is "the" vault. Both were set up separately and used for a while, which
     // is the situation anybody who already owns two devices is actually in.
-    await onboard(alice, { accountName: 'Phone current' });
-    await onboard(bob, { accountName: 'Laptop current' });
+    await onboard(alice, { accountName: "Phone current" });
+    await onboard(bob, { accountName: "Laptop current" });
     await alice.repository.saveTransaction({
-      kind: 'expense',
-      title: 'Coffee',
+      kind: "expense",
+      title: "Coffee",
       localDate: TODAY,
       accountId: alice.state.accounts[0].id,
       amountMinor: 450,
     });
     await bob.repository.saveTransaction({
-      kind: 'income',
-      title: 'Invoice',
+      kind: "income",
+      title: "Invoice",
       localDate: TODAY,
       accountId: bob.state.accounts[0].id,
       amountMinor: 250_000,
@@ -718,13 +768,14 @@ describe('merge scenarios — pairing two populated vaults', () => {
     await sync(devices, 4);
 
     const converged = expectConverged(devices);
-    expect(converged.accounts.map((row) => (row as { name: string }).name).sort()).toEqual([
-      'Laptop current',
-      'Phone current',
-    ]);
     expect(
-      converged.transactions.map((row) => (row as { title: string }).title).sort(),
-    ).toEqual(['Coffee', 'Invoice']);
+      converged.accounts.map((row) => (row as { name: string }).name).sort(),
+    ).toEqual(["Laptop current", "Phone current"]);
+    expect(
+      converged.transactions
+        .map((row) => (row as { title: string }).title)
+        .sort(),
+    ).toEqual(["Coffee", "Invoice"]);
     // Onboarding is monotone-true. A device merging in a peer's older settings row must never
     // be sent back through the first-run flow with its data already on disk.
     expect(alice.state.settings.onboardingComplete).toBe(true);
@@ -738,8 +789,8 @@ describe('merge scenarios — pairing two populated vaults', () => {
         ).resolves.toBeDefined();
       }
       await device.repository.saveTransaction({
-        kind: 'expense',
-        title: 'After pairing',
+        kind: "expense",
+        title: "After pairing",
         localDate: TODAY,
         accountId: device.state.accounts[0].id,
         amountMinor: 99,

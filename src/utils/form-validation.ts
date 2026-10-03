@@ -1,27 +1,30 @@
-import { Decimal } from 'decimal.js';
+import { Decimal } from "decimal.js";
 
-import { isLocalDate } from '@/utils/date';
+import { isLocalDate } from "@/utils/date";
 import {
   isSupportedCurrencyCode,
   normalizeDecimalString,
   parseMoney,
-} from '@/utils/money';
+} from "@/utils/money";
 
 export function validateLocale(value: string) {
   const locale = value.trim();
-  if (!locale) return 'Use a valid locale such as en-US.';
+  if (!locale) return "Use a valid locale such as en-US.";
   try {
     new Intl.NumberFormat(locale).format(1);
     return undefined;
   } catch {
-    return 'Use a valid locale such as en-US.';
+    return "Use a valid locale such as en-US.";
   }
 }
 
 export function validateCurrencyCode(value: string) {
   const currency = value.trim().toUpperCase();
-  if (!/^[A-Z]{3}$/.test(currency)) return 'Use a three-letter currency code such as USD.';
-  return isSupportedCurrencyCode(currency) ? undefined : 'Use a supported ISO 4217 currency code.';
+  if (!/^[A-Z]{3}$/.test(currency))
+    return "Use a three-letter currency code such as USD.";
+  return isSupportedCurrencyCode(currency)
+    ? undefined
+    : "Use a supported ISO 4217 currency code.";
 }
 
 export function validateMoneyInput(
@@ -35,18 +38,20 @@ export function validateMoneyInput(
     nonNegative?: boolean;
   } = {},
 ) {
-  const label = options.label ?? 'Amount';
-  if (!value.trim()) return options.optional ? undefined : `${label} is required.`;
+  const label = options.label ?? "Amount";
+  if (!value.trim())
+    return options.optional ? undefined : `${label} is required.`;
   try {
     const minor = parseMoney(value, currency, locale);
-    if (options.positive && minor <= 0) return `${label} must be greater than zero.`;
+    if (options.positive && minor <= 0)
+      return `${label} must be greater than zero.`;
     if (options.nonNegative && minor < 0) return `${label} cannot be negative.`;
     return undefined;
   } catch (reason) {
     // Keep the parser's specific explanation (decimal places, range), relabelled
     // for the field, instead of collapsing it into a generic message.
-    if (reason instanceof Error && reason.message.startsWith('Amount ')) {
-      return `${label}${reason.message.slice('Amount'.length)}`;
+    if (reason instanceof Error && reason.message.startsWith("Amount ")) {
+      return `${label}${reason.message.slice("Amount".length)}`;
     }
     return `Enter a valid ${label.toLocaleLowerCase()}.`;
   }
@@ -56,16 +61,19 @@ export function validateDateInput(
   value: string,
   options: { label?: string; optional?: boolean } = {},
 ) {
-  const label = options.label ?? 'Date';
-  if (!value.trim()) return options.optional ? undefined : `${label} is required.`;
-  return isLocalDate(value) ? undefined : `Use a real ${label.toLocaleLowerCase()} in YYYY-MM-DD format.`;
+  const label = options.label ?? "Date";
+  if (!value.trim())
+    return options.optional ? undefined : `${label} is required.`;
+  return isLocalDate(value)
+    ? undefined
+    : `Use a real ${label.toLocaleLowerCase()} in YYYY-MM-DD format.`;
 }
 
 export function validatePositiveDecimal(
   value: string,
-  label = 'Value',
+  label = "Value",
   optional = false,
-  locale = 'en-US',
+  locale = "en-US",
 ) {
   if (!value.trim()) return optional ? undefined : `${label} is required.`;
   try {
@@ -80,16 +88,16 @@ export function validatePositiveDecimal(
 }
 
 /** Bounds for a manually entered exchange rate; real pairs (IRR→BHD ≈ 9e-9) sit well inside. */
-export const MIN_EXCHANGE_RATE = '0.000000001';
-export const MAX_EXCHANGE_RATE = '1000000000';
+export const MIN_EXCHANGE_RATE = "0.000000001";
+export const MAX_EXCHANGE_RATE = "1000000000";
 const MAX_RATE_SIGNIFICANT_DIGITS = 12;
 
-export function validateExchangeRate(value: string, locale = 'en-US') {
-  const base = validatePositiveDecimal(value, 'Exchange rate', false, locale);
+export function validateExchangeRate(value: string, locale = "en-US") {
+  const base = validatePositiveDecimal(value, "Exchange rate", false, locale);
   if (base) return base;
   const decimal = new Decimal(normalizeDecimalString(value, locale));
   if (decimal.lt(MIN_EXCHANGE_RATE) || decimal.gt(MAX_EXCHANGE_RATE)) {
-    return 'Exchange rate is outside the supported range.';
+    return "Exchange rate is outside the supported range.";
   }
   if (decimal.precision(true) > MAX_RATE_SIGNIFICANT_DIGITS) {
     return `Use at most ${MAX_RATE_SIGNIFICANT_DIGITS} significant digits.`;
@@ -97,8 +105,12 @@ export function validateExchangeRate(value: string, locale = 'en-US') {
   return undefined;
 }
 
-export function validatePositiveInteger(value: string, label = 'Value') {
-  if (!/^\d+$/.test(value.trim()) || Number(value) < 1 || !Number.isSafeInteger(Number(value))) {
+export function validatePositiveInteger(value: string, label = "Value") {
+  if (
+    !/^\d+$/.test(value.trim()) ||
+    Number(value) < 1 ||
+    !Number.isSafeInteger(Number(value))
+  ) {
     return `${label} must be a positive whole number.`;
   }
   return undefined;

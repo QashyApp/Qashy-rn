@@ -21,15 +21,15 @@
  *   existing on Hermes.
  */
 
-import { getRandomBytes } from 'expo-crypto';
-import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
-import { ed25519, x25519 } from '@noble/curves/ed25519.js';
-import { hkdf as nobleHkdf } from '@noble/hashes/hkdf.js';
-import { scrypt as nobleScrypt } from '@noble/hashes/scrypt.js';
-import { sha256 as nobleSha256 } from '@noble/hashes/sha2.js';
-import { base32nopad, base64urlnopad, hex } from '@scure/base';
+import { getRandomBytes } from "expo-crypto";
+import { xchacha20poly1305 } from "@noble/ciphers/chacha.js";
+import { ed25519, x25519 } from "@noble/curves/ed25519.js";
+import { hkdf as nobleHkdf } from "@noble/hashes/hkdf.js";
+import { scrypt as nobleScrypt } from "@noble/hashes/scrypt.js";
+import { sha256 as nobleSha256 } from "@noble/hashes/sha2.js";
+import { base32nopad, base64urlnopad, hex } from "@scure/base";
 
-import { SyncCryptoError } from '@/sync/crypto/types';
+import { SyncCryptoError } from "@/sync/crypto/types";
 
 export const KEY_LENGTH = 32;
 export const NONCE_LENGTH = 24;
@@ -38,7 +38,7 @@ export const SIGNATURE_LENGTH = 64;
 export const HASH_LENGTH = 32;
 
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder('utf-8', { fatal: true });
+const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
 // ---------------------------------------------------------------------------
 // Bytes
@@ -50,7 +50,10 @@ export const bytesToUtf8 = (bytes: Uint8Array) => {
   try {
     return textDecoder.decode(bytes);
   } catch {
-    throw new SyncCryptoError('Decrypted payload is not valid UTF-8.', 'badFormat');
+    throw new SyncCryptoError(
+      "Decrypted payload is not valid UTF-8.",
+      "badFormat",
+    );
   }
 };
 
@@ -71,7 +74,9 @@ export const randomBytes = (length: number) => {
   // `getRandomBytes` is typed as returning a Uint8Array on every platform, but the web
   // implementation has historically returned a subclass-free view over a larger buffer.
   // Copying makes `.buffer` safe to hand to anything downstream.
-  return bytes instanceof Uint8Array ? new Uint8Array(bytes) : new Uint8Array(bytes as ArrayLike<number>);
+  return bytes instanceof Uint8Array
+    ? new Uint8Array(bytes)
+    : new Uint8Array(bytes as ArrayLike<number>);
 };
 
 /**
@@ -96,9 +101,16 @@ export const zeroize = (...buffers: readonly (Uint8Array | undefined)[]) => {
   for (const buffer of buffers) buffer?.fill(0);
 };
 
-export const assertLength = (bytes: Uint8Array, length: number, what: string) => {
+export const assertLength = (
+  bytes: Uint8Array,
+  length: number,
+  what: string,
+) => {
   if (bytes.length !== length) {
-    throw new SyncCryptoError(`${what} must be ${length} bytes, got ${bytes.length}.`, 'badLength');
+    throw new SyncCryptoError(
+      `${what} must be ${length} bytes, got ${bytes.length}.`,
+      "badLength",
+    );
   }
   return bytes;
 };
@@ -114,7 +126,7 @@ export const fromBase32 = (value: string) => {
   try {
     return base32nopad.decode(value.trim().toUpperCase());
   } catch {
-    throw new SyncCryptoError('Not a valid pairing code.', 'badFormat');
+    throw new SyncCryptoError("Not a valid pairing code.", "badFormat");
   }
 };
 
@@ -124,7 +136,7 @@ export const fromBase64Url = (value: string) => {
   try {
     return base64urlnopad.decode(value);
   } catch {
-    throw new SyncCryptoError('Not valid base64url.', 'badFormat');
+    throw new SyncCryptoError("Not valid base64url.", "badFormat");
   }
 };
 
@@ -134,7 +146,7 @@ export const fromHex = (value: string) => {
   try {
     return hex.decode(value.toLowerCase());
   } catch {
-    throw new SyncCryptoError('Not valid hex.', 'badFormat');
+    throw new SyncCryptoError("Not valid hex.", "badFormat");
   }
 };
 
@@ -149,14 +161,14 @@ export const fromHex = (value: string) => {
 
 export const u8 = (value: number) => {
   if (!Number.isInteger(value) || value < 0 || value > 0xff) {
-    throw new SyncCryptoError(`${value} is not a byte.`, 'badFormat');
+    throw new SyncCryptoError(`${value} is not a byte.`, "badFormat");
   }
   return new Uint8Array([value]);
 };
 
 export const u32be = (value: number) => {
   if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
-    throw new SyncCryptoError(`${value} is not a uint32.`, 'badFormat');
+    throw new SyncCryptoError(`${value} is not a uint32.`, "badFormat");
   }
   const out = new Uint8Array(4);
   new DataView(out.buffer).setUint32(0, value, false);
@@ -166,7 +178,10 @@ export const u32be = (value: number) => {
 /** Big-endian uint64 from a safe integer. Sequence numbers outlive uint32 in principle, never in practice. */
 export const u64be = (value: number) => {
   if (!Number.isSafeInteger(value) || value < 0) {
-    throw new SyncCryptoError(`${value} is not a safe non-negative integer.`, 'badFormat');
+    throw new SyncCryptoError(
+      `${value} is not a safe non-negative integer.`,
+      "badFormat",
+    );
   }
   const out = new Uint8Array(8);
   new DataView(out.buffer).setBigUint64(0, BigInt(value), false);
@@ -176,19 +191,21 @@ export const u64be = (value: number) => {
 /** Length-prefixed bytes. The prefix is what makes concatenation unambiguous. */
 export const lengthPrefixed = (bytes: Uint8Array) => {
   if (bytes.length > 0xffffffff) {
-    throw new SyncCryptoError('Field is too long to encode.', 'badLength');
+    throw new SyncCryptoError("Field is too long to encode.", "badLength");
   }
   return concatBytes(u32be(bytes.length), bytes);
 };
 
-export const lengthPrefixedText = (value: string) => lengthPrefixed(utf8Bytes(value));
+export const lengthPrefixedText = (value: string) =>
+  lengthPrefixed(utf8Bytes(value));
 
 // ---------------------------------------------------------------------------
 // Hashing and derivation
 // ---------------------------------------------------------------------------
 
 /** Synchronous by design — the op chain hash runs inside a database transaction. */
-export const sha256 = (...parts: readonly Uint8Array[]) => nobleSha256(concatBytes(...parts));
+export const sha256 = (...parts: readonly Uint8Array[]) =>
+  nobleSha256(concatBytes(...parts));
 
 /**
  * `info` is a string at every call site in this codebase, and it must come from the table
@@ -201,7 +218,14 @@ export const hkdf = (
   salt: Uint8Array,
   info: string | Uint8Array,
   length: number = KEY_LENGTH,
-) => nobleHkdf(nobleSha256, ikm, salt, typeof info === 'string' ? utf8Bytes(info) : info, length);
+) =>
+  nobleHkdf(
+    nobleSha256,
+    ikm,
+    salt,
+    typeof info === "string" ? utf8Bytes(info) : info,
+    length,
+  );
 
 /**
  * Memory-hard passphrase stretching for the encrypted backup file and the optional web
@@ -231,7 +255,10 @@ export const assertScryptCost = (params: ScryptParams): void => {
     !Number.isSafeInteger(params.p) ||
     params.p < 1
   ) {
-    throw new SyncCryptoError('scrypt r and p must be positive integers.', 'badFormat');
+    throw new SyncCryptoError(
+      "scrypt r and p must be positive integers.",
+      "badFormat",
+    );
   }
   const memory = 128 * params.r * (params.N + params.p + 1);
   const work = params.N * params.p;
@@ -242,18 +269,25 @@ export const assertScryptCost = (params: ScryptParams): void => {
     work > SCRYPT_MAX_WORK
   ) {
     throw new SyncCryptoError(
-      'That backup asks for an unreasonable amount of work to open.',
-      'badFormat',
+      "That backup asks for an unreasonable amount of work to open.",
+      "badFormat",
     );
   }
 };
 
-export const scryptKey = (passphrase: string, salt: Uint8Array, params: ScryptParams) => {
+export const scryptKey = (
+  passphrase: string,
+  salt: Uint8Array,
+  params: ScryptParams,
+) => {
   if (!Number.isInteger(Math.log2(params.N)) || params.N < 2 ** 12) {
-    throw new SyncCryptoError('scrypt N must be a power of two of at least 4096.', 'badFormat');
+    throw new SyncCryptoError(
+      "scrypt N must be a power of two of at least 4096.",
+      "badFormat",
+    );
   }
   assertScryptCost(params);
-  return nobleScrypt(utf8Bytes(passphrase.normalize('NFKC')), salt, {
+  return nobleScrypt(utf8Bytes(passphrase.normalize("NFKC")), salt, {
     N: params.N,
     r: params.r,
     p: params.p,
@@ -278,8 +312,8 @@ export const aeadSeal = (
   plaintext: Uint8Array,
   aad: Uint8Array,
 ) => {
-  assertLength(key, KEY_LENGTH, 'AEAD key');
-  assertLength(nonce, NONCE_LENGTH, 'AEAD nonce');
+  assertLength(key, KEY_LENGTH, "AEAD key");
+  assertLength(nonce, NONCE_LENGTH, "AEAD nonce");
   return xchacha20poly1305(key, nonce, aad).encrypt(plaintext);
 };
 
@@ -289,16 +323,22 @@ export const aeadOpen = (
   ciphertext: Uint8Array,
   aad: Uint8Array,
 ) => {
-  assertLength(key, KEY_LENGTH, 'AEAD key');
-  assertLength(nonce, NONCE_LENGTH, 'AEAD nonce');
+  assertLength(key, KEY_LENGTH, "AEAD key");
+  assertLength(nonce, NONCE_LENGTH, "AEAD nonce");
   if (ciphertext.length < TAG_LENGTH) {
-    throw new SyncCryptoError('Ciphertext is shorter than its authentication tag.', 'badLength');
+    throw new SyncCryptoError(
+      "Ciphertext is shorter than its authentication tag.",
+      "badLength",
+    );
   }
   try {
     return xchacha20poly1305(key, nonce, aad).decrypt(ciphertext);
   } catch {
     // Deliberately opaque: distinguishing "wrong key" from "tampered" would be an oracle.
-    throw new SyncCryptoError('Authentication failed — the data was tampered with or is not for this vault.', 'badTag');
+    throw new SyncCryptoError(
+      "Authentication failed — the data was tampered with or is not for this vault.",
+      "badTag",
+    );
   }
 };
 
@@ -312,18 +352,23 @@ export const signingKeygen = () => {
 };
 
 export const signingPublicKeyFrom = (secretKey: Uint8Array) => {
-  assertLength(secretKey, KEY_LENGTH, 'Signing secret key');
+  assertLength(secretKey, KEY_LENGTH, "Signing secret key");
   return ed25519.getPublicKey(secretKey);
 };
 
 export const sign = (message: Uint8Array, secretKey: Uint8Array) => {
-  assertLength(secretKey, KEY_LENGTH, 'Signing secret key');
+  assertLength(secretKey, KEY_LENGTH, "Signing secret key");
   return ed25519.sign(message, secretKey);
 };
 
 /** Returns a boolean rather than throwing; callers decide what a failure means, and every caller rejects. */
-export const verify = (signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array) => {
-  if (signature.length !== SIGNATURE_LENGTH || publicKey.length !== KEY_LENGTH) return false;
+export const verify = (
+  signature: Uint8Array,
+  message: Uint8Array,
+  publicKey: Uint8Array,
+) => {
+  if (signature.length !== SIGNATURE_LENGTH || publicKey.length !== KEY_LENGTH)
+    return false;
   try {
     return ed25519.verify(signature, message, publicKey);
   } catch {
@@ -342,7 +387,7 @@ export const agreementKeygen = () => {
 };
 
 export const agreementPublicKeyFrom = (secretKey: Uint8Array) => {
-  assertLength(secretKey, KEY_LENGTH, 'Agreement secret key');
+  assertLength(secretKey, KEY_LENGTH, "Agreement secret key");
   return x25519.getPublicKey(secretKey);
 };
 
@@ -350,17 +395,26 @@ export const agreementPublicKeyFrom = (secretKey: Uint8Array) => {
  * X25519. Rejects the all-zero shared secret, which is what a small-order peer public
  * key produces — accepting it would mean agreeing on a key the attacker also knows.
  */
-export const sharedSecret = (secretKey: Uint8Array, peerPublicKey: Uint8Array) => {
-  assertLength(secretKey, KEY_LENGTH, 'Agreement secret key');
-  assertLength(peerPublicKey, KEY_LENGTH, 'Peer public key');
+export const sharedSecret = (
+  secretKey: Uint8Array,
+  peerPublicKey: Uint8Array,
+) => {
+  assertLength(secretKey, KEY_LENGTH, "Agreement secret key");
+  assertLength(peerPublicKey, KEY_LENGTH, "Peer public key");
   let secret: Uint8Array;
   try {
     secret = x25519.getSharedSecret(secretKey, peerPublicKey);
   } catch {
-    throw new SyncCryptoError('Peer offered an unusable public key.', 'weakKey');
+    throw new SyncCryptoError(
+      "Peer offered an unusable public key.",
+      "weakKey",
+    );
   }
   if (constantTimeEqual(secret, new Uint8Array(KEY_LENGTH))) {
-    throw new SyncCryptoError('Peer offered a small-order public key.', 'weakKey');
+    throw new SyncCryptoError(
+      "Peer offered a small-order public key.",
+      "weakKey",
+    );
   }
   return secret;
 };

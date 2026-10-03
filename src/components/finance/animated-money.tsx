@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, type TextProps, type TextStyle } from 'react-native';
-import { useReducedMotion } from 'react-native-reanimated';
+import { useEffect, useRef, useState } from "react";
+import { StyleSheet, Text, type TextProps, type TextStyle } from "react-native";
+import { useReducedMotion } from "react-native-reanimated";
 
-import { AppText } from '@/components/ui/app-text';
-import { useQashyTheme } from '@/theme/theme';
-import type { CurrencyCode } from '@/domain/models';
-import { formatMoney, formatMoneyParts } from '@/utils/money';
+import { AppText } from "@/components/ui/app-text";
+import { useQashyTheme } from "@/theme/theme";
+import type { CurrencyCode } from "@/domain/models";
+import { formatMoney, formatMoneyParts } from "@/utils/money";
 
 const COUNT_DURATION = 420;
 
@@ -33,7 +33,9 @@ export function useAnimatedMinorAmount(target: number) {
     const from = displayRef.current;
     // A large jump (e.g. a new budget period or account switch) reads as a
     // snap, not motion; counting up through it would feel sluggish.
-    const largeChange = Math.abs(target - from) > Math.max(Math.abs(from), Math.abs(target)) * 0.5;
+    const largeChange =
+      Math.abs(target - from) >
+      Math.max(Math.abs(from), Math.abs(target)) * 0.5;
     if (!mountedRef.current || reduceMotion || from === target || largeChange) {
       mountedRef.current = true;
       displayRef.current = target;
@@ -43,9 +45,10 @@ export function useAnimatedMinorAmount(target: number) {
     const start = Date.now();
     const step = () => {
       const progress = Math.min(1, (Date.now() - start) / COUNT_DURATION);
-      const value = progress >= 1
-        ? target
-        : Math.round(from + (target - from) * easeOutCubic(progress));
+      const value =
+        progress >= 1
+          ? target
+          : Math.round(from + (target - from) * easeOutCubic(progress));
       displayRef.current = value;
       setDisplay(value);
       if (progress < 1) frameRef.current = requestAnimationFrame(step);
@@ -64,9 +67,19 @@ export function useAnimatedMinorAmount(target: number) {
 }
 
 /** Variants that split into a full-size integer/sign plus a visually subordinate currency+fraction run by default. */
-const SPLIT_BY_DEFAULT = new Set(['hero', 'display', 'money']);
+const SPLIT_BY_DEFAULT = new Set(["hero", "display", "money"]);
 
-export type AnimatedMoneyVariant = 'hero' | 'display' | 'title' | 'headline' | 'body' | 'caption' | 'label' | 'eyebrow' | 'money' | 'figure';
+export type AnimatedMoneyVariant =
+  | "hero"
+  | "display"
+  | "title"
+  | "headline"
+  | "body"
+  | "caption"
+  | "label"
+  | "eyebrow"
+  | "money"
+  | "figure";
 
 export function AnimatedMoney({
   minor,
@@ -74,7 +87,7 @@ export function AnimatedMoney({
   locale,
   compact = false,
   sign = false,
-  variant = 'body',
+  variant = "body",
   // `figure` defaults on: an `AnimatedMoney` is a money amount, so it always
   // renders digits in the numeric display face regardless of `variant`. Money
   // callers that genuinely need Rubik digits (there are none today) can still
@@ -110,12 +123,22 @@ export function AnimatedMoney({
   const theme = useQashyTheme();
   const display = useAnimatedMinorAmount(minor);
   // Assistive tech should read the settled amount, not the mid-count value.
-  const accessibilityLabel = formatMoney(minor, currency, locale, { compact, sign });
+  const accessibilityLabel = formatMoney(minor, currency, locale, {
+    compact,
+    sign,
+  });
   const typeScale = theme.type.scale;
   const shouldSplit = split ?? SPLIT_BY_DEFAULT.has(variant);
-  const scaledStyle = scale === 1
-    ? style
-    : [{ fontSize: typeScale[variant].fontSize * scale, lineHeight: typeScale[variant].lineHeight * scale }, style];
+  const scaledStyle =
+    scale === 1
+      ? style
+      : [
+          {
+            fontSize: typeScale[variant].fontSize * scale,
+            lineHeight: typeScale[variant].lineHeight * scale,
+          },
+          style,
+        ];
 
   if (!shouldSplit) {
     return (
@@ -126,7 +149,8 @@ export function AnimatedMoney({
         variant={variant}
         figure={figure}
         style={scaledStyle}
-        {...props}>
+        {...props}
+      >
         {formatMoney(display, currency, locale, { compact, sign })}
       </AppText>
     );
@@ -137,7 +161,7 @@ export function AnimatedMoney({
   // run only needs to step down a little to read as subordinate; the larger
   // statement figures need the bigger drop to keep the minor run from
   // competing with the integer.
-  const minorScale = variant === 'money' ? 0.75 : 0.6;
+  const minorScale = variant === "money" ? 0.75 : 0.6;
   // A caller-chosen color (e.g. on-accent text over an accent fill) must carry
   // through to the minor run; the theme's muted grey is unreadable there.
   const callerColor = StyleSheet.flatten(style)?.color;
@@ -154,14 +178,19 @@ export function AnimatedMoney({
       variant={variant}
       figure={figure}
       style={scaledStyle}
-      {...props}>
+      {...props}
+    >
       {parts.literalBefore}
       {parts.sign}
-      {parts.currencyPosition === 'before' ? <Text style={minorStyle}>{parts.currency}</Text> : null}
+      {parts.currencyPosition === "before" ? (
+        <Text style={minorStyle}>{parts.currency}</Text>
+      ) : null}
       {parts.integer}
       <Text style={minorStyle}>{parts.fraction}</Text>
       {parts.literalAfter}
-      {parts.currencyPosition === 'after' ? <Text style={minorStyle}>{parts.currency}</Text> : null}
+      {parts.currencyPosition === "after" ? (
+        <Text style={minorStyle}>{parts.currency}</Text>
+      ) : null}
     </AppText>
   );
 }

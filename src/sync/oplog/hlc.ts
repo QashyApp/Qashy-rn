@@ -18,7 +18,7 @@
  * collation, and it is why the format is pinned by tests.
  */
 
-import { DEVICE_ID_LENGTH } from '@/sync/crypto';
+import { DEVICE_ID_LENGTH } from "@/sync/crypto";
 
 /** `${wall}-${counter}-${deviceId}`, fixed width, lexicographically ordered. */
 export type Hlc = string;
@@ -32,7 +32,8 @@ export const MAX_WALL_MS = 0xffffffffffff;
 /** Ticks available inside one millisecond before the clock borrows from the next one. */
 export const MAX_COUNTER = 0xffff;
 
-export const HLC_LENGTH = WALL_DIGITS + 1 + COUNTER_DIGITS + 1 + DEVICE_ID_LENGTH;
+export const HLC_LENGTH =
+  WALL_DIGITS + 1 + COUNTER_DIGITS + 1 + DEVICE_ID_LENGTH;
 
 /**
  * How far ahead of local time a peer's clock may be before its ops are treated as suspect.
@@ -59,7 +60,7 @@ export interface HlcParts {
 export class HlcError extends Error {
   constructor(message: string) {
     super(message);
-    this.name = 'HlcError';
+    this.name = "HlcError";
   }
 }
 
@@ -80,24 +81,28 @@ export function formatHlc(parts: HlcParts): Hlc {
   if (deviceId.length !== DEVICE_ID_LENGTH) {
     throw new HlcError(`Device id must be ${DEVICE_ID_LENGTH} characters.`);
   }
-  const hlc = `${wall.toString(16).padStart(WALL_DIGITS, '0')}-${counter
+  const hlc = `${wall.toString(16).padStart(WALL_DIGITS, "0")}-${counter
     .toString(16)
-    .padStart(COUNTER_DIGITS, '0')}-${deviceId}`;
+    .padStart(COUNTER_DIGITS, "0")}-${deviceId}`;
   // Cheap, and it catches a device id carrying characters outside the base32 alphabet
   // before that id reaches the wire and starts sorting unpredictably against the others.
-  if (!HLC_PATTERN.test(hlc)) throw new HlcError('Device id is not a valid identifier.');
+  if (!HLC_PATTERN.test(hlc))
+    throw new HlcError("Device id is not a valid identifier.");
   return hlc;
 }
 
 export function isHlc(value: unknown): value is Hlc {
-  return typeof value === 'string' && HLC_PATTERN.test(value);
+  return typeof value === "string" && HLC_PATTERN.test(value);
 }
 
 export function parseHlc(hlc: Hlc): HlcParts {
-  if (!isHlc(hlc)) throw new HlcError('Not a valid clock reading.');
+  if (!isHlc(hlc)) throw new HlcError("Not a valid clock reading.");
   return {
     wall: Number.parseInt(hlc.slice(0, WALL_DIGITS), 16),
-    counter: Number.parseInt(hlc.slice(WALL_DIGITS + 1, WALL_DIGITS + 1 + COUNTER_DIGITS), 16),
+    counter: Number.parseInt(
+      hlc.slice(WALL_DIGITS + 1, WALL_DIGITS + 1 + COUNTER_DIGITS),
+      16,
+    ),
     deviceId: hlc.slice(WALL_DIGITS + COUNTER_DIGITS + 2),
   };
 }
@@ -111,7 +116,8 @@ export function compareHlc(first: Hlc, second: Hlc): number {
   return first < second ? -1 : first > second ? 1 : 0;
 }
 
-export const maxHlc = (first: Hlc, second: Hlc): Hlc => (first >= second ? first : second);
+export const maxHlc = (first: Hlc, second: Hlc): Hlc =>
+  first >= second ? first : second;
 
 /** The wall-clock component as an ISO string, for `updatedAt`. */
 export function hlcToIso(hlc: Hlc): string {
@@ -129,7 +135,11 @@ export interface HlcTick {
  * `nowMs` is a parameter rather than a `Date.now()` call so that every function in this
  * directory stays pure and the property tests can drive time directly.
  */
-export function tick(clock: HlcClock, deviceId: string, nowMs: number): HlcTick {
+export function tick(
+  clock: HlcClock,
+  deviceId: string,
+  nowMs: number,
+): HlcTick {
   const wall = Math.max(clock.wall, Math.floor(nowMs));
   const next =
     wall === clock.wall
@@ -163,7 +173,11 @@ export interface HlcObservation {
  * rejected here; the caller quarantines it, keeps it in the log, forwards it, and
  * re-evaluates on every merge, so it heals by itself once local time catches up.
  */
-export function observe(clock: HlcClock, incoming: Hlc, nowMs: number): HlcObservation {
+export function observe(
+  clock: HlcClock,
+  incoming: Hlc,
+  nowMs: number,
+): HlcObservation {
   const remote = parseHlc(incoming);
   const local = Math.floor(nowMs);
   if (remote.wall > local + MAX_CLOCK_SKEW_MS) {
@@ -173,22 +187,30 @@ export function observe(clock: HlcClock, incoming: Hlc, nowMs: number): HlcObser
   }
   const wall = Math.max(clock.wall, remote.wall, local);
   if (wall === clock.wall && wall === remote.wall) {
-    return { clock: advanceCounter(wall, Math.max(clock.counter, remote.counter)), skewed: false };
+    return {
+      clock: advanceCounter(wall, Math.max(clock.counter, remote.counter)),
+      skewed: false,
+    };
   }
-  if (wall === clock.wall) return { clock: advanceCounter(wall, clock.counter), skewed: false };
-  if (wall === remote.wall) return { clock: advanceCounter(wall, remote.counter), skewed: false };
+  if (wall === clock.wall)
+    return { clock: advanceCounter(wall, clock.counter), skewed: false };
+  if (wall === remote.wall)
+    return { clock: advanceCounter(wall, remote.counter), skewed: false };
   return { clock: { wall, counter: 0 }, skewed: false };
 }
 
 /** Borrow a millisecond once the four-hex-digit counter is exhausted. */
 const advanceCounter = (wall: number, counter: number): HlcClock => {
   if (counter < MAX_COUNTER) return { wall, counter: counter + 1 };
-  if (wall >= MAX_WALL_MS) throw new HlcError('Clock cannot advance beyond its maximum wall time.');
+  if (wall >= MAX_WALL_MS)
+    throw new HlcError("Clock cannot advance beyond its maximum wall time.");
   return { wall: wall + 1, counter: 0 };
 };
 
 const advanceToLocal = (clock: HlcClock, local: number): HlcClock =>
-  local > clock.wall ? { wall: local, counter: 0 } : advanceCounter(clock.wall, clock.counter);
+  local > clock.wall
+    ? { wall: local, counter: 0 }
+    : advanceCounter(clock.wall, clock.counter);
 
 /**
  * Builds an HLC for an entity that predates sync, seeded from its own `createdAt`.
@@ -198,7 +220,11 @@ const advanceToLocal = (clock: HlcClock, local: number): HlcClock =>
  * a sensible shape — two vaults paired for the first time interleave by when things
  * actually happened instead of arriving as one flat wall of simultaneous creates.
  */
-export function hlcFromTimestamp(iso: string, counter: number, deviceId: string): Hlc {
+export function hlcFromTimestamp(
+  iso: string,
+  counter: number,
+  deviceId: string,
+): Hlc {
   const wall = Date.parse(iso);
   return formatHlc({
     wall: Number.isFinite(wall) ? Math.min(Math.max(wall, 0), MAX_WALL_MS) : 0,

@@ -11,7 +11,13 @@
  * use case needs that, it belongs in here as a named construction with its own tests.
  */
 
-export { LABELS, OP_SCHEMA_VERSION, PAIRING_TTL_SECONDS, PROTOCOL_VERSION, RENDEZVOUS_WINDOW_SECONDS } from '@/sync/crypto/labels';
+export {
+  LABELS,
+  OP_SCHEMA_VERSION,
+  PAIRING_TTL_SECONDS,
+  PROTOCOL_VERSION,
+  RENDEZVOUS_WINDOW_SECONDS,
+} from "@/sync/crypto/labels";
 
 export {
   ENVELOPE_PURPOSES,
@@ -22,7 +28,7 @@ export {
   seal,
   type EnvelopeContext,
   type EnvelopePurpose,
-} from '@/sync/crypto/envelope';
+} from "@/sync/crypto/envelope";
 
 export {
   DEVICE_ID_LENGTH,
@@ -46,7 +52,7 @@ export {
   restorePeerKeys,
   restoreVaultRootKey,
   type DeviceIdentity,
-} from '@/sync/crypto/keys';
+} from "@/sync/crypto/keys";
 
 export {
   acceptPeerAuth,
@@ -58,7 +64,7 @@ export {
   type HandshakeHello,
   type HandshakeSession,
   type PendingHandshake,
-} from '@/sync/crypto/handshake';
+} from "@/sync/crypto/handshake";
 
 export {
   decodePairingCode,
@@ -66,11 +72,11 @@ export {
   formatPairingCodeForTyping,
   normalizeTypedPairingCode,
   type PairingCode,
-} from '@/sync/crypto/pairing-code';
+} from "@/sync/crypto/pairing-code";
 
-export { SAS_WORD_COUNT, deriveSas, sasMatches } from '@/sync/crypto/sas';
+export { SAS_WORD_COUNT, deriveSas, sasMatches } from "@/sync/crypto/sas";
 
-export { signBatchPayload, verifyBatchPayload } from '@/sync/crypto/batch-auth';
+export { signBatchPayload, verifyBatchPayload } from "@/sync/crypto/batch-auth";
 
 export {
   MIN_PASSPHRASE_LENGTH,
@@ -85,7 +91,7 @@ export {
   readBackupKind,
   recoveryPhraseToVaultKey,
   vaultKeyToRecoveryPhrase,
-} from '@/sync/crypto/recovery';
+} from "@/sync/crypto/recovery";
 
 export {
   SyncCryptoError,
@@ -104,7 +110,7 @@ export {
   type SyncCryptoErrorCode,
   type TranscriptHash,
   type VaultRootKey,
-} from '@/sync/crypto/types';
+} from "@/sync/crypto/types";
 
 /**
  * Byte helpers that legitimately cross the boundary: the op log hashes its own chain, and
@@ -127,4 +133,4 @@ export {
   utf8Bytes,
   verify,
   zeroize,
-} from '@/sync/crypto/primitives';
+} from "@/sync/crypto/primitives";

@@ -8,14 +8,21 @@
  * than a `ReferenceError` from inside a pairing flow.
  */
 
-import type { IceServer } from '@/sync/transport/endpoints';
-import { UNAVAILABLE_RTC, type RtcConnection, type RtcFactory } from '@/sync/transport/webrtc-core';
+import type { IceServer } from "@/sync/transport/endpoints";
+import {
+  UNAVAILABLE_RTC,
+  type RtcConnection,
+  type RtcFactory,
+} from "@/sync/transport/webrtc-core";
 
-type PeerConnectionCtor = new (config: { iceServers: IceServer[] }) => RtcConnection;
+type PeerConnectionCtor = new (config: {
+  iceServers: IceServer[];
+}) => RtcConnection;
 
 const constructor = (): PeerConnectionCtor | null => {
-  const found = (globalThis as { RTCPeerConnection?: PeerConnectionCtor }).RTCPeerConnection;
-  return typeof found === 'function' ? found : null;
+  const found = (globalThis as { RTCPeerConnection?: PeerConnectionCtor })
+    .RTCPeerConnection;
+  return typeof found === "function" ? found : null;
 };
 
 export const rtcFactory: RtcFactory = constructor()
@@ -27,7 +34,9 @@ export const rtcFactory: RtcFactory = constructor()
         // Copied into a plain array because the platform mutates nothing but does read the
         // list eagerly, and a frozen readonly array from settings has no business being
         // handed straight to a browser internal.
-        return new Ctor({ iceServers: iceServers.map((server) => ({ ...server })) });
+        return new Ctor({
+          iceServers: iceServers.map((server) => ({ ...server })),
+        });
       },
     }
   : UNAVAILABLE_RTC;

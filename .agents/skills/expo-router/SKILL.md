@@ -179,7 +179,11 @@ app/
 ```tsx
 // app/_layout.tsx
 import { NativeTabs } from "expo-router/unstable-native-tabs";
-import { ThemeProvider, DarkTheme, DefaultTheme } from "expo-router/react-navigation";
+import {
+  ThemeProvider,
+  DarkTheme,
+  DefaultTheme,
+} from "expo-router/react-navigation";
 import { useColorScheme } from "react-native";
 
 export default function Layout() {

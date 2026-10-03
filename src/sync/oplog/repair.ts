@@ -42,9 +42,9 @@ import type {
   RecurringRule,
   Tag,
   TransactionRecord,
-} from '@/domain/models';
-import { canActivateRecurringRule, goalCategoryKind } from '@/domain/rules';
-import { compareInvariant, disambiguateNames } from '@/utils/naming';
+} from "@/domain/models";
+import { canActivateRecurringRule, goalCategoryKind } from "@/domain/rules";
+import { compareInvariant, disambiguateNames } from "@/utils/naming";
 
 export interface RepairInput {
   readonly settings: AppSettings | null;
@@ -64,19 +64,19 @@ export interface RepairInput {
 }
 
 export type RepairCode =
-  | 'duplicateOccurrence'
-  | 'duplicateSnapshot'
-  | 'duplicateRate'
-  | 'accountResurrected'
-  | 'accountCurrencyPinned'
-  | 'referenceCleared'
-  | 'budgetLimitDropped'
-  | 'budgetFilterDropped'
-  | 'budgetPeriodNormalized'
-  | 'contributionOrphaned'
-  | 'schedulePaused'
-  | 'scheduleClamped'
-  | 'nameDisambiguated';
+  | "duplicateOccurrence"
+  | "duplicateSnapshot"
+  | "duplicateRate"
+  | "accountResurrected"
+  | "accountCurrencyPinned"
+  | "referenceCleared"
+  | "budgetLimitDropped"
+  | "budgetFilterDropped"
+  | "budgetPeriodNormalized"
+  | "contributionOrphaned"
+  | "schedulePaused"
+  | "scheduleClamped"
+  | "nameDisambiguated";
 
 export interface RepairNote {
   readonly code: RepairCode;
@@ -107,7 +107,8 @@ const isLive = (entity: FinanceEntity) => !entity.deletedAt;
  * `id` are both locale-invariant and both stable.
  */
 const byCreationThenId = (first: FinanceEntity, second: FinanceEntity) =>
-  compareInvariant(first.createdAt, second.createdAt) || compareInvariant(first.id, second.id);
+  compareInvariant(first.createdAt, second.createdAt) ||
+  compareInvariant(first.id, second.id);
 
 const byId = (first: FinanceEntity, second: FinanceEntity) =>
   compareInvariant(first.id, second.id);
@@ -123,7 +124,9 @@ class Draft {
   private readonly dirty = new Set<string>();
   readonly notes: RepairNote[] = [];
 
-  constructor(private readonly tables: Map<EntityType, Map<string, FinanceEntity>>) {}
+  constructor(
+    private readonly tables: Map<EntityType, Map<string, FinanceEntity>>,
+  ) {}
 
   all<T extends FinanceEntity>(type: EntityType): T[] {
     return [...(this.tables.get(type)?.values() ?? [])] as T[];
@@ -133,7 +136,10 @@ class Draft {
     return this.all<T>(type).filter(isLive);
   }
 
-  get<T extends FinanceEntity>(type: EntityType, id: string | null): T | undefined {
+  get<T extends FinanceEntity>(
+    type: EntityType,
+    id: string | null,
+  ): T | undefined {
     return id ? (this.tables.get(type)?.get(id) as T | undefined) : undefined;
   }
 
@@ -141,7 +147,12 @@ class Draft {
     return new Set(this.live(type).map((entity) => entity.id));
   }
 
-  patch<T extends FinanceEntity>(type: EntityType, entity: T, changes: Partial<T>, note: RepairNote) {
+  patch<T extends FinanceEntity>(
+    type: EntityType,
+    entity: T,
+    changes: Partial<T>,
+    note: RepairNote,
+  ) {
     const next = { ...entity, ...changes } as FinanceEntity;
     this.tables.get(type)?.set(entity.id, next);
     this.dirty.add(`${type}:${entity.id}`);
@@ -152,7 +163,7 @@ class Draft {
   changedRecords(): RepairedRecord[] {
     const records: RepairedRecord[] = [];
     for (const key of [...this.dirty].sort()) {
-      const separator = key.indexOf(':');
+      const separator = key.indexOf(":");
       const type = key.slice(0, separator) as EntityType;
       const entity = this.tables.get(type)?.get(key.slice(separator + 1));
       if (entity) records.push({ type, entity });
@@ -167,17 +178,17 @@ const tableOf = <T extends FinanceEntity>(entities: readonly T[]) =>
 /** Repairs a merged set into one the finance core will accept. */
 export function repairMergedState(input: RepairInput): RepairOutput {
   const tables = new Map<EntityType, Map<string, FinanceEntity>>([
-    ['accounts', tableOf(input.accounts)],
-    ['categories', tableOf(input.categories)],
-    ['tags', tableOf(input.tags)],
-    ['transactions', tableOf(input.transactions)],
-    ['budgets', tableOf(input.budgets)],
-    ['budgetPeriods', tableOf(input.budgetPeriods)],
-    ['budgetAdjustments', tableOf(input.budgetAdjustments)],
-    ['goals', tableOf(input.goals)],
-    ['contributions', tableOf(input.contributions)],
-    ['recurringRules', tableOf(input.recurringRules)],
-    ['exchangeRates', tableOf(input.exchangeRates)],
+    ["accounts", tableOf(input.accounts)],
+    ["categories", tableOf(input.categories)],
+    ["tags", tableOf(input.tags)],
+    ["transactions", tableOf(input.transactions)],
+    ["budgets", tableOf(input.budgets)],
+    ["budgetPeriods", tableOf(input.budgetPeriods)],
+    ["budgetAdjustments", tableOf(input.budgetAdjustments)],
+    ["goals", tableOf(input.goals)],
+    ["contributions", tableOf(input.contributions)],
+    ["recurringRules", tableOf(input.recurringRules)],
+    ["exchangeRates", tableOf(input.exchangeRates)],
   ]);
   const draft = new Draft(tables);
 
@@ -191,17 +202,17 @@ export function repairMergedState(input: RepairInput): RepairOutput {
 
   return {
     settings: input.settings,
-    accounts: draft.all<Account>('accounts'),
-    categories: draft.all<Category>('categories'),
-    tags: draft.all<Tag>('tags'),
-    transactions: draft.all<TransactionRecord>('transactions'),
-    budgets: draft.all<Budget>('budgets'),
-    budgetPeriods: draft.all<BudgetPeriodSnapshot>('budgetPeriods'),
-    budgetAdjustments: draft.all<BudgetAdjustment>('budgetAdjustments'),
-    goals: draft.all<Goal>('goals'),
-    contributions: draft.all<GoalContribution>('contributions'),
-    recurringRules: draft.all<RecurringRule>('recurringRules'),
-    exchangeRates: draft.all<ExchangeRate>('exchangeRates'),
+    accounts: draft.all<Account>("accounts"),
+    categories: draft.all<Category>("categories"),
+    tags: draft.all<Tag>("tags"),
+    transactions: draft.all<TransactionRecord>("transactions"),
+    budgets: draft.all<Budget>("budgets"),
+    budgetPeriods: draft.all<BudgetPeriodSnapshot>("budgetPeriods"),
+    budgetAdjustments: draft.all<BudgetAdjustment>("budgetAdjustments"),
+    goals: draft.all<Goal>("goals"),
+    contributions: draft.all<GoalContribution>("contributions"),
+    recurringRules: draft.all<RecurringRule>("recurringRules"),
+    exchangeRates: draft.all<ExchangeRate>("exchangeRates"),
     changed: draft.changedRecords(),
     notes: draft.notes,
   };
@@ -218,7 +229,10 @@ export function repairMergedState(input: RepairInput): RepairOutput {
  * which already have random ids and cannot be un-created.
  */
 function collapseDuplicates(draft: Draft) {
-  const groups = <T extends FinanceEntity>(entities: readonly T[], key: (entity: T) => string | null) => {
+  const groups = <T extends FinanceEntity>(
+    entities: readonly T[],
+    key: (entity: T) => string | null,
+  ) => {
     const byKey = new Map<string, T[]>();
     for (const entity of entities) {
       const value = key(entity);
@@ -235,7 +249,10 @@ function collapseDuplicates(draft: Draft) {
       .sort(([first], [second]) => compareInvariant(first, second));
   };
 
-  for (const [key, list] of groups(draft.live<TransactionRecord>('transactions'), (entity) => entity.occurrenceKey)) {
+  for (const [key, list] of groups(
+    draft.live<TransactionRecord>("transactions"),
+    (entity) => entity.occurrenceKey,
+  )) {
     const keeper = list[0];
     for (const loser of list) {
       if (loser.id === keeper.id) continue;
@@ -243,17 +260,22 @@ function collapseDuplicates(draft: Draft) {
       // load `hydrateFromStorage` rebuilds its suppression set from tombstoned occurrence
       // keys, so a tombstone that still carries the key would permanently stop the survivor
       // from ever being regenerated.
-      draft.patch<TransactionRecord>('transactions', loser, { occurrenceKey: null, deletedAt: loser.updatedAt }, {
-        code: 'duplicateOccurrence',
-        entityType: 'transactions',
-        entityId: loser.id,
-        detail: `Duplicate of ${keeper.id} for occurrence ${key}.`,
-      });
+      draft.patch<TransactionRecord>(
+        "transactions",
+        loser,
+        { occurrenceKey: null, deletedAt: loser.updatedAt },
+        {
+          code: "duplicateOccurrence",
+          entityType: "transactions",
+          entityId: loser.id,
+          detail: `Duplicate of ${keeper.id} for occurrence ${key}.`,
+        },
+      );
     }
   }
 
   for (const [key, list] of groups(
-    draft.live<BudgetPeriodSnapshot>('budgetPeriods'),
+    draft.live<BudgetPeriodSnapshot>("budgetPeriods"),
     (entity) => `${entity.budgetId}:${entity.periodStart}`,
   )) {
     const keeper = list[0];
@@ -262,30 +284,41 @@ function collapseDuplicates(draft: Draft) {
       // Two snapshots for one period make the history sort tie, `.at(-1)` pick arbitrarily,
       // and the rollover carried into the next period differ between devices — a wrong
       // number on screen rather than a crash, which is why it has to be collapsed.
-      draft.patch<BudgetPeriodSnapshot>('budgetPeriods', loser, { deletedAt: loser.updatedAt }, {
-        code: 'duplicateSnapshot',
-        entityType: 'budgetPeriods',
-        entityId: loser.id,
-        detail: `Duplicate of ${keeper.id} for period ${key}.`,
-      });
+      draft.patch<BudgetPeriodSnapshot>(
+        "budgetPeriods",
+        loser,
+        { deletedAt: loser.updatedAt },
+        {
+          code: "duplicateSnapshot",
+          entityType: "budgetPeriods",
+          entityId: loser.id,
+          detail: `Duplicate of ${keeper.id} for period ${key}.`,
+        },
+      );
     }
   }
 
   for (const [key, list] of groups(
-    draft.live<ExchangeRate>('exchangeRates'),
-    (entity) => `${entity.fromCurrency}:${entity.toCurrency}:${entity.effectiveDate}`,
+    draft.live<ExchangeRate>("exchangeRates"),
+    (entity) =>
+      `${entity.fromCurrency}:${entity.toCurrency}:${entity.effectiveDate}`,
   )) {
     const keeper = list[0];
     for (const loser of list) {
       if (loser.id === keeper.id) continue;
       // `directOrInverseRate` breaks ties by whatever it finds first, so two rows for the
       // same pair and date convert the *same transaction* differently on two phones.
-      draft.patch<ExchangeRate>('exchangeRates', loser, { deletedAt: loser.updatedAt }, {
-        code: 'duplicateRate',
-        entityType: 'exchangeRates',
-        entityId: loser.id,
-        detail: `Duplicate of ${keeper.id} for ${key}.`,
-      });
+      draft.patch<ExchangeRate>(
+        "exchangeRates",
+        loser,
+        { deletedAt: loser.updatedAt },
+        {
+          code: "duplicateRate",
+          entityType: "exchangeRates",
+          entityId: loser.id,
+          detail: `Duplicate of ${keeper.id} for ${key}.`,
+        },
+      );
     }
   }
 }
@@ -302,26 +335,34 @@ function collapseDuplicates(draft: Draft) {
  */
 function resurrectReferencedAccounts(draft: Draft) {
   const referenced = new Set<string>();
-  for (const transaction of draft.live<TransactionRecord>('transactions')) {
+  for (const transaction of draft.live<TransactionRecord>("transactions")) {
     referenced.add(transaction.accountId);
-    if (transaction.destinationAccountId) referenced.add(transaction.destinationAccountId);
+    if (transaction.destinationAccountId)
+      referenced.add(transaction.destinationAccountId);
   }
-  for (const rule of draft.live<RecurringRule>('recurringRules')) referenced.add(rule.template.accountId);
-  for (const budget of draft.live<Budget>('budgets')) {
+  for (const rule of draft.live<RecurringRule>("recurringRules"))
+    referenced.add(rule.template.accountId);
+  for (const budget of draft.live<Budget>("budgets")) {
     for (const id of budget.filters.accountIds) referenced.add(id);
   }
-  for (const goal of draft.live<Goal>('goals')) {
+  for (const goal of draft.live<Goal>("goals")) {
     if (goal.linkedAccountId) referenced.add(goal.linkedAccountId);
   }
 
-  for (const account of draft.all<Account>('accounts').sort(byCreationThenId)) {
+  for (const account of draft.all<Account>("accounts").sort(byCreationThenId)) {
     if (isLive(account) || !referenced.has(account.id)) continue;
-    draft.patch<Account>('accounts', account, { deletedAt: null, archived: true }, {
-      code: 'accountResurrected',
-      entityType: 'accounts',
-      entityId: account.id,
-      detail: 'Restored as archived because a transaction or schedule still uses it.',
-    });
+    draft.patch<Account>(
+      "accounts",
+      account,
+      { deletedAt: null, archived: true },
+      {
+        code: "accountResurrected",
+        entityType: "accounts",
+        entityId: account.id,
+        detail:
+          "Restored as archived because a transaction or schedule still uses it.",
+      },
+    );
   }
 }
 
@@ -338,25 +379,40 @@ function resurrectReferencedAccounts(draft: Draft) {
  */
 function pinAccountCurrencies(draft: Draft) {
   const observed = new Map<string, TransactionRecord>();
-  for (const transaction of draft.live<TransactionRecord>('transactions').sort(byCreationThenId)) {
-    if (!observed.has(transaction.accountId)) observed.set(transaction.accountId, transaction);
-    if (transaction.destinationAccountId && !observed.has(transaction.destinationAccountId)) {
+  for (const transaction of draft
+    .live<TransactionRecord>("transactions")
+    .sort(byCreationThenId)) {
+    if (!observed.has(transaction.accountId))
+      observed.set(transaction.accountId, transaction);
+    if (
+      transaction.destinationAccountId &&
+      !observed.has(transaction.destinationAccountId)
+    ) {
       observed.set(transaction.destinationAccountId, transaction);
     }
   }
 
-  for (const account of draft.live<Account>('accounts').sort(byCreationThenId)) {
+  for (const account of draft
+    .live<Account>("accounts")
+    .sort(byCreationThenId)) {
     const transaction = observed.get(account.id);
     if (!transaction) continue;
     const currency =
-      transaction.accountId === account.id ? transaction.currency : transaction.destinationCurrency;
+      transaction.accountId === account.id
+        ? transaction.currency
+        : transaction.destinationCurrency;
     if (!currency || currency === account.currency) continue;
-    draft.patch<Account>('accounts', account, { currency }, {
-      code: 'accountCurrencyPinned',
-      entityType: 'accounts',
-      entityId: account.id,
-      detail: `Set to ${currency} to match transaction ${transaction.id}.`,
-    });
+    draft.patch<Account>(
+      "accounts",
+      account,
+      { currency },
+      {
+        code: "accountCurrencyPinned",
+        entityType: "accounts",
+        entityId: account.id,
+        detail: `Set to ${currency} to match transaction ${transaction.id}.`,
+      },
+    );
   }
 }
 
@@ -368,66 +424,89 @@ function pinAccountCurrencies(draft: Draft) {
  * about something they never touched.
  */
 function clearDanglingReferences(draft: Draft) {
-  const liveCategories = new Map(draft.live<Category>('categories').map((entity) => [entity.id, entity]));
-  const liveTags = draft.liveIds('tags');
-  const liveAccounts = draft.liveIds('accounts');
-  const liveRules = draft.liveIds('recurringRules');
-  const liveGoals = draft.liveIds('goals');
-  const liveTransactions = draft.liveIds('transactions');
+  const liveCategories = new Map(
+    draft.live<Category>("categories").map((entity) => [entity.id, entity]),
+  );
+  const liveTags = draft.liveIds("tags");
+  const liveAccounts = draft.liveIds("accounts");
+  const liveRules = draft.liveIds("recurringRules");
+  const liveGoals = draft.liveIds("goals");
+  const liveTransactions = draft.liveIds("transactions");
 
   // Categories are one level deep: a parent may not itself have a parent, must share the
   // child's kind, and must not be the child. Anything else is a hierarchy the UI cannot render.
-  for (const category of draft.live<Category>('categories').sort(byCreationThenId)) {
+  for (const category of draft
+    .live<Category>("categories")
+    .sort(byCreationThenId)) {
     if (!category.parentId) continue;
     const parent = liveCategories.get(category.parentId);
-    if (parent && parent.kind === category.kind && !parent.parentId && parent.id !== category.id) continue;
-    draft.patch<Category>('categories', category, { parentId: null }, {
-      code: 'referenceCleared',
-      entityType: 'categories',
-      entityId: category.id,
-      detail: 'Parent category is missing, deleted, or not a valid parent.',
-    });
+    if (
+      parent &&
+      parent.kind === category.kind &&
+      !parent.parentId &&
+      parent.id !== category.id
+    )
+      continue;
+    draft.patch<Category>(
+      "categories",
+      category,
+      { parentId: null },
+      {
+        code: "referenceCleared",
+        entityType: "categories",
+        entityId: category.id,
+        detail: "Parent category is missing, deleted, or not a valid parent.",
+      },
+    );
   }
 
-  for (const transaction of draft.live<TransactionRecord>('transactions').sort(byCreationThenId)) {
+  for (const transaction of draft
+    .live<TransactionRecord>("transactions")
+    .sort(byCreationThenId)) {
     const changes: Partial<TransactionRecord> = {};
     const details: string[] = [];
 
     if (transaction.categoryId) {
       const category = liveCategories.get(transaction.categoryId);
-      const expected = transaction.kind === 'transfer' ? null : transaction.kind;
+      const expected =
+        transaction.kind === "transfer" ? null : transaction.kind;
       if (!expected || !category || category.kind !== expected) {
         changes.categoryId = null;
         details.push(
-          expected ? 'Category is missing, deleted, or the wrong kind.' : 'Transfers cannot carry a category.',
+          expected
+            ? "Category is missing, deleted, or the wrong kind."
+            : "Transfers cannot carry a category.",
         );
       }
     }
     const tagIds = transaction.tagIds.filter((id) => liveTags.has(id));
     if (tagIds.length !== transaction.tagIds.length) {
       changes.tagIds = tagIds;
-      details.push('Dropped tags that no longer exist.');
+      details.push("Dropped tags that no longer exist.");
     }
-    if (transaction.recurringRuleId && !liveRules.has(transaction.recurringRuleId)) {
+    if (
+      transaction.recurringRuleId &&
+      !liveRules.has(transaction.recurringRuleId)
+    ) {
       changes.recurringRuleId = null;
-      details.push('Recurring schedule is gone.');
+      details.push("Recurring schedule is gone.");
     }
     if (details.length) {
-      draft.patch<TransactionRecord>('transactions', transaction, changes, {
-        code: 'referenceCleared',
-        entityType: 'transactions',
+      draft.patch<TransactionRecord>("transactions", transaction, changes, {
+        code: "referenceCleared",
+        entityType: "transactions",
         entityId: transaction.id,
-        detail: details.join(' '),
+        detail: details.join(" "),
       });
     }
   }
 
-  for (const goal of draft.live<Goal>('goals').sort(byCreationThenId)) {
+  for (const goal of draft.live<Goal>("goals").sort(byCreationThenId)) {
     const changes: Partial<Goal> = {};
     const details: string[] = [];
     if (goal.linkedAccountId && !liveAccounts.has(goal.linkedAccountId)) {
       changes.linkedAccountId = null;
-      details.push('Linked account is gone.');
+      details.push("Linked account is gone.");
     }
     if (goal.linkedCategoryId) {
       const category = liveCategories.get(goal.linkedCategoryId);
@@ -437,38 +516,55 @@ function clearDanglingReferences(draft: Draft) {
       }
     }
     if (details.length) {
-      draft.patch<Goal>('goals', goal, changes, {
-        code: 'referenceCleared',
-        entityType: 'goals',
+      draft.patch<Goal>("goals", goal, changes, {
+        code: "referenceCleared",
+        entityType: "goals",
         entityId: goal.id,
-        detail: details.join(' '),
+        detail: details.join(" "),
       });
     }
   }
 
-  for (const contribution of draft.live<GoalContribution>('contributions').sort(byCreationThenId)) {
+  for (const contribution of draft
+    .live<GoalContribution>("contributions")
+    .sort(byCreationThenId)) {
     // `goalId` is immutable, so a contribution whose goal is gone has nothing to point at
     // and no way to be re-homed. Tombstoning it is what `deleteEntities` already does.
     if (!liveGoals.has(contribution.goalId)) {
-      draft.patch<GoalContribution>('contributions', contribution, { deletedAt: contribution.updatedAt }, {
-        code: 'contributionOrphaned',
-        entityType: 'contributions',
-        entityId: contribution.id,
-        detail: `Goal ${contribution.goalId} no longer exists.`,
-      });
+      draft.patch<GoalContribution>(
+        "contributions",
+        contribution,
+        { deletedAt: contribution.updatedAt },
+        {
+          code: "contributionOrphaned",
+          entityType: "contributions",
+          entityId: contribution.id,
+          detail: `Goal ${contribution.goalId} no longer exists.`,
+        },
+      );
       continue;
     }
-    if (contribution.transactionId && !liveTransactions.has(contribution.transactionId)) {
-      draft.patch<GoalContribution>('contributions', contribution, { transactionId: null }, {
-        code: 'referenceCleared',
-        entityType: 'contributions',
-        entityId: contribution.id,
-        detail: 'Linked transaction is gone.',
-      });
+    if (
+      contribution.transactionId &&
+      !liveTransactions.has(contribution.transactionId)
+    ) {
+      draft.patch<GoalContribution>(
+        "contributions",
+        contribution,
+        { transactionId: null },
+        {
+          code: "referenceCleared",
+          entityType: "contributions",
+          entityId: contribution.id,
+          detail: "Linked transaction is gone.",
+        },
+      );
     }
   }
 
-  for (const rule of draft.live<RecurringRule>('recurringRules').sort(byCreationThenId)) {
+  for (const rule of draft
+    .live<RecurringRule>("recurringRules")
+    .sort(byCreationThenId)) {
     const template = rule.template;
     const details: string[] = [];
     let categoryId = template.categoryId;
@@ -476,18 +572,24 @@ function clearDanglingReferences(draft: Draft) {
       const category = liveCategories.get(categoryId);
       if (!category || category.kind !== template.kind) {
         categoryId = null;
-        details.push('Category is missing, deleted, or the wrong kind.');
+        details.push("Category is missing, deleted, or the wrong kind.");
       }
     }
     const tagIds = template.tagIds.filter((id) => liveTags.has(id));
-    if (tagIds.length !== template.tagIds.length) details.push('Dropped tags that no longer exist.');
+    if (tagIds.length !== template.tagIds.length)
+      details.push("Dropped tags that no longer exist.");
     if (!details.length) continue;
-    draft.patch<RecurringRule>('recurringRules', rule, { template: { ...template, categoryId, tagIds } }, {
-      code: 'referenceCleared',
-      entityType: 'recurringRules',
-      entityId: rule.id,
-      detail: details.join(' '),
-    });
+    draft.patch<RecurringRule>(
+      "recurringRules",
+      rule,
+      { template: { ...template, categoryId, tagIds } },
+      {
+        code: "referenceCleared",
+        entityType: "recurringRules",
+        entityId: rule.id,
+        detail: details.join(" "),
+      },
+    );
   }
 }
 
@@ -501,18 +603,25 @@ function clearDanglingReferences(draft: Draft) {
  * when a category goes away.
  */
 function repairBudgets(draft: Draft) {
-  const liveAccounts = draft.liveIds('accounts');
-  const liveTags = draft.liveIds('tags');
+  const liveAccounts = draft.liveIds("accounts");
+  const liveTags = draft.liveIds("tags");
   const expenseCategories = new Set(
-    draft.live<Category>('categories').filter((category) => category.kind === 'expense').map((category) => category.id),
+    draft
+      .live<Category>("categories")
+      .filter((category) => category.kind === "expense")
+      .map((category) => category.id),
   );
 
-  for (const budget of draft.live<Budget>('budgets').sort(byCreationThenId)) {
+  for (const budget of draft.live<Budget>("budgets").sort(byCreationThenId)) {
     const changes: Partial<Budget> = {};
     const details: string[] = [];
 
-    const accountIds = budget.filters.accountIds.filter((id) => liveAccounts.has(id));
-    const categoryIds = budget.filters.categoryIds.filter((id) => expenseCategories.has(id));
+    const accountIds = budget.filters.accountIds.filter((id) =>
+      liveAccounts.has(id),
+    );
+    const categoryIds = budget.filters.categoryIds.filter((id) =>
+      expenseCategories.has(id),
+    );
     const tagIds = budget.filters.tagIds.filter((id) => liveTags.has(id));
     if (
       accountIds.length !== budget.filters.accountIds.length ||
@@ -520,35 +629,40 @@ function repairBudgets(draft: Draft) {
       tagIds.length !== budget.filters.tagIds.length
     ) {
       changes.filters = { accountIds, categoryIds, tagIds };
-      details.push('Dropped filters whose target is gone.');
+      details.push("Dropped filters whose target is gone.");
     }
 
     const allowed = new Set(categoryIds);
     const seen = new Set<string>();
     const categoryLimits = budget.categoryLimits.filter((limit) => {
-      if (!allowed.has(limit.categoryId) || seen.has(limit.categoryId)) return false;
+      if (!allowed.has(limit.categoryId) || seen.has(limit.categoryId))
+        return false;
       seen.add(limit.categoryId);
       return true;
     });
     if (categoryLimits.length !== budget.categoryLimits.length) {
       changes.categoryLimits = categoryLimits;
-      details.push('Dropped category limits outside the budget filters.');
+      details.push("Dropped category limits outside the budget filters.");
     }
 
     // `validateBudget` requires an end date for a custom period and forbids one otherwise.
     // A merge of two `period` groups cannot produce a mismatch, but a rollover from an older
     // build can, and the cost of checking is nothing.
-    if (budget.period.unit !== 'custom' && budget.period.endDate !== null) {
+    if (budget.period.unit !== "custom" && budget.period.endDate !== null) {
       changes.period = { ...budget.period, endDate: null };
-      details.push('Cleared an end date on a repeating budget.');
+      details.push("Cleared an end date on a repeating budget.");
     }
 
     if (details.length) {
-      draft.patch<Budget>('budgets', budget, changes, {
-        code: changes.categoryLimits ? 'budgetLimitDropped' : changes.filters ? 'budgetFilterDropped' : 'budgetPeriodNormalized',
-        entityType: 'budgets',
+      draft.patch<Budget>("budgets", budget, changes, {
+        code: changes.categoryLimits
+          ? "budgetLimitDropped"
+          : changes.filters
+            ? "budgetFilterDropped"
+            : "budgetPeriodNormalized",
+        entityType: "budgets",
         entityId: budget.id,
-        detail: details.join(' '),
+        detail: details.join(" "),
       });
     }
   }
@@ -556,32 +670,48 @@ function repairBudgets(draft: Draft) {
 
 /** Recomputes the derived schedule fields against the merged accounts and categories. */
 function repairSchedules(draft: Draft) {
-  const accounts = draft.live<Account>('accounts');
-  const categories = draft.live<Category>('categories');
+  const accounts = draft.live<Account>("accounts");
+  const categories = draft.live<Category>("categories");
 
-  for (const rule of draft.live<RecurringRule>('recurringRules').sort(byCreationThenId)) {
+  for (const rule of draft
+    .live<RecurringRule>("recurringRules")
+    .sort(byCreationThenId)) {
     // A `schedule`-group write can legitimately move `startDate` past the pointer, and the
     // pointer is monotone so it cannot follow on its own.
-    const nextDueDate = rule.nextDueDate < rule.startDate ? rule.startDate : rule.nextDueDate;
-    const clamped = nextDueDate === rule.nextDueDate ? rule : { ...rule, nextDueDate };
+    const nextDueDate =
+      rule.nextDueDate < rule.startDate ? rule.startDate : rule.nextDueDate;
+    const clamped =
+      nextDueDate === rule.nextDueDate ? rule : { ...rule, nextDueDate };
     const paused = !canActivateRecurringRule(clamped, accounts, categories);
 
     if (nextDueDate !== rule.nextDueDate) {
-      draft.patch<RecurringRule>('recurringRules', rule, { nextDueDate, pausedByDependency: paused }, {
-        code: 'scheduleClamped',
-        entityType: 'recurringRules',
-        entityId: rule.id,
-        detail: `Next run moved to ${nextDueDate} to match the schedule start.`,
-      });
+      draft.patch<RecurringRule>(
+        "recurringRules",
+        rule,
+        { nextDueDate, pausedByDependency: paused },
+        {
+          code: "scheduleClamped",
+          entityType: "recurringRules",
+          entityId: rule.id,
+          detail: `Next run moved to ${nextDueDate} to match the schedule start.`,
+        },
+      );
       continue;
     }
     if (paused !== rule.pausedByDependency) {
-      draft.patch<RecurringRule>('recurringRules', rule, { pausedByDependency: paused }, {
-        code: 'schedulePaused',
-        entityType: 'recurringRules',
-        entityId: rule.id,
-        detail: paused ? 'Paused: an account or category it needs is unavailable.' : 'Resumed.',
-      });
+      draft.patch<RecurringRule>(
+        "recurringRules",
+        rule,
+        { pausedByDependency: paused },
+        {
+          code: "schedulePaused",
+          entityType: "recurringRules",
+          entityId: rule.id,
+          detail: paused
+            ? "Paused: an account or category it needs is unavailable."
+            : "Resumed.",
+        },
+      );
     }
   }
 }
@@ -601,14 +731,14 @@ function disambiguate(draft: Draft) {
       const entity = draft.get<T>(type, id);
       if (!entity) continue;
       draft.patch<T>(type, entity, { name } as Partial<T>, {
-        code: 'nameDisambiguated',
+        code: "nameDisambiguated",
         entityType: type,
         entityId: id,
         detail: `Renamed to "${name}" because another entry already used that name.`,
       });
     }
   };
-  rename<Account>('accounts');
-  rename<Category>('categories');
-  rename<Tag>('tags');
+  rename<Account>("accounts");
+  rename<Category>("categories");
+  rename<Tag>("tags");
 }

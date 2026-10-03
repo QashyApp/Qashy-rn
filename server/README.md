@@ -5,11 +5,11 @@ that reading it in full is a realistic thing to ask of you before you deploy it.
 
 It does three things:
 
-| Route | What it does |
-| --- | --- |
-| `GET /health` | Returns `{ "ok": true, "version": 2 }`. No id, no auth, nothing correlatable. This is what the app's **More → Sync** relay-status row asks. |
-| `GET /rendezvous/:id` (WebSocket) | Relays opaque text between exactly two parties at the same rotating id. Once both are connected it sends the fixed `qashy-rendezvous-ready:1` marker, then relays opaque text. Stores nothing. |
-| `PUT`/`GET`/`DELETE` `/bucket/:id` | A drop-box of sealed, padded frames addressed to a blinded route tag. |
+| Route                              | What it does                                                                                                                                                                                   |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`                      | Returns `{ "ok": true, "version": 2 }`. No id, no auth, nothing correlatable. This is what the app's **More → Sync** relay-status row asks.                                                    |
+| `GET /rendezvous/:id` (WebSocket)  | Relays opaque text between exactly two parties at the same rotating id. Once both are connected it sends the fixed `qashy-rendezvous-ready:1` marker, then relays opaque text. Stores nothing. |
+| `PUT`/`GET`/`DELETE` `/bucket/:id` | A drop-box of sealed, padded frames addressed to a blinded route tag.                                                                                                                          |
 
 ## What this server can see
 
@@ -81,13 +81,13 @@ Cloudflare docs.
 
 ## Configuration
 
-| Setting | Where | Default |
-| --- | --- | --- |
-| Retention window for undelivered blobs | `RETENTION_DAYS` in `wrangler.toml` | 14 days |
-| Request logging | `[observability]` in `wrangler.toml` | **off** |
-| Authenticated bucket requests | `REQUEST_RATE_LIMITER` in `wrangler.toml` | 120/minute per Cloudflare location |
-| New bucket allocations | `ALLOCATION_RATE_LIMITER` in `wrangler.toml` | 120/minute per source |
-| New rendezvous rooms | `RENDEZVOUS_RATE_LIMITER` in `wrangler.toml` | 120/minute in aggregate |
+| Setting                                | Where                                        | Default                            |
+| -------------------------------------- | -------------------------------------------- | ---------------------------------- |
+| Retention window for undelivered blobs | `RETENTION_DAYS` in `wrangler.toml`          | 14 days                            |
+| Request logging                        | `[observability]` in `wrangler.toml`         | **off**                            |
+| Authenticated bucket requests          | `REQUEST_RATE_LIMITER` in `wrangler.toml`    | 120/minute per Cloudflare location |
+| New bucket allocations                 | `ALLOCATION_RATE_LIMITER` in `wrangler.toml` | 120/minute per source              |
+| New rendezvous rooms                   | `RENDEZVOUS_RATE_LIMITER` in `wrangler.toml` | 120/minute in aggregate            |
 
 Shortening retention is safe. A device that was away longer simply receives the ops again from
 the sender's outbox, which never got an acknowledgement for them — nothing is lost by expiring
@@ -99,18 +99,18 @@ to prevent. If you turn it on to debug a deploy, turn it back off.
 
 ## Limits, and what happens when one is hit
 
-| Limit | Value | Response |
-| --- | --- | --- |
-| Frame size | 1 400 000 base64url characters | `413` → the app shows "too large"; direct sync unaffected |
-| Request body | 2 MiB, counted while streaming | `413` before a Durable Object is created |
-| Blobs per bucket | 5 000 | `429` → the app shows a relay error and names the device that has been away |
-| Page size | 500 (default 100) | silently clamped |
-| Authenticated requests across bucket ids | 120/minute per Cloudflare location | `429` |
-| New bucket allocations per source | 120/minute | `429` before object naming |
-| New rendezvous rooms | 120/minute in aggregate | `429` before object naming |
-| Requests per bucket | ~600/minute additional coarse brake | `429` |
-| Signaling message | 64 KiB | socket closed with `1009` |
-| Parties per rendezvous | 2 | `409` |
+| Limit                                    | Value                               | Response                                                                    |
+| ---------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------- |
+| Frame size                               | 1 400 000 base64url characters      | `413` → the app shows "too large"; direct sync unaffected                   |
+| Request body                             | 2 MiB, counted while streaming      | `413` before a Durable Object is created                                    |
+| Blobs per bucket                         | 5 000                               | `429` → the app shows a relay error and names the device that has been away |
+| Page size                                | 500 (default 100)                   | silently clamped                                                            |
+| Authenticated requests across bucket ids | 120/minute per Cloudflare location  | `429`                                                                       |
+| New bucket allocations per source        | 120/minute                          | `429` before object naming                                                  |
+| New rendezvous rooms                     | 120/minute in aggregate             | `429` before object naming                                                  |
+| Requests per bucket                      | ~600/minute additional coarse brake | `429`                                                                       |
+| Signaling message                        | 64 KiB                              | socket closed with `1009`                                                   |
+| Parties per rendezvous                   | 2                                   | `409`                                                                       |
 
 A full bucket is refused rather than trimmed. Silently dropping the oldest blob would look, from
 the waiting device's side, exactly like a sync that worked — and nothing in this design lets a
