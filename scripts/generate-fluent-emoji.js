@@ -32,7 +32,9 @@ const ALLOWED = new Set([
 ]);
 
 function parse(body) {
-  if (/<(defs|clipPath|use|filter|linearGradient|radialGradient|mask)/.test(body))
+  if (
+    /<(defs|clipPath|use|filter|linearGradient|radialGradient|mask)/.test(body)
+  )
     return null;
   const shapes = [];
   const tag = /<(path|circle|ellipse|rect)\s([^>]*?)\/?>/g;
@@ -77,12 +79,17 @@ export type FluentShape = { t: "path" | "circle" | "ellipse" | "rect"; a: Record
 
 `;
 let out = header;
-out += "// prettier-ignore\nexport const FLUENT_EMOJI: Readonly<Record<string, readonly FluentShape[]>> = {\n";
+out +=
+  "// prettier-ignore\nexport const FLUENT_EMOJI: Readonly<Record<string, readonly FluentShape[]>> = {\n";
 for (const [name, shapes] of Object.entries(emojis))
   out += `  ${JSON.stringify(name)}: ${JSON.stringify(shapes)},\n`;
 out += "};\n\n";
-out += "// prettier-ignore\nexport const FLUENT_EMOJI_BY_ION: Readonly<Record<string, string>> = " +
-  JSON.stringify(byIon, null, 2) + ";\n";
+out +=
+  "// prettier-ignore\nexport const FLUENT_EMOJI_BY_ION: Readonly<Record<string, string>> = " +
+  JSON.stringify(byIon, null, 2) +
+  ";\n";
 fs.writeFileSync(outPath, out);
-console.log(`emoji: ${Object.keys(emojis).length}, ion ids: ${Object.keys(byIon).length}`);
+console.log(
+  `emoji: ${Object.keys(emojis).length}, ion ids: ${Object.keys(byIon).length}`,
+);
 console.log("dropped:", dropped.join("; "));

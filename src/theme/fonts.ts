@@ -82,7 +82,7 @@ export const FONT_REGISTRY: Record<string, FontDefinition> = {
     },
     scripts: ["latin"],
   },
-  "figtree": {
+  figtree: {
     id: "figtree",
     label: "Figtree",
     weights: {
@@ -93,7 +93,7 @@ export const FONT_REGISTRY: Record<string, FontDefinition> = {
     },
     scripts: ["latin"],
   },
-  "inter": {
+  inter: {
     id: "inter",
     label: "Inter",
     weights: {
@@ -104,7 +104,7 @@ export const FONT_REGISTRY: Record<string, FontDefinition> = {
     },
     scripts: ["latin"],
   },
-  "nunito": {
+  nunito: {
     id: "nunito",
     label: "Nunito",
     weights: {
@@ -120,10 +120,22 @@ export const FONT_REGISTRY: Record<string, FontDefinition> = {
     label: "Atkinson Hyperlegible",
     // Only regular and bold are published: medium maps to regular, semibold to bold.
     weights: {
-      regular: { family: "AtkinsonHyperlegible_400Regular", asset: ATKINSON_HYPERLEGIBLE_400 },
-      medium: { family: "AtkinsonHyperlegible_400Regular", asset: ATKINSON_HYPERLEGIBLE_400 },
-      semibold: { family: "AtkinsonHyperlegible_700Bold", asset: ATKINSON_HYPERLEGIBLE_700 },
-      bold: { family: "AtkinsonHyperlegible_700Bold", asset: ATKINSON_HYPERLEGIBLE_700 },
+      regular: {
+        family: "AtkinsonHyperlegible_400Regular",
+        asset: ATKINSON_HYPERLEGIBLE_400,
+      },
+      medium: {
+        family: "AtkinsonHyperlegible_400Regular",
+        asset: ATKINSON_HYPERLEGIBLE_400,
+      },
+      semibold: {
+        family: "AtkinsonHyperlegible_700Bold",
+        asset: ATKINSON_HYPERLEGIBLE_700,
+      },
+      bold: {
+        family: "AtkinsonHyperlegible_700Bold",
+        asset: ATKINSON_HYPERLEGIBLE_700,
+      },
     },
     scripts: ["latin"],
   },
@@ -187,10 +199,14 @@ export function isFontId(id: unknown): id is string {
  * A stack for `family`, with Rubik appended when the face does not cover Hebrew, so a font chosen
  * by a custom theme or a per-device override can never leave Hebrew without a glyph source.
  */
-export function stackFor(family: string): { family: string; fallbacks: string[] } {
+export function stackFor(family: string): {
+  family: string;
+  fallbacks: string[];
+} {
   const covers = FONT_REGISTRY[family]?.scripts.includes("hebrew") ?? false;
   return {
     family,
-    fallbacks: covers || family === HEBREW_FALLBACK_FONT ? [] : [HEBREW_FALLBACK_FONT],
+    fallbacks:
+      covers || family === HEBREW_FALLBACK_FONT ? [] : [HEBREW_FALLBACK_FONT],
   };
 }

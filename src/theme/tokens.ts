@@ -513,7 +513,12 @@ export function toneColors(
 export function derivedRoleTokens(
   base: Pick<
     BaseTokens,
-    "background" | "surface" | "surfaceElevated" | "surfaceMuted" | "text" | "transfer"
+    | "background"
+    | "surface"
+    | "surfaceElevated"
+    | "surfaceMuted"
+    | "text"
+    | "transfer"
   >,
   dark: boolean,
 ): Pick<BaseTokens, (typeof ROLE_TOKEN_KEYS)[number]> {

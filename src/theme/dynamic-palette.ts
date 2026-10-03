@@ -74,8 +74,13 @@ export function deriveDynamicPalette(
   scheme: ThemeScheme,
   base: BaseTokens,
 ): DynamicPalette {
-  const { accent1: a1, accent2: a2, accent3: a3, neutral1: n1, neutral2: n2 } =
-    palettes;
+  const {
+    accent1: a1,
+    accent2: a2,
+    accent3: a3,
+    neutral1: n1,
+    neutral2: n2,
+  } = palettes;
   const dark = scheme === "dark";
 
   const raw: BaseTokens = dark
@@ -124,33 +129,35 @@ export function deriveDynamicPalette(
 }
 
 /** How much of the seed each surface takes, per scheme: a gentle wash that grows with elevation. */
-const SEED_TINT: Record<ThemeScheme, Partial<Record<keyof BaseTokens, number>>> =
-  {
-    light: {
-      background: 0.05,
-      surface: 0.07,
-      surfaceElevated: 0.09,
-      surfaceMuted: 0.12,
-      surfaceSunken: 0.15,
-      border: 0.14,
-      textMuted: 0.1,
-      text: 0.04,
-      headerBackground: 0.05,
-      navBackground: 0.09,
-    },
-    dark: {
-      background: 0.07,
-      surface: 0.09,
-      surfaceElevated: 0.12,
-      surfaceMuted: 0.16,
-      surfaceSunken: 0.05,
-      border: 0.14,
-      textMuted: 0.08,
-      text: 0.04,
-      headerBackground: 0.07,
-      navBackground: 0.12,
-    },
-  };
+const SEED_TINT: Record<
+  ThemeScheme,
+  Partial<Record<keyof BaseTokens, number>>
+> = {
+  light: {
+    background: 0.05,
+    surface: 0.07,
+    surfaceElevated: 0.09,
+    surfaceMuted: 0.12,
+    surfaceSunken: 0.15,
+    border: 0.14,
+    textMuted: 0.1,
+    text: 0.04,
+    headerBackground: 0.05,
+    navBackground: 0.09,
+  },
+  dark: {
+    background: 0.07,
+    surface: 0.09,
+    surfaceElevated: 0.12,
+    surfaceMuted: 0.16,
+    surfaceSunken: 0.05,
+    border: 0.14,
+    textMuted: 0.08,
+    text: 0.04,
+    headerBackground: 0.07,
+    navBackground: 0.12,
+  },
+};
 
 /**
  * Washes a theme's neutral surfaces, text and borders with a user-picked seed color, so a chosen

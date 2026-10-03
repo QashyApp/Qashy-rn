@@ -134,7 +134,12 @@ export const highContrastTheme: ThemeDefinition = {
   tile,
   iconSize,
   motion: { ...motion, press: "scale" },
-  material: { engine: "soft", card: "elevated", gradients: false, bevelDepth: 0 },
+  material: {
+    engine: "soft",
+    card: "elevated",
+    gradients: false,
+    bevelDepth: 0,
+  },
   type: {
     text: { family: "rubik", fallbacks: [] },
     numeric: { family: "space-grotesk", fallbacks: ["rubik"] },

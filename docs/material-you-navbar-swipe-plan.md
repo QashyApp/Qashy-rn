@@ -16,25 +16,25 @@ Today `materialYouTheme` (`src/theme/themes/material-you.ts`) is `classicTheme` 
 
 The other 60% is **composition**. In Cashew, components are shaped and arranged differently, beyond being painted differently:
 
-| Cashew trait (from the screenshots) | Qashy today | Needed |
-|---|---|---|
-| Large greeting header ("Good evening / Ziv") and tinted collapsing app bar with a big title | Native stack header, `PageHeading` | Header variant |
-| Accounts as horizontally scrolling selectable tiles with an "add account" ghost tile | `accounts-widget.tsx` list | Widget variant |
-| Budget card with a tinted/gradient header band, a "Today" marker on the progress bar and "spend X/day for N days" | `budget-pulse-widget.tsx` | Widget variant + one new derived figure |
-| Category icon as a colorful illustration inside a filled color circle, plus a secondary "type" badge (recurring/transfer) and `×13` installment chip | `transaction-row.tsx` | Row variant |
-| Transactions: scrollable **month tab strip** with an underline indicator, and a pill summary `▾₪0  ▴₪1,462  = ₪1,462` | `MonthSwitcher` + summary tiles | Month-nav variant + summary variant |
-| Collapsible "Future transactions" section | Not present as a section | New list section (pure grouping util) |
-| "More" as a grid of outlined tiles (full-width rows plus a two-column grid) | `more-screen.tsx` list rows | Screen variant |
-| Rounded-square tonal FAB | Circular FAB | FAB shape variant (`radius` may already cover it) |
-| M3 nav bar with a pill indicator | Already native (`indicatorColor`) | None |
+| Cashew trait (from the screenshots)                                                                                                                  | Qashy today                        | Needed                                            |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- | ------------------------------------------------- |
+| Large greeting header ("Good evening / Ziv") and tinted collapsing app bar with a big title                                                          | Native stack header, `PageHeading` | Header variant                                    |
+| Accounts as horizontally scrolling selectable tiles with an "add account" ghost tile                                                                 | `accounts-widget.tsx` list         | Widget variant                                    |
+| Budget card with a tinted/gradient header band, a "Today" marker on the progress bar and "spend X/day for N days"                                    | `budget-pulse-widget.tsx`          | Widget variant + one new derived figure           |
+| Category icon as a colorful illustration inside a filled color circle, plus a secondary "type" badge (recurring/transfer) and `×13` installment chip | `transaction-row.tsx`              | Row variant                                       |
+| Transactions: scrollable **month tab strip** with an underline indicator, and a pill summary `▾₪0  ▴₪1,462  = ₪1,462`                                | `MonthSwitcher` + summary tiles    | Month-nav variant + summary variant               |
+| Collapsible "Future transactions" section                                                                                                            | Not present as a section           | New list section (pure grouping util)             |
+| "More" as a grid of outlined tiles (full-width rows plus a two-column grid)                                                                          | `more-screen.tsx` list rows        | Screen variant                                    |
+| Rounded-square tonal FAB                                                                                                                             | Circular FAB                       | FAB shape variant (`radius` may already cover it) |
+| M3 nav bar with a pill indicator                                                                                                                     | Already native (`indicatorColor`)  | None                                              |
 
 So the work is: **add a component-variant layer to `ThemeDefinition`**, implement the Cashew variants, and point Material You at them. Classic and High Contrast stay identical (all defaults are the current look).
 
 ### A.1 Hard constraints (non-negotiable)
 
 1. **License / branding.** Cashew is GPL-3.0. Reimplement the visual language from observation only. Don't copy its source, assets, icon pack, strings or name. The theme keeps the name "Material You".
-2. **Fonts.** Cashew uses Avenir, which is proprietary, so it can't be bundled. Pick an open-license geometric/humanist face with a similar feel (candidates: *Nunito Sans*, *Figtree*, *Mulish*), bundle it through `src/theme/fonts.ts`, and use Rubik as the Hebrew fallback. No remote fonts.
-3. **Icons.** Cashew's colorful category art is its own. To get the same "illustration in a circle" feel, add a bundled icon set in `src/theme/icon-sets.ts` mapped from existing theme-independent ids. Use an open set, e.g. Microsoft Fluent Emoji *Flat* (MIT) or Noto Emoji (Apache-2.0), SVG and subset to the mapped ids only. Unmapped ids fall back to Ionicons. Stored icon ids never change.
+2. **Fonts.** Cashew uses Avenir, which is proprietary, so it can't be bundled. Pick an open-license geometric/humanist face with a similar feel (candidates: _Nunito Sans_, _Figtree_, _Mulish_), bundle it through `src/theme/fonts.ts`, and use Rubik as the Hebrew fallback. No remote fonts.
+3. **Icons.** Cashew's colorful category art is its own. To get the same "illustration in a circle" feel, add a bundled icon set in `src/theme/icon-sets.ts` mapped from existing theme-independent ids. Use an open set, e.g. Microsoft Fluent Emoji _Flat_ (MIT) or Noto Emoji (Apache-2.0), SVG and subset to the mapped ids only. Unmapped ids fall back to Ionicons. Stored icon ids never change.
 4. **Theme rules from AGENTS.md still apply.** Both schemes are required. Read everything through `useQashyTheme()`. No hard-coded colors or scale values in features. Theme fields stay `deviceLocal`. Keep reduced-motion, reduced-transparency and contrast clamping. Touch targets stay 44–48px.
 5. **Platform.** Material You stays `availableOn: ["android"]`. Because the variants live on `ThemeDefinition`, a later "Cashew-like" theme for iOS/web with a seed accent is a small follow-up, not a rewrite.
 
@@ -45,10 +45,10 @@ So the work is: **add a component-variant layer to `ThemeDefinition`**, implemen
 ```ts
 // src/theme/themes/types.ts
 export interface VariantSpec {
-  header: "native" | "expressive";        // expressive = greeting / large tinted title band
+  header: "native" | "expressive"; // expressive = greeting / large tinted title band
   monthNav: "switcher" | "tabStrip";
   flowSummary: "tiles" | "pill";
-  transactionRow: "standard" | "avatar";  // avatar = filled circle + illustration + type badge
+  transactionRow: "standard" | "avatar"; // avatar = filled circle + illustration + type badge
   accountsWidget: "list" | "tiles";
   budgetCard: "standard" | "banded";
   moreScreen: "list" | "tileGrid";
@@ -58,7 +58,7 @@ export interface VariantSpec {
 
 - Every built-in theme gets defaults equal to today's look. `assertThemeDefinition` / `validate.ts` checks the enums.
 - Components branch on `theme.variants.x` **inside** the shared component (`src/components/ui`, `src/components/finance`, the overview widgets). Feature screens don't branch on theme ids. The existing `theme.id === "high-contrast"` check in `theme.tsx` is the only allowed exception, and it shouldn't spread.
-- **Custom themes:** don't expose `variants` in the custom-theme JSON schema in v1. Custom themes inherit Classic variants. This keeps `CUSTOM_THEME_GUIDE.md` and its tests unchanged. Exposing them later means updating `src/theme/custom/schema.ts`, the guide and `guide.test.ts` together. *(Open decision D2.)*
+- **Custom themes:** don't expose `variants` in the custom-theme JSON schema in v1. Custom themes inherit Classic variants. This keeps `CUSTOM_THEME_GUIDE.md` and its tests unchanged. Exposing them later means updating `src/theme/custom/schema.ts`, the guide and `guide.test.ts` together. _(Open decision D2.)_
 
 **A.2.2 A fuller dynamic palette**
 
@@ -77,15 +77,15 @@ export interface VariantSpec {
 
 ### A.3 Phases
 
-| # | Work | Main files | Done when |
-|---|---|---|---|
-| A1 | `VariantSpec` type, defaults for all built-ins, validation, tests | `themes/types.ts`, `classic.ts`, `high-contrast.ts`, `validate.ts`, `theme.tsx`, theme tests | Typecheck passes; Classic/High Contrast snapshots unchanged |
-| A2 | New container tokens in `BaseTokens` for all themes + custom-theme derivation | `tokens.ts`, `themes/*`, `custom/schema.ts` (derive, not expose) | Contrast tests pass for every theme × scheme |
-| A3 | (Recommended) `qashy-dynamic-colors` Android module + resolver path | `modules/…`, `theme.tsx` | Material You derives hex tokens on device; falls back cleanly below Android 12 |
-| A4 | Font + icon set registered and bundled (subset) | `fonts.ts`, `icon-sets.ts`, assets | Hebrew renders through Rubik; bundle growth measured and reported |
-| A5 | Variants, one PR each: FAB → transaction row → flow summary pill → month tab strip → accounts tiles → banded budget card → expressive header → More tile grid → Future section | the components listed in A.0 | Each variant has light/dark screenshots, a11y labels and selected states, and reduced-motion behavior |
-| A6 | Point `materialYouTheme` at the Cashew variants, font, icon set and radius/space tweaks | `material-you.ts`, `theme-picker.tsx` description | Side-by-side QA against the reference screenshots |
-| A7 | Docs | `docs/theme-authoring.md`, `README.md` | Variants are documented for future theme authors |
+| #   | Work                                                                                                                                                                           | Main files                                                                                   | Done when                                                                                             |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| A1  | `VariantSpec` type, defaults for all built-ins, validation, tests                                                                                                              | `themes/types.ts`, `classic.ts`, `high-contrast.ts`, `validate.ts`, `theme.tsx`, theme tests | Typecheck passes; Classic/High Contrast snapshots unchanged                                           |
+| A2  | New container tokens in `BaseTokens` for all themes + custom-theme derivation                                                                                                  | `tokens.ts`, `themes/*`, `custom/schema.ts` (derive, not expose)                             | Contrast tests pass for every theme × scheme                                                          |
+| A3  | (Recommended) `qashy-dynamic-colors` Android module + resolver path                                                                                                            | `modules/…`, `theme.tsx`                                                                     | Material You derives hex tokens on device; falls back cleanly below Android 12                        |
+| A4  | Font + icon set registered and bundled (subset)                                                                                                                                | `fonts.ts`, `icon-sets.ts`, assets                                                           | Hebrew renders through Rubik; bundle growth measured and reported                                     |
+| A5  | Variants, one PR each: FAB → transaction row → flow summary pill → month tab strip → accounts tiles → banded budget card → expressive header → More tile grid → Future section | the components listed in A.0                                                                 | Each variant has light/dark screenshots, a11y labels and selected states, and reduced-motion behavior |
+| A6  | Point `materialYouTheme` at the Cashew variants, font, icon set and radius/space tweaks                                                                                        | `material-you.ts`, `theme-picker.tsx` description                                            | Side-by-side QA against the reference screenshots                                                     |
+| A7  | Docs                                                                                                                                                                           | `docs/theme-authoring.md`, `README.md`                                                       | Variants are documented for future theme authors                                                      |
 
 **Risks:** variant branches slowly turning into a second app (keep the variant count small and reviewed); illustration icons + font increasing bundle size; RTL mirroring of the tab strip and the accounts carousel; the month tab strip has to work together with workstream C's pager (C owns the gesture, the tab strip only reflects and drives `month`).
 
@@ -103,7 +103,7 @@ The floating bar has to be a JS-rendered tab bar anyway, since native tabs can't
 - **Option 2: JS-only tabs on Android.** Use expo-router's JS `Tabs` (`@react-navigation/bottom-tabs`) with one custom `tabBar` that renders either a docked M3-faithful bar or the floating bar. Long-press works the same in both modes. The cost: "native" becomes a faithful imitation, not the platform view (ripple, predictive back and system font scaling have to be matched by hand).
 - **Fallback in either case:** a "Navigation bar style" row in Appearance (or Gestures) opens the same sheet, so the setting is always reachable and discoverable.
 
-*(Open decision D1: Option 1 vs. 2.)*
+_(Open decision D1: Option 1 vs. 2.)_
 
 ### B.1 Design
 
@@ -128,7 +128,7 @@ Estimate: ~3–5 days (Option 1 adds ~1–2 days for the native patch).
 
 ### C.0 Feasibility verdict
 
-**Feasible, moderate effort (~4–6 days).** `useMonthSwipe` (`src/components/ui/use-month-swipe.ts`) + `MonthSwipeView` translate *the whole wrapped view* with resistance (`FOLLOW = 0.45`). On release they change `month` and nudge the new content in from 44px. No neighbouring month is ever rendered. Both screens wrap everything: `transactions-screen.tsx:351` wraps the pinned toolbar *and* the list, and `overview-screen.tsx:329` wraps the whole scroll view.
+**Feasible, moderate effort (~4–6 days).** `useMonthSwipe` (`src/components/ui/use-month-swipe.ts`) + `MonthSwipeView` translate _the whole wrapped view_ with resistance (`FOLLOW = 0.45`). On release they change `month` and nudge the new content in from 44px. No neighbouring month is ever rendered. Both screens wrap everything: `transactions-screen.tsx:351` wraps the pinned toolbar _and_ the list, and `overview-screen.tsx:329` wraps the whole scroll view.
 
 The target is a real **pager**: previous / current / next month laid side by side. The drag tracks the finger 1:1, so the month you're swiping toward slides in from that side, and release either commits or springs back.
 

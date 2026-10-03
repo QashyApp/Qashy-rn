@@ -28,10 +28,11 @@ describe("platform availability", () => {
     expect(listAvailableThemes([], "web").map((t) => t.id)).toContain(
       "material-you",
     );
-    expect(listAvailableThemes([], "ios").map((t) => t.id).sort()).toEqual([
-      "classic",
-      "high-contrast",
-    ]);
+    expect(
+      listAvailableThemes([], "ios")
+        .map((t) => t.id)
+        .sort(),
+    ).toEqual(["classic", "high-contrast"]);
     expect(isThemeAvailable(classicTheme, "web")).toBe(true);
   });
 

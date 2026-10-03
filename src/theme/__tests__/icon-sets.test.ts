@@ -206,7 +206,10 @@ describe("theme icon validation", () => {
   it("requires a registered set", () => {
     expect(() => assertThemeDefinition(classicTheme)).not.toThrow();
     expect(() =>
-      assertThemeDefinition({ ...classicTheme, icons: { ...classicTheme.icons, set: "nope" } }),
+      assertThemeDefinition({
+        ...classicTheme,
+        icons: { ...classicTheme.icons, set: "nope" },
+      }),
     ).toThrow(/icons\.set/);
   });
 });

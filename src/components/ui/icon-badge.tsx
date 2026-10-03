@@ -108,7 +108,10 @@ export function IconBadge({
   const tileSize = size ?? theme.tile.size;
   const hasContainer = style !== "none" || multiColor;
   const highlight =
-    raised && hasContainer && style === "tinted" && theme.cardStyle === "elevated";
+    raised &&
+    hasContainer &&
+    style === "tinted" &&
+    theme.cardStyle === "elevated";
   return (
     <View
       style={{

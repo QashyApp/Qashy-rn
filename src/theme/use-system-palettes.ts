@@ -13,8 +13,10 @@ function read(): SystemPalettes | null {
   }
 }
 
-const sameTones = (first: SystemPalettes | null, second: SystemPalettes | null) =>
-  first === second || JSON.stringify(first) === JSON.stringify(second);
+const sameTones = (
+  first: SystemPalettes | null,
+  second: SystemPalettes | null,
+) => first === second || JSON.stringify(first) === JSON.stringify(second);
 
 /**
  * The Android 12+ wallpaper palettes, or null on web, iOS, older Android, Expo Go and Jest (any

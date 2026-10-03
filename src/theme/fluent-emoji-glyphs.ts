@@ -3,7 +3,10 @@
 // https://github.com/microsoft/fluentui-emoji (see THIRD_PARTY_NOTICES.md).
 // 32x32 viewBox; each emoji is a list of plain SVG shapes carrying their own colors.
 
-export type FluentShape = { t: "path" | "circle" | "ellipse" | "rect"; a: Record<string, string> };
+export type FluentShape = {
+  t: "path" | "circle" | "ellipse" | "rect";
+  a: Record<string, string>;
+};
 
 // prettier-ignore
 export const FLUENT_EMOJI: Readonly<Record<string, readonly FluentShape[]>> = {

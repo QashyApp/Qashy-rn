@@ -77,7 +77,9 @@ describe("deriveDynamicPalette", () => {
     for (const source of [grey, violet]) {
       const { palette } = deriveDynamicPalette(source, scheme, base);
       for (const surface of [palette.surface, palette.background]) {
-        expect(contrastRatio(palette.text, surface)).toBeGreaterThanOrEqual(4.5);
+        expect(contrastRatio(palette.text, surface)).toBeGreaterThanOrEqual(
+          4.5,
+        );
       }
       expect(
         contrastRatio(palette.textMuted, palette.surface),
@@ -99,7 +101,9 @@ describe("isSystemPalettes", () => {
   it("rejects null, partial and malformed values", () => {
     expect(isSystemPalettes(null)).toBe(false);
     expect(isSystemPalettes({})).toBe(false);
-    expect(isSystemPalettes({ ...violet, accent3: { "0": "#FFF" } })).toBe(false);
+    expect(isSystemPalettes({ ...violet, accent3: { "0": "#FFF" } })).toBe(
+      false,
+    );
     expect(
       isSystemPalettes({
         ...violet,

@@ -57,7 +57,12 @@ export const classicTheme: ThemeDefinition = {
   tile,
   iconSize,
   motion,
-  material: { engine: "soft", card: "elevated", gradients: true, bevelDepth: 0 },
+  material: {
+    engine: "soft",
+    card: "elevated",
+    gradients: true,
+    bevelDepth: 0,
+  },
   type: {
     text: { family: "rubik", fallbacks: [] },
     numeric: { family: "space-grotesk", fallbacks: ["rubik"] },

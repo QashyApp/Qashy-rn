@@ -64,7 +64,8 @@ export function IconButton({
           minHeight: 44,
           // Filled buttons (and so the FAB) take the theme fab radius: a pill in Classic, a rounded
           // square in themes that set one. A ghost button has no fill to shape, so it stays round.
-          borderRadius: variant === "plain" ? theme.radius.pill : theme.radius.fab,
+          borderRadius:
+            variant === "plain" ? theme.radius.pill : theme.radius.fab,
           alignItems: "center",
           justifyContent: "center",
           opacity: isDisabled ? 0.4 : 1,
