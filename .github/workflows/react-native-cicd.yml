@@ -2,7 +2,7 @@ name: React Native CI/CD
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, dev]
     tags: ["v*"]
     paths-ignore:
       - "**.md"
@@ -55,7 +55,8 @@ jobs:
       - name: 🎨 Run Prettier check
         run: npm run format:check
 
-      # Dev, preview and production builds on every push (main and tags).
+      # Pushes to dev build preview only; pushes to main/master and tags build
+      # preview + production. The dev profile runs only from manual dispatch.
       # Manual runs pick builds from the buildType input.
       - name: 🗺 Plan builds
         id: plan
@@ -75,8 +76,10 @@ jobs:
               production) list="$production" ;;
               *) list="$dev,$preview,$production" ;;
             esac
+          elif [ "$EVENT" = "push" ] && [ "$REF" = "refs/heads/dev" ]; then
+            list="$preview"
           elif [ "$EVENT" = "push" ]; then
-            list="$dev,$preview,$production"
+            list="$preview,$production"
           else
             list=""
           fi
