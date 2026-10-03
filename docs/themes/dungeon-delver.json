@@ -1,0 +1,57 @@
+{
+  "themeSchemaVersion": 1,
+  "id": "dungeon-delver",
+  "name": "Dungeon Delver",
+  "extends": "classic",
+  "palette": {
+    "light": {
+      "background": "#C9D6DE",
+      "surface": "#E4ECF1",
+      "surfaceElevated": "#F1F6F9",
+      "surfaceMuted": "#D3DFE6",
+      "surfaceSunken": "#B7C7D1",
+      "text": "#0E1E29",
+      "textMuted": "#3C5566",
+      "border": "#3C5566",
+      "positive": "#1E7A4A",
+      "negative": "#B02A1F",
+      "warning": "#8A4F00",
+      "transfer": "#1F5F99"
+    },
+    "dark": {
+      "background": "#0C1A26",
+      "surface": "#152B3A",
+      "surfaceElevated": "#1E3B4E",
+      "surfaceMuted": "#27495D",
+      "surfaceSunken": "#08121B",
+      "text": "#E8EEF2",
+      "textMuted": "#A9BDCA",
+      "border": "#5A7A8E",
+      "positive": "#3FD68A",
+      "negative": "#FF7A6B",
+      "warning": "#F5B042",
+      "transfer": "#5CB8FF"
+    }
+  },
+  "accent": {
+    "mode": "user",
+    "default": "#F28A2E",
+    "presets": ["#F28A2E", "#3FC8F0", "#B15CE8", "#4CD98A", "#E5534B", "#E9C23B"]
+  },
+  "shape": {
+    "radius": { "sm": 0, "control": 0, "tile": 0, "card": 0, "sheet": 0, "nav": 0, "pill": 0 },
+    "tile": { "size": 44, "icon": 24, "compactSize": 34, "compactIcon": 18 }
+  },
+  "material": { "engine": "bevel", "gradients": false, "bevelDepth": 2 },
+  "motion": { "press": "translate", "pressTranslate": 2, "durationScale": 0.8 },
+  "type": { "text": { "family": "pixelify-sans" }, "numeric": { "family": "pixelify-sans" } },
+  "icons": { "set": "pixel" },
+  "charts": {
+    "patterns": true,
+    "lineWidth": 3,
+    "donutThickness": 18,
+    "gridDash": "2 2",
+    "lineCap": "butt",
+    "categoryPalette": ["#F28A2E", "#3FC8F0", "#B15CE8", "#4CD98A", "#E5534B", "#E9C23B", "#5C86FF", "#D96FA8"]
+  }
+}
