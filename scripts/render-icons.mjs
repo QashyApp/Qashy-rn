@@ -54,10 +54,20 @@ function safeZoneMark(markSvg, { size, scale = 0.66 }) {
   </svg>`;
 }
 
-/** The adaptive icon background layer: a flat pale-blue background layer, no mark, no rounded corners (Android supplies its own mask). */
+/** The adaptive icon background layer: a flat blue background layer, no mark, no rounded corners (Android supplies its own mask). */
 function backgroundOnlySvg({ size }) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
-    <rect width="1024" height="1024" fill="#A7CBD6"/>
+    <rect width="1024" height="1024" fill="#5070FF"/>
+  </svg>`;
+}
+
+/** Maskable PWA icon: full-bleed background, mark inside the 80% maskable safe zone. */
+function maskableSvg({ size }) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
+    <rect width="1024" height="1024" fill="#5070FF"/>
+    <g transform="translate(512 512) scale(0.78) translate(-512 -512)">
+      ${innerMarkup(MARK_SVG)}
+    </g>
   </svg>`;
 }
 
@@ -80,9 +90,9 @@ const targets = [
   },
   {
     out: "assets/images/favicon.png",
-    svg: APP_ICON_SVG,
+    svg: PUBLIC_ICON_SVG,
     size: 48,
-    transparent: false,
+    transparent: true,
   },
   {
     out: "assets/images/android-icon-foreground.png",
@@ -106,11 +116,24 @@ const targets = [
     out: "public/qashy-icon-192.png",
     svg: PUBLIC_ICON_SVG,
     size: 192,
-    transparent: false,
+    transparent: true,
   },
   {
     out: "public/qashy-icon-512.png",
     svg: PUBLIC_ICON_SVG,
+    size: 512,
+    transparent: true,
+  },
+  // iOS rounds apple-touch icons itself, so this one stays a full square.
+  {
+    out: "public/qashy-apple-touch-icon.png",
+    svg: APP_ICON_SVG,
+    size: 180,
+    transparent: false,
+  },
+  {
+    out: "public/qashy-icon-maskable-512.png",
+    svg: maskableSvg({ size: 512 }),
     size: 512,
     transparent: false,
   },

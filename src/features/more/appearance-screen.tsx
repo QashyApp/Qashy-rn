@@ -110,7 +110,7 @@ export function AppearanceScreen() {
   };
   const customError =
     userAccent && source === "custom" && !validHex
-      ? "Use a six-digit hex color such as #5966E9."
+      ? "Use a six-digit hex color such as #5070FF."
       : undefined;
   // Language applies immediately, exactly like the onboarding welcome step: it writes
   // `settings.locale`, and `LocalizationProvider` flips language and RTL from that — no reload.

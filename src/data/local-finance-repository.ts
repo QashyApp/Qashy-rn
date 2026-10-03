@@ -5933,7 +5933,7 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   private assertColor(value: string) {
     if (!/^#[0-9A-Fa-f]{6}$/.test(value))
-      throw new Error("Use a six-digit hex color such as #5966E9.");
+      throw new Error("Use a six-digit hex color such as #5070FF.");
   }
 
   private assertDate(value: string) {

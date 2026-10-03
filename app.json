@@ -17,7 +17,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#A7CBD6",
+        "backgroundColor": "#5070FF",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
@@ -29,7 +29,7 @@
       "favicon": "./assets/images/favicon.png",
       "name": "Qashy — Calm Budgeting",
       "shortName": "Qashy",
-      "themeColor": "#5966E9",
+      "themeColor": "#5070FF",
       "backgroundColor": "#F1F2F5"
     },
     "plugins": [

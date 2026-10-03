@@ -1,7 +1,7 @@
-export const QASHY_INDIGO = "#5966E9";
+export const QASHY_INDIGO = "#5070FF";
 
 export const ACCENT_PRESETS = [
-  "#5966E9",
+  "#5070FF",
   "#007AFF",
   "#00A58E",
   "#36A852",
@@ -16,7 +16,7 @@ export const ACCENT_PRESET_NAMES: Record<
   (typeof ACCENT_PRESETS)[number],
   string
 > = {
-  "#5966E9": "Indigo",
+  "#5070FF": "Indigo",
   "#007AFF": "Blue",
   "#00A58E": "Teal",
   "#36A852": "Green",

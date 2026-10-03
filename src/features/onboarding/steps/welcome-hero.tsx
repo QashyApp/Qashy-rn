@@ -10,7 +10,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import Svg, { Circle, ClipPath, Defs, Path } from "react-native-svg";
+import Svg, { Circle, Path, Rect } from "react-native-svg";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
@@ -99,30 +99,39 @@ export function WelcomeHero() {
             accent,
           ]}
         >
-          <Svg width={48} height={48} viewBox="0 0 1024 1024">
-            <Defs>
-              <ClipPath id="qashy-q-ring-clip">
-                <Path
-                  clipRule="evenodd"
-                  d="M0 0H1024V1024H0Z M430 594L594 430L1194 1030L1030 1194Z"
-                />
-              </ClipPath>
-            </Defs>
+          <Svg width={56} height={56} viewBox="0 0 1024 1024">
             <Circle
               cx={512}
               cy={512}
-              r={246}
+              r={360}
               fill="none"
               stroke={theme.onAccent as string}
-              strokeWidth={56}
-              clipPath="url(#qashy-q-ring-clip)"
+              strokeWidth={92}
             />
-            <Circle cx={500} cy={504} r={16} fill={theme.onAccent as string} />
-            <Circle cx={536} cy={542} r={16} fill={theme.onAccent as string} />
-            <Circle cx={572} cy={580} r={16} fill={theme.onAccent as string} />
-            <Path
+            <Rect
+              x={655}
+              y={712.5}
+              width={214}
+              height={99}
+              rx={26}
               fill={theme.onAccent as string}
-              d="M622 588L773 739L739 773L588 622Z"
+              transform="rotate(45 762 762)"
+            />
+            <Rect
+              x={496.5}
+              y={282}
+              width={31}
+              height={460}
+              rx={15}
+              fill={theme.onAccent as string}
+            />
+            <Path
+              d="M584 418C562 397 538 388 512 388C470 388 440 410 440 445C440 480 470 495 512 506C556 518 586 536 586 574C586 612 556 640 512 640C482 640 455 630 436 612"
+              fill="none"
+              stroke={theme.onAccent as string}
+              strokeWidth={78}
+              strokeLinecap="round"
+              strokeLinejoin="round"
             />
           </Svg>
         </View>

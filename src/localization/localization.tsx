@@ -465,8 +465,8 @@ const HEBREW: Record<string, string> = {
     "הסכום שהומר מחוץ לטווח הנתמך.",
   "Exchange rate must be a positive number.":
     "שער החליפין חייב להיות מספר חיובי.",
-  "Use a six-digit hex color such as #5966E9.":
-    "השתמשו בצבע הקסדצימלי בן שש ספרות, למשל #5966E9.",
+  "Use a six-digit hex color such as #5070FF.":
+    "השתמשו בצבע הקסדצימלי בן שש ספרות, למשל #5070FF.",
   "Use a real date in YYYY-MM-DD format.":
     "השתמשו בתאריך אמיתי בתבנית YYYY-MM-DD.",
   "Choose a destination account.": "בחרו חשבון יעד.",

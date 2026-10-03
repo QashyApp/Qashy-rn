@@ -123,7 +123,7 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-title" content="Qashy" />
         <link rel="manifest" href="/manifest.json" />
         <link rel="icon" href="/qashy-icon.svg" type="image/svg+xml" />
-        <link rel="apple-touch-icon" href="/qashy-icon-192.png" />
+        <link rel="apple-touch-icon" href="/qashy-apple-touch-icon.png" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
       </head>

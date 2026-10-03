@@ -1,8 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
-<defs><clipPath id="q-ring-clip"><path clip-rule="evenodd" d="M0 0H1024V1024H0Z M430 594L594 430L1194 1030L1030 1194Z"/></clipPath></defs>
-<circle cx="512" cy="512" r="246" fill="none" stroke="#000000" stroke-width="56" clip-path="url(#q-ring-clip)"/>
-<circle cx="500" cy="504" r="16" fill="#000000"/>
-<circle cx="536" cy="542" r="16" fill="#000000"/>
-<circle cx="572" cy="580" r="16" fill="#000000"/>
-<polygon points="622,588 773,739 739,773 588,622" fill="#000000"/>
+<circle cx="512" cy="512" r="360" fill="none" stroke="#000000" stroke-width="92"/>
+<rect x="655" y="712.5" width="214" height="99" rx="26" fill="#000000" transform="rotate(45 762 762)"/>
+<rect x="496.5" y="282" width="31" height="460" rx="15" fill="#000000"/>
+<path d="M584 418C562 397 538 388 512 388C470 388 440 410 440 445C440 480 470 495 512 506C556 518 586 536 586 574C586 612 556 640 512 640C482 640 455 630 436 612" fill="none" stroke="#000000" stroke-width="78" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
