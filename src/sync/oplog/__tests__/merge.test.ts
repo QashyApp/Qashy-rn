@@ -385,6 +385,35 @@ describe("monotone registers", () => {
     ).toMatchObject({ nextDueDate: "2026-06-01" });
   });
 
+  it("keeps the larger nextDueDate even when the same device deliberately moves it back", () => {
+    // Characterization of a known gap, not a statement of desired behavior. Editing a rule's
+    // schedule while an occurrence is pending moves the pointer back to that occurrence
+    // (`saveRecurringRuleNow`), but the register is monotone-max, so the merged pointer stays
+    // at the older, larger value: peers (and this device, once the entity is re-projected)
+    // never regenerate the occurrence the edit just discarded. If the registry ever lets a
+    // newer `schedule` write reset the pointer, this expectation should flip to 2026-03-01.
+    const base = recurringRule({ id: "rule-1" });
+    const ops = [
+      ...write("recurringRules", null, base, at(1, DEVICE_A)),
+      ...write(
+        "recurringRules",
+        base,
+        { ...base, nextDueDate: "2026-06-01" },
+        at(10, DEVICE_A),
+      ),
+      ...write(
+        "recurringRules",
+        { ...base, nextDueDate: "2026-06-01" },
+        { ...base, interval: 2, nextDueDate: "2026-03-01" },
+        at(20, DEVICE_A),
+      ),
+    ];
+    expect(project(fold(ops), "recurringRules", "rule-1")).toMatchObject({
+      interval: 2,
+      nextDueDate: "2026-06-01",
+    });
+  });
+
   it("never un-onboards a device", () => {
     const fresh = settings({ onboardingComplete: false });
     const done = { ...fresh, onboardingComplete: true };

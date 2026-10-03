@@ -1,5 +1,7 @@
 import {
+  SUPPORTED_CURRENCY_CODES,
   convertMinor,
+  currencyDigits,
   formatMoney,
   localizeDecimalString,
   minorToDecimalString,
@@ -60,5 +62,32 @@ describe("money utilities", () => {
 
   it("rejects malformed amounts", () => {
     expect(() => parseMoney("12,3,4", "EUR", "de-DE")).toThrow("valid amount");
+  });
+
+  it("pins minor-unit digits instead of trusting the runtime's ICU data", () => {
+    // Synced devices must agree on what a stored integer means, whatever CLDR they ship.
+    const expected: Record<string, number> = {
+      USD: 2,
+      EUR: 2,
+      JPY: 0,
+      KRW: 0,
+      VND: 0,
+      COP: 0,
+      HUF: 0,
+      IDR: 0,
+      IQD: 0,
+      KWD: 3,
+      BHD: 3,
+      TND: 3,
+      ILS: 2,
+    };
+    for (const [code, digits] of Object.entries(expected)) {
+      expect(currencyDigits(code)).toBe(digits);
+      expect(currencyDigits(code, "he-IL")).toBe(digits);
+      expect(currencyDigits(code.toLowerCase())).toBe(digits);
+    }
+    for (const code of SUPPORTED_CURRENCY_CODES) {
+      expect([0, 2, 3]).toContain(currencyDigits(code));
+    }
   });
 });

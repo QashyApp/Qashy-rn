@@ -23,7 +23,7 @@ import type {
   TransactionStatus,
 } from "@/domain/models";
 import { ACCENT_PRESETS, CATEGORY_PALETTE } from "@/theme/tokens";
-import { isLocalDate } from "@/utils/date";
+import { addRecurrence, isLocalDate } from "@/utils/date";
 import { currencyDigits, isSupportedCurrencyCode } from "@/utils/money";
 import { compareInvariant, normalizeName } from "@/utils/naming";
 
@@ -537,6 +537,8 @@ const WARNING_MESSAGES: Record<string, string> = {
     "Recurring transactions with a custom period cannot be scheduled and were imported as regular transactions.",
   "recurring-ended":
     "Subscriptions and repeating transactions with no upcoming entry in Cashew were treated as ended: their past payments were imported, but no schedule was created.",
+  "recurring-stale":
+    "Subscriptions and repeating transactions whose upcoming entry in Cashew was overdue by more than a full period were treated as stopped: their past payments were imported, but no schedule was created.",
   "recurring-review":
     "Recurring transactions were imported as schedules that ask for your review before posting.",
   "shared-budget-flattened":
@@ -611,6 +613,10 @@ export function mapCashewBackup(
 ): ImportBundle {
   const warnings = new WarningCounter();
   const { timeZone, timeZoneSource } = resolveTimeZone(raw, options);
+  const today =
+    options.today !== undefined && isLocalDate(options.today)
+      ? options.today
+      : (localDateFromSeconds(Date.now() / 1000, timeZone) as string);
 
   const fallbackCurrency = normalizeCurrency(options.fallbackCurrency);
   if (!fallbackCurrency) {
@@ -809,31 +815,54 @@ export function mapCashewBackup(
   );
 
   // Recurring series --------------------------------------------------------
+  // Cashew gives every paid occurrence of a subscription its own pk and creates the next
+  // upcoming entry as a fresh row, so occurrences are tied together by what they share
+  // rather than by pk. Rows that carry an explicit `::predict::` suffix keep their base pk.
+  const predictBases = new Set(
+    sourceRows.filter((row) => row.pk !== row.basePk).map((row) => row.basePk),
+  );
+  const seriesKey = (row: SourceTransaction) =>
+    predictBases.has(row.basePk)
+      ? `pk:${row.basePk}`
+      : JSON.stringify([
+          row.walletPk,
+          row.type,
+          row.sign,
+          row.reoccurrence,
+          row.periodLength,
+          normalizeName(row.title ?? ""),
+          row.categoryFk,
+          row.subCategoryFk,
+        ]);
   const groups = new Map<string, SourceTransaction[]>();
+  const groupOf = new Map<string, string>();
   for (const row of sourceRows) {
     if (claimed.has(row.pk) || (row.type !== 1 && row.type !== 2)) continue;
-    const members = groups.get(row.basePk);
+    const key = seriesKey(row);
+    groupOf.set(row.pk, key);
+    const members = groups.get(key);
     if (members) members.push(row);
-    else groups.set(row.basePk, [row]);
+    else groups.set(key, [row]);
   }
 
   const recurringRules: BundleRecurringRule[] = [];
   const plans = new Map<string, GroupPlan>();
   let customPeriodGroups = 0;
   let endedGroups = 0;
+  let staleGroups = 0;
   const titleFor = (
     row: SourceTransaction,
     categoryName: string | null,
     fallback: string,
   ) => row.title ?? categoryName ?? fallback;
 
-  for (const [basePk, members] of groups) {
+  for (const [groupKey, members] of groups) {
     const ordered = [...members].sort(compareByDate);
     const latest = ordered[ordered.length - 1];
     const period = periodOf(latest.reoccurrence, latest.periodLength);
     if (!period) {
       customPeriodGroups += 1;
-      plans.set(basePk, { mode: "custom", ruleExternalId: null });
+      plans.set(groupKey, { mode: "custom", ruleExternalId: null });
       continue;
     }
     // Cashew cancels a series by deleting its upcoming entry, so a series with none is ended.
@@ -841,7 +870,7 @@ export function mapCashewBackup(
     const unpaid = ordered.filter((row) => !row.paid && !row.skipPaid);
     if (unpaid.length === 0) {
       endedGroups += 1;
-      plans.set(basePk, { mode: "finished", ruleExternalId: null });
+      plans.set(groupKey, { mode: "finished", ruleExternalId: null });
       continue;
     }
     const nextDueDate = unpaid[0].localDate;
@@ -850,13 +879,23 @@ export function mapCashewBackup(
       ordered.find((row) => row.endDateSec !== null)?.endDateSec ??
       null;
     const endDate = localDateFromSeconds(endSeconds, timeZone);
-    if (endDate !== null && nextDueDate > endDate) {
-      plans.set(basePk, { mode: "finished", ruleExternalId: null });
+    if (endDate !== null && (nextDueDate > endDate || endDate < today)) {
+      endedGroups += 1;
+      plans.set(groupKey, { mode: "finished", ruleExternalId: null });
+      continue;
+    }
+    // Stopping a subscription in Cashew often just leaves its last upcoming entry overdue.
+    // Scheduling that would back-fill every missed period, so an entry overdue by more than
+    // one full period means the series was abandoned.
+    if (addRecurrence(nextDueDate, period.unit, period.interval) < today) {
+      staleGroups += 1;
+      plans.set(groupKey, { mode: "finished", ruleExternalId: null });
       continue;
     }
     const kind = latest.sign < 0 ? "expense" : "income";
     const category = resolveCategory(latest, kind);
-    const externalId = `recurring:${basePk}`;
+    // Keyed by the upcoming entry, as earlier imports were, so re-importing merges cleanly.
+    const externalId = `recurring:${unpaid[0].basePk}`;
     recurringRules.push({
       externalId,
       kind,
@@ -875,10 +914,11 @@ export function mapCashewBackup(
       autoPost: false,
       active: true,
     });
-    plans.set(basePk, { mode: "rule", ruleExternalId: externalId });
+    plans.set(groupKey, { mode: "rule", ruleExternalId: externalId });
   }
   warnings.add("recurring-custom-period", customPeriodGroups);
   warnings.add("recurring-ended", endedGroups);
+  warnings.add("recurring-stale", staleGroups);
   warnings.add("recurring-review", recurringRules.length);
 
   // Transactions -----------------------------------------------------------
@@ -908,8 +948,8 @@ export function mapCashewBackup(
       });
       continue;
     }
-    const plan =
-      row.type === 1 || row.type === 2 ? plans.get(row.basePk) : undefined;
+    const groupKey = groupOf.get(row.pk);
+    const plan = groupKey === undefined ? undefined : plans.get(groupKey);
     // A live series regenerates its own unpaid occurrences, and a finished series has none left.
     if (plan && plan.mode !== "custom" && row.status === "upcoming") continue;
     const kind = row.sign < 0 ? "expense" : "income";

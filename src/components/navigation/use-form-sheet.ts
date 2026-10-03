@@ -62,9 +62,11 @@ export function useFormSheet({
   // A plain `beforeRemove` listener can only call `event.preventDefault()`
   // after native-stack's interactive swipe-to-dismiss has already torn the
   // screen down natively, which desyncs JS navigation state and logs "was
-  // removed natively but didn't get removed from JS state." `usePreventRemove`
-  // also disables that native gesture while the sheet is dirty on iOS, so the
-  // confirmation is never bypassed by a swipe there. On Android, react-native-
+  // removed natively but didn't get removed from JS state." While the sheet is
+  // dirty, `usePreventRemove` sets `preventNativeDismiss` on iOS: the sheet
+  // springs back and native-stack dispatches a POP instead, so a swipe-down
+  // reaches the confirmation below rather than bypassing it (it is not
+  // disabled — a clean sheet still swipes closed directly). On Android, react-native-
   // screens' classic formSheet stays draggable/hideable regardless, so the
   // branch below is still needed for that platform.
   usePreventRemove(dirty && !leaving, (event) => {

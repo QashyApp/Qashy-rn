@@ -103,7 +103,33 @@ export function isSupportedCurrencyCode(value: string) {
   return SUPPORTED_CURRENCIES.has(value.trim().toUpperCase());
 }
 
+/**
+ * Minor-unit digits for every supported currency, pinned.
+ *
+ * `Intl.NumberFormat` reads these from the runtime's ICU data, and Hermes on iOS, Hermes on
+ * Android and each browser ship different CLDR versions. They disagree for a number of
+ * codes (COP, HUF, IDR, IQD, PKR … moved between 0, 2 and 3 digits across releases), and
+ * `amountMinor` is only meaningful relative to this number: two synced devices that disagree
+ * would show the same stored integer as amounts a hundred times apart. The values below are
+ * what CLDR 48 reports (ICU 78, the version the test environment runs); changing one
+ * reinterprets every amount already stored in that currency, so do not edit them casually.
+ */
+const MINOR_DIGITS_BY_GROUP: Readonly<Record<number, string>> = {
+  0: "AFN ALL BIF CLP COP DJF GNF HUF IDR IQD IRR ISK JPY KMF KPW KRW LAK LBP MGA MMK PKR PYG RWF SLL SOS SYP UGX VND VUV XAF XOF XPF YER",
+  3: "BHD JOD KWD LYD OMR TND",
+};
+
+const MINOR_DIGITS = new Map<string, number>(
+  Object.entries(MINOR_DIGITS_BY_GROUP).flatMap(([digits, codes]) =>
+    codes.split(" ").map((code): [string, number] => [code, Number(digits)]),
+  ),
+);
+
 export function currencyDigits(currency: CurrencyCode, locale = "en-US") {
+  // Every other supported currency has two. Anything outside the supported list is not pinned
+  // and still asks the runtime, so a caller probing an unknown code gets the same error as before.
+  const code = currency.trim().toUpperCase();
+  if (SUPPORTED_CURRENCIES.has(code)) return MINOR_DIGITS.get(code) ?? 2;
   try {
     return (
       new Intl.NumberFormat(locale, {

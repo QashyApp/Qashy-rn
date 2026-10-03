@@ -186,6 +186,11 @@ export interface ParseOptions {
   fallbackTimeZone: string;
   /** Qashy base currency, used for wallets with no currency and for budget limits. */
   fallbackCurrency: string;
+  /**
+   * Today's local date (`YYYY-MM-DD`) in the resolved import zone. Used to tell a live
+   * recurring series from one left with a stale overdue entry. Defaults to the current date.
+   */
+  today?: string;
 }
 
 export type ImportMode = "merge" | "replace";

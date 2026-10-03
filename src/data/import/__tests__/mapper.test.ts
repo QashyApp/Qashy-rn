@@ -19,6 +19,7 @@ import {
 const OPTIONS: ParseOptions = {
   fallbackTimeZone: "Asia/Jerusalem",
   fallbackCurrency: "ILS",
+  today: "2026-01-05",
 };
 
 /** Noon UTC keeps the local date identical in Jerusalem and New York. */
@@ -1054,6 +1055,105 @@ describe("mapCashewBackup recurring transactions", () => {
       recurringRuleExternalId: "recurring:s",
     });
     expect(bundle.transactions).toHaveLength(2);
+  });
+
+  it("treats a series whose upcoming entry is overdue by more than a period as stopped", () => {
+    const bundle = map(
+      rawData({
+        transactions: [
+          transaction({ ...series("old"), date_created: sec("2025-06-05") }),
+          transaction({
+            ...series("old::predict::1"),
+            date_created: sec("2025-07-05"),
+            paid: 0,
+          }),
+        ],
+      }),
+    );
+    expect(bundle.recurringRules).toHaveLength(0);
+    expect(bundle.transactions.map((item) => item.externalId)).toEqual([
+      "transaction:old",
+    ]);
+    expect(byId(bundle, "transaction:old").recurringRuleExternalId).toBeNull();
+    expect(warning(bundle, "recurring-stale")?.count).toBe(1);
+  });
+
+  it("keeps a series overdue by less than one period", () => {
+    const bundle = map(
+      rawData({
+        transactions: [
+          transaction({ ...series("due"), date_created: sec("2025-11-20") }),
+          transaction({
+            ...series("due::predict::1"),
+            date_created: sec("2025-12-20"),
+            paid: 0,
+          }),
+        ],
+      }),
+    );
+    expect(bundle.recurringRules[0].nextDueDate).toBe("2025-12-20");
+    expect(warning(bundle, "recurring-stale")).toBeUndefined();
+  });
+
+  it("treats a series whose end date has passed as ended", () => {
+    const bundle = map(
+      rawData({
+        transactions: [
+          transaction({
+            ...series("x"),
+            date_created: sec("2025-12-01"),
+            end_date: sec("2026-01-01"),
+          }),
+          transaction({
+            ...series("x::predict::1"),
+            date_created: sec("2026-01-01"),
+            end_date: sec("2026-01-01"),
+            paid: 0,
+          }),
+        ],
+      }),
+    );
+    expect(bundle.recurringRules).toHaveLength(0);
+    expect(warning(bundle, "recurring-ended")?.count).toBe(1);
+  });
+
+  it("groups Cashew occurrences that each have their own pk into one series", () => {
+    const occurrence = (pk: string, date: string, paid: 0 | 1) =>
+      transaction({
+        ...series(pk, { type: 1 }),
+        name: "Streaming",
+        amount: -50,
+        date_created: sec(date),
+        paid,
+      });
+    const bundle = map(
+      rawData({
+        transactions: [
+          occurrence("uuid-a", "2025-11-12", 1),
+          occurrence("uuid-b", "2025-12-12", 1),
+          occurrence("uuid-c", "2026-01-12", 0),
+          // A different subscription that was stopped long ago.
+          transaction({
+            ...series("uuid-d", { type: 1 }),
+            name: "Gym",
+            date_created: sec("2025-03-01"),
+          }),
+        ],
+      }),
+    );
+    expect(bundle.recurringRules).toHaveLength(1);
+    expect(bundle.recurringRules[0]).toMatchObject({
+      externalId: "recurring:uuid-c",
+      title: "Streaming",
+      nextDueDate: "2026-01-12",
+    });
+    expect(byId(bundle, "transaction:uuid-a").recurringRuleExternalId).toBe(
+      "recurring:uuid-c",
+    );
+    expect(byId(bundle, "transaction:uuid-b").recurringRuleExternalId).toBe(
+      "recurring:uuid-c",
+    );
+    expect(warning(bundle, "recurring-ended")?.count).toBe(1);
   });
 
   it("uses a matching twin category for an income series filed under an expense category", () => {
