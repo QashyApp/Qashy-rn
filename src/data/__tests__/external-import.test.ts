@@ -129,8 +129,8 @@ describe('importExternalBundle', () => {
       expect(rule.active).toBe(true);
       expect(rule.pausedByDependency).toBe(false);
       const generated = snapshot.transactions.filter((item) => item.occurrenceKey !== null);
-      expect(generated.map((item) => item.localDate)).toEqual(['2026-08-01']);
-      expect(generated[0].status).toBe('upcoming');
+      // Nothing is generated ahead of time: the 2026-08-01 occurrence appears once it is due.
+      expect(generated).toEqual([]);
       const rent = snapshot.transactions.find((item) => item.id === idOf('transaction', 'x-rent'))!;
       expect(rent.recurringRuleId).toBe(rule.id);
       expect(rent.occurrenceKey).toBeNull();
@@ -349,7 +349,7 @@ describe('importExternalBundle', () => {
       await repository.importExternalBundle(bundle, { mode: 'replace' }, true);
       const again = await repository.importExternalBundle(bundle, { mode: 'replace' }, true);
       expect(again.created).toEqual(FULL_COUNTS);
-      expect(again.replaced).toMatchObject({ accounts: 2, categories: 3, tags: 1, transactions: 5, recurringRules: 1, budgets: 1 });
+      expect(again.replaced).toMatchObject({ accounts: 2, categories: 3, tags: 1, transactions: 4, recurringRules: 1, budgets: 1 });
       const snapshot = repository.getSnapshot();
       expect(snapshot.accounts).toHaveLength(2);
       expect(snapshot.transactions.filter((item) => item.occurrenceKey === null)).toHaveLength(4);
@@ -519,7 +519,7 @@ describe('importExternalBundle', () => {
         ].map((item) => item.id).sort();
       };
       expect(ids(first)).toEqual(ids(second));
-      expect(ids(first)).toHaveLength(2 + 3 + 1 + 5 + 1 + 1);
+      expect(ids(first)).toHaveLength(2 + 3 + 1 + 4 + 1 + 1);
     });
   });
 

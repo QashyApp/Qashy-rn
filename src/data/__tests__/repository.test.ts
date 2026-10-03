@@ -339,7 +339,7 @@ describe('FinanceRepository contract', () => {
       });
       await repository.deleteEntities('exchangeRates', [rate.id]);
 
-      jest.setSystemTime(new Date('2026-08-20T09:00:00Z'));
+      jest.setSystemTime(new Date('2026-09-02T09:00:00Z'));
       const reloaded = new LocalFinanceRepository(storage);
       await expect(reloaded.initialize()).resolves.toBeUndefined();
       expect(reloaded.getSnapshot().transactions.some((item) => item.title === 'Healthy')).toBe(true);
@@ -904,13 +904,13 @@ describe('FinanceRepository contract', () => {
       const account = repository.getSnapshot().accounts[0];
       const created = await repository.saveRecurringRule({
         template: { kind: 'expense', title: 'Optional', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-20', endDate: null, nextDueDate: '2026-07-20', autoPost: false, active: true,
+        unit: 'month', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
       });
-      const occurrence = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-20')!;
+      const occurrence = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-15')!;
       await repository.deleteEntities('transactions', [occurrence.id]);
       const currentRule = repository.getSnapshot().recurringRules.find((item) => item.id === created.id)!;
-      await repository.saveRecurringRule({ ...currentRule, nextDueDate: '2026-07-20' }, currentRule.id);
-      expect(repository.getSnapshot().transactions.some((item) => item.localDate === '2026-07-20')).toBe(false);
+      await repository.saveRecurringRule({ ...currentRule, nextDueDate: '2026-07-15' }, currentRule.id);
+      expect(repository.getSnapshot().transactions.some((item) => item.localDate === '2026-07-15')).toBe(false);
 
       const reloaded = new LocalFinanceRepository(storage);
       await reloaded.initialize();
@@ -1029,16 +1029,40 @@ describe('FinanceRepository contract', () => {
       const account = repository.getSnapshot().accounts[0];
       const rule = await repository.saveRecurringRule({
         template: { kind: 'expense', title: 'Old title', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'month', interval: 1, startDate: '2026-07-20', endDate: null, nextDueDate: '2026-07-20', autoPost: false, active: true,
+        unit: 'month', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
       });
-      const before = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-20')!;
+      const before = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-15')!;
       const currentRule = repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)!;
       await repository.saveRecurringRule({
         ...currentRule,
         template: { ...currentRule.template, title: 'New title', amountMinor: 250 },
       }, rule.id);
-      const after = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-20')!;
+      const after = repository.getSnapshot().transactions.find((item) => item.localDate === '2026-07-15')!;
       expect(after).toMatchObject({ id: before.id, title: 'New title', amountMinor: 250 });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('generates the next occurrence when a due one is skipped or confirmed', async () => {
+    jest.useFakeTimers();
+    try {
+      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      const { repository } = await createRepository();
+      const account = repository.getSnapshot().accounts[0];
+      const rule = await repository.saveRecurringRule({
+        template: { kind: 'expense', title: 'Gym', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
+        unit: 'month', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
+      });
+      const dates = (status: string) => repository.getSnapshot().transactions
+        .filter((item) => item.recurringRuleId === rule.id && item.status === status).map((item) => item.localDate);
+      expect(dates('upcoming')).toEqual(['2026-07-15']);
+      await repository.skipUpcoming(repository.getSnapshot().transactions.find((item) => item.recurringRuleId === rule.id)!.id);
+      expect(dates('skipped')).toEqual(['2026-07-15']);
+      expect(dates('upcoming')).toEqual(['2026-08-15']);
+      // Resolving again while a future one exists must not run ahead.
+      await repository.generateRecurring();
+      expect(dates('upcoming')).toEqual(['2026-08-15']);
     } finally {
       jest.useRealTimers();
     }
@@ -1461,13 +1485,13 @@ describe('FinanceRepository contract', () => {
   it('releases generated transactions when their recurring rule is deleted', async () => {
     jest.useFakeTimers();
     try {
-      jest.setSystemTime(new Date('2026-07-15T09:00:00Z'));
+      jest.setSystemTime(new Date('2026-07-29T09:00:00Z'));
       const storage = new MemoryStorageAdapter();
       const { repository } = await createRepository(storage);
       const account = repository.getSnapshot().accounts[0];
       const rule = await repository.saveRecurringRule({
         template: { kind: 'expense', title: 'Streaming', note: '', accountId: account.id, categoryId: null, tagIds: [], amountMinor: 100, currency: 'USD' },
-        unit: 'week', interval: 1, startDate: '2026-07-20', endDate: null, nextDueDate: '2026-07-20', autoPost: false, active: true,
+        unit: 'week', interval: 1, startDate: '2026-07-15', endDate: null, nextDueDate: '2026-07-15', autoPost: false, active: true,
       });
       const generated = repository.getSnapshot().transactions.find((item) => item.recurringRuleId === rule.id)!;
       expect(generated).toBeDefined();
@@ -1765,7 +1789,6 @@ describe('FinanceRepository contract', () => {
         '2026-02-01',
         '2026-03-01',
         '2026-04-01',
-        '2026-05-01',
       ]);
     } finally {
       jest.useRealTimers();
@@ -2347,8 +2370,8 @@ describe('FinanceRepository contract', () => {
  * where there should be one, which is the shape of bug that only shows up as a wrong number.
  */
 describe('generation is stable across devices', () => {
-  // Dated far enough out that `saveRecurringRule`'s own generation — which reaches one month
-  // past today — produces nothing. Every occurrence in these tests is then created by an
+  // Dated far enough out that `saveRecurringRule`'s own generation — which reaches
+  // only today — produces nothing. Every occurrence in these tests is then created by an
   // explicit `generateRecurring`, where the test says it is, whatever day the suite runs on.
   const FIRST_DUE = '2099-01-31';
   const HORIZON = '2099-02-28';

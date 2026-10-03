@@ -208,7 +208,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Deferring the first write to `completeOnboarding` makes that write the create, so the op
     // log states the real base currency from the start. An un-onboarded store rehydrates to
     // exactly `createInitialState()`, so nothing else depends on the row being there early.
-    await this.generateRecurringNow(addRecurrence(todayLocal(), 'month', 1));
+    await this.generateRecurringNow(todayLocal());
     // Only now is the snapshot complete enough for screens to render against.
     this.state = { ...this.state, ready: true };
     this.emit();
@@ -535,7 +535,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     rules.forEach((rule) => this.replaceInList('recurringRules', rule));
     this.emit();
     if (rules.some((rule) => rule.active)) {
-      await this.generateRecurringNow(addRecurrence(todayLocal(), 'month', 1));
+      await this.generateRecurringNow(todayLocal());
     }
     return account;
   }
@@ -599,7 +599,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     rules.forEach((rule) => this.replaceInList('recurringRules', rule));
     this.emit();
     if (rules.some((rule) => rule.active)) {
-      await this.generateRecurringNow(addRecurrence(todayLocal(), 'month', 1));
+      await this.generateRecurringNow(todayLocal());
     }
     return category;
   }
@@ -956,7 +956,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     this.assertRecurringRuleGenerationSafe(
       rule,
       prospectiveTransactions,
-      addRecurrence(todayLocal(), 'month', 1),
+      todayLocal(),
     );
     await this.storage.putMany([
       { type: 'recurringRules', entity: rule },
@@ -980,7 +980,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         .map((transaction) => replacements.get(transaction.id) ?? transaction),
     };
     this.emit();
-    if (rule.active) await this.generateRecurringNow(addRecurrence(todayLocal(), 'month', 1));
+    if (rule.active) await this.generateRecurringNow(todayLocal());
     return rule;
   }
 
@@ -1371,7 +1371,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     return item.destinationBaseAmountMinor ?? item.baseAmountMinor;
   }
 
-  generateRecurring(horizonDate = addRecurrence(todayLocal(), 'month', 1)) {
+  generateRecurring(horizonDate = todayLocal()) {
     return this.enqueueMutation(() => this.generateRecurringNow(horizonDate));
   }
 
@@ -1483,6 +1483,23 @@ export class LocalFinanceRepository implements FinanceRepository {
     await this.persist('transactions', [updated]);
     this.replaceInList('transactions', updated);
     this.emit();
+    await this.generateNextOccurrence(updated);
+  }
+
+  /**
+   * Recurring occurrences are only generated once due, so resolving one (confirm or skip) would
+   * otherwise leave nothing to look forward to. Generate the rule's next occurrence, unless a
+   * future one is already waiting.
+   */
+  private async generateNextOccurrence(resolved: TransactionRecord) {
+    if (!resolved.recurringRuleId) return;
+    const rule = this.state.recurringRules.find((item) => item.id === resolved.recurringRuleId && !item.deletedAt);
+    if (!rule?.active) return;
+    const today = todayLocal();
+    const futureWaiting = this.state.transactions.some((item) =>
+      item.recurringRuleId === rule.id && item.status === 'upcoming' && item.localDate > today);
+    if (futureWaiting) return;
+    await this.generateRecurringNow(rule.nextDueDate > today ? rule.nextDueDate : today);
   }
 
   skipUpcoming(id: string) {
@@ -1496,6 +1513,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     await this.persist('transactions', [updated]);
     this.replaceInList('transactions', updated);
     this.emit();
+    await this.generateNextOccurrence(updated);
   }
 
   updateTransactionsCategory(ids: string[], categoryId: string | null) {
@@ -1755,7 +1773,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     // it missed while paused, exactly as it does when the blocking account or
     // category is un-archived.
     if (reactivatedRule) {
-      await this.generateRecurringNow(addRecurrence(todayLocal(), 'month', 1));
+      await this.generateRecurringNow(todayLocal());
     }
   }
 
@@ -2404,7 +2422,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           this.assertTransactionSetSafe(transactions, buildAccounts);
           this.assertBudgetSetSafe([...liveBudgets, ...newBudgets]);
           for (const rule of newRules) {
-            this.assertRecurringRuleGenerationSafe(rule, transactions, addRecurrence(todayLocal(), 'month', 1));
+            this.assertRecurringRuleGenerationSafe(rule, transactions, todayLocal());
           }
         });
       } catch (error) {
@@ -2499,7 +2517,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Same catch-up `saveAccountNow` does, so imported schedules show their upcoming
     // occurrences and imported budgets get their current period straight away.
     try {
-      await this.generateRecurringNow(addRecurrence(todayLocal(), 'month', 1));
+      await this.generateRecurringNow(todayLocal());
     } catch {
       // The import is already durable; reporting a failure now would misreport a successful
       // import. The recurring catch-up re-runs on the next load anyway.
