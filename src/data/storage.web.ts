@@ -304,14 +304,12 @@ export class PlatformStorageAdapter implements StorageAdapter {
         const wrote = state.dirty;
         if (wrote && !nested && !options?.silent) {
           this.writeCounter += 1;
-          await tx
-            .table("syncMeta")
-            .put([
-              {
-                key: LAST_WRITE_KEY,
-                value: `${this.instanceId}:${this.writeCounter}`,
-              },
-            ]);
+          await tx.table("syncMeta").put([
+            {
+              key: LAST_WRITE_KEY,
+              value: `${this.instanceId}:${this.writeCounter}`,
+            },
+          ]);
         }
         return { value: result, dirty: wrote };
       },
