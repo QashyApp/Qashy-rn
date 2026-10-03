@@ -6,12 +6,7 @@ DISCLAIMR: This is a fun mostly AI generated experimental app also mostly for my
 private and fully open source budgeting app
 </div>
 
-<H3 div align="center"> Description </H3>
-cool app, THANK YOU FOR YOUR ATTENTION TO THIS MATTER
-
-
 <div align="left">
-
 <H3 div align="center"> Features </H3>
 It's a completely free, private and open source app with 0 in-app purchases, not now not ever I don't believe such a helpful app should cost money nor annoy about optionally buying the app, you can:
 
@@ -56,6 +51,4 @@ exception, and it is **off until you turn it on**, per device.
 <H3 div align="center"> Roadmap </H3>
 TBD
 
-<H3 div align="center"> Installation </H3>
-TBD
 </div>
