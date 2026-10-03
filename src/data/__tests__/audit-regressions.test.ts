@@ -5,6 +5,7 @@ import {
   budgetsArchivedByCategoryDeletion,
   categoryDeletionMessage,
 } from "@/utils/category-impact";
+import { decodeBundle } from "@/sync/transport/file";
 import { validateExchangeRate } from "@/utils/form-validation";
 import { budgetPace } from "@/utils/pace";
 
@@ -500,10 +501,6 @@ describe("budget projection", () => {
 });
 
 describe("importing something that is not a sync file", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { decodeBundle } =
-    require("@/sync/transport/file") as typeof import("@/sync/transport/file");
-
   it("says so instead of blaming a newer version", () => {
     expect(() => decodeBundle("{}")).toThrow("not a Qashy sync file");
     expect(() => decodeBundle('{"hello":"world"}')).toThrow(

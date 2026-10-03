@@ -180,8 +180,8 @@ export function PairScreen() {
     () => () => {
       closeSession();
       rollbackAbandonedSetup();
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only; must run once, on unmount
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only; must run once, on unmount
     [],
   );
 
