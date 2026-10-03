@@ -18,6 +18,7 @@ import {
 } from "@/components/navigation/header-back-button";
 import { FinanceProvider, useFinanceState } from "@/providers/finance-provider";
 import { SyncProvider } from "@/providers/sync-provider";
+import { NavBarStyleSheetProvider } from "@/components/navigation/nav-bar-style-sheet";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { WebDialogHost } from "@/components/web-dialog-host";
 import { ReloadErrorBanner } from "@/components/reload-error-banner";
@@ -380,7 +381,9 @@ export default function RootLayout() {
         <SyncProvider>
           <LocalizationProvider>
             <QashyThemeProvider>
-              <RootNavigator />
+              <NavBarStyleSheetProvider>
+                <RootNavigator />
+              </NavBarStyleSheetProvider>
             </QashyThemeProvider>
           </LocalizationProvider>
         </SyncProvider>

@@ -20,7 +20,6 @@ export interface WidgetProps {
   readonly card: OverviewCard;
   /** Start-of-month ISO date, matching the screen's own `month` state. */
   readonly month: string;
-  readonly monthDirection: "left" | "right";
   readonly size: WidgetSize;
   readonly editing: boolean;
 }

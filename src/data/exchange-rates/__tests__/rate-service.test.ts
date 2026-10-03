@@ -1,6 +1,6 @@
 import {
   createExchangeRateService,
-  neededCurrencies,
+  pendingRatePairs,
   unsupportedCurrencies,
 } from "@/data/exchange-rates/rate-service";
 import {
@@ -200,7 +200,6 @@ async function harness(
   options: {
     state?: FinanceState;
     enabled?: boolean;
-    lastRefreshAt?: string;
     fetch?: jest.Mock;
     clockMs?: number;
     today?: string;
@@ -208,12 +207,9 @@ async function harness(
 ): Promise<Harness> {
   const storage = new MemoryStorageAdapter();
   await storage.initialize();
-  if (options.enabled !== undefined || options.lastRefreshAt !== undefined) {
+  if (options.enabled !== undefined) {
     await storage.transact((tx) =>
-      writeRatesFlag(tx, {
-        enabled: options.enabled ?? false,
-        lastRefreshAt: options.lastRefreshAt,
-      }),
+      writeRatesFlag(tx, { enabled: options.enabled }),
     );
   }
   const saveFetchedRates = jest.fn(
@@ -264,42 +260,6 @@ async function harness(
   };
 }
 
-describe("neededCurrencies", () => {
-  it("collects non-archived account currencies and active recurring rule currencies, minus base", () => {
-    const state = makeState({
-      settings: settings({ baseCurrency: "EUR" }),
-      accounts: [
-        account({ currency: "USD" }),
-        account({ currency: "EUR" }), // same as base: dropped
-        account({ currency: "GBP", archived: true }), // archived: dropped
-      ],
-      recurringRules: [
-        recurringRule({
-          template: { ...defaultTemplate, currency: "JPY" },
-          active: true,
-        }),
-        recurringRule({
-          template: { ...defaultTemplate, currency: "CHF" },
-          active: false,
-        }), // inactive: dropped
-      ],
-    });
-    expect(neededCurrencies(state)).toEqual(["JPY", "USD"]);
-  });
-
-  it("excludes currencies Frankfurter does not support", () => {
-    const state = makeState({
-      settings: settings({ baseCurrency: "EUR" }),
-      accounts: [account({ currency: "ZWL" }), account({ currency: "USD" })],
-    });
-    expect(neededCurrencies(state)).toEqual(["USD"]);
-  });
-
-  it("returns an empty list when nothing is needed", () => {
-    expect(neededCurrencies(makeState())).toEqual([]);
-  });
-});
-
 describe("unsupportedCurrencies", () => {
   it("lists in-use currencies Frankfurter does not cover", () => {
     const state = makeState({
@@ -308,24 +268,128 @@ describe("unsupportedCurrencies", () => {
     });
     expect(unsupportedCurrencies(state)).toEqual(["ZWL"]);
   });
+
+  it("includes a recurring rule's foreign currency", () => {
+    const state = makeState({
+      settings: settings({ baseCurrency: "EUR" }),
+      recurringRules: [
+        recurringRule({
+          template: {
+            ...defaultTemplate,
+            foreign: { currency: "ZWL", amountMinor: 500 },
+          },
+        }),
+      ],
+    });
+    expect(unsupportedCurrencies(state)).toEqual(["ZWL"]);
+  });
+});
+
+describe("pendingRatePairs", () => {
+  const today = "2026-10-03";
+
+  it("asks for today's rate for each live foreign account, and nothing for base or archived ones", () => {
+    const state = makeState({
+      accounts: [
+        account({ currency: "USD" }),
+        account({ currency: "EUR" }),
+        account({ currency: "GBP", archived: true }),
+      ],
+    });
+    expect(pendingRatePairs(state, today)).toEqual([
+      { currency: "USD", localDate: today },
+    ]);
+  });
+
+  it("asks for the account and foreign rate on every occurrence a rule is due to post", () => {
+    const rig = account({ id: "acct-eur", currency: "EUR" });
+    const state = makeState({
+      accounts: [rig],
+      recurringRules: [
+        recurringRule({
+          unit: "month",
+          startDate: "2026-08-01",
+          nextDueDate: "2026-08-01",
+          template: {
+            ...defaultTemplate,
+            accountId: "acct-eur",
+            currency: "EUR",
+            foreign: { currency: "USD", amountMinor: 500 },
+          },
+        }),
+      ],
+    });
+    expect(pendingRatePairs(state, today)).toEqual([
+      { currency: "USD", localDate: "2026-08-01" },
+      { currency: "USD", localDate: "2026-09-01" },
+      { currency: "USD", localDate: "2026-10-01" },
+    ]);
+  });
+
+  it("skips a foreign currency whose rate the template pins, inactive rules, and occurrences past the end date", () => {
+    const state = makeState({
+      accounts: [account({ id: "acct-eur", currency: "EUR" })],
+      recurringRules: [
+        recurringRule({
+          startDate: "2026-08-01",
+          nextDueDate: "2026-08-01",
+          template: {
+            ...defaultTemplate,
+            accountId: "acct-eur",
+            currency: "EUR",
+            foreign: { currency: "USD", amountMinor: 500, exchangeRate: "0.9" },
+          },
+        }),
+        recurringRule({
+          active: false,
+          startDate: "2026-08-01",
+          nextDueDate: "2026-08-01",
+          template: {
+            ...defaultTemplate,
+            accountId: "acct-eur",
+            currency: "EUR",
+            foreign: { currency: "JPY", amountMinor: 500 },
+          },
+        }),
+        recurringRule({
+          startDate: "2026-08-01",
+          nextDueDate: "2026-08-01",
+          endDate: "2026-08-15",
+          template: {
+            ...defaultTemplate,
+            accountId: "acct-eur",
+            currency: "EUR",
+            foreign: { currency: "GBP", amountMinor: 500 },
+          },
+        }),
+      ],
+    });
+    expect(pendingRatePairs(state, today)).toEqual([
+      { currency: "GBP", localDate: "2026-08-01" },
+    ]);
+  });
+
+  it("returns nothing when there is nothing foreign", () => {
+    expect(pendingRatePairs(makeState(), today)).toEqual([]);
+  });
 });
 
 describe("privacy: the flag off means fetch is never called", () => {
-  it("refreshLatest makes no request when the flag is off", async () => {
-    const fetch = fakeFetch({ [LATEST_KEY]: { USD: 1.1 } });
+  it("ensureRatesForPending makes no request when the flag is off", async () => {
+    const fetch = fakeFetch({ "2026-09-25": { USD: 1.1 } });
     const { service } = await harness({
       state: makeState({ accounts: [account({ currency: "USD" })] }),
       fetch,
-      // enabled left unset: absent means off.
+      enabled: false,
     });
-    await service.refreshLatest();
+    await service.ensureRatesForPending();
     expect(fetch).not.toHaveBeenCalled();
     expect(service.getStatus().enabled).toBe(false);
   });
 
   it("ensureRatesFor makes no request when the flag is off", async () => {
     const fetch = fakeFetch({ "2026-09-20": { USD: 1.1 } });
-    const { service } = await harness({ fetch });
+    const { service } = await harness({ fetch, enabled: false });
     const result = await service.ensureRatesFor([
       { currency: "USD", localDate: "2026-09-20" },
     ]);
@@ -334,55 +398,21 @@ describe("privacy: the flag off means fetch is never called", () => {
   });
 });
 
-describe("refreshLatest", () => {
-  it("does nothing when nothing is needed, even if enabled", async () => {
-    const fetch = fakeFetch({ [LATEST_KEY]: {} });
-    const { service } = await harness({
-      enabled: true,
-      fetch,
-      state: makeState(),
-    });
-    await service.refreshLatest();
+describe("ensureRatesForPending", () => {
+  it("does nothing when nothing is foreign", async () => {
+    const fetch = fakeFetch({});
+    const { service } = await harness({ fetch, state: makeState() });
+    await service.ensureRatesForPending();
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it("throttles to once per six hours unless forced", async () => {
-    const fetch = fakeFetch({ [LATEST_KEY]: { USD: 1.1 } });
+  it("is on by default: fetches today's rate for a foreign account with no flag ever written", async () => {
+    const fetch = fakeFetch({ "2026-09-25": { USD: 1.1 } });
     const rig = await harness({
-      enabled: true,
-      lastRefreshAt: "2026-09-25T11:00:00.000Z", // one hour before the clock below
-      fetch,
-      state: makeState({ accounts: [account({ currency: "USD" })] }),
-      clockMs: Date.parse("2026-09-25T12:00:00.000Z"),
-    });
-    await rig.service.refreshLatest();
-    expect(fetch).not.toHaveBeenCalled();
-
-    await rig.service.refreshLatest({ force: true });
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it("fetches once the throttle window has passed", async () => {
-    const fetch = fakeFetch({ [LATEST_KEY]: { USD: 1.1 } });
-    const rig = await harness({
-      enabled: true,
-      lastRefreshAt: "2026-09-25T00:00:00.000Z", // seven hours before the clock below
-      fetch,
-      state: makeState({ accounts: [account({ currency: "USD" })] }),
-      clockMs: Date.parse("2026-09-25T07:00:00.000Z"),
-    });
-    await rig.service.refreshLatest();
-    expect(fetch).toHaveBeenCalledTimes(1);
-  });
-
-  it("saves the derived rates and records the refresh time", async () => {
-    const fetch = fakeFetch({ [LATEST_KEY]: { USD: 1.1 } });
-    const rig = await harness({
-      enabled: true,
       fetch,
       state: makeState({ accounts: [account({ currency: "USD" })] }),
     });
-    await rig.service.refreshLatest();
+    await rig.service.ensureRatesForPending();
     expect(rig.saveFetchedRates).toHaveBeenCalledTimes(1);
     const [rates] = rig.saveFetchedRates.mock.calls[0]!;
     expect(rates).toEqual([
@@ -393,31 +423,89 @@ describe("refreshLatest", () => {
         rate: expect.any(String),
       },
     ]);
-    expect(rig.service.getStatus().lastRefreshAt).toBe(
-      new Date(rig.clockMs).toISOString(),
-    );
     expect(rig.service.getStatus().lastError).toBeNull();
+  });
 
-    const flag = await rig.storage.transact((tx) => readRatesFlag(tx));
-    expect(flag.lastRefreshAt).toBe(new Date(rig.clockMs).toISOString());
+  it("fetches a due recurring rule's foreign rate for its occurrence date in one range request", async () => {
+    const calledUrls: string[] = [];
+    const fetch = fakeFetch(
+      {
+        "2026-08-01": { USD: 1.1 },
+        "2026-09-01": { USD: 1.2 },
+      },
+      (url) => calledUrls.push(url),
+    );
+    const rig = await harness({
+      fetch,
+      state: makeState({
+        accounts: [account({ id: "acct-eur", currency: "EUR" })],
+        recurringRules: [
+          recurringRule({
+            startDate: "2026-08-01",
+            nextDueDate: "2026-08-01",
+            template: {
+              ...defaultTemplate,
+              accountId: "acct-eur",
+              currency: "EUR",
+              foreign: { currency: "USD", amountMinor: 500 },
+            },
+          }),
+        ],
+      }),
+    });
+    await rig.service.ensureRatesForPending();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(calledUrls[0]).toContain("from=2026-08-01&to=2026-09-01");
+    const [rates] = rig.saveFetchedRates.mock.calls[0]!;
+    expect(rates.map((rate) => rate.effectiveDate).sort()).toEqual([
+      "2026-08-01",
+      "2026-09-01",
+    ]);
   });
 
   it("records a failure on status without throwing", async () => {
     const fetch = failingFetch();
     const rig = await harness({
-      enabled: true,
       fetch,
       state: makeState({ accounts: [account({ currency: "USD" })] }),
     });
-    await expect(rig.service.refreshLatest()).resolves.toBeUndefined();
+    await expect(rig.service.ensureRatesForPending()).resolves.toEqual({
+      ok: false,
+      conflicts: [],
+    });
     expect(rig.service.getStatus().lastError).toBe("http");
     expect(rig.service.getStatus().fetching).toBe(false);
     expect(rig.saveFetchedRates).not.toHaveBeenCalled();
   });
 
-  it("setEnabled(true) writes the flag and forces an immediate refresh", async () => {
-    const fetch = fakeFetch({ [LATEST_KEY]: { USD: 1.1 } });
+  it("retry: true goes past the negative cache", async () => {
+    const fetch = failingFetch();
     const rig = await harness({
+      fetch,
+      state: makeState({ accounts: [account({ currency: "USD" })] }),
+    });
+    await rig.service.ensureRatesForPending();
+    await rig.service.ensureRatesForPending();
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await rig.service.ensureRatesForPending({ retry: true });
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not ask again for a pair Frankfurter had no data for", async () => {
+    const fetch = fakeFetch({});
+    const rig = await harness({
+      fetch,
+      state: makeState({ accounts: [account({ currency: "USD" })] }),
+    });
+    await rig.service.ensureRatesForPending();
+    await rig.service.ensureRatesForPending();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("setEnabled(true) writes the flag and looks up whatever is pending", async () => {
+    const fetch = fakeFetch({ "2026-09-25": { USD: 1.1 } });
+    const rig = await harness({
+      enabled: false,
       fetch,
       state: makeState({ accounts: [account({ currency: "USD" })] }),
     });

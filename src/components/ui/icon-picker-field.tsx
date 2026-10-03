@@ -186,7 +186,12 @@ export function IconPickerField({
             justifyContent: "center",
           }}
         >
-          <AppIcon name={value} color={previewColor} size={24} />
+          <AppIcon
+            name={value}
+            color={previewColor}
+            size={24}
+            role="category"
+          />
         </View>
         <View style={{ flex: 1, gap: 1 }}>
           <AppText>{currentLabel}</AppText>
@@ -391,7 +396,12 @@ export function IconPickerField({
                             : theme.surfaceMuted,
                         }}
                       >
-                        <AppIcon name={id} color={theme.text} size={26} />
+                        <AppIcon
+                          name={id}
+                          color={theme.text}
+                          size={26}
+                          role="category"
+                        />
                       </MotionPressable>
                     );
                   })}

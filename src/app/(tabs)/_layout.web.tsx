@@ -284,7 +284,7 @@ function NavigationItem({
                 justifyContent: "center",
                 paddingHorizontal: 12,
                 borderRadius: radius.control,
-                backgroundColor: theme.surfaceElevated,
+                backgroundColor: theme.navBackground,
                 borderWidth: 1,
                 borderColor: theme.border,
                 boxShadow: theme.shadowRaised,

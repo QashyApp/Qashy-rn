@@ -1,5 +1,9 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import type MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
+import { FLUENT_EMOJI, FLUENT_EMOJI_BY_ION } from "@/theme/fluent-emoji-glyphs";
+import type { FluentShape } from "@/theme/fluent-emoji-glyphs";
+import { MATERIAL_BY_ION } from "@/theme/material-glyphs";
 import type { ParsedIconId } from "@/utils/icon-id";
 
 /**
@@ -12,9 +16,14 @@ export type IoniconName = keyof typeof Ionicons.glyphMap;
 
 export type SvgGlyphPath = { d: string; fillRule?: "evenodd" | "nonzero" };
 
+export type MaterialIconName = keyof typeof MaterialIcons.glyphMap;
+
 export type IconGlyph =
   | { kind: "ionicon"; name: IoniconName }
-  | { kind: "svg"; viewBox: string; paths: readonly SvgGlyphPath[] };
+  | { kind: "material"; name: MaterialIconName }
+  | { kind: "svg"; viewBox: string; paths: readonly SvgGlyphPath[] }
+  // A multicolor drawing (Fluent Emoji): it carries its own paint, so the tint color is ignored.
+  | { kind: "color-svg"; viewBox: string; shapes: readonly FluentShape[] };
 
 export interface IconSet {
   id: string;
@@ -755,7 +764,43 @@ export const pixel: IconSet = {
       : null,
 };
 
-export const ICON_SETS: Readonly<Record<string, IconSet>> = { ionicons, pixel };
+const hasOwn = (record: object, key: string) =>
+  Object.prototype.hasOwnProperty.call(record, key);
+
+/** `home-outline` and `home-sharp` are drawn like `home` by sets that have one weight. */
+export const baseGlyphName = (ionGlyph: string) =>
+  ionGlyph.replace(/-(outline|sharp)$/, "");
+
+/** Google's Material Icons (Apache-2.0, bundled with @expo/vector-icons): the Material You UI glyphs. */
+export const material: IconSet = {
+  id: "material",
+  label: "Material",
+  resolve: (ionGlyph) => {
+    const name = MATERIAL_BY_ION[baseGlyphName(ionGlyph)];
+    return name && hasOwn(MATERIAL_BY_ION, baseGlyphName(ionGlyph))
+      ? { kind: "material", name: name as MaterialIconName }
+      : null;
+  },
+};
+
+/** A colorful subset of Microsoft's Fluent Emoji Flat (MIT), for entity icons. Unmapped ids fall back to Ionicons. */
+export const fluentEmojiFlat: IconSet = {
+  id: "fluent-emoji-flat",
+  label: "Fluent Emoji",
+  resolve: (ionGlyph) => {
+    const base = baseGlyphName(ionGlyph);
+    if (!hasOwn(FLUENT_EMOJI_BY_ION, base)) return null;
+    const shapes = FLUENT_EMOJI[FLUENT_EMOJI_BY_ION[base]];
+    return shapes ? { kind: "color-svg", viewBox: "0 0 32 32", shapes } : null;
+  },
+};
+
+export const ICON_SETS: Readonly<Record<string, IconSet>> = {
+  ionicons,
+  pixel,
+  material,
+  "fluent-emoji-flat": fluentEmojiFlat,
+};
 export const ICON_SET_IDS: readonly string[] = Object.keys(ICON_SETS);
 
 /** The registered set, or Ionicons for an unknown id. Never throws. */
@@ -807,7 +852,7 @@ export function resolveIconRender(
   if (ios) {
     if (set.id !== DEFAULT_ICON_SET_ID && mapped) {
       const own = set.resolve(mapped);
-      if (own && own.kind === "svg") return own;
+      if (own && own.kind !== "ionicon") return own;
     }
     return { kind: "sf", name: parsed.name };
   }

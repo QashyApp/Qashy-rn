@@ -1,24 +1,17 @@
 import { router } from "expo-router";
-import { View, type ColorValue } from "react-native";
+import { View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { MotionPressable, MotionView } from "@/components/ui/motion";
 import type { TransactionRecord } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { toneColors } from "@/theme/tokens";
 import { mediumDate, parseLocalDate, todayLocal } from "@/utils/date";
 import { formatMoney } from "@/utils/money";
-
-// The category tile's own inset highlight, on top of the tinted container
-// `toneColors` already computes. Not `theme.shadowControl` (that ladder is for
-// full-size raised controls); a 32-40px tile only needs the top-edge catch,
-// not an outer drop shadow that would compete with the row around it.
-const TILE_INSET_HIGHLIGHT_LIGHT = "inset 0 1px 0 rgba(255,255,255,0.4)";
-const TILE_INSET_HIGHLIGHT_DARK = "inset 0 1px 0 rgba(255,255,255,0.08)";
 
 export function TransactionRow({
   transaction,
@@ -128,18 +121,7 @@ export function TransactionRow({
   // shouting at once, and the amount — the reason a ledger exists — came third
   // after them. Tinted toward the surface they still identify at a glance while
   // leaving the strongest contrast in the row to the number.
-  const tile: { container: ColorValue; onContainer: ColorValue } = category
-    ? toneColors(
-        category.color,
-        theme.staticSurface,
-        theme.staticText,
-        theme.mode === "dark",
-        theme.charts.tone,
-      )
-    : {
-        container: theme.accentContainer,
-        onContainer: theme.onAccentContainer,
-      };
+  // The tile itself (tinted, filled or bare; round or squircle) is the theme's: see IconBadge.
 
   return (
     <MotionPressable
@@ -208,31 +190,22 @@ export function TransactionRow({
           </View>
         </MotionView>
       ) : null}
-      <View
-        style={{
-          width: compact ? theme.tile.compactSize : theme.tile.size,
-          height: compact ? theme.tile.compactSize : theme.tile.size,
-          borderRadius: radius.tile,
-          borderCurve: "continuous",
-          backgroundColor: tile.container,
-          alignItems: "center",
-          justifyContent: "center",
-          boxShadow:
-            theme.mode === "dark"
-              ? TILE_INSET_HIGHLIGHT_DARK
-              : TILE_INSET_HIGHLIGHT_LIGHT,
+      <IconBadge
+        icon={
+          isTransfer
+            ? "arrow.left.arrow.right"
+            : (category?.icon ?? (isIncome ? "arrow.down" : "arrow.up"))
+        }
+        color={category?.color}
+        role={category && !isTransfer ? "category" : "ui"}
+        fallback={{
+          container: theme.accentContainer,
+          onContainer: theme.onAccentContainer,
         }}
-      >
-        <AppIcon
-          name={
-            isTransfer
-              ? "arrow.left.arrow.right"
-              : (category?.icon ?? (isIncome ? "arrow.down" : "arrow.up"))
-          }
-          color={tile.onContainer}
-          size={compact ? theme.tile.compactIcon : theme.tile.icon}
-        />
-      </View>
+        size={compact ? theme.tile.compactSize : theme.tile.size}
+        iconSize={compact ? theme.tile.compactIcon : theme.tile.icon}
+        raised
+      />
       <View style={{ flex: 1, minWidth: 0, gap: space.xxs }}>
         <View
           style={{ flexDirection: "row", gap: space.sm, alignItems: "center" }}

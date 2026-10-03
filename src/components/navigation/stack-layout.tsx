@@ -37,7 +37,7 @@ export function TabStackLayout({
       screenOptions={{
         headerShown: !IS_WEB,
         headerShadowVisible: false,
-        headerStyle: { backgroundColor: theme.background },
+        headerStyle: { backgroundColor: theme.headerBackground },
         headerTintColor: theme.staticAccent,
         headerTitleStyle: { color: theme.staticText, fontWeight: "600" },
         contentStyle: { backgroundColor: theme.background },
@@ -54,7 +54,7 @@ export function TabStackLayout({
           // against and would just eat a permanent 52pt of a phone screen.
           headerLargeTitleEnabled: Platform.OS === "ios" && largeTitle,
           headerLargeTitleShadowVisible: false,
-          headerLargeStyle: { backgroundColor: theme.background },
+          headerLargeStyle: { backgroundColor: theme.headerBackground },
           headerLargeTitleStyle: { color: theme.staticText },
         }}
       />

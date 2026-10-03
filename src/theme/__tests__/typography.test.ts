@@ -75,7 +75,7 @@ describe("theme-aware typography", () => {
     });
   });
 
-  it("keeps FONT_ASSETS identical to the pre-registry map", () => {
+  it("keeps FONT_ASSETS equal to the pre-registry map plus the newer bundled faces", () => {
     expect(Object.keys(FONT_ASSETS).sort()).toEqual(
       [
         ...Object.values(fontFamilies),
@@ -84,6 +84,14 @@ describe("theme-aware typography", () => {
         "PixelifySans_500Medium",
         "PixelifySans_600SemiBold",
         "PixelifySans_700Bold",
+        // Figtree, Inter, Nunito (four weights each) and Atkinson Hyperlegible (regular, bold).
+        ...["Figtree", "Inter", "Nunito"].flatMap((name) =>
+          ["400Regular", "500Medium", "600SemiBold", "700Bold"].map(
+            (weight) => `${name}_${weight}`,
+          ),
+        ),
+        "AtkinsonHyperlegible_400Regular",
+        "AtkinsonHyperlegible_700Bold",
       ].sort(),
     );
   });

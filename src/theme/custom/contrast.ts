@@ -76,6 +76,19 @@ export function clampPaletteContrast(
   for (const key of ["positive", "negative", "warning"] as const) {
     clamp(key, "surface", palette.text, STATUS_MIN_CONTRAST);
   }
+  // Content colors of the tonal containers read on their own container, not on the page.
+  clamp(
+    "onSecondaryContainer",
+    "secondaryContainer",
+    palette.text,
+    TEXT_MIN_CONTRAST,
+  );
+  clamp(
+    "onTertiaryContainer",
+    "tertiaryContainer",
+    palette.text,
+    TEXT_MIN_CONTRAST,
+  );
 
   for (const key of Object.keys(original) as Key[]) {
     const spec = against[key];
@@ -96,6 +109,8 @@ export function clampPaletteContrast(
   check("textMuted", "surface", TEXT_MIN_CONTRAST);
   for (const key of ["positive", "negative", "warning"] as const)
     check(key, "surface", STATUS_MIN_CONTRAST);
+  check("onSecondaryContainer", "secondaryContainer", TEXT_MIN_CONTRAST);
+  check("onTertiaryContainer", "tertiaryContainer", TEXT_MIN_CONTRAST);
 
   return { palette, warnings, unsatisfied };
 }

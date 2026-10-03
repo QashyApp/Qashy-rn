@@ -2,6 +2,7 @@ import { router } from "expo-router";
 import { ScrollView, View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -15,7 +16,6 @@ import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { toneColors } from "@/theme/tokens";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { makeId } from "@/utils/entity";
 import { hapticSelection } from "@/utils/haptics";
@@ -27,7 +27,7 @@ import { hapticSelection } from "@/utils/haptics";
  */
 export function CardGalleryScreen() {
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   const { t } = useLocalization();
   const { layout, dispatch } = useOverviewLayout();
   const available = availableToAdd(layout);
@@ -75,13 +75,6 @@ export function CardGalleryScreen() {
           <Card variant="list" dividerInset={theme.tile.size + space.md}>
             {available.map((type) => {
               const definition = WIDGET_REGISTRY[type];
-              const tile = toneColors(
-                theme.staticAccent,
-                theme.staticSurface,
-                theme.staticText,
-                theme.mode === "dark",
-                theme.charts.tone,
-              );
               return (
                 <MotionPressable
                   key={type}
@@ -96,23 +89,15 @@ export function CardGalleryScreen() {
                     paddingVertical: space.sm,
                   }}
                 >
-                  <View
-                    style={{
-                      width: theme.tile.size,
-                      height: theme.tile.size,
-                      borderRadius: radius.tile,
-                      borderCurve: "continuous",
-                      backgroundColor: tile.container,
-                      alignItems: "center",
-                      justifyContent: "center",
+                  <IconBadge
+                    icon={definition.icon}
+                    color={theme.staticAccent}
+                    role="ui"
+                    fallback={{
+                      container: theme.accentContainer,
+                      onContainer: theme.onAccentContainer,
                     }}
-                  >
-                    <AppIcon
-                      name={definition.icon}
-                      color={tile.onContainer}
-                      size={theme.tile.icon}
-                    />
-                  </View>
+                  />
                   <View style={{ flex: 1, gap: space.xxs }}>
                     <AppText variant="label">{definition.title}</AppText>
                     <AppText variant="caption" muted>

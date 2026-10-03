@@ -2,6 +2,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -10,6 +11,7 @@ import {
 import {
   Pressable,
   StyleSheet,
+  View,
   type PressableProps,
   type PressableStateCallbackType,
   type ViewProps,
@@ -17,7 +19,6 @@ import {
 } from "react-native";
 import Animated, {
   Easing,
-  FadeIn,
   FadeOut,
   LinearTransition,
   ReduceMotion,
@@ -45,8 +46,6 @@ export interface MotionDurations {
   exit: number;
   /** Reflow after an insert, delete, or resize. */
   layout: number;
-  /** A whole screen cross-fading in behind a navigation. */
-  screen: number;
 }
 
 /** Durations for a theme's motion spec. Pure, so tests and non-hook code can call it. */
@@ -55,7 +54,6 @@ export function motionDurationsFor(motion: MotionSpec): MotionDurations {
     enter: motion.duration.base,
     exit: motion.duration.fast,
     layout: motion.duration.base,
-    screen: Math.round(motion.duration.base * 0.9),
   };
 }
 
@@ -291,40 +289,153 @@ function useEntranceAllowed(enabled: boolean) {
   return enabled && allowedAtMount;
 }
 
+const NEVER_SETTLED: SettledRef = { current: false };
+
 /**
- * Wraps a screen's content: cross-fades the screen itself and suppresses the
- * per-element entrances underneath it for that first paint.
+ * Whether `exit` elements may fade out when removed. Off inside a pager page that is being paged
+ * away: the page is removed as a whole, and its exits would linger as ghosts over the next month.
+ */
+const ExitContext = createContext(true);
+
+/**
+ * Whether `animateLayout` elements may run their layout transition right now. Off inside a
+ * pager page while it is a neighbour or has only just become current: the page itself is
+ * what moves, and a card transitioning on its own looks detached from the rest of the page.
+ */
+const LayoutTransitionContext = createContext(true);
+
+/**
+ * Suppresses the per-element entrances of anything that mounts beneath it while
+ * `suppressed` is true. A pager's neighbouring page arrives through the pager's
+ * own slide; letting its month-keyed entrances play as well read as a second,
+ * smaller swipe. The tree shape never depends on `suppressed`, so a neighbour
+ * that becomes the current page keeps its instances and does not replay anything.
+ */
+export function EntranceScope({
+  suppressed,
+  settled,
+  layoutTransitions = true,
+  exits = true,
+  children,
+}: {
+  suppressed: boolean;
+  /**
+   * Read at mount like the screen's own flag: entrances beneath only play once this is true
+   * (and the screen has settled). A pager page uses it so a page that mounts already current
+   * arrives without replaying its entrances.
+   */
+  settled?: SettledRef;
+  /** False pauses the layout transitions of `animateLayout` elements beneath it. */
+  layoutTransitions?: boolean;
+  /** False removes `exit` elements beneath it instantly instead of fading them out. */
+  exits?: boolean;
+  children: ReactNode;
+}) {
+  const parent = useContext(ScreenEntranceContext);
+  const parentLayout = useContext(LayoutTransitionContext);
+  const parentExits = useContext(ExitContext);
+  const combined = useMemo<SettledRef | null>(
+    () =>
+      settled
+        ? {
+            get current() {
+              return settled.current && (parent === null || parent.current);
+            },
+          }
+        : parent,
+    [settled, parent],
+  );
+  return (
+    <ScreenEntranceContext.Provider
+      value={suppressed ? NEVER_SETTLED : combined}
+    >
+      <LayoutTransitionContext.Provider
+        value={parentLayout && layoutTransitions}
+      >
+        <ExitContext.Provider value={parentExits && exits}>
+          {children}
+        </ExitContext.Provider>
+      </LayoutTransitionContext.Provider>
+    </ScreenEntranceContext.Provider>
+  );
+}
+
+/**
+ * Whether a self-drawing element (a chart reveal, a progress fill) may animate right now, as a
+ * ref read inside effects. False inside a pager page that is a neighbour or has only just
+ * become current: such an element should arrive already drawn, moving only with its page.
+ * A ref, so the page settling never re-runs the effects that read it.
+ */
+export function usePageMotionRef(): { readonly current: boolean } {
+  const allowed = useContext(LayoutTransitionContext);
+  // Also held back while the screen is still loading: a chart on a freshly opened tab arrives
+  // drawn, and only later data changes animate it.
+  const screen = useContext(ScreenEntranceContext);
+  const allowedRef = useRef(allowed);
+  useLayoutEffect(() => {
+    allowedRef.current = allowed;
+  });
+  return useMemo(
+    () => ({
+      get current() {
+        return allowedRef.current && (screen === null || screen.current);
+      },
+    }),
+    [screen],
+  );
+}
+
+/**
+ * Whether a self-drawing element may play its first reveal, decided once at mount. When it may
+ * not, the element should start already drawn rather than spend a frame empty.
+ */
+export function useRevealAllowedAtMount(): boolean {
+  const allowed = useContext(LayoutTransitionContext);
+  const screen = useContext(ScreenEntranceContext);
+  const [allowedAtMount] = useState(
+    () => allowed && (screen === null || screen.current),
+  );
+  return allowedAtMount;
+}
+
+/**
+ * How long a freshly mounted screen holds back entrances and self-drawing reveals. Generous on
+ * purpose: Overview's cards and charts mount several frames after the screen (they wait for
+ * their own layout and data), and none of that first load should animate.
+ */
+const SCREEN_SETTLE_MS = 450;
+
+/**
+ * Wraps a screen's content and suppresses the per-element entrances and reveals underneath it
+ * while it first loads, so a freshly opened screen simply appears.
  */
 export function ScreenTransition({ style, ...props }: ViewProps) {
-  const durations = useMotionDurations();
   const settled = useRef(false);
-
-  useEffect(() => {
-    // Two frames: one for this commit to paint, one for children that only
-    // mount after measuring themselves (the charts size from `onLayout`).
-    let inner = 0;
-    const outer = requestAnimationFrame(() => {
-      inner = requestAnimationFrame(() => {
-        settled.current = true;
-      });
-    });
-    return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-    };
-  }, []);
-
-  const entering = useMemo(
+  // An enclosing scope (a pager page that is a neighbour or not yet settled) still holds back.
+  const parent = useContext(ScreenEntranceContext);
+  const combined = useMemo<SettledRef>(
     () =>
-      FadeIn.duration(durations.screen)
-        .easing(EASE_STANDARD)
-        .reduceMotion(ReduceMotion.System),
-    [durations.screen],
+      parent
+        ? {
+            get current() {
+              return settled.current && parent.current;
+            },
+          }
+        : settled,
+    [parent],
   );
 
+  useEffect(() => {
+    // Long enough to cover children that mount after measuring themselves or loading data.
+    const timer = setTimeout(() => {
+      settled.current = true;
+    }, SCREEN_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
   return (
-    <ScreenEntranceContext.Provider value={settled}>
-      <Animated.View {...props} entering={entering} style={style} />
+    <ScreenEntranceContext.Provider value={combined}>
+      <View {...props} style={style} />
     </ScreenEntranceContext.Provider>
   );
 }
@@ -357,18 +468,22 @@ export function MotionView({
     duration ?? durations.enter,
     allowEntrance,
   );
+  const exitsAllowed = useContext(ExitContext);
   const exiting = useMemo(
-    () => (exit ? exitingAnimation(durations) : undefined),
-    [exit, durations],
+    () => (exit && exitsAllowed ? exitingAnimation(durations) : undefined),
+    [exit, exitsAllowed, durations],
   );
+  // Only the transition is gated, never `animateLayout` itself: that would change the tree
+  // shape and remount the content.
+  const layoutAllowed = useContext(LayoutTransitionContext);
   const layout = useMemo(
     () =>
-      animateLayout
+      animateLayout && layoutAllowed
         ? LinearTransition.duration(durations.layout)
             .easing(EASE_STANDARD)
             .reduceMotion(ReduceMotion.System)
         : undefined,
-    [animateLayout, durations.layout],
+    [animateLayout, layoutAllowed, durations.layout],
   );
 
   if (!animateLayout) {
@@ -429,7 +544,10 @@ export function MotionPressable({
   const durations = useMotionDurations();
   // A translate theme sinks a control by shifting it down instead of shrinking it, and
   // never scales on hover or on the 'active' pop either.
+  // An overlay theme (flat material) neither shrinks nor shifts: the pressed material's tonal
+  // fill is the whole feedback.
   const translatePress = motion.press === "translate";
+  const staticPress = motion.press !== "scale";
   const timingConfig = {
     duration: durations.exit,
     easing: EASE_STANDARD,
@@ -447,11 +565,16 @@ export function MotionPressable({
   const [jsPressed, setJsPressed] = useState(initiallyPressed);
   const [jsHovered, setJsHovered] = useState(false);
 
+  // The pop marks becoming active; a control that mounts already active (the selected chip
+  // on a freshly opened screen) just appears.
+  const wasActive = useRef(active);
   useEffect(() => {
-    if (!active || reduceMotion || translatePress) return;
+    const became = active && !wasActive.current;
+    wasActive.current = active;
+    if (!became || reduceMotion || staticPress) return;
     scale.set(1.035);
     scale.set(withSpring(1, springConfig));
-  }, [active, reduceMotion, translatePress, scale]);
+  }, [active, reduceMotion, staticPress, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }, { scale: scale.value }],
@@ -572,14 +695,9 @@ export function MotionPressable({
             isHovered.set(1);
             if (usesJsState) setJsHovered(true);
             if (!pressedRef.current && !disabled) {
-              scale.set(
-                withTiming(translatePress ? 1 : hoverScale, timingConfig),
-              );
+              scale.set(withTiming(staticPress ? 1 : hoverScale, timingConfig));
               translateY.set(
-                withTiming(
-                  liftOnHover && !translatePress ? -1 : 0,
-                  timingConfig,
-                ),
+                withTiming(liftOnHover && !staticPress ? -1 : 0, timingConfig),
               );
             }
             onHoverIn?.(event);
@@ -600,7 +718,7 @@ export function MotionPressable({
             if (usesJsState) setJsPressed(true);
             if (!disabled) {
               scale.set(
-                withSpring(translatePress ? 1 : pressedScale, springConfig),
+                withSpring(staticPress ? 1 : pressedScale, springConfig),
               );
               translateY.set(
                 withTiming(
@@ -617,13 +735,13 @@ export function MotionPressable({
             if (usesJsState) setJsPressed(false);
             scale.set(
               withSpring(
-                hoveredRef.current && !translatePress ? hoverScale : 1,
+                hoveredRef.current && !staticPress ? hoverScale : 1,
                 springConfig,
               ),
             );
             translateY.set(
               withTiming(
-                hoveredRef.current && liftOnHover && !translatePress ? -1 : 0,
+                hoveredRef.current && liftOnHover && !staticPress ? -1 : 0,
                 timingConfig,
               ),
             );

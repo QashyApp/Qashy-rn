@@ -1,30 +1,22 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
-import {
-  ScrollView,
-  SectionList,
-  StyleSheet,
-  TextInput,
-  View,
-} from "react-native";
+import { useMemo, useRef, useState } from "react";
+import { ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AnimatedMoney } from "@/components/finance/animated-money";
 import { StatTile } from "@/components/finance/stat-tile";
-import { TransactionRow } from "@/components/finance/transaction-row";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { ChoiceChip } from "@/components/ui/choice-chip";
-import { EmptyState } from "@/components/ui/empty-state";
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
 import { IconButton } from "@/components/ui/icon-button";
+import { MonthSwitcher } from "@/components/ui/month-switcher";
 import {
-  MonthSwitcher,
-  type MonthDirection,
-} from "@/components/ui/month-switcher";
-import { MonthSwipeView } from "@/components/ui/month-swipe-view";
-import { useMonthSwipe } from "@/components/ui/use-month-swipe";
+  MonthPager,
+  navigateMonth,
+  type MonthPagerHandle,
+} from "@/components/ui/month-pager";
 import { MotionView, ScreenTransition } from "@/components/ui/motion";
 import { PageHeading } from "@/components/ui/page-heading";
 import {
@@ -33,13 +25,16 @@ import {
 } from "@/components/ui/screen-container";
 import { TextButton } from "@/components/ui/text-button";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
-import { dayNetMinor } from "@/features/transactions/list/summary";
+import {
+  TransactionMonthList,
+  type KindFilter,
+} from "@/features/transactions/list/transaction-month-list";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
   useFinanceState,
 } from "@/providers/finance-provider";
-import { useScreenMetrics } from "@/theme/layout";
+import { resolveBottomChromeInset, useScreenMetrics } from "@/theme/layout";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { fontStyle } from "@/theme/typography";
@@ -48,19 +43,11 @@ import {
   endOfMonth,
   monthKey,
   monthLabel,
-  parseLocalDate,
   parseMonthKey,
   startOfMonth,
 } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
-import { formatMoney } from "@/utils/money";
-import {
-  hapticImpactLight,
-  hapticSelection,
-  hapticSuccess,
-} from "@/utils/haptics";
-
-type KindFilter = "all" | "expense" | "income" | "transfer" | "upcoming";
+import { hapticSelection, hapticSuccess } from "@/utils/haptics";
 
 const KIND_OPTIONS = [
   { value: "all", label: "All", icon: "list.bullet.rectangle" },
@@ -96,7 +83,6 @@ export function TransactionsScreen() {
   const [month, setMonth] = useState(
     () => parseMonthKey(params.month) ?? startOfMonth(),
   );
-  const [monthDirection, setMonthDirection] = useState<MonthDirection>("right");
   const [search, setSearch] = useState("");
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchAllMonths, setSearchAllMonths] = useState(false);
@@ -106,6 +92,7 @@ export function TransactionsScreen() {
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [busy, setBusy] = useState(false);
+  const pagerRef = useRef<MonthPagerHandle>(null);
 
   // Follow the param when something else navigates here with one (Overview's
   // "See all", the transaction sheet returning to the month it saved into).
@@ -116,25 +103,18 @@ export function TransactionsScreen() {
   if (paramMonth !== followedParam) {
     setFollowedParam(paramMonth);
     if (paramMonth && paramMonth !== month) {
-      setMonthDirection(paramMonth > month ? "right" : "left");
       setMonth(paramMonth);
       setSelectedIds([]);
     }
   }
 
-  const changeMonth = (next: string, direction: MonthDirection) => {
-    setMonthDirection(direction);
+  const changeMonth = (next: string) => {
     setMonth(next);
     setSelectedIds([]);
     router.setParams({ month: monthKey(next) });
   };
 
   const allMonths = searchAllMonths && search.trim().length > 0;
-  const monthSwipe = useMonthSwipe({
-    month,
-    onChange: changeMonth,
-    disabled: allMonths || selectionMode,
-  });
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
@@ -154,40 +134,6 @@ export function TransactionsScreen() {
   const compatibleCategoryKind =
     selectedKinds.length === 1 ? selectedKinds[0] : null;
 
-  // `state.categories` is listed because the repository reads it internally for
-  // hierarchy-aware search; the snapshot argument alone would not re-run this
-  // when a category is renamed.
-  const categoriesVersion = state.categories;
-  const transactions = useMemo(() => {
-    void categoriesVersion;
-    return repository.queryTransactions(
-      {
-        search,
-        kinds: kind !== "all" && kind !== "upcoming" ? [kind] : undefined,
-        statuses:
-          kind === "upcoming"
-            ? ["upcoming"]
-            : kind === "all"
-              ? ["posted", "upcoming"]
-              : ["posted"],
-        fromDate: allMonths || kind === "upcoming" ? undefined : fromDate,
-        toDate: allMonths || kind === "upcoming" ? undefined : toDate,
-        // Soonest due first: the next thing to deal with belongs at the top of an Upcoming list.
-        sort: kind === "upcoming" ? "oldest" : undefined,
-      },
-      state.transactions,
-    );
-  }, [
-    repository,
-    search,
-    kind,
-    allMonths,
-    fromDate,
-    toDate,
-    state.transactions,
-    categoriesVersion,
-  ]);
-
   // Totals come from the dashboard aggregate rather than from summing the rows
   // here: it already excludes transfers, uses each transaction's snapshotted
   // base-currency amount, and matches what Overview shows for the same month.
@@ -202,33 +148,17 @@ export function TransactionsScreen() {
     return latest ? startOfMonth(latest.localDate) : null;
   }, [repository, state.transactions]);
 
-  const sections = useMemo(() => {
-    const groups = new Map<string, typeof transactions>();
-    transactions.forEach((transaction) => {
-      const list = groups.get(transaction.localDate) ?? [];
-      list.push(transaction);
-      groups.set(transaction.localDate, list);
-    });
-    return Array.from(groups, ([title, data]) => ({ title, data }));
-  }, [transactions]);
-
-  const dayFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(
-        locale,
-        allMonths
-          ? {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }
-          : { weekday: "long", month: "short", day: "numeric" },
-      ),
-    [allMonths, locale],
-  );
-
   const clearSelection = () => setSelectedIds([]);
+
+  const toggleSelectionMode = () => {
+    setSelectionMode((current) => !current);
+    setSelectedIds([]);
+  };
+
+  const enterSelection = (id: string) => {
+    setSelectionMode(true);
+    toggleSelected(id, { silent: !selectionMode });
+  };
 
   const toggleSelected = (id: string, options?: { silent?: boolean }) => {
     if (!options?.silent) hapticSelection();
@@ -339,19 +269,17 @@ export function TransactionsScreen() {
   const gutter = Number(content.paddingLeft ?? 0);
   const currency = state.settings.baseCurrency;
   const compactFigures = metrics.contentWidth < 520;
-  const filtered = search.trim().length > 0 || kind !== "all";
   // The floating batch bar takes the FAB's usual spot while it is open, so the
   // two never compete for the same corner of the screen — adding a transaction
   // mid-selection is also just confusing.
-  const batchBarBottom = metrics.hasBottomNavigation
-    ? 92 + insets.bottom
-    : space.xxl + insets.bottom;
+  const { batchBarBottom } = resolveBottomChromeInset(
+    metrics,
+    insets.bottom,
+    space,
+  );
 
   return (
-    <MonthSwipeView
-      swipe={monthSwipe}
-      style={{ flex: 1, backgroundColor: theme.background }}
-    >
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
       <ScreenTransition style={{ flex: 1 }}>
         {/* Month, search and filters sit outside the list, not inside its header.
           Scrolled away, they made the ledger's most-used controls unreachable
@@ -371,14 +299,19 @@ export function TransactionsScreen() {
               <View style={{ alignSelf: "flex-start" }}>
                 <MonthSwitcher
                   value={month}
-                  direction={monthDirection}
-                  onChange={changeMonth}
+                  onChange={(next, direction) =>
+                    navigateMonth(
+                      pagerRef.current,
+                      month,
+                      next,
+                      direction,
+                      changeMonth,
+                    )
+                  }
                   disabled={allMonths}
                 />
               </View>
-              <MotionView
-                key={`${month}-${allMonths}`}
-                variant={monthDirection}
+              <View
                 accessibilityLabel={
                   allMonths
                     ? undefined
@@ -423,7 +356,7 @@ export function TransactionsScreen() {
                     />
                   </View>
                 ))}
-              </MotionView>
+              </View>
             </View>
             <View
               style={{
@@ -530,232 +463,33 @@ export function TransactionsScreen() {
             </ScrollView>
           </View>
         </View>
-        <SectionList
-          contentInsetAdjustmentBehavior="automatic"
-          onScroll={onScroll}
-          scrollEventThrottle={16}
-          style={{ flex: 1, backgroundColor: theme.background }}
-          contentContainerStyle={[
-            content,
-            {
-              paddingTop: 0,
-              paddingBottom:
-                (Number(content.paddingBottom) || 0) +
-                (selectionMode ? 140 : 0),
-            },
-          ]}
-          sections={sections}
-          extraData={`${selectedIds.join(",")}|${selectionMode}|${state.transactions.map((item) => `${item.id}:${item.revision}`).join(",")}`}
-          keyExtractor={(item) => `${item.id}:${item.revision}`}
-          // The day a row belongs to stays on screen for as long as that day's
-          // rows do, so a fast scroll through a busy month never loses its place.
-          stickySectionHeadersEnabled
-          ListHeaderComponent={
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "space-between",
-                gap: space.md,
-                alignItems: "center",
-                paddingTop: space.md,
-              }}
-            >
-              {/* One string so the dictionary's count patterns can match; split
-                children would leave "transactions" on its own with no key. */}
-              <AppText literal variant="caption" muted>
-                {t(
-                  `${transactions.length} ${transactions.length === 1 ? "transaction" : "transactions"}`,
-                )}
-              </AppText>
-              <View
-                style={{
-                  flexDirection: "row",
-                  gap: space.sm,
-                  alignItems: "center",
-                  flexWrap: "wrap",
-                  justifyContent: "flex-end",
-                }}
-              >
-                {transactions.length ? (
-                  <TextButton
-                    title={selectionMode ? "Done selecting" : "Select"}
-                    tone={selectionMode ? "muted" : "accent"}
-                    onPress={() => {
-                      setSelectionMode((current) => !current);
-                      setSelectedIds([]);
-                    }}
-                  />
-                ) : null}
-                <TextButton
-                  title="Import or export"
-                  onPress={() => router.push("/csv")}
-                />
-              </View>
-            </View>
-          }
-          renderSectionHeader={({ section }) => {
-            const net = dayNetMinor(section.data);
-            const netText = formatMoney(net, currency, locale, { sign: true });
-            return (
-              // Opaque, because a sticky header scrolls over live content. The
-              // negative margins let the fill reach the column's gutters so rows do
-              // not slide past it in the margin.
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "baseline",
-                  justifyContent: "space-between",
-                  gap: space.sm,
-                  backgroundColor: theme.background,
-                  paddingTop: space.lg,
-                  paddingBottom: space.sm,
-                  marginHorizontal: -space.xs,
-                  paddingHorizontal: space.xs,
-                }}
-              >
-                <AppText literal variant="overline" muted>
-                  {dayFormat.format(parseLocalDate(section.title))}
-                </AppText>
-                <AppText literal figure variant="caption" muted numeric>
-                  {netText}
-                </AppText>
-              </View>
-            );
-          }}
-          // Each day is one grouped surface with hairlines between its rows,
-          // rather than a separate card per transaction. A true nested `Card`
-          // can't wrap a section's rows here — `SectionList` virtualises each
-          // row independently, so there is no single element spanning a whole
-          // day to attach one shadow to. Every row instead carries the same
-          // flat `card` background and shadow (no gradient, which would band
-          // visibly repeating down a multi-row day); stacked with no gap and
-          // rounded only at the day's first/last row, they read as one raised
-          // slab per day rather than as N separate rows happening to touch.
-          renderItem={({ item, index, section }) => {
-            const selected = selectedIds.includes(item.id);
-            const first = index === 0;
-            const last = index === section.data.length - 1;
-            return (
-              <MotionView entrance={false} animateLayout exit>
-                <View
-                  style={{
-                    paddingHorizontal: space.md,
-                    backgroundColor: selected
-                      ? theme.accentContainer
-                      : theme.surface,
-                    boxShadow: theme.shadowCard,
-                    borderTopLeftRadius: first ? radius.card : 0,
-                    borderTopRightRadius: first ? radius.card : 0,
-                    borderBottomLeftRadius: last ? radius.card : 0,
-                    borderBottomRightRadius: last ? radius.card : 0,
-                    borderCurve: "continuous",
-                  }}
-                >
-                  {first ? null : (
-                    <View
-                      style={{
-                        height: StyleSheet.hairlineWidth,
-                        backgroundColor: theme.border,
-                        marginStart: 52,
-                      }}
-                    />
-                  )}
-                  <TransactionRow
-                    transaction={item}
-                    showDate={false}
-                    selectionMode={selectionMode}
-                    selected={selected}
-                    onLongPress={() => {
-                      if (!selectionMode) hapticImpactLight();
-                      setSelectionMode(true);
-                      toggleSelected(item.id, { silent: !selectionMode });
-                    }}
-                    onPress={
-                      selectionMode ? () => toggleSelected(item.id) : undefined
-                    }
-                  />
-                  {item.status === "upcoming" && !selectionMode ? (
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        justifyContent: "flex-end",
-                        gap: space.sm,
-                        paddingBottom: space.xs,
-                      }}
-                    >
-                      <TextButton
-                        title="Skip"
-                        tone="muted"
-                        disabled={resolvingId !== null}
-                        onPress={() => resolveUpcoming(item.id, "skip")}
-                      />
-                      <TextButton
-                        title="Mark paid"
-                        disabled={resolvingId !== null}
-                        onPress={() => resolveUpcoming(item.id, "confirm")}
-                      />
-                    </View>
-                  ) : null}
-                </View>
-              </MotionView>
-            );
-          }}
-          ListEmptyComponent={
-            <MotionView key={`${month}-${filtered}`} variant={monthDirection}>
-              {filtered ? (
-                <EmptyState
-                  icon="magnifyingglass"
-                  title="Nothing matches"
-                  body={
-                    allMonths
-                      ? "Try another search or filter."
-                      : `Nothing in ${monthLabel(month, locale)} matches. Try another filter, or search all months.`
-                  }
-                >
-                  <ActionButton
-                    title="Clear filters"
-                    variant="secondary"
-                    onPress={clearFilters}
-                  />
-                </EmptyState>
-              ) : state.transactions.length ? (
-                <EmptyState
-                  icon="calendar"
-                  title={`No transactions in ${monthLabel(month, locale)}`}
-                  body="Add one for this month, or jump to your latest activity."
-                >
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: space.sm,
-                      flexWrap: "wrap",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {latestMonth && latestMonth !== month ? (
-                      <ActionButton
-                        title="Go to latest"
-                        variant="secondary"
-                        onPress={() =>
-                          changeMonth(
-                            latestMonth,
-                            latestMonth > month ? "right" : "left",
-                          )
-                        }
-                      />
-                    ) : null}
-                  </View>
-                </EmptyState>
-              ) : (
-                <EmptyState
-                  icon="arrow.left.arrow.right"
-                  title="No transactions yet"
-                  body="Add your first income, expense, or transfer."
-                />
-              )}
-            </MotionView>
-          }
-          ListFooterComponent={<View style={{ height: 88 }} />}
+        <MonthPager
+          ref={pagerRef}
+          month={month}
+          disabled={allMonths || selectionMode}
+          onChange={changeMonth}
+          style={{ flex: 1 }}
+          renderPage={(pageMonth, { isCurrent }) => (
+            <TransactionMonthList
+              month={pageMonth}
+              isCurrent={isCurrent}
+              search={search}
+              kind={kind}
+              allMonths={allMonths}
+              selectionMode={selectionMode}
+              selectedIds={selectedIds}
+              resolvingId={resolvingId}
+              latestMonth={latestMonth}
+              content={content}
+              onScroll={onScroll}
+              onToggleSelectionMode={toggleSelectionMode}
+              onToggleItem={toggleSelected}
+              onLongPressItem={enterSelection}
+              onResolveUpcoming={resolveUpcoming}
+              onClearFilters={clearFilters}
+              onGoToMonth={changeMonth}
+            />
+          )}
         />
       </ScreenTransition>
       {selectionMode ? (
@@ -892,6 +626,6 @@ export function TransactionsScreen() {
           style={floatingActionMetrics(metrics, insets, space)}
         />
       )}
-    </MonthSwipeView>
+    </View>
   );
 }

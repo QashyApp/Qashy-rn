@@ -772,7 +772,8 @@ export function TransactionFormScreen() {
           setAmountTouched(true);
           setAmount(next);
         }}
-        onBlur={() => setAmountTouched(true)}
+        // No blur validation: leaving the empty, autofocused field (to pick an account first)
+        // would pop "Amount is required" in and shift the form under the pointer mid-press.
         error={amountTouched || existing ? amountError : undefined}
         autoFocus={!existing}
       />

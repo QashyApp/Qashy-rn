@@ -11,6 +11,7 @@ import type {
   ImportMode,
 } from "@/data/import/types";
 import { PlatformStorageAdapter } from "@/data/storage";
+import { NAV_BAR_STYLES } from "@/domain/models";
 import type { StorageAdapter, StoredEntity } from "@/data/storage-adapter";
 import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";
 import type {
@@ -547,6 +548,33 @@ export class LocalFinanceRepository implements FinanceRepository {
     ) {
       throw new Error("Base currency cannot change after setup is complete.");
     }
+    const navBarStyle =
+      patch.navBarStyle ?? this.state.settings.navBarStyle ?? "native";
+    if (!NAV_BAR_STYLES.includes(navBarStyle))
+      throw new Error("Choose a valid navigation bar style.");
+    const override = (
+      key:
+        | "fontTextOverride"
+        | "fontNumericOverride"
+        | "uiIconSetOverride"
+        | "categoryIconSetOverride",
+    ): string | null => {
+      // null clears, undefined keeps; an id nothing resolves is allowed and falls back at render time.
+      const next =
+        patch[key] === undefined
+          ? (this.state.settings[key] ?? null)
+          : patch[key];
+      if (next === null) return null;
+      if (typeof next !== "string" || !/^[a-z0-9-]{1,48}$/.test(next))
+        throw new Error("Choose a valid appearance override.");
+      return next;
+    };
+    const overrides = {
+      fontTextOverride: override("fontTextOverride"),
+      fontNumericOverride: override("fontNumericOverride"),
+      uiIconSetOverride: override("uiIconSetOverride"),
+      categoryIconSetOverride: override("categoryIconSetOverride"),
+    };
     const settings = updateEntity(this.state.settings, {
       onboardingComplete: this.state.settings.onboardingComplete,
       locale,
@@ -561,6 +589,8 @@ export class LocalFinanceRepository implements FinanceRepository {
         patch.swipeBetweenMonths ??
         this.state.settings.swipeBetweenMonths ??
         false,
+      navBarStyle,
+      ...overrides,
     });
     await this.persist("settings", [settings]);
     this.state = { ...this.state, settings };
@@ -3789,6 +3819,11 @@ export class LocalFinanceRepository implements FinanceRepository {
       ...storedSettings,
       themeId: storedSettings.themeId ?? DEFAULT_THEME_ID,
       swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? false,
+      navBarStyle: storedSettings.navBarStyle ?? "native",
+      fontTextOverride: storedSettings.fontTextOverride ?? null,
+      fontNumericOverride: storedSettings.fontNumericOverride ?? null,
+      uiIconSetOverride: storedSettings.uiIconSetOverride ?? null,
+      categoryIconSetOverride: storedSettings.categoryIconSetOverride ?? null,
     };
     const loaded = await Promise.all(
       ENTITY_TYPES.map((type) => this.storage.readAll(type)),

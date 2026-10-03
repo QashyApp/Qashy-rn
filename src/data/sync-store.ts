@@ -74,20 +74,17 @@ export const SYNC_META = {
   /** The product-selected default is immediate removal by any paired device. */
   revocationMode: "revocationMode",
 
-  // -- Automatic exchange rates. Device-local opt-in; see `data/exchange-rates/rates-flag.ts`.
+  // -- Automatic exchange rates. Device-local switch; see `data/exchange-rates/rates-flag.ts`.
 
   /**
-   * `'1'` once this device has opted into fetching rates from Frankfurter. Absent or anything
-   * else means off, which is the default — nothing may touch the network until this device
-   * explicitly turns it on.
+   * `'0'` once this device has turned fetching rates from Frankfurter off. Absent or anything
+   * else means on, which is the default — only currency codes and dates ever leave the device.
    *
    * Deliberately never replicated: `AppSettings` syncs to every peer, and a per-device network
    * consent is exactly the kind of value that must not silently follow another device's choice.
    * It lives here, beside the rest of this device's own transport and membership state.
    */
   ratesAutoFetch: "ratesAutoFetch",
-  /** When `refreshLatest` last completed a fetch (successful or not). ISO timestamp, or absent. */
-  ratesLastRefreshAt: "ratesLastRefreshAt",
 
   // -- Presentation preferences. Device-local; see `features/overview/layout`.
 

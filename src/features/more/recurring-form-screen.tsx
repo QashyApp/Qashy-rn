@@ -1,5 +1,5 @@
 import { Redirect, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
@@ -23,12 +23,16 @@ import {
   type ForeignFeeKind,
 } from "@/features/transactions/form/foreign-fee-fields";
 import {
+  useExchangeRateService,
+  useExchangeRateStatus,
+} from "@/providers/exchange-rate-provider";
+import {
   useFinanceRepository,
   useFinanceState,
 } from "@/providers/finance-provider";
 import { useLocalization } from "@/localization/localization";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { todayLocal } from "@/utils/date";
+import { isLocalDate, todayLocal } from "@/utils/date";
 import {
   validateCurrencyCode,
   validateDateInput,
@@ -52,6 +56,9 @@ import {
 } from "@/utils/transaction-amounts";
 
 const MAX_REPEAT_INTERVAL = 999;
+
+/** How long the account, currency and start date must sit still before a rate lookup fires. */
+const RATE_LOOKUP_DEBOUNCE_MS = 400;
 
 /** "Every month." / "Every 2 months." — plain English singular/plural; Hermes (Android) has no `Intl.PluralRules`. */
 function intervalHint(interval: string, unit: RecurrenceUnit) {
@@ -149,6 +156,10 @@ export function RecurringFormScreen() {
     return draft?.feeValue ?? "";
   });
   const [busy, setBusy] = useState(false);
+  const exchangeRateService = useExchangeRateService();
+  const rateStatus = useExchangeRateStatus();
+  const [fetchingRate, setFetchingRate] = useState(false);
+  const [togglingRates, setTogglingRates] = useState(false);
   const [amountTouched, setAmountTouched] = useState(false);
   const account =
     state.accounts.find((item) => item.id === accountId) ?? initialAccount;
@@ -196,6 +207,57 @@ export function RecurringFormScreen() {
       state,
     ],
   );
+  // Debounced and fire-and-forget, like the transaction form: once the account, foreign currency
+  // and start date settle, look up the rates they need so the applied rate below fills in on the
+  // spot. A failure only ever shows up as "No rate for this date.", never as a save error.
+  useEffect(() => {
+    if (!account || !isLocalDate(startDate)) return;
+    const pairs: { currency: string; localDate: string }[] = [];
+    if (account.currency !== state.settings.baseCurrency) {
+      pairs.push({ currency: account.currency, localDate: startDate });
+    }
+    if (
+      foreignEnabled &&
+      !foreignCurrencyError &&
+      trimmedForeignCurrency !== state.settings.baseCurrency
+    ) {
+      pairs.push({ currency: trimmedForeignCurrency, localDate: startDate });
+    }
+    if (!pairs.length) return;
+    const timer = setTimeout(() => {
+      setFetchingRate(true);
+      exchangeRateService
+        .ensureRatesFor(pairs)
+        .catch(() => undefined)
+        .finally(() => setFetchingRate(false));
+    }, RATE_LOOKUP_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [
+    account,
+    startDate,
+    foreignEnabled,
+    foreignCurrencyError,
+    trimmedForeignCurrency,
+    exchangeRateService,
+    state.settings.baseCurrency,
+  ]);
+  const turnOnRates = async () => {
+    if (togglingRates) return;
+    setTogglingRates(true);
+    try {
+      await exchangeRateService.setEnabled(true);
+      // Idempotent via occurrence keys: retries whatever rule generation skipped for lack of a
+      // rate, now that this may have just supplied one.
+      await repository.generateRecurring();
+    } catch (reason) {
+      showError(
+        "Couldn’t turn on automatic rates",
+        errorMessage(reason, "Try again."),
+      );
+    } finally {
+      setTogglingRates(false);
+    }
+  };
   let feeError: string | undefined;
   if (feeKind === "percent") {
     feeError = validatePositiveDecimal(
@@ -472,7 +534,8 @@ export function RecurringFormScreen() {
           setAmountTouched(true);
           setAmount(next);
         }}
-        onBlur={() => setAmountTouched(true)}
+        // No blur validation: leaving the empty, autofocused field (to pick an account first)
+        // would pop "Amount is required" in and shift the form under the pointer mid-press.
         error={amountTouched || existing ? amountError : undefined}
       />
       <Card style={{ gap: 16 }}>
@@ -606,7 +669,9 @@ export function RecurringFormScreen() {
             rateText={foreignRate}
             onChangeRateText={setForeignRate}
             appliedRate={foreignAppliedRate}
-            fetchingRate={false}
+            fetchingRate={fetchingRate}
+            onTurnOnRates={rateStatus.enabled ? undefined : turnOnRates}
+            turningOnRates={togglingRates}
             rateOptional
             feeKind={feeKind}
             onChangeFeeKind={setFeeKind}

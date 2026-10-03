@@ -20,7 +20,7 @@ import {
 
 import type { FinanceRepository } from "@/data/repository";
 import { financeRepository } from "@/data/local-finance-repository";
-import { refreshRatesWithCap } from "@/providers/exchange-rate-provider";
+import { ensurePendingRatesWithCap } from "@/providers/exchange-rate-provider";
 import { QASHY_ACCENT } from "@/domain/defaults";
 import type { FinanceState } from "@/domain/models";
 import { classicTheme } from "@/theme/themes/classic";
@@ -73,9 +73,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     financeRepository
       .initialize()
       // Best-effort and capped: a slow or failed rate fetch must never delay the app's first
-      // render. `refreshRatesWithCap` already swallows every failure into the service's own
+      // render. `ensurePendingRatesWithCap` already swallows every failure into the service's own
       // status, so nothing here needs a `.catch` of its own.
-      .then(() => refreshRatesWithCap())
+      .then(() => ensurePendingRatesWithCap())
       // `initialize()` already generated recurring transactions before this refresh landed, so
       // any rule that had no rate yet skipped that occurrence. Re-running it here is a no-op
       // for everything that already posted (idempotent via occurrence keys) and retries only
@@ -107,7 +107,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       // Refreshed before `generateRecurring()` so a rule that auto-posts today snapshots the
       // rate this refresh just fetched, rather than yesterday's stored one. Capped the same way
       // as the initial load, so a slow network on resume doesn't stall the reconcile either.
-      .then(() => refreshRatesWithCap())
+      .then(() => ensurePendingRatesWithCap())
       .then(() => financeRepository.generateRecurring())
       .then(() => setReloadError(null))
       .catch((reason: unknown) => {

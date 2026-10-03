@@ -3,12 +3,13 @@ import { View, type LayoutChangeEvent } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { MotionPressable } from "@/components/ui/motion";
 import { TextButton } from "@/components/ui/text-button";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { toneColors } from "@/theme/tokens";
+
 import { hapticSelection } from "@/utils/haptics";
 
 export interface CategoryGridOption {
@@ -87,18 +88,6 @@ export function CategoryGrid({
           const label = item
             ? `${item.name}${item.archived ? " (archived)" : ""}`
             : "Uncategorized";
-          const tile = item
-            ? toneColors(
-                item.color,
-                theme.staticSurface,
-                theme.staticText,
-                theme.mode === "dark",
-                theme.charts.tone,
-              )
-            : {
-                container: theme.accentContainer,
-                onContainer: theme.onAccentContainer,
-              };
           return (
             <MotionPressable
               key={id || "uncategorized"}
@@ -136,23 +125,36 @@ export function CategoryGrid({
                   : materialStyle(theme, "control"),
               ]}
             >
-              <View
-                style={{
-                  width: 36,
-                  height: 36,
-                  borderRadius: radius.tile,
-                  borderCurve: "continuous",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: selected ? "transparent" : tile.container,
-                }}
-              >
-                <AppIcon
-                  name={item ? item.icon : "questionmark.circle"}
-                  size={18}
-                  color={selected ? theme.onAccentContainer : tile.onContainer}
+              {selected ? (
+                // The selected tile is already filled with the container color, so the glyph sits bare.
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <AppIcon
+                    name={item ? item.icon : "questionmark.circle"}
+                    size={18}
+                    color={theme.onAccentContainer}
+                    role={item ? "category" : "ui"}
+                  />
+                </View>
+              ) : (
+                <IconBadge
+                  icon={item ? item.icon : "questionmark.circle"}
+                  color={item?.color}
+                  role={item ? "category" : "ui"}
+                  fallback={{
+                    container: theme.accentContainer,
+                    onContainer: theme.onAccentContainer,
+                  }}
+                  size={36}
+                  iconSize={18}
                 />
-              </View>
+              )}
               <AppText
                 selectable={false}
                 literal={Boolean(item)}

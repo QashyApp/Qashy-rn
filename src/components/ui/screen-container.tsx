@@ -2,7 +2,11 @@ import { type ViewProps, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ScreenTransition } from "@/components/ui/motion";
-import { useScreenMetrics, type ScreenMetrics } from "@/theme/layout";
+import {
+  resolveBottomChromeInset,
+  useScreenMetrics,
+  type ScreenMetrics,
+} from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { classicTheme } from "@/theme/themes/classic";
 import type { SpaceScale } from "@/theme/themes/types";
@@ -58,9 +62,8 @@ export function screenContentMetrics(
     paddingTop: (IS_WEB ? space.xxl : space.md) + topInset,
     // Room to scroll the last row clear of the floating action button (it sits at 92px + its own
     // height above the bottom bar), so nothing is stuck permanently underneath it.
-    paddingBottom: metrics.hasBottomNavigation
-      ? 160 + bottomInset
-      : space.xxxl + 80,
+    paddingBottom: resolveBottomChromeInset(metrics, bottomInset, space)
+      .contentPaddingBottom,
   };
 }
 
@@ -86,11 +89,10 @@ export function floatingActionMetrics(
     end:
       (metrics.contentWidth < 600 ? space.lg : 28) +
       (IS_WEB ? (edges.right ?? 0) : 0),
-    // Clear the floating web bottom bar; native tab bars already reserve their
-    // own space, so there the inset is the display's, not the chrome's.
-    bottom: metrics.hasBottomNavigation
-      ? 92 + (edges.bottom ?? 0)
-      : space.xxl + (IS_WEB ? (edges.bottom ?? 0) : 0),
+    // Clear the floating web bottom bar or the floating Android bar; docked native tab bars
+    // already reserve their own space, so there the inset is the display's, not the chrome's.
+    bottom: resolveBottomChromeInset(metrics, edges.bottom ?? 0, space)
+      .overlayBottom,
   };
 }
 

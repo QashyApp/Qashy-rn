@@ -22,7 +22,7 @@ const bevelTheme: ThemeDefinition = {
   ...classicTheme,
   id: "bevel-test",
   name: "Bevel test",
-  material: { engine: "bevel", gradients: false, bevelDepth: 2 },
+  material: { engine: "bevel", card: "elevated", gradients: false, bevelDepth: 2 },
   motion: { ...classicTheme.motion, press: "translate", pressTranslate: 2 },
   shadows: {
     light: bevelShadowSet(classicTheme.palette.light, "light", 2),

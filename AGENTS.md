@@ -9,7 +9,7 @@ Before changing Expo APIs, read the exact SDK 57 documentation at <https://docs.
 Qashy supports:
 
 - Guided onboarding and editable starter categories.
-- Accounts in multiple currencies with automatic, opt-in exchange rates (via Frankfurter) and a manual-rate fallback.
+- Accounts in multiple currencies with automatic exchange rates (on by default, per-device opt-out) (via Frankfurter) and a manual-rate fallback.
 - Expense, income, and transfer transactions.
 - Search, filters, date-grouped lists, and batch category/deletion actions.
 - Daily, weekly, monthly, yearly, and custom budgets with rollover snapshots.
@@ -21,7 +21,7 @@ Qashy supports:
 - Offline PWA startup and install/update behavior.
 - End-to-end encrypted, peer-to-peer sync between the user's own devices.
 
-Do not add authentication, bank connections, analytics, advertising, or a remote finance API unless the task explicitly expands the product scope. Automatic exchange rates are the second deliberate, opt-in, device-local network exception alongside sync: off by default, `src/data/exchange-rates/` sends only currency codes and dates to `frankfurter.dev` (never amounts or account details), pivots every request through EUR, and stores the opt-in flag in `sync_meta` — never in `AppSettings`, which replicates to peers.
+Do not add authentication, bank connections, analytics, advertising, or a remote finance API unless the task explicitly expands the product scope. Automatic exchange rates are the second deliberate, device-local network exception alongside sync: on by default with a per-device opt-out, `src/data/exchange-rates/` sends only currency codes and dates to `frankfurter.dev` (never amounts or account details), pivots every request through EUR, and stores the on/off flag in `sync_meta` — never in `AppSettings`, which replicates to peers.
 
 Sync is the one deliberate exception to "no network". It is peer-to-peer and zero-access: any server involved is a blind relay that only ever holds padded ciphertext addressed to a rotating opaque identifier. It is not a cloud account, it has no server-side identity, and it must never become one. See `docs/sync-threat-model.md`.
 

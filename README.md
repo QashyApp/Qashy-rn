@@ -13,6 +13,7 @@ It's a completely free, private and open source app with 0 in-app purchases, not
 - Use it to track your money manually or be used as an expense tracker
 - Set up budget or goals for yourself
 - See a broad overview of your inputted financial data, budget status, upcoming sub/recurring payments and etc
+- Restyle the whole app with built-in themes (Classic, High Contrast, and a flat Material You theme on Android and the web), your own JSON themes, and per-device overrides for the text font, number font, app icons and category icons
 - Export & Import transaction CSVs, and import data from other apps - Currently just supports from Cashew, it's just the app I previously used...shoutout to bro his app is fine overall
 
 <H3 div align="center"> Import & export </H3>
@@ -38,15 +39,23 @@ Sync uses WebRTC through a native module, so **Expo Go cannot run it** — use a
 
 <H3 div align="center"> Exchange rates </H3>
 Accounts in another currency can convert automatically. It is the app's second deliberate network
-exception, and it is **off until you turn it on**, per device.
+exception, and it is **on by default** but can be turned off per device.
 
-- When enabled, Qashy asks [frankfurter.dev](https://frankfurter.dev) for the day's rates, pivoted through
+- While enabled, Qashy asks [frankfurter.dev](https://frankfurter.dev) for a rate only when something needs one — entering a foreign currency, a recurring schedule coming due, a foreign account — pivoted through
   EUR for precision. Only currency codes and a date ever leave the device — never an amount, an account name,
   or anything else. Frankfurter has no key and needs no account, but it can see the device's IP address.
-- The opt-in flag lives in local sync metadata, not in the settings that sync replicates to your other
-  devices — turning it on is a per-device choice, not a vault-wide one.
+- The on/off flag lives in local sync metadata, not in the settings that sync replicates to your other
+  devices — turning it off is a per-device choice, not a vault-wide one.
 - Turned off, or for a currency Frankfurter doesn't cover, exchange rates fall back to the manual rate you
   enter yourself under **More → Exchange rates**.
+
+<H3 div align="center"> Themes </H3>
+Themes are pure data and bundled assets: nothing is downloaded for a theme. The **Material You** theme is flat (tonal surfaces and outlines instead of shadows and gradients) and on Android 12 and newer takes its colors from the wallpaper through a small local native module (`modules/qashy-dynamic-colors`); it needs a development build or release build, not Expo Go. iOS offers Classic and High Contrast; imported custom themes work on every platform. **More → Appearance** also lets each device override the text font, the numbers font, the app icon set and the category icon set; those four overrides are stored per device and never synced. Custom themes are documented in [CUSTOM_THEME_GUIDE.md](CUSTOM_THEME_GUIDE.md). Bundled fonts and icon art and their licenses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+<H3 div align="center"> Native patches </H3>
+`postinstall` runs [`patch-package`](https://github.com/ds300/patch-package), which applies everything in `patches/`. Today that is one patch, `react-native-screens+4.26.2.patch`. It gives Android's native bottom tab bar a long-press event: it calls `setOnLongClickListener` on each `BottomNavigationView` item (which also suppresses Material's tooltip) and emits an `onTabLongPress` event that expo-router forwards through `NativeTabs` `unstable_nativeProps`. Long-pressing either Android navigation bar opens the "Navigation bar style" sheet (native or floating); the same sheet is reachable from Appearance.
+
+**Re-check this patch on every Expo SDK upgrade.** It touches `gamma/tabs/container/TabsContainer.kt`, `TabsHost*.kt` and the Fabric spec `src/fabric/tabs/TabsHostAndroidNativeComponent.ts`. When the `react-native-screens` version changes, re-run `npx patch-package react-native-screens` after reapplying the edits (or drop the patch if upstream ships a long-press event), then rebuild the Android dev client. A failed patch application fails `npm install` on purpose.
 
 <H3 div align="center"> Roadmap </H3>
 TBD

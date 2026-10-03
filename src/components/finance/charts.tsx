@@ -27,6 +27,10 @@ import {
   type SlicePatternKind,
 } from "@/components/finance/slice-pattern";
 import { AppText } from "@/components/ui/app-text";
+import {
+  usePageMotionRef,
+  useRevealAllowedAtMount,
+} from "@/components/ui/motion";
 import type { DashboardSummary } from "@/domain/models";
 import { translateCurrent, useLocalization } from "@/localization/localization";
 import { useScreenMetrics } from "@/theme/layout";
@@ -127,9 +131,17 @@ export function SpendLineChart({
   );
   const denseSeries = points.length > DENSE_SERIES_POINTS;
   const peakIndex = actualMax > 0 ? amounts.indexOf(actualMax) : -1;
-  const reveal = useSharedValue(reduceMotion ? 1 : 0);
+  const revealAllowed = useRevealAllowedAtMount();
+  const drawnAtMount = reduceMotion || !revealAllowed;
+  const reveal = useSharedValue(drawnAtMount ? 1 : 0);
+  const pageMotion = usePageMotionRef();
 
   useEffect(() => {
+    // A neighbouring month arrives already drawn; only a settled page draws its line.
+    if (!pageMotion.current) {
+      reveal.set(1);
+      return;
+    }
     reveal.set(reduceMotion ? 1 : 0);
     reveal.set(
       withTiming(1, {
@@ -138,7 +150,7 @@ export function SpendLineChart({
         reduceMotion: ReduceMotion.System,
       }),
     );
-  }, [path, reduceMotion, reveal]);
+  }, [path, reduceMotion, reveal, pageMotion]);
 
   const pathProps = useAnimatedProps(() => ({
     strokeDashoffset: pathLength * (1 - reveal.value),
@@ -391,12 +403,20 @@ export function CategoryDonut({
   const reduceMotion = useReducedMotion();
   // Sweeps a track-colored cover arc away clockwise so the segments appear to
   // draw themselves in sequence, mirroring the line chart's reveal.
-  const revealed = useSharedValue(reduceMotion ? circumference : 0);
+  const revealAllowed = useRevealAllowedAtMount();
+  const drawnAtMount = reduceMotion || !revealAllowed;
+  const revealed = useSharedValue(drawnAtMount ? circumference : 0);
   const signature = slices
     .map((slice) => `${slice.key}:${slice.amountMinor}`)
     .join("|");
 
+  const pageMotion = usePageMotionRef();
+
   useEffect(() => {
+    if (!pageMotion.current) {
+      revealed.set(circumference);
+      return;
+    }
     revealed.set(reduceMotion ? circumference : 0);
     revealed.set(
       withTiming(circumference, {
@@ -405,7 +425,7 @@ export function CategoryDonut({
         reduceMotion: ReduceMotion.System,
       }),
     );
-  }, [circumference, reduceMotion, revealed, signature]);
+  }, [circumference, reduceMotion, revealed, signature, pageMotion]);
 
   const coverProps = useAnimatedProps(() => ({
     // Negative offset walks the cover's gap clockwise from the top so segments

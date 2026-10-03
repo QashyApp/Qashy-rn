@@ -18,11 +18,20 @@ import type { AccentSource } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { useCustomThemes } from "@/theme/custom/use-custom-themes";
-import { bevelAccentShadow } from "@/theme/shadow";
+import {
+  deriveDynamicPalette,
+  tintPaletteWithSeed,
+  type SystemPalettes,
+} from "@/theme/dynamic-palette";
+import { applyAppearanceOverrides } from "@/theme/overrides";
+import { NO_SHADOW, bevelAccentShadow, flatShadowSet } from "@/theme/shadow";
+import { useSystemPalettes } from "@/theme/use-system-palettes";
 import { classicTheme } from "@/theme/themes/classic";
 import { getTheme } from "@/theme/themes/registry";
 import type {
   ChartSpec,
+  IconBadgeShape,
+  IconBadgeStyle,
   IconSizeScale,
   MaterialSpec,
   MotionSpec,
@@ -51,6 +60,14 @@ export interface ThemeTokens {
   motion: MotionSpec;
   /** Registered icon set id (see `@/theme/icon-sets`); only changes how an icon id is drawn. */
   iconSet: string;
+  /** Icon set that draws entity icons (categories, accounts, goals); the theme's categorySet, else iconSet. */
+  categoryIconSet: string;
+  /** How an entity icon sits in its badge; see IconBadge. */
+  iconBadge: { style: IconBadgeStyle; shape: IconBadgeShape };
+  /** How card, list and tile surfaces are drawn: raised material, hairline outline, or a tonal fill. */
+  cardStyle: MaterialSpec["card"];
+  /** Draw switches and segmented controls the Material 3 way (the flat engine's look). */
+  materialControls: boolean;
   /** Font stacks and the type scale; resolve faces with `fontStyle(weight, type)` and friends from `@/theme/typography`. */
   type: TypeSpec;
   /** Line/donut/grid geometry, slice patterns and category tone for charts. */
@@ -84,6 +101,15 @@ export interface ThemeTokens {
   onWarning: ColorValue;
   /** Semantic color for transfers — neither an income nor an expense. */
   transfer: ColorValue;
+  /** Tonal secondary and tertiary containers (chips, selected rows, highlights) and their content colors. */
+  secondaryContainer: ColorValue;
+  onSecondaryContainer: ColorValue;
+  tertiaryContainer: ColorValue;
+  onTertiaryContainer: ColorValue;
+  /** Fill behind a stack header (see stack-layout). Equal to background unless the theme sets it apart. */
+  headerBackground: ColorValue;
+  /** Fill of the bottom navigation bar. */
+  navBackground: ColorValue;
   glassTint: "light" | "dark" | "systemMaterial";
   staticAccent: string;
   /**
@@ -138,6 +164,13 @@ const ThemeContext = createContext<ThemeTokens | null>(null);
 
 /** Builds the accent-dependent shadow/gradient pair that no static const can hold. */
 function accentMaterial(accent: string, dark: boolean, material: MaterialSpec) {
+  if (material.engine === "flat") {
+    // A solid fill: no gradient, no drop shadow. Press feedback is the pressed material's tonal fill.
+    return {
+      accentGradient: `linear-gradient(180deg, ${accent}, ${accent})`,
+      shadowAccent: NO_SHADOW,
+    };
+  }
   if (material.engine === "bevel") {
     return {
       accentGradient: `linear-gradient(180deg, ${accent}, ${accent})`,
@@ -159,10 +192,28 @@ function accentMaterial(accent: string, dark: boolean, material: MaterialSpec) {
 export function accentTokens(
   seed: string,
   dark: boolean,
-  theme: ThemeDefinition = classicTheme,
+  sourceTheme: ThemeDefinition = classicTheme,
 ): ThemeTokens {
   const scheme = dark ? "dark" : "light";
-  const base = theme.palette[scheme];
+  // A picked accent can wash the neutral surfaces too (Material You); shadows that are rings of the
+  // border color must follow the tinted palette.
+  const tinted = sourceTheme.accent.tintSurfaces === true;
+  const base = tinted
+    ? tintPaletteWithSeed(seed, scheme, sourceTheme.palette[scheme])
+    : sourceTheme.palette[scheme];
+  const theme: ThemeDefinition = tinted
+    ? {
+        ...sourceTheme,
+        palette: { ...sourceTheme.palette, [scheme]: base },
+        shadows:
+          sourceTheme.material.engine === "flat"
+            ? {
+                ...sourceTheme.shadows,
+                [scheme]: flatShadowSet(base, scheme),
+              }
+            : sourceTheme.shadows,
+      }
+    : sourceTheme;
   const accent = accessibleAccentColor(seed, base.surface, base.text);
   const accentContainer = mixHex(accent, base.surface, dark ? 0.78 : 0.86);
   const surfaceGradient = dark
@@ -181,6 +232,10 @@ export function accentTokens(
     iconSize: theme.iconSize,
     motion: theme.motion,
     iconSet: theme.icons.set,
+    categoryIconSet: theme.icons.categorySet ?? theme.icons.set,
+    iconBadge: { style: theme.icons.badge, shape: theme.icons.badgeShape },
+    cardStyle: theme.material.card,
+    materialControls: theme.material.engine === "flat",
     type: theme.type,
     charts: theme.charts,
     gradients: theme.material.gradients,
@@ -213,6 +268,12 @@ export function accentTokens(
     warning: base.warning,
     onWarning: readableTextColor(base.warning),
     transfer: base.transfer,
+    secondaryContainer: base.secondaryContainer,
+    onSecondaryContainer: base.onSecondaryContainer,
+    tertiaryContainer: base.tertiaryContainer,
+    onTertiaryContainer: base.onTertiaryContainer,
+    headerBackground: base.headerBackground,
+    navBackground: base.navBackground,
     glassTint: dark ? "dark" : "light",
     staticAccent: accent,
     staticSurface: base.surface,
@@ -229,7 +290,9 @@ export function accentTokens(
 function systemTokens(
   dark: boolean,
   theme: ThemeDefinition = classicTheme,
+  palettes: SystemPalettes | null = null,
 ): ThemeTokens {
+  if (palettes) return paletteTokens(palettes, dark, theme);
   const fallback = accentTokens(theme.accent.default, dark, theme);
   if (Platform.OS !== "android") return fallback;
   const { accentGradient, shadowAccent } = accentMaterial(
@@ -258,6 +321,36 @@ function systemTokens(
     surfaceGradient: undefined,
     accentGradient,
     shadowAccent,
+  };
+}
+
+/**
+ * Tokens from the Android 12+ wallpaper palettes (read by the qashy-dynamic-colors module): the
+ * whole palette is derived in JS like a seed theme, so every value is real hex, gradients, chart
+ * tints and contrast math all work, and nothing relies on opaque platform colors.
+ */
+function paletteTokens(
+  palettes: SystemPalettes,
+  dark: boolean,
+  theme: ThemeDefinition,
+): ThemeTokens {
+  const scheme = dark ? "dark" : "light";
+  const derived = deriveDynamicPalette(palettes, scheme, theme.palette[scheme]);
+  const derivedTheme: ThemeDefinition = {
+    ...theme,
+    // The wallpaper palette already carries its own surface tint.
+    accent: { ...theme.accent, tintSurfaces: false },
+    palette: { ...theme.palette, [scheme]: derived.palette },
+    // Flat shadows are rings of the border color, so they follow the derived border.
+    shadows:
+      theme.material.engine === "flat"
+        ? { ...theme.shadows, [scheme]: flatShadowSet(derived.palette, scheme) }
+        : theme.shadows,
+  };
+  return {
+    ...accentTokens(derived.seed, dark, derivedTheme),
+    accentContainer: derived.accentContainer,
+    onAccentContainer: derived.onAccentContainer,
   };
 }
 
@@ -315,20 +408,44 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
       : settings.themeMode;
   // A custom theme that is not loaded yet, was deleted, or no longer resolves is classic; the stored id is left alone.
   const { themes: customThemes } = useCustomThemes();
-  const theme = useMemo(
+  const {
+    fontTextOverride,
+    fontNumericOverride,
+    uiIconSetOverride,
+    categoryIconSetOverride,
+  } = settings;
+  const baseTheme = useMemo(
     () => getTheme(settings.themeId, customThemes),
     [settings.themeId, customThemes],
+  );
+  // The font and icon-set choices of this device sit on top of whichever theme is active.
+  const theme = useMemo(
+    () =>
+      applyAppearanceOverrides(baseTheme, {
+        fontTextOverride,
+        fontNumericOverride,
+        uiIconSetOverride,
+        categoryIconSetOverride,
+      }),
+    [
+      baseTheme,
+      fontTextOverride,
+      fontNumericOverride,
+      uiIconSetOverride,
+      categoryIconSetOverride,
+    ],
   );
   const accentChoice = resolveAccentChoice(theme, settings);
   const usesSystemAccent = accentChoice.kind === "system";
   const seed =
     accentChoice.kind === "seed" ? accentChoice.seed : theme.accent.default;
+  const palettes = useSystemPalettes(usesSystemAccent);
   const tokens = useMemo(
     () =>
       usesSystemAccent
-        ? systemTokens(mode === "dark", theme)
+        ? systemTokens(mode === "dark", theme, palettes)
         : accentTokens(seed, mode === "dark", theme),
-    [mode, seed, theme, usesSystemAccent],
+    [mode, seed, theme, usesSystemAccent, palettes],
   );
 
   useEffect(() => {
@@ -441,7 +558,7 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
         style={{ flex: 1, direction: isRtl ? "rtl" : "ltr" }}
         colorScheme={mode}
         seedColor={
-          usesSystemAccent && Platform.OS === "android"
+          usesSystemAccent && Platform.OS === "android" && !palettes
             ? undefined
             : tokens.staticAccent
         }

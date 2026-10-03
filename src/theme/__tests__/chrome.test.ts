@@ -14,7 +14,7 @@ const system = { accentSource: "system" as const, accentHex: "#00A58E" };
 describe("platform availability", () => {
   it("falls back to classic where the theme is not offered", () => {
     expect(getTheme("material-you", [], "ios")).toBe(classicTheme);
-    expect(getTheme("material-you", [], "web")).toBe(classicTheme);
+    expect(getTheme("material-you", [], "web")).toBe(materialYouTheme);
     expect(getTheme("material-you", [], "android")).toBe(materialYouTheme);
   });
 
@@ -25,6 +25,13 @@ describe("platform availability", () => {
     expect(listAvailableThemes([], "android").map((t) => t.id)).toContain(
       "material-you",
     );
+    expect(listAvailableThemes([], "web").map((t) => t.id)).toContain(
+      "material-you",
+    );
+    expect(listAvailableThemes([], "ios").map((t) => t.id).sort()).toEqual([
+      "classic",
+      "high-contrast",
+    ]);
     expect(isThemeAvailable(classicTheme, "web")).toBe(true);
   });
 
@@ -44,10 +51,22 @@ describe("resolveAccentChoice", () => {
     });
   });
 
-  it("system mode ignores the settings", () => {
+  it("material-you follows the settings, defaulting to the system accent", () => {
     expect(resolveAccentChoice(materialYouTheme, user)).toEqual({
+      kind: "seed",
+      seed: "#00A58E",
+    });
+    expect(resolveAccentChoice(materialYouTheme, system)).toEqual({
       kind: "system",
     });
+  });
+
+  it("system mode ignores the settings", () => {
+    const systemOnly = {
+      ...classicTheme,
+      accent: { ...classicTheme.accent, mode: "system" as const },
+    };
+    expect(resolveAccentChoice(systemOnly, user)).toEqual({ kind: "system" });
   });
 
   it("fixed mode uses the theme default", () => {

@@ -1,5 +1,9 @@
 import { clampPaletteContrast } from "@/theme/custom/contrast";
-import { FULL_EXAMPLE, MINIMAL_EXAMPLE } from "@/theme/custom/examples";
+import {
+  FLAT_EXAMPLE,
+  FULL_EXAMPLE,
+  MINIMAL_EXAMPLE,
+} from "@/theme/custom/examples";
 import {
   MAX_CUSTOM_THEME_BYTES,
   canonicalizeCustomThemeFile,
@@ -43,6 +47,7 @@ describe("parseCustomTheme: valid files", () => {
     expect(warnings).toEqual([]);
     expect(theme.material).toEqual({
       engine: "bevel",
+      card: "outlined",
       gradients: false,
       bevelDepth: 2,
     });
@@ -79,11 +84,31 @@ describe("parseCustomTheme: valid files", () => {
     expect(parseCustomTheme(cyclic).ok).toBe(false);
   });
 
-  it("can extend another built-in and drops the system accent mode", () => {
+  it("can extend another built-in without inheriting its platform limit", () => {
     const file = { ...clone(MINIMAL_EXAMPLE), extends: "material-you" };
     const { theme } = themeOf(file);
-    expect(theme.accent.mode).toBe("user");
     expect(theme.availableOn).toBeUndefined();
+  });
+
+  it("accepts the flat example and keeps it flat", () => {
+    const { theme, warnings } = themeOf(FLAT_EXAMPLE);
+    expect(warnings).toEqual([]);
+    expect(theme.material.engine).toBe("flat");
+    expect(theme.material.gradients).toBe(false);
+    expect(theme.motion.press).toBe("overlay");
+    expect(theme.accent.mode).toBe("system");
+    expect(theme.icons.badge).toBe("filled");
+    expect(theme.icons.categorySet).toBe("fluent-emoji-flat");
+    expect(theme.type.text.family).toBe("inter");
+    expect(theme.availableOn).toBeUndefined();
+  });
+
+  it("applies the type scale and the chart tone overrides", () => {
+    const { theme } = themeOf(FULL_EXAMPLE);
+    expect(theme.type.scale?.title?.fontSize).toBe(26);
+    expect(theme.type.scale?.label?.weight).toBe("bold");
+    expect(theme.charts.tone?.containerMix).toEqual({ light: 0.8, dark: 0.7 });
+    expect(theme.radius.fab).toBe(0);
   });
 
   it("re-derives high-contrast rings from the merged palette", () => {
@@ -222,8 +247,68 @@ describe("parseCustomTheme: rejection (fail closed)", () => {
 
   it("rejects the wrong schema version", () => {
     expect(
-      errorsOf({ ...clone(MINIMAL_EXAMPLE), themeSchemaVersion: 2 }),
-    ).toContain("themeSchemaVersion: must be 1");
+      errorsOf({ ...clone(MINIMAL_EXAMPLE), themeSchemaVersion: 3 }),
+    ).toContain("themeSchemaVersion: must be 1 or 2");
+  });
+
+  it("still parses version 1 files", () => {
+    const v1 = { ...clone(MINIMAL_EXAMPLE), themeSchemaVersion: 1 };
+    expect(parseCustomTheme(v1).ok).toBe(true);
+  });
+
+  it("gates every version 2 field behind themeSchemaVersion 2", () => {
+    const base = { ...clone(MINIMAL_EXAMPLE), themeSchemaVersion: 1 };
+    const gated: [Record<string, unknown>, RegExp][] = [
+      [{ accent: { mode: "system" } }, /accent\.mode/],
+      [{ shape: { radius: { fab: 10 } } }, /shape\.radius\.fab/],
+      [{ material: { engine: "flat" } }, /material\.engine/],
+      [{ material: { card: "tonal" } }, /material\.card/],
+      [{ motion: { press: "overlay" } }, /motion\.press/],
+      [{ type: { scale: { title: { fontSize: 20 } } } }, /type\.scale/],
+      [{ icons: { set: "ionicons", categorySet: "ionicons" } }, /categorySet/],
+      [{ icons: { set: "ionicons", badge: "filled" } }, /icons\.badge/],
+      [{ icons: { set: "ionicons", badgeShape: "circle" } }, /badgeShape/],
+      [
+        { charts: { tone: { containerMix: { light: 0.8, dark: 0.7 } } } },
+        /charts.tone/,
+      ],
+    ];
+    for (const [patch, pattern] of gated) {
+      const errors = errorsOf({ ...base, ...patch }).join("\n");
+      expect(errors).toMatch(pattern);
+      expect(errors).toMatch(/requires themeSchemaVersion 2/);
+    }
+  });
+
+  it("validates the version 2 fields", () => {
+    const bad: [Record<string, unknown>, RegExp][] = [
+      [{ shape: { radius: { fab: 99 } } }, /shape\.radius\.fab/],
+      [{ material: { card: "glass" } }, /material\.card/],
+      [
+        { material: { engine: "flat", gradients: true } },
+        /material\.gradients/,
+      ],
+      [{ motion: { press: "ripple" } }, /motion\.press/],
+      [{ type: { scale: { nope: { fontSize: 20 } } } }, /type\.scale/],
+      [{ type: { scale: { title: { fontSize: 200 } } } }, /fontSize/],
+      [{ type: { scale: { title: { weight: "heavy" } } } }, /weight/],
+      [{ type: { scale: { title: { letterSpacing: 9 } } } }, /letterSpacing/],
+      [
+        { type: { scale: { title: { fontSize: 30, lineHeight: 20 } } } },
+        /lineHeight/,
+      ],
+      [{ icons: { categorySet: "nope" } }, /categorySet/],
+      [{ icons: { badge: "square" } }, /icons\.badge/],
+      [{ icons: { badgeShape: "star" } }, /badgeShape/],
+      [
+        { charts: { tone: { containerMix: { light: 2, dark: 0.7 } } } },
+        /containerMix/,
+      ],
+    ];
+    for (const [patch, pattern] of bad) {
+      const file = { ...clone(MINIMAL_EXAMPLE), ...patch };
+      expect(errorsOf(file).join("\n")).toMatch(pattern);
+    }
   });
 
   it("rejects oversized files", () => {
@@ -326,12 +411,12 @@ describe("parseCustomTheme: rejection (fail closed)", () => {
     ).toMatch(/^extends:/m);
   });
 
-  it("rejects the system accent mode", () => {
-    expect(
-      errorsOf({ ...clone(MINIMAL_EXAMPLE), accent: { mode: "system" } }).join(
-        "\n",
-      ),
-    ).toMatch(/accent\.mode: "system" is not allowed/);
+  it("accepts the system accent mode only in version 2", () => {
+    const file = { ...clone(MINIMAL_EXAMPLE), accent: { mode: "system" } };
+    expect(parseCustomTheme(file).ok).toBe(true);
+    expect(errorsOf({ ...file, themeSchemaVersion: 1 }).join("\n")).toMatch(
+      /accent.mode "system": requires themeSchemaVersion 2/,
+    );
   });
 
   it("collects every error, not just the first", () => {
@@ -521,7 +606,7 @@ describe("export and round trip", () => {
   });
 
   it("round-trips both examples exactly", () => {
-    for (const example of [MINIMAL_EXAMPLE, FULL_EXAMPLE]) {
+    for (const example of [MINIMAL_EXAMPLE, FULL_EXAMPLE, FLAT_EXAMPLE]) {
       const { file } = themeOf(example);
       expect(file).toEqual(example);
       expect(canonicalizeCustomThemeFile(file)).toEqual(example);

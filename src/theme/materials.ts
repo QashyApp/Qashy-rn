@@ -1,5 +1,6 @@
 import type { ViewStyle } from "react-native";
 
+import { NO_SHADOW, ringShadow } from "@/theme/shadow";
 import { useQashyTheme, type ThemeTokens } from "@/theme/theme";
 
 /**
@@ -45,6 +46,25 @@ export type Material =
   // A small tinted badge sunk into a card.
   | "well";
 
+/**
+ * The shadow of a card-like surface under the theme's `material.card`: the raised ladder step as
+ * is (`elevated`), a hairline ring and no shadow (`outlined`), or no ring and no shadow, depth
+ * coming from the tonal fill alone (`tonal`). Rings need a hex border, so an opaque platform
+ * border falls back to the theme's own shadow rather than guessing a color.
+ */
+function cardShadow(theme: ThemeTokens, elevated: string): string {
+  switch (theme.cardStyle) {
+    case "outlined":
+      return typeof theme.border === "string"
+        ? ringShadow(theme.border)
+        : elevated;
+    case "tonal":
+      return NO_SHADOW;
+    default:
+      return elevated;
+  }
+}
+
 function withGradient(
   style: ViewStyle,
   gradient: string | undefined,
@@ -67,13 +87,19 @@ export function materialStyle(
   switch (material) {
     case "card":
       return withGradient(
-        { backgroundColor: theme.surface, boxShadow: theme.shadowCard },
+        {
+          backgroundColor: theme.surface,
+          boxShadow: cardShadow(theme, theme.shadowCard),
+        },
         theme.surfaceGradient,
         theme.gradients,
       );
     case "raised":
       return withGradient(
-        { backgroundColor: theme.surface, boxShadow: theme.shadowRaised },
+        {
+          backgroundColor: theme.surface,
+          boxShadow: cardShadow(theme, theme.shadowRaised),
+        },
         theme.surfaceGradient,
         theme.gradients,
       );

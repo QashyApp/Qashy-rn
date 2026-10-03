@@ -1,7 +1,7 @@
 import { View } from "react-native";
 
 import { AnimatedMoney } from "@/components/finance/animated-money";
-import { AppIcon } from "@/components/ui/app-icon";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -10,7 +10,6 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
-import { toneColors } from "@/theme/tokens";
 import type { WidgetProps } from "@/features/overview/widgets/types";
 import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 
@@ -18,7 +17,7 @@ const MAX_CATEGORIES_SHOWN = 5;
 
 export function TopCategoriesWidget({ month }: WidgetProps) {
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   const { t } = useLocalization();
   const state = useFinanceState();
   const summary = useDashboard(month);
@@ -58,13 +57,6 @@ export function TopCategoriesWidget({ month }: WidgetProps) {
           const category = item.category;
           const share = totalMinor > 0 ? item.amountMinor / totalMinor : 0;
           const percent = Math.round(share * 100);
-          const tile = toneColors(
-            category?.color ?? theme.staticAccent,
-            theme.staticSurface,
-            theme.staticText,
-            theme.mode === "dark",
-            theme.charts.tone,
-          );
           const name = category?.name ?? "Uncategorized";
           const translatedName = category ? category.name : t("Uncategorized");
           return (
@@ -79,23 +71,15 @@ export function TopCategoriesWidget({ month }: WidgetProps) {
                   gap: space.md,
                 }}
               >
-                <View
-                  style={{
-                    width: theme.tile.size,
-                    height: theme.tile.size,
-                    borderRadius: radius.tile,
-                    borderCurve: "continuous",
-                    backgroundColor: tile.container,
-                    alignItems: "center",
-                    justifyContent: "center",
+                <IconBadge
+                  icon={category?.icon ?? "chart.pie"}
+                  color={category?.color ?? theme.staticAccent}
+                  role={category ? "category" : "ui"}
+                  fallback={{
+                    container: theme.accentContainer,
+                    onContainer: theme.onAccentContainer,
                   }}
-                >
-                  <AppIcon
-                    name={category?.icon ?? "chart.pie"}
-                    color={tile.onContainer}
-                    size={theme.tile.icon}
-                  />
-                </View>
+                />
                 <AppText
                   literal={Boolean(category)}
                   variant="label"

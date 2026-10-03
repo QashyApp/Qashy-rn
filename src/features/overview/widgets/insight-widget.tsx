@@ -63,7 +63,7 @@ export function InsightWidget({ month }: WidgetProps) {
           />
         </View>
       </View>
-      <MotionView key={`${insightMode}-${month}`} variant="fade" exit>
+      <MotionView key={insightMode} variant="fade" exit>
         {insight}
       </MotionView>
     </Card>

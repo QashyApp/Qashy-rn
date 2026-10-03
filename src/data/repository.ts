@@ -103,6 +103,11 @@ export type SettingsInput = Partial<
     | "accentSource"
     | "accentHex"
     | "swipeBetweenMonths"
+    | "navBarStyle"
+    | "fontTextOverride"
+    | "fontNumericOverride"
+    | "uiIconSetOverride"
+    | "categoryIconSetOverride"
   >
 >;
 

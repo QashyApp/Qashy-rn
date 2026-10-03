@@ -80,6 +80,8 @@ export const radius = {
   sheet: 28,
   /** Navigation items: rail buttons, sidebar rows, the bottom-bar indicator. */
   nav: 16,
+  /** The floating action button. Classic keeps the full pill; other themes may use a rounded square. */
+  fab: 999,
   pill: 999,
 } as const;
 
@@ -269,7 +271,26 @@ export interface BaseTokens {
   warning: string;
   /** Semantic color for transfers — neither income nor expense. */
   transfer: string;
+  /** Material 3 secondary container: quiet tonal fills (chips, selected rows, inactive tracks). */
+  secondaryContainer: string;
+  onSecondaryContainer: string;
+  /** Material 3 tertiary container: a second accent family to set against the primary. */
+  tertiaryContainer: string;
+  onTertiaryContainer: string;
+  /** The native stack header fill. Equals `background` in themes whose header is invisible. */
+  headerBackground: string;
+  /** The tab / navigation bar fill. */
+  navBackground: string;
 }
+
+export const ROLE_TOKEN_KEYS = [
+  "secondaryContainer",
+  "onSecondaryContainer",
+  "tertiaryContainer",
+  "onTertiaryContainer",
+  "headerBackground",
+  "navBackground",
+] as const;
 
 /**
  * Light surfaces.
@@ -297,6 +318,12 @@ export const lightTokens: BaseTokens = {
   negative: "#C43D4A",
   warning: "#9A6700",
   transfer: "#3F6FD8",
+  secondaryContainer: "#E9EBEF",
+  onSecondaryContainer: "#191B20",
+  tertiaryContainer: "#DDE6F8",
+  onTertiaryContainer: "#2B58B8",
+  headerBackground: "#F1F2F5",
+  navBackground: "#FFFFFF",
 };
 
 /**
@@ -321,6 +348,12 @@ export const darkTokens: BaseTokens = {
   negative: "#FF8F96",
   warning: "#F0C36A",
   transfer: "#8FB0FF",
+  secondaryContainer: "#262931",
+  onSecondaryContainer: "#F2F3F5",
+  tertiaryContainer: "#252E45",
+  onTertiaryContainer: "#8FB0FF",
+  headerBackground: "#0C0D11",
+  navBackground: "#1E2027",
 };
 
 function channels(hex: string): [number, number, number] {
@@ -470,5 +503,40 @@ export function toneColors(
   return {
     container,
     onContainer: ensureContrast(seed, container, text, tone.minContrast),
+  };
+}
+
+/**
+ * Derives the Material 3 style roles from colors a palette already defines. Used for custom
+ * palettes that omit them and for themes seeded from the system tonal palettes. Pure.
+ */
+export function derivedRoleTokens(
+  base: Pick<
+    BaseTokens,
+    "background" | "surface" | "surfaceElevated" | "surfaceMuted" | "text" | "transfer"
+  >,
+  dark: boolean,
+): Pick<BaseTokens, (typeof ROLE_TOKEN_KEYS)[number]> {
+  const secondaryContainer = base.surfaceMuted;
+  const tertiaryContainer = mixHex(
+    base.transfer,
+    base.surface,
+    dark ? 0.75 : 0.84,
+  );
+  return {
+    secondaryContainer,
+    onSecondaryContainer: ensureContrast(
+      base.text,
+      secondaryContainer,
+      base.text,
+    ),
+    tertiaryContainer,
+    onTertiaryContainer: ensureContrast(
+      base.transfer,
+      tertiaryContainer,
+      base.text,
+    ),
+    headerBackground: base.background,
+    navBackground: base.surfaceElevated,
   };
 }

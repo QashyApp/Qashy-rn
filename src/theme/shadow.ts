@@ -137,3 +137,34 @@ export function bevelAccentShadow(accent: string, depth: number): string {
     { x: 0, y: d, blur: 0, color: mixHex(accent, "#000000", 0.6) },
   ]);
 }
+
+/** A shadow layer that paints nothing, for a slot that must be a non-empty string. */
+export const NO_SHADOW = "0px 0px 0px 0px rgba(0, 0, 0, 0)";
+
+/** A 1px inset ring: the flat engine's outline, which (unlike a border) takes no layout space. */
+export function ringShadow(color: string, width = 1): string {
+  return serializeShadow([
+    { inset: true, x: 0, y: 0, blur: 0, spread: width, color },
+  ]);
+}
+
+/**
+ * The "flat" material engine (Material 3): surfaces are tonal steps, not lit objects. Cards,
+ * raised surfaces and pressed controls carry no shadow; controls and wells get a hairline ring so
+ * they stay discernible; only the overlay and FAB keep a small shadow, for legibility over content.
+ */
+export function flatShadowSet(
+  base: BaseTokens,
+  scheme: "light" | "dark",
+): BevelShadowSet {
+  return {
+    shadowCard: NO_SHADOW,
+    shadowRaised: NO_SHADOW,
+    shadowControl: ringShadow(base.border),
+    shadowControlPressed: NO_SHADOW,
+    shadowSunken: ringShadow(base.border),
+    shadowOverlay: `0px 4px 16px 0px rgba(0, 0, 0, ${scheme === "dark" ? 0.5 : 0.16})`,
+    shadowFab: `0px 3px 8px 0px rgba(0, 0, 0, ${scheme === "dark" ? 0.5 : 0.22})`,
+    scrim: scheme === "dark" ? "rgba(0, 0, 0, 0.6)" : "rgba(0, 0, 0, 0.4)",
+  };
+}

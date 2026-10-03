@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { ScrollView, View, useColorScheme } from "react-native";
+import { Pressable, ScrollView, View, useColorScheme } from "react-native";
 
 import { AnimatedMoney } from "@/components/finance/animated-money";
+import { useNavBarStyleSheet } from "@/components/navigation/nav-bar-style-sheet-context";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
@@ -17,6 +18,7 @@ import {
   type SegmentOption,
 } from "@/components/ui/segmented-control";
 import { effectiveAccentMode, ThemePicker } from "@/components/ui/theme-picker";
+import { AppearanceOverridesCard } from "@/features/more/appearance-overrides-card";
 import {
   saveThemeFile,
   pickThemeFileText,
@@ -59,6 +61,7 @@ export function AppearanceScreen() {
   const { radius, space } = theme;
   const { t } = useLocalization();
   const systemScheme = useColorScheme();
+  const navBarSheet = useNavBarStyleSheet();
   const [expectedRevision, setExpectedRevision] = useState(settings.revision);
   const [themeId, setThemeId] = useState(settings.themeId);
   const [mode, setMode] = useState<ThemeMode>(settings.themeMode);
@@ -336,6 +339,9 @@ export function AppearanceScreen() {
         </Card>
       </MotionView>
       <MotionView>
+        <AppearanceOverridesCard />
+      </MotionView>
+      <MotionView>
         <Card style={{ gap: 16 }}>
           <AppText variant="headline">Custom themes</AppText>
           <AppText muted>
@@ -373,6 +379,35 @@ export function AppearanceScreen() {
           ) : null}
         </Card>
       </MotionView>
+      {navBarSheet.available ? (
+        <MotionView>
+          <Card style={{ gap: 16 }}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={t("Navigation bar style")}
+              accessibilityHint={t(
+                settings.navBarStyle === "floating" ? "Floating" : "Native",
+              )}
+              onPress={navBarSheet.open}
+              style={{
+                minHeight: 48,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: space.md,
+              }}
+            >
+              <View style={{ flex: 1, gap: 2 }}>
+                <AppText variant="label">Navigation bar style</AppText>
+                <AppText variant="caption" muted>
+                  {settings.navBarStyle === "floating" ? "Floating" : "Native"}
+                </AppText>
+              </View>
+              <AppIcon name="chevron.right" color={theme.textMuted} size={16} />
+            </Pressable>
+          </Card>
+        </MotionView>
+      ) : null}
       <MotionView>
         <Card style={{ gap: 16 }}>
           <AppText variant="headline">Appearance</AppText>

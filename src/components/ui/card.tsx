@@ -78,7 +78,7 @@ export function Card({
           // where a gradient over a tint would just look like a mistake.
           {
             backgroundColor: theme.accentContainer,
-            boxShadow: theme.shadowCard,
+            boxShadow: materialStyle(theme, "card").boxShadow,
           }
         : materialStyle(theme, "card")),
   };

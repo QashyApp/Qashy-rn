@@ -1,6 +1,8 @@
 import { createContext, use } from "react";
 import { useWindowDimensions } from "react-native";
 
+import type { SpaceScale } from "@/theme/themes/types";
+
 const IS_WEB = process.env.EXPO_OS === "web";
 
 /** At or above this viewport width the web shell shows a rail instead of the bottom bar. */
@@ -33,7 +35,70 @@ export function navigationRailWidth(windowWidth: number) {
  */
 export const ContentWidthContext = createContext<number | null>(null);
 
+/** Height of the inset floating tab bar (Android "floating" navigation style). */
+export const FLOATING_BAR_HEIGHT = 64;
+
+/**
+ * How much of the bottom edge the floating tab bar covers (safe-area inset, its own margin and its
+ * height). The tabs layout provides it while the floating bar is showing; everywhere else it is 0.
+ * It is the single source for every bottom offset that has to clear the bar: scroll padding, the
+ * FAB, the batch bar and the undo bar.
+ */
+export const BottomBarClearanceContext = createContext(0);
+
+export function floatingBarClearance(safeBottom: number, margin: number) {
+  return safeBottom + margin + FLOATING_BAR_HEIGHT;
+}
+
+export interface BottomChromeInset {
+  /** Distance from the screen bottom to the resting floating action button. */
+  overlayBottom: number;
+  /** The transient batch-selection bar, which takes the FAB's spot while open. */
+  batchBarBottom: number;
+  /** An undo snackbar stacked above the FAB. */
+  stackedOverlayBottom: number;
+  /** Bottom padding that scrolls the last row clear of the FAB and the bar. */
+  contentPaddingBottom: number;
+}
+
+/**
+ * Pure resolver for every bottom offset that depends on the navigation chrome. The three cases are the
+ * floating Android bar, the web bottom bar, and a docked native bar that reserves its own space.
+ */
+export function resolveBottomChromeInset(
+  metrics: Pick<ScreenMetrics, "hasBottomNavigation" | "floatingBarClearance">,
+  safeBottom: number,
+  space: SpaceScale,
+): BottomChromeInset {
+  if (metrics.floatingBarClearance > 0) {
+    const overlayBottom = metrics.floatingBarClearance + space.lg;
+    return {
+      overlayBottom,
+      batchBarBottom: overlayBottom,
+      stackedOverlayBottom: overlayBottom + 64,
+      contentPaddingBottom: overlayBottom + 80 + space.lg,
+    };
+  }
+  const stackedOverlayBottom = safeBottom + space.xxl + 64;
+  if (metrics.hasBottomNavigation) {
+    return {
+      overlayBottom: 92 + safeBottom,
+      batchBarBottom: 92 + safeBottom,
+      stackedOverlayBottom,
+      contentPaddingBottom: 160 + safeBottom,
+    };
+  }
+  return {
+    overlayBottom: space.xxl + (IS_WEB ? safeBottom : 0),
+    batchBarBottom: space.xxl + safeBottom,
+    stackedOverlayBottom,
+    contentPaddingBottom: space.xxxl + 80,
+  };
+}
+
 export interface ScreenMetrics {
+  /** Bottom area the floating tab bar covers, or 0 when none floats over the content. */
+  floatingBarClearance: number;
   /** The viewport. Use only for things anchored to the viewport, not to content. */
   windowWidth: number;
   /** The room a screen has to lay itself out in. Use this for layout breakpoints. */
@@ -54,9 +119,11 @@ export interface ScreenMetrics {
 export function useScreenMetrics(): ScreenMetrics {
   const { width } = useWindowDimensions();
   const provided = use(ContentWidthContext);
+  const floatingBarClearance = use(BottomBarClearanceContext);
   const contentWidth = provided ?? width;
   return {
     windowWidth: width,
+    floatingBarClearance,
     contentWidth,
     hasNavigationRail: contentWidth < width,
     hasBottomNavigation:

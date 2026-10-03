@@ -1,11 +1,11 @@
-import { View, type ColorValue } from "react-native";
+import { View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { MotionPressable } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
-import { toneColors } from "@/theme/tokens";
 
 export function SettingsRow({
   title,
@@ -38,7 +38,7 @@ export function SettingsRow({
   onPress?: () => void;
 }) {
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   const { t } = useLocalization();
   const destructive = tone === "danger";
   // Without this the row exposes title, subtitle, and value as three unrelated
@@ -51,17 +51,12 @@ export function SettingsRow({
   // does not rank it. A full-saturation tile in a list of thirty settings rows
   // reads as thirty alerts, so the seed is tinted toward the surface and the
   // glyph carries the contrast.
-  const tile: { container: ColorValue; onContainer: ColorValue } = color
-    ? toneColors(
-        color,
-        theme.staticSurface,
-        theme.staticText,
-        theme.mode === "dark",
-        theme.charts.tone,
-      )
-    : destructive
-      ? { container: theme.surfaceMuted, onContainer: theme.negative }
-      : { container: theme.accentContainer, onContainer: theme.accent };
+  const fallback = destructive
+    ? { container: theme.surfaceMuted, onContainer: theme.negative }
+    : { container: theme.accentContainer, onContainer: theme.accent };
+  const fallbackFilled = destructive
+    ? { container: theme.negative, onContainer: theme.onNegative }
+    : { container: theme.accent, onContainer: theme.onAccent };
   return (
     <MotionPressable
       accessibilityLabel={accessibilityLabel}
@@ -84,24 +79,14 @@ export function SettingsRow({
         opacity: disabled ? 0.5 : pressed ? 0.62 : 1,
       })}
     >
-      <View
-        style={{
-          width: theme.tile.size,
-          height: theme.tile.size,
-          borderRadius: radius.tile,
-          borderCurve: "continuous",
-          backgroundColor: tile.container,
-          alignItems: "center",
-          justifyContent: "center",
-          // A raised icon tile: a 1px top highlight catching the light, same
-          // idea as a card's inner highlight but scaled to a small filled
-          // square. Lighter in dark mode, where a bright highlight against a
-          // dark tint would otherwise overpower the icon.
-          boxShadow: `inset 0 1px 0 rgba(255,255,255,${theme.mode === "dark" ? 0.06 : 0.35})`,
-        }}
-      >
-        <AppIcon name={icon} color={tile.onContainer} size={theme.tile.icon} />
-      </View>
+      <IconBadge
+        icon={icon}
+        color={color}
+        role={color ? "category" : "ui"}
+        fallback={fallback}
+        fallbackFilled={fallbackFilled}
+        raised
+      />
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"

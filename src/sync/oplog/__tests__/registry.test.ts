@@ -127,7 +127,17 @@ describe("registry coverage", () => {
     });
     expect(specFor("settings").themeMode).toEqual({ kind: "deviceLocal" });
     // Appearance never replicates: a phone's theme must not restyle a laptop.
-    for (const field of ["themeId", "accentSource", "accentHex"]) {
+    for (const field of [
+      "themeId",
+      "accentSource",
+      "accentHex",
+      "swipeBetweenMonths",
+      "navBarStyle",
+      "fontTextOverride",
+      "fontNumericOverride",
+      "uiIconSetOverride",
+      "categoryIconSetOverride",
+    ]) {
       expect(specFor("settings")[field]).toEqual({ kind: "deviceLocal" });
     }
     expect(specFor("recurringRules").nextDueDate).toEqual({

@@ -8,20 +8,20 @@ Background and history: [theming-plan.md](theming-plan.md).
 
 A theme is one `ThemeDefinition` (`src/theme/themes/types.ts`) in its own file under `src/theme/themes/`. The active theme is resolved by `getTheme(id, custom)` in `src/theme/themes/registry.ts`; an unknown id, or a theme not offered on the current platform, falls back to `classic`. Components never see the definition directly: they read the resolved result from `useQashyTheme()`.
 
-| Field                                 | What it is                                                                                                                              |
-| ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`                                  | Stable, lowercase, hyphenated (`THEME_ID_PATTERN`). Stored per device as `AppSettings.themeId`. Never reuse an id for a different look. |
-| `name`                                | Display name. Looked up through localization (see below).                                                                               |
-| `palette`                             | `{ light, dark }`, each a complete `BaseTokens` (12 colors). Both are mandatory.                                                        |
-| `shadows`                             | `{ light, dark }`, each a `ShadowSet` of CSS `box-shadow` strings plus `scrim`. Both mandatory.                                         |
-| `space`, `radius`, `tile`, `iconSize` | Scales with the same keys as the classic ones.                                                                                          |
-| `motion`                              | Durations, springs, and press behaviour (`press: 'scale' \| 'translate'`, `pressScale`, `pressTranslate`).                              |
-| `material`                            | `{ engine: 'soft' \| 'bevel', gradients, bevelDepth }`.                                                                                 |
-| `type`                                | `text` and `numeric` font stacks (`family` plus `fallbacks`, both registry ids) and a `scale` of the 11 type variants.                  |
-| `icons`                               | `{ set }`, an id in `src/theme/icon-sets.ts`.                                                                                           |
-| `charts`                              | Line width, cap, donut thickness, grid dash, `patterns`, `categoryPalette`, `tone`.                                                     |
-| `accent`                              | `mode` (`user`, `fixed`, `system`), `default`, `presets`.                                                                               |
-| `availableOn`                         | Optional platform list. Omitted means everywhere.                                                                                       |
+| Field                                 | What it is                                                                                                                                                                                                                                                                                       |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`                                  | Stable, lowercase, hyphenated (`THEME_ID_PATTERN`). Stored per device as `AppSettings.themeId`. Never reuse an id for a different look.                                                                                                                                                          |
+| `name`                                | Display name. Looked up through localization (see below).                                                                                                                                                                                                                                        |
+| `palette`                             | `{ light, dark }`, each a complete `BaseTokens`: the 12 base colors plus the role colors `secondaryContainer`, `onSecondaryContainer`, `tertiaryContainer`, `onTertiaryContainer`, `headerBackground` and `navBackground` (`derivedRoleTokens` derives them from a palette). Both are mandatory. |
+| `shadows`                             | `{ light, dark }`, each a `ShadowSet` of CSS `box-shadow` strings plus `scrim`. Both mandatory.                                                                                                                                                                                                  |
+| `space`, `radius`, `tile`, `iconSize` | Scales with the same keys as the classic ones.                                                                                                                                                                                                                                                   |
+| `motion`                              | Durations, springs, and press behaviour (`press: 'scale' \| 'translate' \| 'overlay'`, `pressScale`, `pressTranslate`).                                                                                                                                                                          |
+| `material`                            | `{ engine: 'soft' \| 'bevel' \| 'flat', card: 'elevated' \| 'outlined' \| 'tonal', gradients, bevelDepth }`.                                                                                                                                                                                     |
+| `type`                                | `text` and `numeric` font stacks (`family` plus `fallbacks`, both registry ids) and a `scale` of the 11 type variants.                                                                                                                                                                           |
+| `icons`                               | `{ set, categorySet?, badge, badgeShape }`: icon set ids from `src/theme/icon-sets.ts` (UI icons and entity icons) and how a category icon sits in its badge.                                                                                                                                    |
+| `charts`                              | Line width, cap, donut thickness, grid dash, `patterns`, `categoryPalette`, `tone`.                                                                                                                                                                                                              |
+| `accent`                              | `mode` (`user`, `fixed`, `system`), `default`, `presets`.                                                                                                                                                                                                                                        |
+| `availableOn`                         | Optional platform list. Omitted means everywhere.                                                                                                                                                                                                                                                |
 
 ## A minimal built-in theme
 
@@ -108,6 +108,28 @@ These are floors. A theme may exceed them (`high-contrast` does). Fix the theme,
 
 The `bevelShadowSet` helper builds the bevel look. Pair bevel with `press: 'translate'` and zero radii for the pixel look. `high-contrast.ts` shows the other pattern: `outlineShadows(palette, scrim)` derives ring-style shadows from the palette.
 
+## Flat engine and Material You
+
+`material.engine: 'flat'` is the Material 3 look. `flatShadowSet(palette, scheme)` returns no shadow for cards, raised surfaces and pressed controls, a hairline ring (`ringShadow`) for controls and wells, and keeps a small shadow only for `shadowFab` and `shadowOverlay`. Flat themes have `gradients: false` and use `motion.press: 'overlay'` (a tonal fill, no scale or shift). `material.card` chooses how a card is separated from the page: `elevated` keeps the theme shadow, `outlined` draws an inset ring, `tonal` relies on the fill alone; `materialStyle` applies it to the card and raised materials.
+
+Other capabilities read through `useQashyTheme()`:
+
+- `radius.fab` rounds the floating add button and icon buttons.
+- `icons.badge` (`tinted`, `filled` or `none`) and `icons.badgeShape` (`circle` or `squircle`) drive `IconBadge`, which every entity row and widget uses. A multicolor glyph (emoji, Fluent Emoji) keeps a tinted container under `filled`.
+- `icons.set` draws UI chrome and `icons.categorySet` (default: `set`) draws category and account icons. `AppIcon` takes `role: 'ui' | 'category'`.
+- `headerBackground` fills the native stack header and `navBackground` the tab bar.
+- `type.scale` is the per-variant size, weight, spacing and line height; custom themes may override each value within bounds.
+- `charts.tone.containerMix` controls how strongly an entity color is mixed into its tinted container.
+- `accent.mode: 'system'` follows the wallpaper on Android and `accent.default` elsewhere, with no picker. Material You uses `'user'` instead: the wallpaper is the default `accentSource`, and the Appearance screen also offers curated and custom colors.
+
+### Dynamic colors
+
+`modules/qashy-dynamic-colors` is a local Expo module (Android 12+) that returns the system tonal palettes as hex. `src/theme/dynamic-palette.ts` is the pure resolver that derives the tokens; `useSystemPalettes` re-reads them when the app becomes active. Below Android 12, on iOS and web, and in Jest the module is absent and the theme uses `accent.default`. Changing the module needs a native rebuild (a development build, not Expo Go).
+
+### Per-device overrides
+
+`fontTextOverride`, `fontNumericOverride`, `uiIconSetOverride` and `categoryIconSetOverride` are nullable `deviceLocal` settings. `applyAppearanceOverrides` (`src/theme/overrides.ts`) layers them over the theme, ignores unknown ids, and keeps the Rubik Hebrew fallback for any chosen font. The picker lives in `src/features/more/appearance-overrides-card.tsx`.
+
 ## Adding a font
 
 Fonts live in `FONT_REGISTRY` in `src/theme/fonts.ts`. A theme names a font by id; it never references a file.
@@ -120,13 +142,17 @@ Requirements:
 - **Hebrew must be covered.** The app ships English and Hebrew. A face that lacks Hebrew must be used with `fallbacks: ['rubik']` (Rubik covers both), and the conformance test fails if a theme's text stack has no Hebrew glyph source. The custom theme builder adds the Rubik fallback automatically for any non-Rubik face; built-in themes must declare it.
 - The `require()` goes in `fonts.ts` only (the theme source hygiene test forbids `require(` in theme files). The registered files are bundled and precached for offline use. Keep the precache budget in mind and update `workbox-config.cjs` only for static files; `runtimeCaching` stays empty.
 
+Bundled so far: Rubik, Space Grotesk, Pixelify Sans, Figtree, Inter, Nunito and Atkinson Hyperlegible (regular and bold only). Add each license to `THIRD_PARTY_NOTICES.md`.
+
 Adding a font id also makes it selectable as `type.text.family` / `type.numeric.family` in custom themes, so update the font table in `CUSTOM_THEME_GUIDE.md`.
 
 ## Adding an icon set
 
 Icon sets in `src/theme/icon-sets.ts` decide how a stored icon id is drawn on this device. Stored ids (`ion:<glyph>`, `emoji:<char>`, legacy SF-style names) are replicated data and are theme-independent: a set only changes the drawing.
 
-1. Implement `IconSet`: `resolve(ionGlyph)` returns an `IconGlyph` (`ionicon` or an `svg` with a `viewBox` and paths) or `null` when the set does not cover that glyph. Sets are keyed by Ionicons glyph name.
+Built in: `ionicons`, `pixel`, `material` (Material Icons through the already bundled vector-icons font) and `fluent-emoji-flat` (an MIT-licensed SVG subset of Fluent Emoji Flat in `fluent-emoji-glyphs.ts`, generated by `scripts/generate-fluent-emoji.js`; see `THIRD_PARTY_NOTICES.md`).
+
+1. Implement `IconSet`: `resolve(ionGlyph)` returns an `IconGlyph` (`ionicon`, `material`, an `svg` with a `viewBox` and paths, or a multicolor `color-svg`) or `null` when the set does not cover that glyph. Sets are keyed by Ionicons glyph name.
 2. Register it in `ICON_SETS`. `ICON_SET_IDS` is derived from it, so custom themes can select it immediately; add it to the icon table in `CUSTOM_THEME_GUIDE.md`.
 3. Never rely on coverage being complete. `resolveIconRender` falls back to Ionicons for any gap, and the conformance suite lists gaps and checks the fallback. `emoji:` ids always ignore the set.
 
@@ -146,7 +172,7 @@ Use the semantic tokens from `useQashyTheme()`, never a hex string or a light/da
 
 ## Device-local, no network
 
-- `themeId`, `themeMode`, `accentSource` and `accentHex` are `deviceLocal` in `src/sync/oplog/registry.ts`, so choosing a theme on one device never changes another. Do not add theme settings to a synced field group.
+- `themeId`, `themeMode`, `accentSource`, `accentHex` and the four font and icon-set overrides are `deviceLocal` in `src/sync/oplog/registry.ts`, so choosing a theme on one device never changes another. Do not add theme settings to a synced field group.
 - Custom themes are not in `AppSettings` either. They live in a device-local `sync_meta` key (`SYNC_META.customThemes`) behind `src/data/custom-themes-store.ts`, written with `transact` so no sync op is captured.
 - Themes are data and bundled assets. No remote fonts, images or textures, no fetching, no clock. The CSP and the "no network" rule stand, and the source hygiene test enforces the obvious cases.
 - Both light and dark are required for every theme, built-in or custom.

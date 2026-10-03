@@ -1,17 +1,23 @@
 /**
- * Orchestrates automatic exchange-rate fetching: whether it is allowed to run at all, what it
- * fetches, and what the UI is told about the result.
+ * Orchestrates automatic exchange-rate fetching: whether it is allowed to run at all, which
+ * rates it fetches, and what the UI is told about the result.
+ *
+ * There is no "refresh" step. Rates are fetched on demand, for exactly the currency/date pairs
+ * something is about to need: the transaction and recurring forms when an account, currency or
+ * date settles, the CSV preview, and `ensureRatesForPending` (today's rate for each foreign
+ * account, plus every rate a recurring rule is due to use). A pair that is already stored is
+ * never fetched again.
  *
  * Nothing here duplicates finance state — `deps.getState()` reads the one copy the repository
- * already holds — and nothing here fetches without first reading the device-local opt-in flag
- * from `rates-flag.ts` inside its own storage transaction, well before any `fetch` call leaves
- * that transaction. See `AGENTS.md` ("work passed to `StorageAdapter.transact` must not await
+ * already holds — and nothing here fetches without first reading the device-local flag from
+ * `rates-flag.ts` inside its own storage transaction, well before any `fetch` call leaves that
+ * transaction. See `AGENTS.md` ("work passed to `StorageAdapter.transact` must not await
  * anything but its own transaction") for why the flag read and the network call are always two
  * separate steps here, never one.
  *
  * Every public method is failure-shaped rather than throw-shaped: a network error, a timeout, or
- * a malformed response is recorded on `status` and swallowed, because a background rate refresh
- * must never take down app startup, a foreground resume, or a CSV import.
+ * a malformed response is recorded on `status` and swallowed, because a rate lookup must never
+ * take down app startup, a foreground resume, or a CSV import.
  */
 
 import {
@@ -35,13 +41,13 @@ import type {
 } from "@/data/repository";
 import type { StorageAdapter } from "@/data/storage-adapter";
 import type { FinanceState } from "@/domain/models";
-import { isLocalDate, toLocalDate } from "@/utils/date";
-
-/** How often `refreshLatest` is willing to hit the network on its own, absent `force`. */
-const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+import { addRecurrence, isLocalDate, toLocalDate } from "@/utils/date";
 
 /** How long a failed `ensureRatesFor` pair is remembered, so a form doesn't retry it in a loop. */
 const NEGATIVE_CACHE_MS = 5 * 60 * 1000;
+
+/** Most occurrences of one recurring rule whose rates are looked up in a single pass. */
+const MAX_PENDING_OCCURRENCES_PER_RULE = 500;
 
 /** One currency that needs a rate as of one local calendar date. */
 export interface RatePair {
@@ -55,31 +61,29 @@ export interface EnsureRatesResult {
   readonly conflicts: readonly FetchedRateConflict[];
 }
 
+export interface EnsureRatesOptions {
+  /** Also retries pairs a recent failure put in the negative cache. */
+  readonly retry?: boolean;
+}
+
 export interface ExchangeRateStatus {
   readonly enabled: boolean;
   readonly fetching: boolean;
-  /** ISO timestamp of the last completed refresh, successful or not. */
-  readonly lastRefreshAt: string | null;
   readonly lastError: RateFetchErrorCode | null;
   /** Reciprocal conflicts from the most recent save, so the UI can offer a manual resolution. */
   readonly conflicts: readonly FetchedRateConflict[];
   /** Currencies in use that Frankfurter does not cover, sorted. */
   readonly unsupported: readonly string[];
-  /** The last refresh found no foreign currency in use, so there was nothing to fetch. */
-  readonly nothingNeeded: boolean;
-  /** Rates written by the last successful refresh; null until one completes. */
-  readonly lastWritten: number | null;
 }
 
 const INITIAL_STATUS: ExchangeRateStatus = {
-  enabled: false,
+  // Matches the flag's default, so the first render doesn't flash a "turn on" prompt before the
+  // stored value is read.
+  enabled: true,
   fetching: false,
-  lastRefreshAt: null,
   lastError: null,
   conflicts: [],
   unsupported: [],
-  nothingNeeded: false,
-  lastWritten: null,
 };
 
 export interface ExchangeRateServiceDeps {
@@ -100,39 +104,75 @@ const sameStrings = (a: readonly string[], b: readonly string[]) =>
 
 const normalizeCode = (value: string) => value.trim().toUpperCase();
 
-/**
- * Currencies this vault actually needs a rate for: every non-archived account's currency, plus
- * every active recurring rule's template currency, minus the base currency (nothing converts
- * into itself) and minus whatever Frankfurter does not cover (`FRANKFURTER_UNSUPPORTED` — those
- * are surfaced separately, as `unsupportedCurrencies`, for a manual-rate prompt). Sorted, so two
- * callers building the same request produce the same `quotes` list.
- */
-export function neededCurrencies(state: FinanceState): string[] {
-  const base = normalizeCode(state.settings.baseCurrency);
+/** Currencies this vault uses (non-archived accounts, active rules), minus the base currency. */
+function usedCurrencies(state: FinanceState): Set<string> {
   const codes = new Set<string>();
   for (const account of state.accounts) {
     if (!account.archived) codes.add(normalizeCode(account.currency));
   }
   for (const rule of state.recurringRules) {
-    if (rule.active) codes.add(normalizeCode(rule.template.currency));
+    if (!rule.active) continue;
+    codes.add(normalizeCode(rule.template.currency));
+    if (rule.template.foreign)
+      codes.add(normalizeCode(rule.template.foreign.currency));
   }
-  codes.delete(base);
-  for (const code of FRANKFURTER_UNSUPPORTED) codes.delete(code);
-  return [...codes].sort();
+  codes.delete(normalizeCode(state.settings.baseCurrency));
+  return codes;
 }
 
 /** Currencies this vault uses that Frankfurter does not cover, sorted. */
 export function unsupportedCurrencies(state: FinanceState): string[] {
+  return [...usedCurrencies(state)]
+    .filter((code) => FRANKFURTER_UNSUPPORTED.has(code))
+    .sort();
+}
+
+/**
+ * The rates this vault is about to use and may not have yet: today's rate for each live foreign
+ * account (balances and net worth convert at today's rate) and, for each active recurring rule,
+ * the rate on every occurrence date it is due to post up to `today` — for its account's currency
+ * and for its foreign currency when the template doesn't pin a rate. Duplicates and pairs that
+ * are already stored are filtered by `ensureRatesFor`, not here.
+ */
+export function pendingRatePairs(
+  state: FinanceState,
+  today: string,
+): RatePair[] {
   const base = normalizeCode(state.settings.baseCurrency);
-  const codes = new Set<string>();
+  const pairs: RatePair[] = [];
+  const add = (currency: string, localDate: string) => {
+    const code = normalizeCode(currency);
+    if (code !== base) pairs.push({ currency: code, localDate });
+  };
   for (const account of state.accounts) {
-    if (!account.archived) codes.add(normalizeCode(account.currency));
+    if (!account.archived) add(account.currency, today);
   }
   for (const rule of state.recurringRules) {
-    if (rule.active) codes.add(normalizeCode(rule.template.currency));
+    if (!rule.active) continue;
+    const account = state.accounts.find(
+      (item) => item.id === rule.template.accountId,
+    );
+    const foreign = rule.template.foreign;
+    let due = rule.nextDueDate;
+    for (
+      let count = 0;
+      due <= today && count < MAX_PENDING_OCCURRENCES_PER_RULE;
+      count += 1
+    ) {
+      if (rule.endDate && due > rule.endDate) break;
+      if (account) add(account.currency, due);
+      if (foreign && !foreign.exchangeRate) add(foreign.currency, due);
+      const next = addRecurrence(
+        due,
+        rule.unit,
+        Math.max(1, rule.interval),
+        rule.startDate,
+      );
+      if (next <= due) break;
+      due = next;
+    }
   }
-  codes.delete(base);
-  return [...codes].filter((code) => FRANKFURTER_UNSUPPORTED.has(code)).sort();
+  return pairs;
 }
 
 /** A live (non-tombstoned) row already answers this exact currency/date pair. */
@@ -158,7 +198,6 @@ export class ExchangeRateService {
   private readonly listeners = new Set<() => void>();
   private readonly negativeCache = new Map<string, number>();
   private readonly inFlight = new Map<string, Promise<EnsureRatesResult>>();
-  private refreshPromise: Promise<void> | null = null;
 
   constructor(private readonly deps: ExchangeRateServiceDeps) {}
 
@@ -176,11 +215,8 @@ export class ExchangeRateService {
     if (
       next.enabled === this.status.enabled &&
       next.fetching === this.status.fetching &&
-      next.lastRefreshAt === this.status.lastRefreshAt &&
       next.lastError === this.status.lastError &&
       next.conflicts === this.status.conflicts &&
-      next.nothingNeeded === this.status.nothingNeeded &&
-      next.lastWritten === this.status.lastWritten &&
       sameStrings(next.unsupported, this.status.unsupported)
     ) {
       return;
@@ -198,10 +234,6 @@ export class ExchangeRateService {
     return () => this.listeners.delete(listener);
   };
 
-  neededCurrencies(state: FinanceState): string[] {
-    return neededCurrencies(state);
-  }
-
   private isNegativeCached(key: string): boolean {
     const at = this.negativeCache.get(key);
     if (at === undefined) return false;
@@ -212,87 +244,27 @@ export class ExchangeRateService {
     return true;
   }
 
-  /** Writes the opt-in flag. Turning it on immediately forces a refresh. */
+  /** Writes the on/off flag. Turning it on immediately looks up whatever is pending. */
   setEnabled = async (on: boolean): Promise<void> => {
     await this.deps.storage.transact((tx) =>
       writeRatesFlag(tx, { enabled: on }),
     );
     this.setStatus({ enabled: on });
-    if (on) await this.refreshLatest({ force: true });
+    if (on) await this.ensureRatesForPending({ retry: true });
   };
 
   /**
-   * Fetches today's rates for every currency this vault needs, if the flag is on, something is
-   * needed, and (absent `force`) the last refresh was more than six hours ago.
-   *
-   * Never throws. A concurrent call while one is already in flight returns the same promise
-   * rather than issuing a second request.
+   * Looks up the rates the vault is about to use (see `pendingRatePairs`). Called on startup, on
+   * foreground resume and before recurring generation, so a rule that posts on its own never
+   * finds its rate missing, and again when automatic rates are turned on.
    */
-  refreshLatest = (options: { force?: boolean } = {}): Promise<void> => {
-    if (this.refreshPromise) return this.refreshPromise;
-    const run = this.refreshLatestNow(options).finally(() => {
-      this.refreshPromise = null;
-    });
-    this.refreshPromise = run;
-    return run;
-  };
-
-  private async refreshLatestNow({
-    force,
-  }: {
-    force?: boolean;
-  }): Promise<void> {
-    const state = this.deps.getState();
-    this.setStatus({ unsupported: unsupportedCurrencies(state) });
-
-    const flag = await this.deps.storage.transact((tx) => readRatesFlag(tx));
-    this.setStatus({ enabled: flag.enabled });
-    if (!flag.enabled) return;
-
-    const needed = neededCurrencies(state);
-    if (!needed.length) {
-      this.setStatus({ nothingNeeded: true, lastError: null });
-      return;
-    }
-    this.setStatus({ nothingNeeded: false });
-
-    if (!force) {
-      const last = flag.lastRefreshAt ? Date.parse(flag.lastRefreshAt) : NaN;
-      if (
-        Number.isFinite(last) &&
-        this.now().getTime() - last < REFRESH_INTERVAL_MS
-      )
-        return;
-    }
-
-    const base = normalizeCode(state.settings.baseCurrency);
-    this.setStatus({ fetching: true });
-    try {
-      const quotes = [...new Set([...needed, base])];
-      const rows = await fetchEurRates(
-        { fetch: this.deps.fetch, timeoutMs: this.deps.timeoutMs },
-        { quotes },
-      );
-      const derived = deriveBaseRates(rows, base, needed);
-      const result = await this.deps.repository.saveFetchedRates(derived);
-      const at = this.now().toISOString();
-      await this.deps.storage.transact((tx) =>
-        writeRatesFlag(tx, { lastRefreshAt: at }),
-      );
-      this.setStatus({
-        fetching: false,
-        lastError: null,
-        lastRefreshAt: at,
-        conflicts: result.conflicts,
-        lastWritten: result.written,
-      });
-    } catch (error) {
-      this.setStatus({
-        fetching: false,
-        lastError: error instanceof RateFetchError ? error.code : "malformed",
-      });
-    }
-  }
+  ensureRatesForPending = (
+    options: EnsureRatesOptions = {},
+  ): Promise<EnsureRatesResult> =>
+    this.ensureRatesFor(
+      pendingRatePairs(this.deps.getState(), this.todayLocal()),
+      options,
+    );
 
   /**
    * Fills in whatever rates `pairs` are missing, with one range request for the lot.
@@ -302,10 +274,12 @@ export class ExchangeRateService {
    */
   ensureRatesFor = async (
     pairs: readonly RatePair[],
+    options: EnsureRatesOptions = {},
   ): Promise<EnsureRatesResult> => {
     const state = this.deps.getState();
     const base = normalizeCode(state.settings.baseCurrency);
     const today = this.todayLocal();
+    this.setStatus({ unsupported: unsupportedCurrencies(state) });
 
     const flag = await this.deps.storage.transact((tx) => readRatesFlag(tx));
     this.setStatus({ enabled: flag.enabled });
@@ -319,7 +293,7 @@ export class ExchangeRateService {
       const localDate = pair.localDate > today ? today : pair.localDate;
       if (isAlreadyCovered(state, currency, localDate)) continue;
       const key = pairKey(currency, localDate);
-      if (this.isNegativeCached(key)) continue;
+      if (!options.retry && this.isNegativeCached(key)) continue;
       wanted.set(key, { currency, localDate });
     }
     if (!wanted.size) return { ok: true, conflicts: [] };
@@ -361,6 +335,14 @@ export class ExchangeRateService {
       const result: FetchedRateResult = filtered.length
         ? await this.deps.repository.saveFetchedRates(filtered)
         : { written: 0, skippedManual: 0, conflicts: [] };
+      // A pair Frankfurter had no data for would otherwise be asked for again on every call.
+      const answered = new Set(
+        filtered.map((rate) => pairKey(rate.fromCurrency, rate.effectiveDate)),
+      );
+      const at = this.now().getTime();
+      for (const key of wanted.keys()) {
+        if (!answered.has(key)) this.negativeCache.set(key, at);
+      }
       this.setStatus({
         fetching: false,
         lastError: null,

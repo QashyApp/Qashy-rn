@@ -2,9 +2,10 @@
 // it exports into the bundle — 18 TTFs, ~2.5MB — even though only Ionicons is used,
 // and on web all of that lands in the offline precache too.
 import Ionicons from "@expo/vector-icons/Ionicons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Image } from "expo-image";
 import { Text, View, type ColorValue } from "react-native";
-import Svg, { Path } from "react-native-svg";
+import Svg, { Circle, Ellipse, Path, Rect } from "react-native-svg";
 
 import { resolveIconRender } from "@/theme/icon-sets";
 import { useQashyTheme } from "@/theme/theme";
@@ -22,15 +23,24 @@ export function AppIcon({
   name,
   color,
   size = 20,
+  role = "ui",
+  iconSetId,
 }: {
   name: string;
   color: ColorValue;
   size?: number;
+  /**
+   * `ui` draws chrome (navigation, buttons, menus) with the theme's UI icon set; `category`
+   * draws an entity's own icon (category, account, goal) with the category set.
+   */
+  role?: "ui" | "category";
+  /** Draw with this registered set instead of the theme's (the appearance pickers' previews). */
+  iconSetId?: string;
 }) {
-  const { iconSet } = useQashyTheme();
+  const { iconSet, categoryIconSet } = useQashyTheme();
   const render = resolveIconRender(
     parseIconId(name),
-    iconSet,
+    iconSetId ? iconSetId : role === "category" ? categoryIconSet : iconSet,
     process.env.EXPO_OS === "ios",
   );
   if (render.kind === "emoji") {
@@ -94,6 +104,62 @@ export function AppIcon({
             />
           ))}
         </Svg>
+      ) : render.kind === "color-svg" ? (
+        <Svg width={size} height={size} viewBox={render.viewBox}>
+          {render.shapes.map((shape, index) => {
+            const { fill, opacity } = shape.a;
+            const common = { fill, opacity };
+            switch (shape.t) {
+              case "circle":
+                return (
+                  <Circle
+                    key={index}
+                    cx={shape.a.cx}
+                    cy={shape.a.cy}
+                    r={shape.a.r}
+                    {...common}
+                  />
+                );
+              case "ellipse":
+                return (
+                  <Ellipse
+                    key={index}
+                    cx={shape.a.cx}
+                    cy={shape.a.cy}
+                    rx={shape.a.rx}
+                    ry={shape.a.ry}
+                    {...common}
+                  />
+                );
+              case "rect":
+                return (
+                  <Rect
+                    key={index}
+                    x={shape.a.x}
+                    y={shape.a.y}
+                    width={shape.a.width}
+                    height={shape.a.height}
+                    rx={shape.a.rx}
+                    ry={shape.a.ry}
+                    {...common}
+                  />
+                );
+              default:
+                return (
+                  <Path
+                    key={index}
+                    d={shape.a.d}
+                    fillRule={
+                      shape.a["fill-rule"] === "evenodd" ? "evenodd" : undefined
+                    }
+                    {...common}
+                  />
+                );
+            }
+          })}
+        </Svg>
+      ) : render.kind === "material" ? (
+        <MaterialIcons name={render.name} size={size} color={color} />
       ) : (
         <Ionicons name={render.name} size={size} color={color} />
       )}

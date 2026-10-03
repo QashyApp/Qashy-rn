@@ -7,7 +7,7 @@ import type { CustomThemeFile } from "@/theme/custom/schema";
 
 /** The smallest valid theme: both schemes are present; everything else is inherited from Classic. */
 export const MINIMAL_EXAMPLE: CustomThemeFile = {
-  themeSchemaVersion: 1,
+  themeSchemaVersion: 2,
   id: "forest-minimal",
   name: "Forest Minimal",
   palette: {
@@ -16,9 +16,9 @@ export const MINIMAL_EXAMPLE: CustomThemeFile = {
   },
 };
 
-/** A theme that uses every section: a bevel (pixel) look with Pixelify Sans, pixel icons and custom charts. */
+/** A theme that uses every section: a bevel (pixel) look with Pixelify Sans, pixel icons, a type scale and custom charts. */
 export const FULL_EXAMPLE: CustomThemeFile = {
-  themeSchemaVersion: 1,
+  themeSchemaVersion: 2,
   id: "moss-block",
   name: "Moss Block",
   extends: "classic",
@@ -58,18 +58,42 @@ export const FULL_EXAMPLE: CustomThemeFile = {
     presets: ["#4C9A2A", "#2F6F8F", "#B5651D", "#A33B2E", "#6B4E9B"],
   },
   shape: {
-    radius: { sm: 0, control: 0, tile: 0, card: 0, sheet: 0, nav: 0, pill: 0 },
+    radius: {
+      sm: 0,
+      control: 0,
+      tile: 0,
+      card: 0,
+      sheet: 0,
+      nav: 0,
+      fab: 0,
+      pill: 0,
+    },
     space: { xxs: 2, xs: 4, sm: 8, md: 12, lg: 16, xl: 20, xxl: 24, xxxl: 32 },
     tile: { size: 40, icon: 20, compactSize: 32, compactIcon: 16 },
   },
-  material: { engine: "bevel", gradients: false, bevelDepth: 2 },
+  material: {
+    engine: "bevel",
+    card: "outlined",
+    gradients: false,
+    bevelDepth: 2,
+  },
   motion: { press: "translate", pressTranslate: 2, durationScale: 0.8 },
   type: {
     text: { family: "pixelify-sans" },
     numeric: { family: "pixelify-sans" },
+    scale: {
+      title: { fontSize: 26, lineHeight: 32, letterSpacing: 0 },
+      label: { weight: "bold" },
+    },
   },
-  icons: { set: "pixel" },
+  icons: {
+    set: "pixel",
+    categorySet: "pixel",
+    badge: "filled",
+    badgeShape: "squircle",
+  },
   charts: {
+    tone: { containerMix: { light: 0.8, dark: 0.7 } },
     patterns: true,
     lineWidth: 3,
     donutThickness: 18,
@@ -85,5 +109,36 @@ export const FULL_EXAMPLE: CustomThemeFile = {
       "#2E8B7A",
       "#7A6A58",
     ],
+  },
+};
+
+/**
+ * A flat, Material-style theme built on Material You: the wallpaper accent on Android 12+, a
+ * hairline-outlined card, round filled category badges over colorful category art, and a bolder
+ * type scale in Inter.
+ */
+export const FLAT_EXAMPLE: CustomThemeFile = {
+  themeSchemaVersion: 2,
+  id: "paper-flat",
+  name: "Paper Flat",
+  extends: "material-you",
+  palette: {
+    light: { background: "#FBFBF7", surface: "#FFFFFF" },
+    dark: { background: "#101311", surface: "#181C19" },
+  },
+  accent: { mode: "system", default: "#2E7D5B" },
+  shape: { radius: { card: 20, fab: 28 } },
+  material: { engine: "flat", card: "outlined" },
+  motion: { press: "overlay" },
+  type: {
+    text: { family: "inter" },
+    numeric: { family: "inter" },
+    scale: { money: { weight: "bold" } },
+  },
+  icons: {
+    set: "material",
+    categorySet: "fluent-emoji-flat",
+    badge: "filled",
+    badgeShape: "circle",
   },
 };

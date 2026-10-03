@@ -4,7 +4,7 @@ import { View } from "react-native";
 
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
-import { AppIcon } from "@/components/ui/app-icon";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
@@ -28,7 +28,7 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
-import { ACCENT_PRESETS, toneColors } from "@/theme/tokens";
+import { ACCENT_PRESETS } from "@/theme/tokens";
 import { accountTypeLabel } from "@/utils/labels";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import {
@@ -59,7 +59,7 @@ export function AccountFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   const { t } = useLocalization();
   const existing = id
     ? state.accounts.find((item) => item.id === id)
@@ -184,6 +184,9 @@ export function AccountFormScreen() {
         expectedRevision,
       );
       hapticSuccess();
+      // Fire-and-forget: a new foreign account gets today's rate so its balance converts right
+      // away. Never blocks or fails the save.
+      exchangeRateService.ensureRatesForPending().catch(() => undefined);
       if (!existing && returnTo === "/transaction" && router.canGoBack()) {
         // Returning to the transaction sheet that opened this one, not to a section.
         allowLeave();
@@ -219,14 +222,6 @@ export function AccountFormScreen() {
 
   if (id && !existing) return <Redirect href="/more" />;
 
-  const preview = toneColors(
-    color,
-    theme.staticSurface,
-    theme.staticText,
-    theme.mode === "dark",
-    theme.charts.tone,
-  );
-
   return (
     <FormScreen contentContainerStyle={{ gap: 16 }}>
       {/* A hero preview of the tinted, raised tile this account will show everywhere else
@@ -239,24 +234,16 @@ export function AccountFormScreen() {
           paddingVertical: space.sm,
         }}
       >
-        <View
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: radius.card,
-            borderCurve: "continuous",
-            backgroundColor: preview.container,
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: theme.shadowRaised,
+        <IconBadge
+          icon={ACCOUNT_TYPE_ICONS[type]}
+          color={color}
+          fallback={{
+            container: theme.accentContainer,
+            onContainer: theme.onAccentContainer,
           }}
-        >
-          <AppIcon
-            name={ACCOUNT_TYPE_ICONS[type]}
-            color={preview.onContainer}
-            size={32}
-          />
-        </View>
+          size={72}
+          iconSize={32}
+        />
         {name.trim() ? (
           <AppText literal variant="headline" numberOfLines={1}>
             {name}

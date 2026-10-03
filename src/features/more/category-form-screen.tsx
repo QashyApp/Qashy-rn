@@ -4,7 +4,7 @@ import { View } from "react-native";
 
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
-import { AppIcon } from "@/components/ui/app-icon";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
@@ -19,10 +19,10 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
+import { toneColors } from "@/theme/tokens";
 import { categoryDeletionMessage } from "@/utils/category-impact";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { hapticSuccess } from "@/utils/haptics";
-import { toneColors } from "@/theme/tokens";
 
 const DEFAULT_ICON: Record<CategoryKind, string> = {
   expense: "ion:cart-outline",
@@ -36,7 +36,7 @@ export function CategoryFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   // Suggested colors for a new category come from the theme; a stored color is never rewritten.
   const COLORS = theme.charts.categoryPalette;
   const { t } = useLocalization();
@@ -168,20 +168,16 @@ export function CategoryFormScreen() {
           paddingVertical: space.sm,
         }}
       >
-        <View
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: radius.card,
-            borderCurve: "continuous",
-            backgroundColor: preview.container,
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: theme.shadowRaised,
+        <IconBadge
+          icon={icon}
+          color={color}
+          fallback={{
+            container: theme.accentContainer,
+            onContainer: theme.onAccentContainer,
           }}
-        >
-          <AppIcon name={icon} color={preview.onContainer} size={32} />
-        </View>
+          size={72}
+          iconSize={32}
+        />
         {name.trim() ? (
           <AppText literal variant="headline" numberOfLines={1}>
             {name}

@@ -856,6 +856,91 @@ test("pages the ledger by month and deep-links to one", async ({ page }) => {
   await expect(page.getByText("Last month rent")).toBeVisible();
 });
 
+/** Seeds one expense this month and one last month, then opens this month's ledger with swipe on. */
+async function openLedgerWithSwipe(page: Page) {
+  await completeOnboarding(page);
+  const now = new Date();
+  const last = new Date(now.getFullYear(), now.getMonth() - 1, 15);
+  const pad = (value: number) => String(value).padStart(2, "0");
+  const lastKey = `${last.getFullYear()}-${pad(last.getMonth() + 1)}`;
+  const thisKey = `${now.getFullYear()}-${pad(now.getMonth() + 1)}`;
+  // Wait for each sheet to close: a full reload while a save is in flight can drop the next page.
+  await addExpense(page, "This month coffee");
+  await expect(page).toHaveURL(/\/overview$/);
+  await addExpense(page, "Last month rent", `${lastKey}-15`);
+  await expect(page).toHaveURL(/\/overview$/);
+  await page.goto("/gestures");
+  const swipeSwitch = page.getByRole("switch", {
+    name: "Swipe to change month",
+  });
+  await swipeSwitch.click();
+  await expect(swipeSwitch).toBeChecked();
+  await page.goto(`/transactions?month=${thisKey}`);
+  await expect(page.getByText("This month coffee")).toBeVisible();
+  return { lastKey, thisKey };
+}
+
+test("swipes between months with a finger but not with a mouse", async ({
+  page,
+  browserName,
+  isMobile,
+}) => {
+  test.skip(
+    browserName !== "chromium",
+    "Touch input is injected through the Chrome DevTools Protocol.",
+  );
+  const { lastKey } = await openLedgerWithSwipe(page);
+
+  // A mouse drag across the list must stay inert (desktop text selection).
+  if (!isMobile) {
+    await page.mouse.move(700, 600);
+    await page.mouse.down();
+    await page.mouse.move(1100, 600, { steps: 12 });
+    await page.mouse.up();
+    await expect(page.getByText("This month coffee")).toBeVisible();
+    await expect(page.getByText("Last month rent")).toHaveCount(0);
+    return;
+  }
+
+  // A vertical-dominant finger drag must not change the month.
+  const cdp = await page.context().newCDPSession(page);
+  const drag = async (from: [number, number], to: [number, number]) => {
+    const steps = 14;
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchStart",
+      touchPoints: [{ x: from[0], y: from[1] }],
+    });
+    for (let i = 1; i <= steps; i += 1) {
+      await cdp.send("Input.dispatchTouchEvent", {
+        type: "touchMove",
+        touchPoints: [
+          {
+            x: from[0] + ((to[0] - from[0]) * i) / steps,
+            y: from[1] + ((to[1] - from[1]) * i) / steps,
+          },
+        ],
+      });
+    }
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchEnd",
+      touchPoints: [],
+    });
+  };
+  const width = page.viewportSize()?.width ?? 400;
+  await drag([width / 2, 650], [width / 2 + 10, 350]);
+  await expect(page.getByText("This month coffee")).toBeVisible();
+
+  // A short horizontal drag springs back.
+  await drag([width / 2, 500], [width / 2 + 30, 502]);
+  await expect(page.getByText("This month coffee")).toBeVisible();
+
+  // A long drag toward the end edge steps back a month.
+  await drag([40, 500], [width - 40, 505]);
+  await expect(page.getByText("Last month rent")).toBeVisible();
+  await expect(page.getByText("This month coffee")).toHaveCount(0);
+  await expect(page).toHaveURL(new RegExp(`month=${lastKey}$`));
+});
+
 // --- Automatic exchange rates (Frankfurter) -------------------------------------------------
 //
 // These onboard with EUR as the base currency (rather than the default USD) so a USD account is
@@ -899,7 +984,7 @@ function todayKey(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
-test("never contacts frankfurter.dev while automatic rates are off", async ({
+test("never contacts frankfurter.dev once automatic rates are turned off", async ({
   page,
 }) => {
   const requests: string[] = [];
@@ -913,6 +998,14 @@ test("never contacts frankfurter.dev while automatic rates are off", async ({
   });
 
   await completeOnboardingWithCurrency(page, "EUR");
+  // Automatic rates are on by default; this test is about the opted-out state.
+  await page.getByRole("link", { name: "More" }).click();
+  await page.getByRole("button", { name: /Exchange rates/ }).click();
+  await page.getByRole("switch", { name: "Fetch rates automatically" }).click();
+  await expect(
+    page.getByRole("switch", { name: "Fetch rates automatically" }),
+  ).not.toBeChecked();
+  await page.goBack();
   await createAccount(page, "Card", "USD");
 
   // The floating "Add transaction" action lives on Overview/Transactions, not on More, where
@@ -946,7 +1039,7 @@ test("never contacts frankfurter.dev while automatic rates are off", async ({
   expect(requests).toEqual([]);
 });
 
-test("fetches automatic rates once enabled and applies them to a transaction", async ({
+test("fetches automatic rates by default and applies them to a transaction", async ({
   page,
 }) => {
   const today = todayKey();
@@ -965,10 +1058,10 @@ test("fetches automatic rates once enabled and applies them to a transaction", a
   await completeOnboardingWithCurrency(page, "EUR");
   await createAccount(page, "Card", "USD");
 
-  await page.getByRole("link", { name: "More" }).click();
-  await page.getByRole("button", { name: /Exchange rates/ }).click();
-  await expect(page).toHaveURL(/\/exchange-rates$/);
-  await page.getByRole("switch", { name: "Fetch rates automatically" }).click();
+  // Automatic rates are on by default: picking the foreign account is enough to fetch its rate.
+  await page.getByRole("link", { name: "Overview" }).click();
+  await page.getByLabel("Add transaction").first().click();
+  await page.getByRole("radio", { name: "Card · USD" }).click();
 
   await expect.poll(() => requests.length).toBeGreaterThan(0);
   const firstRequest = new URL(requests[0]!);
@@ -977,14 +1070,6 @@ test("fetches automatic rates once enabled and applies them to a transaction", a
   for (const key of firstRequest.searchParams.keys()) {
     expect(allowedParams.has(key)).toBe(true);
   }
-
-  // Back into the app (no reload) to open a fresh expense on the USD account. The rate this
-  // just fetched is already in the finance snapshot, so the applied-rate line needs no further
-  // network round trip.
-  await page.goBack();
-  await page.getByRole("link", { name: "Overview" }).click();
-  await page.getByLabel("Add transaction").first().click();
-  await page.getByRole("radio", { name: "Card · USD" }).click();
   // 1 EUR = 1.25 USD, EUR is the base, so 1 USD = 1 / 1.25 = 0.8 EUR.
   await expect(page.getByText(/1 USD = 0\.8 EUR.*Automatic/)).toBeVisible();
 
@@ -995,6 +1080,32 @@ test("fetches automatic rates once enabled and applies them to a transaction", a
   // The ledger shows the transaction in its own account currency (USD); it does not additionally
   // surface a base-converted amount per row, so there is nothing further to assert about that.
   await expect(page.getByText("Coffee in USD")).toBeVisible();
+});
+
+test("looks up the rate on the spot in the recurring form", async ({
+  page,
+}) => {
+  const today = todayKey();
+  await page.route("https://api.frankfurter.dev/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { date: today, base: "EUR", quote: "USD", rate: 1.25 },
+      ]),
+    });
+  });
+
+  await completeOnboardingWithCurrency(page, "EUR");
+  await page.getByRole("link", { name: "More" }).click();
+  await page.getByRole("button", { name: "New recurring" }).click();
+  await page.getByRole("switch", { name: "Paid in another currency" }).click();
+  await page.getByRole("button", { name: "Foreign currency" }).click();
+  await page.getByLabel("Search foreign currency").fill("USD");
+  await page.getByRole("radio", { name: /USD/ }).first().click();
+
+  // 1 EUR = 1.25 USD, so 1 USD = 0.8 EUR — with no manual rate and nothing turned on by hand.
+  await expect(page.getByText(/1 USD = 0\.8 EUR.*Automatic/)).toBeVisible();
 });
 
 test("shows a clear error when frankfurter fails, and the rest of the app keeps working", async ({
@@ -1009,13 +1120,12 @@ test("shows a clear error when frankfurter fails, and the rest of the app keeps 
   );
 
   await completeOnboardingWithCurrency(page, "EUR");
-  // A foreign-currency account is required for `refreshLatest` to attempt a fetch at all — a
+  // A foreign-currency account is required for any rate lookup to be attempted at all — a
   // vault with only base-currency accounts has nothing to fetch and never calls the network.
   await createAccount(page, "Card", "USD");
 
   await page.getByRole("link", { name: "More" }).click();
   await page.getByRole("button", { name: /Exchange rates/ }).click();
-  await page.getByRole("switch", { name: "Fetch rates automatically" }).click();
 
   await expect(page.getByRole("alert")).toContainText(
     "frankfurter.dev returned an error.",

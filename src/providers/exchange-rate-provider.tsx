@@ -45,22 +45,25 @@ export const exchangeRateService = createExchangeRateService({
 });
 
 /**
- * How long `FinanceProvider` is willing to let a refresh delay startup or a foreground resume.
- * The refresh itself keeps running after this if it hasn't settled — this only stops it from
- * being on the critical path, since `refreshLatest` already reports its own outcome to `status`
+ * How long `FinanceProvider` is willing to let a rate lookup delay startup or a foreground
+ * resume. The lookup itself keeps running after this if it hasn't settled — this only stops it
+ * from being on the critical path, since the service already reports its own outcome to `status`
  * rather than throwing.
  */
 export const EXCHANGE_RATE_STARTUP_CAP_MS = 4_000;
 
 /**
- * Runs `refreshLatest`, but never makes a caller wait longer than the cap for it. Exported so
- * `FinanceProvider` can call it before `generateRecurring()` without inlining the race there.
+ * Looks up the rates the vault is about to use (today's rate for foreign accounts, and every
+ * rate a due recurring rule needs), but never makes a caller wait longer than the cap for it.
+ * Exported so `FinanceProvider` can call it before `generateRecurring()` without inlining the
+ * race there.
  */
-export function refreshRatesWithCap(
-  options: { force?: boolean } = {},
-): Promise<void> {
+export function ensurePendingRatesWithCap(): Promise<void> {
   return Promise.race([
-    exchangeRateService.refreshLatest(options).catch(() => undefined),
+    exchangeRateService.ensureRatesForPending().then(
+      () => undefined,
+      () => undefined,
+    ),
     new Promise<void>((resolve) =>
       setTimeout(resolve, EXCHANGE_RATE_STARTUP_CAP_MS),
     ),

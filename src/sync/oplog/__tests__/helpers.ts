@@ -61,6 +61,11 @@ export const settings = (over: Partial<AppSettings> = {}): AppSettings => ({
   accentSource: "system",
   accentHex: "#5966E9",
   swipeBetweenMonths: false,
+  navBarStyle: "native",
+  fontTextOverride: null,
+  fontNumericOverride: null,
+  uiIconSetOverride: null,
+  categoryIconSetOverride: null,
   ...over,
 });
 

@@ -46,8 +46,8 @@ export interface MotionSpec {
   };
   /** How far a raised control sinks when pressed. */
   readonly pressScale: number;
-  /** `scale` shrinks a pressed control by `pressScale`; `translate` shifts it down `pressTranslate` px instead. */
-  readonly press: "scale" | "translate";
+  /** `scale` shrinks a pressed control by `pressScale`; `translate` shifts it down `pressTranslate` px instead; `overlay` neither moves nor shrinks it (the pressed material's tonal fill is the feedback). */
+  readonly press: "scale" | "translate" | "overlay";
   readonly pressTranslate: number;
 }
 
@@ -55,10 +55,17 @@ export interface MotionSpec {
  * How surfaces are built. `soft` is the layered blur-shadow look; `bevel` is a hard-edged
  * (0px blur) pixel look derived by `bevelShadowSet`. The shadow strings themselves still live
  * in `ThemeDefinition.shadows`, so any theme can hand-write them; the engine only decides how
- * the accent material is derived and whether `gradients` are layered on top.
+ * the accent material is derived and whether `gradients` are layered on top. `flat` is the
+ * Material 3 look: no gradients, no drop shadows (derived by `flatShadowSet`), depth from tonal
+ * surface steps and outlines, press feedback as a tonal overlay.
  */
 export interface MaterialSpec {
-  engine: "soft" | "bevel";
+  engine: "soft" | "bevel" | "flat";
+  /**
+   * How a card/list/tile surface is drawn. `elevated`: the theme's raised material. `outlined`:
+   * the surface with a hairline ring and no shadow. `tonal`: a tonal container fill, no ring.
+   */
+  card: "elevated" | "outlined" | "tonal";
   /** Layer the subtle surface/accent gradients. Off for flat or pixel looks. */
   gradients: boolean;
   /** Bevel thickness in px, used by the accent material when `engine` is `bevel`. */
@@ -106,10 +113,19 @@ export interface TypeSpec {
   scale: TypeScaleSpec;
 }
 
+/** How an entity's icon sits in its badge: a tint of its color, a solid fill of its color, or bare. */
+export type IconBadgeStyle = "tinted" | "filled" | "none";
+export type IconBadgeShape = "circle" | "squircle";
+
 /** Which glyph set draws `ion:` and legacy icon ids. `ionicons` is the default; `emoji:` ids ignore it. */
 export interface IconSpec {
-  /** An id in the icon-set registry (`src/theme/icon-sets.ts`). */
+  /** The UI set (navigation, buttons, menus): an id in the icon-set registry (`src/theme/icon-sets.ts`). */
   set: string;
+  /** The set that draws entity icons (categories, accounts, goals). Defaults to `set`. */
+  categorySet?: string;
+  /** Classic is `tinted`. */
+  badge: IconBadgeStyle;
+  badgeShape: IconBadgeShape;
 }
 
 export interface ChartSpec {
@@ -170,6 +186,11 @@ export interface ThemeDefinition {
     default: string;
     /** Curated swatches offered on the Appearance screen. */
     presets: readonly string[];
+    /**
+     * Wash the neutral surfaces with a user-picked (non-system) accent, like the wallpaper palette
+     * does. Only meaningful for `user` mode; off when omitted.
+     */
+    tintSurfaces?: boolean;
   };
 }
 

@@ -1,6 +1,7 @@
 import { View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
+import { IconBadge } from "@/components/ui/icon-badge";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { MotionView } from "@/components/ui/motion";
@@ -11,7 +12,6 @@ import { currencyLabel } from "@/features/onboarding/steps/currency-step";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { toneColors } from "@/theme/tokens";
 import { formatMoney, parseMoney } from "@/utils/money";
 
 /**
@@ -109,13 +109,6 @@ export function ReadyStep({ draft }: { draft: OnboardingDraft }) {
           style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}
         >
           {categories.map((category) => {
-            const tone = toneColors(
-              category.color,
-              theme.staticSurface,
-              theme.staticText,
-              theme.mode === "dark",
-              theme.charts.tone,
-            );
             return (
               <View
                 key={category.name}
@@ -131,22 +124,16 @@ export function ReadyStep({ draft }: { draft: OnboardingDraft }) {
                   backgroundColor: theme.surface,
                 }}
               >
-                <View
-                  style={{
-                    width: 26,
-                    height: 26,
-                    borderRadius: radius.pill,
-                    backgroundColor: tone.container,
-                    alignItems: "center",
-                    justifyContent: "center",
+                <IconBadge
+                  icon={category.icon}
+                  color={category.color}
+                  fallback={{
+                    container: theme.accentContainer,
+                    onContainer: theme.onAccentContainer,
                   }}
-                >
-                  <AppIcon
-                    name={category.icon}
-                    color={tone.onContainer}
-                    size={14}
-                  />
-                </View>
+                  size={26}
+                  iconSize={14}
+                />
                 <AppText
                   literal
                   variant="caption"

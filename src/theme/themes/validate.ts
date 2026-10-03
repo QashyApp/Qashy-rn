@@ -66,9 +66,13 @@ function assertMotion(theme: ThemeDefinition) {
   positive(motion.pressScale, "pressScale");
   if (motion.pressScale > 1)
     throw new Error(`Theme "${theme.id}" motion.pressScale must be at most 1.`);
-  if (motion.press !== "scale" && motion.press !== "translate") {
+  if (
+    motion.press !== "scale" &&
+    motion.press !== "translate" &&
+    motion.press !== "overlay"
+  ) {
     throw new Error(
-      `Theme "${theme.id}" motion.press must be "scale" or "translate".`,
+      `Theme "${theme.id}" motion.press must be "scale", "translate" or "overlay".`,
     );
   }
   if (
@@ -86,9 +90,23 @@ function assertMotion(theme: ThemeDefinition) {
 function assertMaterial(theme: ThemeDefinition) {
   const material = theme.material;
   if (!material) throw new Error(`Theme "${theme.id}" must define material.`);
-  if (material.engine !== "soft" && material.engine !== "bevel") {
+  if (
+    material.engine !== "soft" &&
+    material.engine !== "bevel" &&
+    material.engine !== "flat"
+  ) {
     throw new Error(
-      `Theme "${theme.id}" material.engine must be "soft" or "bevel".`,
+      `Theme "${theme.id}" material.engine must be "soft", "bevel" or "flat".`,
+    );
+  }
+  if (!["elevated", "outlined", "tonal"].includes(material.card)) {
+    throw new Error(
+      `Theme "${theme.id}" material.card must be "elevated", "outlined" or "tonal".`,
+    );
+  }
+  if (material.engine === "flat" && material.gradients) {
+    throw new Error(
+      `Theme "${theme.id}" material.gradients must be false for the flat engine.`,
     );
   }
   if (typeof material.gradients !== "boolean")
@@ -170,6 +188,14 @@ function assertCharts(theme: ThemeDefinition) {
     if (typeof mix !== "number" || !(mix > 0 && mix < 1)) {
       throw new Error(
         `Theme "${theme.id}" charts.tone.containerMix.${scheme} must be a number between 0 and 1 (exclusive).`,
+      );
+    }
+  }
+  for (const scheme of SCHEMES) {
+    const mix = tone.containerMix[scheme];
+    if (mix < 0.5 || mix > 0.95) {
+      throw new Error(
+        `Theme "${theme.id}" charts.tone.containerMix.${scheme} must be between 0.5 and 0.95.`,
       );
     }
   }
@@ -277,6 +303,25 @@ function assertIcons(theme: ThemeDefinition) {
   if (typeof set !== "string" || !ICON_SET_IDS.includes(set)) {
     throw new Error(
       `Theme "${theme.id}" icons.set must be a registered icon set (${ICON_SET_IDS.join(", ")}).`,
+    );
+  }
+  const categorySet = theme.icons.categorySet;
+  if (
+    categorySet !== undefined &&
+    (typeof categorySet !== "string" || !ICON_SET_IDS.includes(categorySet))
+  ) {
+    throw new Error(
+      `Theme "${theme.id}" icons.categorySet must be a registered icon set (${ICON_SET_IDS.join(", ")}).`,
+    );
+  }
+  if (!["tinted", "filled", "none"].includes(theme.icons.badge)) {
+    throw new Error(
+      `Theme "${theme.id}" icons.badge must be "tinted", "filled" or "none".`,
+    );
+  }
+  if (!["circle", "squircle"].includes(theme.icons.badgeShape)) {
+    throw new Error(
+      `Theme "${theme.id}" icons.badgeShape must be "circle" or "squircle".`,
     );
   }
 }

@@ -57,13 +57,13 @@ export const classicTheme: ThemeDefinition = {
   tile,
   iconSize,
   motion,
-  material: { engine: "soft", gradients: true, bevelDepth: 0 },
+  material: { engine: "soft", card: "elevated", gradients: true, bevelDepth: 0 },
   type: {
     text: { family: "rubik", fallbacks: [] },
     numeric: { family: "space-grotesk", fallbacks: ["rubik"] },
     scale: typeScale,
   },
-  icons: { set: "ionicons" },
+  icons: { set: "ionicons", badge: "tinted", badgeShape: "squircle" },
   charts: {
     lineWidth: 2.5,
     sparklineWidth: 2,

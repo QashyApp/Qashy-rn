@@ -42,6 +42,11 @@ export const initialSettings = (): AppSettings => {
     accentSource: "system",
     accentHex: QASHY_ACCENT,
     swipeBetweenMonths: false,
+    navBarStyle: "native",
+    fontTextOverride: null,
+    fontNumericOverride: null,
+    uiIconSetOverride: null,
+    categoryIconSetOverride: null,
   });
 };
 

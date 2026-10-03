@@ -30,6 +30,12 @@ const lightPalette: BaseTokens = {
   negative: "#B3001B",
   warning: "#7A4400",
   transfer: "#0A3FBF",
+  secondaryContainer: "#E2E2E2",
+  onSecondaryContainer: "#000000",
+  tertiaryContainer: "#E1E8FA",
+  onTertiaryContainer: "#0A3FBF",
+  headerBackground: "#F0F0F0",
+  navBackground: "#FFFFFF",
 };
 
 const darkPalette: BaseTokens = {
@@ -45,6 +51,12 @@ const darkPalette: BaseTokens = {
   negative: "#FF8D9A",
   warning: "#FFD25A",
   transfer: "#8FB6FF",
+  secondaryContainer: "#242424",
+  onSecondaryContainer: "#FFFFFF",
+  tertiaryContainer: "#16213D",
+  onTertiaryContainer: "#8FB6FF",
+  headerBackground: "#000000",
+  navBackground: "#161616",
 };
 
 export function outlineShadows(palette: BaseTokens, scrim: string): ShadowSet {
@@ -81,6 +93,7 @@ const radius: RadiusScale = {
   card: 12,
   sheet: 16,
   nav: 10,
+  fab: 999,
   pill: 999,
 };
 
@@ -121,13 +134,13 @@ export const highContrastTheme: ThemeDefinition = {
   tile,
   iconSize,
   motion: { ...motion, press: "scale" },
-  material: { engine: "soft", gradients: false, bevelDepth: 0 },
+  material: { engine: "soft", card: "elevated", gradients: false, bevelDepth: 0 },
   type: {
     text: { family: "rubik", fallbacks: [] },
     numeric: { family: "space-grotesk", fallbacks: ["rubik"] },
     scale,
   },
-  icons: { set: "ionicons" },
+  icons: { set: "ionicons", badge: "tinted", badgeShape: "squircle" },
   charts: {
     lineWidth: 3,
     sparklineWidth: 3,

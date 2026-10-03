@@ -3,6 +3,10 @@
   "main": "expo-router/entry",
   "version": "1.0.0",
   "dependencies": {
+    "@expo-google-fonts/atkinson-hyperlegible": "^0.4.1",
+    "@expo-google-fonts/figtree": "^0.4.1",
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/nunito": "^0.4.2",
     "@expo-google-fonts/pixelify-sans": "^0.4.2",
     "@expo-google-fonts/rubik": "^0.4.2",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
@@ -61,6 +65,7 @@
     "eslint-config-expo": "^57.0.0",
     "fake-indexeddb": "^6.2.5",
     "jest-expo": "^57.0.1",
+    "patch-package": "^8.0.1",
     "prettier": "^3.9.9",
     "serve": "^14.2.6",
     "typescript": "~6.0.3",
@@ -75,6 +80,7 @@
     }
   },
   "scripts": {
+    "postinstall": "patch-package",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",

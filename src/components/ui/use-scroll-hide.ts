@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
+import { getFloatingBarVisibility } from "@/components/navigation/floating-bar-visibility";
 import {
   Easing,
   ReduceMotion,
@@ -25,13 +26,14 @@ export function useScrollHide() {
   const setShown = (next: boolean) => {
     if (shown.current === next) return;
     shown.current = next;
-    visibility.set(
-      withTiming(next ? 1 : 0, {
-        duration: 200,
-        easing: Easing.out(Easing.cubic),
-        reduceMotion: ReduceMotion.System,
-      }),
-    );
+    const timing = {
+      duration: 200,
+      easing: Easing.out(Easing.cubic),
+      reduceMotion: ReduceMotion.System,
+    };
+    visibility.set(withTiming(next ? 1 : 0, timing));
+    // The Android floating tab bar tucks away with the FAB (a no-op for every other bar).
+    getFloatingBarVisibility().set(withTiming(next ? 1 : 0, timing));
   };
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {

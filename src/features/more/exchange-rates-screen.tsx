@@ -2,7 +2,6 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, ScrollView, View } from "react-native";
 
-import { ActionButton } from "@/components/ui/action-button";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { QashySwitch } from "@/components/ui/qashy-switch";
@@ -26,8 +25,6 @@ import { errorMessage, showError } from "@/utils/confirm";
 import { endOfMonth, mediumDate, startOfMonth } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
 import { isFetchedRate } from "@/utils/deterministic-id";
-import { useNow } from "@/utils/use-now";
-import { relativeTime } from "@/utils/relative-time";
 
 // A settings row is a 38pt icon tile plus a 12pt gap; matches `more-screen.tsx`'s own rows so
 // the divider lines up with the text rather than the icon.
@@ -55,10 +52,9 @@ export function ExchangeRatesScreen() {
   const { radius, space } = theme;
   const rowDividerInset = 38 + space.md;
   const { t } = useLocalization();
-  const now = useNow();
   const [toggling, setToggling] = useState(false);
 
-  // Only consulted while auto-fetch is off — `summary.missingExchangeRates` already answers
+  // Only consulted while auto-fetch is off or failing — `summary.missingExchangeRates` already answers
   // "what does this vault currently lack a usable rate for", so this reuses it instead of
   // recomputing the same thing a second way.
   const summary = useDashboardRange(startOfMonth(), endOfMonth());
@@ -82,7 +78,7 @@ export function ExchangeRatesScreen() {
       });
       covered.add(conflict.fromCurrency);
     }
-    if (!status.enabled) {
+    if (!status.enabled || status.lastError) {
       for (const missing of summary.missingExchangeRates) {
         if (covered.has(missing.fromCurrency)) continue;
         rows.push({
@@ -98,6 +94,7 @@ export function ExchangeRatesScreen() {
     status.unsupported,
     status.conflicts,
     status.enabled,
+    status.lastError,
     summary.missingExchangeRates,
   ]);
 
@@ -116,10 +113,6 @@ export function ExchangeRatesScreen() {
     [state.exchangeRates],
   );
 
-  const lastUpdated = status.lastRefreshAt
-    ? relativeTime(status.lastRefreshAt, now)
-    : "";
-
   const toggle = async (next: boolean) => {
     if (toggling) return;
     setToggling(true);
@@ -136,11 +129,6 @@ export function ExchangeRatesScreen() {
     } finally {
       setToggling(false);
     }
-  };
-
-  const refresh = () => {
-    if (status.fetching) return;
-    service.refreshLatest({ force: true }).catch(() => undefined);
   };
 
   return (
@@ -170,7 +158,7 @@ export function ExchangeRatesScreen() {
           <View style={{ flex: 1, gap: 2 }}>
             <AppText variant="label">Fetch rates automatically</AppText>
             <AppText variant="caption" muted>
-              Off by default. Sends only currency codes and dates to
+              On by default. Sends only currency codes and dates to
               frankfurter.dev — never amounts or account details. Frankfurter
               can see your IP address.
             </AppText>
@@ -199,36 +187,6 @@ export function ExchangeRatesScreen() {
               {t("Fetching latest rates…")}
             </AppText>
           </View>
-        ) : null}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 14,
-          }}
-        >
-          <AppText literal variant="caption" muted>
-            {lastUpdated
-              ? `${t("Last updated")} ${lastUpdated}`
-              : t("Never updated")}
-          </AppText>
-          <ActionButton
-            title={status.fetching ? "Refreshing…" : "Refresh now"}
-            variant="secondary"
-            onPress={refresh}
-            disabled={status.fetching || !status.enabled}
-          />
-        </View>
-        {status.enabled &&
-        !status.fetching &&
-        !status.lastError &&
-        (status.nothingNeeded || status.lastWritten !== null) ? (
-          <AppText literal variant="caption" muted>
-            {status.nothingNeeded
-              ? "Nothing to update: none of your accounts or recurring rules use a currency other than your base currency."
-              : `Fetched ${status.lastWritten} rate${status.lastWritten === 1 ? "" : "s"} from frankfurter.dev.`}
-          </AppText>
         ) : null}
         {status.lastError ? (
           <AppText

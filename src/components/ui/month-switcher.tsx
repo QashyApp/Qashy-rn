@@ -20,9 +20,8 @@ export type MonthDirection = "left" | "right";
 
 /**
  * Steps through calendar months. `value` is always the first day of a month
- * (`YYYY-MM-01`); `onChange` receives the new first day plus the direction the
- * content should slide, so screens can animate their month-scoped content the
- * same way the label moves.
+ * (`YYYY-MM-01`); `onChange` receives the new first day plus the direction of
+ * travel, which a screen's month pager uses to slide toward that month.
  *
  * The label itself is a button: it opens a year/month grid for jumping further
  * than one step at a time.
@@ -31,14 +30,12 @@ export function MonthSwitcher({
   value,
   onChange,
   max,
-  direction = "right",
   disabled = false,
 }: {
   value: string;
   onChange: (month: string, direction: MonthDirection) => void;
   /** First day of the latest selectable month. Omit to allow any future month. */
   max?: string;
-  direction?: MonthDirection;
   disabled?: boolean;
 }) {
   const theme = useQashyTheme();
@@ -92,16 +89,14 @@ export function MonthSwitcher({
           borderRadius: radius.pill,
         }}
       >
-        <MotionView key={value} variant={direction} duration={180}>
-          <AppText
-            literal
-            variant="label"
-            numeric
-            style={{ textAlign: "center" }}
-          >
-            {monthLabel(value, locale)}
-          </AppText>
-        </MotionView>
+        <AppText
+          literal
+          variant="label"
+          numeric
+          style={{ textAlign: "center" }}
+        >
+          {monthLabel(value, locale)}
+        </AppText>
       </MotionPressable>
       <IconButton
         label="Next month"

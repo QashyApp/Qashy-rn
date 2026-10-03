@@ -2,6 +2,8 @@ export type CurrencyCode = string;
 
 export type ThemeMode = "system" | "light" | "dark";
 export type AccentSource = "system" | "preset" | "custom";
+export type NavBarStyle = "native" | "floating";
+export const NAV_BAR_STYLES: readonly NavBarStyle[] = ["native", "floating"];
 export type AccountType = "cash" | "checking" | "savings" | "credit" | "wallet";
 export type CategoryKind = "expense" | "income";
 export type TransactionKind = "expense" | "income" | "transfer";
@@ -34,6 +36,18 @@ export interface AppSettings extends SyncEntity {
   accentHex: string;
   /** Per device (`deviceLocal`). Swipe sideways on Overview and Transactions to change month. Saves from before this existed read as off. */
   swipeBetweenMonths?: boolean;
+  /** Per device (`deviceLocal`). Android only: the platform bar or an inset floating pill. Saves from before this existed read as native. */
+  navBarStyle?: NavBarStyle;
+  /**
+   * Per device (`deviceLocal`). Appearance overrides that sit on top of the active theme: a font
+   * registry id for text / figures, an icon-set id for the UI chrome / for category and account
+   * icons. `null` (or absent) follows the theme; an id this device cannot resolve also falls back
+   * to the theme, so they are never validated against a registry here.
+   */
+  fontTextOverride?: string | null;
+  fontNumericOverride?: string | null;
+  uiIconSetOverride?: string | null;
+  categoryIconSetOverride?: string | null;
 }
 
 export interface Account extends SyncEntity {

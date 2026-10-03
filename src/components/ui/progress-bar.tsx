@@ -14,7 +14,11 @@ import Animated, {
 } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
 
-import { motionCurves } from "@/components/ui/motion";
+import {
+  motionCurves,
+  usePageMotionRef,
+  useRevealAllowedAtMount,
+} from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -58,9 +62,12 @@ export function ProgressBar({
   const safeValue = Number.isFinite(value) ? value : 0;
   const clamped = Math.max(0, Math.min(1, safeValue));
   const reduceMotion = useReducedMotion();
-  const progress = useSharedValue(reduceMotion ? clamped : 0);
+  const revealAllowed = useRevealAllowedAtMount();
+  const drawnAtMount = reduceMotion || !revealAllowed;
+  const progress = useSharedValue(drawnAtMount ? clamped : 0);
   const pulse = useSharedValue(1);
   const colorMix = useSharedValue(1);
+  const pageMotion = usePageMotionRef();
   // theme.accent is an opaque PlatformColor object under Material You, and
   // String() on it yields "[object Object]", which paints nothing. Reanimated's
   // interpolateColor needs a real parsable color, so keep a hex on both sides.
@@ -95,6 +102,10 @@ export function ProgressBar({
 
   useEffect(() => {
     if (colorPair.from === colorPair.to) return;
+    if (!pageMotion.current) {
+      colorMix.set(1);
+      return;
+    }
     colorMix.set(0);
     colorMix.set(
       withTiming(1, {
@@ -103,13 +114,18 @@ export function ProgressBar({
         reduceMotion: ReduceMotion.System,
       }),
     );
-  }, [colorMix, colorPair]);
+  }, [colorMix, colorPair, pageMotion]);
 
   useEffect(() => {
     const previous = previousValueRef.current;
     previousValueRef.current = safeValue;
     if (!mountedRef.current) {
       mountedRef.current = true;
+      // A neighbouring month arrives already filled.
+      if (!pageMotion.current) {
+        progress.set(clamped);
+        return;
+      }
       progress.set(
         withTiming(clamped, {
           duration: 420,
@@ -132,7 +148,7 @@ export function ProgressBar({
         withTiming(1, { duration: 240, easing: motionCurves.inOut }),
       ),
     );
-  }, [clamped, progress, pulse, reduceMotion, safeValue]);
+  }, [clamped, progress, pulse, reduceMotion, safeValue, pageMotion]);
 
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ scaleY: pulse.value }],
@@ -254,7 +270,9 @@ export function ProgressRing({
   const safeValue = Number.isFinite(value) ? value : 0;
   const clamped = Math.max(0, Math.min(1, safeValue));
   const reduceMotion = useReducedMotion();
-  const progress = useSharedValue(reduceMotion ? clamped : 0);
+  const revealAllowed = useRevealAllowedAtMount();
+  const drawnAtMount = reduceMotion || !revealAllowed;
+  const progress = useSharedValue(drawnAtMount ? clamped : 0);
 
   const staticFallback =
     typeof theme.staticAccent === "string" && theme.staticAccent
@@ -271,9 +289,10 @@ export function ProgressRing({
       ? theme.surfaceSunken
       : staticFallback;
 
+  const pageMotion = usePageMotionRef();
   useEffect(() => {
     progress.set(
-      reduceMotion
+      reduceMotion || !pageMotion.current
         ? clamped
         : withTiming(clamped, {
             duration: 420,
@@ -281,7 +300,7 @@ export function ProgressRing({
             reduceMotion: ReduceMotion.System,
           }),
     );
-  }, [clamped, progress, reduceMotion]);
+  }, [clamped, progress, reduceMotion, pageMotion]);
 
   const radiusPx = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radiusPx;

@@ -1,13 +1,15 @@
 import { clampPaletteContrast } from "@/theme/custom/contrast";
-import { FONT_REGISTRY } from "@/theme/fonts";
+import { FONT_REGISTRY, stackFor } from "@/theme/fonts";
 import { ICON_SET_IDS } from "@/theme/icon-sets";
-import { bevelShadowSet } from "@/theme/shadow";
+import { bevelShadowSet, flatShadowSet } from "@/theme/shadow";
 import { BUILT_IN_THEMES } from "@/theme/themes/registry";
 import { classicTheme } from "@/theme/themes/classic";
 import { outlineShadows } from "@/theme/themes/high-contrast";
 import {
   THEME_ID_PATTERN,
   type ChartSpec,
+  type IconBadgeShape,
+  type IconBadgeStyle,
   type MaterialSpec,
   type MotionSpec,
   type RadiusScale,
@@ -16,9 +18,17 @@ import {
   type ThemeDefinition,
   type ThemeScheme,
   type TileScale,
+  type TypeScaleSpec,
+  type TypeStyleSpec,
 } from "@/theme/themes/types";
 import { assertThemeDefinition } from "@/theme/themes/validate";
-import { darkTokens, type BaseTokens } from "@/theme/tokens";
+import {
+  ROLE_TOKEN_KEYS,
+  darkTokens,
+  derivedRoleTokens,
+  type BaseTokens,
+  type FontWeightName,
+} from "@/theme/tokens";
 
 /**
  * User-authored themes: a versioned, declarative JSON file that is validated, merged over a
@@ -37,40 +47,72 @@ import { darkTokens, type BaseTokens } from "@/theme/tokens";
  * See docs/theming-plan.md, Phase 11.
  */
 
-export const CUSTOM_THEME_SCHEMA_VERSION = 1;
+/**
+ * The version this build writes. Version 1 files still parse; fields introduced by version 2 are
+ * rejected in a version 1 file ("requires themeSchemaVersion 2"), so a file never silently
+ * means different things in different versions.
+ */
+export const CUSTOM_THEME_SCHEMA_VERSION = 2;
+export const SUPPORTED_SCHEMA_VERSIONS = [1, 2] as const;
+export type CustomThemeSchemaVersion =
+  (typeof SUPPORTED_SCHEMA_VERSIONS)[number];
 export const MAX_CUSTOM_THEME_BYTES = 16 * 1024;
 export const MAX_ACCENT_PRESETS = 12;
 
 type Hex = string;
 
 export interface CustomThemeFile {
-  themeSchemaVersion: 1;
+  themeSchemaVersion: CustomThemeSchemaVersion;
   id: string;
   name: string;
   /** A built-in theme id. Defaults to `classic`. A custom theme cannot extend another custom theme. */
   extends?: string;
   /** Both schemes are required and non-empty. Unspecified keys inherit from the `extends` theme's same scheme. */
   palette: { light: Partial<BaseTokens>; dark: Partial<BaseTokens> };
-  accent?: { mode?: "user" | "fixed"; default?: Hex; presets?: Hex[] };
+  accent?: {
+    /** `system` (version 2): the wallpaper accent on Android 12+, `default` everywhere else. */
+    mode?: "user" | "fixed" | "system";
+    default?: Hex;
+    presets?: Hex[];
+  };
   shape?: {
     radius?: Partial<RadiusScale>;
     space?: Partial<SpaceScale>;
     tile?: Partial<TileScale>;
   };
   material?: {
-    engine?: "soft" | "bevel";
+    /** `flat` (version 2): no gradients or drop shadows, depth from tonal steps and outlines. */
+    engine?: "soft" | "bevel" | "flat";
+    /** Version 2. */
+    card?: MaterialSpec["card"];
     gradients?: boolean;
     bevelDepth?: number;
   };
   motion?: {
-    press?: "scale" | "translate";
+    /** `overlay` (version 2): a pressed control changes fill instead of moving. */
+    press?: "scale" | "translate" | "overlay";
     pressScale?: number;
     pressTranslate?: number;
     durationScale?: number;
   };
-  type?: { text?: { family: string }; numeric?: { family: string } };
-  icons?: { set: string };
+  type?: {
+    text?: { family: string };
+    numeric?: { family: string };
+    /** Version 2: per-variant overrides of the classic scale. */
+    scale?: CustomTypeScale;
+  };
+  icons?: {
+    set?: string;
+    /** Version 2. */
+    categorySet?: string;
+    /** Version 2. */
+    badge?: IconBadgeStyle;
+    /** Version 2. */
+    badgeShape?: IconBadgeShape;
+  };
   charts?: {
+    /** Version 2. */
+    tone?: { containerMix?: { light?: number; dark?: number } };
     patterns?: boolean;
     lineWidth?: number;
     donutThickness?: number;
@@ -79,6 +121,22 @@ export interface CustomThemeFile {
     categoryPalette?: Hex[];
   };
 }
+
+export type CustomTypeVariant =
+  | "hero"
+  | "display"
+  | "title"
+  | "money"
+  | "headline"
+  | "body"
+  | "label"
+  | "figure"
+  | "caption"
+  | "overline"
+  | "eyebrow";
+export type CustomTypeScale = Partial<
+  Record<CustomTypeVariant, Partial<TypeStyleSpec>>
+>;
 
 export type CustomThemeParseResult =
   | {
@@ -249,8 +307,34 @@ const RADIUS_RANGES: Record<keyof RadiusScale, number> = {
   card: 64,
   sheet: 64,
   nav: 64,
+  fab: 64,
   pill: 999,
 };
+const TYPE_VARIANTS: readonly CustomTypeVariant[] = [
+  "hero",
+  "display",
+  "title",
+  "money",
+  "headline",
+  "body",
+  "label",
+  "figure",
+  "caption",
+  "overline",
+  "eyebrow",
+];
+const FONT_WEIGHTS: readonly FontWeightName[] = [
+  "regular",
+  "medium",
+  "semibold",
+  "bold",
+];
+const ICON_BADGE_STYLES: readonly IconBadgeStyle[] = [
+  "tinted",
+  "filled",
+  "none",
+];
+const ICON_BADGE_SHAPES: readonly IconBadgeShape[] = ["circle", "squircle"];
 const SPACE_KEYS: readonly (keyof SpaceScale)[] = [
   "xxs",
   "xs",
@@ -267,6 +351,15 @@ const TILE_RANGES: Record<keyof TileScale, [number, number]> = {
   compactSize: [28, 48],
   compactIcon: [12, 32],
 };
+
+const ROLE_SOURCE_KEYS = [
+  "background",
+  "surface",
+  "surfaceElevated",
+  "surfaceMuted",
+  "text",
+  "transfer",
+] as const;
 
 function readPalette(
   value: unknown,
@@ -332,6 +425,72 @@ function readFontFamily(
   return { family };
 }
 
+const TYPE_STYLE_KEYS = [
+  "fontSize",
+  "weight",
+  "letterSpacing",
+  "lineHeight",
+] as const;
+
+/** Bounded per-variant overrides; every bound keeps text legible and the layout intact. */
+function readTypeScale(
+  value: unknown,
+  path: string,
+  errors: Errors,
+): CustomTypeScale | undefined {
+  const obj = readObject(value, path, TYPE_VARIANTS, errors);
+  if (!obj) return undefined;
+  const out: CustomTypeScale = {};
+  for (const variant of TYPE_VARIANTS) {
+    if (obj[variant] === undefined) continue;
+    const here = `${path}.${variant}`;
+    const style = readObject(obj[variant], here, TYPE_STYLE_KEYS, errors);
+    if (!style) continue;
+    const entry: Partial<TypeStyleSpec> = {};
+    if (style.fontSize !== undefined) {
+      const fontSize = readNumber(
+        style.fontSize,
+        `${here}.fontSize`,
+        9,
+        72,
+        errors,
+      );
+      if (fontSize !== undefined) entry.fontSize = fontSize;
+    }
+    if (style.lineHeight !== undefined) {
+      const lineHeight = readNumber(
+        style.lineHeight,
+        `${here}.lineHeight`,
+        10,
+        96,
+        errors,
+      );
+      if (lineHeight !== undefined) entry.lineHeight = lineHeight;
+    }
+    if (style.letterSpacing !== undefined) {
+      const spacing = readNumber(
+        style.letterSpacing,
+        `${here}.letterSpacing`,
+        -3,
+        3,
+        errors,
+      );
+      if (spacing !== undefined) entry.letterSpacing = spacing;
+    }
+    if (style.weight !== undefined) {
+      const weight = readEnum(
+        style.weight,
+        `${here}.weight`,
+        FONT_WEIGHTS,
+        errors,
+      );
+      if (weight !== undefined) entry.weight = weight;
+    }
+    out[variant] = entry;
+  }
+  return out;
+}
+
 /**
  * Validates the raw shape. Returns the file (a JSON-clean copy) or null with errors pushed.
  * Everything is checked before returning so the author sees every problem at once.
@@ -360,11 +519,20 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
 
   const file: Partial<CustomThemeFile> = {};
 
-  if (root.themeSchemaVersion !== CUSTOM_THEME_SCHEMA_VERSION) {
-    errors.push(`themeSchemaVersion: must be ${CUSTOM_THEME_SCHEMA_VERSION}`);
+  const version = SUPPORTED_SCHEMA_VERSIONS.find(
+    (supported) => supported === root.themeSchemaVersion,
+  );
+  if (version === undefined) {
+    errors.push(
+      `themeSchemaVersion: must be ${SUPPORTED_SCHEMA_VERSIONS.join(" or ")}`,
+    );
   } else {
-    file.themeSchemaVersion = 1;
+    file.themeSchemaVersion = version;
   }
+  // Fields added in version 2 are an error in a version 1 file rather than silently honoured.
+  const needsV2 = (path: string) => {
+    if (version === 1) errors.push(`${path}: requires themeSchemaVersion 2`);
+  };
 
   if (typeof root.id !== "string" || !THEME_ID_PATTERN.test(root.id)) {
     errors.push(
@@ -425,17 +593,13 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
     if (accent) {
       const out: NonNullable<CustomThemeFile["accent"]> = {};
       if (accent.mode !== undefined) {
-        if (accent.mode === "system")
-          errors.push(
-            'accent.mode: "system" is not allowed for custom themes; use "user" or "fixed"',
-          );
-        else
-          out.mode = readEnum(
-            accent.mode,
-            "accent.mode",
-            ["user", "fixed"] as const,
-            errors,
-          );
+        if (accent.mode === "system") needsV2('accent.mode "system"');
+        out.mode = readEnum(
+          accent.mode,
+          "accent.mode",
+          ["user", "fixed", "system"] as const,
+          errors,
+        );
       }
       if (accent.default !== undefined)
         out.default = readHex(accent.default, "accent.default", errors);
@@ -461,6 +625,8 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
     if (shape) {
       const out: NonNullable<CustomThemeFile["shape"]> = {};
       if (shape.radius !== undefined) {
+        if (isObject(shape.radius) && shape.radius.fab !== undefined)
+          needsV2("shape.radius.fab");
         out.radius = readScale(
           shape.radius,
           "shape.radius",
@@ -494,18 +660,29 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
     const material = readObject(
       root.material,
       "material",
-      ["engine", "gradients", "bevelDepth"],
+      ["engine", "card", "gradients", "bevelDepth"],
       errors,
     );
     if (material) {
       const out: NonNullable<CustomThemeFile["material"]> = {};
-      if (material.engine !== undefined)
+      if (material.engine !== undefined) {
+        if (material.engine === "flat") needsV2('material.engine "flat"');
         out.engine = readEnum(
           material.engine,
           "material.engine",
-          ["soft", "bevel"] as const,
+          ["soft", "bevel", "flat"] as const,
           errors,
         );
+      }
+      if (material.card !== undefined) {
+        needsV2("material.card");
+        out.card = readEnum(
+          material.card,
+          "material.card",
+          ["elevated", "outlined", "tonal"] as const,
+          errors,
+        );
+      }
       if (material.gradients !== undefined)
         out.gradients = readBoolean(
           material.gradients,
@@ -534,13 +711,15 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
     );
     if (motion) {
       const out: NonNullable<CustomThemeFile["motion"]> = {};
-      if (motion.press !== undefined)
+      if (motion.press !== undefined) {
+        if (motion.press === "overlay") needsV2('motion.press "overlay"');
         out.press = readEnum(
           motion.press,
           "motion.press",
-          ["scale", "translate"] as const,
+          ["scale", "translate", "overlay"] as const,
           errors,
         );
+      }
       if (motion.pressScale !== undefined)
         out.pressScale = readNumber(
           motion.pressScale,
@@ -570,28 +749,69 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
   }
 
   if (root.type !== undefined) {
-    const type = readObject(root.type, "type", ["text", "numeric"], errors);
+    const type = readObject(
+      root.type,
+      "type",
+      ["text", "numeric", "scale"],
+      errors,
+    );
     if (type) {
       const out: NonNullable<CustomThemeFile["type"]> = {};
       if (type.text !== undefined)
         out.text = readFontFamily(type.text, "type.text", errors);
       if (type.numeric !== undefined)
         out.numeric = readFontFamily(type.numeric, "type.numeric", errors);
+      if (type.scale !== undefined) {
+        needsV2("type.scale");
+        out.scale = readTypeScale(type.scale, "type.scale", errors);
+      }
       file.type = out;
     }
   }
 
   if (root.icons !== undefined) {
-    const icons = readObject(root.icons, "icons", ["set"], errors);
+    const icons = readObject(
+      root.icons,
+      "icons",
+      ["set", "categorySet", "badge", "badgeShape"],
+      errors,
+    );
     if (icons) {
-      const set = icons.set;
-      if (typeof set !== "string" || !ICON_SET_IDS.includes(set)) {
-        errors.push(
-          `icons.set: must be one of ${ICON_SET_IDS.map((id) => `"${id}"`).join(", ")}`,
-        );
-      } else {
-        file.icons = { set };
+      const out: NonNullable<CustomThemeFile["icons"]> = {};
+      const readSet = (key: "set" | "categorySet") => {
+        const id = icons[key];
+        if (typeof id !== "string" || !ICON_SET_IDS.includes(id)) {
+          errors.push(
+            `icons.${key}: must be one of ${ICON_SET_IDS.map((known) => `"${known}"`).join(", ")}`,
+          );
+          return undefined;
+        }
+        return id;
+      };
+      if (icons.set !== undefined || version === 1) out.set = readSet("set");
+      if (icons.categorySet !== undefined) {
+        needsV2("icons.categorySet");
+        out.categorySet = readSet("categorySet");
       }
+      if (icons.badge !== undefined) {
+        needsV2("icons.badge");
+        out.badge = readEnum(
+          icons.badge,
+          "icons.badge",
+          ICON_BADGE_STYLES,
+          errors,
+        );
+      }
+      if (icons.badgeShape !== undefined) {
+        needsV2("icons.badgeShape");
+        out.badgeShape = readEnum(
+          icons.badgeShape,
+          "icons.badgeShape",
+          ICON_BADGE_SHAPES,
+          errors,
+        );
+      }
+      file.icons = out;
     }
   }
 
@@ -606,11 +826,43 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
         "gridDash",
         "lineCap",
         "categoryPalette",
+        "tone",
       ],
       errors,
     );
     if (charts) {
       const out: NonNullable<CustomThemeFile["charts"]> = {};
+      if (charts.tone !== undefined) {
+        needsV2("charts.tone");
+        const tone = readObject(
+          charts.tone,
+          "charts.tone",
+          ["containerMix"],
+          errors,
+        );
+        if (tone && tone.containerMix !== undefined) {
+          const mix = readObject(
+            tone.containerMix,
+            "charts.tone.containerMix",
+            ["light", "dark"],
+            errors,
+          );
+          if (mix) {
+            const outMix: { light?: number; dark?: number } = {};
+            for (const key of ["light", "dark"] as const) {
+              if (mix[key] === undefined) continue;
+              outMix[key] = readNumber(
+                mix[key],
+                `charts.tone.containerMix.${key}`,
+                0.4,
+                0.95,
+                errors,
+              );
+            }
+            out.tone = { containerMix: outMix };
+          }
+        }
+      }
       if (charts.patterns !== undefined)
         out.patterns = readBoolean(charts.patterns, "charts.patterns", errors);
       if (charts.lineWidth !== undefined)
@@ -686,10 +938,13 @@ function deriveShadows(
   bevelDepth: number,
 ): ShadowSet {
   if (engine === "bevel") return bevelShadowSet(palette, scheme, bevelDepth);
-  // Soft. A bevel base's shadows are hard-edged, so fall back to the neutral classic set.
+  // Flat: no drop shadows; rings follow the merged palette border.
+  if (engine === "flat") return flatShadowSet(palette, scheme);
+  // Soft. A bevel or flat base's shadows are not the soft ladder, so fall back to the neutral classic set.
   // High contrast draws its rings in the palette's own colors, so they are re-derived from the
   // merged palette rather than copied (a copy would ring in the BASE theme's colors).
-  if (base.material.engine === "bevel") return classicTheme.shadows[scheme];
+  if (base.material.engine === "bevel" || base.material.engine === "flat")
+    return classicTheme.shadows[scheme];
   if (base.id === "high-contrast")
     return outlineShadows(palette, base.shadows[scheme].scrim);
   return base.shadows[scheme];
@@ -704,7 +959,17 @@ function buildTheme(
 
   const palette = {} as Record<ThemeScheme, BaseTokens>;
   for (const scheme of ["light", "dark"] as const) {
-    const merged = pickDefined(base.palette[scheme], file.palette[scheme]);
+    const authored = file.palette[scheme];
+    let merged = pickDefined(base.palette[scheme], authored);
+    // A theme that changes the surfaces but not the Material style roles gets roles derived from
+    // its own colors, so the header and tab bar follow the palette instead of the base theme's.
+    if (ROLE_SOURCE_KEYS.some((key) => authored[key] !== undefined)) {
+      const derived = derivedRoleTokens(merged, scheme === "dark");
+      const roles: Partial<BaseTokens> = {};
+      for (const key of ROLE_TOKEN_KEYS)
+        if (authored[key] === undefined) roles[key] = derived[key];
+      merged = { ...merged, ...roles };
+    }
     const clamped = clampPaletteContrast(scheme, merged);
     palette[scheme] = clamped.palette;
     warnings.push(...clamped.warnings);
@@ -730,13 +995,26 @@ function buildTheme(
       : 0;
   const material: MaterialSpec = {
     engine,
-    gradients: file.material?.gradients ?? baseMaterial.gradients,
+    card: file.material?.card ?? baseMaterial.card,
+    // A flat look has no gradients unless the author insists (which is then an error below).
+    gradients:
+      file.material?.gradients ??
+      (engine === "flat" ? false : baseMaterial.gradients),
     bevelDepth,
   };
+  if (engine === "flat" && material.gradients)
+    errors.push(
+      'material.gradients: must be false when material.engine is "flat"',
+    );
 
   // Switching the press style needs a value that actually moves the control, so inherit a sane
   // one when the base theme's value is the "off" value for the new style.
-  const press = file.motion?.press ?? base.motion.press;
+  // A flat theme that does not say otherwise presses with a tonal overlay, not a sink.
+  const press =
+    file.motion?.press ??
+    (engine === "flat" && baseMaterial.engine !== "flat"
+      ? "overlay"
+      : base.motion.press);
   const durationScale = file.motion?.durationScale ?? 1;
   const motion: MotionSpec = {
     ...base.motion,
@@ -766,22 +1044,41 @@ function buildTheme(
       'motion.pressScale: must be below 1 when motion.press is "scale"',
     );
 
-  // Every non-Rubik face gets Rubik as a fallback so Hebrew always has a glyph source.
-  const stack = (family: string) => ({
-    family,
-    fallbacks: family === "rubik" ? [] : ["rubik"],
-  });
+  // Every face without Hebrew gets Rubik as a fallback so Hebrew always has a glyph source.
+  const scale = { ...base.type.scale } as TypeScaleSpec;
+  for (const variant of TYPE_VARIANTS) {
+    const override = file.type?.scale?.[variant];
+    if (!override) continue;
+    const merged = pickDefined(scale[variant], override);
+    if (merged.lineHeight < merged.fontSize)
+      errors.push(
+        `type.scale.${variant}.lineHeight: must be at least type.scale.${variant}.fontSize`,
+      );
+    scale[variant] = merged;
+  }
   const type = {
-    text: file.type?.text ? stack(file.type.text.family) : base.type.text,
+    text: file.type?.text ? stackFor(file.type.text.family) : base.type.text,
     numeric: file.type?.numeric
-      ? stack(file.type.numeric.family)
+      ? stackFor(file.type.numeric.family)
       : base.type.numeric,
-    scale: base.type.scale,
+    scale,
   };
 
   const lineWidth = file.charts?.lineWidth;
+  const toneMix = file.charts?.tone?.containerMix;
   const charts: ChartSpec = {
     ...base.charts,
+    ...(toneMix
+      ? {
+          tone: {
+            ...base.charts.tone,
+            containerMix: {
+              light: toneMix.light ?? base.charts.tone.containerMix.light,
+              dark: toneMix.dark ?? base.charts.tone.containerMix.dark,
+            },
+          },
+        }
+      : {}),
     ...(lineWidth !== undefined
       ? { lineWidth, sparklineWidth: Math.max(1, lineWidth - 0.5) }
       : {}),
@@ -803,7 +1100,7 @@ function buildTheme(
   };
 
   const accent = {
-    // `system` is the platform's dynamic accent; a custom theme never owns that.
+    // A theme inheriting a system accent from its base only keeps it when the file asks (version 2).
     mode:
       file.accent?.mode ??
       (base.accent.mode === "system" ? "user" : base.accent.mode),
@@ -828,7 +1125,15 @@ function buildTheme(
     motion,
     material,
     type,
-    icons: file.icons ? { set: file.icons.set } : base.icons,
+    icons: {
+      ...base.icons,
+      ...(file.icons?.set ? { set: file.icons.set } : {}),
+      ...(file.icons?.categorySet
+        ? { categorySet: file.icons.categorySet }
+        : {}),
+      ...(file.icons?.badge ? { badge: file.icons.badge } : {}),
+      ...(file.icons?.badgeShape ? { badgeShape: file.icons.badgeShape } : {}),
+    },
     charts,
     accent,
   };
@@ -918,7 +1223,7 @@ export function canonicalizeCustomThemeFile(
   file: CustomThemeFile,
 ): CustomThemeFile {
   const out: CustomThemeFile = {
-    themeSchemaVersion: 1,
+    themeSchemaVersion: file.themeSchemaVersion,
     id: file.id,
     name: file.name,
     ...(file.extends !== undefined ? { extends: file.extends } : {}),
@@ -946,6 +1251,7 @@ function finishCanonical(
         "card",
         "sheet",
         "nav",
+        "fab",
         "pill",
       ]);
     if (file.shape.space)
@@ -961,6 +1267,7 @@ function finishCanonical(
   if (file.material)
     out.material = ordered(file.material, [
       "engine",
+      "card",
       "gradients",
       "bevelDepth",
     ]);
@@ -976,8 +1283,28 @@ function finishCanonical(
     if (file.type.text) out.type.text = { family: file.type.text.family };
     if (file.type.numeric)
       out.type.numeric = { family: file.type.numeric.family };
+    if (file.type.scale) {
+      const scale: CustomTypeScale = {};
+      for (const variant of TYPE_VARIANTS) {
+        const entry = file.type.scale[variant];
+        if (entry)
+          scale[variant] = ordered(entry, [
+            "fontSize",
+            "lineHeight",
+            "weight",
+            "letterSpacing",
+          ]);
+      }
+      out.type.scale = scale;
+    }
   }
-  if (file.icons) out.icons = { set: file.icons.set };
+  if (file.icons)
+    out.icons = ordered(file.icons, [
+      "set",
+      "categorySet",
+      "badge",
+      "badgeShape",
+    ]);
   if (file.charts) {
     out.charts = ordered(file.charts, [
       "patterns",
@@ -986,7 +1313,12 @@ function finishCanonical(
       "gridDash",
       "lineCap",
       "categoryPalette",
+      "tone",
     ]);
+    if (file.charts.tone?.containerMix && out.charts)
+      out.charts.tone = {
+        containerMix: ordered(file.charts.tone.containerMix, ["light", "dark"]),
+      };
   }
   return out;
 }

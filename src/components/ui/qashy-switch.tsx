@@ -1,23 +1,19 @@
-import { Switch, type SwitchProps } from "react-native";
+import type { SwitchProps } from "react-native";
 
+import { MaterialSwitch } from "@/components/ui/material-switch";
+import { PlatformSwitch } from "@/components/ui/platform-switch";
 import { useQashyTheme } from "@/theme/theme";
 
 /**
- * The app's one toggle. React Native Web paints an unset `false` track color as
- * transparent, which made an "off" switch invisible against a card. The off
- * track uses the muted-text token (visible on both light and dark surfaces),
- * with a surface-colored knob; the on state uses the accent with an on-accent knob.
+ * The app's one toggle. Themes on the flat (Material 3) engine get a hand-drawn Material 3
+ * switch here (web and iOS have no native one); Android draws the real Compose switch, see
+ * `qashy-switch.android.tsx`. Every other theme uses the platform switch.
  */
-export function QashySwitch({ trackColor, thumbColor, ...props }: SwitchProps) {
+export function QashySwitch(props: SwitchProps) {
   const theme = useQashyTheme();
-  return (
-    <Switch
-      {...props}
-      trackColor={{ false: theme.textMuted, true: theme.accent, ...trackColor }}
-      thumbColor={thumbColor ?? theme.surface}
-      {...(process.env.EXPO_OS === "web"
-        ? { activeThumbColor: theme.onAccent }
-        : null)}
-    />
+  return theme.materialControls ? (
+    <MaterialSwitch {...props} />
+  ) : (
+    <PlatformSwitch {...props} />
   );
 }

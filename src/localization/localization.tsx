@@ -1135,6 +1135,14 @@ const HEBREW: Record<string, string> = {
   "Swipe to change month": "החלקה למעבר בין חודשים",
   "Swipe left or right on Overview and Transactions to move between months.":
     "החליקו ימינה או שמאלה במסכי הסקירה והתנועות כדי לעבור בין חודשים.",
+  "Navigation bar style": "סגנון סרגל הניווט",
+  Native: "מובנה",
+  Floating: "צף",
+  "Docked to the bottom edge, drawn by Android.":
+    "מוצמד לתחתית המסך, ומצויר על ידי אנדרואיד.",
+  "A rounded bar that floats above your content.": "סרגל מעוגל שצף מעל התוכן.",
+  "Choose how the bottom bar looks. Press and hold the bar any time to change it.":
+    "בחרו איך סרגל הניווט התחתון נראה. אפשר לשנות זאת בכל עת בלחיצה ארוכה על הסרגל.",
   "Previous year": "השנה הקודמת",
   "Next year": "השנה הבאה",
   Close: "סגירה",
@@ -1313,12 +1321,8 @@ const HEBREW: Record<string, string> = {
   Automatic: "אוטומטי",
   Manual: "ידני",
   "Fetch rates automatically": "משיכת שערים אוטומטית",
-  "Off by default. Sends only currency codes and dates to frankfurter.dev — never amounts or account details. Frankfurter can see your IP address.":
-    "כבוי כברירת מחדל. נשלחים רק קודי מטבע ותאריכים אל frankfurter.dev — לעולם לא סכומים או פרטי חשבון. frankfurter יכול לראות את כתובת ה־IP שלכם.",
-  "Last updated": "עודכן לאחרונה",
-  "Never updated": "מעולם לא עודכן",
-  "Refreshing…": "מרענן…",
-  "Refresh now": "רענון עכשיו",
+  "On by default. Sends only currency codes and dates to frankfurter.dev — never amounts or account details. Frankfurter can see your IP address.":
+    "פעיל כברירת מחדל. נשלחים רק קודי מטבע ותאריכים אל frankfurter.dev — לעולם לא סכומים או פרטי חשבון. frankfurter יכול לראות את כתובת ה־IP שלכם.",
   "Needs a manual rate": "דורש שער ידני",
   "Manual rates": "שערים ידניים",
   "This device looks offline. Automatic rates will try again the next time it is online.":
@@ -1359,6 +1363,21 @@ const HEBREW: Record<string, string> = {
     "משטחי Material מעוגלים שמתאימים לצבעי המערכת של Android.",
   "Maximum contrast and bold edges for easy reading.":
     "ניגודיות מרבית וקצוות בולטים לקריאה נוחה.",
+
+  // Per-device font and icon overrides (More → Appearance).
+  "Fonts and icons": "גופנים וסמלים",
+  "Override the theme’s typefaces and icon styles on this device. These choices are not synced.":
+    "אפשר להחליף במכשיר הזה את הגופנים וסגנונות הסמלים של ערכת העיצוב. הבחירות האלה לא מסונכרנות.",
+  "Text font": "גופן הטקסט",
+  "Numbers font": "גופן המספרים",
+  "App icons (UI)": "סמלי האפליקציה (ממשק)",
+  "Category icons": "סמלי קטגוריות",
+  "Theme default": "ברירת המחדל של הערכה",
+  "Choose text font": "בחירת גופן הטקסט",
+  "Choose numbers font": "בחירת גופן המספרים",
+  "Choose app icons": "בחירת סמלי האפליקציה",
+  "Choose category icons": "בחירת סמלי הקטגוריות",
+  "Close font and icon choices": "סגירת בחירת הגופנים והסמלים",
 
   // Custom themes (More → Appearance): import, export, delete.
   "Custom themes": "ערכות עיצוב מותאמות",
