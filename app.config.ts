@@ -6,9 +6,10 @@ import type { ExpoConfig } from "expo/config";
  * dev, `expo run:android`) keeps Expo's default of all four ABIs.
  */
 export default ({ config }: { config: ExpoConfig }): ExpoConfig => {
-  const archs = (process.env.QASHY_ANDROID_ARCHS ?? "")
+  const raw: string = process.env.QASHY_ANDROID_ARCHS ?? "";
+  const archs = raw
     .split(",")
-    .map((arch) => arch.trim())
+    .map((arch: string) => arch.trim())
     .filter(Boolean);
 
   if (archs.length === 0) return config;
