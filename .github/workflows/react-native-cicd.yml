@@ -117,6 +117,7 @@ jobs:
         uses: expo/expo-github-action@v8
         with:
           eas-version: 24.x
+          packager: npm
           token: ${{ secrets.EXPO_TOKEN }}
 
       - name: 📦 Install dependencies
