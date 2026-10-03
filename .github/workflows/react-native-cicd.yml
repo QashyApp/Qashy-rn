@@ -65,9 +65,9 @@ jobs:
           REF: ${{ github.ref }}
           BUILD_TYPE: ${{ github.event.inputs.buildType }}
         run: |
-          dev='{"name":"dev","profile":"development","file":"app-dev.apk","node_env":"development"}'
-          preview='{"name":"preview","profile":"preview","file":"app-preview.apk","node_env":"production"}'
-          production='{"name":"production","profile":"production","file":"app-prod.aab","node_env":"production"}'
+          dev='{"name":"dev","profile":"development","prefix":"qashy-dev","ext":"apk","node_env":"development"}'
+          preview='{"name":"preview","profile":"preview","prefix":"qashy-release","ext":"apk","node_env":"production"}'
+          production='{"name":"production","profile":"production","prefix":"qashy-release","ext":"aab","node_env":"production"}'
 
           if [ "$EVENT" = "workflow_dispatch" ]; then
             case "$BUILD_TYPE" in
@@ -123,16 +123,23 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
+      - name: 🏷 Name build output
+        id: out
+        run: |
+          version=$(node -p "require('./app.json').expo.version")
+          echo "name=${{ matrix.prefix }}-${version}" >> "$GITHUB_OUTPUT"
+          echo "file=${{ matrix.prefix }}-${version}.${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
+
       - name: 📱 Build ${{ matrix.name }}
         run: |
           export NODE_OPTIONS="--max_old_space_size=4096"
-          eas build --platform android --profile ${{ matrix.profile }} --local --non-interactive --output=./${{ matrix.file }}
+          eas build --platform android --profile ${{ matrix.profile }} --local --non-interactive --output=./${{ steps.out.outputs.file }}
         env:
           NODE_ENV: ${{ matrix.node_env }}
 
       - name: 📦 Upload build artifact to GitHub
         uses: actions/upload-artifact@v7
         with:
-          name: app-${{ matrix.name }}
-          path: ./${{ matrix.file }}
+          name: ${{ steps.out.outputs.name }}
+          path: ./${{ steps.out.outputs.file }}
           retention-days: 7
