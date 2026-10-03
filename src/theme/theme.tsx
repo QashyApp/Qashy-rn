@@ -9,16 +9,18 @@ import {
 } from 'react-native';
 
 import { DirectionScope } from '@/components/ui/direction-scope';
-import { QASHY_ACCENT } from '@/domain/defaults';
 import type { AccentSource } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceState } from '@/providers/finance-provider';
+import { useCustomThemes } from '@/theme/custom/use-custom-themes';
+import { bevelAccentShadow } from '@/theme/shadow';
+import { classicTheme } from '@/theme/themes/classic';
+import { getTheme } from '@/theme/themes/registry';
+import type { ChartSpec, IconSizeScale, MaterialSpec, MotionSpec, RadiusScale, SpaceScale, ThemeDefinition, TileScale, TypeSpec } from '@/theme/themes/types';
+import { fontStyle } from '@/theme/typography';
 import {
   accessibleAccentColor,
-  darkTokens,
   ensureContrast,
-  fontFamilies,
-  lightTokens,
   mixHex,
   readableTextColor,
   withAlpha,
@@ -26,7 +28,27 @@ import {
 
 export interface ThemeTokens {
   mode: 'light' | 'dark';
+  /** Shape and rhythm come from the active theme; never import the classic constants from `@/theme/tokens`. */
+  space: SpaceScale;
+  radius: RadiusScale;
+  tile: TileScale;
+  iconSize: IconSizeScale;
+  motion: MotionSpec;
+  /** Registered icon set id (see `@/theme/icon-sets`); only changes how an icon id is drawn. */
+  iconSet: string;
+  /** Font stacks and the type scale; resolve faces with `fontStyle(weight, type)` and friends from `@/theme/typography`. */
+  type: TypeSpec;
+  /** Line/donut/grid geometry, slice patterns and category tone for charts. */
+  charts: ChartSpec;
+  /** Whether surfaces layer the subtle gradients (off for flat and pixel looks). */
+  gradients: boolean;
   accent: ColorValue;
+  /**
+   * The accent as a *text or glyph* colour on the theme's own surfaces. `accent` itself only
+   * clears 3:1 (it is mostly a fill), which is not enough for small text; this is nudged to 4.5:1
+   * against background, surface and muted surface. Use it for any accent-coloured text.
+   */
+  accentText: ColorValue;
   onAccent: ColorValue;
   accentContainer: ColorValue;
   onAccentContainer: ColorValue;
@@ -97,32 +119,13 @@ export interface ThemeTokens {
   scrim: string;
 }
 
-const lightShadows = {
-  shadowCard: 'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 1px 2px rgba(25, 27, 32, 0.06), 0 8px 20px -10px rgba(25, 27, 32, 0.14)',
-  shadowRaised: 'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 2px 4px rgba(25, 27, 32, 0.06), 0 14px 32px -12px rgba(25, 27, 32, 0.20)',
-  shadowControl: 'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 1px 2px rgba(25, 27, 32, 0.10), 0 3px 8px -3px rgba(25, 27, 32, 0.16)',
-  shadowControlPressed: 'inset 0 2px 4px rgba(25, 27, 32, 0.16), inset 0 0 0 1px rgba(25, 27, 32, 0.04)',
-  shadowSunken: 'inset 0 1px 3px rgba(25, 27, 32, 0.12), inset 0 -1px 0 rgba(255, 255, 255, 0.7)',
-  shadowOverlay: '0 20px 48px rgba(25, 27, 32, 0.18)',
-  shadowFab: 'inset 0 1px 0 rgba(255, 255, 255, 0.5), 0 4px 14px rgba(25, 27, 32, 0.28)',
-  scrim: 'rgba(12, 13, 17, 0.42)',
-} as const;
-
-const darkShadows = {
-  shadowCard: 'inset 0 1px 0 rgba(255, 255, 255, 0.06), 0 1px 0 rgba(0, 0, 0, 0.45), 0 10px 24px -12px rgba(0, 0, 0, 0.7)',
-  shadowRaised: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 16px 36px -12px rgba(0, 0, 0, 0.75)',
-  shadowControl: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5)',
-  shadowControlPressed: 'inset 0 2px 5px rgba(0, 0, 0, 0.55)',
-  shadowSunken: 'inset 0 1px 3px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(255, 255, 255, 0.04)',
-  shadowOverlay: '0 22px 52px rgba(0, 0, 0, 0.6)',
-  shadowFab: 'inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 6px 18px rgba(0, 0, 0, 0.58)',
-  scrim: 'rgba(0, 0, 0, 0.56)',
-} as const;
-
 const ThemeContext = createContext<ThemeTokens | null>(null);
 
 /** Builds the accent-dependent shadow/gradient pair that no static const can hold. */
-function accentMaterial(accent: string, dark: boolean) {
+function accentMaterial(accent: string, dark: boolean, material: MaterialSpec) {
+  if (material.engine === 'bevel') {
+    return { accentGradient: `linear-gradient(180deg, ${accent}, ${accent})`, shadowAccent: bevelAccentShadow(accent, material.bevelDepth) };
+  }
   const gradientTop = mixHex(accent, '#FFFFFF', dark ? 0.10 : 0.14);
   const accentGradient = `linear-gradient(180deg, ${gradientTop}, ${accent})`;
   const highlightAlpha = dark ? 0.18 : 0.28;
@@ -135,17 +138,31 @@ function accentMaterial(accent: string, dark: boolean) {
 // Hand-tuned neutral surfaces with a single accent family. The user's accent
 // only drives accent/accentContainer colors; surfaces stay neutral so the app
 // keeps a conventional, high-contrast look in both modes.
-function accentTokens(seed: string, dark: boolean): ThemeTokens {
-  const base = dark ? darkTokens : lightTokens;
+export function accentTokens(seed: string, dark: boolean, theme: ThemeDefinition = classicTheme): ThemeTokens {
+  const scheme = dark ? 'dark' : 'light';
+  const base = theme.palette[scheme];
   const accent = accessibleAccentColor(seed, base.surface, base.text);
   const accentContainer = mixHex(accent, base.surface, dark ? 0.78 : 0.86);
   const surfaceGradient = dark
     ? `linear-gradient(180deg, ${mixHex(base.surface, '#FFFFFF', 0.035)}, ${base.surface})`
     : `linear-gradient(180deg, #FFFFFF, ${mixHex('#FFFFFF', base.background, 0.35)})`;
-  const { accentGradient, shadowAccent } = accentMaterial(accent, dark);
+  const { accentGradient, shadowAccent } = accentMaterial(accent, dark, theme.material);
   return {
     mode: dark ? 'dark' : 'light',
+    space: theme.space,
+    radius: theme.radius,
+    tile: theme.tile,
+    iconSize: theme.iconSize,
+    motion: theme.motion,
+    iconSet: theme.icons.set,
+    type: theme.type,
+    charts: theme.charts,
+    gradients: theme.material.gradients,
     accent,
+    accentText: [base.surface, base.background, base.surfaceMuted].reduce(
+      (color, surface) => ensureContrast(color, surface, base.text, theme.id === 'high-contrast' ? 7 : 4.5),
+      accent,
+    ),
     onAccent: readableTextColor(accent),
     accentContainer,
     onAccentContainer: ensureContrast(accent, accentContainer, base.text),
@@ -171,19 +188,20 @@ function accentTokens(seed: string, dark: boolean): ThemeTokens {
     surfaceGradient,
     accentGradient,
     shadowAccent,
-    ...(dark ? darkShadows : lightShadows),
+    ...theme.shadows[scheme],
   };
 }
 
 // Material You stays available as an explicit opt-in on Android only; every
 // other platform uses the default indigo on the hand-tuned neutral surfaces.
-function systemTokens(dark: boolean): ThemeTokens {
-  const fallback = accentTokens(QASHY_ACCENT, dark);
+function systemTokens(dark: boolean, theme: ThemeDefinition = classicTheme): ThemeTokens {
+  const fallback = accentTokens(theme.accent.default, dark, theme);
   if (Platform.OS !== 'android') return fallback;
-  const { accentGradient, shadowAccent } = accentMaterial(fallback.staticAccent, dark);
+  const { accentGradient, shadowAccent } = accentMaterial(fallback.staticAccent, dark, theme.material);
   return {
     ...fallback,
     accent: Color.android.dynamic.primary,
+    accentText: Color.android.dynamic.primary,
     onAccent: Color.android.dynamic.onPrimary,
     accentContainer: Color.android.dynamic.primaryContainer,
     onAccentContainer: Color.android.dynamic.onPrimaryContainer,
@@ -213,9 +231,27 @@ function systemTokens(dark: boolean): ThemeTokens {
 // Android's dynamic accent is an opaque platform color with no JS-readable hex,
 // so callers must render these values directly and must not pass them through
 // the hex helpers in `@/theme/tokens`.
-export function previewAccentTokens(source: AccentSource, accentHex: string, dark: boolean) {
-  const tokens = source === 'system' ? systemTokens(dark) : accentTokens(accentHex, dark);
+export function previewAccentTokens(source: AccentSource, accentHex: string, dark: boolean, theme: ThemeDefinition = classicTheme) {
+  const tokens = source === 'system' ? systemTokens(dark, theme) : accentTokens(accentHex, dark, theme);
   return { accent: tokens.accent, onAccent: tokens.onAccent };
+}
+
+/**
+ * Which accent a theme lets the settings choose: `system` themes always use the platform accent,
+ * `fixed` themes ignore the settings entirely, and `user` themes follow `accentSource`/`accentHex`.
+ */
+export function resolveAccentChoice(
+  theme: ThemeDefinition,
+  settings: { accentSource: AccentSource; accentHex: string },
+): { kind: 'system' } | { kind: 'seed'; seed: string } {
+  switch (theme.accent.mode) {
+    case 'system':
+      return { kind: 'system' };
+    case 'fixed':
+      return { kind: 'seed', seed: theme.accent.default };
+    default:
+      return settings.accentSource === 'system' ? { kind: 'system' } : { kind: 'seed', seed: settings.accentHex };
+  }
 }
 
 export function QashyThemeProvider({ children }: { children: ReactNode }) {
@@ -223,11 +259,15 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
   const { isRtl } = useLocalization();
   const systemScheme = useColorScheme();
   const mode = settings.themeMode === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : settings.themeMode;
-  const usesSystemAccent = settings.accentSource === 'system';
-  const seed = usesSystemAccent ? QASHY_ACCENT : settings.accentHex;
+  // A custom theme that is not loaded yet, was deleted, or no longer resolves is classic; the stored id is left alone.
+  const { themes: customThemes } = useCustomThemes();
+  const theme = useMemo(() => getTheme(settings.themeId, customThemes), [settings.themeId, customThemes]);
+  const accentChoice = resolveAccentChoice(theme, settings);
+  const usesSystemAccent = accentChoice.kind === 'system';
+  const seed = accentChoice.kind === 'seed' ? accentChoice.seed : theme.accent.default;
   const tokens = useMemo(
-    () => (usesSystemAccent ? systemTokens(mode === 'dark') : accentTokens(seed, mode === 'dark')),
-    [mode, seed, usesSystemAccent],
+    () => (usesSystemAccent ? systemTokens(mode === 'dark', theme) : accentTokens(seed, mode === 'dark', theme)),
+    [mode, seed, theme, usesSystemAccent],
   );
 
   useEffect(() => {
@@ -254,22 +294,22 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
 
     // Following the system means each media-scoped meta stays truthful. Forcing
     // a mode means only one of them can ever match, so both carry that surface.
-    const background = cssColor(tokens.background, mode === 'dark' ? darkTokens.background : lightTokens.background);
+    const background = cssColor(tokens.background, theme.palette[mode].background);
     const light = document.getElementById('qashy-theme-color-light');
     const dark = document.getElementById('qashy-theme-color-dark');
-    light?.setAttribute('content', settings.themeMode === 'system' ? lightTokens.background : background);
-    dark?.setAttribute('content', settings.themeMode === 'system' ? darkTokens.background : background);
-  }, [mode, settings.themeMode, tokens]);
+    light?.setAttribute('content', settings.themeMode === 'system' ? theme.palette.light.background : background);
+    dark?.setAttribute('content', settings.themeMode === 'system' ? theme.palette.dark.background : background);
+  }, [mode, settings.themeMode, theme, tokens]);
 
   const baseNavigation = mode === 'dark' ? DarkTheme : DefaultTheme;
   const navigationTheme = {
     ...baseNavigation,
     // Native stack headers (titles, large titles, back labels) use the app face too.
     fonts: {
-      regular: { fontFamily: fontFamilies.regular, fontWeight: 'normal' as const },
-      medium: { fontFamily: fontFamilies.medium, fontWeight: 'normal' as const },
-      bold: { fontFamily: fontFamilies.semibold, fontWeight: 'normal' as const },
-      heavy: { fontFamily: fontFamilies.bold, fontWeight: 'normal' as const },
+      regular: { fontFamily: fontStyle('regular', theme.type).fontFamily as string, fontWeight: 'normal' as const },
+      medium: { fontFamily: fontStyle('medium', theme.type).fontFamily as string, fontWeight: 'normal' as const },
+      bold: { fontFamily: fontStyle('semibold', theme.type).fontFamily as string, fontWeight: 'normal' as const },
+      heavy: { fontFamily: fontStyle('bold', theme.type).fontFamily as string, fontWeight: 'normal' as const },
     },
     colors: {
       ...baseNavigation.colors,

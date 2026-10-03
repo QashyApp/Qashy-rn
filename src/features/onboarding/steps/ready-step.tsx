@@ -11,7 +11,7 @@ import { currencyLabel } from '@/features/onboarding/steps/currency-step';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, toneColors } from '@/theme/tokens';
+import { toneColors } from '@/theme/tokens';
 import { formatMoney, parseMoney } from '@/utils/money';
 
 /**
@@ -21,6 +21,7 @@ import { formatMoney, parseMoney } from '@/utils/money';
  */
 export function ReadyStep({ draft }: { draft: OnboardingDraft }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   let balance = draft.openingBalance.trim() || '0';
   try {
@@ -66,7 +67,7 @@ export function ReadyStep({ draft }: { draft: OnboardingDraft }) {
         </View>
         <View accessibilityRole="list" accessibilityLabel={t('Starter categories')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.sm }}>
           {categories.map((category) => {
-            const tone = toneColors(category.color, theme.staticSurface, theme.staticText, theme.mode === 'dark');
+            const tone = toneColors(category.color, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone);
             return (
               <View
                 key={category.name}

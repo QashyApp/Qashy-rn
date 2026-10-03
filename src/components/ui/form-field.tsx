@@ -7,7 +7,6 @@ import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { withAppFont } from '@/theme/typography';
-import { radius, space } from '@/theme/tokens';
 
 export function FormField({
   label,
@@ -35,6 +34,7 @@ export function FormField({
   literalLabel?: boolean;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
   const [focused, setFocused] = useState(false);
   const sunken = materialStyle(theme, 'sunken');
@@ -105,7 +105,7 @@ export function FormField({
             boxShadow: sunken.boxShadow as string,
           },
           style,
-        ])}
+        ], 'regular', 'text', theme.type)}
       />
       {description ? (
         <MotionView key={description} variant="up" exit animateLayout>

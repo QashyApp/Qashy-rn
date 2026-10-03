@@ -5,11 +5,10 @@ import Animated, { ReduceMotion, useAnimatedStyle, withTiming } from 'react-nati
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { DirectionScope } from '@/components/ui/direction-scope';
-import { motionCurves, motionDurations, MotionPressable } from '@/components/ui/motion';
+import { motionCurves, MotionPressable, useMotionDurations } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 
 export interface SegmentOption<T extends string> {
@@ -51,17 +50,19 @@ export function SegmentedControl<T extends string>({
   lockLtr?: boolean;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
+  const motionDuration = useMotionDurations();
   const { t, isRtl } = useLocalization();
   const rtl = lockLtr ? false : isRtl;
   const [width, setWidth] = useState(0);
   const index = Math.max(0, options.findIndex((option) => option.value === value));
   const segment = width > 0 ? (width - space.xs) / options.length : 0;
-  const height = size === 'compact' ? 36 : 44;
+  const height = size === 'compact' ? 44 : 48; // 44px is the minimum touch target
 
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [{
       translateX: withTiming((rtl ? -1 : 1) * index * segment, {
-        duration: motionDurations.enter,
+        duration: motionDuration.enter,
         easing: motionCurves.standard,
         reduceMotion: ReduceMotion.System,
       }),

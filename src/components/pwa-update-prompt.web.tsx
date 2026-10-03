@@ -7,7 +7,6 @@ import { GlassSurface } from '@/components/ui/glass-surface';
 import { MotionView } from '@/components/ui/motion';
 import { TextButton } from '@/components/ui/text-button';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 declare global {
   interface Window {
@@ -21,6 +20,7 @@ export function PwaUpdatePrompt() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const compact = width < 768;
   useEffect(() => {
     const canRegister =

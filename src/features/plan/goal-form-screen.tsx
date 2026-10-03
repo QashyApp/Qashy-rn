@@ -16,7 +16,7 @@ import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
-import { todayLocal } from '@/utils/date';
+import { mediumDate, todayLocal } from '@/utils/date';
 import { validateDateInput, validateMoneyInput } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
 import { formatMoney, minorToLocalizedDecimalString, parseMoney } from '@/utils/money';
@@ -33,9 +33,9 @@ export function GoalFormScreen() {
   const existing = id ? state.goals.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
   const toMoneyText = (minor: number) => minorToLocalizedDecimalString(minor, state.settings.baseCurrency, state.settings.locale);
-  const [name, setName] = useState(existing?.name ?? defaultGoalName);
+  const [name, setName] = useState(existing?.name ?? '');
   const [kind, setKind] = useState<GoalKind>(existing?.kind ?? 'saving');
-  const [target, setTarget] = useState(existing ? toMoneyText(existing.targetMinor) : '5000');
+  const [target, setTarget] = useState(existing ? toMoneyText(existing.targetMinor) : '');
   const [initial, setInitial] = useState(existing ? toMoneyText(existing.initialMinor) : '0');
   const [targetDate, setTargetDate] = useState(existing?.targetDate ?? '');
   const [linkedAccountId, setLinkedAccountId] = useState(existing?.linkedAccountId ?? '');
@@ -58,7 +58,12 @@ export function GoalFormScreen() {
     label: 'Starting progress',
     nonNegative: true,
   });
-  const targetDateError = validateDateInput(targetDate, { label: 'Target date', optional: true });
+  const targetDateFormatError = validateDateInput(targetDate, { label: 'Target date', optional: true });
+  // A deadline in the past can never be met; an existing goal keeps whatever date it already has.
+  const targetDateError = targetDateFormatError
+    ?? (targetDate.trim() && targetDate < todayLocal() && targetDate !== existing?.targetDate
+      ? 'Target date must be today or later.'
+      : undefined);
   const contributionError = validateMoneyInput(contribution, state.settings.baseCurrency, state.settings.locale, {
     label: 'Contribution',
     optional: true,
@@ -146,7 +151,7 @@ export function GoalFormScreen() {
     const amountLabel = formatMoney(item.amountMinor, state.settings.baseCurrency, state.settings.locale);
     if (!(await confirmDestructive({
       title: 'Delete this contribution?',
-      message: `${amountLabel} from ${item.localDate} will be removed from this goal.`,
+      message: `${amountLabel} from ${mediumDate(item.localDate, state.settings.locale)} will be removed from this goal.`,
     }))) return;
     setSaving(true);
     try {
@@ -184,7 +189,7 @@ export function GoalFormScreen() {
         currency={state.settings.baseCurrency}
         value={target}
         onChangeText={setTarget}
-        error={targetError}
+        error={target.trim() ? targetError : undefined}
         autoFocus={!existing}
       />
 
@@ -196,7 +201,7 @@ export function GoalFormScreen() {
             setLinkedCategoryId('');
           }} /></View>)}
         </View>
-        <FormField label="Goal name" value={name} onChangeText={setName} />
+        <FormField label="Goal name" value={name} onChangeText={setName} placeholder={defaultGoalName} />
         <FormField label="Starting progress" value={initial} onChangeText={setInitial} keyboardType="decimal-pad" error={initialError} required />
         <FormField label="Target date (optional)" value={targetDate} onChangeText={setTargetDate} placeholder="YYYY-MM-DD" error={targetDateError} />
       </Card>
@@ -220,7 +225,7 @@ export function GoalFormScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                   <View style={{ flex: 1, gap: 2 }}>
                     <AppText literal variant="label">{amountLabel}</AppText>
-                    <AppText literal variant="caption" muted>{`${item.localDate}${item.note ? ` · ${item.note}` : ''}`}</AppText>
+                    <AppText literal variant="caption" muted>{`${mediumDate(item.localDate, state.settings.locale)}${item.note ? ` · ${item.note}` : ''}`}</AppText>
                   </View>
                   <View style={{ flexDirection: 'row' }}>
                     <TextButton title="Edit" accessibilityLabel={t(`Edit contribution ${amountLabel}`)} onPress={() => editManualContribution(item)} disabled={saving} />

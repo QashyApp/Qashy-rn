@@ -27,6 +27,8 @@ export interface AppSettings extends SyncEntity {
   onboardingComplete: boolean;
   locale: string;
   baseCurrency: CurrencyCode;
+  /** Per device (`deviceLocal` in the sync registry). An id this device cannot resolve falls back to the default theme. */
+  themeId: string;
   themeMode: ThemeMode;
   accentSource: AccentSource;
   accentHex: string;

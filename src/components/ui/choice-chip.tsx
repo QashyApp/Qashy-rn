@@ -6,7 +6,6 @@ import { MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 
 export type ChoiceChipMode = 'radio' | 'checkbox' | 'button';
@@ -33,6 +32,7 @@ export function ChoiceChip({
   mode?: ChoiceChipMode;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const selectable = mode !== 'button';
   return (
@@ -65,7 +65,7 @@ export function ChoiceChip({
         // a raised one — rather than merely tinted; unselected stays a raised
         // control like any other chip or pill button.
         selected
-          ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+          ? materialStyle(theme, 'selected')
           : materialStyle(theme, 'control'),
       ]}>
       {icon ? <AppIcon name={icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={17} /> : selectable ? <View style={{ width: 16, height: 16 }} /> : null}

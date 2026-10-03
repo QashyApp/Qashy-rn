@@ -1,6 +1,14 @@
 # Plan: fully modular, themeable design language
 
-Status: proposal. Nothing in this document is implemented yet.
+Status: implemented (Phases 0-12), with the deviations listed in the status note on each phase and in section 10. The Phase 0 screenshot baseline was deliberately skipped by the user and the theme gallery was not built. The Appearance import/export/delete UI landed alongside this documentation pass.
+
+## 0. Resolved decisions
+
+1. **Theme settings are per device.** `themeId`, `themeMode` and the accent (`accentSource`, `accentHex`) are all `deviceLocal` in `src/sync/oplog/registry.ts`. The accent moves out of the synced `accent` group. User-authored themes live in a device-local `sync_meta` store, never in `AppSettings`.
+2. **Every theme must define both light and dark.** `palette.light` and `palette.dark` are required, and so are the per-mode material values. There are no single-scheme themes, and the loader rejects a theme missing either one. A theme that wants to look the same in both modes still has to say so explicitly.
+3. **Pixel font:** an OFL-licensed Latin face is fine, with Rubik as the Hebrew fallback.
+4. **User-authored themes are in scope.** The repo gets `CUSTOM_THEME_GUIDE.md` (Phase 11) explaining exactly how to write, validate and import one.
+5. **The icon work is committed** (`748d4500`, on top of `a667ff9a`). This plan was re-checked against it; see section 2.1.
 
 ## 1. Goal
 
@@ -32,6 +40,17 @@ Success test: a "Blocky" (Minecraft-style) theme and a "High contrast" theme shi
 
 Correction to an earlier claim: `themeMode` is registered `deviceLocal`, so light/dark does not replicate. Only the accent group does.
 
+### 2.1 Compatibility with commit `748d4500` (icon picker, batch delete)
+
+- **Icon ids are permanent, replicated data** (`src/utils/icon-id.ts`): `ion:<glyph>`, `emoji:<char>`, or a legacy SF-style name, "parseable forever". A theme therefore never changes a stored id. It only changes how an id is *drawn on this device*.
+- `AppIcon` already branches on `parseIconId`. A theme icon set plugs in **after** that parse: `ion:` and legacy ids can be remapped by the theme (e.g. to pixel glyphs), `emoji:` is always drawn as the emoji and ignores the theme, and anything the theme does not cover falls back to the current Ionicons behaviour (including today's `help-circle-outline` fallback).
+- `AppIcon`'s comment promises a catalog icon "looks the same on every device a vault syncs to". A themed icon set deliberately relaxes that, per device. The comment and the guide must say so.
+- `icon-catalog.test.ts` asserts every catalog glyph exists in the bundled Ionicons map. A theme icon set gets the same kind of test, plus a coverage report against the catalog, because a missing glyph must degrade to Ionicons and not to a question mark.
+- `src/components/ui/icon-picker-field.tsx` is new and uses `radius`, `space`, `materialStyle`, `fontStyle`, hard-coded `CELL`/`GAP`/`MODAL_PADDING` constants and a module-level emoji list. It joins the Phase 3 codemod list. The picker previews icons through `AppIcon`, so it follows the active icon set automatically.
+- `use-batch-delete.tsx`, the selection-mode rows and the new delete icons add no theming surface, but they use `settings-row.tsx` and `section-header.tsx`, which were also edited and are Phase 3 consumers.
+- `localization.tsx` gained 31 keys. Theme names and descriptions need en and he keys in the same shape.
+- Settings validation lives in three places in `local-finance-repository.ts` (`completeOnboardingNow`, `updateSettingsNow`, and the import/sync validation that checks `themeMode` and `accentSource`). `themeId` must be added to all three.
+
 ## 3. Target architecture
 
 ### 3.1 `ThemeDefinition`
@@ -42,8 +61,7 @@ New directory `src/theme/themes/`, one file per theme, plus `registry.ts`.
 interface ThemeDefinition {
   id: string;                       // 'classic' | 'material-you' | 'blocky' | ...
   name: string;                     // localized via localization.tsx keys
-  schemes: ('light' | 'dark')[];    // single-scheme themes allowed; resolver maps forced mode
-  palette: { light?: BaseTokens; dark?: BaseTokens };
+  palette: { light: BaseTokens; dark: BaseTokens };   // both required, no single-scheme themes
   accent: {
     mode: 'user' | 'fixed' | 'system';   // user = presets/custom hex apply; fixed = theme owns it
     default: string;
@@ -125,79 +143,113 @@ interface MaterialSpec {
 ## 4. Persistence and sync
 
 - Add `themeId: string` to `AppSettings` (default `'classic'`).
-- Register it in `src/sync/oplog/registry.ts` as **`deviceLocal`**, like `themeMode`. A phone and a desktop may reasonably want different looks, and a peer on an older build could not render an unknown id.
-- Decision needed: the existing `accent` field group still syncs. Options: (a) leave it, (b) make accent per-theme and device-local. Recommendation: (a) for now, and themes with `accent.mode: 'fixed'` simply ignore it.
-- Unknown or removed `themeId` resolves to `classic` at read time, never throws. Because `registry.ts` is the sync merge registry, this must land in the same change as the model field (AGENTS.md rule).
+- Register `themeId` in `src/sync/oplog/registry.ts` as **`deviceLocal`**, and change `accentSource` and `accentHex` from `group('accent')` to `deviceLocal` too (decision 1). `registry.test.ts`, `merge.test.ts` and the sync fixtures in `src/sync/oplog/__tests__/helpers.ts` are updated to match.
+- Known `deviceLocal` behavior, already true for `themeMode`: the `create` op still carries the creating device's value as a seed for a device that holds no copy. After that the local value always wins. This is acceptable and is documented in the guide.
+- Existing stored settings rows have no `themeId`. Hydration backfills `'classic'` in memory only, so nothing is rewritten and no migration is needed.
+- Validation is **format-only** for `themeId` (`^[a-z0-9][a-z0-9-]{0,47}$`), because a custom theme exists only on the device that created it. An id the device cannot resolve falls back to `classic` at read time and never throws. Because `registry.ts` is the sync merge registry, the registry entry must land in the same change as the model field (AGENTS.md rule).
 - Update, together: `domain/models.ts`, `domain/defaults.ts`, `data/repository.ts` (`SettingsInput`), the validation in `local-finance-repository.ts` (settings update around lines 413-468 and the import validation around line 3612), and the repository contract tests. Confirm during Phase 2 whether settings are stored as an opaque record (then no storage migration) or need a migration on either adapter.
-- Custom user themes (Phase 11) are stored **device-locally** and never in `AppSettings`, because that replicates. Candidate home: `sync_meta` or a dedicated local-only store, decided in that phase. They must not touch the keystore, logs or the service-worker cache.
+- Custom user themes (Phase 11) are stored **device-locally** and never in `AppSettings`, because that replicates. Home: a new `SYNC_META.customThemes` key behind a `custom-themes-store.ts`, modeled on `overview-layout-store.ts` (tolerant reader that degrades to "no custom themes", explicit writer through `tx` so no sync op is captured). They must not touch the keystore, logs or the service-worker cache.
 
 ## 5. Phases
 
 Each phase ends green on `npm run typecheck`, `lint`, `test`, and `build:web`. Phases 1-3 must produce zero visual change in `classic`.
 
-### Phase 0: Guardrails (0.5 day)
+### Phase 0: Guardrails (0.5 day) — partly done
+Status: the ESLint rule is in place. The baseline screenshots were deliberately skipped by the user, and the theme gallery was not built (the dev kitchen-sink screen remains as it was).
+
+Done: the lint rule below (`eslint.config.js`). Not done: baseline screenshots and the theme gallery. Phase 3 was instead verified by construction (`classicTheme.space/radius/tile/iconSize/motion` are the same constants, asserted by a test), plus typecheck, the full jest suite, the web build, the iOS and Android exports and the Playwright desktop run. A screenshot baseline is still worth having before Phase 4, which *can* change pixels.
 - Capture baseline Playwright screenshots of key screens in classic light and dark (Overview, Transactions, Plan, More, a form sheet, Appearance).
 - Turn the dev kitchen-sink screen into a **theme gallery**: every shared control, material, type variant and chart in one place, switchable by theme.
 - Add an ESLint rule (or `no-restricted-imports`) so that, after Phase 3, importing `space/radius/motion/tile/iconSize/typeScale` from `@/theme/tokens` outside `src/theme/` fails the build.
 
-### Phase 1: Definition and resolver (1-2 days)
+### Phase 1: Definition and resolver (1-2 days) — done, with deviations
+Status: `ThemeDefinition`, the registry (`getTheme`, `listAvailableThemes`) and `classic` exist, and `accentTokens(seed, dark, theme)` takes the theme instead of reading globals. There is no `defineTheme` and no pure `resolveTheme`: `getTheme` plus `accentTokens` cover the need, and themes extend classic by object spread. Shadows moved out of `theme.tsx` into each theme's `shadows`.
+
 - Add `ThemeDefinition`, `defineTheme`, `resolveTheme`, the registry, and `classic` expressed as a definition.
 - Rebuild `QashyThemeProvider` on `resolveTheme`; make `accentTokens(seed, dark)` take a `BaseTokens` argument instead of reading globals.
 - Move `lightShadows`/`darkShadows` out of `theme.tsx` into classic's material recipe.
 - **Acceptance:** a golden test asserts `resolveTheme(classic, ...)` deep-equals today's `accentTokens`/`systemTokens` output for light/dark x system/preset/custom accents. `tokens.test.ts`, `materials.test.ts` and `accent-preview.test.ts` pass unchanged.
 
-### Phase 2: Persistence and selection plumbing (1 day)
+### Phase 2: Persistence and selection plumbing (1 day) — done
+Status: `themeId` is in the model, repository validation and sync registry (`deviceLocal`), as are `accentSource` and `accentHex`. Unknown ids fall back to classic.
+
 - `themeId` through model, defaults, repository, validation, registry (`deviceLocal`), import/export, onboarding draft, Appearance state.
 - Unknown-id fallback and tests for it; contract tests for the new setting.
 - **Acceptance:** settings round-trip on SQLite and Dexie; sync merge test shows `themeId` is not replicated.
 
-### Phase 3: Scales into context (2-3 days, mostly mechanical)
+### Phase 3: Scales into context (2-3 days, mostly mechanical) — done
+Note: `useThemedStyles` was not needed; the codemod used per-component destructuring from `useQashyTheme()`.
+
+Done with a codemod: components now read `const { space, radius } = useQashyTheme()` and call sites are unchanged. Module-level uses became functions (`containerStyle(space)`, `sizeConfig(theme)`, `tooltipOffset(gap)`), `screenContentMetrics`/`floatingActionMetrics` take `space` as a third argument, and the `ROW_DIVIDER_INSET` constants became a per-component value. Exception: `src/components/ui/motion.tsx` still reads the classic `motion` durations at module scope; it moves with Phase 4, and the lint rule exempts it until then. The `typeScale` import is untouched (Phase 5). Inline numeric gaps (`gap: 12`) were not converted; they were never on the scale and are left for a later cleanup.
 - Add `theme.space/radius/tile/iconSize/motion` and `useThemedStyles`.
 - Codemod the ~120 consuming files; hand-fix module-level `StyleSheet.create` cases. Tackle the ~171 inline `gap/padding/margin: N` and 10 inline `borderRadius: N` by mapping to scale steps where they match, and listing outliers for a decision.
 - Turn the lint rule from Phase 0 on.
 - **Acceptance:** screenshot diff against the Phase 0 baseline is empty for classic.
 
-### Phase 4: Material engine (2 days)
+### Phase 4: Material engine (2 days) — done, simplified
+Status: `MaterialSpec` is `{ engine: 'soft' | 'bevel', gradients, bevelDepth }`, not the full declarative recipe in 3.3. Each theme keeps its `ShadowSet` strings (`shadows`), the bevel engine derives them with `bevelShadowSet` in `src/theme/shadow.ts`, and `press: 'scale' | 'translate'` lives in `MotionSpec`. There is no per-material escape hatch.
+
 - Implement recipe types, soft and bevel engines, and the `boxShadow` serializer.
 - `materialStyle()` reads `theme.material`; the pressed behavior (scale vs translate) moves into `motion.tsx` and the pressables that use `pressScale` today.
 - Replace the remaining direct uses of `theme.shadow*` with materials, and keep `shadowOverlay`/`scrim` as theme fields.
 - **Acceptance:** classic output unchanged; a new test renders every material in a bevel theme and asserts no blur radius > 0.
 
-### Phase 5: Typography registry (2 days)
+### Phase 5: Typography registry (2 days) — done
+Status: `src/theme/fonts.ts` is the bundled font registry (Rubik, Space Grotesk, Pixelify Sans) with per-script coverage, `TypeSpec` has `text`, `numeric` and a per-theme `scale`, and the conformance suite fails a theme with no Hebrew glyph source. Custom themes can pick faces but not change the type scale.
+
 - Font specs, per-theme `typeScale`, generalized `withAppFont`, lazy loading, web precache changes in `workbox-config.cjs` (static files only, `runtimeCaching` stays empty).
 - Script-fallback mechanism and the Hebrew-coverage test.
 - **Acceptance:** typography tests pass; switching theme swaps faces with no flash of the wrong face on web.
 
-### Phase 6: Icon sets (1-2 days)
-- `IconSet` interface, Ionicons set as default, theme-aware `AppIcon` and `IconPickerField`.
-- Coordinate with the in-progress `icon-catalog.ts` work (it is uncommitted); land that first.
+### Phase 6: Icon sets (1-2 days) — done
+Status: `src/theme/icon-sets.ts` (`ionicons`, `pixel`), `resolveIconRender` after `parseIconId`, Ionicons fallback, and coverage tests.
 
-### Phase 7: Charts and category tone (1-2 days)
+- `IconSet` interface, Ionicons set as default, theme-aware `AppIcon` and `IconPickerField`.
+- Builds on the committed `icon-id.ts` / `icon-catalog.ts` (see 2.1): remap after `parseIconId`, never touch `emoji:`, always fall back to Ionicons.
+
+### Phase 7: Charts and category tone (1-2 days) — done
+Status: `ChartSpec` (line width, cap, donut thickness, grid dash, patterns, `categoryPalette`, tone mixing) is consumed by the charts. `categoryPalette` lives under `charts`, not as a top-level field.
+
 - `ChartSpec` consumed by `charts.tsx` and `sparkline.tsx`; render-time `toneColors` adjustment; pattern fills.
 - **Acceptance:** a chart test checks that adjacent series differ by more than color (pattern, label or position).
 
-### Phase 8: Chrome and platform (1 day)
+### Phase 8: Chrome and platform (1 day) — done, simplified
+Status: `material-you` is a built-in definition (`accent.mode: 'system'`, `availableOn` gate); chrome (status bar, `theme-color`, CSS variables, navigation theme) follows the resolved theme. There is no separate `chrome` spec; `glass` and `backdrop` are not part of `ThemeDefinition` (Liquid Glass stays governed by the existing platform and reduced-transparency checks).
+
 - Remove direct token imports from `_layout.tsx`, `+html.tsx`, `finance-provider.tsx` (the HTML shell keeps classic constants intentionally and documents why).
 - Theme-driven status bar, navigation theme, `Host`, web CSS variables, `theme-color`.
 - Extract `material-you` into a definition; keep the Android-only gate.
 
-### Phase 9: Appearance UX (1-2 days)
+### Phase 9: Appearance UX (1-2 days) — done
+Status: `ThemePicker` with preview cards on Appearance and in onboarding, English and Hebrew name and description keys, and accent controls hidden or explained for `fixed` and `system` themes. Import, export and delete of custom themes are on the same screen.
+
 - Theme picker on the Appearance screen with a live preview card (reuse the Phase 0 gallery pieces), and the same step in onboarding's look step.
 - Themes that are single-scheme or have a fixed accent hide or disable the irrelevant controls with an explanation.
 - Add localization keys (English and Hebrew) for names and descriptions.
 
-### Phase 10: First themes (2-4 days)
+### Phase 10: First themes (2-4 days) — done
+Status: `classic`, `material-you` and `high-contrast` ship. The `blocky` theme was built and then removed by request; its building blocks (bevel engine, `pixelify-sans` font, `pixel` icon set) stay and are available to custom themes.
+
 1. `classic` (baseline) and `material-you` (from Phases 1 and 8).
 2. `high-contrast`: proves the system for accessibility, with 7:1 text, thick borders, no gradients and no glass.
-3. `blocky` (the stress test): earthy dirt/stone/grass/oak palettes in light and dark, zero radius, 2-3px hard bevels, no blur, a pixel font for Latin and digits with Rubik for Hebrew, pixel icon set, square-bar charts with patterns, "press = shift down 2px" instead of scale, optional tiled backdrop, no glass.
+3. `blocky` (the stress test; REMOVED, see status above): earthy dirt/stone/grass/oak palettes in light and dark, zero radius, 2-3px hard bevels, no blur, a pixel font for Latin and digits with Rubik for Hebrew, pixel icon set, square-bar charts with patterns, "press = shift down 2px" instead of scale, optional tiled backdrop, no glass.
 4. Optionally one or two more (e.g. terminal green-on-black, paper/ink) to confirm the abstraction is not accidentally shaped around just two themes.
 
-### Phase 11: User-authored themes (2-3 days, after the rest is stable)
+### Phase 11: User-authored themes (2-3 days, after the rest is stable) — done
+Status: `src/theme/custom/schema.ts` (`themeSchemaVersion: 1`, 16 KB cap, fail-closed, path-addressed errors), `contrast.ts` (clamps `text`, `textMuted` and status colors; the accent is clamped by `accentTokens`), and `src/data/custom-themes-store.ts` (`SYNC_META.customThemes`, 8 themes, broken entries dropped on read). Deviations: data URIs are rejected outright rather than allowed with a size cap; shadows are derived (`soft` reuses the base set, `bevel` calls `bevelShadowSet`) and never written by the author; custom themes can only `extend` a built-in; `accent.mode: 'system'` is not allowed.
+
 - A versioned JSON schema (`themeSchemaVersion`) covering palette, accent, shape, material parameters and chart palette. No code, no remote URLs, no font or image fetch; bundled assets only, optionally small embedded data URIs with a size cap.
 - Validation fails closed: the whole theme is rejected if any field is invalid. Contrast is **enforced** (text vs surface, onAccent vs accent) by clamping through the existing `ensureContrast`.
 - Import and export as a file. Storage is device-local. A broken custom theme falls back to classic.
 
-### Phase 12: Docs and hardening (1 day)
+### Phase 11b: `CUSTOM_THEME_GUIDE.md` — done
+Status: written at the repo root. `src/theme/custom/__tests__/guide.test.ts` parses every JSON block with the real validator, checks the two embedded examples against `examples.ts`, and checks that each troubleshooting fragment still exists in the validator source.
+
+Written against the real schema once Phase 11 lands, so every example is validated by a test that parses the guide's JSON blocks with the actual validator. It covers: file format and `themeSchemaVersion`; every field with type, range and default; the requirement to define both light and dark; how contrast clamping rewrites low-contrast colors; what is not allowed (code, URLs, remote fonts); how to import, switch, export and delete a theme; how a broken theme falls back to `classic`; a minimal and a full worked example; and a troubleshooting table of validator errors.
+
+### Phase 12: Docs and hardening (1 day) — done
+Status: README, AGENTS.md and `docs/theme-authoring.md` updated.
+
 - README (features, architecture, privacy note that themes are local) and AGENTS.md (theme authoring rules, the lint restriction, "no hard-coded colors or scales in features").
 - A `docs/theme-authoring.md` with a minimal example.
 
@@ -230,14 +282,20 @@ Each phase ends green on `npm run typecheck`, `lint`, `test`, and `build:web`. P
 | Theme choice leaking into sync | `deviceLocal` registry entry plus test |
 | Scope creep into custom themes and a theme store | Phase 11 is separate and local-only; a store would violate product scope |
 
-## 8. Decisions needed
+## 8. Decisions
 
-1. Should `accentSource`/`accentHex` stay synced across devices, or become per-device with `themeId`?
-2. Are single-scheme themes allowed (Blocky might be dark-only), and what should "System" mean for them?
-3. Pixel font choice: check the licence (OFL fonts such as Silkscreen or Press Start 2P are bundleable) and confirm Latin-plus-digits-only is acceptable with a Rubik fallback for Hebrew.
-4. Is Phase 11 (user-authored themes) wanted at all, or are built-in themes enough?
-5. Landing order: should the uncommitted icon-catalog work merge before Phase 3?
+All five open questions are answered; see section 0.
 
 ## 9. Effort and slicing
 
 Rough total: **3-4 weeks** for Phases 0-10 by one developer, about 1 more week for Phases 11-12. Suggested PR slices: (1) Phases 0-2, (2) Phase 3 alone, (3) Phases 4-5, (4) Phases 6-8, (5) Phase 9-10, (6) Phase 11-12.
+
+## 10. Deviations from this plan
+
+- No `defineTheme` or pure `resolveTheme`; `getTheme` and `accentTokens` cover it, and themes extend classic by spread.
+- No `useThemedStyles`; per-component destructuring from `useQashyTheme()` was enough.
+- `accent.mode` (`user`, `fixed`, `system`) and `availableOn` were added to `ThemeDefinition`, which the plan did not have.
+- Materials are an engine flag plus per-scheme shadow strings, not a full recipe per material. Custom themes get derived shadows.
+- `shape.borderWidth`, `cornerStyle`, `glass`, `chrome` and `backdrop` were not added.
+- Custom themes reject data URIs; they cannot extend other custom themes or use the `system` accent mode.
+- Phase 0 screenshots were skipped and the theme gallery was not built.

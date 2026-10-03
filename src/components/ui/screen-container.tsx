@@ -3,7 +3,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ScreenTransition } from '@/components/ui/motion';
 import { useScreenMetrics, type ScreenMetrics } from '@/theme/layout';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
+import { classicTheme } from '@/theme/themes/classic';
+import type { SpaceScale } from '@/theme/themes/types';
 
 const IS_WEB = process.env.EXPO_OS === 'web';
 
@@ -27,7 +29,7 @@ export interface ScreenInsets {
 // opts into `viewport-fit=cover`, so an installed iOS PWA draws under the status
 // bar and the rounded display corners. Native tab screens get their top inset
 // from the section stack's native header, so it is not added twice here.
-export function screenContentMetrics(metrics: ScreenMetrics, insets: number | ScreenInsets = 0): ViewStyle {
+export function screenContentMetrics(metrics: ScreenMetrics, insets: number | ScreenInsets = 0, space: SpaceScale = classicTheme.space): ViewStyle {
   const edges = typeof insets === 'number' ? { bottom: insets } : insets;
   const bottomInset = edges.bottom ?? 0;
   const topInset = IS_WEB ? edges.top ?? 0 : 0;
@@ -49,7 +51,9 @@ export function screenContentMetrics(metrics: ScreenMetrics, insets: number | Sc
     paddingLeft: horizontal + leftInset,
     paddingRight: horizontal + rightInset,
     paddingTop: (IS_WEB ? space.xxl : space.md) + topInset,
-    paddingBottom: metrics.hasBottomNavigation ? 104 + bottomInset : space.xxxl,
+    // Room to scroll the last row clear of the floating action button (it sits at 92px + its own
+    // height above the bottom bar), so nothing is stuck permanently underneath it.
+    paddingBottom: metrics.hasBottomNavigation ? 160 + bottomInset : space.xxxl + 80,
   };
 }
 
@@ -62,7 +66,7 @@ export function screenContentMetrics(metrics: ScreenMetrics, insets: number | Sc
  * of pixels as you switched tabs. It also ignored safe-area insets entirely,
  * which put it under the home indicator on an installed iOS PWA.
  */
-export function floatingActionMetrics(metrics: ScreenMetrics, insets: number | ScreenInsets = 0): ViewStyle {
+export function floatingActionMetrics(metrics: ScreenMetrics, insets: number | ScreenInsets = 0, space: SpaceScale = classicTheme.space): ViewStyle {
   const edges = typeof insets === 'number' ? { bottom: insets } : insets;
   return {
     position: 'absolute',
@@ -80,10 +84,11 @@ export function floatingActionMetrics(metrics: ScreenMetrics, insets: number | S
 export function ScreenContainer({ style, ...props }: ViewProps) {
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
+  const { space } = useQashyTheme();
   return (
     <ScreenTransition
       {...props}
-      style={[screenContentMetrics(metrics, insets), { gap: space.xl }, style]}
+      style={[screenContentMetrics(metrics, insets, space), { gap: space.xl }, style]}
     />
   );
 }

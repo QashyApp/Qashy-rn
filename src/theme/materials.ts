@@ -27,10 +27,23 @@ import { useQashyTheme, type ThemeTokens } from '@/theme/theme';
  */
 const GRADIENT_KEY = process.env.EXPO_OS === 'web' ? 'backgroundImage' : 'experimental_backgroundImage';
 
-export type Material = 'card' | 'raised' | 'sunken' | 'control' | 'controlPressed' | 'accent' | 'accentPressed';
+export type Material =
+  | 'card'
+  | 'raised'
+  | 'sunken'
+  | 'control'
+  | 'controlPressed'
+  | 'accent'
+  | 'accentPressed'
+  // A chosen option in a picker, chip or grid: tinted container pressed into the surface.
+  | 'selected'
+  // A floating panel (menu, sheet, picker, dragged card): raised plus the overlay shadow.
+  | 'overlay'
+  // A small tinted badge sunk into a card.
+  | 'well';
 
-function withGradient(style: ViewStyle, gradient: string | undefined): ViewStyle {
-  if (!gradient) return style;
+function withGradient(style: ViewStyle, gradient: string | undefined, enabled: boolean): ViewStyle {
+  if (!gradient || !enabled) return style;
   return { ...style, [GRADIENT_KEY]: gradient };
 }
 
@@ -43,19 +56,25 @@ function withGradient(style: ViewStyle, gradient: string | undefined): ViewStyle
 export function materialStyle(theme: ThemeTokens, material: Material): ViewStyle {
   switch (material) {
     case 'card':
-      return withGradient({ backgroundColor: theme.surface, boxShadow: theme.shadowCard }, theme.surfaceGradient);
+      return withGradient({ backgroundColor: theme.surface, boxShadow: theme.shadowCard }, theme.surfaceGradient, theme.gradients);
     case 'raised':
-      return withGradient({ backgroundColor: theme.surface, boxShadow: theme.shadowRaised }, theme.surfaceGradient);
+      return withGradient({ backgroundColor: theme.surface, boxShadow: theme.shadowRaised }, theme.surfaceGradient, theme.gradients);
     case 'sunken':
       return { backgroundColor: theme.surfaceSunken, boxShadow: theme.shadowSunken };
     case 'control':
-      return withGradient({ backgroundColor: theme.surfaceElevated, boxShadow: theme.shadowControl }, theme.surfaceGradient);
+      return withGradient({ backgroundColor: theme.surfaceElevated, boxShadow: theme.shadowControl }, theme.surfaceGradient, theme.gradients);
     case 'controlPressed':
       return { backgroundColor: theme.surfaceMuted, boxShadow: theme.shadowControlPressed };
     case 'accent':
-      return withGradient({ backgroundColor: theme.accent, boxShadow: theme.shadowAccent }, theme.accentGradient);
+      return withGradient({ backgroundColor: theme.accent, boxShadow: theme.shadowAccent }, theme.accentGradient, theme.gradients);
     case 'accentPressed':
       return { backgroundColor: theme.accent, boxShadow: theme.shadowControlPressed };
+    case 'selected':
+      return { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed };
+    case 'overlay':
+      return withGradient({ backgroundColor: theme.surface, boxShadow: theme.shadowOverlay }, theme.surfaceGradient, theme.gradients);
+    case 'well':
+      return { backgroundColor: theme.accentContainer, boxShadow: theme.shadowSunken };
     default:
       return {};
   }

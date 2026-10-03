@@ -8,12 +8,13 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { MotionView } from '@/components/ui/motion';
 import { SectionHeader } from '@/components/ui/section-header';
 import { useFinanceState } from '@/providers/finance-provider';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 import { monthKey, monthLabel } from '@/utils/date';
 import type { WidgetProps } from '@/features/overview/widgets/types';
 import { useDashboard } from '@/features/overview/widgets/use-dashboard';
 
 export function RecentWidget({ month }: WidgetProps) {
+  const { space } = useQashyTheme();
   const state = useFinanceState();
   const summary = useDashboard(month);
   const locale = state.settings.locale;

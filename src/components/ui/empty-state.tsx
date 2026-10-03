@@ -6,7 +6,6 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 /**
  * The one shape an empty list takes.
@@ -39,11 +38,16 @@ export function EmptyState({
   children?: ReactNode;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const tile = compact ? 48 : 56;
   // The icon tile sits inside a larger sunken well, so it reads as set into
   // the page rather than floating flat on it — the one place in the empty
   // state where material carries the sense of "there's nothing here yet".
   const well = tile + space.md * 2;
+  // The well's corners are concentric with the tile's, so both are circles in
+  // themes with round cards and both are rounded squares in blockier ones.
+  const tileRadius = Math.min(radius.card, tile / 2);
+  const wellRadius = Math.min(tileRadius + space.md, well / 2);
   return (
     <MotionView
       variant="down"
@@ -58,7 +62,8 @@ export function EmptyState({
           {
             width: well,
             height: well,
-            borderRadius: well / 2,
+            borderRadius: wellRadius,
+            borderCurve: 'continuous',
             alignItems: 'center',
             justifyContent: 'center',
           },
@@ -71,7 +76,7 @@ export function EmptyState({
           style={{
             width: tile,
             height: tile,
-            borderRadius: radius.card,
+            borderRadius: tileRadius,
             borderCurve: 'continuous',
             backgroundColor: theme.accentContainer,
             alignItems: 'center',

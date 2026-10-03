@@ -64,9 +64,8 @@ import {
 import type { BundleExport, BundleImport, SyncPassReason } from '@/sync/runtime';
 import { BUNDLE_MIME, bundleFileName } from '@/sync/transport/file';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
-import { todayLocal } from '@/utils/date';
+import { toLocalDate, todayLocal } from '@/utils/date';
 import { hapticSuccess } from '@/utils/haptics';
 import {
   MAX_SYNC_IMPORT_BYTES,
@@ -98,6 +97,7 @@ interface PickedBackup {
 }
 
 export function TransferScreen() {
+  const { radius, space } = useQashyTheme();
   const { status, refresh, setup, runtime } = useSync();
   const onboardingParam = useLocalSearchParams<{ onboarding?: string }>().onboarding;
   const repository = useFinanceRepository();
@@ -597,6 +597,13 @@ function Preview({
 }) {
   const summary = summarizeArchive(archive);
   const theme = useQashyTheme();
+  const { radius, space } = theme;
+  // The timestamp is UTC, but the file name carries the local day it was made. Slicing the UTC
+  // string showed a different date to anyone away from UTC around midnight.
+  const madeOnDate = (createdAt: string) => {
+    const made = new Date(createdAt);
+    return Number.isNaN(made.getTime()) ? createdAt.slice(0, 10) : toLocalDate(made);
+  };
   return (
     <MotionView variant="up" exit animateLayout style={{ gap: space.md }}>
       <StatusPill
@@ -606,7 +613,7 @@ function Preview({
         style={{ borderRadius: radius.control }}
       />
       <View style={{ gap: space.xxs }}>
-        <Detail label="Made on" value={summary.createdAt.slice(0, 10)} />
+        <Detail label="Made on" value={madeOnDate(summary.createdAt)} />
         <Detail label="Made by" value={summary.deviceName || '—'} />
         <Detail label="Base currency" value={summary.baseCurrency || '—'} />
       </View>
@@ -633,6 +640,7 @@ function Preview({
 
 /** One fact about the archive. The value is data, so it is never translated. */
 function Detail({ label, value }: { label: string; value: string }) {
+  const { space } = useQashyTheme();
   return (
     <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'baseline', gap: space.sm }}>
       <AppText variant="label">{label}</AppText>
@@ -658,6 +666,7 @@ function Tally({
   tone?: 'accent' | 'negative' | 'plain';
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   return (
     <View
       style={{

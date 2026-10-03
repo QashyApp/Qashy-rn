@@ -1,7 +1,9 @@
 module.exports = {
   globDirectory: 'dist',
   globPatterns: ['**/*.{html,js,css,json,png,jpg,jpeg,svg,ico,woff,woff2,ttf,otf}'],
-  globIgnores: ['sw.js', 'workbox-*.js'],
+  // The dev-only component gallery redirects away at runtime in production, so its page has no
+  // business in the precache.
+  globIgnores: ['sw.js', 'workbox-*.js', '**/kitchen-sink*'],
   swDest: 'dist/sw.js',
   navigateFallback: '/index.html',
   // Without a denylist the app shell is returned for *any* uncached navigation,

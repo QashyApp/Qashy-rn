@@ -87,7 +87,7 @@ function directOrInverseApplied(
   const inverse = latestRate(rates, toCurrency, fromCurrency, localDate);
   if (!inverse) return null;
   const inverseRate = new Decimal(inverse.rate);
-  if (!inverseRate.isFinite() || !inverseRate.isPositive()) return null;
+  if (!inverseRate.isFinite() || inverseRate.lte(0)) return null;
   return {
     rate: new Decimal(1).div(inverseRate).toSignificantDigits(20).toFixed(),
     effectiveDate: inverse.effectiveDate,
@@ -137,7 +137,7 @@ export function appliedCrossRateFor(
 
   const fromBaseRate = new Decimal(fromBase.rate);
   const toBaseRate = new Decimal(toBase.rate);
-  if (!toBaseRate.isFinite() || !toBaseRate.isPositive()) return null;
+  if (!toBaseRate.isFinite() || toBaseRate.lte(0)) return null;
 
   return {
     rate: fromBaseRate.div(toBaseRate).toSignificantDigits(20).toFixed(),

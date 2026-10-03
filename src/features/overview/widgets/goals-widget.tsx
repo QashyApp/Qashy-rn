@@ -12,7 +12,7 @@ import { ProgressRing } from '@/components/ui/progress-bar';
 import { SectionHeader } from '@/components/ui/section-header';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 import { formatMoney } from '@/utils/money';
 import type { WidgetConfigSheetProps, WidgetProps } from '@/features/overview/widgets/types';
 
@@ -27,6 +27,7 @@ function useActiveGoals() {
 }
 
 export function GoalsWidget({ card }: WidgetProps) {
+  const { space } = useQashyTheme();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const { t } = useLocalization();

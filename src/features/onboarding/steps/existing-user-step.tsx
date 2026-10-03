@@ -8,7 +8,6 @@ import { StepHeading } from '@/features/onboarding/onboarding-shell';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, tile } from '@/theme/tokens';
 
 /**
  * "I already use Qashy". There is no account to sign in to — the data lives on
@@ -16,6 +15,7 @@ import { radius, space, tile } from '@/theme/tokens';
  * options are to fetch it from one of those.
  */
 export function ExistingUserStep() {
+  const { space } = useQashyTheme();
   return (
     <View style={{ gap: space.xxl }}>
       <StepHeading
@@ -42,6 +42,7 @@ export function ExistingUserStep() {
 
 function Option({ icon, title, body, onPress }: { icon: string; title: string; body: string; onPress: () => void }) {
   const theme = useQashyTheme();
+  const { radius, space, tile } = theme;
   const { isRtl, t } = useLocalization();
   return (
     <MotionPressable

@@ -2,9 +2,10 @@ import type { ColorValue } from 'react-native';
 
 import { materialStyle, type Material } from '@/theme/materials';
 import type { ThemeTokens } from '@/theme/theme';
+import { classicTheme } from '@/theme/themes/classic';
 import { darkTokens, lightTokens } from '@/theme/tokens';
 
-const MATERIALS: Material[] = ['card', 'raised', 'sunken', 'control', 'controlPressed', 'accent', 'accentPressed'];
+const MATERIALS: Material[] = ['card', 'raised', 'sunken', 'control', 'controlPressed', 'accent', 'accentPressed', 'selected', 'overlay', 'well'];
 
 /**
  * A minimal but structurally faithful `ThemeTokens` fixture. `androidPlatform`
@@ -22,7 +23,17 @@ function buildTheme(dark: boolean, androidPlatform: boolean): ThemeTokens {
   const opaque = (label: string): ColorValue => ({ toString: () => label }) as unknown as ColorValue;
   return {
     mode: dark ? 'dark' : 'light',
+    space: classicTheme.space,
+    radius: classicTheme.radius,
+    tile: classicTheme.tile,
+    iconSize: classicTheme.iconSize,
+    motion: classicTheme.motion,
+    iconSet: classicTheme.icons.set,
+    type: classicTheme.type,
+    charts: classicTheme.charts,
+    gradients: true,
     accent: androidPlatform ? opaque('accent') : '#5966E9',
+    accentText: androidPlatform ? opaque('accentText') : '#4755D6',
     onAccent: androidPlatform ? opaque('onAccent') : '#FFFFFF',
     accentContainer: androidPlatform ? opaque('accentContainer') : '#E4E6FB',
     onAccentContainer: androidPlatform ? opaque('onAccentContainer') : '#2A2F80',

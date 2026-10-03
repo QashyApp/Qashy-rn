@@ -1,11 +1,15 @@
 import { AppIcon } from '@/components/ui/app-icon';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
-import { readableTextColor } from '@/theme/tokens';
+import { ACCENT_PRESET_NAMES, readableTextColor } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 
 /** A coarse, human name for a hex color, so screen readers never announce raw hex digits. */
 export function describeColor(hex: string) {
+  // The shipped presets have their own names, so two of them never announce the same word
+  // (Indigo and Blue both fall in the coarse "Blue" hue band below).
+  const preset = ACCENT_PRESET_NAMES[hex.trim().toUpperCase() as keyof typeof ACCENT_PRESET_NAMES];
+  if (preset) return preset;
   const match = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
   if (!match) return 'Custom color';
   const [r, g, b] = [0, 2, 4].map((offset) => parseInt(match[1].slice(offset, offset + 2), 16) / 255);

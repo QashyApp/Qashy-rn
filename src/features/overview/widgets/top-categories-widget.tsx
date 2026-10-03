@@ -10,7 +10,7 @@ import { SectionHeader } from '@/components/ui/section-header';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, tile as tileMetrics, toneColors } from '@/theme/tokens';
+import { toneColors } from '@/theme/tokens';
 import type { WidgetProps } from '@/features/overview/widgets/types';
 import { useDashboard } from '@/features/overview/widgets/use-dashboard';
 
@@ -18,6 +18,7 @@ const MAX_CATEGORIES_SHOWN = 5;
 
 export function TopCategoriesWidget({ month }: WidgetProps) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const state = useFinanceState();
   const summary = useDashboard(month);
@@ -45,14 +46,14 @@ export function TopCategoriesWidget({ month }: WidgetProps) {
           const category = item.category;
           const share = totalMinor > 0 ? item.amountMinor / totalMinor : 0;
           const percent = Math.round(share * 100);
-          const tile = toneColors(category?.color ?? theme.staticAccent, theme.staticSurface, theme.staticText, theme.mode === 'dark');
+          const tile = toneColors(category?.color ?? theme.staticAccent, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone);
           const name = category?.name ?? 'Uncategorized';
           const translatedName = category ? category.name : t('Uncategorized');
           return (
             <View key={category?.id ?? `uncategorized-${index}`} style={{ gap: space.xs }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
-                <View style={{ width: tileMetrics.size, height: tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
-                  <AppIcon name={category?.icon ?? 'chart.pie'} color={tile.onContainer} size={tileMetrics.icon} />
+                <View style={{ width: theme.tile.size, height: theme.tile.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
+                  <AppIcon name={category?.icon ?? 'chart.pie'} color={tile.onContainer} size={theme.tile.icon} />
                 </View>
                 <AppText literal={Boolean(category)} variant="label" style={{ flex: 1 }} numberOfLines={1}>{name}</AppText>
                 <View style={{ alignItems: 'flex-end', gap: space.xxs }}>

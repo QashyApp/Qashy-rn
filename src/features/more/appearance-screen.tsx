@@ -13,12 +13,17 @@ import { LanguageSelector } from '@/components/ui/language-selector';
 import { MotionView } from '@/components/ui/motion';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { SegmentedControl, type SegmentOption } from '@/components/ui/segmented-control';
+import { effectiveAccentMode, ThemePicker } from '@/components/ui/theme-picker';
+import { saveThemeFile, pickThemeFileText } from '@/features/more/custom-theme-files';
 import type { AccentSource, ThemeMode } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
+import { evaluateThemeImport, exportCustomThemeJson, summarizeImportErrors, themeExportFilename } from '@/theme/custom/theme-import';
+import { useCustomThemes } from '@/theme/custom/use-custom-themes';
 import { previewAccentTokens, useQashyTheme } from '@/theme/theme';
-import { ACCENT_PRESETS, mixHex, radius, space } from '@/theme/tokens';
-import { errorMessage, showError } from '@/utils/confirm';
+import { getTheme, listAvailableThemes } from '@/theme/themes/registry';
+import { ACCENT_PRESETS, mixHex } from '@/theme/tokens';
+import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 
 const THEME_MODE_ICONS: Record<ThemeMode, string> = { system: 'circle.lefthalf.filled', light: 'sun.max', dark: 'moon' };
 const THEME_MODE_OPTIONS: SegmentOption<ThemeMode>[] = [
@@ -33,17 +38,31 @@ export function AppearanceScreen() {
   const repository = useFinanceRepository();
   const { settings } = useFinanceState();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const systemScheme = useColorScheme();
   const [expectedRevision, setExpectedRevision] = useState(settings.revision);
+  const [themeId, setThemeId] = useState(settings.themeId);
   const [mode, setMode] = useState<ThemeMode>(settings.themeMode);
   const [source, setSource] = useState<AccentSource>(settings.accentSource);
   const [hex, setHex] = useState(settings.accentHex);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const { themes: customThemes, files: customFiles, save: saveCustomTheme, remove: removeCustomTheme } = useCustomThemes();
   const validHex = /^#[0-9A-Fa-f]{6}$/.test(hex);
   const previewMode = mode === 'system' ? (systemScheme === 'dark' ? 'dark' : 'light') : mode;
-  const preview = previewAccentTokens(source, validHex ? hex : theme.staticAccent, previewMode === 'dark');
+  const selectedTheme = getTheme(themeId, customThemes);
+  const customIds = customThemes.map((item) => item.id);
+  const selectedCustomFile = customFiles.find((file) => file.id === themeId);
+  const accentMode = effectiveAccentMode(selectedTheme);
+  const userAccent = accentMode === 'user';
+  // A theme that owns its accent ('fixed', or 'system' off Android) ignores the accent controls, so the
+  // preview shows what the provider will actually apply.
+  const preview = userAccent
+    ? previewAccentTokens(source, validHex ? hex : theme.staticAccent, previewMode === 'dark', selectedTheme)
+    : previewAccentTokens(accentMode === 'system' ? 'system' : 'preset', selectedTheme.accent.default, previewMode === 'dark', selectedTheme);
   // Android's Material You accent is a dynamic platform color, so it cannot be
   // blended in JS the way a hex accent can. Fade the secondary lines instead.
   const dynamicAccent = typeof preview.accent !== 'string' || typeof preview.onAccent !== 'string';
@@ -51,7 +70,7 @@ export function AppearanceScreen() {
     ? preview.onAccent
     : mixHex(preview.onAccent as string, preview.accent as string, 0.25);
   const previewMutedStyle = { color: previewMuted, opacity: dynamicAccent ? 0.75 : 1 };
-  const customError = source === 'custom' && !validHex
+  const customError = userAccent && source === 'custom' && !validHex
     ? 'Use a six-digit hex color such as #5966E9.'
     : undefined;
   // Language applies immediately, exactly like the onboarding welcome step: it writes
@@ -64,6 +83,76 @@ export function AppearanceScreen() {
       setExpectedRevision(updated.revision);
     } catch (reason) {
       showError('Couldn’t apply this setting', errorMessage(reason, 'Try again.'));
+    }
+  };
+  // Like language, the theme applies immediately and adopts the new revision, so a pending
+  // "Save appearance" doesn't hit a stale-revision conflict.
+  const changeTheme = async (id: string): Promise<boolean> => {
+    if (id === themeId) return true;
+    const previous = themeId;
+    setThemeId(id);
+    try {
+      const updated = await repository.updateSettings({ themeId: id });
+      setExpectedRevision(updated.revision);
+      return true;
+    } catch (reason) {
+      setThemeId(previous);
+      showError('Couldn’t apply this setting', errorMessage(reason, 'Try again.'));
+      return false;
+    }
+  };
+  // Import reads a file the user picked, validates the whole theme, and changes nothing unless it
+  // is valid (and, when it would replace a stored theme, confirmed). Theme contents are never logged.
+  const importTheme = async () => {
+    if (importing) return;
+    setImporting(true);
+    setNotice(null);
+    try {
+      const text = await pickThemeFileText();
+      if (text === null) return;
+      const evaluation = evaluateThemeImport(text, customFiles);
+      if (!evaluation.ok) {
+        showError('Couldn’t import theme', summarizeImportErrors(evaluation.errors));
+        return;
+      }
+      if (evaluation.replaces) {
+        const confirmed = await confirmDestructive({
+          title: 'Replace this theme?',
+          message: 'A custom theme with the same ID is already on this device. Importing replaces it.',
+          confirmLabel: 'Replace',
+        });
+        if (!confirmed) return;
+      }
+      await saveCustomTheme(evaluation.file);
+      setNotice([t('Theme imported.'), ...evaluation.warnings].join('\n'));
+      await changeTheme(evaluation.file.id);
+    } catch (reason) {
+      showError('Couldn’t import theme', errorMessage(reason, 'Try again.'));
+    } finally {
+      setImporting(false);
+    }
+  };
+  const exportTheme = async () => {
+    if (!selectedCustomFile) return;
+    try {
+      await saveThemeFile(themeExportFilename(selectedCustomFile), exportCustomThemeJson(selectedCustomFile), t('Export theme'));
+    } catch (reason) {
+      showError('Couldn’t export theme', errorMessage(reason, 'Try again.'));
+    }
+  };
+  const deleteTheme = async (id: string) => {
+    const confirmed = await confirmDestructive({
+      title: 'Delete this theme?',
+      message: 'The theme is removed from this device. Export it first to keep a copy.',
+    });
+    if (!confirmed) return;
+    // Leave the deleted theme first, so settings never point at a theme that no longer exists.
+    if (themeId === id && !(await changeTheme('classic'))) return;
+    try {
+      await removeCustomTheme(id);
+      setNotice(null);
+    } catch (reason) {
+      showError('Couldn’t delete theme', errorMessage(reason, 'Try again.'));
     }
   };
   const save = async () => {
@@ -92,7 +181,7 @@ export function AppearanceScreen() {
           context, so the button below is a hand-styled stand-in that mirrors its look using
           `preview.accent`/`preview.onAccent` directly — it is not interactive and never becomes
           real chrome, it exists purely so a color choice reads instantly, before Save. */}
-      <MotionView key={`${mode}-${source}-${hex}`} variant="fade" exit animateLayout>
+      <MotionView key={`${themeId}-${mode}-${source}-${hex}`} variant="fade" exit animateLayout>
         {/* A plain View, not `Card`: Card's raised material paints a neutral gradient over any
             backgroundColor, which hid the accent (and left on-accent text white on white). */}
         <View style={{ backgroundColor: preview.accent, gap: space.lg, padding: space.lg, borderRadius: radius.card, borderCurve: 'continuous', boxShadow: theme.shadowCard }}>
@@ -133,10 +222,44 @@ export function AppearanceScreen() {
       </MotionView>
       <MotionView>
         <Card style={{ gap: 16 }}>
+          <AppText variant="headline">Theme</AppText>
+          <AppText muted>Choose the overall look. Every theme has a light and a dark version.</AppText>
+          <ThemePicker
+            value={themeId}
+            onChange={(id) => { void changeTheme(id); }}
+            themes={listAvailableThemes(customThemes)}
+            customIds={customIds}
+            onDelete={(id) => { void deleteTheme(id); }}
+            dark={previewMode === 'dark'}
+          />
+        </Card>
+      </MotionView>
+      <MotionView>
+        <Card style={{ gap: 16 }}>
+          <AppText variant="headline">Custom themes</AppText>
+          <AppText muted>Import a theme file (.json) or export the selected custom theme. Custom themes stay on this device.</AppText>
+          {notice ? <AppText literal accessibilityRole="alert">{notice}</AppText> : null}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md }}>
+            <ActionButton title="Import theme" icon="square.and.arrow.down" variant="secondary" disabled={importing} busy={importing} onPress={importTheme} />
+            <ActionButton title="Export theme" icon="square.and.arrow.up" variant="secondary" disabled={!selectedCustomFile} onPress={exportTheme} />
+          </View>
+          {!selectedCustomFile ? <AppText variant="caption" muted>Select a custom theme to export it.</AppText> : null}
+        </Card>
+      </MotionView>
+      <MotionView>
+        <Card style={{ gap: 16 }}>
           <AppText variant="headline">Appearance</AppText>
           <SegmentedControl label="Appearance" options={THEME_MODE_OPTIONS} value={mode} onChange={(value) => { setMode(value); setSaved(false); }} />
         </Card>
       </MotionView>
+      {!userAccent ? (
+        <MotionView>
+          <Card style={{ gap: 8 }}>
+            <AppText variant="headline">Accent source</AppText>
+            <AppText muted>{accentMode === 'system' ? 'This theme uses your device’s accent color.' : 'This theme sets its own accent color.'}</AppText>
+          </Card>
+        </MotionView>
+      ) : (
       <MotionView>
         <Card style={{ gap: 16 }}>
           <AppText variant="headline">Accent source</AppText>
@@ -156,6 +279,7 @@ export function AppearanceScreen() {
           <FormField label="Custom accent" value={hex} onChangeText={(value) => { setSource('custom'); setHex(value); setSaved(false); }} autoCapitalize="characters" maxLength={7} error={customError} hint="Only the accent changes. Qashy gently adjusts unsafe colors to preserve contrast." />
         </Card>
       </MotionView>
+      )}
       <MotionView>
         <ActionButton title={saving ? 'Saving…' : saved ? 'Saved' : 'Save appearance'} icon="checkmark" size="large" disabled={saving || Boolean(customError)} busy={saving} onPress={save} />
       </MotionView>

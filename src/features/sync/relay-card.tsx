@@ -46,7 +46,6 @@ import {
 import type { RelayHealth } from '@/sync/transport/relay-health';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
 import { relativeTime } from '@/utils/relative-time';
 
@@ -77,6 +76,7 @@ export function RelayCard({
 }) {
   const { setup } = useSync();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
 
   const [advanced, setAdvanced] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -298,6 +298,7 @@ function ToggleRow({
   readonly value: boolean;
   readonly onValueChange: (value: boolean) => void;
 }) {
+  const { space } = useQashyTheme();
   const { t } = useLocalization();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: space.lg }}>

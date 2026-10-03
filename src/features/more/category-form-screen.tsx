@@ -16,18 +16,23 @@ import type { CategoryKind } from '@/domain/models';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
+import { categoryDeletionMessage } from '@/utils/category-impact';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { hapticSuccess } from '@/utils/haptics';
-import { CATEGORY_PALETTE, radius, space, toneColors } from '@/theme/tokens';
+import { toneColors } from '@/theme/tokens';
 
-const COLORS = CATEGORY_PALETTE;
 const DEFAULT_ICON: Record<CategoryKind, string> = { expense: 'ion:cart-outline', income: 'ion:cash-outline' };
+
+const MAX_CATEGORY_NAME_LENGTH = 40;
 
 export function CategoryFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
+  // Suggested colors for a new category come from the theme; a stored color is never rewritten.
+  const COLORS = theme.charts.categoryPalette;
   const { t } = useLocalization();
   const existing = id ? state.categories.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
@@ -67,6 +72,7 @@ export function CategoryFormScreen() {
     item.name.trim().toLocaleLowerCase() === trimmedName.toLocaleLowerCase());
   const nameError = !trimmedName
     ? 'Category name is required.'
+    : trimmedName.length > MAX_CATEGORY_NAME_LENGTH ? `Use ${MAX_CATEGORY_NAME_LENGTH} characters or fewer.`
     : duplicate ? 'A category with this name already exists.' : undefined;
 
   const save = async () => {
@@ -85,7 +91,7 @@ export function CategoryFormScreen() {
 
   const remove = async () => {
     if (!existing || busy) return;
-    if (!(await confirmDestructive({ title: `Delete ${existing.name}?`, message: 'Transactions in this category become uncategorized, and it is removed from budgets and goals.' }))) return;
+    if (!(await confirmDestructive({ title: `Delete ${existing.name}?`, message: categoryDeletionMessage(state.budgets, [existing.id]) }))) return;
     setBusy(true);
     try {
       await repository.deleteEntities('categories', [existing.id]);
@@ -99,7 +105,7 @@ export function CategoryFormScreen() {
 
   if (id && !existing) return <Redirect href="/more" />;
 
-  const preview = toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark');
+  const preview = toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone);
 
   return (
     <FormScreen contentContainerStyle={{ gap: 16 }}>

@@ -34,6 +34,42 @@ describe('localization', () => {
       .toBe('+$100.00 יוסר מהמגבלה של התקופה הזו.');
   });
 
+  it('translates the theme picker title, helper text, and every built-in theme name and description', () => {
+    for (const message of [
+      'Theme',
+      'Choose the overall look. Every theme has a light and a dark version.',
+      'This theme sets its own accent color.',
+      'Classic',
+      'High contrast',
+      'Soft, tactile surfaces with a calm indigo accent.',
+      'Rounded Material surfaces that follow your Android system colors.',
+      'Maximum contrast and bold edges for easy reading.',
+    ]) {
+      expect(translateMessage(message, 'he')).not.toBe(message);
+      expect(translateMessage(message, 'en')).toBe(message);
+    }
+    expect(translateMessage('Classic', 'he')).toBe('קלאסי');
+  });
+
+  it('translates the custom theme import, export and delete copy', () => {
+    for (const message of [
+      'Custom themes',
+      'Import theme',
+      'Export theme',
+      'Delete theme',
+      'Delete this theme?',
+      'Replace this theme?',
+      'Replace',
+      'Theme imported.',
+      'Couldn’t import theme',
+      'At most 8 custom themes can be stored; delete one first.',
+      'This file is too large to be a theme.',
+    ]) {
+      expect(translateMessage(message, 'he')).not.toBe(message);
+      expect(translateMessage(message, 'en')).toBe(message);
+    }
+  });
+
   it('leaves unknown copy and English unchanged', () => {
     expect(translateMessage('Custom account name', 'he')).toBe('Custom account name');
     expect(translateMessage('Base currency', 'en')).toBe('Base currency');

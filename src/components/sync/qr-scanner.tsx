@@ -1,5 +1,5 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 
 import { cameraSupported } from '@/components/sync/camera-support';
@@ -8,7 +8,6 @@ import { AppText } from '@/components/ui/app-text';
 import { FormField } from '@/components/ui/form-field';
 import { TextButton } from '@/components/ui/text-button';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 /**
  * Reads a pairing code, by camera or by hand.
@@ -29,14 +28,26 @@ import { radius, space } from '@/theme/tokens';
 export function QrScanner({
   onCode,
   hint,
+  rearm,
 }: {
   /** Called once per accepted code. The caller owns validation and any error message. */
   onCode: (code: string) => void;
   hint?: string;
+  /**
+   * Claims one more code without remounting. Bump `token` after a failed attempt. The scanner never
+   * holds a pairing secret past its attempt, so the typed code is cleared (`keepManual` exists only
+   * for callers that knowingly keep it).
+   */
+  rearm?: { token: number; keepManual: boolean };
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const [permission, requestPermission] = useCameraPermissions();
-  const [manual, setManual] = useState('');
+  // The typed text remembers which re-arm it was typed under, so a spent code is dropped from the
+  // field (derived, not an effect) while a mistyped one can be kept for correction.
+  const [typed, setTyped] = useState({ text: '', token: rearm?.token });
+  const manual = typed.token === rearm?.token || rearm?.keepManual ? typed.text : '';
+  const setManual = (text: string) => setTyped({ text, token: rearm?.token });
   const [showManual, setShowManual] = useState(!cameraSupported());
 
   /**
@@ -50,6 +61,10 @@ export function QrScanner({
    * A ref, not state: the frames arrive faster than a re-render.
    */
   const claimed = useRef(false);
+  const rearmToken = rearm?.token;
+  useEffect(() => {
+    if (rearmToken !== undefined) claimed.current = false;
+  }, [rearmToken]);
   const claim = useCallback(
     (value: string) => {
       const code = value.trim();

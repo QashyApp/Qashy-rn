@@ -4,7 +4,6 @@ import { StyleSheet, View, type ColorValue, type ViewProps, type ViewStyle } fro
 import { MotionPressable } from '@/components/ui/motion';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 export type CardVariant = 'default' | 'list' | 'inset' | 'emphasized';
 
@@ -50,10 +49,17 @@ export function Card({
   ...props
 }: CardProps) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
 
   const base: ViewStyle = {
     borderRadius: variant === 'inset' ? radius.tile : radius.card,
     borderCurve: 'continuous',
+    // Card edges are drawn with box-shadow, which Windows High Contrast (forced-colors) strips. A
+    // transparent outline is invisible normally but is repainted in a system colour there, and
+    // unlike a border it takes no layout space.
+    ...(process.env.EXPO_OS === 'web'
+      ? { outlineWidth: 1, outlineStyle: 'solid' as const, outlineColor: 'transparent' }
+      : null),
     ...(variant === 'inset'
       ? materialStyle(theme, 'sunken')
       : variant === 'emphasized'

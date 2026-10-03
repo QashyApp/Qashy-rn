@@ -29,7 +29,6 @@ import {
   type CatalogIcon,
   type IconTopic,
 } from '@/theme/icon-catalog';
-import { radius, space } from '@/theme/tokens';
 import { fontStyle } from '@/theme/typography';
 import { hapticSelection } from '@/utils/haptics';
 import { emojiIconId, normalizeEmoji, parseIconId } from '@/utils/icon-id';
@@ -70,6 +69,7 @@ export function IconPickerField({
   previewBackground: string;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
   const { height, width } = useWindowDimensions();
   const [open, setOpen] = useState(false);
@@ -184,8 +184,7 @@ export function IconPickerField({
                 borderRadius: radius.card,
                 borderCurve: 'continuous',
               },
-              materialStyle(theme, 'raised'),
-              { boxShadow: theme.shadowOverlay },
+              materialStyle(theme, 'overlay'),
             ]}>
             <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -216,7 +215,7 @@ export function IconPickerField({
                   backgroundColor: theme.surfaceMuted,
                   color: theme.text,
                   fontSize: 16,
-                  ...fontStyle('regular'),
+                  ...fontStyle('regular', theme.type),
                   writingDirection: isRtl ? 'rtl' : 'ltr',
                   textAlign: isRtl ? 'right' : 'left',
                 }}
@@ -338,6 +337,7 @@ export function IconPickerField({
 
 function IconCell({ icon, selected, onPress }: { icon: CatalogIcon; selected: boolean; onPress: () => void }) {
   const theme = useQashyTheme();
+  const { radius } = theme;
   const { t } = useLocalization();
   return (
     <MotionPressable
@@ -357,7 +357,7 @@ function IconCell({ icon, selected, onPress }: { icon: CatalogIcon; selected: bo
           justifyContent: 'center',
           opacity: pressed ? 0.72 : 1,
         },
-        selected ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed } : materialStyle(theme, 'control'),
+        selected ? materialStyle(theme, 'selected') : materialStyle(theme, 'control'),
       ]}>
       <AppIcon name={icon.id} color={selected ? theme.onAccentContainer : theme.text} size={26} />
       {/* Selection must not rely on the tinted fill alone. */}

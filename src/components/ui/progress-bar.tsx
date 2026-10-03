@@ -18,7 +18,7 @@ import { motionCurves } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { QASHY_INDIGO, radius } from '@/theme/tokens';
+import { QASHY_INDIGO } from '@/theme/tokens';
 
 const fillSpring = {
   damping: 16,
@@ -51,6 +51,7 @@ export function ProgressBar({
   segments?: number;
 }) {
   const theme = useQashyTheme();
+  const { radius } = theme;
   const { isRtl } = useLocalization();
   // Math.min(1, NaN) is NaN, so a non-finite ratio would otherwise reach
   // withSpring() and accessibilityValue.

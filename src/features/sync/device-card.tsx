@@ -43,11 +43,10 @@ import {
   transferVaultOwnership,
   type SyncStatus,
 } from '@/sync/setup';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 
 /** The rows are inset past a 38pt tile plus its gap, matching every other list in the app. */
-const ROW_DIVIDER_INSET = 38 + space.md;
 
 export function DeviceCard({
   status,
@@ -58,6 +57,8 @@ export function DeviceCard({
   readonly now: number;
   readonly onChanged: () => Promise<void>;
 }) {
+  const { space } = useQashyTheme();
+  const rowDividerInset = 38 + space.md;
   const { setup } = useSync();
   const { t } = useLocalization();
 
@@ -134,7 +135,7 @@ export function DeviceCard({
   return (
     <>
       <SectionHeader title="Devices" />
-      <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+      <Card variant="list" dividerInset={rowDividerInset}>
         <SettingsRow
           // `literal` covers the whole row, so the fixed half is translated here and the
           // user's own device name passes through exactly as they typed it.

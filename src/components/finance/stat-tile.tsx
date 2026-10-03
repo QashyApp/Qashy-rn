@@ -5,7 +5,7 @@ import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, withAlpha } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
 
 export type StatTileTone = 'positive' | 'negative' | 'transfer' | 'default';
 
@@ -30,6 +30,7 @@ export function StatTile({
   delta,
   icon,
   variant = 'flat',
+  onTint = false,
 }: {
   label: string;
   value: ReactNode | string;
@@ -39,15 +40,18 @@ export function StatTile({
   icon?: string;
   /** `sunken` sets a carved-in well look; `flat` (default) renders inline with its surroundings. */
   variant?: 'flat' | 'sunken';
+  /** Set when the tile sits on the accent container (an emphasized card): text then uses its readable foreground instead of the neutral text colours, which fall short of 4.5:1 there. */
+  onTint?: boolean;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const toneColor: ColorValue = tone === 'positive'
     ? theme.positive
     : tone === 'negative'
       ? theme.negative
       : tone === 'transfer'
         ? theme.transfer
-        : theme.text;
+        : onTint ? theme.onAccentContainer : theme.text;
   const deltaColor: ColorValue = delta?.tone === 'positive'
     ? theme.positive
     : delta?.tone === 'negative'
@@ -82,10 +86,10 @@ export function StatTile({
               justifyContent: 'center',
               backgroundColor: withAlpha(theme.staticAccent, 0.12),
             }}>
-            <AppIcon name={icon} color={theme.staticAccent} size={16} />
+            <AppIcon name={icon} color={onTint ? theme.onAccentContainer : theme.staticAccent} size={16} />
           </View>
         ) : null}
-        <AppText variant="caption" muted numberOfLines={1}>{label}</AppText>
+        <AppText variant="caption" muted={!onTint} numberOfLines={1} style={onTint ? { color: theme.onAccentContainer } : undefined}>{label}</AppText>
       </View>
       {icon && typeof value === 'string' ? null : typeof value === 'string' ? (
         <AppText literal figure variant="figure" style={{ color: toneColor }}>{value}</AppText>

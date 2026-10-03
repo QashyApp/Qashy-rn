@@ -5,8 +5,8 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
-import { useQashyTheme } from '@/theme/theme';
-import { radius, space, typeScale } from '@/theme/tokens';
+import { useQashyTheme, type ThemeTokens } from '@/theme/theme';
+import type { TypeScaleSpec } from '@/theme/themes/types';
 import { withAppFont } from '@/theme/typography';
 
 type AmountHeroSize = 'hero' | 'display' | 'money';
@@ -18,11 +18,11 @@ type AmountHeroSize = 'hero' | 'display' | 'money';
  * other two sizes render a visible label above the well, sized down to fit
  * a form alongside other fields.
  */
-const SIZE_CONFIG: Record<AmountHeroSize, { face: keyof typeof typeScale; radius: number; paddingVertical: number; paddingHorizontal: number; showLabel: boolean }> = {
+const sizeConfig = ({ space, radius }: Pick<ThemeTokens, 'space' | 'radius'>): Record<AmountHeroSize, { face: keyof TypeScaleSpec; radius: number; paddingVertical: number; paddingHorizontal: number; showLabel: boolean }> => ({
   hero: { face: 'hero', radius: radius.sheet, paddingVertical: space.xxl, paddingHorizontal: space.xl, showLabel: false },
   display: { face: 'display', radius: radius.sheet, paddingVertical: space.xl, paddingHorizontal: space.xl, showLabel: true },
   money: { face: 'money', radius: radius.tile, paddingVertical: space.xl, paddingHorizontal: space.lg, showLabel: true },
-};
+});
 
 /**
  * The shared amount-first hero for every "big number in a sunken well with a
@@ -88,13 +88,14 @@ export function AmountHero({
   ref?: Ref<TextInput>;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
   const [focused, setFocused] = useState(false);
   const [pillWidth, setPillWidth] = useState(0);
   const sunken = materialStyle(theme, 'sunken');
   const pill = materialStyle(theme, 'control');
-  const config = SIZE_CONFIG[size];
-  const face = typeScale[config.face];
+  const config = sizeConfig(theme)[size];
+  const face = theme.type.scale[config.face];
 
   const baseAccessibilityLabel = currencyInTranslation
     ? t(`${label} (${currency})`)
@@ -180,6 +181,7 @@ export function AmountHero({
               ],
               'semibold',
               'numeric',
+              theme.type,
             )}
           />
           {onCurrencyPress ? (

@@ -11,13 +11,12 @@ import { FormScreen } from '@/components/ui/form-screen';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { todayLocal } from '@/utils/date';
 import {
   validateCurrencyCode,
   validateDateInput,
-  validatePositiveDecimal,
+  validateExchangeRate,
 } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
 import {
@@ -30,6 +29,7 @@ export function ExchangeRateScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const existing = id ? state.exchangeRates.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
   // `currency` arrives from the "Needs a manual rate" list on the Exchange rates screen
@@ -37,7 +37,7 @@ export function ExchangeRateScreen() {
   const [fromCurrency, setFromCurrency] = useState(existing?.fromCurrency ?? currency?.toUpperCase() ?? 'EUR');
   const [rate, setRate] = useState(() => existing?.rate
     ? localizeDecimalString(existing.rate, state.settings.locale)
-    : '1');
+    : '');
   const [effectiveDate, setEffectiveDate] = useState(existing?.effectiveDate ?? todayLocal());
   const [saving, setSaving] = useState(false);
   const { closeToOwner, allowLeave } = useFormSheet({
@@ -59,7 +59,7 @@ export function ExchangeRateScreen() {
     ?? (fromCurrency.toUpperCase() === state.settings.baseCurrency
       ? `Choose a currency other than ${state.settings.baseCurrency}.`
       : undefined);
-  const rateError = validatePositiveDecimal(rate, 'Exchange rate', false, state.settings.locale);
+  const rateError = validateExchangeRate(rate, state.settings.locale);
   const dateError = validateDateInput(effectiveDate, { label: 'Effective date' });
   const canSave = !currencyError && !rateError && !dateError;
   const save = async () => {
@@ -102,7 +102,7 @@ export function ExchangeRateScreen() {
           than one of three equally weighted fields. */}
       <View style={{ ...materialStyle(theme, 'sunken'), borderRadius: radius.sheet, borderCurve: 'continuous', paddingVertical: space.xl, paddingHorizontal: space.xl, alignItems: 'center', gap: space.xs }}>
         <AppText literal variant="overline" muted>{`${fromCurrency.toUpperCase() || '—'} → ${state.settings.baseCurrency}`}</AppText>
-        <AppText literal figure variant="display">{rate || '0'}</AppText>
+        <AppText literal figure variant="display">{rate || '—'}</AppText>
       </View>
       <Card style={{ gap: 16 }}>
         <FormField label="From currency" value={fromCurrency} onChangeText={setFromCurrency} autoCapitalize="characters" maxLength={3} error={currencyError} required />

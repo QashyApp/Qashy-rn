@@ -6,7 +6,8 @@ import { financeRepository } from '@/data/local-finance-repository';
 import { refreshRatesWithCap } from '@/providers/exchange-rate-provider';
 import { QASHY_ACCENT } from '@/domain/defaults';
 import type { FinanceState } from '@/domain/models';
-import { darkTokens, lightTokens, readableTextColor } from '@/theme/tokens';
+import { classicTheme } from '@/theme/themes/classic';
+import { readableTextColor } from '@/theme/tokens';
 
 interface FinanceContextValue {
   repository: FinanceRepository;
@@ -32,7 +33,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   // This component renders above QashyThemeProvider, so it themes its own
   // loading and error states from the static token sets.
   const scheme = useColorScheme();
-  const tokens = scheme === 'dark' ? darkTokens : lightTokens;
+  // Settings are not loaded yet, so the user's theme is unknown: classic is the only truthful choice.
+  const tokens = classicTheme.palette[scheme === 'dark' ? 'dark' : 'light'];
   // Re-render the tree as a transition so a mutation (e.g. saving a budget)
   // doesn't block the UI while every mounted screen recomputes its projections.
   const subscribe = useCallback(

@@ -16,16 +16,15 @@ import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
-import { endOfMonth, startOfMonth } from '@/utils/date';
+import { endOfMonth, mediumDate, startOfMonth } from '@/utils/date';
+import { useDashboardRange } from '@/features/overview/widgets/use-dashboard';
 import { isFetchedRate } from '@/utils/deterministic-id';
 import { useNow } from '@/utils/use-now';
 import { relativeTime } from '@/utils/relative-time';
 
 // A settings row is a 38pt icon tile plus a 12pt gap; matches `more-screen.tsx`'s own rows so
 // the divider lines up with the text rather than the icon.
-const ROW_DIVIDER_INSET = 38 + space.md;
 
 const ERROR_MESSAGES: Record<RateFetchErrorCode, string> = {
   offline: 'This device looks offline. Automatic rates will try again the next time it is online.',
@@ -46,6 +45,8 @@ export function ExchangeRatesScreen() {
   const service = useExchangeRateService();
   const status = useExchangeRateStatus();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
+  const rowDividerInset = 38 + space.md;
   const { t } = useLocalization();
   const now = useNow();
   const [toggling, setToggling] = useState(false);
@@ -53,13 +54,7 @@ export function ExchangeRatesScreen() {
   // Only consulted while auto-fetch is off — `summary.missingExchangeRates` already answers
   // "what does this vault currently lack a usable rate for", so this reuses it instead of
   // recomputing the same thing a second way.
-  const summary = useMemo(() => {
-    void state.accounts;
-    void state.exchangeRates;
-    void state.settings;
-    void state.transactions;
-    return repository.getDashboard(startOfMonth(), endOfMonth());
-  }, [repository, state.accounts, state.exchangeRates, state.settings, state.transactions]);
+  const summary = useDashboardRange(startOfMonth(), endOfMonth());
 
   const needsManual = useMemo(() => {
     const rows: NeedsManualRow[] = [];
@@ -166,7 +161,7 @@ export function ExchangeRatesScreen() {
       {needsManual.length ? (
         <>
           <SectionHeader title="Needs a manual rate" />
-          <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+          <Card variant="list" dividerInset={rowDividerInset}>
             {needsManual.map((row) => (
               <SettingsRow
                 key={row.key}
@@ -184,9 +179,9 @@ export function ExchangeRatesScreen() {
       {manualRates.length ? (
         <>
           <SectionHeader title="Manual rates" />
-          <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+          <Card variant="list" dividerInset={rowDividerInset}>
             {manualRates.map((rate) => {
-              const label = `${rate.fromCurrency} → ${rate.toCurrency}, ${rate.rate}, ${t('Manual')}, ${t(`Effective ${rate.effectiveDate}`)}`;
+              const label = `${rate.fromCurrency} → ${rate.toCurrency}, ${rate.rate}, ${t('Manual')}, ${t(`Effective ${mediumDate(rate.effectiveDate, state.settings.locale)}`)}`;
               return (
                 <MotionPressable
                   key={rate.id}
@@ -213,7 +208,7 @@ export function ExchangeRatesScreen() {
                     importantForAccessibility="no-hide-descendants"
                     style={{ flex: 1, gap: space.xxs }}>
                     <AppText literal variant="label">{`${rate.fromCurrency} → ${rate.toCurrency}`}</AppText>
-                    <AppText literal variant="caption" muted>{t(`Effective ${rate.effectiveDate}`)}</AppText>
+                    <AppText literal variant="caption" muted>{t(`Effective ${mediumDate(rate.effectiveDate, state.settings.locale)}`)}</AppText>
                   </View>
                   <StatusPill label="Manual" icon="pencil" tone="neutral" />
                   <AppText

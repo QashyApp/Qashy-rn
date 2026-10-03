@@ -4,6 +4,7 @@ import type { AppSettings, Category, FinanceState } from '@/domain/models';
 import { createEntity, makeId } from '@/utils/entity';
 import { validateLocale } from '@/utils/form-validation';
 import { isSupportedCurrencyCode } from '@/utils/money';
+import { DEFAULT_THEME_ID } from '@/theme/themes/types';
 import { QASHY_INDIGO } from '@/theme/tokens';
 
 export const QASHY_ACCENT: string = QASHY_INDIGO;
@@ -32,6 +33,7 @@ export const initialSettings = (): AppSettings => {
     onboardingComplete: false,
     locale,
     baseCurrency,
+    themeId: DEFAULT_THEME_ID,
     themeMode: 'system',
     accentSource: 'system',
     accentHex: QASHY_ACCENT,

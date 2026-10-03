@@ -1,12 +1,13 @@
-import { Children } from 'react';
+import { Children, useMemo } from 'react';
 import { Text, type TextProps, type TextStyle } from 'react-native';
 
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { NUMERIC_FACE_VARIANTS, typeScale } from '@/theme/tokens';
+import { NUMERIC_FACE_VARIANTS } from '@/theme/tokens';
+import type { TypeScaleSpec } from '@/theme/themes/types';
 import { withAppFont } from '@/theme/typography';
 
-export type TextVariant = keyof typeof typeScale;
+export type TextVariant = keyof TypeScaleSpec;
 
 // Not `as const`: TextStyle declares fontVariant as a mutable array, so a
 // readonly tuple is rejected where the style is actually consumed.
@@ -18,14 +19,16 @@ const TABULAR: TextStyle['fontVariant'] = ['tabular-nums'];
  */
 const NUMERIC_VARIANTS = new Set<TextVariant>(NUMERIC_FACE_VARIANTS);
 
-const variants = Object.fromEntries(
-  (Object.keys(typeScale) as TextVariant[]).map((name) => {
-    const { fontSize, lineHeight, weight, letterSpacing } = typeScale[name];
-    const style: TextStyle = { fontSize, lineHeight, letterSpacing, fontWeight: weight === 'regular' ? '400' : weight === 'medium' ? '500' : weight === 'semibold' ? '600' : '700' };
-    if (NUMERIC_VARIANTS.has(name)) style.fontVariant = TABULAR;
-    return [name, style];
-  }),
-) as Record<TextVariant, TextStyle>;
+function buildVariants(scale: TypeScaleSpec): Record<TextVariant, TextStyle> {
+  return Object.fromEntries(
+    (Object.keys(scale) as TextVariant[]).map((name) => {
+      const { fontSize, lineHeight, weight, letterSpacing } = scale[name];
+      const style: TextStyle = { fontSize, lineHeight, letterSpacing, fontWeight: weight === 'regular' ? '400' : weight === 'medium' ? '500' : weight === 'semibold' ? '600' : '700' };
+      if (NUMERIC_VARIANTS.has(name)) style.fontVariant = TABULAR;
+      return [name, style];
+    }),
+  ) as Record<TextVariant, TextStyle>;
+}
 
 /**
  * `literal` opts a run of text out of translation. Anything the user typed —
@@ -45,6 +48,7 @@ const variants = Object.fromEntries(
 export function AppText({ variant = 'body', muted, numeric, figure = false, style, selectable = false, literal = false, children, ...props }: TextProps & { variant?: TextVariant; muted?: boolean; numeric?: boolean; figure?: boolean; literal?: boolean }) {
   const theme = useQashyTheme();
   const { isRtl, t } = useLocalization();
+  const variants = useMemo(() => buildVariants(theme.type.scale), [theme.type.scale]);
   const localizedChildren = literal
     ? children
     : Children.map(children, (child) => typeof child === 'string' ? t(child) : child);
@@ -62,6 +66,7 @@ export function AppText({ variant = 'body', muted, numeric, figure = false, styl
         ],
         undefined,
         useNumericFace ? 'numeric' : 'text',
+        theme.type,
       )}>
       {localizedChildren}
     </Text>

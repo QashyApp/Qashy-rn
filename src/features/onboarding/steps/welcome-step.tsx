@@ -4,7 +4,7 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionView } from '@/components/ui/motion';
 import { LanguageSelector } from '@/components/ui/language-selector';
 import { WelcomeHero } from '@/features/onboarding/steps/welcome-hero';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 
 /**
  * The first screen. One mark, one line of promise, and the only choice that
@@ -12,6 +12,7 @@ import { space } from '@/theme/tokens';
  * speaks. Everything else waits for the steps that need it.
  */
 export function WelcomeStep({ locale, onLocale }: { locale: string; onLocale: (locale: string) => void }) {
+  const { space } = useQashyTheme();
   const headingLevelProps = process.env.EXPO_OS === 'web' ? ({ 'aria-level': 1 } as object) : {};
   return (
     <View style={{ gap: space.xxl, alignItems: 'center' }}>

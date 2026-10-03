@@ -5,7 +5,6 @@ import { create } from 'qrcode';
 
 import { AppText } from '@/components/ui/app-text';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 /**
  * A QR code, rendered as vector paths.
@@ -31,6 +30,7 @@ export function QrCode({
   label: string;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
 
   const matrix = useMemo(() => {
     try {

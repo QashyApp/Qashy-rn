@@ -8,6 +8,7 @@ const draft = (patch: Partial<OnboardingDraft> = {}): OnboardingDraft => ({
   accountName: 'Everyday',
   accountType: 'checking',
   openingBalance: '',
+  themeId: 'classic',
   themeMode: 'system',
   accentSource: 'system',
   accentHex: '#5966E9',
@@ -35,6 +36,11 @@ describe('onboarding flow rules', () => {
     expect(stepIsValid('account', draft({ openingBalance: 'abc' }))).toBe(false);
     expect(stepIsValid('account', draft({ accountName: '   ' }))).toBe(false);
     expect(() => finishPayload(draft({ accountName: '' }))).toThrow();
+  });
+
+  it('carries the chosen theme into the finish payload', () => {
+    expect(finishPayload(draft()).themeId).toBe('classic');
+    expect(finishPayload(draft({ themeId: 'high-contrast' })).themeId).toBe('high-contrast');
   });
 
   it('normalizes the finish payload', () => {

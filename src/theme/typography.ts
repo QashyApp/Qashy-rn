@@ -1,24 +1,17 @@
 import { StyleSheet, type StyleProp, type TextStyle } from 'react-native';
 
-import { fontFamilies, numericFontFamilies, type FontWeightName } from '@/theme/tokens';
-
-type NumericFontWeightName = keyof typeof numericFontFamilies;
+import { FONT_REGISTRY, fontAssetsFor, isRegisteredFamily, type FontWeightKey } from '@/theme/fonts';
+import { classicTheme } from '@/theme/themes/classic';
+import type { FontStackSpec, TypeSpec } from '@/theme/themes/types';
+import type { FontWeightName } from '@/theme/tokens';
 
 /**
- * Local font files, keyed by the family names in `fontFamilies` and
- * `numericFontFamilies`. Loaded once by the root layout; nothing here touches
- * the network, and on web the files ship in `dist/` where the service worker
- * precaches them with the rest of the shell.
+ * Local font files, keyed by loaded family name, derived from the font registry.
+ * Loaded once by the root layout; nothing here touches the network, and on web
+ * the files ship in `dist/` where the service worker precaches them with the
+ * rest of the shell.
  */
-export const FONT_ASSETS = {
-  [fontFamilies.regular]: require('@expo-google-fonts/rubik/400Regular/Rubik_400Regular.ttf'),
-  [fontFamilies.medium]: require('@expo-google-fonts/rubik/500Medium/Rubik_500Medium.ttf'),
-  [fontFamilies.semibold]: require('@expo-google-fonts/rubik/600SemiBold/Rubik_600SemiBold.ttf'),
-  [fontFamilies.bold]: require('@expo-google-fonts/rubik/700Bold/Rubik_700Bold.ttf'),
-  [numericFontFamilies.medium]: require('@expo-google-fonts/space-grotesk/500Medium/SpaceGrotesk_500Medium.ttf'),
-  [numericFontFamilies.semibold]: require('@expo-google-fonts/space-grotesk/600SemiBold/SpaceGrotesk_600SemiBold.ttf'),
-  [numericFontFamilies.bold]: require('@expo-google-fonts/space-grotesk/700Bold/SpaceGrotesk_700Bold.ttf'),
-} as const;
+export const FONT_ASSETS = fontAssetsFor(Object.keys(FONT_REGISTRY));
 
 // A system stack behind the bundled face on web, so text is readable during
 // the brief swap on a cold, uncached first load instead of falling back to
@@ -33,51 +26,66 @@ export function weightName(weight: TextStyle['fontWeight']): FontWeightName {
   return 'bold';
 }
 
+const CSS_WEIGHT = { regular: '400', medium: '500', semibold: '600', bold: '700' } as const;
+const WEIGHT_ORDER: readonly FontWeightKey[] = ['regular', 'medium', 'semibold', 'bold'];
+
+function resolveStack(stack: FontStackSpec, weight: FontWeightName): TextStyle {
+  const font = FONT_REGISTRY[stack.family];
+  if (!font) throw new Error(`Unknown font "${stack.family}".`);
+  const family = font.weights[weight].family;
+  if (process.env.EXPO_OS === 'web') {
+    // Per-glyph fallback: a Latin-only face lists a face that covers Hebrew behind it.
+    const names = [family];
+    for (const id of stack.fallbacks) {
+      const fallback = FONT_REGISTRY[id]?.weights[weight].family;
+      if (fallback && !names.includes(fallback)) names.push(fallback);
+    }
+    // The CSS weight follows the file actually used: a face with no 400 file maps regular to its
+    // medium file, so the last weight sharing that file wins.
+    const cssKey = [...WEIGHT_ORDER].reverse().find((key) => font.weights[key].family === family) ?? weight;
+    return { fontFamily: `${names.join(', ')}, ${WEB_FALLBACK}`, fontWeight: CSS_WEIGHT[cssKey] };
+  }
+  return { fontFamily: family, fontWeight: undefined };
+}
+
 /**
- * The font properties for one weight of the app face.
+ * The font properties for one weight of the theme's text face.
  *
  * Native gets the weight's own family and *no* `fontWeight`: with a static
  * font file, a `fontWeight` on Android synthesises a fake bold on top of the
  * real one, and iOS may ignore the family entirely. Web keeps the numeric
  * weight so the system fallback renders at the intended weight too.
  */
-export function fontStyle(weight: FontWeightName): TextStyle {
-  const family = fontFamilies[weight];
-  if (process.env.EXPO_OS === 'web') {
-    const numeric = { regular: '400', medium: '500', semibold: '600', bold: '700' } as const;
-    return { fontFamily: `${family}, ${WEB_FALLBACK}`, fontWeight: numeric[weight] };
-  }
-  return { fontFamily: family, fontWeight: undefined };
+export function fontStyle(weight: FontWeightName, type: TypeSpec = classicTheme.type): TextStyle {
+  return resolveStack(type.text, weight);
 }
 
 /**
- * The font properties for one weight of the numeric display face (Space
- * Grotesk). There is no bundled 400-weight file, so `regular` resolves to
- * `medium` — the lightest weight actually loaded. Only digits (and the
- * handful of symbols money formatting uses) are ever rendered in this face,
- * so it never has to cover Hebrew or any other script.
+ * The font properties for one weight of the theme's numeric face. A face with
+ * no file for a weight resolves to the nearest bundled one (the registry maps
+ * it; Space Grotesk regular is its medium file). Only digits and the handful
+ * of symbols money formatting uses are rendered in this face, so it may be
+ * Latin-only.
  */
-export function numericFontStyle(weight: FontWeightName): TextStyle {
-  const numericWeight: NumericFontWeightName = weight === 'regular' ? 'medium' : weight;
-  const family = numericFontFamilies[numericWeight];
-  if (process.env.EXPO_OS === 'web') {
-    const numeric = { medium: '500', semibold: '600', bold: '700' } as const;
-    return { fontFamily: `${family}, ${WEB_FALLBACK}`, fontWeight: numeric[numericWeight] };
-  }
-  return { fontFamily: family, fontWeight: undefined };
+export function numericFontStyle(weight: FontWeightName, type: TypeSpec = classicTheme.type): TextStyle {
+  return resolveStack(type.numeric, weight);
 }
 
 /**
  * Resolves a composed text style so its `fontWeight` picks the matching
  * family for the requested face. Call sites keep writing `fontWeight: '700'`
  * in overrides and still get the real bold file rather than a synthesised
- * one. `face: 'numeric'` resolves against Space Grotesk instead of Rubik —
- * used only where the rendered text is guaranteed to be digits.
+ * one. `face: 'numeric'` resolves the numeric stack instead of the text stack.
+ * A style carrying a foreign `fontFamily` is returned untouched.
  */
-export function withAppFont(style: StyleProp<TextStyle>, fallback: FontWeightName = 'regular', face: 'text' | 'numeric' = 'text'): TextStyle {
+export function withAppFont(
+  style: StyleProp<TextStyle>,
+  fallback: FontWeightName = 'regular',
+  face: 'text' | 'numeric' = 'text',
+  type: TypeSpec = classicTheme.type,
+): TextStyle {
   const flat = StyleSheet.flatten(style) ?? {};
-  const isOurFont = !flat.fontFamily || flat.fontFamily.startsWith('Rubik_') || flat.fontFamily.startsWith('SpaceGrotesk_');
-  if (!isOurFont) return flat;
+  if (flat.fontFamily && !isRegisteredFamily(flat.fontFamily)) return flat;
   const weight = flat.fontWeight != null ? weightName(flat.fontWeight) : fallback;
-  return { ...flat, ...(face === 'numeric' ? numericFontStyle(weight) : fontStyle(weight)) };
+  return { ...flat, ...(face === 'numeric' ? numericFontStyle(weight, type) : fontStyle(weight, type)) };
 }

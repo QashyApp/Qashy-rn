@@ -5,7 +5,6 @@ import { MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { motion } from '@/theme/tokens';
 
 export function IconButton({
   label,
@@ -30,6 +29,7 @@ export function IconButton({
   enteringDelay?: number;
 }) {
   const theme = useQashyTheme();
+  const { motion } = theme;
   const { t } = useLocalization();
   const isDisabled = Boolean(disabled);
   const color = variant === 'accent' ? theme.onAccent : theme.textMuted;

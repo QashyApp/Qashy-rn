@@ -42,7 +42,7 @@ import { useSync } from '@/providers/sync-provider';
 import { RECOVERY_WORD_COUNT, vaultKeyToRecoveryPhrase } from '@/sync/crypto';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
+import type { SpaceScale } from '@/theme/themes/types';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 
 /** The same normalization `recoveryPhraseToVaultKey` applies, so the check matches what a restore would. */
@@ -51,6 +51,7 @@ const normalize = (phrase: string) => phrase.trim().toLowerCase().replace(/\s+/g
 export function RecoveryScreen() {
   const { status, setup } = useSync();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
 
   const [phrase, setPhrase] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -89,7 +90,7 @@ export function RecoveryScreen() {
 
   if (!status) {
     return (
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
         <AppText muted>Reading this device’s sync state…</AppText>
       </ScrollView>
     );
@@ -100,7 +101,7 @@ export function RecoveryScreen() {
   const matches = phrase !== null && normalize(typed) === phrase;
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
+    <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
       <Card style={{ gap: space.md }}>
         <AppText variant="title">Your recovery phrase</AppText>
         <AppText muted>
@@ -222,17 +223,18 @@ export function RecoveryScreen() {
   );
 }
 
-const container = {
+const containerStyle = (space: SpaceScale) => ({
   padding: 18,
   paddingBottom: 40,
   gap: space.lg,
   width: '100%',
   maxWidth: 720,
   alignSelf: 'center',
-} as const;
+}) as const;
 
 /** One consequence of holding the phrase, stated in the user's terms. */
 function Warns({ title, children }: { title: string; children: string }) {
+  const { space } = useQashyTheme();
   return (
     <View style={{ gap: space.xxs }}>
       <AppText variant="label">{title}</AppText>

@@ -47,7 +47,7 @@ import { useFinanceRepository, useFinanceState } from '@/providers/finance-provi
 import { planMerge, suggestDuplicates, type DuplicateGroup, type MergeKind } from '@/sync/engine/duplicates';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
+import type { SpaceScale } from '@/theme/themes/types';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 
 /** Named things first — see the header. The array order is the on-screen order. */
@@ -65,6 +65,7 @@ export function MergeScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
 
   const [selected, setSelected] = useState<readonly string[]>([]);
@@ -134,7 +135,7 @@ export function MergeScreen() {
   };
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
+    <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
       <Card style={{ gap: space.md }}>
         <AppText variant="title">Review duplicates</AppText>
         <AppText muted>
@@ -247,14 +248,14 @@ export function MergeScreen() {
   );
 }
 
-const container = {
+const containerStyle = (space: SpaceScale) => ({
   padding: 18,
   paddingBottom: 40,
   gap: space.lg,
   width: '100%',
   maxWidth: 720,
   alignSelf: 'center',
-} as const;
+}) as const;
 
 /**
  * One suggested merge.
@@ -277,6 +278,7 @@ function GroupRow({
   readonly onToggle: () => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const blocked = Boolean(group.blocked);
   // `group.label` is the user's own name for the record, so it is never translated. The count
@@ -339,6 +341,7 @@ function GroupRow({
 /** One number from the preview. Same proportions as the CSV import summary, deliberately. */
 function Tile({ value, label, accent = false }: { readonly value: number; readonly label: string; readonly accent?: boolean }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   return (
     <View
       style={{
@@ -349,7 +352,7 @@ function Tile({ value, label, accent = false }: { readonly value: number; readon
         borderCurve: 'continuous',
         backgroundColor: accent ? theme.accentContainer : theme.surfaceMuted,
       }}>
-      <AppText numeric variant="headline" style={accent ? { color: theme.accent } : undefined}>
+      <AppText numeric variant="headline" style={accent ? { color: theme.accentText } : undefined}>
         {value}
       </AppText>
       <AppText variant="caption" muted>{label}</AppText>

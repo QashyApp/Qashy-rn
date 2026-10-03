@@ -6,7 +6,7 @@ import { StatTile } from '@/components/finance/stat-tile';
 import { AppText } from '@/components/ui/app-text';
 import { useMaterial } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, withAlpha } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
 
 export interface HeroStat {
   label: string;
@@ -48,6 +48,7 @@ export function PageHero({
   footer?: ReactNode;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const raised = useMaterial('raised');
   const accentWash = `linear-gradient(135deg, ${withAlpha(theme.staticAccent, 0.10)}, transparent 60%)`;
   // Layers the accent wash over whatever gradient (or none, under Android's
@@ -66,7 +67,7 @@ export function PageHero({
     <View style={panelStyle}>
       <View style={{ gap: space.xs }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md, flexWrap: 'wrap' }}>
-          <AppText variant="overline" muted>{overline}</AppText>
+          <AppText variant="headline" muted>{overline}</AppText>
           {accessory}
         </View>
         {figure}

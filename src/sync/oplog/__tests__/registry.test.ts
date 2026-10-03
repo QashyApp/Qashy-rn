@@ -118,6 +118,10 @@ describe('registry coverage', () => {
     expect(specFor('settings').baseCurrency).toEqual({ kind: 'createOnly' });
     expect(specFor('settings').onboardingComplete).toEqual({ kind: 'monotoneTrue' });
     expect(specFor('settings').themeMode).toEqual({ kind: 'deviceLocal' });
+    // Appearance never replicates: a phone's theme must not restyle a laptop.
+    for (const field of ['themeId', 'accentSource', 'accentHex']) {
+      expect(specFor('settings')[field]).toEqual({ kind: 'deviceLocal' });
+    }
     expect(specFor('recurringRules').nextDueDate).toEqual({ kind: 'monotoneMax' });
     expect(specFor('recurringRules').pausedByDependency).toEqual({ kind: 'derived' });
     expect(specFor('transactions').occurrenceKey).toEqual({ kind: 'createOnly' });

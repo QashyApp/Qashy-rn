@@ -24,11 +24,21 @@ export interface BudgetPaceResult {
   spentRatio: number;
   /** Spend projected across the full period at the current daily pace, rounded to a safe integer minor amount. */
   projectedMinor: number;
+  /**
+   * Whether enough of the period has passed for `projectedMinor` to mean something. Three days of
+   * data extrapolated across a month is noise, so callers should not show the figure (and the
+   * status does not predict an overrun) until this is true.
+   */
+  projectionReliable: boolean;
   status: BudgetPaceStatus;
 }
 
 /** Spend/elapsed-time slack, in ratio points, before pace reads as "over" or "under" rather than "on track". */
 const ON_TRACK_TOLERANCE = 0.05;
+
+/** A projection needs a quarter of the period, or a week of it, whichever is shorter. */
+const MIN_PROJECTION_DAYS = 7;
+const MIN_PROJECTION_RATIO = 0.25;
 
 /**
  * A display-only projection of a budget's pace: how far through the period
@@ -62,12 +72,14 @@ export function budgetPace({
   // best available "projection" is simply what has been spent so far.
   const projectedMinor = elapsedRatio > 0 ? Math.round(spentMinor / elapsedRatio) : spentMinor;
 
+  const projectionReliable = elapsedDays >= Math.min(MIN_PROJECTION_DAYS, Math.ceil(totalDays * MIN_PROJECTION_RATIO));
+
   let status: BudgetPaceStatus;
   if (limitMinor <= 0) {
     status = spentMinor > 0 ? 'over' : 'onTrack';
   } else if (spentMinor > limitMinor) {
     status = 'over';
-  } else if (projectedMinor > limitMinor) {
+  } else if (projectionReliable && projectedMinor > limitMinor) {
     status = 'projectedOver';
   } else if (spentRatio < elapsedRatio - ON_TRACK_TOLERANCE) {
     status = 'under';
@@ -75,5 +87,5 @@ export function budgetPace({
     status = 'onTrack';
   }
 
-  return { elapsedRatio, spentRatio, projectedMinor, status };
+  return { elapsedRatio, spentRatio, projectedMinor, projectionReliable, status };
 }

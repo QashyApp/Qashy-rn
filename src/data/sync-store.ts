@@ -103,6 +103,15 @@ export const SYNC_META = {
    */
   overviewLayout: 'overviewLayout',
 
+  /**
+   * The user-authored themes on this device, as one JSON document of validated theme FILES
+   * (never the derived theme objects). See `data/custom-themes-store.ts`.
+   *
+   * Device-local like `overviewLayout`: written through `transact` so it never diffs into a
+   * sync op, never held in `AppSettings` (which replicates), and never near the keystore.
+   */
+  customThemes: 'customThemes',
+
   // -- Transport configuration. Non-secret by construction; see `sync/transport/endpoints.ts`.
 
   /** Origin of the relay and signaling service, without a trailing slash. `''` means none. */

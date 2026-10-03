@@ -16,7 +16,7 @@ import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
-import { todayLocal } from '@/utils/date';
+import { mediumDate, todayLocal } from '@/utils/date';
 import { validateMoneyInput } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
 import { formatMoney, parseMoney } from '@/utils/money';
@@ -104,7 +104,7 @@ export function BudgetAdjustmentScreen() {
     <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
       <Card style={{ gap: 4 }}>
         <AppText literal variant="headline">{budget.name}</AppText>
-        <AppText literal variant="caption" muted>{`${snapshot.periodStart} ${t('to')} ${snapshot.periodEnd}`}</AppText>
+        <AppText literal variant="caption" muted>{`${mediumDate(snapshot.periodStart, locale)} ${t('to')} ${mediumDate(snapshot.periodEnd, locale)}`}</AppText>
         <AppText literal numeric>
           {`${t('Limit this period')}: ${money(effectiveLimitMinor)}${previewable ? ` → ${money(nextLimitMinor)}` : ''}`}
         </AppText>

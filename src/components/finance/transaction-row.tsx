@@ -9,8 +9,8 @@ import { useLocalization } from '@/localization/localization';
 import { useFinanceState } from '@/providers/finance-provider';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, toneColors, tile as tileMetrics } from '@/theme/tokens';
-import { parseLocalDate } from '@/utils/date';
+import { toneColors } from '@/theme/tokens';
+import { mediumDate, parseLocalDate, todayLocal } from '@/utils/date';
 import { formatMoney } from '@/utils/money';
 
 // The category tile's own inset highlight, on top of the tinted container
@@ -47,6 +47,7 @@ export function TransactionRow({
 }) {
   const { settings, accounts, categories } = useFinanceState();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const account = accounts.find((item) => item.id === transaction.accountId);
   const category = categories.find((item) => item.id === transaction.categoryId);
@@ -101,7 +102,7 @@ export function TransactionRow({
   // after them. Tinted toward the surface they still identify at a glance while
   // leaving the strongest contrast in the row to the number.
   const tile: { container: ColorValue; onContainer: ColorValue } = category
-    ? toneColors(category.color, theme.staticSurface, theme.staticText, theme.mode === 'dark')
+    ? toneColors(category.color, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone)
     : { container: theme.accentContainer, onContainer: theme.onAccentContainer };
 
   return (
@@ -140,8 +141,8 @@ export function TransactionRow({
       ) : null}
       <View
         style={{
-          width: compact ? tileMetrics.compactSize : tileMetrics.size,
-          height: compact ? tileMetrics.compactSize : tileMetrics.size,
+          width: compact ? theme.tile.compactSize : theme.tile.size,
+          height: compact ? theme.tile.compactSize : theme.tile.size,
           borderRadius: radius.tile,
           borderCurve: 'continuous',
           backgroundColor: tile.container,
@@ -149,18 +150,18 @@ export function TransactionRow({
           justifyContent: 'center',
           boxShadow: theme.mode === 'dark' ? TILE_INSET_HIGHLIGHT_DARK : TILE_INSET_HIGHLIGHT_LIGHT,
         }}>
-        <AppIcon name={isTransfer ? 'arrow.left.arrow.right' : category?.icon ?? (isIncome ? 'arrow.down' : 'arrow.up')} color={tile.onContainer} size={compact ? tileMetrics.compactIcon : tileMetrics.icon} />
+        <AppIcon name={isTransfer ? 'arrow.left.arrow.right' : category?.icon ?? (isIncome ? 'arrow.down' : 'arrow.up')} color={tile.onContainer} size={compact ? theme.tile.compactIcon : theme.tile.icon} />
       </View>
       <View style={{ flex: 1, minWidth: 0, gap: space.xxs }}>
         <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
           <AppText literal variant="label" numberOfLines={1} style={{ flexShrink: 1 }}>{transaction.title}</AppText>
           {transaction.status === 'upcoming' ? (
-            <View style={{ borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: space.xxs, backgroundColor: theme.accentContainer, boxShadow: theme.shadowSunken }}>
-              <AppText selectable={false} variant="eyebrow" style={{ color: theme.onAccentContainer }}>UPCOMING</AppText>
+            <View style={{ borderRadius: radius.pill, paddingHorizontal: space.sm, paddingVertical: space.xxs, ...materialStyle(theme, 'well') }}>
+              <AppText selectable={false} variant="eyebrow" style={{ color: theme.onAccentContainer }}>{transaction.localDate < todayLocal() ? 'OVERDUE' : 'UPCOMING'}</AppText>
             </View>
           ) : null}
         </View>
-        <AppText literal variant="caption" muted numberOfLines={1}>{`${categoryLabel} · ${accountLabel}`}</AppText>
+        <AppText literal variant="caption" muted numberOfLines={1}>{`${categoryLabel} · ${accountLabel}${compact && transaction.status === 'upcoming' ? ` · ${t('Due')} ${mediumDate(transaction.localDate, settings.locale)}` : ''}`}</AppText>
         {foreignFeeCaption ? (
           <AppText literal variant="caption" muted numberOfLines={1}>{foreignFeeCaption}</AppText>
         ) : null}
@@ -169,7 +170,7 @@ export function TransactionRow({
         <AppText literal figure variant="label" style={{ color }}>
           {amountText}
         </AppText>
-        {showDate && !compact ? <AppText literal variant="caption" muted>{transaction.localDate}</AppText> : null}
+        {showDate && !compact ? <AppText literal variant="caption" muted>{mediumDate(transaction.localDate, settings.locale)}</AppText> : null}
       </View>
     </MotionPressable>
   );

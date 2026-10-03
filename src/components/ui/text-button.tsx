@@ -5,7 +5,6 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 export function TextButton({
   title,
@@ -22,9 +21,10 @@ export function TextButton({
   tone?: 'accent' | 'muted' | 'danger';
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const isDisabled = Boolean(disabled);
-  const color = tone === 'danger' ? theme.negative : tone === 'muted' ? theme.textMuted : theme.accent;
+  const color = tone === 'danger' ? theme.negative : tone === 'muted' ? theme.textMuted : theme.accentText;
   return (
     <MotionPressable
       accessibilityLabel={t(title)}

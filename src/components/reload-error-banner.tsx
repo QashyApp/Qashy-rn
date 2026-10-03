@@ -7,7 +7,6 @@ import { MotionView } from '@/components/ui/motion';
 import { TextButton } from '@/components/ui/text-button';
 import { useFinanceReload } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 /**
  * Reports a resume-time reload failure without taking the app down with it.
@@ -23,6 +22,7 @@ export function ReloadErrorBanner() {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
 
   if (!reload?.error) return null;
 

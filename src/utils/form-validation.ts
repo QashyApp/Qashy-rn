@@ -70,12 +70,31 @@ export function validatePositiveDecimal(
   if (!value.trim()) return optional ? undefined : `${label} is required.`;
   try {
     const decimal = new Decimal(normalizeDecimalString(value, locale));
-    return decimal.isFinite() && decimal.isPositive()
+    // `Decimal(0).isPositive()` is true (it checks the sign bit), so compare against zero.
+    return decimal.isFinite() && decimal.gt(0)
       ? undefined
       : `${label} must be greater than zero.`;
   } catch {
     return `Enter a valid ${label.toLocaleLowerCase()}.`;
   }
+}
+
+/** Bounds for a manually entered exchange rate; real pairs (IRR→BHD ≈ 9e-9) sit well inside. */
+export const MIN_EXCHANGE_RATE = '0.000000001';
+export const MAX_EXCHANGE_RATE = '1000000000';
+const MAX_RATE_SIGNIFICANT_DIGITS = 12;
+
+export function validateExchangeRate(value: string, locale = 'en-US') {
+  const base = validatePositiveDecimal(value, 'Exchange rate', false, locale);
+  if (base) return base;
+  const decimal = new Decimal(normalizeDecimalString(value, locale));
+  if (decimal.lt(MIN_EXCHANGE_RATE) || decimal.gt(MAX_EXCHANGE_RATE)) {
+    return 'Exchange rate is outside the supported range.';
+  }
+  if (decimal.precision(true) > MAX_RATE_SIGNIFICANT_DIGITS) {
+    return `Use at most ${MAX_RATE_SIGNIFICANT_DIGITS} significant digits.`;
+  }
+  return undefined;
 }
 
 export function validatePositiveInteger(value: string, label = 'Value') {

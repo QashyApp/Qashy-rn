@@ -1,9 +1,10 @@
 import { router } from 'expo-router';
-import { useEffect, useMemo, useRef } from 'react';
-import { ScrollView, View, type DimensionValue } from 'react-native';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Pressable, ScrollView, View, type DimensionValue } from 'react-native';
 
 import { AnimatedMoney } from '@/components/finance/animated-money';
 import { ActionButton } from '@/components/ui/action-button';
+import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { Card } from '@/components/ui/card';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -14,6 +15,7 @@ import { ScreenContainer } from '@/components/ui/screen-container';
 import { SectionHeader } from '@/components/ui/section-header';
 import { StatusPill, type StatusTone } from '@/components/ui/status-pill';
 import type { BudgetStatus, Goal } from '@/domain/models';
+import { BatchDeleteBar, useBatchDelete } from '@/features/more/use-batch-delete';
 import { PaceBar } from '@/features/plan/pace-bar';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
@@ -83,6 +85,21 @@ export function PlanScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
   }, [repository, goals, state.contributions, state.transactions, state.categories]);
 
+  const budgetSelection = useBatchDelete({
+    type: 'budgets',
+    liveIds: budgets.map((item) => item.budget.id),
+    confirmTitle: (count) => count === 1 ? 'Delete 1 budget?' : `Delete ${count} budgets?`,
+    confirmMessage: 'Past period snapshots are removed with them.',
+    errorTitle: 'Couldn’t delete budgets',
+  });
+  const goalSelection = useBatchDelete({
+    type: 'goals',
+    liveIds: goals.map((item) => item.id),
+    confirmTitle: (count) => count === 1 ? 'Delete 1 goal?' : `Delete ${count} goals?`,
+    confirmMessage: 'Manual contributions are removed with them.',
+    errorTitle: 'Couldn’t delete goals',
+  });
+
   const cardBasis: { flexBasis: DimensionValue; flexGrow: number; minWidth: number } | { width: DimensionValue } = wide
     ? { flexBasis: '48%', flexGrow: 1, minWidth: 320 }
     : { width: '100%' };
@@ -93,12 +110,26 @@ export function PlanScreen() {
         <PageHeading title="Plan" subtitle="Set flexible limits and track progress toward meaningful goals." />
 
         <View style={{ gap: 10 }}>
-          <SectionHeader title="Budgets" action="Add budget" actionIcon="plus" onAction={() => router.push('/budget')} />
+          <SectionHeader
+            title="Budgets"
+            action={budgets.length && !budgetSelection.selecting ? 'Add budget' : undefined}
+            actionIcon="plus"
+            onAction={() => router.push('/budget')}
+            secondaryAction={budgets.length ? (budgetSelection.selecting ? 'Done selecting' : 'Select') : undefined}
+            onSecondaryAction={budgetSelection.toggleMode}
+          />
           {budgets.length ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
               {budgets.map((status) => (
                 <View key={status.budget.id} style={cardBasis}>
-                  <BudgetCard status={status} today={today} />
+                  <SelectableCard
+                    selecting={budgetSelection.selecting}
+                    selected={budgetSelection.selectedIds.includes(status.budget.id)}
+                    disabled={budgetSelection.deleting}
+                    label={status.budget.name}
+                    onToggle={() => budgetSelection.toggle(status.budget.id)}>
+                    <BudgetCard status={status} today={today} />
+                  </SelectableCard>
                 </View>
               ))}
             </View>
@@ -113,15 +144,30 @@ export function PlanScreen() {
               </EmptyState>
             </Card>
           )}
+          {budgetSelection.selecting ? <BatchDeleteBar count={budgetSelection.liveSelectedCount} busy={budgetSelection.deleting} onDelete={budgetSelection.deleteSelected} /> : null}
         </View>
 
         <View style={{ gap: 10 }}>
-          <SectionHeader title="Goals" action="Add goal" actionIcon="plus" onAction={() => router.push('/goal')} />
+          <SectionHeader
+            title="Goals"
+            action={goals.length && !goalSelection.selecting ? 'Add goal' : undefined}
+            actionIcon="plus"
+            onAction={() => router.push('/goal')}
+            secondaryAction={goals.length ? (goalSelection.selecting ? 'Done selecting' : 'Select') : undefined}
+            onSecondaryAction={goalSelection.toggleMode}
+          />
           {goals.length ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
               {goals.map((goal) => (
                 <View key={goal.id} style={cardBasis}>
-                  <GoalCard goal={goal} progress={goalProgress.get(goal.id) ?? 0} />
+                  <SelectableCard
+                    selecting={goalSelection.selecting}
+                    selected={goalSelection.selectedIds.includes(goal.id)}
+                    disabled={goalSelection.deleting}
+                    label={goal.name}
+                    onToggle={() => goalSelection.toggle(goal.id)}>
+                    <GoalCard goal={goal} progress={goalProgress.get(goal.id) ?? 0} />
+                  </SelectableCard>
                 </View>
               ))}
             </View>
@@ -136,9 +182,45 @@ export function PlanScreen() {
               </EmptyState>
             </Card>
           )}
+          {goalSelection.selecting ? <BatchDeleteBar count={goalSelection.liveSelectedCount} busy={goalSelection.deleting} onDelete={goalSelection.deleteSelected} /> : null}
         </View>
       </ScreenContainer>
     </ScrollView>
+  );
+}
+
+/** In selection mode the whole card becomes one toggle; its inner buttons are inert. */
+function SelectableCard({ selecting, selected, disabled, label, onToggle, children }: { selecting: boolean; selected: boolean; disabled: boolean; label: string; onToggle: () => void; children: ReactNode }) {
+  const theme = useQashyTheme();
+  if (!selecting) return <>{children}</>;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected, disabled }}
+      disabled={disabled}
+      onPress={onToggle}
+      style={{ height: '100%', borderRadius: theme.radius.card, borderWidth: 2, borderColor: selected ? theme.accent : 'transparent' }}>
+      <View pointerEvents="none" style={{ height: '100%' }}>{children}</View>
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={{
+          position: 'absolute',
+          top: 12,
+          end: 12,
+          width: 24,
+          height: 24,
+          borderRadius: 12,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 2,
+          borderColor: selected ? theme.accent : theme.textMuted,
+          backgroundColor: selected ? theme.accent : theme.surface,
+        }}>
+        {selected ? <AppIcon name="checkmark" color={theme.staticSurface} size={14} /> : null}
+      </View>
+    </Pressable>
   );
 }
 
@@ -166,7 +248,7 @@ function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) 
   // Dates and the rollover amount are data, so the caption is assembled with
   // its translatable words already resolved and then rendered verbatim.
   const signed = (minor: number) => formatMoney(minor, state.settings.baseCurrency, state.settings.locale, { sign: true });
-  const periodSummary = `${customState}${t(budget.period.unit)} · ${snapshot.periodStart} ${t('to')} ${snapshot.periodEnd}${budget.rollover ? ` · ${t('rollover')} ${signed(snapshot.rolloverMinor)}` : ''}${adjustmentMinor ? ` · ${t('adjusted')} ${signed(adjustmentMinor)}` : ''}`;
+  const periodSummary = `${customState}${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, state.settings.locale)} ${t('to')} ${mediumDate(snapshot.periodEnd, state.settings.locale)}${budget.rollover ? ` · ${t('rollover')} ${signed(snapshot.rolloverMinor)}` : ''}${adjustmentMinor ? ` · ${t('adjusted')} ${signed(adjustmentMinor)}` : ''}`;
   // A custom budget outside its window has no current period to adjust.
   const canAdjust = !customState;
 
@@ -192,9 +274,9 @@ function BudgetCard({ status, today }: { status: BudgetStatus; today: string }) 
 
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
           <StatusPill label={presentation.label} icon={presentation.icon} tone={presentation.tone} />
-          <AppText literal variant="caption" muted numeric>
+          {pace.projectionReliable ? <AppText literal variant="caption" muted numeric>
             {`${t('Projected')}: ${formatMoney(pace.projectedMinor, state.settings.baseCurrency, state.settings.locale)} ${t('by')} ${mediumDate(snapshot.periodEnd, state.settings.locale)}`}
-          </AppText>
+          </AppText> : null}
         </View>
 
         {categorySpend.length ? (

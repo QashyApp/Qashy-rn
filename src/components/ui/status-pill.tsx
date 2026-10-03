@@ -3,7 +3,7 @@ import { View, type ViewStyle } from 'react-native';
 import { AppIcon } from '@/components/ui/app-icon';
 import { AppText } from '@/components/ui/app-text';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, toneColors } from '@/theme/tokens';
+import { toneColors } from '@/theme/tokens';
 
 /**
  * How a state reads at a glance.
@@ -47,6 +47,7 @@ export function StatusPill({
   style?: ViewStyle;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   // `transfer` is tinted like a category/budget color rather than flat, so it
   // needs its own container derived through `toneColors`. `theme.transfer` is
   // always a static hex in practice (only surface-family colors map to opaque
@@ -54,7 +55,7 @@ export function StatusPill({
   // rather than assume it.
   const transferSeed = typeof theme.transfer === 'string' ? theme.transfer : undefined;
   const transferTone = transferSeed
-    ? toneColors(transferSeed, theme.staticSurface, theme.staticText, theme.mode === 'dark')
+    ? toneColors(transferSeed, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone)
     : undefined;
   const color = tone === 'transfer'
     ? (transferTone?.onContainer ?? theme.onAccentContainer)

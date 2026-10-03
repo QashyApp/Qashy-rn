@@ -92,7 +92,7 @@ export function Sparkline({
             </LinearGradient>
           </Defs>
           <Path d={areaPath} fill={`url(#${gradientId})`} stroke="none" />
-          <Path d={path} fill="none" stroke={resolvedColor} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          <Path d={path} fill="none" stroke={resolvedColor} strokeWidth={theme.charts.sparklineWidth ?? theme.charts.lineWidth} strokeLinecap={theme.charts.lineCap} strokeLinejoin="round" />
           {values.length > 0 ? <Circle cx={last.x} cy={last.y} r={2.5} fill={resolvedColor} /> : null}
         </Svg>
       ) : null}

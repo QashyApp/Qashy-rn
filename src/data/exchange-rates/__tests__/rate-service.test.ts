@@ -74,6 +74,7 @@ function settings(overrides: Partial<AppSettings> = {}): AppSettings {
     onboardingComplete: true,
     locale: 'en-US',
     baseCurrency: 'EUR',
+    themeId: 'classic',
     themeMode: 'system',
     accentSource: 'system',
     accentHex: '#000000',

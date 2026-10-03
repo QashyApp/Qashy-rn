@@ -25,10 +25,10 @@ import { useFinanceRepository, useFinanceState } from '@/providers/finance-provi
 import { useScreenMetrics } from '@/theme/layout';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { fontStyle } from '@/theme/typography';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { endOfMonth, monthKey, monthLabel, parseLocalDate, parseMonthKey, startOfMonth } from '@/utils/date';
+import { useDashboardRange } from '@/features/overview/widgets/use-dashboard';
 import { formatMoney } from '@/utils/money';
 import { hapticImpactLight, hapticSelection, hapticSuccess } from '@/utils/haptics';
 
@@ -60,6 +60,7 @@ export function TransactionsScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { isRtl, locale, t } = useLocalization();
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
@@ -67,6 +68,7 @@ export function TransactionsScreen() {
   const [month, setMonth] = useState(() => parseMonthKey(params.month) ?? startOfMonth());
   const [monthDirection, setMonthDirection] = useState<MonthDirection>('right');
   const [search, setSearch] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
   const [searchAllMonths, setSearchAllMonths] = useState(false);
   const [kind, setKind] = useState<KindFilter>('all');
   const { visibility: fabVisibility, onScroll } = useScrollHide();
@@ -120,23 +122,15 @@ export function TransactionsScreen() {
       statuses: kind === 'upcoming' ? ['upcoming'] : kind === 'all' ? ['posted', 'upcoming'] : ['posted'],
       fromDate: allMonths || kind === 'upcoming' ? undefined : fromDate,
       toDate: allMonths || kind === 'upcoming' ? undefined : toDate,
+      // Soonest due first: the next thing to deal with belongs at the top of an Upcoming list.
+      sort: kind === 'upcoming' ? 'oldest' : undefined,
     }, state.transactions);
   }, [repository, search, kind, allMonths, fromDate, toDate, state.transactions, categoriesVersion]);
 
   // Totals come from the dashboard aggregate rather than from summing the rows
   // here: it already excludes transfers, uses each transaction's snapshotted
   // base-currency amount, and matches what Overview shows for the same month.
-  const summary = useMemo(() => {
-    void state.accounts;
-    void state.exchangeRates;
-    void state.settings;
-    void state.transactions;
-    void state.budgets;
-    void state.budgetPeriods;
-
-    void state.budgetAdjustments;
-    return repository.getDashboard(fromDate, toDate);
-  }, [repository, fromDate, toDate, state.accounts, state.exchangeRates, state.settings, state.transactions, state.budgets, state.budgetPeriods, state.budgetAdjustments]);
+  const summary = useDashboardRange(fromDate, toDate);
 
   // Where "Go to latest" leads when this month is empty.
   const latestMonth = useMemo(() => {
@@ -228,7 +222,7 @@ export function TransactionsScreen() {
   // The list content and the pinned toolbar have to occupy the same column, so
   // both derive their width and gutters from one call.
   // A ledger is a reading column: past this width amounts drift far from their titles.
-  const content = { ...screenContentMetrics(metrics, insets), maxWidth: 860 };
+  const content = { ...screenContentMetrics(metrics, insets, space), maxWidth: 860 };
   const toolbarStyle = {
     width: content.width,
     maxWidth: content.maxWidth,
@@ -285,18 +279,20 @@ export function TransactionsScreen() {
               ))}
             </MotionView>
           </View>
-          <View style={{ minHeight: 44, borderRadius: radius.pill, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, gap: space.sm, ...materialStyle(theme, 'sunken') }}>
+          <View style={{ minHeight: 44, borderRadius: radius.pill, borderCurve: 'continuous', flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, gap: space.sm, ...materialStyle(theme, 'sunken'), ...(searchFocused ? { boxShadow: `inset 0 0 0 2px ${String(theme.accent)}` } : null) }}>
             <AppIcon name="magnifyingglass" color={theme.textMuted} size={18} />
             <TextInput
               accessibilityLabel={t('Search transactions')}
               placeholder={t(searchAllMonths ? 'Search all months' : 'Search this month')}
               placeholderTextColor={theme.textMuted}
               value={search}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
               onChangeText={(value) => {
                 setSearch(value);
                 clearSelection();
               }}
-              style={{ flex: 1, minHeight: 44, color: theme.text, fontSize: 16, ...fontStyle('regular'), writingDirection: isRtl ? 'rtl' : 'ltr', textAlign: isRtl ? 'right' : 'left' }}
+              style={{ flex: 1, minHeight: 44, color: theme.text, fontSize: 16, ...fontStyle('regular', theme.type), writingDirection: isRtl ? 'rtl' : 'ltr', textAlign: isRtl ? 'right' : 'left' }}
             />
             {search ? <IconButton label="Clear search" icon="xmark" iconSize={17} enteringVariant="zoom" onPress={() => {
               setSearch('');
@@ -498,8 +494,7 @@ export function TransactionsScreen() {
               padding: space.lg,
               borderRadius: radius.sheet,
               borderCurve: 'continuous',
-              ...materialStyle(theme, 'raised'),
-              boxShadow: theme.shadowOverlay,
+              ...materialStyle(theme, 'overlay'),
             }}>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
               <MotionView key={selectedIds.length} variant="fade" animateLayout style={{ flexShrink: 1 }}>
@@ -536,7 +531,7 @@ export function TransactionsScreen() {
           label="Add transaction"
           visibility={fabVisibility}
           onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/transactions' } })}
-          style={floatingActionMetrics(metrics, insets)}
+          style={floatingActionMetrics(metrics, insets, space)}
         />
       )}
     </View>

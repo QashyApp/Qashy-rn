@@ -8,6 +8,38 @@ const expoConfig = require('eslint-config-expo/flat');
 // introduce a second, unreviewed cryptosystem.
 const CRYPTO_PACKAGES = ['@noble/*', '@scure/*'];
 
+// Shape and rhythm belong to the active theme, so a component reads them from `useQashyTheme()`
+// (`const { space, radius } = useQashyTheme()`) rather than importing the classic constants,
+// which would silently ignore every other theme. Only `src/theme/**` defines them.
+const THEME_SCALES = ['space', 'radius', 'tile', 'iconSize', 'motion'];
+
+const RESTRICTED_PATHS = [
+  {
+    // Importing zod directly skips `z.config({ jitless: true })`, and the only symptom is
+    // a Content Security Policy violation on web that zod itself swallows — so it would
+    // reach production looking like nothing at all.
+    //
+    // This is `paths`, not `patterns`, on purpose: `group` matches gitignore-style, where
+    // a pattern with no slash matches *any* path segment, so `'zod'` also flags
+    // `@/utils/zod` — the one import that has to be allowed. `paths` compares the module
+    // name exactly. The subpath entry below carries a slash, so it anchors to the root.
+    name: 'zod',
+    message: "Import { z } from '@/utils/zod' so the jitless configuration applies.",
+  },
+];
+
+const RESTRICTED_PATTERNS = [
+  {
+    group: CRYPTO_PACKAGES,
+    message:
+      'Cryptographic primitives may only be imported inside src/sync/crypto/. Use the API that directory exports.',
+  },
+  {
+    group: ['zod/**'],
+    message: "Import { z } from '@/utils/zod' so the jitless configuration applies.",
+  },
+];
+
 module.exports = defineConfig([
   ...expoConfig,
   {
@@ -26,33 +58,24 @@ module.exports = defineConfig([
       'no-restricted-imports': [
         'error',
         {
-          // Importing zod directly skips `z.config({ jitless: true })`, and the only symptom is
-          // a Content Security Policy violation on web that zod itself swallows — so it would
-          // reach production looking like nothing at all.
-          //
-          // This is `paths`, not `patterns`, on purpose: `group` matches gitignore-style, where
-          // a pattern with no slash matches *any* path segment, so `'zod'` also flags
-          // `@/utils/zod` — the one import that has to be allowed. `paths` compares the module
-          // name exactly. The subpath entry below carries a slash, so it anchors to the root.
           paths: [
+            ...RESTRICTED_PATHS,
             {
-              name: 'zod',
-              message: "Import { z } from '@/utils/zod' so the jitless configuration applies.",
-            },
-          ],
-          patterns: [
-            {
-              group: CRYPTO_PACKAGES,
+              name: '@/theme/tokens',
+              importNames: THEME_SCALES,
               message:
-                'Cryptographic primitives may only be imported inside src/sync/crypto/. Use the API that directory exports.',
-            },
-            {
-              group: ['zod/**'],
-              message: "Import { z } from '@/utils/zod' so the jitless configuration applies.",
+                "Read space, radius, tile, iconSize and motion from useQashyTheme() so the active theme applies.",
             },
           ],
+          patterns: RESTRICTED_PATTERNS,
         },
       ],
+    },
+  },
+  {
+    files: ['src/theme/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', { paths: RESTRICTED_PATHS, patterns: RESTRICTED_PATTERNS }],
     },
   },
   {

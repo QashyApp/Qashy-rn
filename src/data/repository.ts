@@ -37,6 +37,8 @@ export interface OnboardingInput {
   accountName: string;
   accountType: Account['type'];
   openingBalanceMinor: number;
+  /** Optional so callers that predate themes keep working; omitted means the settings' current theme. */
+  themeId?: AppSettings['themeId'];
   themeMode: AppSettings['themeMode'];
   accentSource: AppSettings['accentSource'];
   accentHex: string;
@@ -58,7 +60,7 @@ export type ContributionInput = Omit<GoalContribution, 'id' | 'revision' | 'crea
 export type GoalContributionInput = Omit<ContributionInput, 'goalId'>;
 export type RecurringInput = Omit<RecurringRule, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt' | 'pausedByDependency'>;
 export type RateInput = Omit<ExchangeRate, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'deletedAt'>;
-export type SettingsInput = Partial<Pick<AppSettings, 'locale' | 'baseCurrency' | 'themeMode' | 'accentSource' | 'accentHex'>>;
+export type SettingsInput = Partial<Pick<AppSettings, 'locale' | 'baseCurrency' | 'themeId' | 'themeMode' | 'accentSource' | 'accentHex'>>;
 
 export interface TransactionInput {
   kind: TransactionRecord['kind'];
@@ -145,6 +147,8 @@ export interface FinanceRepository {
    * forward. Rejects an adjustment that would push the effective limit below zero.
    */
   addBudgetAdjustment(input: BudgetAdjustmentInput): Promise<BudgetAdjustment>;
+  /** Zeroes the rollover carried into a budget's current period, so it starts fresh from its plain limit. */
+  resetBudgetRollover(budgetId: string): Promise<void>;
   /** Soft-deletes an adjustment. Only one belonging to a budget's current period can be removed. */
   deleteBudgetAdjustment(id: string): Promise<void>;
   saveGoal(input: GoalInput, id?: string, expectedRevision?: number): Promise<Goal>;

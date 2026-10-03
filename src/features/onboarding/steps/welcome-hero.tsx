@@ -18,7 +18,7 @@ import { DirectionScope } from '@/components/ui/direction-scope';
 import { ProgressRing } from '@/components/ui/progress-bar';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, withAlpha } from '@/theme/tokens';
+import { withAlpha } from '@/theme/tokens';
 
 /** The hero is English and left-to-right in every UI language, so its text opts out of the RTL defaults `AppText` applies. */
 const HERO_TEXT = { writingDirection: 'ltr', textAlign: 'left' } as const;
@@ -59,6 +59,7 @@ function useFloat(delay: number, duration: number, disabled: boolean) {
  */
 export function WelcomeHero() {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const reduceMotion = useReducedMotion();
   const raised = materialStyle(theme, 'raised');
   const accent = materialStyle(theme, 'accent');

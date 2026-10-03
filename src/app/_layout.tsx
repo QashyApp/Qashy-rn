@@ -2,21 +2,24 @@ import { useEffect } from 'react';
 import { useFonts } from 'expo-font';
 import { Pressable, Text, View, useColorScheme } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { useNavigationContainerRef, type ErrorBoundaryProps } from 'expo-router';
+import { useNavigationContainerRef, type ErrorBoundaryProps, type Href } from 'expo-router';
 import { Stack } from 'expo-router/stack';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import * as SystemUI from 'expo-system-ui';
 
+import { backFallbackOptions, useTrackLocationChanges } from '@/components/navigation/header-back-button';
 import { FinanceProvider, useFinanceState } from '@/providers/finance-provider';
 import { SyncProvider } from '@/providers/sync-provider';
 import { PwaUpdatePrompt } from '@/components/pwa-update-prompt';
+import { WebDialogHost } from '@/components/web-dialog-host';
 import { ReloadErrorBanner } from '@/components/reload-error-banner';
 import { LocalizationProvider, useLocalization } from '@/localization/localization';
 import { QashyThemeProvider, useQashyTheme } from '@/theme/theme';
 import { QASHY_ACCENT } from '@/domain/defaults';
-import { darkTokens, lightTokens, readableTextColor } from '@/theme/tokens';
-import { FONT_ASSETS } from '@/theme/typography';
+import { classicTheme } from '@/theme/themes/classic';
+import { readableTextColor } from '@/theme/tokens';
+import { FONT_REGISTRY, fontAssetsFor } from '@/theme/fonts';
 
 // `index` redirects to onboarding or the tabs, so anchoring the root stack to it
 // gives every deep-linked route (a form sheet, /appearance, /csv, +not-found) a
@@ -64,11 +67,14 @@ function useWebDocumentTitle() {
 // Every creation/editing flow gets identical sheet behaviour. Previously only
 // `transaction` carried the detents and transparent content style, so the other
 // six sheets opened at a different height with an opaque backdrop.
-function formSheetOptions(title: string, backTitle: string) {
+function formSheetOptions(title: string, backTitle: string, fallback: Href) {
   return {
     headerShown: true,
     title,
     headerBackTitle: backTitle,
+    // Web: a back control that falls back to the owning section on a reload or deep link,
+    // instead of the stock link that renders nothing (or points at the wrong section).
+    ...backFallbackOptions(fallback),
     // The long-press back-button menu can jump back multiple screens at
     // once, natively removing this one without ever running `usePreventRemove`'s
     // confirmation (see `useFormSheet`).
@@ -87,7 +93,8 @@ function formSheetOptions(title: string, backTitle: string) {
  */
 export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
   const scheme = useColorScheme();
-  const tokens = scheme === 'dark' ? darkTokens : lightTokens;
+  // Settings are not loaded here, so the user's theme is unknown: classic is the only truthful choice.
+  const tokens = classicTheme.palette[scheme === 'dark' ? 'dark' : 'light'];
 
   useEffect(hideSplashScreen, []);
 
@@ -115,6 +122,7 @@ function RootNavigator() {
   const { settings } = useFinanceState();
 
   useWebDocumentTitle();
+  useTrackLocationChanges();
 
   // Without an explicit back title, a directly-loaded route labels its back
   // control from the anchor's route name ("index, back").
@@ -138,21 +146,21 @@ function RootNavigator() {
         </Stack.Protected>
         <Stack.Protected guard={settings.onboardingComplete}>
           <Stack.Screen name="(tabs)" />
-          <Stack.Screen name="transaction" options={formSheetOptions(t('Transaction'), backTitle)} />
-          <Stack.Screen name="budget" options={formSheetOptions(t('Budget'), backTitle)} />
-          <Stack.Screen name="budget-adjustment" options={formSheetOptions(t('Adjust budget'), backTitle)} />
-          <Stack.Screen name="goal" options={formSheetOptions(t('Goal'), backTitle)} />
-          <Stack.Screen name="overview-cards" options={formSheetOptions(t('Add cards'), backTitle)} />
-          <Stack.Screen name="account" options={formSheetOptions(t('Account'), backTitle)} />
-          <Stack.Screen name="category" options={formSheetOptions(t('Category'), backTitle)} />
-          <Stack.Screen name="recurring" options={formSheetOptions(t('Recurring transaction'), backTitle)} />
-          <Stack.Screen name="exchange-rate" options={formSheetOptions(t('Exchange rate'), backTitle)} />
-          <Stack.Screen name="exchange-rates" options={{ headerShown: true, title: t('Exchange rates'), headerBackTitle: backTitle }} />
-          <Stack.Screen name="appearance" options={{ headerShown: true, title: t('Appearance'), headerBackTitle: backTitle }} />
-          <Stack.Screen name="csv" options={{ headerShown: true, title: t('Import & export'), headerBackTitle: backTitle }} />
-          <Stack.Screen name="sync" options={{ headerShown: true, title: t('Sync'), headerBackTitle: backTitle }} />
-          <Stack.Screen name="sync-merge" options={{ headerShown: true, title: t('Review duplicates'), headerBackTitle: backTitle }} />
-          <Stack.Screen name="sync-recovery" options={{ headerShown: true, title: t('Recovery phrase'), headerBackTitle: backTitle }} />
+          <Stack.Screen name="transaction" options={formSheetOptions(t('Transaction'), backTitle, '/transactions')} />
+          <Stack.Screen name="budget" options={formSheetOptions(t('Budget'), backTitle, '/plan')} />
+          <Stack.Screen name="budget-adjustment" options={formSheetOptions(t('Adjust budget'), backTitle, '/plan')} />
+          <Stack.Screen name="goal" options={formSheetOptions(t('Goal'), backTitle, '/plan')} />
+          <Stack.Screen name="overview-cards" options={formSheetOptions(t('Add cards'), backTitle, '/overview')} />
+          <Stack.Screen name="account" options={formSheetOptions(t('Account'), backTitle, '/more')} />
+          <Stack.Screen name="category" options={formSheetOptions(t('Category'), backTitle, '/more')} />
+          <Stack.Screen name="recurring" options={formSheetOptions(t('Recurring transaction'), backTitle, '/more')} />
+          <Stack.Screen name="exchange-rate" options={formSheetOptions(t('Exchange rate'), backTitle, '/more')} />
+          <Stack.Screen name="exchange-rates" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Exchange rates'), headerBackTitle: backTitle }} />
+          <Stack.Screen name="appearance" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Appearance'), headerBackTitle: backTitle }} />
+          <Stack.Screen name="csv" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Import & export'), headerBackTitle: backTitle }} />
+          <Stack.Screen name="sync" options={{ headerShown: true, ...backFallbackOptions('/more'), title: t('Sync'), headerBackTitle: backTitle }} />
+          <Stack.Screen name="sync-merge" options={{ headerShown: true, ...backFallbackOptions('/sync'), title: t('Review duplicates'), headerBackTitle: backTitle }} />
+          <Stack.Screen name="sync-recovery" options={{ headerShown: true, ...backFallbackOptions('/sync'), title: t('Recovery phrase'), headerBackTitle: backTitle }} />
         </Stack.Protected>
         {/* Reachable before and after setup. Onboarding's "I already use Qashy" joins a vault
             or restores a backup on a device that has nothing yet — both screens refuse to do
@@ -162,21 +170,28 @@ function RootNavigator() {
             Full-screen pushes, not form sheets. Pairing puts a camera viewfinder and a
             six-word code the user must read off two screens at once; a 0.72 detent that can
             be swiped away mid-handshake is the wrong container for either. */}
-        <Stack.Screen name="sync-pair" options={{ headerShown: true, title: t(settings.onboardingComplete ? 'Add a device' : 'Join your other device'), headerBackTitle: backTitle }} />
-        <Stack.Screen name="sync-transfer" options={{ headerShown: true, title: t(settings.onboardingComplete ? 'Backup & transfer' : 'Restore a backup'), headerBackTitle: backTitle }} />
+        <Stack.Screen name="sync-pair" options={{ headerShown: true, ...backFallbackOptions(settings.onboardingComplete ? '/sync' : '/onboarding'), title: t(settings.onboardingComplete ? 'Add a device' : 'Join your other device'), headerBackTitle: backTitle }} />
+        <Stack.Screen name="sync-transfer" options={{ headerShown: true, ...backFallbackOptions(settings.onboardingComplete ? '/sync' : '/onboarding'), title: t(settings.onboardingComplete ? 'Backup & transfer' : 'Restore a backup'), headerBackTitle: backTitle }} />
       </Stack>
       <PwaUpdatePrompt />
       <ReloadErrorBanner />
+      <WebDialogHost />
     </>
   );
 }
+
+// Loading is keyed by font id (fontIdsForTheme(theme.type) yields a theme's own list). For now every
+// registered font is loaded up front, which is simple and always correct; loading only the active
+// theme's ids lazily is a later optimisation and is deliberately not done here.
+const FONT_IDS_TO_LOAD = Object.keys(FONT_REGISTRY);
+const FONTS_TO_LOAD = fontAssetsFor(FONT_IDS_TO_LOAD);
 
 export default function RootLayout() {
   // The fonts are local assets, so this resolves in a frame or two. Native waits
   // behind the splash rather than flashing the system face; web renders at once
   // (the static export must not be blank) and swaps via the CSS fallback stack.
   // A load error falls through to the system font instead of hanging the splash.
-  const [fontsLoaded, fontError] = useFonts(FONT_ASSETS);
+  const [fontsLoaded, fontError] = useFonts(FONTS_TO_LOAD);
   const ready = fontsLoaded || fontError != null || process.env.EXPO_OS === 'web';
 
   // Runs on the first renderable commit regardless of which branch FinanceProvider

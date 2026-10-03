@@ -7,6 +7,10 @@ import { EditableCardFrame } from '@/features/overview/edit/editable-card-frame'
 // read for the materials this frame uses (`raised`, `sunken` is not used here).
 jest.mock('@/theme/theme', () => ({
   useQashyTheme: () => ({
+    // The real classic scales: components destructure `space`/`radius` from the theme.
+    ...(({ space, radius, tile, iconSize, motion, type }) => ({ space, radius, tile, iconSize, motion, type }))(
+      jest.requireActual('@/theme/themes/classic').classicTheme,
+    ),
     text: '#111111',
     textMuted: '#666666',
     surface: '#ffffff',

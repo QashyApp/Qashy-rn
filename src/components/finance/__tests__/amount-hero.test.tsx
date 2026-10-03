@@ -6,6 +6,10 @@ import { AmountHero } from '@/components/finance/amount-hero';
 // read for the materials this hero uses (`sunken`, `control`).
 jest.mock('@/theme/theme', () => ({
   useQashyTheme: () => ({
+    // The real classic scales: components destructure `space`/`radius` from the theme.
+    ...(({ space, radius, tile, iconSize, motion, type }) => ({ space, radius, tile, iconSize, motion, type }))(
+      jest.requireActual('@/theme/themes/classic').classicTheme,
+    ),
     text: '#111111',
     textMuted: '#666666',
     negative: '#cc0000',

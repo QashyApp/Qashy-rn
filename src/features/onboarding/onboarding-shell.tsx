@@ -10,7 +10,6 @@ import { StickyFooterLayout } from '@/components/ui/sticky-footer';
 import { SETUP_STEPS } from '@/features/onboarding/use-onboarding-flow';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
 
 /**
  * The frame every onboarding step sits in: a quiet top bar (back, progress),
@@ -35,6 +34,7 @@ export function OnboardingShell({
   children: ReactNode;
 }) {
   const theme = useQashyTheme();
+  const { space } = theme;
   const { isRtl, t } = useLocalization();
   const insets = useSafeAreaInsets();
   // Content arrives from the side it is heading toward: forward pushes in from
@@ -88,6 +88,7 @@ export function OnboardingShell({
 
 /** A step's heading block. One title, one sentence of why. */
 export function StepHeading({ title, body }: { title: string; body?: string }) {
+  const { space } = useQashyTheme();
   const headingLevelProps = process.env.EXPO_OS === 'web' ? ({ 'aria-level': 1 } as object) : {};
   return (
     <View style={{ gap: space.sm }}>

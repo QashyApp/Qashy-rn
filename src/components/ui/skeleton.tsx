@@ -12,7 +12,6 @@ import Animated, {
 } from 'react-native-reanimated';
 
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 const PULSE_DURATION = 900;
 const PULSE_MIN = 0.55;
@@ -28,7 +27,7 @@ const REDUCED_MOTION_OPACITY = 0.7;
 export function Skeleton({
   width,
   height,
-  radius: cornerRadius = radius.control,
+  radius: cornerRadius,
   style,
 }: {
   width: number | `${number}%`;
@@ -37,6 +36,7 @@ export function Skeleton({
   style?: StyleProp<ViewStyle>;
 }) {
   const theme = useQashyTheme();
+  const { radius } = theme;
   const reduceMotion = useReducedMotion();
   const opacity = useSharedValue(reduceMotion ? REDUCED_MOTION_OPACITY : PULSE_MIN);
 
@@ -67,7 +67,7 @@ export function Skeleton({
       importantForAccessibility="no-hide-descendants"
       aria-hidden
       style={[
-        { width, height, borderRadius: cornerRadius, borderCurve: 'continuous', backgroundColor: theme.surfaceSunken },
+        { width, height, borderRadius: cornerRadius ?? radius.control, borderCurve: 'continuous', backgroundColor: theme.surfaceSunken },
         animatedStyle,
         style,
       ]}
@@ -76,9 +76,10 @@ export function Skeleton({
 }
 
 /** A stack of `Skeleton` lines, narrowing the last one so the block reads as text rather than a bar chart. */
-export function SkeletonText({ lines = 3, lineHeight = 14, gap = space.sm }: { lines?: number; lineHeight?: number; gap?: number }) {
+export function SkeletonText({ lines = 3, lineHeight = 14, gap }: { lines?: number; lineHeight?: number; gap?: number }) {
+  const { radius, space } = useQashyTheme();
   return (
-    <View style={{ gap }}>
+    <View style={{ gap: gap ?? space.sm }}>
       {Array.from({ length: lines }, (_, index) => (
         <Skeleton
           // A static placeholder list never reorders, so an index key is safe here.

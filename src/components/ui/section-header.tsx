@@ -2,9 +2,10 @@ import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { TextButton } from '@/components/ui/text-button';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 
 export function SectionHeader({ title, action, actionIcon, onAction, secondaryAction, onSecondaryAction }: { title: string; action?: string; actionIcon?: string; onAction?: () => void; secondaryAction?: string; onSecondaryAction?: () => void }) {
+  const { space } = useQashyTheme();
   const headingLevelProps = process.env.EXPO_OS === 'web' ? ({ 'aria-level': 2 } as object) : {};
 
   return (

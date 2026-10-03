@@ -6,7 +6,6 @@ import { MotionView } from '@/components/ui/motion';
 import { TextButton } from '@/components/ui/text-button';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 const DEFAULT_DURATION = 5000;
 
@@ -37,6 +36,7 @@ export function UndoBar({
   style?: ViewStyle;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
 
   useEffect(() => {
     const timer = setTimeout(onDismiss, duration);
@@ -66,8 +66,7 @@ export function UndoBar({
           borderCurve: 'continuous',
           maxWidth: 480,
         },
-        materialStyle(theme, 'raised'),
-        { boxShadow: theme.shadowOverlay },
+        materialStyle(theme, 'overlay'),
         style,
       ]}>
       <AppText selectable={false} literal={literal} variant="label" style={{ flexShrink: 1 }}>

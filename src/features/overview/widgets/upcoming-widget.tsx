@@ -8,13 +8,14 @@ import { MotionView } from '@/components/ui/motion';
 import { SectionHeader } from '@/components/ui/section-header';
 import { TextButton } from '@/components/ui/text-button';
 import { useFinanceRepository } from '@/providers/finance-provider';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 import { errorMessage, showError } from '@/utils/confirm';
 import { hapticSelection, hapticSuccess } from '@/utils/haptics';
 import type { WidgetProps } from '@/features/overview/widgets/types';
 import { useDashboard } from '@/features/overview/widgets/use-dashboard';
 
 export function UpcomingWidget({ month, editing }: WidgetProps) {
+  const { space } = useQashyTheme();
   const repository = useFinanceRepository();
   const summary = useDashboard(month);
   const [pendingUpcomingId, setPendingUpcomingId] = useState<string | null>(null);
@@ -49,7 +50,7 @@ export function UpcomingWidget({ month, editing }: WidgetProps) {
       <SectionHeader title="Coming up" />
       <Card variant="list">
         {summary.upcomingTransactions.map((transaction) => (
-          <MotionView key={transaction.id} variant="fade" animateLayout exit style={{ gap: space.xxs, paddingVertical: space.xs }}>
+          <MotionView key={transaction.id} variant="fade" style={{ gap: space.xxs, paddingVertical: space.xs }}>
             <TransactionRow transaction={transaction} compact returnTo="/overview" />
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: space.sm }}>
               <TextButton title="Skip" tone="muted" disabled={editing || pendingUpcomingId !== null} onPress={() => resolveUpcoming(transaction.id, 'skip')} />

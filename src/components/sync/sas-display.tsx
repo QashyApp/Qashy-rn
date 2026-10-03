@@ -3,7 +3,6 @@ import { View } from 'react-native';
 import { AppText } from '@/components/ui/app-text';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 /**
  * The six words both devices must be showing.
@@ -31,6 +30,7 @@ import { radius, space } from '@/theme/tokens';
  */
 export function SasDisplay({ words }: { words: readonly string[] }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
 
   return (

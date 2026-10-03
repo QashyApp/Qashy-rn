@@ -12,6 +12,7 @@ function settings(baseCurrency: string): AppSettings {
     onboardingComplete: true,
     locale: 'en-US',
     baseCurrency,
+    themeId: 'classic',
     themeMode: 'system',
     accentSource: 'system',
     accentHex: '#5966E9',

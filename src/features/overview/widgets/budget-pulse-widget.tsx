@@ -11,13 +11,15 @@ import { ProgressBar } from '@/components/ui/progress-bar';
 import { SectionHeader } from '@/components/ui/section-header';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 import { todayLocal } from '@/utils/date';
 import { formatMoney } from '@/utils/money';
 import type { WidgetConfigSheetProps, WidgetProps } from '@/features/overview/widgets/types';
 import { useDashboard } from '@/features/overview/widgets/use-dashboard';
 
 export function BudgetPulseWidget({ card, month }: WidgetProps) {
+  const theme = useQashyTheme();
+  const { space } = theme;
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const { t } = useLocalization();
@@ -44,7 +46,8 @@ export function BudgetPulseWidget({ card, month }: WidgetProps) {
           <AnimatedMoney minor={selected.spentMinor} currency={currency} locale={locale} variant="money" numeric />
           <AppText literal muted variant="caption">{`${t('of')} ${formatMoney(selected.effectiveLimitMinor, currency, locale)}`}</AppText>
         </View>
-        <ProgressBar label={t('Budget progress')} value={ratio} />
+        <ProgressBar label={t('Budget progress')} value={ratio} color={ratio > 1 ? (theme.negative as string) : undefined} />
+        {ratio > 1 ? <AppText variant="caption" style={{ color: theme.negative }}>Over budget</AppText> : null}
       </Card>
     );
   }
@@ -68,7 +71,7 @@ export function BudgetPulseWidget({ card, month }: WidgetProps) {
             <AnimatedMoney minor={summary.budgetSpentMinor} currency={currency} locale={locale} variant="money" numeric />
             <AppText literal muted variant="caption">{`${t('of')} ${formatMoney(summary.budgetLimitMinor, currency, locale)}`}</AppText>
           </View>
-          <ProgressBar label={t('Budget progress')} value={budgetProgress} />
+          <ProgressBar label={t('Budget progress')} value={budgetProgress} color={budgetProgress > 1 ? (theme.negative as string) : undefined} />
           <AppText variant="caption" muted>{budgetProgress > 1 ? 'Over budget — review the categories driving it.' : `${Math.max(0, Math.round((1 - budgetProgress) * 100))}% remains in this period.`}</AppText>
         </>
       ) : (

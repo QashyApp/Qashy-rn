@@ -148,7 +148,7 @@ export function convertMinor(
   if (fromCurrency === toCurrency) return amountMinor;
   if (!isSafeMinor(amountMinor)) throw new Error('Amount is outside the supported range.');
   const decimalRate = new Decimal(rate);
-  if (!decimalRate.isFinite() || !decimalRate.isPositive()) {
+  if (!decimalRate.isFinite() || decimalRate.lte(0)) {
     throw new Error('Exchange rate must be a positive number.');
   }
   const fromScale = new Decimal(10).pow(currencyDigits(fromCurrency, locale));

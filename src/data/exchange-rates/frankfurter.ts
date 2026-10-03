@@ -144,7 +144,7 @@ export function deriveBaseRates(
   const byDate = new Map<string, Map<string, Decimal>>();
   for (const row of rows) {
     const eur = new Decimal(String(row.rate));
-    if (!eur.isFinite() || !eur.isPositive()) continue;
+    if (!eur.isFinite() || eur.lte(0)) continue;
     const perDate = byDate.get(row.date) ?? new Map<string, Decimal>();
     perDate.set(row.quote, eur);
     byDate.set(row.date, perDate);

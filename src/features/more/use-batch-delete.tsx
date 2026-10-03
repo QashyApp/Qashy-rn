@@ -6,10 +6,10 @@ import { AppText } from '@/components/ui/app-text';
 import { useLocalization } from '@/localization/localization';
 import { useFinanceRepository } from '@/providers/finance-provider';
 import type { FinanceState } from '@/domain/models';
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 
-type DeletableType = 'recurringRules' | 'accounts' | 'categories';
+type DeletableType = 'recurringRules' | 'accounts' | 'categories' | 'budgets' | 'goals';
 
 /**
  * Multi-select + batch delete state for one list on the More screen. `liveIds` are the ids
@@ -20,7 +20,7 @@ export function useBatchDelete(options: {
   type: DeletableType;
   liveIds: string[];
   confirmTitle: (count: number) => string;
-  confirmMessage: string;
+  confirmMessage: string | ((ids: string[]) => string);
   errorTitle: string;
 }) {
   const repository = useFinanceRepository();
@@ -38,7 +38,7 @@ export function useBatchDelete(options: {
   const deleteSelected = async () => {
     if (deleting || !liveSelected.length) return;
     const ids = [...liveSelected];
-    const confirmed = await confirmDestructive({ title: options.confirmTitle(ids.length), message: options.confirmMessage });
+    const confirmed = await confirmDestructive({ title: options.confirmTitle(ids.length), message: typeof options.confirmMessage === 'function' ? options.confirmMessage(ids) : options.confirmMessage });
     if (!confirmed) return;
     setDeleting(true);
     try {
@@ -56,6 +56,7 @@ export function useBatchDelete(options: {
 }
 
 export function BatchDeleteBar({ count, busy, onDelete }: { count: number; busy: boolean; onDelete: () => void }) {
+  const { space } = useQashyTheme();
   const { t } = useLocalization();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>

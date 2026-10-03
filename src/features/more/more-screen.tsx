@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 
 import { StatTile } from '@/components/finance/stat-tile';
@@ -18,9 +18,10 @@ import { useFinanceRepository, useFinanceState } from '@/providers/finance-provi
 import { useSyncState } from '@/providers/sync-provider';
 import { useScreenMetrics } from '@/theme/layout';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
+import { categoryDeletionMessage } from '@/utils/category-impact';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
-import { endOfMonth, startOfMonth } from '@/utils/date';
+import { endOfMonth, mediumDate, startOfMonth } from '@/utils/date';
+import { useDashboardRange } from '@/features/overview/widgets/use-dashboard';
 import { accountTypeIcon, accountTypeLabel, categoryKindLabel } from '@/utils/labels';
 import { formatMoney } from '@/utils/money';
 import { useNow } from '@/utils/use-now';
@@ -28,29 +29,18 @@ import { useNow } from '@/utils/use-now';
 // A settings row is a 38pt icon tile plus a 12pt gap, so hairlines start where
 // the text does. Running them edge to edge cut the icons off from their labels
 // and made one list look like several stacked ones.
-const ROW_DIVIDER_INSET = 38 + space.md;
 
 export function MoreScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
+  const rowDividerInset = 38 + space.md;
   const { t } = useLocalization();
   const { contentWidth } = useScreenMetrics();
   const wide = contentWidth >= 860;
-  const summary = useMemo(() => {
-    void state.accounts;
-    void state.budgetPeriods;
-
-    void state.budgetAdjustments;
-    void state.budgets;
-    void state.categories;
-    void state.exchangeRates;
-    void state.settings;
-    void state.transactions;
-    return repository.getDashboard(startOfMonth(), endOfMonth());
-  }, [repository, state.accounts, state.budgetPeriods, state.budgetAdjustments, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
+  const summary = useDashboardRange(startOfMonth(), endOfMonth());
   const activeAccounts = state.accounts.filter((item) => !item.archived);
-  const archivedAccounts = state.accounts.filter((item) => item.archived);
   const archivedCategories = state.categories.filter((item) => item.archived);
   const recurring = state.recurringRules;
   const [restoringId, setRestoringId] = useState<string | null>(null);
@@ -60,14 +50,14 @@ export function MoreScreen() {
     type: 'accounts',
     liveIds: activeAccounts.map((item) => item.id),
     confirmTitle: (count) => count === 1 ? 'Delete 1 account?' : `Delete ${count} accounts?`,
-    confirmMessage: 'Accounts with transactions, schedules, budgets, or goals attached keep their history and are archived instead of erased.',
+    confirmMessage: 'Deleted accounts leave your net worth. Their past transactions stay in your history, and their schedules stop.',
     errorTitle: 'Couldn’t delete accounts',
   });
   const categorySelection = useBatchDelete({
     type: 'categories',
     liveIds: activeCategories.map((item) => item.id),
     confirmTitle: (count) => count === 1 ? 'Delete 1 category?' : `Delete ${count} categories?`,
-    confirmMessage: 'Transactions in these categories become uncategorized, and the categories are removed from budgets and goals.',
+    confirmMessage: (ids) => categoryDeletionMessage(state.budgets, ids),
     errorTitle: 'Couldn’t delete categories',
   });
   const ruleSelection = useBatchDelete({
@@ -131,18 +121,18 @@ export function MoreScreen() {
       <ScreenContainer>
         <PageHeading title="More" subtitle="Accounts, categories, automation, portability, and appearance." />
         <Card variant="emphasized" style={{ gap: space.lg }}>
-          <AppText variant="overline" style={{ color: theme.onAccentContainer, opacity: 0.75 }}>Qashy</AppText>
+          <AppText variant="overline" style={{ color: theme.onAccentContainer }}>Qashy</AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.lg }}>
             <View style={{ minWidth: 96, flex: 1 }}>
-              <StatTile icon="wallet" label="Accounts" value={String(activeAccounts.length)} />
+              <StatTile onTint icon="wallet" label="Accounts" value={String(activeAccounts.length)} />
             </View>
             <View style={{ minWidth: 96, flex: 1 }}>
-              <StatTile icon="chart.pie" label="Categories" value={String(state.categories.filter((item) => !item.archived).length)} />
+              <StatTile onTint icon="chart.pie" label="Categories" value={String(state.categories.filter((item) => !item.archived).length)} />
             </View>
           </View>
           {syncSummary ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-              <AppText literal variant="caption" style={{ color: theme.onAccentContainer, opacity: 0.85 }}>{t('Sync')}</AppText>
+              <AppText literal variant="caption" style={{ color: theme.onAccentContainer }}>{t('Sync')}</AppText>
               <StatusPill literal label={syncSummary.subtitle} icon={syncSummary.icon} tone={syncSummary.tone} />
             </View>
           ) : null}
@@ -156,13 +146,14 @@ export function MoreScreen() {
               secondaryAction={activeAccounts.length ? (accountSelection.selecting ? 'Done selecting' : 'Select') : undefined}
               onSecondaryAction={accountSelection.toggleMode}
             />
-            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+            <Card variant="list" dividerInset={rowDividerInset}>
               {activeAccounts.map((account) => {
                 const balance = summary.accountBalances.find((item) => item.account.id === account.id)?.balanceMinor ?? account.openingBalanceMinor;
                 return <SettingsRow key={account.id} literal title={account.name} subtitle={`${t(accountTypeLabel(account.type))} · ${account.currency}`} value={formatMoney(balance, account.currency, state.settings.locale)} icon={accountTypeIcon(account.type)} color={account.color} selected={accountSelection.selecting ? accountSelection.selectedIds.includes(account.id) : undefined} disabled={accountSelection.deleting} onPress={() => accountSelection.selecting ? accountSelection.toggle(account.id) : router.push({ pathname: '/account', params: { id: account.id } })} />;
               })}
             </Card>
-            {accountSelection.selecting ? <BatchDeleteBar count={accountSelection.liveSelectedCount} busy={accountSelection.deleting} onDelete={accountSelection.deleteSelected} /> : null}
+            {accountSelection.selecting ? <BatchDeleteBar count={accountSelection.liveSelectedCount} busy={accountSelection.deleting || accountSelection.liveSelectedCount >= activeAccounts.length} onDelete={accountSelection.deleteSelected} /> : null}
+            {accountSelection.selecting && activeAccounts.length > 0 && accountSelection.liveSelectedCount >= activeAccounts.length ? <AppText variant="caption" muted>Keep at least one account. Deselect one to continue.</AppText> : null}
 
             <SectionHeader
               title="Categories"
@@ -171,7 +162,7 @@ export function MoreScreen() {
               secondaryAction={activeCategories.length ? (categorySelection.selecting ? 'Done selecting' : 'Select') : undefined}
               onSecondaryAction={categorySelection.toggleMode}
             />
-            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+            <Card variant="list" dividerInset={rowDividerInset}>
               {activeCategories.map((category) => <SettingsRow key={category.id} literal title={category.name} subtitle={t(categoryKindLabel(category.kind))} icon={category.icon} color={category.color} selected={categorySelection.selecting ? categorySelection.selectedIds.includes(category.id) : undefined} disabled={categorySelection.deleting} onPress={() => categorySelection.selecting ? categorySelection.toggle(category.id) : router.push({ pathname: '/category', params: { id: category.id } })} />)}
             </Card>
             {categorySelection.selecting ? <BatchDeleteBar count={categorySelection.liveSelectedCount} busy={categorySelection.deleting} onDelete={categorySelection.deleteSelected} /> : null}
@@ -185,10 +176,10 @@ export function MoreScreen() {
               secondaryAction={recurring.length ? (ruleSelection.selecting ? 'Done selecting' : 'Select') : undefined}
               onSecondaryAction={ruleSelection.toggleMode}
             />
-            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+            <Card variant="list" dividerInset={rowDividerInset}>
               {recurring.length ? recurring.map((rule) => {
                 const ended = Boolean(rule.endDate && rule.nextDueDate > rule.endDate);
-                const status = ended ? 'Ended' : rule.active ? `Next ${rule.nextDueDate}` : 'Paused';
+                const status = ended ? 'Ended' : rule.active ? `Next ${mediumDate(rule.nextDueDate, state.settings.locale)}` : 'Paused';
                 const frequency = rule.interval === 1
                   ? rule.unit === 'month'
                     ? t('Monthly')
@@ -204,18 +195,17 @@ export function MoreScreen() {
             </Card>
             {ruleSelection.selecting ? <BatchDeleteBar count={ruleSelection.liveSelectedCount} busy={ruleSelection.deleting} onDelete={ruleSelection.deleteSelected} /> : null}
 
-            {archivedAccounts.length || archivedCategories.length ? (
+            {archivedCategories.length ? (
               <>
                 <SectionHeader title="Archived" />
-                <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
-                  {archivedAccounts.map((account) => <SettingsRow key={account.id} literal title={account.name} subtitle={t(`Archived account · ${account.currency}`)} value={t(restoringId === account.id ? 'Restoring…' : 'Restore')} icon={accountTypeIcon(account.type)} color={account.color} onPress={() => restore('account', account.id)} />)}
+                <Card variant="list" dividerInset={rowDividerInset}>
                   {archivedCategories.map((category) => <SettingsRow key={category.id} literal title={category.name} subtitle={t(`Archived ${category.kind} category`)} value={t(restoringId === category.id ? 'Restoring…' : 'Restore')} icon={category.icon} color={category.color} onPress={() => restore('category', category.id)} />)}
                 </Card>
               </>
             ) : null}
 
             <SectionHeader title="Data" />
-            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+            <Card variant="list" dividerInset={rowDividerInset}>
               {/* The subtitle is the at-a-glance answer to "is the relay down?" — it reads
                   `Relay unreachable` rather than a stale last-synced time whenever the drop-box
                   is the thing that broke. The row is not `literal`, so it translates itself. */}
@@ -230,7 +220,7 @@ export function MoreScreen() {
             </Card>
 
             <SectionHeader title="App" />
-            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+            <Card variant="list" dividerInset={rowDividerInset}>
               <SettingsRow title="Appearance" subtitle="Theme, Material You, and accent" icon="paintbrush" onPress={() => router.push('/appearance')} />
               {/* Dev-only component gallery; the route itself redirects away in production
                   builds (see src/app/kitchen-sink.tsx), but the row is also hidden there so
@@ -241,7 +231,7 @@ export function MoreScreen() {
             </Card>
 
             <SectionHeader title="Danger zone" />
-            <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+            <Card variant="list" dividerInset={rowDividerInset}>
               <SettingsRow title="Reset all data" subtitle="Delete everything and return to first-time setup" icon="trash" tone="danger" value={resetting ? 'Resetting…' : undefined} disabled={resetting} onPress={resetAllData} />
             </Card>
           </View>

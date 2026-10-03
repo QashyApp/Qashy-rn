@@ -43,12 +43,11 @@ import { disableSync, resumeSync, rotateVaultKey } from '@/sync/setup';
 import type { RelayHealth } from '@/sync/transport/relay-health';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
+import type { SpaceScale } from '@/theme/themes/types';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { relativeTime } from '@/utils/relative-time';
 import { useNow } from '@/utils/use-now';
 
-const ROW_DIVIDER_INSET = 38 + space.md;
 
 /** Which long-running action owns the screen, so two cannot be started at once. */
 type Busy = 'pause' | 'resume' | 'rotate' | 'leave' | null;
@@ -56,6 +55,8 @@ type Busy = 'pause' | 'resume' | 'rotate' | 'leave' | null;
 export function SyncScreen() {
   const { status, syncing, error, refresh, reconcile, checkRelay, setup } = useSync();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
+  const rowDividerInset = 38 + space.md;
   const { t } = useLocalization();
 
   /**
@@ -80,7 +81,7 @@ export function SyncScreen() {
 
   if (!status) {
     return (
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
         <AppText muted>Reading this device’s sync state…</AppText>
       </ScrollView>
     );
@@ -134,7 +135,7 @@ export function SyncScreen() {
     <ScrollView
       contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
-      contentContainerStyle={container}
+      contentContainerStyle={containerStyle(space)}
       refreshControl={<RefreshControl refreshing={syncing} onRefresh={() => void reconcile()} tintColor={theme.accent} />}>
       <MotionView>
         {/* `accessibilityLiveRegion` is why the hero is one node: a state change here is the
@@ -221,7 +222,7 @@ export function SyncScreen() {
           every device" underneath the setup flow would make it findable only by someone who did
           not need it. Pairing is still the primary action above; this is the other way in. */}
       {!paired ? (
-        <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+        <Card variant="list" dividerInset={rowDividerInset}>
           <SettingsRow
             title="Restore from a backup"
             subtitle="Put an encrypted vault backup onto this device."
@@ -252,7 +253,7 @@ export function SyncScreen() {
       {paired ? (
         <>
           <SectionHeader title="Activity" />
-          <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+          <Card variant="list" dividerInset={rowDividerInset}>
             {status.activity.length ? (
               status.activity.map((row) => {
                 const described = describeActivity(row);
@@ -281,7 +282,7 @@ export function SyncScreen() {
           </AppText>
 
           <SectionHeader title="Recovery" />
-          <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+          <Card variant="list" dividerInset={rowDividerInset}>
             <SettingsRow
               title="Recovery phrase"
               subtitle="Twenty-four words that are the vault. Anyone holding them holds your data."
@@ -300,7 +301,7 @@ export function SyncScreen() {
           </Card>
 
           <SectionHeader title="Danger zone" />
-          <Card variant="list" dividerInset={ROW_DIVIDER_INSET}>
+          <Card variant="list" dividerInset={rowDividerInset}>
             <SettingsRow
               title="Replace the vault key"
               subtitle="For a lost device. Every device must be paired again."
@@ -326,14 +327,14 @@ export function SyncScreen() {
   );
 }
 
-const container = {
+const containerStyle = (space: SpaceScale) => ({
   padding: 18,
   paddingBottom: 40,
   gap: space.lg,
   width: '100%',
   maxWidth: 720,
   alignSelf: 'center',
-} as const;
+}) as const;
 
 /** The same tone → color mapping `StatusPill` uses internally, for the hero's icon well. */
 function toneColor(theme: ReturnType<typeof useQashyTheme>, tone: StatusTone) {
@@ -353,6 +354,7 @@ function toneColor(theme: ReturnType<typeof useQashyTheme>, tone: StatusTone) {
  * in a help page nobody opens. If any line here stops being true, the line is the bug.
  */
 function Explains({ icon, title, children }: { icon: string; title: string; children: string }) {
+  const { radius, space } = useQashyTheme();
   return (
     <View style={{ gap: space.xs }}>
       <StatusPill label={title} icon={icon} tone="neutral" style={{ borderRadius: radius.control }} />

@@ -66,6 +66,7 @@ import {
 import { PairingHost, PairingJoiner } from '@/sync/pairing';
 import {
   adoptVault,
+  disableSync,
   enableSync,
   readSyncStatus,
   recordPairedPeer,
@@ -75,7 +76,7 @@ import {
 } from '@/sync/setup';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
+import type { SpaceScale } from '@/theme/themes/types';
 import { errorMessage } from '@/utils/confirm';
 import { nowIso } from '@/utils/entity';
 
@@ -120,6 +121,7 @@ export function PairScreen() {
   const { status, setup, refresh, reconcile } = useSync();
   const { settings } = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   // Reached from onboarding's "I already use Qashy". This device has nothing yet, so it can
   // only join: hosting would mint a vault around an empty ledger.
@@ -136,7 +138,7 @@ export function PairScreen() {
   const [remaining, setRemaining] = useState(0);
   const [sas, setSas] = useState<readonly string[] | null>(null);
   const [outcome, setOutcome] = useState<{ headline: string; body: string } | null>(null);
-  const [scannerKey, setScannerKey] = useState(0);
+  const [scannerRearm, setScannerRearm] = useState({ token: 0, keepManual: false });
 
   const session = useRef<Session | null>(null);
   // Held apart from `sas` because the confirmation closure differs by role while the words
@@ -151,9 +153,27 @@ export function PairScreen() {
     accept.current = null;
   };
 
+  // Hosting turns sync on (or back on) before any peer exists. If the attempt ends without a
+  // device ever being added, undo exactly that, so abandoning the screen cannot leave sync
+  // enabled — or an activity log claiming a pairing — with nobody on the other end.
+  const startedSync = useRef<'created' | 'resumed' | null>(null);
+  const pairedPeer = useRef(false);
+  const rollbackAbandonedSetup = () => {
+    const started = startedSync.current;
+    if (!started || pairedPeer.current) return;
+    startedSync.current = null;
+    void disableSync(setup, { forget: started === 'created' })
+      .then(() => refresh())
+      .catch(() => undefined);
+  };
+
   // Unmount is a cancellation like any other: a socket left open on a rendezvous the user
   // navigated away from would keep a pairing window alive with nobody watching the words.
-  useEffect(() => closeSession, []);
+  useEffect(() => () => {
+    closeSession();
+    rollbackAbandonedSetup();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only; must run once, on unmount
+  }, []);
 
   // First run ends when the vault's own settings arrive: they carry `onboardingComplete`, which
   // is what opens the rest of the app. Until then the done step says it is still receiving.
@@ -201,10 +221,12 @@ export function PairScreen() {
         // `VaultRootKey` is ever minted, and doing it here rather than on the sync screen means
         // a key only exists once somebody has actually started adding a second device.
         await enableSync(setup, profile());
+        startedSync.current = 'created';
       } else if (!currentBeforeStart.enabled) {
         // Hosting is an explicit sync action. It also repairs the useful case where a reset or
         // an older build left the device key intact but removed the enabled metadata.
         await resumeSync(setup);
+        startedSync.current = 'resumed';
       }
       const vault = await setup.keystore.read();
       if (!vault) throw new Error('This device’s vault key could not be read.');
@@ -242,6 +264,7 @@ export function PairScreen() {
           accept.current = async () => {
             const { peer } = await confirmation.confirm();
             await recordPairedPeer(setup, peer);
+            pairedPeer.current = true;
             await refresh();
             setOutcome({
               headline: 'Device added',
@@ -262,6 +285,7 @@ export function PairScreen() {
           setSas(null);
           setCode((current) => (current ? { ...current, unusable: true } : null));
           setError(errorMessage(reason, 'The other device did not complete pairing.'));
+          rollbackAbandonedSetup();
         });
     } catch (reason) {
       setError(errorMessage(reason, 'Sync could not be set up on this device.'));
@@ -299,7 +323,15 @@ export function PairScreen() {
       // Decoded before a socket is opened. A stale or malformed code is a local error with a
       // local fix, and reporting it as "the other device didn't answer" would send someone
       // debugging a network that is fine.
-      const decoded = decodePairingCode(normalizeTypedPairingCode(scanned), unixSeconds());
+      let decoded: ReturnType<typeof decodePairingCode>;
+      try {
+        decoded = decodePairingCode(normalizeTypedPairingCode(scanned), unixSeconds());
+      } catch (reason) {
+        // Rejected on this device before anything was sent, so what was typed is only a typo.
+        setScannerRearm((value) => ({ token: value.token + 1, keepManual: false }));
+        setError(errorMessage(reason, 'That code could not be used. Show a fresh one and try again.'));
+        return;
+      }
       const identity = createDeviceIdentity();
       // The joiner never needs a configured relay: `PairingCode` carries the host's address, so
       // a brand-new device with blank endpoints can still be added, and it inherits the host's
@@ -346,7 +378,7 @@ export function PairScreen() {
     } catch (reason) {
       // QrScanner claims one code per mount so a camera frame cannot start a dozen handshakes.
       // A failed or expired code is a new attempt, so give the scanner a fresh claim slot.
-      setScannerKey((value) => value + 1);
+      setScannerRearm((value) => ({ token: value.token + 1, keepManual: false }));
       setError(errorMessage(reason, 'That code could not be used. Show a fresh one and try again.'));
     } finally {
       setBusy(false);
@@ -379,6 +411,7 @@ export function PairScreen() {
 
   const rejectMatch = () => {
     closeSession();
+    rollbackAbandonedSetup();
     setSas(null);
     setCode(null);
     setError(
@@ -393,7 +426,7 @@ export function PairScreen() {
 
   if (!status) {
     return (
-      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
+      <ScrollView contentInsetAdjustmentBehavior="automatic" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
         <AppText muted>Reading this device’s sync state…</AppText>
       </ScrollView>
     );
@@ -402,7 +435,7 @@ export function PairScreen() {
   const blocked = blockingReason(status);
 
   return (
-    <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={container}>
+    <ScrollView contentInsetAdjustmentBehavior="automatic" keyboardShouldPersistTaps="handled" style={{ flex: 1, backgroundColor: theme.background }} contentContainerStyle={containerStyle(space)}>
       <View style={{ gap: space.sm }}>
         <AppText literal variant="caption" muted style={{ textAlign: 'center' }}>
           {t(`Step ${STAGES.indexOf(stage) + 1} of ${STAGES.length}`)}
@@ -469,7 +502,7 @@ export function PairScreen() {
                 one at the code it shows.
               </AppText>
               <QrScanner
-                key={scannerKey}
+                rearm={scannerRearm}
                 onCode={(value) => void startJoining(value)}
                 hint="The code works once and expires after a minute and a half."
               />
@@ -488,14 +521,14 @@ export function PairScreen() {
   );
 }
 
-const container = {
+const containerStyle = (space: SpaceScale) => ({
   padding: 18,
   paddingBottom: 40,
   gap: space.lg,
   width: '100%',
   maxWidth: 720,
   alignSelf: 'center',
-} as const;
+}) as const;
 
 /**
  * The states in which pairing cannot start at all, with the fix.
@@ -547,6 +580,7 @@ function RoleStep({
   readonly onContinue: () => void;
 }) {
   const theme = useQashyTheme();
+  const { space } = theme;
   const blockedHost = role === 'host' && !canHost;
 
   return (
@@ -633,6 +667,7 @@ function RoleOption({
   readonly onPress: () => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   // A pressable rather than a `Card` with a touch handler: the choice needs press feedback and
   // a real `radio` role, and a `View` that happens to react to `onTouchEnd` gives neither — nor
@@ -653,7 +688,7 @@ function RoleOption({
           opacity: disabled ? 0.5 : 1,
         },
         selected && !disabled
-          ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+          ? materialStyle(theme, 'selected')
           : materialStyle(theme, 'control'),
       ]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
@@ -675,6 +710,7 @@ function HostCodeStep({
   readonly onRestart: () => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const [showTyped, setShowTyped] = useState(false);
   const expired = remaining <= 0;
@@ -771,6 +807,7 @@ function ConfirmStep({
   readonly onReject: () => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   return (
     <>
       <AppText variant="title">Do these words match?</AppText>
@@ -824,6 +861,7 @@ function DoneStep({
   readonly firstRun?: boolean;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   if (firstRun) {
     return (
       <View accessibilityLiveRegion="polite" style={{ alignItems: 'center', gap: space.md, paddingVertical: space.xxl }}>

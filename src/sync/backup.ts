@@ -352,6 +352,7 @@ function parseArchive(text: string): VaultArchive {
   }
   if (!isRecord(parsed)) throw new BackupError(DAMAGED);
 
+  if (typeof parsed.format !== 'number') throw new BackupError(DAMAGED);
   if (parsed.format !== ARCHIVE_FORMAT) {
     throw new BackupError(
       `That backup was written by a different version of Qashy (format v${String(parsed.format)}). Update this device before restoring it.`,

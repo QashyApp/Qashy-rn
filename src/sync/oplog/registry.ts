@@ -88,10 +88,14 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
     /** Monotone: a peer that has not finished onboarding must never un-onboard this one. */
     onboardingComplete: { kind: 'monotoneTrue' },
     locale: LWW,
+    /**
+     * Appearance is per device: a phone in a pixel-style dark theme must not restyle a laptop. The accent
+     * pair is device-local together, so `'custom'` can never meet another device's system-derived hex.
+     */
+    themeId: { kind: 'deviceLocal' },
     themeMode: { kind: 'deviceLocal' },
-    /** `'custom'` paired with another device's system-derived hex is not a state that means anything. */
-    accentSource: group('accent'),
-    accentHex: group('accent'),
+    accentSource: { kind: 'deviceLocal' },
+    accentHex: { kind: 'deviceLocal' },
   }),
 
   accounts: spec({

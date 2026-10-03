@@ -53,6 +53,7 @@ export const settings = (over: Partial<AppSettings> = {}): AppSettings => ({
   onboardingComplete: true,
   locale: 'en-US',
   baseCurrency: 'USD',
+  themeId: 'classic',
   themeMode: 'system',
   accentSource: 'system',
   accentHex: '#5966E9',

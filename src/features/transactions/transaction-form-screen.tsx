@@ -297,14 +297,38 @@ export function TransactionFormScreen() {
       && existing.foreign.currency === trimmedForeignCurrency
       && existing.accountId === account?.id
       && existing.localDate === date);
-  const accountRateMissing = Boolean(needsRate) && !appliedRate && !exchangeRate.trim();
+  // A typed destination amount prices a transfer that touches the base currency by itself (the
+  // repository derives the missing leg from it), so no stored rate is needed in that case.
+  const baseCurrency = state.settings.baseCurrency;
+  const crossCurrencyTransfer = kind === 'transfer' && !!account && !!destinationAccount && !sameCurrencyTransfer;
+  const manualDestination = crossCurrencyTransfer && destinationAmount.trim().length > 0 && !destinationAmountError;
+  const pricedByDestinationAmount = manualDestination &&
+    (account?.currency === baseCurrency || destinationAccount?.currency === baseCurrency);
+  const accountRateMissing = Boolean(needsRate) && !appliedRate && !exchangeRate.trim() && !pricedByDestinationAmount;
+  // The other transfer leg needs a rate too when no typed amount supplies it. Without this the
+  // gap only surfaced at save time as a reversed-direction "Missing exchange rate" alert.
+  const transferLegMissingPair = (() => {
+    if (!crossCurrencyTransfer || !account || !destinationAccount) return null;
+    // Re-saving an unchanged historical transfer keeps its own snapshots.
+    if (existing?.kind === 'transfer' && existing.accountId === account.id &&
+      existing.destinationAccountId === destinationAccount.id && existing.localDate === date) return null;
+    if (!manualDestination) {
+      return appliedCrossRateFor(state, account.currency, destinationAccount.currency, date)
+        ? null
+        : `${account.currency} → ${destinationAccount.currency}`;
+    }
+    if (account.currency === baseCurrency || destinationAccount.currency === baseCurrency) return null;
+    return appliedRateFor(state, destinationAccount.currency, date)
+      ? null
+      : `${destinationAccount.currency} → ${baseCurrency}`;
+  })();
   const missingRatePair = foreignRateMissing && account
     ? `${trimmedForeignCurrency} → ${account.currency}`
     : accountRateMissing && account
-      ? `${account.currency} → ${state.settings.baseCurrency}`
-      : null;
+      ? `${account.currency} → ${baseCurrency}`
+      : transferLegMissingPair;
   const rateMissingMessage = missingRatePair && !fetchingRate
-    ? `Add an exchange rate for ${missingRatePair} to save.`
+    ? `Add an exchange rate for ${missingRatePair} to save${crossCurrencyTransfer && (account?.currency === baseCurrency || destinationAccount?.currency === baseCurrency) ? ', or enter the destination amount' : ''}.`
     : undefined;
   const canSave = Boolean(account)
     && !missingRatePair
@@ -495,7 +519,7 @@ export function TransactionFormScreen() {
                 />
               </View>
             )}
-            {destinationError && destinationChoices.length ? <AppText accessibilityRole="alert" variant="caption" style={{ color: theme.negative }}>{destinationError}</AppText> : null}
+            {destinationError && destinationChoices.length ? <AppText variant="caption" muted>{destinationError}</AppText> : null}
             {destinationAccount && !sameCurrencyTransfer ? (
               <FormField
                 label={`Destination amount (${destinationAccount.currency})`}

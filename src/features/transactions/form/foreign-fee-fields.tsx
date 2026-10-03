@@ -10,7 +10,6 @@ import { TextButton } from '@/components/ui/text-button';
 import { currencyLabel } from '@/features/onboarding/steps/currency-step';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
 import { mediumDate } from '@/utils/date';
 import { formatMoney, localizeDecimalString, SUPPORTED_CURRENCY_CODES } from '@/utils/money';
 import type { AppliedRate } from '@/utils/rates';
@@ -83,6 +82,7 @@ export function ForeignFeeFields({
 }) {
   const { t } = useLocalization();
   const theme = useQashyTheme();
+  const { space } = theme;
   const [rateOverrideOpen, setRateOverrideOpen] = useState(() => Boolean(rateText.trim()));
   // Errors only surface once a field has been edited or left, so toggling a
   // section on (or picking a fee type) doesn't open with a wall of red.

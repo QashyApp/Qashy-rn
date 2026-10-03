@@ -7,7 +7,6 @@ import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { motion, radius, space } from '@/theme/tokens';
 import { monthKey, monthLabel, moveMonth, parseLocalDate, startOfMonth } from '@/utils/date';
 import { hapticSelection } from '@/utils/haptics';
 
@@ -37,6 +36,7 @@ export function MonthSwitcher({
   disabled?: boolean;
 }) {
   const theme = useQashyTheme();
+  const { motion, radius, space } = theme;
   const { locale, isRtl, t } = useLocalization();
   const [pickerOpen, setPickerOpen] = useState(false);
   const atMax = max != null && value >= max;
@@ -108,6 +108,7 @@ function MonthPicker({
   onSelect: (month: string) => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { locale, isRtl, t } = useLocalization();
   const [year, setYear] = useState(() => parseLocalDate(value).getFullYear());
   const current = monthKey(value);

@@ -9,7 +9,6 @@ import { StepHeading } from '@/features/onboarding/onboarding-shell';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 import { formatMoney, parseMoney, SUPPORTED_CURRENCY_CODES } from '@/utils/money';
 
@@ -40,6 +39,7 @@ export function currencyLabel(currency: string, locale: string) {
  * there, searchable, for everyone else.
  */
 export function CurrencyStep({ currency, locale, onCurrency }: { currency: string; locale: string; onCurrency: (currency: string) => void }) {
+  const { space } = useQashyTheme();
   const { t } = useLocalization();
   // The device's own currency joins the quick picks when it is not already one.
   const quick = useMemo(
@@ -109,6 +109,7 @@ export function CurrencyStep({ currency, locale, onCurrency }: { currency: strin
  */
 function CurrencyTile({ code, name, selected, onPress }: { code: string; name: string; selected: boolean; onPress: () => void }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   return (
     <MotionPressable
       accessibilityRole="radio"
@@ -132,7 +133,7 @@ function CurrencyTile({ code, name, selected, onPress }: { code: string; name: s
           borderCurve: 'continuous',
         },
         selected
-          ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+          ? materialStyle(theme, 'selected')
           : materialStyle(theme, 'control'),
       ]}>
       <AppText literal figure variant="label" style={{ fontWeight: '700', color: selected ? theme.onAccentContainer : theme.text }}>{code}</AppText>

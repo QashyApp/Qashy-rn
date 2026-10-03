@@ -827,6 +827,24 @@ describe('FinanceRepository contract', () => {
     expect(reloaded.getSnapshot().categories.map((item) => item.name)).toEqual(initialOrder);
   });
 
+  it('persists the onboarding theme choice and rejects a malformed theme id', async () => {
+    const onboarding = { locale: 'en-US', baseCurrency: 'USD', accountName: 'Everyday', accountType: 'checking', openingBalanceMinor: 0, themeMode: 'system', accentSource: 'system', accentHex: '#5966E9' } as const;
+    const chosen = new LocalFinanceRepository(new MemoryStorageAdapter());
+    await chosen.initialize();
+    await chosen.completeOnboarding({ ...onboarding, themeId: 'high-contrast' });
+    expect(chosen.getSnapshot().settings.themeId).toBe('high-contrast');
+
+    const omitted = new LocalFinanceRepository(new MemoryStorageAdapter());
+    await omitted.initialize();
+    await omitted.completeOnboarding(onboarding);
+    expect(omitted.getSnapshot().settings.themeId).toBe('classic');
+
+    const invalid = new LocalFinanceRepository(new MemoryStorageAdapter());
+    await invalid.initialize();
+    await expect(invalid.completeOnboarding({ ...onboarding, themeId: 'Not A Theme' })).rejects.toThrow('valid theme');
+    expect(invalid.getSnapshot().settings.onboardingComplete).toBe(false);
+  });
+
   it('rejects repeated onboarding without creating duplicate starter data', async () => {
     const { repository } = await createRepository();
     const before = repository.getSnapshot();
@@ -2079,6 +2097,7 @@ describe('FinanceRepository contract', () => {
     expect(repository.getSnapshot().goals.find((item) => item.id === goal.id)?.linkedCategoryId).toBeNull();
     expect(repository.getSnapshot().recurringRules.find((item) => item.id === rule.id)?.template.categoryId).toBeNull();
 
+    await repository.saveAccount({ name: 'Other', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
     await repository.deleteEntities('accounts', [account.id]);
     expect(repository.getSnapshot().accounts.find((item) => item.id === account.id)?.archived).toBe(true);
     expect(repository.getSnapshot().transactions.find((item) => item.id === transaction.id)?.accountId).toBe(account.id);
@@ -2125,25 +2144,18 @@ describe('FinanceRepository contract', () => {
     expect(windowB.getDashboard('2026-07-01', '2026-07-31').accountBalances[0].balanceMinor).toBe(-1500);
   });
 
-  it('keeps an archived account funded in net worth until it is emptied', async () => {
+  it('drops a deleted account from net worth while its history still counts', async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
+    await repository.saveAccount({ name: 'Other', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
     await repository.saveTransaction({ kind: 'income', title: 'Salary', localDate: '2026-07-01', accountId: account.id, amountMinor: 50000 });
     expect(repository.getDashboard('2026-07-01', '2026-07-31').netWorthMinor).toBe(50000);
 
     await repository.deleteEntities('accounts', [account.id]);
-    const archived = repository.getDashboard('2026-07-01', '2026-07-31');
-    expect(archived.netWorthMinor).toBe(50000);
-    expect(archived.accountBalances).toHaveLength(1);
-    expect(archived.incomeMinor).toBe(50000);
-
-    // An archived account holding nothing carries no balance to strand, so it
-    // stays hidden exactly as before.
-    const spare = await repository.saveAccount({ name: 'Spare', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: false });
-    await repository.saveAccount({ name: 'Spare', type: 'checking', currency: 'USD', openingBalanceMinor: 0, icon: 'wallet', color: '#00A58E', archived: true }, spare.id);
-    const emptied = repository.getDashboard('2026-07-01', '2026-07-31');
-    expect(emptied.netWorthMinor).toBe(50000);
-    expect(emptied.accountBalances.map((item) => item.account.id)).toEqual([account.id]);
+    const after = repository.getDashboard('2026-07-01', '2026-07-31');
+    expect(after.netWorthMinor).toBe(0);
+    expect(after.accountBalances.map((item) => item.account.id)).not.toContain(account.id);
+    expect(after.incomeMinor).toBe(50000);
   });
 
   it('returns a stable identity for a budget period that is not persisted yet', async () => {

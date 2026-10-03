@@ -4,7 +4,6 @@ import { useReducedMotion } from 'react-native-reanimated';
 
 import { AppText } from '@/components/ui/app-text';
 import { useQashyTheme } from '@/theme/theme';
-import { typeScale } from '@/theme/tokens';
 import type { CurrencyCode } from '@/domain/models';
 import { formatMoney, formatMoneyParts } from '@/utils/money';
 
@@ -112,6 +111,7 @@ export function AnimatedMoney({
   const display = useAnimatedMinorAmount(minor);
   // Assistive tech should read the settled amount, not the mid-count value.
   const accessibilityLabel = formatMoney(minor, currency, locale, { compact, sign });
+  const typeScale = theme.type.scale;
   const shouldSplit = split ?? SPLIT_BY_DEFAULT.has(variant);
   const scaledStyle = scale === 1
     ? style

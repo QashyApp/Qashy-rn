@@ -32,10 +32,9 @@ import { useFinanceRepository, useFinanceState } from '@/providers/finance-provi
 import type { Material } from '@/theme/materials';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { ACCENT_PRESETS, CATEGORY_PALETTE, radius, space, typeScale } from '@/theme/tokens';
+import { ACCENT_PRESETS, CATEGORY_PALETTE } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
 
-const TYPOGRAPHY_VARIANTS = Object.keys(typeScale) as TextVariant[];
 const MATERIALS: Material[] = ['card', 'raised', 'sunken', 'control', 'controlPressed', 'accent', 'accentPressed'];
 const STATUS_TONES: StatusTone[] = ['neutral', 'positive', 'warning', 'negative', 'transfer'];
 
@@ -112,6 +111,8 @@ const DEMO_TRANSACTION = makeDemoTransaction();
  */
 export function KitchenSinkScreen() {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
+  const typographyVariants = Object.keys(theme.type.scale) as TextVariant[];
   const repository = useFinanceRepository();
   const { settings } = useFinanceState();
   const [expectedRevision, setExpectedRevision] = useState(settings.revision);
@@ -177,7 +178,7 @@ export function KitchenSinkScreen() {
         <View style={{ gap: space.md }}>
           <SectionHeader title="Typography" />
           <Card style={{ gap: space.sm }}>
-            {TYPOGRAPHY_VARIANTS.map((variant) => (
+            {typographyVariants.map((variant) => (
               <AppText key={variant} literal variant={variant}>{`${variant} — The quick brown fox`}</AppText>
             ))}
             <AppText literal variant="body">Figure vs numeric:</AppText>

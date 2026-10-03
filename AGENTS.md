@@ -92,7 +92,13 @@ Use Expo Router and preserve real public web paths such as `/overview`, `/transa
 
 - Use semantic values from `useQashyTheme()` instead of hard-coded light/dark surface colors.
 - Keep native controls inside the shared `@expo/ui` `Host`.
-- Surfaces come from hand-tuned neutral light/dark tokens in `src/theme/tokens.ts`; the chosen accent only drives the accent color family. Android system accent optionally uses dynamic Material colors; iOS and web use the default indigo accent on the same neutral surfaces.
+- A theme is a `ThemeDefinition` in `src/theme/themes/` (registered in `BUILT_IN_THEMES`). Read it only through `useQashyTheme()`, for colors AND scales: `space`, `radius`, `tile`, `iconSize` and `motion` are per theme and must not be imported from `@/theme/tokens` outside `src/theme/` (ESLint enforces this). Never hard-code colors or scale values in features. See `docs/theme-authoring.md`.
+- Every theme defines both light and dark; there are no single-scheme themes.
+- Classic's surfaces are the hand-tuned neutral tokens in `src/theme/tokens.ts`; other themes may use different surfaces, shapes, materials, type and icon sets. The accent drives the accent color family only when the theme's `accent.mode` is `user`; Android system accent (Material You theme) optionally uses dynamic Material colors, while iOS and web use the theme's default accent.
+- Custom (user-authored) themes are JSON files validated fail-closed and contrast-clamped by `src/theme/custom/schema.ts`. They are stored device-locally in `sync_meta` (`SYNC_META.customThemes`, via `src/data/custom-themes-store.ts`), never in `AppSettings`, and never synced. A broken or missing custom theme falls back to Classic. Changing the schema means updating `CUSTOM_THEME_GUIDE.md` and its tests (`src/theme/custom/__tests__/guide.test.ts`).
+- `themeId`, `themeMode`, `accentSource` and `accentHex` are `deviceLocal` in the sync registry. Do not move theme settings into a synced field group.
+- Icon ids stored on entities stay theme-independent; a theme's icon set only changes how an id is drawn, and any gap falls back to Ionicons.
+- Fonts come from the registry in `src/theme/fonts.ts`, must be open-license and bundled, and any face without Hebrew needs a Rubik fallback. No remote theme assets: no fonts, images or URLs fetched for a theme.
 - Liquid Glass is selective: navigation, sheets, and floating actions on supported iOS versions only.
 - Always provide blur and opaque reduced-transparency fallbacks.
 - Prefer continuous corners, restrained shadows, tabular financial figures, and subtle motion.

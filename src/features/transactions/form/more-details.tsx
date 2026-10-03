@@ -6,7 +6,6 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
 
 /**
  * A collapsible "More details" section: title, date, tags, exchange rate, and
@@ -26,6 +25,7 @@ export function MoreDetails({
   children: ReactNode;
 }) {
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   return (
     <View style={{ gap: space.md }}>

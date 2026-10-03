@@ -97,6 +97,9 @@ export const motion = {
   },
   /** How far a raised control sinks when pressed. */
   pressScale: 0.97,
+  /** `scale` sinks a control by shrinking it; `translate` shifts it down `pressTranslate` px (pixel-style themes). */
+  press: 'scale' as 'scale' | 'translate',
+  pressTranslate: 0,
 } as const;
 
 /**
@@ -324,6 +327,15 @@ export function accessibleAccentColor(seed: string, surface: string, text: strin
   return ensureContrast(seed, surface, text, 3);
 }
 
+/** How a stored entity color becomes a container tint; a theme's `charts.tone`. */
+export interface ToneSpec {
+  containerMix: { light: number; dark: number };
+  minContrast: number;
+}
+
+/** The shipped tint recipe, used when a caller passes no theme tone. */
+export const CLASSIC_TONE: ToneSpec = { containerMix: { light: 0.86, dark: 0.78 }, minContrast: 3 };
+
 export interface ToneColors {
   /** A tinted fill that stays a surface, not a shout. */
   container: string;
@@ -345,7 +357,7 @@ export interface ToneColors {
  * exposes opaque platform colors with no JS-readable value, which is what
  * `staticSurface`/`staticText` on ThemeTokens are for.
  */
-export function toneColors(seed: string, surface: string, text: string, dark: boolean): ToneColors {
-  const container = mixHex(seed, surface, dark ? 0.78 : 0.86);
-  return { container, onContainer: ensureContrast(seed, container, text, 3) };
+export function toneColors(seed: string, surface: string, text: string, dark: boolean, tone: ToneSpec = CLASSIC_TONE): ToneColors {
+  const container = mixHex(seed, surface, dark ? tone.containerMix.dark : tone.containerMix.light);
+  return { container, onContainer: ensureContrast(seed, container, text, tone.minContrast) };
 }

@@ -25,6 +25,7 @@ export interface OnboardingDraft {
   accountName: string;
   accountType: AccountType;
   openingBalance: string;
+  themeId: string;
   themeMode: ThemeMode;
   accentSource: AccentSource;
   accentHex: string;
@@ -67,6 +68,7 @@ export function finishPayload(draft: OnboardingDraft): OnboardingInput {
     // Empty means "start from zero" rather than an error: most people set up
     // before they know the exact figure, and a balance is editable later.
     openingBalanceMinor: draft.openingBalance.trim() ? parseMoney(draft.openingBalance, draft.currency, draft.locale) : 0,
+    themeId: draft.themeId,
     themeMode: draft.themeMode,
     accentSource: draft.accentSource,
     accentHex: draft.accentHex,
@@ -88,6 +90,7 @@ export function useOnboardingFlow() {
       accountName: defaultAccountName(locale),
       accountType: 'checking',
       openingBalance: '',
+      themeId: settings.themeId,
       themeMode: settings.themeMode,
       accentSource: settings.accentSource,
       accentHex: settings.accentHex || QASHY_ACCENT,
@@ -122,6 +125,10 @@ export function useOnboardingFlow() {
   const setLocale = (locale: string) => {
     update({ locale });
     previewSetting({ locale });
+  };
+  const setTheme = (themeId: string) => {
+    update({ themeId });
+    previewSetting({ themeId });
   };
   const setThemeMode = (themeMode: ThemeMode) => {
     update({ themeMode });
@@ -182,6 +189,7 @@ export function useOnboardingFlow() {
     progress: setupIndex + 1,
     update,
     setLocale,
+    setTheme,
     setThemeMode,
     setAccent,
     goTo,

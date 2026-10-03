@@ -24,7 +24,6 @@ import { useFinanceRepository, useFinanceState } from '@/providers/finance-provi
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { MAX_BACKUP_IMPORT_BYTES, assertFileSize } from '@/utils/file-size';
 import { hapticSelection, hapticSuccess } from '@/utils/haptics';
@@ -95,6 +94,7 @@ function OptionRow({
   onPress: () => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const foreground = selected ? theme.onAccentContainer : theme.text;
   return (
@@ -124,7 +124,7 @@ function OptionRow({
           opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
         },
         selected
-          ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+          ? materialStyle(theme, 'selected')
           : materialStyle(theme, 'control'),
       ]}>
       <AppIcon name={icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={22} />
@@ -150,6 +150,7 @@ function OptionRow({
 }
 
 function BulletList({ items, icon, color }: { items: string[]; icon: string; color: ColorValue }) {
+  const { space } = useQashyTheme();
   return (
     <View style={{ gap: space.sm }}>
       {items.map((item) => (
@@ -176,6 +177,7 @@ function InfoSection({
   tone: 'positive' | 'negative' | 'muted';
 }) {
   const theme = useQashyTheme();
+  const { space } = theme;
   if (!items.length) return null;
   const color = tone === 'positive' ? theme.positive : tone === 'negative' ? theme.negative : theme.textMuted;
   return (
@@ -188,6 +190,7 @@ function InfoSection({
 
 function StatTile({ value, label, tone }: { value: number; label: string; tone: 'accent' | 'muted' | 'negative' }) {
   const theme = useQashyTheme();
+  const { radius } = theme;
   return (
     <View
       style={{
@@ -201,7 +204,7 @@ function StatTile({ value, label, tone }: { value: number; label: string; tone: 
         literal
         figure
         variant="headline"
-        style={{ color: tone === 'accent' ? theme.accent : tone === 'negative' && value ? theme.negative : theme.text }}>
+        style={{ color: tone === 'accent' ? theme.accentText : tone === 'negative' && value ? theme.negative : theme.text }}>
         {String(value)}
       </AppText>
       <AppText variant="caption" muted>{label}</AppText>
@@ -210,6 +213,7 @@ function StatTile({ value, label, tone }: { value: number; label: string; tone: 
 }
 
 function CountRow({ label, value }: { label: string; value: number }) {
+  const { space } = useQashyTheme();
   return (
     <View style={{ minHeight: 32, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: space.md }}>
       <AppText variant="caption" style={{ flex: 1 }}>{label}</AppText>
@@ -219,6 +223,7 @@ function CountRow({ label, value }: { label: string; value: number }) {
 }
 
 function CountList({ title, counts, extra }: { title: string; counts: ImportCounts & { goals?: number }; extra?: boolean }) {
+  const { space } = useQashyTheme();
   const rows = COUNT_LABELS.filter((item) => counts[item.key] > 0);
   const goals = extra ? counts.goals ?? 0 : 0;
   if (!rows.length && !goals) return null;
@@ -241,6 +246,7 @@ function PreviewSummary({
   mode: ImportMode;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t, locale } = useLocalization();
   const router = useRouter();
   const existing = outcome.duplicateTransactions + outcome.reused.accounts + outcome.reused.categories + outcome.reused.tags;
@@ -338,6 +344,7 @@ function PreviewSummary({
 
 function SourcePanel({ source, busy, onChoose }: { source: ImportSourceInfo; busy: boolean; onChoose: () => void }) {
   const theme = useQashyTheme();
+  const { space } = theme;
   return (
     <View style={{ gap: space.md }}>
       <Card variant="inset" style={{ gap: space.lg }}>
@@ -355,6 +362,7 @@ function SourcePanel({ source, busy, onChoose }: { source: ImportSourceInfo; bus
 }
 
 export function ExternalImportCard() {
+  const { space } = useQashyTheme();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const { t } = useLocalization();

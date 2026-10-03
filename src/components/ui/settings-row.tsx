@@ -5,7 +5,7 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionPressable } from '@/components/ui/motion';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, toneColors, tile as tileMetrics } from '@/theme/tokens';
+import { toneColors } from '@/theme/tokens';
 
 export function SettingsRow({
   title,
@@ -38,6 +38,7 @@ export function SettingsRow({
   onPress?: () => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const destructive = tone === 'danger';
   // Without this the row exposes title, subtitle, and value as three unrelated
@@ -51,7 +52,7 @@ export function SettingsRow({
   // reads as thirty alerts, so the seed is tinted toward the surface and the
   // glyph carries the contrast.
   const tile: { container: ColorValue; onContainer: ColorValue } = color
-    ? toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark')
+    ? toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone)
     : destructive
       ? { container: theme.surfaceMuted, onContainer: theme.negative }
       : { container: theme.accentContainer, onContainer: theme.accent };
@@ -66,8 +67,8 @@ export function SettingsRow({
       style={({ pressed }) => ({ minHeight: 58, flexDirection: 'row', alignItems: 'center', gap: space.md, opacity: disabled ? 0.5 : pressed ? 0.62 : 1 })}>
       <View
         style={{
-          width: tileMetrics.size,
-          height: tileMetrics.size,
+          width: theme.tile.size,
+          height: theme.tile.size,
           borderRadius: radius.tile,
           borderCurve: 'continuous',
           backgroundColor: tile.container,
@@ -79,7 +80,7 @@ export function SettingsRow({
           // dark tint would otherwise overpower the icon.
           boxShadow: `inset 0 1px 0 rgba(255,255,255,${theme.mode === 'dark' ? 0.06 : 0.35})`,
         }}>
-        <AppIcon name={icon} color={tile.onContainer} size={tileMetrics.icon} />
+        <AppIcon name={icon} color={tile.onContainer} size={theme.tile.icon} />
       </View>
       <View
         accessibilityElementsHidden

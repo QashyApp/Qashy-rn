@@ -27,7 +27,6 @@ import { AppText } from '@/components/ui/app-text';
 import { IconButton } from '@/components/ui/icon-button';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 import type { WidgetSize } from '@/features/overview/layout/overview-layout';
 
@@ -82,6 +81,7 @@ export function EditableCardFrame({
   configSheet?: ReactNode;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const reduceMotion = useReducedMotion();
   const [dragging, setDragging] = useState(false);
   const translateY = useSharedValue(0);
@@ -146,7 +146,7 @@ export function EditableCardFrame({
       onLayout={onLayout}
       style={[
         { borderRadius: radius.card, borderCurve: 'continuous' },
-        dragging ? [materialStyle(theme, 'raised'), { boxShadow: theme.shadowOverlay }] : null,
+        dragging ? materialStyle(theme, 'overlay') : null,
         animatedStyle,
       ]}
       accessibilityActions={[

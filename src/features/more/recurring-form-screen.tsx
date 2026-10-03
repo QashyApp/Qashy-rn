@@ -33,6 +33,8 @@ import { feeMinorFor, normalizeFeePercent, totalWithFee } from '@/utils/transact
 const pluralRules = new Intl.PluralRules('en');
 
 /** "Every month." / "Every 2 months." — English plural form chosen by CLDR rules, not by string concatenation. */
+const MAX_REPEAT_INTERVAL = 999;
+
 function intervalHint(interval: string, unit: RecurrenceUnit) {
   const count = Number(interval);
   if (!Number.isInteger(count) || count < 1) return `Every ${unit}.`;
@@ -162,7 +164,8 @@ export function RecurringFormScreen() {
   const amountError = account
     ? validateMoneyInput(amount, foreignEnabled && !foreignCurrencyError ? trimmedForeignCurrency : account.currency, state.settings.locale, { label: 'Amount', positive: true })
     : 'Choose an account before entering an amount.';
-  const intervalError = validatePositiveInteger(interval, 'Repeat interval');
+  const intervalError = validatePositiveInteger(interval, 'Repeat interval')
+    ?? (Number(interval) > MAX_REPEAT_INTERVAL ? `Repeat interval must be ${MAX_REPEAT_INTERVAL} or less.` : undefined);
   const startDateError = validateDateInput(startDate, { label: 'Start date' });
   const endDateFormatError = validateDateInput(endDate, { label: 'End date', optional: true });
   const endDateError = !endDateFormatError && endDate && startDate && endDate < startDate

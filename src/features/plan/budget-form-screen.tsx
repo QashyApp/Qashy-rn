@@ -19,7 +19,7 @@ import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { todayLocal } from '@/utils/date';
 import { validateDateInput, validateMoneyInput } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
-import { minorToLocalizedDecimalString, parseMoney } from '@/utils/money';
+import { formatMoney, minorToLocalizedDecimalString, parseMoney } from '@/utils/money';
 
 export function BudgetFormScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -33,8 +33,8 @@ export function BudgetFormScreen() {
   const existing = id ? state.budgets.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
   const toMoneyText = (minor: number) => minorToLocalizedDecimalString(minor, state.settings.baseCurrency, state.settings.locale);
-  const [name, setName] = useState(existing?.name ?? defaultBudgetName);
-  const [limit, setLimit] = useState(existing ? toMoneyText(existing.limitMinor) : '1000');
+  const [name, setName] = useState(existing?.name ?? '');
+  const [limit, setLimit] = useState(existing ? toMoneyText(existing.limitMinor) : '');
   const [unit, setUnit] = useState<PeriodUnit>(existing?.period.unit ?? 'month');
   const [startDate, setStartDate] = useState(existing?.period.anchorDate ?? todayLocal());
   const [endDate, setEndDate] = useState(existing?.period.endDate ?? todayLocal());
@@ -108,6 +108,25 @@ export function BudgetFormScreen() {
     }
   };
 
+  // The amount carried into the current period. It is kept (but ignored) while rollover is off, so
+  // switching rollover back on restores it; this lets the user wipe it instead.
+  const today = todayLocal();
+  const carriedMinor = existing
+    ? state.budgetPeriods.find((item) => item.budgetId === existing.id && item.periodStart <= today && item.periodEnd >= today)?.rolloverMinor ?? 0
+    : 0;
+  const resetRollover = async () => {
+    if (!existing || saving) return;
+    if (!(await confirmDestructive({ title: 'Reset carried rollover?', message: 'This period starts again from the plain budget limit. Past periods are not changed.', confirmLabel: 'Reset rollover' }))) return;
+    setSaving(true);
+    try {
+      await repository.resetBudgetRollover(existing.id);
+    } catch (reason) {
+      showError('Couldn’t reset rollover', errorMessage(reason, 'Try again.'));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const remove = async () => {
     if (!existing || saving) return;
     if (!(await confirmDestructive({ title: `Delete ${existing.name}?`, message: 'Past period snapshots are removed with it.' }))) return;
@@ -133,12 +152,12 @@ export function BudgetFormScreen() {
         currency={state.settings.baseCurrency}
         value={limit}
         onChangeText={setLimit}
-        error={limitError}
+        error={limit.trim() ? limitError : undefined}
         autoFocus={!existing}
       />
 
       <Card style={{ gap: 16 }}>
-        <FormField label="Budget name" value={name} onChangeText={setName} />
+        <FormField label="Budget name" value={name} onChangeText={setName} placeholder={defaultBudgetName} />
         <AppText variant="label">Period</AppText>
         <View accessibilityLabel={t('Budget period')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {(['day', 'week', 'month', 'year', 'custom'] as PeriodUnit[]).map((item) => <ChoiceChip key={item} icon={item === "custom" ? "pencil" : "calendar"} label={item[0].toUpperCase() + item.slice(1)} selected={unit === item} onPress={() => setUnit(item)} />)}
@@ -153,6 +172,12 @@ export function BudgetFormScreen() {
           <View style={{ flex: 1, gap: 2 }}><AppText variant="label">Rollover</AppText><AppText variant="caption" muted>Carry both surplus and overspend forward.</AppText></View>
           <QashySwitch accessibilityLabel={t('Rollover')} value={rollover} onValueChange={setRollover} />
         </View>
+        {existing && carriedMinor !== 0 ? (
+          <View style={{ gap: 8 }}>
+            <AppText variant="caption" muted>{rollover ? `Carrying ${formatMoney(carriedMinor, state.settings.baseCurrency, state.settings.locale)} into this period.` : `${formatMoney(carriedMinor, state.settings.baseCurrency, state.settings.locale)} is remembered and returns if you turn rollover back on.`}</AppText>
+            <ActionButton title="Reset carried rollover" icon="repeat" variant="secondary" onPress={resetRollover} disabled={saving} />
+          </View>
+        ) : null}
       </Card>
 
       <Card style={{ gap: 14 }}>

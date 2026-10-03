@@ -21,7 +21,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 
-import { motion as motionTokens } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
+import type { MotionSpec } from '@/theme/themes/types';
 
 // ── The motion system ───────────────────────────────────────────────────────
 // One curve family, two durations, one travel distance, no overshoot. Motion
@@ -29,16 +30,32 @@ import { motion as motionTokens } from '@/theme/tokens';
 // into the place it already belongs instead of flying in from off-screen, and
 // nothing bounces — an overshoot on a surface the user did not physically drag
 // is the single thing that makes an interface read as a toy.
-export const motionDurations = {
+export interface MotionDurations {
   /** Anything arriving or changing in place. */
-  enter: motionTokens.duration.base,
+  enter: number;
   /** Anything leaving. Exits are always faster than entrances. */
-  exit: motionTokens.duration.fast,
+  exit: number;
   /** Reflow after an insert, delete, or resize. */
-  layout: motionTokens.duration.base,
+  layout: number;
   /** A whole screen cross-fading in behind a navigation. */
-  screen: 180,
-} as const;
+  screen: number;
+}
+
+/** Durations for a theme's motion spec. Pure, so tests and non-hook code can call it. */
+export function motionDurationsFor(motion: MotionSpec): MotionDurations {
+  return {
+    enter: motion.duration.base,
+    exit: motion.duration.fast,
+    layout: motion.duration.base,
+    screen: Math.round(motion.duration.base * 0.9),
+  };
+}
+
+/** The active theme's durations. */
+export function useMotionDurations(): MotionDurations {
+  const { motion } = useQashyTheme();
+  return useMemo(() => motionDurationsFor(motion), [motion]);
+}
 
 // How far anything travels while it fades. Small enough to read as a settle
 // rather than a flight; the fade carries the change, the offset only hints at
@@ -68,11 +85,6 @@ const springConfig = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
-const timingConfig = {
-  duration: motionDurations.exit,
-  easing: EASE_STANDARD,
-  reduceMotion: ReduceMotion.System,
-} as const;
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -219,9 +231,9 @@ function useEntrance(variant: MotionVariant, delay: number, duration: number, en
 // going anywhere — the incoming element already carries the direction. Keeping
 // exits uniform also sidesteps the presets' fixed 25px exit offset, which
 // `withInitialValues` cannot reach because it only overrides the start state.
-function exitingAnimation() {
+function exitingAnimation(durations: MotionDurations) {
   return FadeOut
-    .duration(motionDurations.exit)
+    .duration(durations.exit)
     .easing(EASE_EXIT)
     .reduceMotion(ReduceMotion.System);
 }
@@ -256,6 +268,7 @@ function useEntranceAllowed(enabled: boolean) {
  * per-element entrances underneath it for that first paint.
  */
 export function ScreenTransition({ style, ...props }: ViewProps) {
+  const durations = useMotionDurations();
   const settled = useRef(false);
 
   useEffect(() => {
@@ -274,8 +287,8 @@ export function ScreenTransition({ style, ...props }: ViewProps) {
   }, []);
 
   const entering = useMemo(
-    () => FadeIn.duration(motionDurations.screen).easing(EASE_STANDARD).reduceMotion(ReduceMotion.System),
-    [],
+    () => FadeIn.duration(durations.screen).easing(EASE_STANDARD).reduceMotion(ReduceMotion.System),
+    [durations.screen],
   );
 
   return (
@@ -288,7 +301,7 @@ export function ScreenTransition({ style, ...props }: ViewProps) {
 export function MotionView({
   variant = 'up',
   delay = 0,
-  duration = motionDurations.enter,
+  duration,
   animateLayout = false,
   exit = false,
   entrance = true,
@@ -305,14 +318,15 @@ export function MotionView({
    */
   entrance?: boolean;
 }) {
+  const durations = useMotionDurations();
   const allowEntrance = useEntranceAllowed(entrance);
-  const entranceStyle = useEntrance(variant, delay, duration, allowEntrance);
-  const exiting = useMemo(() => exit ? exitingAnimation() : undefined, [exit]);
+  const entranceStyle = useEntrance(variant, delay, duration ?? durations.enter, allowEntrance);
+  const exiting = useMemo(() => exit ? exitingAnimation(durations) : undefined, [exit, durations]);
   const layout = useMemo(
     () => animateLayout
-      ? LinearTransition.duration(motionDurations.layout).easing(EASE_STANDARD).reduceMotion(ReduceMotion.System)
+      ? LinearTransition.duration(durations.layout).easing(EASE_STANDARD).reduceMotion(ReduceMotion.System)
       : undefined,
-    [animateLayout],
+    [animateLayout, durations.layout],
   );
 
   if (!animateLayout) {
@@ -363,6 +377,16 @@ export function MotionPressable({
   enteringDelay?: number;
 }) {
   const reduceMotion = useReducedMotion();
+  const { motion } = useQashyTheme();
+  const durations = useMotionDurations();
+  // A translate theme sinks a control by shifting it down instead of shrinking it, and
+  // never scales on hover or on the 'active' pop either.
+  const translatePress = motion.press === 'translate';
+  const timingConfig = {
+    duration: durations.exit,
+    easing: EASE_STANDARD,
+    reduceMotion: ReduceMotion.System,
+  } as const;
   const initiallyPressed = Boolean(props.testOnly_pressed);
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
@@ -376,10 +400,10 @@ export function MotionPressable({
   const [jsHovered, setJsHovered] = useState(false);
 
   useEffect(() => {
-    if (!active || reduceMotion) return;
+    if (!active || reduceMotion || translatePress) return;
     scale.set(1.035);
     scale.set(withSpring(1, springConfig));
-  }, [active, reduceMotion, scale]);
+  }, [active, reduceMotion, translatePress, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -439,13 +463,29 @@ export function MotionPressable({
     return next as ViewStyle;
   });
 
+  // react-native-web activates a Pressable on Enter for every role but only on Space for
+  // `button`, so a focused radio, checkbox, switch or tab ignored Space. These controls are
+  // expected to answer to both.
+  const pressRole = props.role ?? props.accessibilityRole;
+  const spaceActivates = process.env.EXPO_OS === 'web' && (
+    pressRole === 'radio' || pressRole === 'checkbox' || pressRole === 'switch' || pressRole === 'tab'
+  );
+  const spaceKeyProps = spaceActivates
+    ? {
+      onKeyDown: (event: { key?: string; preventDefault?: () => void }) => {
+        if (event.key !== ' ') return;
+        event.preventDefault?.();
+        if (!disabled) props.onPress?.(event as never);
+      },
+    }
+    : null;
   const { wrapperStyle, contentStyle: pressableStyle } = splitWrapperStyle(flattenedStyle);
   const resolvedChildren = typeof children === 'function' ? children(state) : children;
   const allowEntrance = useEntranceAllowed(Boolean(enteringVariant));
   const entranceStyle = useEntrance(
     enteringVariant ?? 'fade',
     enteringDelay,
-    motionDurations.enter,
+    durations.enter,
     allowEntrance,
   );
 
@@ -456,14 +496,15 @@ export function MotionPressable({
       <Animated.View style={animatedStyle}>
         <AnimatedPressable
           {...props}
+          {...spaceKeyProps}
           disabled={disabled}
           onHoverIn={(event) => {
             hoveredRef.current = true;
             isHovered.set(1);
             if (usesJsState) setJsHovered(true);
             if (!pressedRef.current && !disabled) {
-              scale.set(withTiming(hoverScale, timingConfig));
-              translateY.set(withTiming(liftOnHover ? -1 : 0, timingConfig));
+              scale.set(withTiming(translatePress ? 1 : hoverScale, timingConfig));
+              translateY.set(withTiming(liftOnHover && !translatePress ? -1 : 0, timingConfig));
             }
             onHoverIn?.(event);
           }}
@@ -482,8 +523,8 @@ export function MotionPressable({
             isPressed.set(1);
             if (usesJsState) setJsPressed(true);
             if (!disabled) {
-              scale.set(withSpring(pressedScale, springConfig));
-              translateY.set(withTiming(0, timingConfig));
+              scale.set(withSpring(translatePress ? 1 : pressedScale, springConfig));
+              translateY.set(withTiming(translatePress ? motion.pressTranslate : 0, timingConfig));
             }
             onPressIn?.(event);
           }}
@@ -491,8 +532,8 @@ export function MotionPressable({
             pressedRef.current = false;
             isPressed.set(0);
             if (usesJsState) setJsPressed(false);
-            scale.set(withSpring(hoveredRef.current ? hoverScale : 1, springConfig));
-            translateY.set(withTiming(hoveredRef.current && liftOnHover ? -1 : 0, timingConfig));
+            scale.set(withSpring(hoveredRef.current && !translatePress ? hoverScale : 1, springConfig));
+            translateY.set(withTiming(hoveredRef.current && liftOnHover && !translatePress ? -1 : 0, timingConfig));
             onPressOut?.(event);
           }}
           style={[pressableStyle, overrideStyle]}>

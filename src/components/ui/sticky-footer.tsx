@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { KeyboardAvoidingView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { space } from '@/theme/tokens';
+import { useQashyTheme } from '@/theme/theme';
 
 /**
  * Lays out a scrolling body with an action bar pinned under it.
@@ -21,6 +21,7 @@ export function StickyFooterLayout({
   footer: ReactNode;
   maxWidth?: number;
 }) {
+  const { space } = useQashyTheme();
   const insets = useSafeAreaInsets();
   return (
     <KeyboardAvoidingView

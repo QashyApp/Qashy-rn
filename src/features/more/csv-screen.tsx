@@ -16,7 +16,6 @@ import { useFinanceRepository, useFinanceState } from '@/providers/finance-provi
 import { FormScreen } from '@/components/ui/form-screen';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
 import { csvCategoryForRow, extractCsvRatePairs, parseCsvTable } from '@/utils/csv';
 import { todayLocal } from '@/utils/date';
@@ -54,6 +53,7 @@ const CSV_STEPS = ['Choose file', 'Map columns', 'Preview', 'Import'] as const;
  */
 function CsvStepper({ current }: { current: number }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   return (
     <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
@@ -78,7 +78,7 @@ function CsvStepper({ current }: { current: number }) {
                       ? `inset 0 0 0 2px ${String(theme.accent)}, ${theme.shadowControl}`
                       : theme.shadowSunken,
                 }}>
-                {done ? <AppIcon name="checkmark" color={theme.onAccent} size={14} /> : <AppText selectable={false} literal figure variant="caption" style={{ color: active ? theme.accent : theme.textMuted }}>{String(index + 1)}</AppText>}
+                {done ? <AppIcon name="checkmark" color={theme.onAccent} size={14} /> : <AppText selectable={false} literal figure variant="caption" style={{ color: active ? theme.accentText : theme.textMuted }}>{String(index + 1)}</AppText>}
               </View>
               <View style={{ flex: 1, height: 2, backgroundColor: index === CSV_STEPS.length - 1 ? 'transparent' : done ? theme.accent : theme.border }} />
             </View>
@@ -101,6 +101,7 @@ export function CsvScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const [sourceRows, setSourceRows] = useState<Record<string, string | number>[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
@@ -316,7 +317,7 @@ export function CsvScreen() {
         {preview ? (
           <View style={{ gap: 10, paddingTop: 6 }}>
             <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
-              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.accentContainer }}><AppText literal figure variant="headline" style={{ color: theme.accent }}>{String(preview.validRows.length)}</AppText><AppText variant="caption" muted>Ready</AppText></View>
+              <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.accentContainer }}><AppText literal figure variant="headline" style={{ color: theme.accentText }}>{String(preview.validRows.length)}</AppText><AppText variant="caption" muted>Ready</AppText></View>
               <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.surfaceMuted }}><AppText literal figure variant="headline">{String(preview.duplicateRows.length)}</AppText><AppText variant="caption" muted>Duplicates</AppText></View>
               <View style={{ flex: 1, minWidth: 120, padding: 14, borderRadius: radius.card, backgroundColor: theme.surfaceMuted }}><AppText literal figure variant="headline" style={{ color: preview.rejectedRows.length ? theme.negative : theme.text }}>{String(preview.rejectedRows.length)}</AppText><AppText variant="caption" muted>Rejected</AppText></View>
             </View>

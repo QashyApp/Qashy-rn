@@ -1,15 +1,19 @@
 import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
 
-import { QASHY_INDIGO, darkTokens, lightTokens } from '@/theme/tokens';
+import { classicTheme } from '@/theme/themes/classic';
 import { CONTENT_SECURITY_POLICY } from '@/utils/csp';
 
 // Derived from the same tokens the app renders with, rather than hand-copied. The
 // static shell used to carry its own `#F7F7FB`/`#121217` pair while the app painted
 // `#F6F7F9`/`#0E0F13`, so first paint stepped to a different colour in both schemes
 // and the address-bar tint never matched the page behind it.
-const LIGHT_BACKGROUND = lightTokens.background;
-const DARK_BACKGROUND = darkTokens.background;
+const LIGHT_BACKGROUND = classicTheme.palette.light.background;
+const DARK_BACKGROUND = classicTheme.palette.dark.background;
+const QASHY_INDIGO = classicTheme.accent.default;
+// This static shell renders before React and before settings load, so classic is the only
+// possible choice here. Known limit: manifest.json theme_color/background_color are static per
+// install; only the in-page <meta name="theme-color"> follows the active theme (QashyThemeProvider).
 
 // react-native-web resets `outline` to none on every pressable it renders, and
 // nothing put a focus style back, so keyboard navigation was invisible across
@@ -45,6 +49,30 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, [contentedita
 }
 @media (prefers-color-scheme: dark) {
   html, body { background: ${DARK_BACKGROUND}; }
+}
+/* Windows High Contrast / forced colors replaces every background and box-shadow with system
+   colors, which erased progress fills, the selected segment of a control and card edges. Keep
+   progress colors as authored (on an outlined track) and mark selected controls with Highlight. */
+@media (forced-colors: active) {
+  [role="progressbar"] {
+    forced-color-adjust: none;
+    outline: 1px solid CanvasText;
+  }
+  [role="radio"][aria-checked="true"],
+  [role="tab"][aria-selected="true"],
+  [role="button"][aria-pressed="true"],
+  [aria-selected="true"][role="button"] {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+    color: HighlightText !important;
+    outline: 2px solid CanvasText;
+  }
+  [role="radio"][aria-checked="true"] *,
+  [role="tab"][aria-selected="true"] *,
+  [role="button"][aria-pressed="true"] *,
+  [aria-selected="true"][role="button"] * {
+    color: HighlightText !important;
+  }
 }
 `;
 

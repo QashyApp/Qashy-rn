@@ -5,7 +5,6 @@ import { AppText } from '@/components/ui/app-text';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { motion, radius, space } from '@/theme/tokens';
 import { hapticImpactLight, hapticSelection, hapticWarning } from '@/utils/haptics';
 
 /**
@@ -42,6 +41,7 @@ export function ActionButton({
   busy?: boolean;
 }) {
   const theme = useQashyTheme();
+  const { motion, radius, space } = theme;
   const isDisabled = Boolean(disabled);
   const foreground = variant === 'primary' ? theme.onAccent : variant === 'danger' ? theme.onNegative : theme.text;
   const minHeight = size === 'large' ? 56 : 48;

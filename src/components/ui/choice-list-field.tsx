@@ -17,7 +17,6 @@ import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
 import { fontStyle } from '@/theme/typography';
-import { radius, space } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 
 export type ChoiceListOption = {
@@ -51,6 +50,7 @@ export function ChoiceListField({
   searchPlaceholder?: string;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
   const { height } = useWindowDimensions();
   const [open, setOpen] = useState(false);
@@ -147,8 +147,7 @@ export function ChoiceListField({
                 borderRadius: radius.card,
                 borderCurve: 'continuous',
               },
-              materialStyle(theme, 'raised'),
-              { boxShadow: theme.shadowOverlay },
+              materialStyle(theme, 'overlay'),
             ]}>
             <View style={{ minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ flex: 1, gap: 2 }}>
@@ -183,7 +182,7 @@ export function ChoiceListField({
                     backgroundColor: theme.surfaceMuted,
                     color: theme.text,
                     fontSize: 16,
-                    ...fontStyle('regular'),
+                    ...fontStyle('regular', theme.type),
                     writingDirection: isRtl ? 'rtl' : 'ltr',
                     textAlign: isRtl ? 'right' : 'left',
                   }}

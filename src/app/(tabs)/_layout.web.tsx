@@ -25,7 +25,6 @@ import {
   navigationRailWidth,
 } from '@/theme/layout';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space } from '@/theme/tokens';
 
 // Icon names mirror the SF Symbols used by the native tabs in `_layout.tsx` so
 // the same section reads the same on every platform.
@@ -87,7 +86,7 @@ const RAIL_GUTTER = (NAV_RAIL_WIDTH - RAIL_ITEM_SIZE) / 2;
  * where the only part of it not covered by the page was the sliver still inside
  * the rail — it read as a stray 6pt rectangle rather than a label.
  */
-const TOOLTIP_OFFSET = NAV_RAIL_WIDTH - RAIL_GUTTER + space.sm;
+const tooltipOffset = (gap: number) => NAV_RAIL_WIDTH - RAIL_GUTTER + gap;
 const TOOLTIP_HEIGHT = 36;
 
 type NavItem = typeof NAV_ITEMS[number];
@@ -116,6 +115,7 @@ function NavigationItem({
   onMeasure: (href: string, metrics: NavMetrics) => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
   const [showTooltip, setShowTooltip] = useState(false);
   const currentPageProps = active ? { 'aria-current': 'page' as const } : {};
@@ -230,7 +230,7 @@ function NavigationItem({
             style={[
               {
                 position: 'absolute',
-                start: TOOLTIP_OFFSET,
+                start: tooltipOffset(space.sm),
                 top: (48 - TOOLTIP_HEIGHT) / 2,
                 minHeight: TOOLTIP_HEIGHT,
                 justifyContent: 'center',
@@ -271,6 +271,7 @@ function NavigationBar({
   pathname: string;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const reduceMotion = useReducedMotion();
   const [metrics, setMetrics] = useState<Record<string, NavMetrics>>({});
   const activeHref = NAV_ITEMS.find((item) => isActiveItem(item, pathname))?.href;
@@ -368,6 +369,7 @@ export default function WebTabsLayout() {
   const insets = useSafeAreaInsets();
   const pathname = usePathname();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const compact = width < NAV_SIDEBAR_BREAKPOINT;
   const mobile = width < NAV_RAIL_BREAKPOINT;

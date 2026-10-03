@@ -62,6 +62,7 @@ import {
 } from '@/sync/oplog';
 import { readAllStates, writeStates } from '@/data/sync-store';
 import { planMerge, type DuplicateGroup } from '@/sync/engine/duplicates';
+import { DEFAULT_THEME_ID, isValidThemeId } from '@/theme/themes/types';
 import { createDefaultCategories, createInitialState, defaultAccountName, initialSettings } from '@/domain/defaults';
 import { canActivateRecurringRule } from '@/domain/rules';
 import {
@@ -80,6 +81,7 @@ import { validateLocale } from '@/utils/form-validation';
 import {
   addMinor,
   convertMinor,
+  currencyDigits,
   isSafeMinor,
   isSupportedCurrencyCode,
   minorToDecimalString,
@@ -110,6 +112,11 @@ const RECIPROCAL_RATE_TOLERANCE = 0.02;
 // rate-derived amount before it reads as a typo rather than spread (one order
 // of magnitude either way).
 const MANUAL_TRANSFER_AMOUNT_TOLERANCE = 10;
+
+/** Case- and accent-insensitive form for search, so "cafe" finds "Café". Uses no locale-sensitive collation. */
+function foldForSearch(value: string) {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLocaleLowerCase();
+}
 // Roughly a century of daily points. A dashboard range wider than this used to
 // truncate the daily series silently and return a chart that was simply wrong.
 const MAX_DASHBOARD_DAYS = 36_600;
@@ -412,12 +419,15 @@ export class LocalFinanceRepository implements FinanceRepository {
     this.assertSafeMinor(input.openingBalanceMinor, 'Opening balance');
     this.assertColor(input.accentHex);
     if (!ACCOUNT_TYPES.includes(input.accountType)) throw new Error('Choose a valid account type.');
+    const themeId = input.themeId ?? this.state.settings.themeId;
+    if (!isValidThemeId(themeId)) throw new Error('Choose a valid theme.');
     if (!THEME_MODES.includes(input.themeMode)) throw new Error('Choose a valid theme mode.');
     if (!ACCENT_SOURCES.includes(input.accentSource)) throw new Error('Choose a valid accent source.');
     const settings = updateEntity(this.state.settings, {
       onboardingComplete: true,
       locale: input.locale,
       baseCurrency,
+      themeId,
       themeMode: input.themeMode,
       accentSource: input.accentSource,
       accentHex: input.accentHex.toUpperCase(),
@@ -452,6 +462,8 @@ export class LocalFinanceRepository implements FinanceRepository {
     const baseCurrency = this.normalizeCurrency(patch.baseCurrency ?? this.state.settings.baseCurrency);
     this.assertLocale(locale);
     this.assertColor(patch.accentHex ?? this.state.settings.accentHex);
+    const themeId = patch.themeId ?? this.state.settings.themeId;
+    if (!isValidThemeId(themeId)) throw new Error('Choose a valid theme.');
     const themeMode = patch.themeMode ?? this.state.settings.themeMode;
     const accentSource = patch.accentSource ?? this.state.settings.accentSource;
     if (!THEME_MODES.includes(themeMode)) throw new Error('Choose a valid theme mode.');
@@ -463,6 +475,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       onboardingComplete: this.state.settings.onboardingComplete,
       locale,
       baseCurrency,
+      themeId,
       themeMode,
       accentSource,
       accentHex: (patch.accentHex ?? this.state.settings.accentHex).toUpperCase(),
@@ -631,7 +644,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const periods = this.buildBudgetSnapshots(budget, true);
     periods.forEach((period) => {
       addMinor(
-        addMinor(period.limitMinor, period.rolloverMinor, `${budget.name} effective limit`),
+        addMinor(period.limitMinor, this.carriedRollover(budget, period), `${budget.name} effective limit`),
         this.budgetAdjustmentTotal(budget.id, period.periodStart, period.periodEnd),
         `${budget.name} effective limit`,
       );
@@ -685,6 +698,27 @@ export class LocalFinanceRepository implements FinanceRepository {
     return adjustment;
   }
 
+  resetBudgetRollover(budgetId: string) {
+    return this.enqueueMutation(() => this.resetBudgetRolloverNow(budgetId));
+  }
+
+  private async resetBudgetRolloverNow(budgetId: string) {
+    const budget = this.active(this.state.budgets).find((item) => item.id === budgetId);
+    if (!budget || budget.archived) throw new Error('Choose a valid budget.');
+    const snapshot = this.state.budgetPeriods.find((item) =>
+      item.budgetId === budget.id && item.periodStart === resolvePeriod(budget.period, todayLocal()).start);
+    if (!snapshot || snapshot.rolloverMinor === 0) return;
+    const reset = updateEntity(snapshot, { rolloverMinor: 0 });
+    await this.persist('budgetPeriods', [reset]);
+    this.replaceInList('budgetPeriods', reset);
+    this.emit();
+  }
+
+  /** The rollover that counts toward the limit: stored amounts are inert while rollover is off. */
+  private carriedRollover(budget: Budget, snapshot: BudgetPeriodSnapshot) {
+    return budget.rollover ? snapshot.rolloverMinor : 0;
+  }
+
   deleteBudgetAdjustment(id: string) {
     return this.enqueueMutation(() => this.deleteBudgetAdjustmentNow(id));
   }
@@ -717,7 +751,7 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   private effectiveLimitFor(budget: Budget, snapshot: BudgetPeriodSnapshot) {
     return addMinor(
-      addMinor(snapshot.limitMinor, snapshot.rolloverMinor, `${budget.name} effective limit`),
+      addMinor(snapshot.limitMinor, this.carriedRollover(budget, snapshot), `${budget.name} effective limit`),
       this.budgetAdjustmentTotal(budget.id, snapshot.periodStart, snapshot.periodEnd),
       `${budget.name} effective limit`,
     );
@@ -870,6 +904,16 @@ export class LocalFinanceRepository implements FinanceRepository {
     const earliestUpcomingDate = currentUpcoming
       .map((transaction) => transaction.localDate)
       .sort()[0];
+    // Regeneration restarts where the discarded pending items began. Flooring at today dropped
+    // every overdue occurrence for good (their keys are released, nothing regenerates them). With
+    // nothing pending it restarts from the rule's next due date, never earlier than today, so an
+    // edit still cannot backfill history.
+    const baseRegenerateFrom = earliestUpcomingDate
+      ?? [existing?.nextDueDate ?? input.startDate, todayLocal()].sort().at(-1)!;
+    // Moving the start date earlier is an explicit request to include the missed occurrences, so
+    // regeneration begins at the new start; occurrence keys keep already-generated ones from duplicating.
+    const movedEarlier = !!existing && input.startDate < existing.startDate;
+    const regenerateFrom = movedEarlier && input.startDate < baseRegenerateFrom ? input.startDate : baseRegenerateFrom;
     const nextInput = scheduleChanged
       ? {
         ...input,
@@ -877,7 +921,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           input.startDate,
           input.unit,
           input.interval,
-          [input.startDate, earliestUpcomingDate ?? existing.nextDueDate, todayLocal()].sort().at(-1)!,
+          [input.startDate, regenerateFrom].sort().at(-1)!,
         ),
       }
       : input;
@@ -1085,10 +1129,10 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   queryTransactions(query: TransactionQuery = {}, snapshot = this.state.transactions) {
-    const normalizedSearch = query.search?.trim().toLocaleLowerCase();
+    const normalizedSearch = query.search ? foldForSearch(query.search.trim()) : undefined;
       const matchesCategory = query.categoryIds?.length ? this.categoryMatcher(query.categoryIds) : null;
       let result = this.active(snapshot).filter((transaction) => {
-        if (normalizedSearch && !`${transaction.title} ${transaction.note}`.toLocaleLowerCase().includes(normalizedSearch)) return false;
+        if (normalizedSearch && !foldForSearch(`${transaction.title} ${transaction.note}`).includes(normalizedSearch)) return false;
         if (
           query.accountIds?.length &&
           !query.accountIds.includes(transaction.accountId) &&
@@ -1148,13 +1192,9 @@ export class LocalFinanceRepository implements FinanceRepository {
     }
     const accountBalances = accounts
       .map((account) => ({ account, balanceMinor: balances.get(account.id) ?? account.openingBalanceMinor }))
-      // An archived account still holds real money. Dropping it here removed its
-      // balance from net worth while its transactions kept counting toward the
-      // income and expense totals, so the summary contradicted itself: deleting
-      // a referenced account (which archives it) zeroed net worth and left no
-      // account on screen to explain where the money went. Hide an archived
-      // account only once it is actually empty.
-      .filter(({ account, balanceMinor }) => !account.archived || balanceMinor !== 0);
+      // Deleting a referenced account keeps its history (it is flagged archived internally),
+      // but to the user it is deleted, so its balance leaves net worth.
+      .filter(({ account }) => !account.archived);
     const expenseCategories = this.active(this.state.categories)
       .filter((category) => category.kind === 'expense');
     const expenseCategoryIds = new Set(expenseCategories.map((category) => category.id));
@@ -1306,7 +1346,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           adjustmentMinor,
           adjustments,
           effectiveLimitMinor: addMinor(
-            addMinor(snapshot.limitMinor, snapshot.rolloverMinor, `${budget.name} effective limit`),
+            addMinor(snapshot.limitMinor, this.carriedRollover(budget, snapshot), `${budget.name} effective limit`),
             adjustmentMinor,
             `${budget.name} effective limit`,
           ),
@@ -1498,6 +1538,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     let deleted = list.filter((entity) => deletedIds.has(entity.id)).map((entity) => updateEntity(entity, { deletedAt: nowIso() }));
     let archivedAccounts: Account[] = [];
     let pausedRules: RecurringRule[] = [];
+
+    if (type === 'accounts') {
+      const removing = new Set(ids);
+      const wasLive = this.state.accounts.some((account) => !account.archived && removing.has(account.id));
+      const remaining = this.state.accounts.filter((account) => !account.archived && !removing.has(account.id));
+      if (wasLive && !remaining.length) throw new Error('Keep at least one account. Add another account before deleting this one.');
+    }
 
     // Accounts are part of every ledger entry's identity and cannot be nulled
     // or reassigned without changing history. Convert deletion of a referenced
@@ -2551,8 +2598,10 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   private async hydrateFromStorage() {
     const settingsRecords = await this.storage.readAll('settings');
-    const settings = (settingsRecords.find((item) => item.id === 'settings' && !item.deletedAt) ??
+    const storedSettings = (settingsRecords.find((item) => item.id === 'settings' && !item.deletedAt) ??
       initialSettings()) as AppSettings;
+    // Saves from before themes existed have no id; the default theme is what they were already showing.
+    const settings: AppSettings = { ...storedSettings, themeId: storedSettings.themeId ?? DEFAULT_THEME_ID };
     const loaded = await Promise.all(ENTITY_TYPES.map((type) => this.storage.readAll(type)));
     const loadedTransactions = loaded[ENTITY_TYPES.indexOf('transactions')] as TransactionRecord[];
     this.deletedOccurrenceKeys = new Set(
@@ -2665,6 +2714,9 @@ export class LocalFinanceRepository implements FinanceRepository {
         foreignRate,
         this.state.settings.locale,
       );
+      if (principalMinor <= 0) {
+        throw new Error(`This amount converts to less than the smallest unit of ${account.currency}. Enter a larger amount or check the exchange rate.`);
+      }
       foreign = { amountMinor: input.foreign.amountMinor, currency: foreignCurrency, exchangeRate: foreignRate };
     } else {
       this.assertPositiveMinor(input.amountMinor, 'Amount');
@@ -2694,20 +2746,37 @@ export class LocalFinanceRepository implements FinanceRepository {
     const preservesRateSnapshot = existing?.accountId === account.id &&
       existing.localDate === input.localDate &&
       existing.currency === account.currency;
+    // A cross-currency transfer into the base currency with a typed destination amount is priced
+    // by that amount itself: the base value of the source leg *is* what arrived. Requiring a
+    // separate stored rate for it made the "Destination amount" alternative unusable.
+    const baseDestinationAmountMinor = input.kind === 'transfer' &&
+      destination?.currency === this.state.settings.baseCurrency &&
+      account.currency !== this.state.settings.baseCurrency &&
+      input.destinationAmountMinor !== undefined && input.destinationAmountMinor !== null
+      ? input.destinationAmountMinor
+      : null;
     const rate = account.currency === this.state.settings.baseCurrency
       ? '1'
       : input.exchangeRate
         ? this.normalizeRate(input.exchangeRate)
         : preservesRateSnapshot
           ? existing.exchangeRate
-          : this.resolveRate(account.currency, this.state.settings.baseCurrency, input.localDate);
-    const baseAmountMinor = convertMinor(
-      amountMinor,
-      account.currency,
-      this.state.settings.baseCurrency,
-      rate,
-      this.state.settings.locale,
-    );
+          : this.resolveTransferAwareRate(account.currency, input.localDate, amountMinor, baseDestinationAmountMinor);
+    const baseAmountMinor = baseDestinationAmountMinor !== null && !input.exchangeRate && !preservesRateSnapshot
+      && !this.hasRate(account.currency, this.state.settings.baseCurrency, input.localDate)
+      ? baseDestinationAmountMinor
+      : convertMinor(
+        amountMinor,
+        account.currency,
+        this.state.settings.baseCurrency,
+        rate,
+        this.state.settings.locale,
+      );
+    // A positive amount that rounds to nothing in the base currency would be a free transaction
+    // that still moves an account balance. An unchanged historical record is left alone.
+    if (amountMinor > 0 && baseAmountMinor <= 0 && existing?.baseAmountMinor !== baseAmountMinor) {
+      throw new Error(`This amount converts to less than the smallest unit of ${this.state.settings.baseCurrency}. Enter a larger amount or check the exchange rate.`);
+    }
     let destinationAmountMinor: number | null = null;
     let destinationBaseAmountMinor: number | null = null;
     if (input.kind === 'transfer') {
@@ -2772,6 +2841,14 @@ export class LocalFinanceRepository implements FinanceRepository {
         destinationBaseAmountMinor = destinationAmountMinor;
       } else if (destination!.currency === account.currency) {
         destinationBaseAmountMinor = baseAmountMinor;
+      } else if (
+        account.currency === this.state.settings.baseCurrency &&
+        input.destinationAmountMinor !== undefined && input.destinationAmountMinor !== null &&
+        !this.hasRate(destination!.currency, this.state.settings.baseCurrency, input.localDate)
+      ) {
+        // Base → foreign with a typed destination amount: the base value that left the source
+        // is the value that arrived, so no stored destination-to-base rate is needed.
+        destinationBaseAmountMinor = baseAmountMinor;
       } else {
         destinationBaseAmountMinor = convertMinor(
           destinationAmountMinor,
@@ -2831,6 +2908,38 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   private active<T extends FinanceEntity>(entities: T[]) {
     return entities.filter((entity) => !entity.deletedAt);
+  }
+
+  private hasRate(fromValue: string, toValue: string, localDate: string) {
+    try {
+      this.resolveRate(fromValue, toValue, localDate);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * `resolveRate` for a transfer's source leg, falling back to the rate implied by the typed
+   * destination amount when that amount is already denominated in the base currency.
+   */
+  private resolveTransferAwareRate(
+    fromCurrency: string,
+    localDate: string,
+    amountMinor: number,
+    baseAmountMinor: number | null,
+  ) {
+    try {
+      return this.resolveRate(fromCurrency, this.state.settings.baseCurrency, localDate);
+    } catch (reason) {
+      if (baseAmountMinor === null || amountMinor <= 0 || baseAmountMinor <= 0) throw reason;
+      const locale = this.state.settings.locale;
+      return new Decimal(baseAmountMinor)
+        .div(new Decimal(10).pow(currencyDigits(this.state.settings.baseCurrency, locale)))
+        .div(new Decimal(amountMinor).div(new Decimal(10).pow(currencyDigits(fromCurrency, locale))))
+        .toSignificantDigits(20)
+        .toFixed();
+    }
   }
 
   private resolveRate(
@@ -3031,7 +3140,9 @@ export class LocalFinanceRepository implements FinanceRepository {
       return [updateEntity(existing, {
         periodEnd: bounds.end,
         limitMinor: budget.limitMinor,
-        rolloverMinor: budget.rollover && preservesDefinition ? existing.rolloverMinor : 0,
+        // Kept even while rollover is switched off: the effective limit ignores it then, so
+        // switching it back on restores the same carried amount instead of silently zeroing it.
+        rolloverMinor: preservesDefinition ? existing.rolloverMinor : 0,
         filters: budget.filters,
         categoryLimits: budget.categoryLimits,
       })];
@@ -3609,6 +3720,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     // rejecting otherwise well-formed history.
     if (settings) {
       assertCurrency(settings.baseCurrency, 'Base currency');
+      if (!isValidThemeId(settings.themeId)) throw new Error('Theme is invalid.');
       assertEnum(settings.themeMode, THEME_MODES, 'Theme mode');
       assertEnum(settings.accentSource, ACCENT_SOURCES, 'Accent source');
       if (validateLocale(settings.locale)) throw new Error('Settings locale is invalid.');
@@ -3974,7 +4086,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     } catch {
       throw new Error('Exchange rate must be a positive number.');
     }
-    if (!rate.isFinite() || !rate.isPositive()) throw new Error('Exchange rate must be a positive number.');
+    if (!rate.isFinite() || rate.lte(0)) throw new Error('Exchange rate must be a positive number.');
     // `toFixed`, not `toString`: decimal.js switches to exponential notation below
     // 1e-7 (`toExpNeg`), which real pairs such as IRR→BHD reach. Rates are stored as
     // decimal strings, and `normalizeDecimalString` would reject "8.9e-9" if such a

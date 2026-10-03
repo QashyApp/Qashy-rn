@@ -8,7 +8,7 @@ import { TextButton } from '@/components/ui/text-button';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, toneColors } from '@/theme/tokens';
+import { toneColors } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 
 export interface CategoryGridOption {
@@ -40,6 +40,7 @@ export function CategoryGrid({
   onSelect: (id: string) => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const [width, setWidth] = useState(0);
   const [expanded, setExpanded] = useState(false);
@@ -71,7 +72,7 @@ export function CategoryGrid({
           const selected = categoryId === id;
           const label = item ? `${item.name}${item.archived ? ' (archived)' : ''}` : 'Uncategorized';
           const tile = item
-            ? toneColors(item.color, theme.staticSurface, theme.staticText, theme.mode === 'dark')
+            ? toneColors(item.color, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone)
             : { container: theme.accentContainer, onContainer: theme.onAccentContainer };
           return (
             <MotionPressable
@@ -103,7 +104,7 @@ export function CategoryGrid({
                   opacity: item?.archived ? 0.45 : 1,
                 },
                 selected
-                  ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+                  ? materialStyle(theme, 'selected')
                   : materialStyle(theme, 'control'),
               ]}>
               <View

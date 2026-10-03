@@ -13,7 +13,6 @@ import type { OnboardingDraft } from '@/features/onboarding/use-onboarding-flow'
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, tile } from '@/theme/tokens';
 import { hapticSelection } from '@/utils/haptics';
 import { ACCOUNT_TYPE_INFO } from '@/utils/labels';
 
@@ -33,6 +32,7 @@ export function AccountStep({
   onSubmit: () => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space, tile } = theme;
   const { t } = useLocalization();
   const balanceRef = useRef<TextInput>(null);
 
@@ -74,7 +74,7 @@ export function AccountStep({
                   borderCurve: 'continuous',
                 },
                 selected
-                  ? { backgroundColor: theme.accentContainer, boxShadow: theme.shadowControlPressed }
+                  ? materialStyle(theme, 'selected')
                   : materialStyle(theme, 'control'),
               ]}>
               <AppIcon name={item.icon} color={selected ? theme.onAccentContainer : theme.textMuted} size={tile.icon + 2} />

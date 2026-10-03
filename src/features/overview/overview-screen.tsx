@@ -34,9 +34,9 @@ import { useExchangeRateService, useExchangeRateStatus } from '@/providers/excha
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useScreenMetrics } from '@/theme/layout';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
 import { errorMessage, showError } from '@/utils/confirm';
-import { endOfMonth, startOfMonth } from '@/utils/date';
+import { startOfMonth } from '@/utils/date';
+import { useDashboard } from '@/features/overview/widgets/use-dashboard';
 import { hapticImpactLight } from '@/utils/haptics';
 import { amountTone } from '@/utils/labels';
 import { formatMoney } from '@/utils/money';
@@ -57,6 +57,7 @@ export function OverviewScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
@@ -109,18 +110,7 @@ export function OverviewScreen() {
     setMonth(next);
   };
 
-  const summary = useMemo(() => {
-    void state.accounts;
-    void state.budgetPeriods;
-
-    void state.budgetAdjustments;
-    void state.budgets;
-    void state.categories;
-    void state.exchangeRates;
-    void state.settings;
-    void state.transactions;
-    return repository.getDashboard(startOfMonth(month), endOfMonth(month));
-  }, [repository, month, state.accounts, state.budgetPeriods, state.budgetAdjustments, state.budgets, state.categories, state.exchangeRates, state.settings, state.transactions]);
+  const summary = useDashboard(month);
 
   const currency = state.settings.baseCurrency;
   const locale = state.settings.locale;
@@ -160,7 +150,7 @@ export function OverviewScreen() {
   const multiColumn = contentWidth >= GRID_BREAKPOINT;
   const rows = useMemo(
     () => (gridWidth > 0 ? packOverviewRows(cards, gridWidth, space.xl, { multiColumn }) : []),
-    [cards, gridWidth, multiColumn],
+    [cards, gridWidth, multiColumn, space.xl],
   );
 
   const dispatchGuarded = async (action: OverviewLayoutAction, failureTitle: string) => {
@@ -439,7 +429,7 @@ export function OverviewScreen() {
         label="Add transaction"
         visibility={fabVisibility}
         onPress={() => router.push({ pathname: '/transaction', params: { returnTo: '/overview' } })}
-        style={floatingActionMetrics(metrics, insets)}
+        style={floatingActionMetrics(metrics, insets, space)}
       />
     </View>
   );

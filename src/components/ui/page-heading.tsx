@@ -2,7 +2,6 @@ import { View } from 'react-native';
 
 import { AppText } from '@/components/ui/app-text';
 import { useQashyTheme } from '@/theme/theme';
-import { space } from '@/theme/tokens';
 
 /**
  * The document heading for a section, on web only.
@@ -23,6 +22,7 @@ export function PageHeading({
   overline?: string;
 }) {
   const theme = useQashyTheme();
+  const { space } = theme;
   if (process.env.EXPO_OS !== 'web') return null;
   const headingLevelProps = { 'aria-level': 1 } as object;
   return (

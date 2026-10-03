@@ -85,11 +85,13 @@ export function OnboardingScreen() {
       ) : null}
       {step === 'look' ? (
         <LookStep
+          themeId={draft.themeId}
           themeMode={draft.themeMode}
           accentSource={draft.accentSource}
           accentHex={draft.accentHex}
           currency={draft.currency}
           locale={draft.locale}
+          onTheme={flow.setTheme}
           onThemeMode={flow.setThemeMode}
           onAccent={flow.setAccent}
         />

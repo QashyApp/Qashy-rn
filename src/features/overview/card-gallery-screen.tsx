@@ -15,7 +15,7 @@ import { WIDGET_REGISTRY } from '@/features/overview/widgets/registry';
 import { useLocalization } from '@/localization/localization';
 import { materialStyle } from '@/theme/materials';
 import { useQashyTheme } from '@/theme/theme';
-import { radius, space, tile as tileMetrics, toneColors } from '@/theme/tokens';
+import { toneColors } from '@/theme/tokens';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { makeId } from '@/utils/entity';
 import { hapticSelection } from '@/utils/haptics';
@@ -27,6 +27,7 @@ import { hapticSelection } from '@/utils/haptics';
  */
 export function CardGalleryScreen() {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const { layout, dispatch } = useOverviewLayout();
   const available = availableToAdd(layout);
@@ -61,10 +62,10 @@ export function CardGalleryScreen() {
       <ScreenContainer>
         <PageHeading title="Add cards" subtitle="Choose what shows up on your overview." />
         {available.length ? (
-          <Card variant="list" dividerInset={tileMetrics.size + space.md}>
+          <Card variant="list" dividerInset={theme.tile.size + space.md}>
             {available.map((type) => {
               const definition = WIDGET_REGISTRY[type];
-              const tile = toneColors(theme.staticAccent, theme.staticSurface, theme.staticText, theme.mode === 'dark');
+              const tile = toneColors(theme.staticAccent, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone);
               return (
                 <MotionPressable
                   key={type}
@@ -72,8 +73,8 @@ export function CardGalleryScreen() {
                   accessibilityLabel={`Add ${t(definition.title)} card`}
                   onPress={() => addCard(type)}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 64, paddingVertical: space.sm }}>
-                  <View style={{ width: tileMetrics.size, height: tileMetrics.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
-                    <AppIcon name={definition.icon} color={tile.onContainer} size={tileMetrics.icon} />
+                  <View style={{ width: theme.tile.size, height: theme.tile.size, borderRadius: radius.tile, borderCurve: 'continuous', backgroundColor: tile.container, alignItems: 'center', justifyContent: 'center' }}>
+                    <AppIcon name={definition.icon} color={tile.onContainer} size={theme.tile.icon} />
                   </View>
                   <View style={{ flex: 1, gap: space.xxs }}>
                     <AppText variant="label">{definition.title}</AppText>
@@ -97,6 +98,7 @@ export function CardGalleryScreen() {
 
 export function AddCardWell({ onPress }: { onPress: () => void }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   return (
     <MotionPressable

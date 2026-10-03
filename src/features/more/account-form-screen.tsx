@@ -19,7 +19,8 @@ import { useLocalization } from '@/localization/localization';
 import { useExchangeRateService, useExchangeRateStatus } from '@/providers/exchange-rate-provider';
 import { useFinanceRepository, useFinanceState } from '@/providers/finance-provider';
 import { useQashyTheme } from '@/theme/theme';
-import { ACCENT_PRESETS, radius, space, toneColors } from '@/theme/tokens';
+import { ACCENT_PRESETS, toneColors } from '@/theme/tokens';
+import { accountTypeLabel } from '@/utils/labels';
 import { confirmDestructive, errorMessage, showError } from '@/utils/confirm';
 import { validateCurrencyCode, validateMoneyInput } from '@/utils/form-validation';
 import { hapticSuccess } from '@/utils/haptics';
@@ -33,6 +34,7 @@ export function AccountFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const existing = id ? state.accounts.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
@@ -114,7 +116,7 @@ export function AccountFormScreen() {
 
   const remove = async () => {
     if (!existing || busy) return;
-    if (!(await confirmDestructive({ title: `Delete ${existing.name}?`, message: 'An account with transactions, schedules, budgets, or goals attached keeps its history, so it is removed from lists and pickers rather than erased.' }))) return;
+    if (!(await confirmDestructive({ title: `Delete ${existing.name}?`, message: 'The account leaves your net worth. Its past transactions stay in your history, and its schedules stop.' }))) return;
     setBusy(true);
     try {
       await repository.deleteEntities('accounts', [existing.id]);
@@ -128,7 +130,7 @@ export function AccountFormScreen() {
 
   if (id && !existing) return <Redirect href="/more" />;
 
-  const preview = toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark');
+  const preview = toneColors(color, theme.staticSurface, theme.staticText, theme.mode === 'dark', theme.charts.tone);
 
   return (
     <FormScreen contentContainerStyle={{ gap: 16 }}>
@@ -154,7 +156,7 @@ export function AccountFormScreen() {
       <Card style={{ gap: 16 }}>
         <FormField label="Account name" value={name} onChangeText={setName} placeholder="Everyday" autoFocus={!existing} />
         <AppText variant="label">Type</AppText>
-        <View accessibilityLabel={t('Account type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{(['checking', 'cash', 'savings', 'credit', 'wallet'] as AccountType[]).map((item) => <ChoiceChip key={item} icon={ACCOUNT_TYPE_ICONS[item]} label={item[0].toUpperCase() + item.slice(1)} selected={type === item} onPress={() => setType(item)} />)}</View>
+        <View accessibilityLabel={t('Account type')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>{(['checking', 'cash', 'savings', 'credit', 'wallet'] as AccountType[]).map((item) => <ChoiceChip key={item} icon={ACCOUNT_TYPE_ICONS[item]} label={accountTypeLabel(item)} selected={type === item} onPress={() => setType(item)} />)}</View>
         {currencyLocked ? (
         <FormField label="Currency" value={currency} onChangeText={changeCurrency} maxLength={3} autoCapitalize="characters" editable={!currencyLocked} error={currencyLocked ? undefined : currencyError} hint={currencyLocked ? 'Currency is locked because this account has transaction or schedule history.' : undefined} required />
         ) : (
@@ -168,7 +170,7 @@ export function AccountFormScreen() {
             searchPlaceholder="Search by currency name or code"
           />
         )}
-        <FormField label="Opening balance" value={opening} onChangeText={(value) => { setOpeningTouched(true); setOpening(value); }} keyboardType="decimal-pad" error={openingError} hint="Changing this adjusts the derived account balance." required />
+        <FormField label="Opening balance" value={opening} onChangeText={(value) => { setOpeningTouched(true); setOpening(value); }} keyboardType="decimal-pad" error={openingError} hint={existing ? 'Changing this adjusts the derived account balance.' : undefined} required />
         <AppText variant="label">Color</AppText>
         <View accessibilityLabel={t('Account color')} accessibilityRole="radiogroup" style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>{COLORS.map((item) => <ColorSwatch key={item} color={item} selected={color === item} label={`Use ${item} account color`} onPress={() => setColor(item)} />)}</View>
       </Card>

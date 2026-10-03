@@ -214,6 +214,11 @@ export function decodeBundle(text: string): SyncBundle {
   }
 
   const body = parsed as Record<string, unknown>;
+  // No numeric version at all means this was never a Qashy file (an empty object, someone
+  // else's JSON), which is a different problem from a newer format Qashy could update to read.
+  if (typeof body.version !== 'number') {
+    throw new BundleError('That file is not a Qashy sync file.');
+  }
   if (body.version !== BUNDLE_VERSION) {
     throw new BundleError(
       `That file was written by a newer version of Qashy (format v${String(body.version)}). Update this device.`,

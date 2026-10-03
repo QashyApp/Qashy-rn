@@ -7,11 +7,13 @@ import { ColorSwatch } from '@/components/ui/color-swatch';
 import { MotionPressable, MotionView } from '@/components/ui/motion';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { SegmentedControl } from '@/components/ui/segmented-control';
+import { effectiveAccentMode, ThemePicker } from '@/components/ui/theme-picker';
 import type { AccentSource, ThemeMode } from '@/domain/models';
 import { StepHeading } from '@/features/onboarding/onboarding-shell';
 import { useLocalization } from '@/localization/localization';
 import { useQashyTheme } from '@/theme/theme';
-import { ACCENT_PRESET_NAMES, ACCENT_PRESETS, radius, space, tile } from '@/theme/tokens';
+import { getTheme } from '@/theme/themes/registry';
+import { ACCENT_PRESET_NAMES, ACCENT_PRESETS } from '@/theme/tokens';
 import { formatMoney } from '@/utils/money';
 
 const THEMES = [
@@ -26,25 +28,31 @@ const THEMES = [
  * that looks like on real UI rather than on a swatch alone.
  */
 export function LookStep({
+  themeId,
   themeMode,
   accentSource,
   accentHex,
   currency,
   locale,
+  onTheme,
   onThemeMode,
   onAccent,
 }: {
+  themeId: string;
   themeMode: ThemeMode;
   accentSource: AccentSource;
   accentHex: string;
   currency: string;
   locale: string;
+  onTheme: (id: string) => void;
   onThemeMode: (mode: ThemeMode) => void;
   onAccent: (source: AccentSource, hex?: string) => void;
 }) {
   const theme = useQashyTheme();
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const systemSelected = accentSource === 'system';
+  const userAccent = effectiveAccentMode(getTheme(themeId)) === 'user';
 
   return (
     <View style={{ gap: space.xxl }}>
@@ -53,8 +61,9 @@ export function LookStep({
       <Preview currency={currency} locale={locale} />
 
       <View style={{ gap: space.lg }}>
+        <ThemePicker value={themeId} onChange={onTheme} />
         <SegmentedControl label="Appearance" options={THEMES} value={themeMode} onChange={onThemeMode} />
-        <View accessibilityRole="radiogroup" accessibilityLabel={t('Accent color')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, justifyContent: 'center' }}>
+        {userAccent ? <View accessibilityRole="radiogroup" accessibilityLabel={t('Accent color')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: space.md, justifyContent: 'center' }}>
           {/* The system accent (Material You on Android, Qashy indigo elsewhere)
               sits in the same grid as the presets: it is one more choice of
               color, not a separate mode above them. */}
@@ -88,7 +97,7 @@ export function LookStep({
               onPress={() => onAccent('preset', color)}
             />
           ))}
-        </View>
+        </View> : <AppText muted>This theme sets its own accent color.</AppText>}
       </View>
     </View>
   );
@@ -96,6 +105,7 @@ export function LookStep({
 
 function Preview({ currency, locale }: { currency: string; locale: string }) {
   const theme = useQashyTheme();
+  const { radius, space, tile } = theme;
   let amount = '';
   let balance = '';
   try {

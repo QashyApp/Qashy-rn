@@ -1,5 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/** Confirms the in-app dialog (replaces the browser confirm). Cancel renders first, confirm last. */
+async function confirmDialog(page: Page) {
+  const dialog = page.getByRole('alertdialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button').last().click();
+  await expect(dialog).toHaveCount(0);
+}
+
 async function completeOnboarding(page: Page) {
   await page.goto('/');
   await page.getByRole('button', { name: 'Get started' }).click();
@@ -108,7 +116,7 @@ test('chooses readable locale and currency options during onboarding', async ({ 
   await page.getByRole('button', { name: 'מחזורית חדשה' }).click();
   await expect(page.getByText('רישום אוטומטי')).toBeVisible();
   await expect(page.getByText('כבוי כברירת מחדל. תנועות עתידיות ממתינות לבדיקה שלכם.')).toBeVisible();
-  await expect(page.getByText('כל 1 חודש')).toBeVisible();
+  await expect(page.getByText('כל חודש', { exact: true })).toBeVisible();
 });
 
 test('applies an onboarding theme choice immediately', async ({ page }) => {
@@ -224,8 +232,8 @@ test('edits and deletes manual goal contributions', async ({ page }) => {
   await expect(page.getByText(/Corrected amount/)).toBeVisible();
   await expect(page.getByText(/First amount/)).toHaveCount(0);
 
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: /Delete contribution/ }).click();
+  await confirmDialog(page);
   await expect(page.getByText('No manual contributions yet.')).toBeVisible();
 });
 
@@ -260,8 +268,8 @@ test('adds, persists, guards and removes a one-time budget adjustment', async ({
   await page.getByRole('button', { name: 'Reduce budget' }).last().click();
   await expect(page.getByText(/adjusted \+\$150\.00/)).toBeVisible();
   await page.getByRole('button', { name: /^Adjust Everyday spending/ }).click();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Delete adjustment +$250.00' }).click();
+  await confirmDialog(page);
   await expect(page.getByText('Limit this period: $900.00')).toBeVisible();
 });
 
@@ -336,11 +344,16 @@ test('edits tags carried by an imported transaction', async ({ page }) => {
   const chooserPromise = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: 'Choose CSV' }).click();
   const chooser = await chooserPromise;
-  await chooser.setFiles('e2e/fixtures/tagged.csv');
+  // Dated today rather than read from a fixture: the ledger opens on the current month, so a
+  // hard-coded date stops appearing in it the moment the calendar moves on.
+  const csv = `date,type,status,title,amount,currency,account,category,tags,note
+${todayKey()},expense,posted,Tagged import,10.00,USD,Everyday,,Work,Imported
+`;
+  await chooser.setFiles({ name: 'tagged.csv', mimeType: 'text/csv', buffer: Buffer.from(csv) });
   await page.getByRole('button', { name: 'Preview import' }).click();
   await expect(page.getByText('Ready').locator('..').getByText('1')).toBeVisible();
-  page.once('dialog', (dialog) => void dialog.accept());
   await page.getByRole('button', { name: 'Import 1 transactions' }).click();
+  await confirmDialog(page);
   // Pressable does not await an async onPress handler. Wait for the preview to move out of its
   // pre-commit state before navigating, or WebKit can reload the ledger while the Dexie write is
   // still in flight.
@@ -348,7 +361,7 @@ test('edits tags carried by an imported transaction', async ({ page }) => {
   // Stay in the same app instance after the async commit. A full WebKit reload can race the
   // browser's IndexedDB restore even after the repository write has completed; returning through
   // the stack and selecting the section exercises the edit flow without that unrelated race.
-  await page.getByRole('link', { name: 'Go back' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByRole('link', { name: 'Transactions' }).click();
   await page.getByRole('button', { name: /Tagged import/ }).click();
   const workTag = page.getByRole('checkbox', { name: 'Work' });
@@ -416,8 +429,8 @@ test('can leave an invalid custom accent by returning to the default source', as
 test('resets all local data and returns to onboarding', async ({ page }) => {
   await completeOnboarding(page);
   await page.getByRole('link', { name: 'More' }).click();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Reset all data' }).click();
+  await confirmDialog(page);
 
   await expect(page).toHaveURL(/\/onboarding$/);
   await expect(page.getByText('Money, made calmer.')).toBeVisible();
@@ -715,7 +728,10 @@ async function createAccount(page: Page, name: string, currency: string) {
   await page.getByRole('link', { name: 'More' }).click();
   await page.getByRole('button', { name: 'Add', exact: true }).first().click();
   await page.getByLabel('Account name').fill(name);
-  await page.getByLabel('Currency').fill(currency);
+  // Currency is a searchable picker, not a text field: open it, narrow by code, choose the match.
+  await page.getByLabel('Currency', { exact: true }).click();
+  await page.getByLabel('Search currency').fill(currency);
+  await page.getByRole('radio', { name: new RegExp(currency) }).first().click();
   await page.getByRole('button', { name: 'Create account' }).click();
   await expect(page).toHaveURL(/\/more$/);
 }
