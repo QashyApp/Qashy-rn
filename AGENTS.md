@@ -48,7 +48,7 @@ Keep domain logic out of screen components when it belongs in the repository or 
 - Account balances derive from opening balances and posted transactions; never store a mutable current balance.
 - Transfers affect both accounts but never income or expense analytics.
 - Every persisted entity has a UUID, revision, `createdAt`, `updatedAt`, and nullable `deletedAt`.
-- Use soft deletion for finance entities.
+- Use soft deletion for finance entities. The one exception is the import's replace option ("Delete my current data and import"), which erases for real; see the Sync and cryptography rules.
 - Preserve historical budget period limits, filters, category caps, and rollover values.
 - Recurring generation must remain idempotent through occurrence keys.
 - Batch mutations and CSV commits must use one adapter `putMany` call so SQLite and Dexie can apply them atomically.
@@ -68,7 +68,7 @@ When adding or changing an entity, update the model, repository contract, both s
 - Co-dependent fields must share a field group. Splitting `amountMinor` from `currency`, or `accountId` from the currency derived from it, produces states no local mutation could create and corrupts money silently.
 - The repair pass in `src/sync/oplog/repair.ts` must stay pure and emit no ops: no `Date.now()`, no `todayLocal()`, no `makeId()`, no `Math.random()`, and no locale-sensitive collation.
 - `work` passed to `StorageAdapter.transact` must not await anything but the transaction it is handed. Dexie tracks membership through its own promise zone, and a foreign await commits or aborts the transaction underneath you.
-- Never hard-delete a `records` row. Tombstones carry recurrence suppression, so deleting one resurrects a transaction the user deleted.
+- Never hard-delete a `records` row. Tombstones carry recurrence suppression, so deleting one resurrects a transaction the user deleted. The sole exception is the import's replace option, by explicit product decision: it erases the replaced entity types' rows (tombstones included) in one `transact`, and only when `hasSyncHistory` is false. On a device with any sync history it is refused, because the op log and other devices still hold those entities and would restore them. Do not add other hard deletes, and do not weaken that guard.
 - Prefer deterministic entity ids over post-hoc duplicate repair whenever a value uniquely identifies the record.
 
 ## Navigation and responsive layout

@@ -154,6 +154,33 @@ export async function readMeta(
   return new Map(rows.map((row) => [row.key, row.value]));
 }
 
+/**
+ * Whether this device has ever taken part in a sync vault: an identity, a genesis marker, the
+ * switch turned on, or any op or merge state left behind.
+ *
+ * It is what decides whether finance records may be erased for real. A device with sync history
+ * has an op log that still describes those records, and peers that still hold them, so a hard
+ * delete would either be undone by the next merge or leave an op log describing rows that no
+ * longer exist.
+ */
+export async function hasSyncHistory(tx: StorageTx): Promise<boolean> {
+  const meta = await readMeta(tx, [
+    SYNC_META.deviceId,
+    SYNC_META.genesisAt,
+    SYNC_META.enabled,
+  ]);
+  if (
+    meta.has(SYNC_META.deviceId) ||
+    meta.has(SYNC_META.genesisAt) ||
+    meta.get(SYNC_META.enabled) === "1"
+  )
+    return true;
+  for (const name of ["syncOps", "syncState"] as const) {
+    if ((await tx.table(name).all()).length > 0) return true;
+  }
+  return false;
+}
+
 export async function writeMeta(
   tx: StorageTx,
   entries: Partial<Record<SyncMetaKey, string>>,

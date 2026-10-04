@@ -83,7 +83,7 @@ const MODES: {
     id: "replace",
     title: "Delete my current data and import this backup",
     description:
-      "Deletes your current accounts, transactions, budgets and goals first, then adds the backup.",
+      "Permanently deletes your current accounts, transactions, budgets and goals first, then adds the backup. Not available on a device that syncs.",
     icon: "arrow.clockwise",
   },
 ];
@@ -386,6 +386,7 @@ function PreviewSummary({
   const reasonList = [...reasons.entries()];
   const replacedAny =
     mode === "replace" &&
+    outcome.rejected.length === 0 &&
     (totalOf(outcome.replaced) > 0 || outcome.replaced.goals > 0);
   const { warnings, balanceChecks } = bundle.report;
 
@@ -422,7 +423,7 @@ function PreviewSummary({
               size={18}
             />
             <AppText variant="label" style={{ color: theme.negative, flex: 1 }}>
-              Your current data will be deleted
+              Your current data will be permanently deleted
             </AppText>
           </View>
           <CountList title="Will be deleted" counts={outcome.replaced} extra />
@@ -725,8 +726,8 @@ export function ExternalImportCard() {
       const confirmed = await confirmDestructive({
         title: "Delete your current data?",
         message: deleted
-          ? `This deletes ${deleted} you have now, then imports the backup. You can’t undo this.`
-          : "This deletes your current data, then imports the backup. You can’t undo this.",
+          ? `This permanently deletes ${deleted} you have now, then imports the backup. You can’t undo this.`
+          : "This permanently deletes your current data, then imports the backup. You can’t undo this.",
         confirmLabel: "Delete and import",
       });
       if (!confirmed) return;

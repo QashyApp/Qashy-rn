@@ -32,7 +32,7 @@ export const IMPORT_SOURCES: readonly ImportSourceInfo[] = [
       "Imported recurring schedules are set to review, not to post automatically.",
       "A subscription or repeating series only becomes a schedule if Cashew still has an upcoming entry for it. Series with no upcoming entry are treated as ended and only their past payments are imported.",
       "Importing the same backup twice is safe: items that are already in Qashy are recognised and skipped.",
-      "Deleting your current data first removes your accounts, transactions, budgets and goals from Qashy before the backup is added. Like every deletion in Qashy, it leaves a hidden marker so your other devices delete the same things when they sync.",
+      "Deleting your current data first permanently erases your accounts, transactions, budgets and goals before the backup is added, and cannot be undone. It is not available on a device that syncs, because your other devices would keep that data and send it back.",
       "Budget limits are read in your base currency.",
     ],
   },
