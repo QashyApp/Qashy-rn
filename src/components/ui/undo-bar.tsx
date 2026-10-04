@@ -11,7 +11,7 @@ const DEFAULT_DURATION = 5000;
 
 /**
  * An inline "undo" snackbar. There is no global host: the screen that triggers
- * a reversible action (a soft delete, a batch move) renders this itself,
+ * a reversible action (removing a card, a batch move) renders this itself,
  * positions it with `style` (typically `position: absolute` pinned to the
  * bottom of that screen, above any tab bar/safe area), and keeps `message` in
  * its own state — passing a new message re-arms the auto-dismiss timer.

@@ -3,6 +3,7 @@ import { openDatabaseAsync, type SQLiteDatabase } from "expo-sqlite";
 import {
   clearSyncTables,
   compareStoredEntities,
+  toStoredForm,
   type StorageAdapter,
   type StorageTx,
   type StoredEntity,
@@ -288,7 +289,10 @@ class SqliteTx implements StorageTx {
     // One native call per chunk of rows rather than one per row: a batch (CSV import, bulk
     // delete, a sync merge) otherwise pays a bridge round trip for every record. Rows are applied
     // in order, so a key repeated within a batch still ends on its last value.
-    for (const batch of chunk(records, Math.floor(MAX_PARAMETERS / 5))) {
+    for (const batch of chunk(
+      records.map(toStoredForm),
+      Math.floor(MAX_PARAMETERS / 5),
+    )) {
       const params: SqlValue[] = [];
       for (const record of batch) {
         params.push(
@@ -430,12 +434,14 @@ export class PlatformStorageAdapter implements StorageAdapter {
   private async openDatabase() {
     const database = await openDatabaseAsync("qashy.db");
     try {
-      // All three are per-connection, which is the reason this adapter keeps one connection
+      // All four are per-connection, which is the reason this adapter keeps one connection
       // and manages transactions on it by hand. `busy_timeout` matters now that reads and
       // writes share a transaction: without it a lock contended by the OS's own WAL
-      // checkpointer fails immediately instead of waiting.
+      // checkpointer fails immediately instead of waiting. `secure_delete` zeroes the bytes a
+      // row update or delete frees, so the content an erased tombstone replaced does not linger
+      // in the database file's free pages.
       await database.execAsync(
-        "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;",
+        "PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000; PRAGMA secure_delete = ON;",
       );
       const row = await database.getFirstAsync<{ user_version: number }>(
         "PRAGMA user_version",

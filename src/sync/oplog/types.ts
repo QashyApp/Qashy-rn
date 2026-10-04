@@ -125,6 +125,15 @@ export interface CausalMeta {
   >;
   readonly deleted: DeletionState | null;
   /**
+   * The newest `delete` op this state has seen, whether or not a later `restore` beat it.
+   *
+   * Every register, set element, and map entry written at or before this reading holds its
+   * erased value — see `eraseDeletedState`. A max over delete readings, so it is commutative;
+   * absent on states that have never seen a delete, and on rows written before erasure existed,
+   * which fall back to the winning deletion's reading.
+   */
+  readonly erasedThrough?: Hlc | null;
+  /**
    * Ops this build could not interpret — a newer `schema`, an unknown `kind`, an unknown
    * `entityType`. Kept so that upgrading the app materializes them rather than losing an
    * edit that was faithfully stored and forwarded the whole time.

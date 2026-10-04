@@ -5694,3 +5694,60 @@ describe("foreign amounts and fees", () => {
     expect(balance).toBe(0 - 10100 + 4950);
   });
 });
+
+describe("FinanceRepository deletion erases", () => {
+  const coffee = (accountId: string) => ({
+    kind: "expense" as const,
+    title: "Private coffee",
+    note: "With Sam",
+    localDate: "2026-07-15",
+    accountId,
+    amountMinor: 1_234,
+  });
+
+  it("stores a deleted transaction with nothing it described", async () => {
+    const storage = new MemoryStorageAdapter();
+    const { repository } = await createRepository(storage);
+    const account = repository.getSnapshot().accounts[0];
+    const saved = await repository.saveTransaction(coffee(account.id));
+    await repository.deleteEntities("transactions", [saved.id]);
+
+    const row = (await storage.readAll("transactions")).find(
+      (item) => item.id === saved.id,
+    );
+    expect(row?.deletedAt).not.toBeNull();
+    const text = JSON.stringify(row);
+    for (const secret of ["Private coffee", "With Sam", "1234", account.id])
+      expect(text).not.toContain(secret);
+    expect(repository.getSnapshot().transactions).toHaveLength(0);
+  });
+
+  it("erases tombstones an older build left with their content, once, at startup", async () => {
+    const storage = new MemoryStorageAdapter();
+    const { repository } = await createRepository(storage);
+    const account = repository.getSnapshot().accounts[0];
+    const saved = await repository.saveTransaction(coffee(account.id));
+
+    // What an older build stored: a soft-deleted row with every field intact, written past
+    // the adapter's own erasure, and no record that the one-time pass has run.
+    const legacy = { ...saved, deletedAt: "2026-07-16T00:00:00.000Z" };
+    (
+      storage as unknown as { records: Map<string, unknown> }
+    ).records.set(`transactions:${saved.id}`, {
+      type: "transactions",
+      entity: legacy,
+    });
+    await storage.transact((tx) =>
+      tx.table("syncMeta").delete(["tombstonesErased"]),
+    );
+
+    const reloaded = new LocalFinanceRepository(storage);
+    await reloaded.initialize();
+    const row = (await storage.readAll("transactions")).find(
+      (item) => item.id === saved.id,
+    );
+    expect(row?.deletedAt).toBe(legacy.deletedAt);
+    expect(JSON.stringify(row)).not.toContain("Private coffee");
+    expect(reloaded.getSnapshot().transactions).toHaveLength(0);
+  });
+});

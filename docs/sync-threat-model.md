@@ -53,6 +53,12 @@ State these in the UI and the README. Pretending otherwise would be worse than t
 - **The local database is not encrypted at rest by Qashy.** It is not today either; OS full-disk encryption
   is the boundary. Encrypting only the sync log while `records` stays plaintext would be theatre.
   Optional at-rest encryption is deliberately out of scope.
+- **Instant erasure of a delete from the sync log.** Deleting erases the record's content from `records`
+  and from the merged causal state on every device. A small id marker stays so the delete itself syncs.
+  The signed ops that carried the content before the delete stay in the hash-chained op log until
+  compaction drops them: once every peer has acknowledged them, or after 90 days. They cannot be
+  rewritten sooner without breaking the chain. A recurring schedule's next-due date is a monotone
+  register and stays in causal state, and IndexedDB has no secure-delete equivalent to SQLite's.
 - **A compromised _paired_ device.** There is no partial authorization in a single-user vault: a device you
   paired can read and write everything. Revocation limits future access only.
 - **Global passive traffic analysis** by an adversary who can observe both endpoints at once.

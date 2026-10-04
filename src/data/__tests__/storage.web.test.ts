@@ -80,6 +80,25 @@ describe("web storage adapter", () => {
     expect(await adapter.readAll("categories")).toEqual([]);
   });
 
+  it("stores a deleted record in its erased form", async () => {
+    const adapter = await freshAdapter();
+    await adapter.putMany([
+      stored({
+        ...account("a", "Joint savings", "2026-01-01T00:00:00.000Z"),
+        openingBalanceMinor: 90_000,
+        deletedAt: "2026-02-01T00:00:00.000Z",
+      }),
+    ]);
+
+    const [row] = await adapter.readAll("accounts");
+    expect(row).toMatchObject({
+      id: "a",
+      name: "",
+      openingBalanceMinor: 0,
+      deletedAt: "2026-02-01T00:00:00.000Z",
+    });
+  });
+
   it("refuses reads and writes before initialize(), matching the native adapter", async () => {
     await Dexie.delete("qashy");
     const adapter = newAdapter();

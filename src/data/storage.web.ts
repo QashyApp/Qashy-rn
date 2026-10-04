@@ -10,6 +10,7 @@ import {
   clearSyncTables,
   compareStoredEntities,
   recordKey,
+  toStoredForm,
   type StorageAdapter,
   type StorageTx,
   type StoredEntity,
@@ -143,7 +144,7 @@ class DexieTx implements StorageTx {
   async putMany(records: readonly StoredEntity[]) {
     if (records.length) this.state.dirty = true;
     await this.db.records.bulkPut(
-      records.map(({ type, entity }) => ({
+      records.map(toStoredForm).map(({ type, entity }) => ({
         key: recordKey(type, entity.id),
         type,
         entityId: entity.id,

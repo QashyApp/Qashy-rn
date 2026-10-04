@@ -66,6 +66,7 @@ import type {
 import {
   applyOps,
   changedTypes,
+  eraseDeletedState,
   finalize,
   isEntityType,
   materialize,
@@ -75,7 +76,15 @@ import {
   type CausalMeta,
   type SyncOpBody,
 } from "@/sync/oplog";
-import { hasSyncHistory, readAllStates, writeStates } from "@/data/sync-store";
+import {
+  hasSyncHistory,
+  readAllStates,
+  readMeta,
+  SYNC_META,
+  writeMeta,
+  writeStates,
+} from "@/data/sync-store";
+import { eraseEntity } from "@/domain/erasure";
 import { planMerge, type DuplicateGroup } from "@/sync/engine/duplicates";
 import { DEFAULT_THEME_ID, isValidThemeId } from "@/theme/themes/types";
 import {
@@ -364,6 +373,7 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   private async initializeNow() {
     await this.storage.initialize();
+    await this.eraseStoredTombstones();
     await this.hydrateFromStorage();
     await this.migrateLoadedState();
     // No placeholder settings row is written here, and that is load-bearing for sync.
@@ -383,6 +393,43 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Only now is the snapshot complete enough for screens to render against.
     this.state = { ...this.state, ready: true };
     this.emit();
+  }
+
+  /**
+   * Erases, once per device, the tombstones stored before deleting erased them.
+   *
+   * Both halves: the rows in `records`, and the causal state sync keeps for them. Through
+   * `transact`, never `putMany`, because this is not an edit — it rewrites rows into the form
+   * every tombstone is now written in, and must emit no ops. Ops already in the log keep what
+   * they carried until compaction drops them, as it does every op.
+   */
+  private async eraseStoredTombstones() {
+    await this.storage.transact(
+      async (tx) => {
+        const done = await readMeta(tx, [SYNC_META.tombstonesErased]);
+        if (done.get(SYNC_META.tombstonesErased) === "1") return;
+
+        const records: StoredEntity[] = [];
+        for (const type of ALL_ENTITY_TYPES) {
+          for (const entity of await tx.readAll(type)) {
+            if (!entity.deletedAt) continue;
+            const erased = eraseEntity(type, entity);
+            if (JSON.stringify(erased) !== JSON.stringify(entity))
+              records.push({ type, entity: erased });
+          }
+        }
+        if (records.length) await tx.putMany(records);
+
+        const states: CausalMeta[] = [];
+        for (const meta of (await readAllStates(tx)).values()) {
+          const erased = eraseDeletedState(meta);
+          if (erased !== meta) states.push(erased);
+        }
+        await writeStates(tx, states);
+        await writeMeta(tx, { [SYNC_META.tombstonesErased]: "1" });
+      },
+      { silent: true },
+    );
   }
 
   refresh() {
@@ -543,9 +590,11 @@ export class LocalFinanceRepository implements FinanceRepository {
           for (const entity of entities) {
             // `finalize` settles `revision` against what is actually stored, and reports the
             // record unchanged when only the derived fields moved — so an op that re-states
-            // a value this device already holds writes nothing and bumps nothing.
+            // a value this device already holds writes nothing and bumps nothing. Compared in
+            // erased form because that is how a tombstone is stored: a duplicate the repair
+            // pass tombstones would otherwise differ from its stored self on every merge.
             const { entity: settled, changed } = finalize(
-              entity,
+              eraseEntity(type, entity),
               original.get(metaKey(type, entity.id)) ?? null,
             );
             if (!changed) continue;
@@ -5525,19 +5574,24 @@ export class LocalFinanceRepository implements FinanceRepository {
       recurringRules,
       exchangeRates,
     } = repaired;
+    // Tombstones are erased, so their content is blank by design and validating it would
+    // reject every merge that carries a delete. Accounts stay whole: an erased account keeps
+    // its type and currency, and the lookups below resolve references through it.
+    const liveOnly = <T extends FinanceEntity>(rows: readonly T[]) =>
+      rows.filter((row) => !row.deletedAt);
     this.assertMergedDomainValues({
       settings,
       accounts,
-      categories,
-      tags,
-      transactions,
-      budgets,
-      budgetPeriods,
-      budgetAdjustments,
-      goals,
-      contributions,
-      recurringRules,
-      exchangeRates,
+      categories: liveOnly(categories),
+      tags: liveOnly(tags),
+      transactions: liveOnly(transactions),
+      budgets: liveOnly(budgets),
+      budgetPeriods: liveOnly(budgetPeriods),
+      budgetAdjustments: liveOnly(budgetAdjustments),
+      goals: liveOnly(goals),
+      contributions: liveOnly(contributions),
+      recurringRules: liveOnly(recurringRules),
+      exchangeRates: liveOnly(exchangeRates),
     });
     const posted = transactions.filter(
       (item) => !item.deletedAt && item.status === "posted",

@@ -29,6 +29,7 @@ import {
   type SigningSecretKey,
 } from "@/sync/crypto";
 import {
+  compareHlc,
   isEntityType,
   isHlc,
   opIdFor,
@@ -173,6 +174,17 @@ const decodeState = (value: unknown, index: number): CausalMeta => {
       (value.deleted.at !== null && typeof value.deleted.at !== "string"))
   )
     return fail(`Full-state entry ${index} has a malformed deletion state.`);
+  // The erasure threshold blanks every register at or before it, so a malformed one is not
+  // cosmetic: it would erase a live record's content. It only ever exists after a delete, and
+  // never past the newest reading the entry has seen.
+  if (
+    value.erasedThrough !== undefined &&
+    value.erasedThrough !== null &&
+    (!isHlc(value.erasedThrough) ||
+      !value.deleted ||
+      compareHlc(value.erasedThrough, value.maxHlc) > 0)
+  )
+    return fail(`Full-state entry ${index} has a malformed erasure state.`);
   for (const register of Object.values(value.registers)) {
     if (!isRecord(register) || !isHlc(register.hlc))
       return fail(`Full-state entry ${index} has a malformed register.`);

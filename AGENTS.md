@@ -48,7 +48,7 @@ Keep domain logic out of screen components when it belongs in the repository or 
 - Account balances derive from opening balances and posted transactions; never store a mutable current balance.
 - Transfers affect both accounts but never income or expense analytics.
 - Every persisted entity has a UUID, revision, `createdAt`, `updatedAt`, and nullable `deletedAt`.
-- Use soft deletion for finance entities. The one exception is the import's replace option ("Delete my current data and import"), which erases for real; see the Sync and cryptography rules.
+- Deleting erases. A deleted finance entity becomes a tombstone that keeps only what `src/domain/erasure.ts` lists (identity, `deletedAt`, kinds, a transaction's `occurrenceKey`, create-time links, and an account's currency, icon and color). Every storage adapter writes tombstones through `toStoredForm`, the op diff emits only the `delete`, and the merge erases causal state at or before the newest delete. A new entity field needs an erasure entry, and the types enforce it. The one hard delete is the import's replace option ("Delete my current data and import"); see the Sync and cryptography rules.
 - Preserve historical budget period limits, filters, category caps, and rollover values.
 - Recurring generation must remain idempotent through occurrence keys.
 - Batch mutations and CSV commits must use one adapter `putMany` call so SQLite and Dexie can apply them atomically.
@@ -68,7 +68,7 @@ When adding or changing an entity, update the model, repository contract, both s
 - Co-dependent fields must share a field group. Splitting `amountMinor` from `currency`, or `accountId` from the currency derived from it, produces states no local mutation could create and corrupts money silently.
 - The repair pass in `src/sync/oplog/repair.ts` must stay pure and emit no ops: no `Date.now()`, no `todayLocal()`, no `makeId()`, no `Math.random()`, and no locale-sensitive collation.
 - `work` passed to `StorageAdapter.transact` must not await anything but the transaction it is handed. Dexie tracks membership through its own promise zone, and a foreign await commits or aborts the transaction underneath you.
-- Never hard-delete a `records` row. Tombstones carry recurrence suppression, so deleting one resurrects a transaction the user deleted. The sole exception is the import's replace option, by explicit product decision: it erases the replaced entity types' rows (tombstones included) in one `transact`, and only when `hasSyncHistory` is false. On a device with any sync history it is refused, because the op log and other devices still hold those entities and would restore them. Do not add other hard deletes, and do not weaken that guard.
+- Never hard-delete a `records` row. Tombstones are erased, not removed: they carry recurrence suppression, so deleting one resurrects a transaction the user deleted. The sole exception is the import's replace option, by explicit product decision: it erases the replaced entity types' rows (tombstones included) in one `transact`, and only when `hasSyncHistory` is false. On a device with any sync history it is refused, because the op log and other devices still hold those entities and would restore them. Do not add other hard deletes, and do not weaken that guard.
 - Prefer deterministic entity ids over post-hoc duplicate repair whenever a value uniquely identifies the record.
 
 ## Navigation and responsive layout
@@ -144,7 +144,7 @@ npx expo export -p ios --output-dir /tmp/qashy-ios-export
 npx expo export -p android --output-dir /tmp/qashy-android-export
 ```
 
-Tests should cover money and rate calculations, balances, transfers, recurrence edge cases, rollover snapshots, filters, soft deletion, atomic failures, CSV escaping/deduplication, IndexedDB persistence, responsive navigation, and offline PWA reloads.
+Tests should cover money and rate calculations, balances, transfers, recurrence edge cases, rollover snapshots, filters, tombstone erasure, atomic failures, CSV escaping/deduplication, IndexedDB persistence, responsive navigation, and offline PWA reloads.
 
 Do not use `npm audit fix --force` to resolve transitive Expo advisories; it can install incompatible SDK packages. Report unresolved advisories and upgrade through an intentional Expo SDK update instead.
 

@@ -63,6 +63,11 @@ export const SYNC_META = {
   baseCurrency: "baseCurrency",
   /** Set once the genesis migration has converted pre-sync rows into ops. */
   genesisAt: "genesisAt",
+  /**
+   * `'1'` once tombstones stored before deletion erased them have been erased in place, along
+   * with their causal state. See `LocalFinanceRepository.eraseStoredTombstones`.
+   */
+  tombstonesErased: "tombstonesErased",
   /** Written by every commit so other tabs can tell a foreign write from their own echo. */
   lastWrite: "lastWrite",
   /** `'1'` once the user has switched sync on. Absent means off, which is the default. */

@@ -2,6 +2,7 @@ import {
   clearSyncTables,
   compareStoredEntities,
   recordKey,
+  toStoredForm,
   type StorageAdapter,
   type StorageTx,
   type StoredEntity,
@@ -55,7 +56,7 @@ class MemoryTx implements StorageTx {
 
   async putMany(records: readonly StoredEntity[]) {
     if (records.length) this.dirty = true;
-    for (const record of records) {
+    for (const record of records.map(toStoredForm)) {
       this.records.set(
         recordKey(record.type, record.entity.id),
         structuredClone(record),

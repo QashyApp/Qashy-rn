@@ -20,6 +20,7 @@
  * Nothing here reads a clock, generates an id, or touches storage.
  */
 
+import { eraseEntity, eraseField, isErasable } from "@/domain/erasure";
 import type { EntityType, FinanceEntity } from "@/domain/models";
 import { OP_SCHEMA_VERSION } from "@/sync/crypto";
 import { canonicalJson } from "@/utils/canonical-json";
@@ -294,6 +295,122 @@ const sortUnknown = (ops: readonly SyncOpBody[]): SyncOpBody[] =>
     return left < right ? -1 : left > right ? 1 : 0;
   });
 
+// ---------------------------------------------------------------------------
+// Erasure — a deleted entity's merge state holds no content
+// ---------------------------------------------------------------------------
+
+/** The newest delete reading this state has seen; see `CausalMeta.erasedThrough`. */
+const erasureThreshold = (meta: CausalMeta): Hlc | null =>
+  meta.erasedThrough ?? (meta.deleted?.at ? meta.deleted.hlc : null);
+
+const withErasureAt = (meta: CausalMeta, hlc: Hlc): CausalMeta => ({
+  ...meta,
+  erasedThrough: laterOrNull(erasureThreshold(meta), hlc),
+});
+
+/**
+ * Replaces everything a delete covered with its erased value.
+ *
+ * `records` erases tombstones on write, but the causal state keeps the register values a
+ * projection is built from, so it has to be erased as well or deleting would only hide.
+ *
+ * What makes it safe to run inside a CRDT is that it is a pure function of slots and clock
+ * readings: a slot written at or before the newest delete reading is erased, and a slot written
+ * after it is not. Each slot keeps its own reading, so last-writer-wins still picks the same
+ * winner in either arrival order and the merge stays commutative, idempotent and associative —
+ * an edit made after the delete, by a device that had not heard of it yet, still lands.
+ *
+ * Two register strategies compare values rather than readings, so erasing them would make the
+ * result depend on arrival order. Neither holds anything the user entered: `monotoneTrue` is
+ * the settings onboarding flag, and settings are never deleted; `monotoneMax` is a schedule's
+ * `nextDueDate`, which the projection still erases on its way into `records`.
+ */
+export function eraseDeletedState(meta: CausalMeta): CausalMeta {
+  const through = erasureThreshold(meta);
+  if (through === null || !isErasable(meta.entityType)) return meta;
+  const erase = (field: string, value: unknown) =>
+    eraseField(meta.entityType, field, value);
+
+  const specs = new Map(
+    registersOf(meta.entityType).map((spec) => [spec.name, spec]),
+  );
+  const registers: Record<string, RegisterState> = {};
+  for (const [name, state] of Object.entries(meta.registers)) {
+    const spec = specs.get(name);
+    if (
+      state.hlc > through ||
+      spec?.strategy.kind === "monotoneMax" ||
+      spec?.strategy.kind === "monotoneTrue"
+    ) {
+      registers[name] = state;
+      continue;
+    }
+    // A register this build does not know is erased whole: there is no way to tell which of
+    // its values would be safe to keep.
+    const value = asRecord(state.value);
+    registers[name] = {
+      hlc: state.hlc,
+      value: spec
+        ? Object.fromEntries(
+            spec.fields.map((field) => [
+              field,
+              erase(field, value[field] ?? null),
+            ]),
+          )
+        : null,
+    };
+  }
+
+  // Every element counts as removed at the delete. An add at or before it is forgotten, and an
+  // element left with no later add and no later remove is dropped entirely — `{ add: null,
+  // remove: through }` is what it would hold, and re-deriving that from `through` alone gives
+  // the same answer in every arrival order — so nothing records which ids were ever in the set.
+  const sets: Record<string, Record<string, ElementState>> = {};
+  for (const [path, elements] of Object.entries(meta.sets)) {
+    const next: Record<string, ElementState> = {};
+    for (const [element, state] of Object.entries(elements)) {
+      const addHlc =
+        state.addHlc !== null && state.addHlc > through ? state.addHlc : null;
+      const removedLater =
+        state.removeHlc !== null && state.removeHlc > through;
+      if (addHlc === null && !removedLater) continue;
+      next[element] = {
+        addHlc,
+        removeHlc: laterOrNull(state.removeHlc, through),
+      };
+    }
+    sets[path] = next;
+  }
+
+  const maps: Record<string, Record<string, MapEntryState>> = {};
+  for (const [path, entries] of Object.entries(meta.maps)) {
+    const next: Record<string, MapEntryState> = {};
+    for (const [key, state] of Object.entries(entries)) {
+      if (state.hlc > through) next[key] = state;
+    }
+    maps[path] = next;
+  }
+
+  const created = meta.created && {
+    hlc: meta.created.hlc,
+    fields: Object.fromEntries(
+      Object.entries(meta.created.fields).map(([field, value]) => [
+        field,
+        erase(field, value),
+      ]),
+    ),
+  };
+
+  return {
+    ...meta,
+    erasedThrough: through,
+    created,
+    registers,
+    sets,
+    maps,
+  };
+}
+
 /** Folds one op into an entity's causal state. Pure, commutative, and idempotent. */
 export function applyOp(meta: CausalMeta | null, op: SyncOpBody): CausalMeta {
   const base = meta ?? emptyMeta(op.entityType, op.entityId, op.hlc);
@@ -312,6 +429,10 @@ export function applyOp(meta: CausalMeta | null, op: SyncOpBody): CausalMeta {
       : { ...advanced, unknown: sortUnknown([...advanced.unknown, op]) };
   }
 
+  return eraseDeletedState(applyKnownOp(advanced, op));
+}
+
+function applyKnownOp(advanced: CausalMeta, op: SyncOpBody): CausalMeta {
   switch (op.kind) {
     case "create":
       return applyCreate(advanced, op);
@@ -354,7 +475,7 @@ export function applyOp(meta: CausalMeta | null, op: SyncOpBody): CausalMeta {
       const at =
         typeof op.payload.at === "string" ? op.payload.at : hlcToIso(op.hlc);
       return {
-        ...advanced,
+        ...withErasureAt(advanced, op.hlc),
         deleted: pickDeletion(advanced.deleted, { hlc: op.hlc, at }),
       };
     }
@@ -428,7 +549,7 @@ function applyCreate(meta: CausalMeta, op: SyncOpBody): CausalMeta {
   const deletedAt = entity.deletedAt;
   if (typeof deletedAt === "string") {
     next = {
-      ...next,
+      ...withErasureAt(next, op.hlc),
       deleted: pickDeletion(next.deleted, { hlc: op.hlc, at: deletedAt }),
     };
   }
@@ -537,7 +658,12 @@ export function mergeMeta(local: CausalMeta, remote: CausalMeta): CausalMeta {
     [...local.unknown, ...remote.unknown].map((op) => [unknownKey(op), op]),
   );
 
-  return {
+  const erasedThrough = laterOrNull(
+    erasureThreshold(local),
+    erasureThreshold(remote),
+  );
+
+  return eraseDeletedState({
     entityType: local.entityType,
     entityId: local.entityId,
     maxHlc: maxHlc(local.maxHlc, remote.maxHlc),
@@ -548,8 +674,9 @@ export function mergeMeta(local: CausalMeta, remote: CausalMeta): CausalMeta {
     deleted: remote.deleted
       ? pickDeletion(local.deleted, remote.deleted)
       : local.deleted,
+    ...(erasedThrough === null ? {} : { erasedThrough }),
     unknown: sortUnknown([...unknownByKey.values()]),
-  };
+  });
 }
 
 export function mergeMetaMaps(
@@ -647,7 +774,9 @@ export function materialize(
     previous && previous.updatedAt > stamp ? previous.updatedAt : stamp;
   entity.revision = previous?.revision ?? 1;
 
-  return entity as unknown as FinanceEntity;
+  // A tombstone projects erased, including the fields `eraseDeletedState` has to leave alone
+  // and any edit that arrived after the delete.
+  return eraseEntity(meta.entityType, entity as unknown as FinanceEntity);
 }
 
 export interface Finalized {

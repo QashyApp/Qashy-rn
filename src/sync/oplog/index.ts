@@ -72,6 +72,7 @@ export {
   applyOp,
   applyOps,
   changedTypes,
+  eraseDeletedState,
   finalize,
   hasCompleteKnownRegisters,
   isElementPresent,

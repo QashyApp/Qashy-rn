@@ -136,14 +136,48 @@ describe("commutativity", () => {
   });
 
   it("merges each device edit into the field it touched, losing none of them", () => {
-    const merged = project(fold(CONCURRENT), "transactions", "txn-1");
+    const edits = CONCURRENT.filter((op) => op.kind !== "delete");
+    const merged = project(fold(edits), "transactions", "txn-1");
     expect(merged).toMatchObject({
       id: "txn-1",
       amountMinor: 2_500,
       title: "Tea",
       tagIds: ["keep", "new"],
-      deletedAt: "2026-02-02T00:00:00.000Z",
+      deletedAt: null,
     });
+  });
+
+  it("erases every edit the delete saw, in whatever order they arrive", () => {
+    // The delete is the newest reading, so every edit before it is gone — from the projected
+    // row and from the causal state that would otherwise keep the content alive.
+    for (const order of permutations(CONCURRENT)) {
+      const state = fold(order);
+      expect(project(state, "transactions", "txn-1")).toMatchObject({
+        id: "txn-1",
+        amountMinor: 0,
+        title: "",
+        tagIds: [],
+        deletedAt: "2026-02-02T00:00:00.000Z",
+      });
+      expect(snapshot(state)).not.toContain("Tea");
+      expect(snapshot(state)).not.toContain("2500");
+      expect(snapshot(state)).not.toContain('"new"');
+    }
+  });
+
+  it("keeps an edit made after the delete, and nothing from before it", () => {
+    const late = write(
+      "transactions",
+      BASE,
+      { ...BASE, title: "Edited elsewhere" },
+      at(30, DEVICE_C),
+    );
+    const ops = [...CONCURRENT, ...late];
+    const expected = snapshot(fold(ops));
+    for (const order of permutations(ops))
+      expect(snapshot(fold(order))).toBe(expected);
+    expect(expected).not.toContain("Tea");
+    expect(expected).toContain("Edited elsewhere");
   });
 
   it("holds for entities with keyed maps and nested sets too", () => {
