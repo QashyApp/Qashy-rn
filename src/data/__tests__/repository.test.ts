@@ -32,6 +32,150 @@ async function createRepository(
   return { repository, storage };
 }
 
+describe("FinanceRepository CSV row validation", () => {
+  const row = (overrides: Record<string, unknown> = {}) => ({
+    rowNumber: 2,
+    date: "2026-07-15",
+    type: "expense",
+    title: "Coffee",
+    amount: "4.50",
+    currency: "usd",
+    account: "Everyday",
+    category: "",
+    tags: "",
+    note: "",
+    exchangeRate: "",
+    destinationAccount: "",
+    destinationAmount: "",
+    ...overrides,
+  });
+
+  it("accepts a lower-case currency and defaults the status to posted", async () => {
+    const { repository } = await createRepository();
+    const preview = await repository.importCsv([row()] as never, false);
+    expect(preview.rejectedRows).toEqual([]);
+    expect(preview.validRows).toHaveLength(1);
+  });
+
+  it.each([
+    ["a malformed date", { date: "15/07/2026" }, "Enter a real calendar date."],
+    [
+      "an impossible date",
+      { date: "2026-02-31" },
+      "Enter a real calendar date.",
+    ],
+    ["an unknown type", { type: "refund" }, "Type must be one of"],
+    ["an unknown status", { status: "later" }, "Status must be one of"],
+    ["an empty title", { title: "" }, "Title is required."],
+    ["an empty amount", { amount: "" }, "Amount is required."],
+    [
+      "a bad currency",
+      { currency: "US" },
+      "Currency must be a three-letter code.",
+    ],
+    ["an empty account", { account: "" }, "Account is required."],
+    ["a non-text optional column", { note: 5 }, "Invalid row"],
+  ])("rejects %s with a readable reason", async (_label, overrides, reason) => {
+    const { repository } = await createRepository();
+    const preview = await repository.importCsv(
+      [row(overrides)] as never,
+      false,
+    );
+    expect(preview.validRows).toEqual([]);
+    expect(preview.rejectedRows).toHaveLength(1);
+    expect(preview.rejectedRows[0].reason).toContain(reason);
+  });
+
+  it("validates a file larger than one yield batch without losing or reordering rows", async () => {
+    const { repository } = await createRepository();
+    const rows = Array.from({ length: 600 }, (_, index) =>
+      row({ rowNumber: index + 2, title: `Row ${index}` }),
+    );
+    const preview = await repository.importCsv(rows as never, false);
+    expect(preview.validRows).toHaveLength(600);
+    expect(preview.validRows.map((item) => item.rowNumber)).toEqual(
+      rows.map((item) => item.rowNumber),
+    );
+  });
+});
+
+describe("FinanceRepository snapshot stability", () => {
+  it("keeps the settings object across a reload that changed nothing", async () => {
+    const { repository } = await createRepository();
+    const before = repository.getSnapshot().settings;
+    await repository.refresh();
+    expect(repository.getSnapshot().settings).toBe(before);
+  });
+
+  it("replaces the settings object once a setting really changes", async () => {
+    const { repository } = await createRepository();
+    const before = repository.getSnapshot().settings;
+    await repository.updateSettings({ themeMode: "dark" });
+    expect(repository.getSnapshot().settings).not.toBe(before);
+    expect(repository.getSnapshot().settings.themeMode).toBe("dark");
+  });
+});
+
+describe("FinanceRepository balance guard across accounts", () => {
+  it("refuses a transfer that would overflow the destination account's balance", async () => {
+    const { repository } = await createRepository();
+    const source = repository.getSnapshot().accounts[0];
+    const spare = await repository.saveAccount({
+      name: "Spare",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: Number.MAX_SAFE_INTEGER - 100,
+      icon: "wallet.bifold",
+      color: "#5966E9",
+      archived: false,
+    });
+    await expect(
+      repository.saveTransaction({
+        kind: "transfer",
+        title: "Too much",
+        localDate: "2026-07-15",
+        accountId: source.id,
+        destinationAccountId: spare.id,
+        amountMinor: 500,
+        destinationAmountMinor: 500,
+      }),
+    ).rejects.toThrow(/Spare balance is outside the supported range/);
+    expect(repository.getSnapshot().transactions).toHaveLength(0);
+  });
+
+  it("still saves ordinary transfers between accounts and keeps balances consistent", async () => {
+    const { repository } = await createRepository();
+    const source = repository.getSnapshot().accounts[0];
+    const other = await repository.saveAccount({
+      name: "Savings",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 1000,
+      icon: "wallet.bifold",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveTransaction({
+      kind: "transfer",
+      title: "Move",
+      localDate: "2026-07-15",
+      accountId: source.id,
+      destinationAccountId: other.id,
+      amountMinor: 250,
+      destinationAmountMinor: 250,
+    });
+    const summary = repository.getDashboard("2026-07-01", "2026-07-31");
+    const balances = new Map(
+      summary.accountBalances.map((item) => [
+        item.account.id,
+        item.balanceMinor,
+      ]),
+    );
+    expect(balances.get(source.id)).toBe(-250);
+    expect(balances.get(other.id)).toBe(1250);
+  });
+});
+
 describe("FinanceRepository contract", () => {
   it("bounds a transaction query to one calendar month, edges included", async () => {
     const { repository } = await createRepository();

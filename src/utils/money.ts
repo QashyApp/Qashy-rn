@@ -9,10 +9,38 @@ export const SUPPORTED_CURRENCY_CODES =
 
 const SUPPORTED_CURRENCIES = new Set(SUPPORTED_CURRENCY_CODES);
 
+const NUMBER_FORMATS = new Map<string, Intl.NumberFormat>();
+
+/**
+ * `Intl.NumberFormat` is expensive to construct (Hermes especially) and a list renders
+ * several amounts per row, so formatters are built once per locale + options. A construction
+ * that throws (bad locale or currency) is never cached, so callers see the same errors.
+ */
+function numberFormat(locale: string, options?: Intl.NumberFormatOptions) {
+  const key = `${locale}|${options ? JSON.stringify(options) : ""}`;
+  let format = NUMBER_FORMATS.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(locale, options);
+    NUMBER_FORMATS.set(key, format);
+  }
+  return format;
+}
+
+const NUMBER_PARTS = new Map<string, ReturnType<typeof computeNumberParts>>();
+
 function localeNumberParts(locale: string) {
-  const formatter = new Intl.NumberFormat(locale);
+  let parts = NUMBER_PARTS.get(locale);
+  if (!parts) {
+    parts = computeNumberParts(locale);
+    NUMBER_PARTS.set(locale, parts);
+  }
+  return parts;
+}
+
+function computeNumberParts(locale: string) {
+  const formatter = numberFormat(locale);
   const parts = formatter.formatToParts(-12345.6);
-  const plusParts = new Intl.NumberFormat(locale, {
+  const plusParts = numberFormat(locale, {
     signDisplay: "always",
   }).formatToParts(1);
   return {
@@ -23,7 +51,7 @@ function localeNumberParts(locale: string) {
       plusParts.find((part) => part.type === "plusSign")?.value ?? "+",
     digits: new Map(
       Array.from({ length: 10 }, (_, digit) => [
-        new Intl.NumberFormat(locale, { useGrouping: false }).format(digit),
+        numberFormat(locale, { useGrouping: false }).format(digit),
         String(digit),
       ]),
     ),
@@ -93,7 +121,7 @@ function minorFromDecimal(
 }
 
 function localizeAsciiDigits(value: string, locale: string) {
-  const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
+  const formatter = numberFormat(locale, { useGrouping: false });
   return Array.from(value, (character) =>
     /\d/.test(character) ? formatter.format(Number(character)) : character,
   ).join("");
@@ -132,7 +160,7 @@ export function currencyDigits(currency: CurrencyCode, locale = "en-US") {
   if (SUPPORTED_CURRENCIES.has(code)) return MINOR_DIGITS.get(code) ?? 2;
   try {
     return (
-      new Intl.NumberFormat(locale, {
+      numberFormat(locale, {
         style: "currency",
         currency,
       }).resolvedOptions().maximumFractionDigits ?? 2
@@ -272,12 +300,12 @@ function moneyPartsList(
   if (!compact) {
     const fixed = minorToDecimalString(Math.abs(minor), currency, locale);
     const [integer, fraction = ""] = fixed.split(".");
-    const numberParts = new Intl.NumberFormat(locale, {
+    const numberParts = numberFormat(locale, {
       useGrouping: true,
       maximumFractionDigits: 0,
     }).formatToParts(Number(integer));
     const sample = minor < 0 ? -1 : minor > 0 ? 1 : 0;
-    const pattern = new Intl.NumberFormat(locale, {
+    const pattern = numberFormat(locale, {
       style: "currency",
       currency,
       signDisplay: options?.sign ? "exceptZero" : "auto",
@@ -309,7 +337,7 @@ function moneyPartsList(
     });
   }
   const value = new Decimal(minor).div(new Decimal(10).pow(digits)).toNumber();
-  return new Intl.NumberFormat(locale, {
+  return numberFormat(locale, {
     style: "currency",
     currency,
     notation: "compact",

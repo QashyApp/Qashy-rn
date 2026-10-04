@@ -61,9 +61,8 @@ jest.mock("@/localization/localization", () => ({
     locale: "en-US",
   }),
 }));
-jest.mock("@/providers/finance-provider", () => ({
-  useFinanceRepository: () => ({ updateSettings: mockUpdateSettings }),
-  useFinanceState: () => ({
+jest.mock("@/providers/finance-provider", () => {
+  const settingsState = () => ({
     settings: {
       revision: 1,
       locale: "en-US",
@@ -73,8 +72,13 @@ jest.mock("@/providers/finance-provider", () => ({
       accentSource: "preset",
       accentHex: "#5966E9",
     },
-  }),
-}));
+  });
+  return {
+    useFinanceRepository: () => ({ updateSettings: mockUpdateSettings }),
+    useFinanceState: () => settingsState(),
+    useFinanceSettings: () => settingsState().settings,
+  };
+});
 
 describe("AppearanceScreen custom themes", () => {
   beforeEach(() => {

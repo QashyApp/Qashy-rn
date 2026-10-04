@@ -62,7 +62,11 @@ class MockDatabase {
     return [...this.rows.values()] as T[];
   }
 
-  async runAsync() {}
+  runs: { sql: string; params: unknown[] }[] = [];
+
+  async runAsync(sql: string, ...params: unknown[]) {
+    this.runs.push({ sql, params });
+  }
 
   async closeAsync() {
     this.closed = true;
@@ -371,5 +375,55 @@ describe("native storage transactions", () => {
       "second:start",
       "second:end",
     ]);
+  });
+});
+
+describe("native storage adapter batched writes", () => {
+  beforeEach(() => {
+    mockOpened.length = 0;
+    mockFailOnExec = null;
+    mockStartVersion = 0;
+  });
+
+  it("writes a batch in a few multi-row statements instead of one per record", async () => {
+    const adapter = new PlatformStorageAdapter();
+    await adapter.initialize();
+    const inserts = () =>
+      mockOpened[0].runs.filter(({ sql }) =>
+        sql.includes("INSERT INTO records"),
+      );
+    const before = inserts().length;
+
+    await adapter.putMany(
+      Array.from({ length: 400 }, (_, index) => stored(`a${index}`)),
+    );
+
+    const batches = inserts().slice(before);
+    // 900 parameters per statement, five per row: 180 rows each, so 400 rows is 3 statements.
+    expect(batches).toHaveLength(3);
+    expect(batches.map(({ params }) => params.length / 5)).toEqual([
+      180, 180, 40,
+    ]);
+    expect(batches.every(({ params }) => params.length <= 900)).toBe(true);
+    expect(batches[0].params.slice(0, 2)).toEqual(["accounts:a0", "accounts"]);
+  });
+
+  it("applies rows in order, so a key repeated in one batch ends on its last value", async () => {
+    const adapter = new PlatformStorageAdapter();
+    await adapter.initialize();
+    const first = stored("same");
+    const last = {
+      ...stored("same"),
+      entity: { ...account("same"), name: "last" },
+    };
+    await adapter.putMany([first, last]);
+
+    const run = mockOpened[0].runs.filter(({ sql }) =>
+      sql.includes("INSERT INTO records"),
+    );
+    const params = run[run.length - 1].params;
+    expect(params).toHaveLength(10);
+    expect(JSON.parse(params[2] as string).name).toBe("same");
+    expect(JSON.parse(params[7] as string).name).toBe("last");
   });
 });

@@ -7,9 +7,8 @@ import { Image } from "expo-image";
 import { Text, View, type ColorValue } from "react-native";
 import Svg, { Circle, Ellipse, Path, Rect } from "react-native-svg";
 
-import { resolveIconRender } from "@/theme/icon-sets";
+import { resolveIconRenderById } from "@/theme/icon-sets";
 import { useQashyTheme } from "@/theme/theme";
-import { parseIconId } from "@/utils/icon-id";
 
 // Not in react-native-svg's Path typings; the web shim forwards it as the SVG attribute, native ignores it.
 const CRISP = { shapeRendering: "crispEdges" } as object;
@@ -38,8 +37,8 @@ export function AppIcon({
   iconSetId?: string;
 }) {
   const { iconSet, categoryIconSet } = useQashyTheme();
-  const render = resolveIconRender(
-    parseIconId(name),
+  const render = resolveIconRenderById(
+    name,
     iconSetId ? iconSetId : role === "category" ? categoryIconSet : iconSet,
     process.env.EXPO_OS === "ios",
   );

@@ -285,20 +285,29 @@ class SqliteTx implements StorageTx {
 
   async putMany(records: readonly StoredEntity[]) {
     if (records.length) this.dirty = true;
-    for (const record of records) {
+    // One native call per chunk of rows rather than one per row: a batch (CSV import, bulk
+    // delete, a sync merge) otherwise pays a bridge round trip for every record. Rows are applied
+    // in order, so a key repeated within a batch still ends on its last value.
+    for (const batch of chunk(records, Math.floor(MAX_PARAMETERS / 5))) {
+      const params: SqlValue[] = [];
+      for (const record of batch) {
+        params.push(
+          `${record.type}:${record.entity.id}`,
+          record.type,
+          JSON.stringify(record.entity),
+          record.entity.updatedAt,
+          record.entity.deletedAt,
+        );
+      }
       await this.database.runAsync(
         `INSERT INTO records (record_key, entity_type, payload, updated_at, deleted_at)
-         VALUES (?, ?, ?, ?, ?)
+         VALUES ${batch.map(() => "(?, ?, ?, ?, ?)").join(", ")}
          ON CONFLICT(record_key) DO UPDATE SET
            entity_type = excluded.entity_type,
            payload = excluded.payload,
            updated_at = excluded.updated_at,
            deleted_at = excluded.deleted_at`,
-        `${record.type}:${record.entity.id}`,
-        record.type,
-        JSON.stringify(record.entity),
-        record.entity.updatedAt,
-        record.entity.deletedAt,
+        ...params,
       );
     }
   }
@@ -364,14 +373,22 @@ class SqliteTx implements StorageTx {
           .filter(([column]) => column !== spec.key)
           .map(([column]) => `${column} = excluded.${column}`)
           .join(", ");
-        for (const row of rows) {
-          const fields = row as unknown as Record<string, SqlValue>;
-          const values = spec.columns.map(([, field]) => fields[field] ?? null);
+        for (const batch of chunk(
+          rows,
+          Math.max(1, Math.floor(MAX_PARAMETERS / spec.columns.length)),
+        )) {
+          const params: SqlValue[] = [];
+          for (const row of batch) {
+            const fields = row as unknown as Record<string, SqlValue>;
+            for (const [, field] of spec.columns)
+              params.push(fields[field] ?? null);
+          }
+          const placeholders = `(${spec.columns.map(() => "?").join(", ")})`;
           await database.runAsync(
             `INSERT INTO ${spec.table} (${selection})
-             VALUES (${spec.columns.map(() => "?").join(", ")})
+             VALUES ${batch.map(() => placeholders).join(", ")}
              ON CONFLICT(${spec.key}) DO UPDATE SET ${assignments}`,
-            ...values,
+            ...params,
           );
         }
       },

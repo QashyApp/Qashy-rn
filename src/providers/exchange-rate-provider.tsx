@@ -59,15 +59,17 @@ export const EXCHANGE_RATE_STARTUP_CAP_MS = 4_000;
  * race there.
  */
 export function ensurePendingRatesWithCap(): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const cap = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, EXCHANGE_RATE_STARTUP_CAP_MS);
+  });
   return Promise.race([
     exchangeRateService.ensureRatesForPending().then(
       () => undefined,
       () => undefined,
     ),
-    new Promise<void>((resolve) =>
-      setTimeout(resolve, EXCHANGE_RATE_STARTUP_CAP_MS),
-    ),
-  ]);
+    cap,
+  ]).finally(() => clearTimeout(timer));
 }
 
 export function useExchangeRateService() {

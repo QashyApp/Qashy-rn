@@ -50,7 +50,26 @@ const WEIGHT_ORDER: readonly FontWeightKey[] = [
   "bold",
 ];
 
+// A stack's faces never change, but every `AppText` render asks for one. Resolved styles are
+// cached per stack object and weight; callers only spread them, never mutate.
+const STACK_CACHE = new WeakMap<
+  FontStackSpec,
+  Partial<Record<FontWeightName, TextStyle>>
+>();
+
 function resolveStack(stack: FontStackSpec, weight: FontWeightName): TextStyle {
+  let byWeight = STACK_CACHE.get(stack);
+  if (!byWeight) {
+    byWeight = {};
+    STACK_CACHE.set(stack, byWeight);
+  }
+  return (byWeight[weight] ??= resolveStackUncached(stack, weight));
+}
+
+function resolveStackUncached(
+  stack: FontStackSpec,
+  weight: FontWeightName,
+): TextStyle {
   const font = FONT_REGISTRY[stack.family];
   if (!font) throw new Error(`Unknown font "${stack.family}".`);
   const family = font.weights[weight].family;

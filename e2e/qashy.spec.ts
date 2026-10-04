@@ -114,14 +114,23 @@ test("chooses readable locale and currency options during onboarding", async ({
   ).toHaveCount(0);
 
   await page.goto("/goal");
-  await expect(page.getByLabel("שם היעד")).toHaveValue("קרן ליום גשום");
+  // The form starts empty: the localized default name shows as the placeholder and is used on save.
+  await expect(page.getByLabel("שם היעד")).toHaveAttribute(
+    "placeholder",
+    "קרן ליום גשום",
+  );
+  await page.getByPlaceholder("0.00").first().fill("5000");
   await page.getByRole("button", { name: "יצירת יעד" }).click();
   await expect(page).toHaveURL(/\/plan$/);
   await expect(page.getByText("יעד חיסכון")).toBeVisible();
   await expect(page.getByText("saving goal")).toHaveCount(0);
 
   await page.goto("/budget");
-  await expect(page.getByLabel("שם התקציב")).toHaveValue("הוצאות יומיומיות");
+  await expect(page.getByLabel("שם התקציב")).toHaveAttribute(
+    "placeholder",
+    "הוצאות יומיומיות",
+  );
+  await page.getByPlaceholder("0.00").first().fill("1000");
   await page.getByRole("button", { name: "יצירת תקציב" }).click();
   await expect(page).toHaveURL(/\/plan$/);
   await expect(page.getByText(/ to /)).toHaveCount(0);
@@ -238,10 +247,20 @@ test("preserves a selected transaction type and lets an edit clear its category"
   await expect(page.getByText(/Uncategorized · Everyday/)).toBeVisible();
 });
 
+/** The goal and budget forms start empty (defaults show as placeholders); a target / limit is required. */
+async function createDefaultGoal(page: Page, target = "5000") {
+  await page.goto("/goal");
+  await page.getByRole("textbox", { name: /^Target \(USD\)/ }).fill(target);
+  await page.getByRole("button", { name: "Create goal" }).click();
+}
+
+async function fillBudgetLimit(page: Page, limit = "1000") {
+  await page.getByRole("textbox", { name: /^Total limit \(USD\)/ }).fill(limit);
+}
+
 test("edits and deletes manual goal contributions", async ({ page }) => {
   await completeOnboarding(page);
-  await page.goto("/goal");
-  await page.getByRole("button", { name: "Create goal" }).click();
+  await createDefaultGoal(page);
   await page.getByRole("button", { name: "Open" }).click();
 
   await page.getByLabel("Add a manual contribution").fill("25");
@@ -267,6 +286,7 @@ test("adds, persists, guards and removes a one-time budget adjustment", async ({
 }) => {
   await completeOnboarding(page);
   await page.goto("/budget");
+  await fillBudgetLimit(page);
   await page.getByRole("button", { name: "Create budget" }).click();
   await expect(page.getByText("of $1,000.00")).toBeVisible();
 
@@ -311,6 +331,7 @@ test("shows every category cap and the actual recurring interval", async ({
 }) => {
   await completeOnboarding(page);
   await page.goto("/budget");
+  await fillBudgetLimit(page, "1000");
   for (const category of ["Groceries", "Dining", "Transport", "Home"]) {
     await page.getByRole("checkbox", { name: category }).click();
     await page.getByLabel(`${category} cap (optional)`).fill("100");
@@ -330,7 +351,7 @@ test("shows every category cap and the actual recurring interval", async ({
     .fill("2099-01-01");
   await page.getByRole("button", { name: "Create schedule" }).click();
   await expect(
-    page.getByText(/Every 3 months\. · Next 2099-01-01/),
+    page.getByText(/Every 3 months\. · Next Jan 1, 2099/),
   ).toBeVisible();
 });
 
@@ -371,7 +392,7 @@ test("uncategorizes, pauses, and resumes a recurring schedule", async ({
   await page.getByRole("switch", { name: "Schedule active" }).click();
   await page.getByRole("button", { name: "Save schedule" }).click();
   await expect(
-    page.getByRole("button", { name: /Flexible schedule.*Next 2099-01-01/ }),
+    page.getByRole("button", { name: /Flexible schedule.*Next Jan 1, 2099/ }),
   ).toBeVisible();
 });
 
@@ -383,17 +404,17 @@ test("selects a custom budget start date and labels progress controls", async ({
   await page.getByRole("radio", { name: "Custom" }).click();
   await page.getByLabel("Start date").fill("2099-01-01");
   await page.getByLabel("End date").fill("2099-01-31");
+  await fillBudgetLimit(page);
   await expect(page.getByRole("switch", { name: "Rollover" })).toBeVisible();
   await page.getByRole("button", { name: "Create budget" }).click();
-  await expect(page.getByText(/2099-01-01 to 2099-01-31/)).toBeVisible();
+  await expect(page.getByText(/Jan 1, 2099 to Jan 31, 2099/)).toBeVisible();
   await expect(
     page.getByRole("progressbar", {
       name: "Everyday spending: Budget progress",
     }),
   ).toBeVisible();
 
-  await page.goto("/goal");
-  await page.getByRole("button", { name: "Create goal" }).click();
+  await createDefaultGoal(page);
   await expect(
     page.getByRole("progressbar", { name: "Rainy day fund: Goal progress" }),
   ).toBeVisible();

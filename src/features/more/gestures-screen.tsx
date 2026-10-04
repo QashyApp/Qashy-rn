@@ -6,14 +6,14 @@ import { QashySwitch } from "@/components/ui/qashy-switch";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
-  useFinanceState,
+  useFinanceSettings,
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
 
 export function GesturesScreen() {
   const repository = useFinanceRepository();
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const theme = useQashyTheme();
   const { t } = useLocalization();
 

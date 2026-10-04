@@ -32,16 +32,20 @@ jest.mock("@/localization/localization", () => ({
     locale: "en-US",
   }),
 }));
-jest.mock("@/providers/finance-provider", () => ({
-  useFinanceState: () => ({
+jest.mock("@/providers/finance-provider", () => {
+  const settingsState = () => ({
     settings: {
       themeId: mockThemeId,
       themeMode: "light",
       accentSource: "preset",
       accentHex: "#5966E9",
     },
-  }),
-}));
+  });
+  return {
+    useFinanceState: () => settingsState(),
+    useFinanceSettings: () => settingsState().settings,
+  };
+});
 
 function Probe() {
   const theme = useQashyTheme();

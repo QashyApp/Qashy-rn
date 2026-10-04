@@ -35,6 +35,7 @@ import { hapticSuccess } from "@/utils/haptics";
 import { MAX_CSV_IMPORT_BYTES, assertFileSize } from "@/utils/file-size";
 import { exchangeRateService } from "@/providers/exchange-rate-provider";
 import { ExternalImportCard } from "@/features/more/external-import-card";
+import { insetHighlight } from "@/theme/highlight";
 
 type CsvField = Exclude<keyof CsvImportRow, "rowNumber">;
 
@@ -168,7 +169,7 @@ function CsvStepper({ current }: { current: number }) {
                       ? theme.surfaceElevated
                       : theme.surfaceSunken,
                   boxShadow: done
-                    ? "inset 0 1px 0 rgba(255,255,255,0.3)"
+                    ? insetHighlight(theme.mode, 0.3)
                     : active
                       ? `inset 0 0 0 2px ${String(theme.accent)}, ${theme.shadowControl}`
                       : theme.shadowSunken,

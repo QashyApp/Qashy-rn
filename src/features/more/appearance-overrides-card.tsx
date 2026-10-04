@@ -18,7 +18,7 @@ import type { AppSettings } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
-  useFinanceState,
+  useFinanceSettings,
 } from "@/providers/finance-provider";
 import { FONT_REGISTRY, isFontId, stackFor } from "@/theme/fonts";
 import { ICON_SETS } from "@/theme/icon-sets";
@@ -117,7 +117,7 @@ function labelOf(kind: RowSpec["kind"], id: string): string {
  */
 export function AppearanceOverridesCard() {
   const repository = useFinanceRepository();
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const theme = useQashyTheme();
   const { space, radius } = theme;
   const { t } = useLocalization();

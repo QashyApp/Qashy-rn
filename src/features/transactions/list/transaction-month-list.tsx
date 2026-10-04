@@ -1,12 +1,14 @@
 import { router } from "expo-router";
-import { memo, useMemo, type ComponentProps } from "react";
+import { memo, useCallback, useMemo, type ComponentProps } from "react";
 import { SectionList, StyleSheet, View, type ViewStyle } from "react-native";
 
 import { TransactionRow } from "@/components/finance/transaction-row";
+import type { TransactionRecord } from "@/domain/models";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { MonthDirection } from "@/components/ui/month-switcher";
+import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
 import { MotionView } from "@/components/ui/motion";
 import { TextButton } from "@/components/ui/text-button";
 import { dayNetMinor } from "@/features/transactions/list/summary";
@@ -81,7 +83,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   const { locale, t } = useLocalization();
   const currency = state.settings.baseCurrency;
 
@@ -144,6 +146,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   );
 
   const filtered = search.trim().length > 0 || kind !== "all";
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   return (
     <SectionList
@@ -152,7 +155,10 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       scrollEventThrottle={16}
       scrollEnabled={isCurrent}
       initialNumToRender={isCurrent ? 10 : 6}
-      style={{ flex: 1, backgroundColor: theme.background }}
+      style={[
+        { flex: 1, backgroundColor: theme.background },
+        PAGER_SCROLLER_STYLE,
+      ]}
       contentContainerStyle={[
         content,
         {
@@ -163,7 +169,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       ]}
       sections={sections}
       extraData={`${selectedIds.join(",")}|${selectionMode}|${resolvingId}`}
-      keyExtractor={(item) => `${item.id}:${item.revision}`}
+      keyExtractor={(item) => item.id}
       // The day a row belongs to stays on screen for as long as that day's
       // rows do, so a fast scroll through a busy month never loses its place.
       stickySectionHeadersEnabled
@@ -245,74 +251,19 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       // visibly repeating down a multi-row day); stacked with no gap and
       // rounded only at the day's first/last row, they read as one raised
       // slab per day rather than as N separate rows happening to touch.
-      renderItem={({ item, index, section }) => {
-        const selected = selectedIds.includes(item.id);
-        const first = index === 0;
-        const last = index === section.data.length - 1;
-        return (
-          <MotionView entrance={false} animateLayout exit>
-            <View
-              style={{
-                paddingHorizontal: space.md,
-                backgroundColor: selected
-                  ? theme.accentContainer
-                  : theme.surface,
-                boxShadow: theme.shadowCard,
-                borderTopLeftRadius: first ? radius.card : 0,
-                borderTopRightRadius: first ? radius.card : 0,
-                borderBottomLeftRadius: last ? radius.card : 0,
-                borderBottomRightRadius: last ? radius.card : 0,
-                borderCurve: "continuous",
-              }}
-            >
-              {first ? null : (
-                <View
-                  style={{
-                    height: StyleSheet.hairlineWidth,
-                    backgroundColor: theme.border,
-                    marginStart: 52,
-                  }}
-                />
-              )}
-              <TransactionRow
-                transaction={item}
-                showDate={false}
-                selectionMode={selectionMode}
-                selected={selected}
-                onLongPress={() => {
-                  if (!selectionMode) hapticImpactLight();
-                  onLongPressItem(item.id);
-                }}
-                onPress={
-                  selectionMode ? () => onToggleItem(item.id) : undefined
-                }
-              />
-              {item.status === "upcoming" && !selectionMode ? (
-                <View
-                  style={{
-                    flexDirection: "row",
-                    justifyContent: "flex-end",
-                    gap: space.sm,
-                    paddingBottom: space.xs,
-                  }}
-                >
-                  <TextButton
-                    title="Skip"
-                    tone="muted"
-                    disabled={resolvingId !== null}
-                    onPress={() => onResolveUpcoming(item.id, "skip")}
-                  />
-                  <TextButton
-                    title="Mark paid"
-                    disabled={resolvingId !== null}
-                    onPress={() => onResolveUpcoming(item.id, "confirm")}
-                  />
-                </View>
-              ) : null}
-            </View>
-          </MotionView>
-        );
-      }}
+      renderItem={({ item, index, section }) => (
+        <DayRow
+          item={item}
+          first={index === 0}
+          last={index === section.data.length - 1}
+          selected={selectedSet.has(item.id)}
+          selectionMode={selectionMode}
+          resolving={resolvingId !== null}
+          onToggleItem={onToggleItem}
+          onLongPressItem={onLongPressItem}
+          onResolveUpcoming={onResolveUpcoming}
+        />
+      )}
       ListEmptyComponent={
         <MotionView key={String(filtered)} variant="fade">
           {filtered ? (
@@ -370,5 +321,101 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       }
       ListFooterComponent={<View style={{ height: 88 }} />}
     />
+  );
+});
+
+interface DayRowProps {
+  item: TransactionRecord;
+  first: boolean;
+  last: boolean;
+  selected: boolean;
+  selectionMode: boolean;
+  resolving: boolean;
+  onToggleItem: (id: string) => void;
+  onLongPressItem: (id: string) => void;
+  onResolveUpcoming: (id: string, action: "skip" | "confirm") => void;
+}
+
+/**
+ * One row of a day's grouped surface. Memoized so a selection change or a refreshed snapshot
+ * re-renders only the rows whose own inputs changed, not every row the list has mounted.
+ */
+const DayRow = memo(function DayRow({
+  item,
+  first,
+  last,
+  selected,
+  selectionMode,
+  resolving,
+  onToggleItem,
+  onLongPressItem,
+  onResolveUpcoming,
+}: DayRowProps) {
+  const theme = useQashyTheme();
+  const { radius, space } = theme;
+  const id = item.id;
+  const handleLongPress = useCallback(() => {
+    if (!selectionMode) hapticImpactLight();
+    onLongPressItem(id);
+  }, [selectionMode, onLongPressItem, id]);
+  const handlePress = useMemo(
+    () => (selectionMode ? () => onToggleItem(id) : undefined),
+    [selectionMode, onToggleItem, id],
+  );
+  return (
+    <MotionView entrance={false} animateLayout exit>
+      <View
+        style={{
+          paddingHorizontal: space.md,
+          backgroundColor: selected ? theme.accentContainer : theme.surface,
+          boxShadow: theme.shadowCard,
+          borderTopLeftRadius: first ? radius.card : 0,
+          borderTopRightRadius: first ? radius.card : 0,
+          borderBottomLeftRadius: last ? radius.card : 0,
+          borderBottomRightRadius: last ? radius.card : 0,
+          borderCurve: "continuous",
+        }}
+      >
+        {first ? null : (
+          <View
+            style={{
+              height: StyleSheet.hairlineWidth,
+              backgroundColor: theme.border,
+              marginStart: 52,
+            }}
+          />
+        )}
+        <TransactionRow
+          transaction={item}
+          showDate={false}
+          selectionMode={selectionMode}
+          selected={selected}
+          onLongPress={handleLongPress}
+          onPress={handlePress}
+        />
+        {item.status === "upcoming" && !selectionMode ? (
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "flex-end",
+              gap: space.sm,
+              paddingBottom: space.xs,
+            }}
+          >
+            <TextButton
+              title="Skip"
+              tone="muted"
+              disabled={resolving}
+              onPress={() => onResolveUpcoming(id, "skip")}
+            />
+            <TextButton
+              title="Mark paid"
+              disabled={resolving}
+              onPress={() => onResolveUpcoming(id, "confirm")}
+            />
+          </View>
+        ) : null}
+      </View>
+    </MotionView>
   );
 });

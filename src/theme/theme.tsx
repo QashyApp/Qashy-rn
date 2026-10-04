@@ -16,7 +16,7 @@ import {
 import { DirectionScope } from "@/components/ui/direction-scope";
 import type { AccentSource } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 import { useCustomThemes } from "@/theme/custom/use-custom-themes";
 import {
   deriveDynamicPalette,
@@ -397,7 +397,7 @@ export function resolveAccentChoice(
 }
 
 export function QashyThemeProvider({ children }: { children: ReactNode }) {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const systemScheme = useColorScheme();
   const mode =
@@ -508,49 +508,51 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
     );
   }, [mode, settings.themeMode, theme, tokens]);
 
-  const baseNavigation = mode === "dark" ? DarkTheme : DefaultTheme;
-  const navigationTheme = {
-    ...baseNavigation,
-    // Native stack headers (titles, large titles, back labels) use the app face too.
-    fonts: {
-      regular: {
-        fontFamily: fontStyle("regular", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
+  const navigationTheme = useMemo(() => {
+    const baseNavigation = mode === "dark" ? DarkTheme : DefaultTheme;
+    return {
+      ...baseNavigation,
+      // Native stack headers (titles, large titles, back labels) use the app face too.
+      fonts: {
+        regular: {
+          fontFamily: fontStyle("regular", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
+        medium: {
+          fontFamily: fontStyle("medium", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
+        bold: {
+          fontFamily: fontStyle("semibold", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
+        heavy: {
+          fontFamily: fontStyle("bold", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
       },
-      medium: {
-        fontFamily: fontStyle("medium", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
+      colors: {
+        ...baseNavigation.colors,
+        primary: tokens.staticAccent,
+        background:
+          typeof tokens.background === "string"
+            ? tokens.background
+            : baseNavigation.colors.background,
+        card:
+          typeof tokens.surface === "string"
+            ? tokens.surface
+            : baseNavigation.colors.card,
+        text:
+          typeof tokens.text === "string"
+            ? tokens.text
+            : baseNavigation.colors.text,
+        border:
+          typeof tokens.border === "string"
+            ? tokens.border
+            : baseNavigation.colors.border,
       },
-      bold: {
-        fontFamily: fontStyle("semibold", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
-      },
-      heavy: {
-        fontFamily: fontStyle("bold", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
-      },
-    },
-    colors: {
-      ...baseNavigation.colors,
-      primary: tokens.staticAccent,
-      background:
-        typeof tokens.background === "string"
-          ? tokens.background
-          : baseNavigation.colors.background,
-      card:
-        typeof tokens.surface === "string"
-          ? tokens.surface
-          : baseNavigation.colors.card,
-      text:
-        typeof tokens.text === "string"
-          ? tokens.text
-          : baseNavigation.colors.text,
-      border:
-        typeof tokens.border === "string"
-          ? tokens.border
-          : baseNavigation.colors.border,
-    },
-  };
+    };
+  }, [mode, theme.type, tokens]);
 
   return (
     <ThemeContext value={tokens}>
@@ -574,7 +576,9 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
 }
 
 export function useQashyTheme() {
-  useColorScheme();
+  // No `useColorScheme()` here: the provider already resolves the scheme and republishes the
+  // tokens through this context, so a per-component subscription only added hundreds of
+  // listeners that re-rendered consumers a second time.
   const theme = use(ThemeContext);
   if (!theme)
     throw new Error("useQashyTheme must be used inside QashyThemeProvider.");

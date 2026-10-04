@@ -153,15 +153,31 @@ export function firstRecurrenceOnOrAfter(
   return candidate;
 }
 
+const DATE_FORMATS = new Map<string, Intl.DateTimeFormat>();
+
+/** Constructing an `Intl.DateTimeFormat` is slow and lists format a date per row, so build each once. */
+export function dateFormat(
+  locale: string,
+  options: Intl.DateTimeFormatOptions,
+) {
+  const key = `${locale}|${JSON.stringify(options)}`;
+  let format = DATE_FORMATS.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(locale, options);
+    DATE_FORMATS.set(key, format);
+  }
+  return format;
+}
+
 export function monthLabel(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
+  return dateFormat(locale, {
     month: "long",
     year: "numeric",
   }).format(parseLocalDate(value));
 }
 
 export function shortDate(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
+  return dateFormat(locale, {
     month: "short",
     day: "numeric",
   }).format(parseLocalDate(value));
@@ -169,7 +185,7 @@ export function shortDate(value: string, locale: string) {
 
 /** Adds the year to `shortDate` — for a rate or a rule that may be read back long after the fact. */
 export function mediumDate(value: string, locale: string) {
-  return new Intl.DateTimeFormat(locale, {
+  return dateFormat(locale, {
     day: "numeric",
     month: "short",
     year: "numeric",

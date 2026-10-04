@@ -11,7 +11,7 @@ import {
   type TabSection,
 } from "@/components/navigation/tab-sections";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 import {
   BottomBarClearanceContext,
   floatingBarClearance,
@@ -27,7 +27,7 @@ const IS_ANDROID = process.env.EXPO_OS === "android";
  * `navBarStyle` setting. Swapping navigators remounts the tab stacks, so the user's section is restored.
  */
 export default function TabsLayout() {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const floating = IS_ANDROID && settings.navBarStyle === "floating";
   useRestoreSectionOnSwitch(floating);
   return floating ? <FloatingTabsLayout /> : <NativeTabsLayout />;

@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import { ScrollView, StyleSheet, TextInput, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -84,6 +84,9 @@ export function TransactionsScreen() {
     () => parseMonthKey(params.month) ?? startOfMonth(),
   );
   const [search, setSearch] = useState("");
+  // The input stays on the live value; the list re-queries at low priority so typing never
+  // waits on filtering every transaction.
+  const deferredSearch = useDeferredValue(search);
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchAllMonths, setSearchAllMonths] = useState(false);
   const [kind, setKind] = useState<KindFilter>("all");
@@ -118,8 +121,9 @@ export function TransactionsScreen() {
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
+  const selectedIdSet = new Set(selectedIds);
   const selectedTransactions = state.transactions.filter((item) =>
-    selectedIds.includes(item.id),
+    selectedIdSet.has(item.id),
   );
   const hasSelectedTransfers = selectedTransactions.some(
     (item) => item.kind === "transfer",
@@ -473,9 +477,9 @@ export function TransactionsScreen() {
             <TransactionMonthList
               month={pageMonth}
               isCurrent={isCurrent}
-              search={search}
+              search={deferredSearch}
               kind={kind}
-              allMonths={allMonths}
+              allMonths={searchAllMonths && deferredSearch.trim().length > 0}
               selectionMode={selectionMode}
               selectedIds={selectedIds}
               resolvingId={resolvingId}

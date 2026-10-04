@@ -36,7 +36,7 @@ import { EntranceScope } from "@/components/ui/motion";
 import type { MonthDirection } from "@/components/ui/month-switcher";
 import { resolveSwipe } from "@/components/ui/resolve-swipe";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { moveMonth } from "@/utils/date";
 import { hapticSelection } from "@/utils/haptics";
@@ -50,6 +50,16 @@ const CROSSFADE_OUT = 90;
 const CROSSFADE_IN = 140;
 /** If the parent ignores `onChange`, put the pages back after this long. */
 const COMMIT_TIMEOUT = 400;
+
+/**
+ * Style for the scroll container inside a pager page. `touch-action` only counts up to the nearest
+ * scroll container, so the pager's own `pan-y` is overridden by the page's scroller (`auto`) and
+ * the browser claims horizontal drags (cancelling the pointer, or navigating history). The
+ * scroller has to carry `pan-y` itself for a finger swipe to reach the gesture handler.
+ */
+export const PAGER_SCROLLER_STYLE: ViewStyle | undefined = WEB
+  ? ({ touchAction: "pan-y" } as ViewStyle)
+  : undefined;
 
 export interface MonthPagerHandle {
   /** Slide one month forward (`1`) or back (`-1`), exactly like a committed swipe. */
@@ -125,7 +135,7 @@ function PagerImpl({
   style,
   ref,
 }: MonthPagerProps) {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const { background, motion } = useQashyTheme();
   const reduced = useReducedMotion();
@@ -207,6 +217,10 @@ function PagerImpl({
     else fade.set(1);
   }, [month, reduced, translateX, busy, fade]);
 
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useEffect(() => () => clearTimeout(commitTimer.current), []);
   const commit = useCallback(
     (direction: 1 | -1, haptic: boolean) => {
       if (haptic) hapticSelection();
@@ -216,7 +230,8 @@ function PagerImpl({
         direction > 0 ? "right" : "left",
       );
       // A parent that declines the change must not leave the pages stranded off-screen.
-      setTimeout(() => {
+      clearTimeout(commitTimer.current);
+      commitTimer.current = setTimeout(() => {
         if (monthRef.current !== from) return;
         translateX.set(0);
         fade.set(1);
