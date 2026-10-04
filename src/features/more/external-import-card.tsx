@@ -81,9 +81,9 @@ const MODES: {
   },
   {
     id: "replace",
-    title: "Replace my data with this backup",
+    title: "Delete my current data and import this backup",
     description:
-      "Hides your current accounts, transactions, budgets and goals first. Nothing is permanently erased.",
+      "Deletes your current accounts, transactions, budgets and goals first, then adds the backup.",
     icon: "arrow.clockwise",
   },
 ];
@@ -422,10 +422,10 @@ function PreviewSummary({
               size={18}
             />
             <AppText variant="label" style={{ color: theme.negative, flex: 1 }}>
-              Your current data will be hidden
+              Your current data will be deleted
             </AppText>
           </View>
-          <CountList title="Will be hidden" counts={outcome.replaced} extra />
+          <CountList title="Will be deleted" counts={outcome.replaced} extra />
         </Card>
       ) : null}
 
@@ -721,13 +721,13 @@ export function ExternalImportCard() {
   const commit = async () => {
     if (!bundle || !outcome || busy || outcome.rejected.length) return;
     if (mode === "replace") {
-      const hidden = describeCounts(outcome.replaced);
+      const deleted = describeCounts(outcome.replaced);
       const confirmed = await confirmDestructive({
-        title: "Replace your data?",
-        message: hidden
-          ? `This hides ${hidden} you have now, then imports the backup. Nothing is permanently erased.`
-          : "This hides your current data, then imports the backup. Nothing is permanently erased.",
-        confirmLabel: "Replace",
+        title: "Delete your current data?",
+        message: deleted
+          ? `This deletes ${deleted} you have now, then imports the backup. You can’t undo this.`
+          : "This deletes your current data, then imports the backup. You can’t undo this.",
+        confirmLabel: "Delete and import",
       });
       if (!confirmed) return;
     }
