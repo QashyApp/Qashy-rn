@@ -36,7 +36,7 @@ import { EntranceScope } from "@/components/ui/motion";
 import type { MonthDirection } from "@/components/ui/month-switcher";
 import { resolveSwipe } from "@/components/ui/resolve-swipe";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { moveMonth } from "@/utils/date";
 import { hapticSelection } from "@/utils/haptics";
@@ -135,7 +135,7 @@ function PagerImpl({
   style,
   ref,
 }: MonthPagerProps) {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const { background, motion } = useQashyTheme();
   const reduced = useReducedMotion();

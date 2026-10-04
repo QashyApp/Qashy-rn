@@ -15,17 +15,11 @@ const THEME_SCALES = ["space", "radius", "tile", "iconSize", "motion"];
 
 const RESTRICTED_PATHS = [
   {
-    // Importing zod directly skips `z.config({ jitless: true })`, and the only symptom is
-    // a Content Security Policy violation on web that zod itself swallows — so it would
-    // reach production looking like nothing at all.
-    //
-    // This is `paths`, not `patterns`, on purpose: `group` matches gitignore-style, where
-    // a pattern with no slash matches *any* path segment, so `'zod'` also flags
-    // `@/utils/zod` — the one import that has to be allowed. `paths` compares the module
-    // name exactly. The subpath entry below carries a slash, so it anchors to the root.
+    // zod was removed: it is a large share of the web bundle for three flat validators, which
+    // are hand-written beside their callers now. Keep it out unless the trade is revisited.
     name: "zod",
     message:
-      "Import { z } from '@/utils/zod' so the jitless configuration applies.",
+      "zod was removed for bundle size; validate with a small hand-written parser instead.",
   },
 ];
 
@@ -38,7 +32,7 @@ const RESTRICTED_PATTERNS = [
   {
     group: ["zod/**"],
     message:
-      "Import { z } from '@/utils/zod' so the jitless configuration applies.",
+      "zod was removed for bundle size; validate with a small hand-written parser instead.",
   },
 ];
 
@@ -52,10 +46,9 @@ module.exports = defineConfig([
   },
   {
     files: ["src/**/*.{ts,tsx}"],
-    // Each exemption is the one file whose entire purpose is the import it is exempt from:
-    // `src/sync/crypto/**` is the quarantine itself, and `src/utils/zod.ts` exists only to
-    // configure zod before re-exporting it.
-    ignores: ["src/sync/crypto/**", "src/utils/zod.ts"],
+    // `src/sync/crypto/**` is the quarantine itself: the one place cryptographic packages are
+    // imported.
+    ignores: ["src/sync/crypto/**"],
     rules: {
       "no-restricted-imports": [
         "error",

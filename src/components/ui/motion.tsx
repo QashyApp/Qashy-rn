@@ -440,15 +440,7 @@ export function ScreenTransition({ style, ...props }: ViewProps) {
   );
 }
 
-export function MotionView({
-  variant = "up",
-  delay = 0,
-  duration,
-  animateLayout = false,
-  exit = false,
-  entrance = true,
-  ...props
-}: ViewProps & {
+type MotionViewProps = ViewProps & {
   variant?: MotionVariant;
   delay?: number;
   duration?: number;
@@ -459,15 +451,11 @@ export function MotionView({
    * only means the row scrolled into the render window.
    */
   entrance?: boolean;
-}) {
+};
+
+/** The exit and layout animations, shared by the entrance and static variants of `MotionView`. */
+function useMotionViewParts(animateLayout: boolean, exit: boolean) {
   const durations = useMotionDurations();
-  const allowEntrance = useEntranceAllowed(entrance);
-  const entranceStyle = useEntrance(
-    variant,
-    delay,
-    duration ?? durations.enter,
-    allowEntrance,
-  );
   const exitsAllowed = useContext(ExitContext);
   const exiting = useMemo(
     () => (exit && exitsAllowed ? exitingAnimation(durations) : undefined),
@@ -485,13 +473,24 @@ export function MotionView({
         : undefined,
     [animateLayout, layoutAllowed, durations.layout],
   );
+  return { durations, exiting, layout };
+}
 
+function renderMotionView(
+  props: ViewProps,
+  animateLayout: boolean,
+  parts: {
+    exiting: ReturnType<typeof useMotionViewParts>["exiting"];
+    layout: ReturnType<typeof useMotionViewParts>["layout"];
+  },
+  entranceStyle: ReturnType<typeof useEntrance>,
+) {
   if (!animateLayout) {
     const { style: plainStyle, ...plainProps } = props;
     return (
       <Animated.View
         {...plainProps}
-        exiting={exiting}
+        exiting={parts.exiting}
         style={[plainStyle, entranceStyle]}
       />
     );
@@ -504,17 +503,103 @@ export function MotionView({
   const { style, ...viewProps } = props;
   const { wrapperStyle, contentStyle } = splitWrapperStyle(style);
   return (
-    <Animated.View collapsable={false} layout={layout} style={wrapperStyle}>
+    <Animated.View
+      collapsable={false}
+      layout={parts.layout}
+      style={wrapperStyle}
+    >
       <Animated.View
         {...viewProps}
-        exiting={exiting}
+        exiting={parts.exiting}
         style={[contentStyle, entranceStyle]}
       />
     </Animated.View>
   );
 }
 
-export function MotionPressable({
+export function MotionView(props: MotionViewProps) {
+  // `entrance={false}` is a static opt-out (virtualised rows) and is never toggled on a mounted
+  // view, so choosing the component here cannot remount anything. The opted-out path skips the
+  // shared value and animated style the entrance allocates, once per row of a long list.
+  return props.entrance === false ? (
+    <StaticMotionView {...props} />
+  ) : (
+    <EntranceMotionView {...props} />
+  );
+}
+
+function StaticMotionView({
+  variant: _variant,
+  delay: _delay,
+  duration: _duration,
+  animateLayout = false,
+  exit = false,
+  entrance: _entrance,
+  ...props
+}: MotionViewProps) {
+  const parts = useMotionViewParts(animateLayout, exit);
+  return renderMotionView(props, animateLayout, parts, null);
+}
+
+function EntranceMotionView({
+  variant = "up",
+  delay = 0,
+  duration,
+  animateLayout = false,
+  exit = false,
+  entrance = true,
+  ...props
+}: MotionViewProps) {
+  const parts = useMotionViewParts(animateLayout, exit);
+  const allowEntrance = useEntranceAllowed(entrance);
+  const entranceStyle = useEntrance(
+    variant,
+    delay,
+    duration ?? parts.durations.enter,
+    allowEntrance,
+  );
+  return renderMotionView(props, animateLayout, parts, entranceStyle);
+}
+
+type MotionPressableProps = Omit<PressableProps, "children" | "style"> & {
+  children?: ReactNode | ((state: ExtendedPressableState) => ReactNode);
+  style?: PressableProps["style"];
+  pressedScale?: number;
+  hoverScale?: number;
+  liftOnHover?: boolean;
+  active?: boolean;
+  enteringVariant?: "fade" | "zoom";
+  enteringDelay?: number;
+};
+
+export function MotionPressable(props: MotionPressableProps) {
+  // `enteringVariant` is fixed per call site, so choosing the component here never remounts a
+  // live control. Most pressables have no entrance; they skip the shared value and animated
+  // style it allocates, which adds up across a list of rows.
+  return props.enteringVariant ? (
+    <EnteringPressable {...props} />
+  ) : (
+    <MotionPressableBase {...props} entranceStyle={null} />
+  );
+}
+
+function EnteringPressable({
+  enteringVariant,
+  enteringDelay = 0,
+  ...props
+}: MotionPressableProps) {
+  const durations = useMotionDurations();
+  const allowEntrance = useEntranceAllowed(Boolean(enteringVariant));
+  const entranceStyle = useEntrance(
+    enteringVariant ?? "fade",
+    enteringDelay,
+    durations.enter,
+    allowEntrance,
+  );
+  return <MotionPressableBase {...props} entranceStyle={entranceStyle} />;
+}
+
+function MotionPressableBase({
   children,
   style,
   onPressIn,
@@ -526,19 +611,11 @@ export function MotionPressable({
   hoverScale = 1.008,
   liftOnHover = true,
   active = false,
-  enteringVariant,
-  enteringDelay = 0,
+  enteringVariant: _enteringVariant,
+  enteringDelay: _enteringDelay,
+  entranceStyle,
   ...props
-}: Omit<PressableProps, "children" | "style"> & {
-  children?: ReactNode | ((state: ExtendedPressableState) => ReactNode);
-  style?: PressableProps["style"];
-  pressedScale?: number;
-  hoverScale?: number;
-  liftOnHover?: boolean;
-  active?: boolean;
-  enteringVariant?: "fade" | "zoom";
-  enteringDelay?: number;
-}) {
+}: MotionPressableProps & { entranceStyle: ReturnType<typeof useEntrance> }) {
   const reduceMotion = useReducedMotion();
   const { motion } = useQashyTheme();
   const durations = useMotionDurations();
@@ -675,13 +752,6 @@ export function MotionPressable({
     splitWrapperStyle(flattenedStyle);
   const resolvedChildren =
     typeof children === "function" ? children(state) : children;
-  const allowEntrance = useEntranceAllowed(Boolean(enteringVariant));
-  const entranceStyle = useEntrance(
-    enteringVariant ?? "fade",
-    enteringDelay,
-    durations.enter,
-    allowEntrance,
-  );
 
   return (
     <Animated.View collapsable={false} style={[wrapperStyle, entranceStyle]}>

@@ -25,6 +25,7 @@ import { errorMessage, showError } from "@/utils/confirm";
 import { endOfMonth, mediumDate, startOfMonth } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
 import { isFetchedRate } from "@/utils/deterministic-id";
+import { insetHighlight } from "@/theme/highlight";
 
 // A settings row is a 38pt icon tile plus a 12pt gap; matches `more-screen.tsx`'s own rows so
 // the divider lines up with the text rather than the icon.
@@ -260,7 +261,7 @@ export function ExchangeRatesScreen() {
                       backgroundColor: theme.accentContainer,
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: `inset 0 1px 0 rgba(255,255,255,${theme.mode === "dark" ? 0.06 : 0.35})`,
+                      boxShadow: insetHighlight(theme.mode),
                     }}
                   >
                     <AppIcon

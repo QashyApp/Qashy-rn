@@ -23,7 +23,7 @@ import type { FinanceRepository } from "@/data/repository";
 import { financeRepository } from "@/data/local-finance-repository";
 import { ensurePendingRatesWithCap } from "@/providers/exchange-rate-provider";
 import { QASHY_ACCENT } from "@/domain/defaults";
-import type { FinanceState } from "@/domain/models";
+import type { AppSettings, FinanceState } from "@/domain/models";
 import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
 
@@ -36,6 +36,11 @@ interface FinanceContextValue {
 }
 
 const FinanceContext = createContext<FinanceContextValue | null>(null);
+
+// The settings row on its own. Providers, the root navigator and the pager read nothing else, and
+// the rest of the snapshot changes on every transaction save; a separate context lets them skip
+// those renders. Its value is `state.settings`, whose identity only changes when a setting does.
+const FinanceSettingsContext = createContext<AppSettings | null>(null);
 
 interface FinanceReloadValue {
   /** Set when a resume-time reconcile failed. The snapshot on screen is stale. */
@@ -258,9 +263,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   return (
     <FinanceContext value={contextValue}>
-      <FinanceReloadContext value={reloadValue}>
-        {children}
-      </FinanceReloadContext>
+      <FinanceSettingsContext value={state.settings}>
+        <FinanceReloadContext value={reloadValue}>
+          {children}
+        </FinanceReloadContext>
+      </FinanceSettingsContext>
     </FinanceContext>
   );
 }
@@ -287,4 +294,15 @@ export function useFinanceState(): FinanceState {
   if (!context)
     throw new Error("useFinanceState must be used inside FinanceProvider.");
   return context.state;
+}
+
+/**
+ * Just the settings row. Prefer this to `useFinanceState()` when settings are all a component
+ * reads: it re-renders only when a setting changes, not on every finance mutation.
+ */
+export function useFinanceSettings(): AppSettings {
+  const settings = use(FinanceSettingsContext);
+  if (!settings)
+    throw new Error("useFinanceSettings must be used inside FinanceProvider.");
+  return settings;
 }

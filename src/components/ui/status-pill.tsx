@@ -4,6 +4,7 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { useQashyTheme } from "@/theme/theme";
 import { toneColors } from "@/theme/tokens";
+import { insetHighlight } from "@/theme/highlight";
 
 /**
  * How a state reads at a glance.
@@ -14,10 +15,6 @@ import { toneColors } from "@/theme/tokens";
  */
 export type StatusTone =
   "neutral" | "positive" | "warning" | "negative" | "transfer";
-
-/** A subtle inner top highlight so a tone pill reads as a raised chip, not a flat label. */
-const INNER_HIGHLIGHT: ViewStyle["boxShadow"] =
-  "inset 0 1px 0 rgba(255,255,255,0.35)";
 
 /**
  * A small labelled state marker.
@@ -98,7 +95,8 @@ export function StatusPill({
         borderWidth: 1,
         borderColor: theme.border,
         backgroundColor,
-        boxShadow: INNER_HIGHLIGHT,
+        // A subtle inner top highlight so a tone pill reads as a raised chip, not a flat label.
+        boxShadow: insetHighlight(theme.mode),
         ...style,
       }}
     >

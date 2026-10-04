@@ -23,6 +23,7 @@ import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { QASHY_INDIGO } from "@/theme/tokens";
+import { insetHighlight } from "@/theme/highlight";
 
 const fillSpring = {
   damping: 16,
@@ -215,7 +216,7 @@ export function ProgressBar({
                 borderRadius: radius.pill,
                 // Inner top highlight so the fill reads as raised material,
                 // not just a flat tinted bar inside the well.
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.35)",
+                boxShadow: insetHighlight(theme.mode),
               },
               fillColorStyle,
             ]}

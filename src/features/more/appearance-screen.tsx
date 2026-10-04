@@ -27,7 +27,7 @@ import type { AccentSource, ThemeMode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
-  useFinanceState,
+  useFinanceSettings,
 } from "@/providers/finance-provider";
 import {
   evaluateThemeImport,
@@ -56,7 +56,7 @@ const PREVIEW_NET_WORTH_MINOR = 1284350;
 
 export function AppearanceScreen() {
   const repository = useFinanceRepository();
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();

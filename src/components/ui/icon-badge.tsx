@@ -3,6 +3,7 @@ import { View, type ColorValue } from "react-native";
 import { AppIcon } from "@/components/ui/app-icon";
 import { resolveIconRenderById } from "@/theme/icon-sets";
 import { useQashyTheme, type ThemeTokens } from "@/theme/theme";
+import { insetHighlight } from "@/theme/highlight";
 import { readableTextColor, toneColors } from "@/theme/tokens";
 
 export interface BadgeColors {
@@ -63,9 +64,6 @@ export function badgeColors(
   return { container: "transparent", onContainer: tinted().onContainer };
 }
 
-const HIGHLIGHT_LIGHT = "inset 0 1px 0 rgba(255,255,255,0.35)";
-const HIGHLIGHT_DARK = "inset 0 1px 0 rgba(255,255,255,0.06)";
-
 /**
  * The square or round tile behind an entity icon (category, account, goal), drawn from the
  * theme icons.badge and icons.badgeShape. Every list row and widget uses this one component so
@@ -121,11 +119,7 @@ export function IconBadge({
         backgroundColor: hasContainer ? colors.container : "transparent",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: highlight
-          ? theme.mode === "dark"
-            ? HIGHLIGHT_DARK
-            : HIGHLIGHT_LIGHT
-          : undefined,
+        boxShadow: highlight ? insetHighlight(theme.mode) : undefined,
       }}
     >
       <AppIcon

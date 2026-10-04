@@ -10,6 +10,7 @@ import {
   hapticSelection,
   hapticWarning,
 } from "@/utils/haptics";
+import { insetHighlight } from "@/theme/highlight";
 
 /**
  * The danger material isn't in `materials.ts` because it needs `theme.negative`
@@ -28,8 +29,7 @@ function dangerMaterial(
     };
   return {
     backgroundColor: theme.negative,
-    boxShadow:
-      "inset 0 1px 0 rgba(255,255,255,0.25), 0 1px 2px rgba(0,0,0,0.12), 0 6px 14px -4px rgba(0,0,0,0.22)",
+    boxShadow: `${insetHighlight(theme.mode, 0.25)}, 0 1px 2px rgba(0,0,0,0.12), 0 6px 14px -4px rgba(0,0,0,0.22)`,
   };
 }
 

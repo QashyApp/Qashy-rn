@@ -408,6 +408,10 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                         renderWidget(card)
                       ) : (
                         <Pressable
+                          // A press-and-hold affordance for sighted users only. Left accessible it
+                          // would collapse the whole card into one screen-reader element and hide
+                          // its buttons; "Customize" is the accessible way into edit mode.
+                          accessible={false}
                           delayLongPress={450}
                           onLongPress={onEnterEdit}
                           style={{ width: "100%" }}
@@ -441,6 +445,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                             renderWidget(card)
                           ) : (
                             <Pressable
+                              accessible={false}
                               delayLongPress={450}
                               onLongPress={onEnterEdit}
                               style={{ width: "100%" }}

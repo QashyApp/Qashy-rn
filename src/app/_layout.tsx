@@ -16,7 +16,10 @@ import {
   backFallbackOptions,
   useTrackLocationChanges,
 } from "@/components/navigation/header-back-button";
-import { FinanceProvider, useFinanceState } from "@/providers/finance-provider";
+import {
+  FinanceProvider,
+  useFinanceSettings,
+} from "@/providers/finance-provider";
 import { SyncProvider } from "@/providers/sync-provider";
 import { NavBarStyleSheetProvider } from "@/components/navigation/nav-bar-style-sheet";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
@@ -162,7 +165,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
 function RootNavigator() {
   const theme = useQashyTheme();
   const { t } = useLocalization();
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
 
   useWebDocumentTitle();
   useTrackLocationChanges();

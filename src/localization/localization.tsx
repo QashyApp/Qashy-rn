@@ -1,6 +1,6 @@
 import { createContext, use, useEffect, useMemo, type ReactNode } from "react";
 
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 
 export type AppLanguage = "en" | "he";
 
@@ -1771,7 +1771,7 @@ const LocalizationContext = createContext<LocalizationValue | null>(null);
 let currentLanguage: AppLanguage = "en";
 
 export function LocalizationProvider({ children }: { children: ReactNode }) {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const language = languageFromLocale(settings.locale);
   const value = useMemo<LocalizationValue>(
     () => ({

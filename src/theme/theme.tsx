@@ -16,7 +16,7 @@ import {
 import { DirectionScope } from "@/components/ui/direction-scope";
 import type { AccentSource } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 import { useCustomThemes } from "@/theme/custom/use-custom-themes";
 import {
   deriveDynamicPalette,
@@ -397,7 +397,7 @@ export function resolveAccentChoice(
 }
 
 export function QashyThemeProvider({ children }: { children: ReactNode }) {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const systemScheme = useColorScheme();
   const mode =

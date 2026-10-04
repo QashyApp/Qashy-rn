@@ -15,7 +15,6 @@ import { Decimal } from "decimal.js";
 
 import type { RateInput } from "@/data/repository";
 import { isLocalDate } from "@/utils/date";
-import { z } from "@/utils/zod";
 
 const FRANKFURTER_BASE_URL = "https://api.frankfurter.dev/v2/rates";
 
@@ -73,24 +72,41 @@ export function buildRatesUrl(params: RatesUrlParams): string {
   return `${FRANKFURTER_BASE_URL}?${query.join("&")}`;
 }
 
-const rateRowSchema = z.object({
-  date: z
-    .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/)
-    .refine(isLocalDate, "Frankfurter returned a malformed date."),
-  base: z.literal(PIVOT),
-  quote: z
-    .string()
-    .regex(/^[A-Z]{3}$/, "Frankfurter returned a malformed quote code."),
+export interface FrankfurterRow {
+  date: string;
+  base: typeof PIVOT;
+  quote: string;
+  rate: number;
+}
+
+/** Throws on the first row that is not what Frankfurter promises; see `parseRatesResponse`. */
+function parseRateRow(value: unknown): FrankfurterRow {
+  if (!value || typeof value !== "object")
+    throw new Error("Frankfurter returned a malformed row.");
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.date !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(row.date) ||
+    !isLocalDate(row.date)
+  )
+    throw new Error("Frankfurter returned a malformed date.");
+  if (row.base !== PIVOT)
+    throw new Error(`Frankfurter returned a base other than ${PIVOT}.`);
+  if (typeof row.quote !== "string" || !/^[A-Z]{3}$/.test(row.quote))
+    throw new Error("Frankfurter returned a malformed quote code.");
   // `rate` is re-parsed through `Decimal(String(n))` in `deriveBaseRates` — JSON's own number
   // type is enough to reject NaN/Infinity/non-positive here, but not enough precision to
   // trust for the arithmetic, since small rates come back in exponent form.
-  rate: z.number().finite().positive(),
-});
-
-const ratesResponseSchema = z.array(rateRowSchema);
-
-export type FrankfurterRow = z.infer<typeof rateRowSchema>;
+  if (
+    typeof row.rate !== "number" ||
+    !Number.isFinite(row.rate) ||
+    row.rate <= 0
+  )
+    throw new Error(
+      "Frankfurter returned a rate that is not a positive number.",
+    );
+  return { date: row.date, base: PIVOT, quote: row.quote, rate: row.rate };
+}
 
 /**
  * Validates a decoded JSON response body against the shape Frankfurter promises.
@@ -104,7 +120,9 @@ export function parseRatesResponse(
   json: unknown,
   requestedQuotes: readonly string[],
 ): FrankfurterRow[] {
-  const rows = ratesResponseSchema.parse(json);
+  if (!Array.isArray(json))
+    throw new Error("Frankfurter returned an unexpected response.");
+  const rows = json.map(parseRateRow);
   const requested = new Set(
     requestedQuotes.map((code) => code.trim().toUpperCase()),
   );
