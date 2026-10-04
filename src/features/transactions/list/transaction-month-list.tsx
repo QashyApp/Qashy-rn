@@ -8,6 +8,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { MonthDirection } from "@/components/ui/month-switcher";
+import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
 import { MotionView } from "@/components/ui/motion";
 import { TextButton } from "@/components/ui/text-button";
 import { dayNetMinor } from "@/features/transactions/list/summary";
@@ -154,7 +155,10 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       scrollEventThrottle={16}
       scrollEnabled={isCurrent}
       initialNumToRender={isCurrent ? 10 : 6}
-      style={{ flex: 1, backgroundColor: theme.background }}
+      style={[
+        { flex: 1, backgroundColor: theme.background },
+        PAGER_SCROLLER_STYLE,
+      ]}
       contentContainerStyle={[
         content,
         {

@@ -19,6 +19,7 @@ import {
   MonthSwitcher,
   type MonthDirection,
 } from "@/components/ui/month-switcher";
+import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
 import { MotionView } from "@/components/ui/motion";
 import { PageHeading } from "@/components/ui/page-heading";
 import { PageHero } from "@/components/ui/page-hero";
@@ -219,7 +220,10 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
       onScroll={isCurrent ? onScroll : undefined}
       scrollEventThrottle={16}
       scrollEnabled={isCurrent}
-      style={{ flex: 1, backgroundColor: theme.background }}
+      style={[
+        { flex: 1, backgroundColor: theme.background },
+        PAGER_SCROLLER_STYLE,
+      ]}
     >
       <ScreenContainer>
         {/* Native no longer draws its own copy of this heading: the section

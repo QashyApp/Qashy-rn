@@ -51,6 +51,16 @@ const CROSSFADE_IN = 140;
 /** If the parent ignores `onChange`, put the pages back after this long. */
 const COMMIT_TIMEOUT = 400;
 
+/**
+ * Style for the scroll container inside a pager page. `touch-action` only counts up to the nearest
+ * scroll container, so the pager's own `pan-y` is overridden by the page's scroller (`auto`) and
+ * the browser claims horizontal drags (cancelling the pointer, or navigating history). The
+ * scroller has to carry `pan-y` itself for a finger swipe to reach the gesture handler.
+ */
+export const PAGER_SCROLLER_STYLE: ViewStyle | undefined = WEB
+  ? ({ touchAction: "pan-y" } as ViewStyle)
+  : undefined;
+
 export interface MonthPagerHandle {
   /** Slide one month forward (`1`) or back (`-1`), exactly like a committed swipe. */
   goTo(direction: 1 | -1): void;
