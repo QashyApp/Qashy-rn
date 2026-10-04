@@ -605,6 +605,12 @@ interface CategoryInfo {
 interface GroupPlan {
   mode: "rule" | "finished" | "custom";
   ruleExternalId: string | null;
+  /**
+   * The earliest unpaid entry of a live series (`pk`): the one occurrence that is waiting to be
+   * paid. It is imported as an upcoming transaction so the schedule starts with its next
+   * occurrence already in place, instead of only creating it once the date arrives.
+   */
+  waitingPk?: string;
 }
 
 export function mapCashewBackup(
@@ -914,7 +920,11 @@ export function mapCashewBackup(
       autoPost: false,
       active: true,
     });
-    plans.set(groupKey, { mode: "rule", ruleExternalId: externalId });
+    plans.set(groupKey, {
+      mode: "rule",
+      ruleExternalId: externalId,
+      waitingPk: unpaid[0].pk,
+    });
   }
   warnings.add("recurring-custom-period", customPeriodGroups);
   warnings.add("recurring-ended", endedGroups);
@@ -950,8 +960,11 @@ export function mapCashewBackup(
     }
     const groupKey = groupOf.get(row.pk);
     const plan = groupKey === undefined ? undefined : plans.get(groupKey);
-    // A live series regenerates its own unpaid occurrences, and a finished series has none left.
-    if (plan && plan.mode !== "custom" && row.status === "upcoming") continue;
+    // Only a live series' earliest unpaid entry is carried over (below). The schedule generates
+    // every later occurrence itself as it comes due, and a finished series has none left.
+    const waiting = plan?.mode === "rule" && row.pk === plan.waitingPk;
+    if (plan && plan.mode !== "custom" && row.status === "upcoming" && !waiting)
+      continue;
     const kind = row.sign < 0 ? "expense" : "income";
     const category = resolveCategory(row, kind);
     if (row.title === null) emptyTitles += 1;
@@ -969,7 +982,7 @@ export function mapCashewBackup(
       amountMinor: row.amountMinor,
       destinationAmountMinor: null,
       recurringRuleExternalId:
-        plan?.mode === "rule" && row.status === "posted"
+        plan?.mode === "rule" && (row.status === "posted" || waiting)
           ? plan.ruleExternalId
           : null,
     });

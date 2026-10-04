@@ -792,12 +792,16 @@ describe("mapCashewBackup recurring transactions", () => {
       autoPost: false,
       active: true,
     });
-    expect(bundle.transactions.map((item) => item.externalId)).toEqual([
-      "transaction:r1",
-      "transaction:r1::predict::1",
+    // The paid history, plus the earliest unpaid entry as the schedule's waiting occurrence. The
+    // later unpaid one (predict::3) is left for the schedule to generate when it comes due.
+    expect(
+      bundle.transactions.map((item) => [item.externalId, item.status]),
+    ).toEqual([
+      ["transaction:r1", "posted"],
+      ["transaction:r1::predict::1", "posted"],
+      ["transaction:r1::predict::2", "upcoming"],
     ]);
     bundle.transactions.forEach((item) => {
-      expect(item.status).toBe("posted");
       expect(item.recurringRuleExternalId).toBe("recurring:r1");
     });
     expect(warning(bundle, "recurring-review")?.count).toBe(1);
@@ -1054,7 +1058,75 @@ describe("mapCashewBackup recurring transactions", () => {
       status: "posted",
       recurringRuleExternalId: "recurring:s",
     });
-    expect(bundle.transactions).toHaveLength(2);
+    // The skipped entry stays as history; the next unpaid one is the waiting occurrence.
+    expect(byId(bundle, "transaction:s::predict::2")).toMatchObject({
+      status: "upcoming",
+      recurringRuleExternalId: "recurring:s",
+    });
+    expect(bundle.transactions).toHaveLength(3);
+  });
+
+  it("carries only the earliest unpaid entry of a live series, and none for a finished one", () => {
+    const bundle = map(
+      rawData({
+        transactions: [
+          transaction({
+            ...series("live"),
+            date_created: sec("2025-12-05"),
+            name: "Live",
+          }),
+          transaction({
+            ...series("live::predict::1"),
+            date_created: sec("2026-01-10"),
+            name: "Live",
+            paid: 0,
+          }),
+          transaction({
+            ...series("live::predict::2"),
+            date_created: sec("2026-02-10"),
+            name: "Live",
+            paid: 0,
+          }),
+          transaction({
+            ...series("live::predict::3"),
+            date_created: sec("2026-03-10"),
+            name: "Live",
+            paid: 0,
+          }),
+          // A series whose only unpaid entry is long overdue is stopped: nothing is carried.
+          transaction({
+            ...series("old"),
+            date_created: sec("2025-06-05"),
+            name: "Old",
+          }),
+          transaction({
+            ...series("old::predict::1"),
+            date_created: sec("2025-07-05"),
+            name: "Old",
+            paid: 0,
+          }),
+        ],
+      }),
+    );
+    const upcoming = bundle.transactions.filter(
+      (item) => item.status === "upcoming",
+    );
+    expect(upcoming.map((item) => item.externalId)).toEqual([
+      "transaction:live::predict::1",
+    ]);
+    expect(upcoming[0]).toMatchObject({
+      localDate: "2026-01-10",
+      recurringRuleExternalId: "recurring:live",
+    });
+    // The schedule's next due date is the same entry, so the generator will not make it again.
+    expect(bundle.recurringRules.map((rule) => rule.nextDueDate)).toEqual([
+      "2026-01-10",
+    ]);
+    expect(
+      bundle.transactions.some((item) =>
+        item.externalId.startsWith("transaction:old::"),
+      ),
+    ).toBe(false);
   });
 
   it("treats a series whose upcoming entry is overdue by more than a period as stopped", () => {

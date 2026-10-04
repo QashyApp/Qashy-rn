@@ -3423,6 +3423,13 @@ export class LocalFinanceRepository implements FinanceRepository {
 
     // ---- Transactions --------------------------------------------------------------------
     const seenTransactions = new Set<string>();
+    // Occurrences the vault already has an answer for, live or tombstoned. The generator makes an
+    // upcoming occurrence for a due schedule on its own, and a user may have skipped or deleted
+    // one, so an imported upcoming entry for the same schedule and date must not add a second.
+    const storedOccurrenceKeys = new Set<string>();
+    for (const record of stored.transactions.values()) {
+      if (record.occurrenceKey) storedOccurrenceKeys.add(record.occurrenceKey);
+    }
     this.withProspectiveState(
       {
         accounts: buildAccounts,
@@ -3444,6 +3451,27 @@ export class LocalFinanceRepository implements FinanceRepository {
           // Live or tombstoned: either way the vault already has an answer for this record. The
           // tombstone case is the user's deliberate deletion, which an import must not undo.
           if (!replacing && stored.transactions.has(derivedId)) {
+            outcome.duplicateTransactions += 1;
+            continue;
+          }
+          // An upcoming entry that belongs to a schedule is that schedule's waiting occurrence, so
+          // it carries the key the generator uses for it (`<rule id>:<date>`).
+          const occurrenceRuleId =
+            item.status === "upcoming" && item.recurringRuleExternalId !== null
+              ? idOf("recurringRule", item.recurringRuleExternalId)
+              : null;
+          const occurrenceKey = occurrenceRuleId
+            ? `${occurrenceRuleId}:${item.localDate}`
+            : null;
+          if (
+            !replacing &&
+            occurrenceRuleId &&
+            occurrenceKey &&
+            (storedOccurrenceKeys.has(occurrenceKey) ||
+              stored.recurringRules.get(occurrenceRuleId)?.deletedAt)
+          ) {
+            // Either the occurrence already exists, or the user deleted the schedule: an import
+            // must not bring back an entry for something they removed.
             outcome.duplicateTransactions += 1;
             continue;
           }
@@ -3501,7 +3529,7 @@ export class LocalFinanceRepository implements FinanceRepository {
                   item.recurringRuleExternalId === null
                     ? null
                     : idOf("recurringRule", item.recurringRuleExternalId),
-                occurrenceKey: null,
+                occurrenceKey,
               },
               undefined,
               [],
