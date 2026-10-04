@@ -12,7 +12,11 @@ import type {
 } from "@/data/import/types";
 import { PlatformStorageAdapter } from "@/data/storage";
 import { NAV_BAR_STYLES } from "@/domain/models";
-import type { StorageAdapter, StoredEntity } from "@/data/storage-adapter";
+import {
+  recordKey,
+  type StorageAdapter,
+  type StoredEntity,
+} from "@/data/storage-adapter";
 import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";
 import type {
   Account,
@@ -71,7 +75,7 @@ import {
   type CausalMeta,
   type SyncOpBody,
 } from "@/sync/oplog";
-import { readAllStates, writeStates } from "@/data/sync-store";
+import { hasSyncHistory, readAllStates, writeStates } from "@/data/sync-store";
 import { planMerge, type DuplicateGroup } from "@/sync/engine/duplicates";
 import { DEFAULT_THEME_ID, isValidThemeId } from "@/theme/themes/types";
 import {
@@ -269,6 +273,26 @@ function parseCsvRow(raw: unknown): CsvRowParse {
     },
   };
 }
+
+/**
+ * What a replace-import deletes: every finance entity the backup stands in for. Settings and
+ * exchange rates are not part of a backup's content, so they are kept.
+ */
+const REPLACED_TYPES: EntityType[] = [
+  "accounts",
+  "categories",
+  "tags",
+  "transactions",
+  "budgets",
+  "budgetPeriods",
+  "budgetAdjustments",
+  "goals",
+  "contributions",
+  "recurringRules",
+];
+
+const REPLACE_NEEDS_NO_SYNC_MESSAGE =
+  "Your current data can’t be deleted for real while this device syncs: your other devices would keep it and send it back. Remove this device from sync first, or choose “Add to my current data”.";
 
 const ENTITY_TYPES: EntityType[] = [
   "accounts",
@@ -2178,7 +2202,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         )
           continue;
         // Any other failure (dangling reference, invalid schedule) will not fix
-        // itself. Pause the rule so it surfaces as "Paused" in the Automation
+        // itself. Pause the rule so it surfaces as "Paused" in the Recurring
         // list and the user can fix the cause and re-enable it.
         if (rule.active)
           ruleChanges.push(
@@ -3423,6 +3447,13 @@ export class LocalFinanceRepository implements FinanceRepository {
 
     // ---- Transactions --------------------------------------------------------------------
     const seenTransactions = new Set<string>();
+    // Occurrences the vault already has an answer for, live or tombstoned. The generator makes an
+    // upcoming occurrence for a due schedule on its own, and a user may have skipped or deleted
+    // one, so an imported upcoming entry for the same schedule and date must not add a second.
+    const storedOccurrenceKeys = new Set<string>();
+    for (const record of stored.transactions.values()) {
+      if (record.occurrenceKey) storedOccurrenceKeys.add(record.occurrenceKey);
+    }
     this.withProspectiveState(
       {
         accounts: buildAccounts,
@@ -3444,6 +3475,27 @@ export class LocalFinanceRepository implements FinanceRepository {
           // Live or tombstoned: either way the vault already has an answer for this record. The
           // tombstone case is the user's deliberate deletion, which an import must not undo.
           if (!replacing && stored.transactions.has(derivedId)) {
+            outcome.duplicateTransactions += 1;
+            continue;
+          }
+          // An upcoming entry that belongs to a schedule is that schedule's waiting occurrence, so
+          // it carries the key the generator uses for it (`<rule id>:<date>`).
+          const occurrenceRuleId =
+            item.status === "upcoming" && item.recurringRuleExternalId !== null
+              ? idOf("recurringRule", item.recurringRuleExternalId)
+              : null;
+          const occurrenceKey = occurrenceRuleId
+            ? `${occurrenceRuleId}:${item.localDate}`
+            : null;
+          if (
+            !replacing &&
+            occurrenceRuleId &&
+            occurrenceKey &&
+            (storedOccurrenceKeys.has(occurrenceKey) ||
+              stored.recurringRules.get(occurrenceRuleId)?.deletedAt)
+          ) {
+            // Either the occurrence already exists, or the user deleted the schedule: an import
+            // must not bring back an entry for something they removed.
             outcome.duplicateTransactions += 1;
             continue;
           }
@@ -3501,7 +3553,7 @@ export class LocalFinanceRepository implements FinanceRepository {
                   item.recurringRuleExternalId === null
                     ? null
                     : idOf("recurringRule", item.recurringRuleExternalId),
-                occurrenceKey: null,
+                occurrenceKey,
               },
               undefined,
               [],
@@ -3639,29 +3691,6 @@ export class LocalFinanceRepository implements FinanceRepository {
       recurringRules: newRules.length,
       budgets: newBudgets.length,
     };
-    const importedIds = {
-      accounts: new Set(newAccounts.map((item) => item.id)),
-      categories: new Set(newCategories.map((item) => item.id)),
-      tags: new Set(newTags.map((item) => item.id)),
-      transactions: new Set(newTransactions.map((item) => item.id)),
-      budgets: new Set(newBudgets.map((item) => item.id)),
-      recurringRules: new Set(newRules.map((item) => item.id)),
-    };
-
-    // Live entities that are overwritten in place by an imported row of the same id are not
-    // tombstoned separately (one row, one write), but they are still replaced.
-    const retire = <T extends FinanceEntity>(
-      live: readonly T[],
-      imported: ReadonlySet<string>,
-      at: string,
-    ) =>
-      replacing
-        ? live
-            .filter((entity) => !imported.has(entity.id))
-            .map((entity) =>
-              updateEntity(entity, { deletedAt: at } as Partial<T>),
-            )
-        : [];
     if (replacing) {
       outcome.replaced = {
         accounts: this.state.accounts.length,
@@ -3672,6 +3701,14 @@ export class LocalFinanceRepository implements FinanceRepository {
         budgets: this.state.budgets.length,
         goals: this.state.goals.length,
       };
+      // A replace really erases, and that is only coherent on a device that does not sync. The
+      // commit checks again inside its own transaction; this is what lets a preview say so first.
+      if (
+        await this.storage.transact((tx) => hasSyncHistory(tx), {
+          silent: true,
+        })
+      )
+        reject("replace", REPLACE_NEEDS_NO_SYNC_MESSAGE);
     }
 
     if (!commit) return outcome;
@@ -3681,64 +3718,20 @@ export class LocalFinanceRepository implements FinanceRepository {
       );
     }
 
-    const at = nowIso();
-    // Overwrites a tombstone (or, in `replace`, a live row) that already holds this id, bumping
-    // the revision instead of restarting it at 1, so the op log records a revival or an update
-    // and never a second "create" of the same entity.
+    // In `merge`, overwrites a tombstone that already holds this id, bumping the revision
+    // instead of restarting it at 1, so the op log records a revival and never a second "create"
+    // of the same entity. A `replace` erases the old rows first, so there is nothing to revive:
+    // every imported entity is simply new.
     const settle = <T extends FinanceEntity>(
       fresh: T,
       previous: ReadonlyMap<string, T>,
     ): T => {
-      const old = previous.get(fresh.id);
+      const old = replacing ? undefined : previous.get(fresh.id);
       return old
         ? updateEntity(old, { ...fresh, deletedAt: null } as Partial<T>)
         : fresh;
     };
     const records: StoredEntity[] = [
-      ...retire(this.state.accounts, importedIds.accounts, at).map(
-        (entity) => ({ type: "accounts" as const, entity }),
-      ),
-      ...retire(this.state.categories, importedIds.categories, at).map(
-        (entity) => ({ type: "categories" as const, entity }),
-      ),
-      ...retire(this.state.tags, importedIds.tags, at).map((entity) => ({
-        type: "tags" as const,
-        entity,
-      })),
-      // A tombstone that kept its occurrence key would suppress that occurrence on every
-      // later load, so a schedule imported again after a replace would silently skip it. The
-      // key is cleared first, exactly as a schedule change does when it retires an occurrence.
-      ...retire(this.state.transactions, importedIds.transactions, at).map(
-        (entity) => ({
-          type: "transactions" as const,
-          entity: entity.occurrenceKey
-            ? { ...entity, occurrenceKey: null }
-            : entity,
-        }),
-      ),
-      ...retire(this.state.budgets, importedIds.budgets, at).map((entity) => ({
-        type: "budgets" as const,
-        entity,
-      })),
-      ...retire(this.state.budgetPeriods, new Set(), at).map((entity) => ({
-        type: "budgetPeriods" as const,
-        entity,
-      })),
-      ...retire(this.state.budgetAdjustments, new Set(), at).map((entity) => ({
-        type: "budgetAdjustments" as const,
-        entity,
-      })),
-      ...retire(this.state.goals, new Set(), at).map((entity) => ({
-        type: "goals" as const,
-        entity,
-      })),
-      ...retire(this.state.contributions, new Set(), at).map((entity) => ({
-        type: "contributions" as const,
-        entity,
-      })),
-      ...retire(this.state.recurringRules, importedIds.recurringRules, at).map(
-        (entity) => ({ type: "recurringRules" as const, entity }),
-      ),
       ...newAccounts.map((fresh) => ({
         type: "accounts" as const,
         entity: settle(fresh, stored.accounts),
@@ -3764,12 +3757,33 @@ export class LocalFinanceRepository implements FinanceRepository {
         entity: settle(fresh, stored.recurringRules),
       })),
     ];
-    // Nothing new (a re-import) writes nothing and captures no ops.
-    if (!records.length) {
+    // Nothing new (a re-import) writes nothing and captures no ops. A replace still has the old
+    // data to erase.
+    if (!records.length && !replacing) {
       outcome.committed = true;
       return outcome;
     }
-    await this.storage.putMany(records, this);
+    if (replacing) {
+      // One transaction: the old rows (live and already-deleted alike) go and the backup's come
+      // in together, or nothing changes. Written through `transact`, which captures no ops, so
+      // it must never run where an op log exists for these rows; the check sits inside the
+      // transaction so nothing can pair this device between the preview and now.
+      await this.storage.transact(
+        async (tx) => {
+          if (await hasSyncHistory(tx))
+            throw new Error(REPLACE_NEEDS_NO_SYNC_MESSAGE);
+          for (const type of REPLACED_TYPES) {
+            const rows = await tx.readAll(type);
+            if (rows.length)
+              await tx.deleteKeys(rows.map((row) => recordKey(type, row.id)));
+          }
+          await tx.putMany(records);
+        },
+        { source: this },
+      );
+    } else {
+      await this.storage.putMany(records, this);
+    }
     // Rehydrate rather than splice: an import touches up to nine entity types, revives
     // tombstones, and (in `replace`) retires occurrence keys, all of which `hydrateFromStorage`
     // already derives from the stored rows.

@@ -3,7 +3,8 @@ import "fake-indexeddb/auto";
 import { Dexie } from "dexie";
 
 import { PlatformStorageAdapter } from "@/data/storage.web";
-import type { StoredEntity } from "@/data/storage-adapter";
+import { hasSyncHistory } from "@/data/sync-store";
+import { recordKey, type StoredEntity } from "@/data/storage-adapter";
 import type { Account } from "@/domain/models";
 
 // `liveQuery` notifications land asynchronously, so assertions about what the
@@ -377,5 +378,29 @@ describe("web storage adapter", () => {
 
     await adapter.clear();
     expect(await adapter.readAll("accounts")).toEqual([]);
+  });
+
+  it("erases rows and writes new ones in one transaction, reading sync history first", async () => {
+    const adapter = await freshAdapter();
+    await adapter.putMany([
+      stored(account("a", "A", "2026-01-01T00:00:00.000Z")),
+      stored(account("b", "B", "2026-02-01T00:00:00.000Z")),
+    ]);
+
+    // The same shape a replace-import uses: it must only await the transaction it is handed.
+    await adapter.transact(async (tx) => {
+      expect(await hasSyncHistory(tx)).toBe(false);
+      const rows = await tx.readAll("accounts");
+      await tx.deleteKeys(rows.map((row) => recordKey("accounts", row.id)));
+      await tx.putMany([stored(account("c", "C", "2026-03-01T00:00:00.000Z"))]);
+    });
+    expect((await adapter.readAll("accounts")).map((row) => row.id)).toEqual([
+      "c",
+    ]);
+
+    await adapter.transact(async (tx) => {
+      await tx.table("syncMeta").put([{ key: "deviceId", value: "device-x" }]);
+    });
+    expect(await adapter.transact((tx) => hasSyncHistory(tx))).toBe(true);
   });
 });

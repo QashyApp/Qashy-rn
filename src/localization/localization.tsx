@@ -331,12 +331,12 @@ const HEBREW: Record<string, string> = {
   "Add a manual contribution": "הוספת הפקדה ידנית",
   "Save goal": "שמירת יעד",
   "Delete goal": "מחיקת יעד",
-  "Accounts, categories, automation, portability, and appearance.":
-    "חשבונות, קטגוריות, אוטומציה, ניידות ומראה.",
+  "Accounts, categories, recurring, portability, and appearance.":
+    "חשבונות, קטגוריות, מחזוריות, ניידות ומראה.",
   Accounts: "חשבונות",
   Add: "הוספה",
   Categories: "קטגוריות",
-  Automation: "אוטומציה",
+  Recurring: "מחזוריות",
   "New recurring": "מחזורית חדשה",
   "Exchange rates": "שערי חליפין",
   "Add rate": "הוספת שער",
@@ -538,6 +538,8 @@ const HEBREW: Record<string, string> = {
   "Couldn’t save transaction": "לא ניתן לשמור את התנועה",
   "Couldn’t delete transaction": "לא ניתן למחוק את התנועה",
   "Couldn’t delete transactions": "לא ניתן למחוק את התנועות",
+  "Couldn’t delete recurring transactions":
+    "לא ניתן למחוק את התנועות המחזוריות",
   "Couldn’t change category": "לא ניתן לשנות את הקטגוריה",
   "Couldn’t save budget": "לא ניתן לשמור את התקציב",
   "Couldn’t delete budget": "לא ניתן למחוק את התקציב",
@@ -559,6 +561,7 @@ const HEBREW: Record<string, string> = {
   "Delete this schedule?": "למחוק את התזמון הזה?",
   "Delete this contribution?": "למחוק את ההפקדה הזו?",
   "Delete 1 transaction?": "למחוק תנועה אחת?",
+  "Delete 1 recurring transaction?": "למחוק תנועה מחזורית אחת?",
   "Already generated transactions stay in your ledger.":
     "תנועות שכבר נוצרו יישארו ביומן.",
   "They will be removed from your ledger.": "הן יוסרו מהיומן.",
@@ -1576,6 +1579,10 @@ const DYNAMIC_PATTERNS: [RegExp, (...parts: string[]) => string][] = [
   [/^Archive (.+)\?$/, (name) => `להעביר את ${name} לארכיון?`],
   [/^Delete the (.+) rate\?$/, (currency) => `למחוק את שער ${currency}?`],
   [/^Delete (\d+) transactions\?$/, (count) => `למחוק ${count} תנועות?`],
+  [
+    /^Delete (\d+) recurring transactions\?$/,
+    (count) => `למחוק ${count} תנועות מחזוריות?`,
+  ],
   [/^Delete (.+)\?$/, (name) => `למחוק את ${name}?`],
   [
     /^“(.+)” will be removed from your ledger\.$/,

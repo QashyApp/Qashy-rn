@@ -50,6 +50,11 @@ export interface CashewRawData {
   detectedTimeZone: string | null;
   /** Every table in the file, rows keyed by column name. */
   tables: Record<string, RawRow[]>;
+  /**
+   * Cashew's "pay automatically when due" preferences, read from the settings it stores in the
+   * backup. `null` means the backup does not say; Cashew's own default is on.
+   */
+  autoPay?: { subscriptions: boolean | null; repetitive: boolean | null };
 }
 
 export interface ImportWarning {

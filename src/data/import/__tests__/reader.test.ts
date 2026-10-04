@@ -114,6 +114,46 @@ describeIfSqlite("readCashewBackup", () => {
     ).toBe("Europe/Paris");
   });
 
+  test("reads Cashew's automatic-payment preferences from the settings and still blanks them", () => {
+    const build = (json: string | null) =>
+      buildDatabase((db) => {
+        db.exec("CREATE TABLE wallets (wallet_pk TEXT)");
+        db.exec("CREATE TABLE categories (category_pk TEXT)");
+        db.exec("CREATE TABLE transactions (transaction_pk TEXT)");
+        db.exec(
+          "CREATE TABLE app_settings (settings_pk INTEGER PRIMARY KEY, settings_j_s_o_n TEXT)",
+        );
+        if (json !== null)
+          db.prepare(
+            "INSERT INTO app_settings (settings_j_s_o_n) VALUES (?)",
+          ).run(json);
+        db.exec("PRAGMA user_version = 46");
+      }).bytes;
+    const both = readCashewBackup(
+      build(
+        '{"automaticallyPaySubscriptions":false,"automaticallyPayRepetitive":true}',
+      ),
+    );
+    expect(both.autoPay).toEqual({ subscriptions: false, repetitive: true });
+    expect(both.tables.app_settings[0].settings_j_s_o_n).toBe("");
+    // Not saying anything, or saying something that is not a boolean, is "unknown".
+    expect(readCashewBackup(build("{}")).autoPay).toEqual({
+      subscriptions: null,
+      repetitive: null,
+    });
+    expect(
+      readCashewBackup(build('{"automaticallyPaySubscriptions":"no"}')).autoPay,
+    ).toEqual({ subscriptions: null, repetitive: null });
+    expect(readCashewBackup(build("not json")).autoPay).toEqual({
+      subscriptions: null,
+      repetitive: null,
+    });
+    expect(readCashewBackup(build(null)).autoPay).toEqual({
+      subscriptions: null,
+      repetitive: null,
+    });
+  });
+
   test("non-SQLite input is rejected", () => {
     expect(
       errorCodeOf(() => readCashewBackup(new TextEncoder().encode("hello"))),

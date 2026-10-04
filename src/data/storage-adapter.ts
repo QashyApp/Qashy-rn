@@ -54,7 +54,10 @@ export interface StorageTx {
   /** Keys are `${type}:${id}`. Misses are omitted rather than returned as holes. */
   readKeys(keys: readonly string[]): Promise<StoredEntity[]>;
   putMany(records: readonly StoredEntity[]): Promise<void>;
-  /** Compaction and `clear` only — finance entities are soft-deleted, never removed. */
+  /**
+   * Compaction, `clear`, and the replace-import on a device that does not sync. Everywhere else
+   * finance entities are soft-deleted: a tombstone is what carries a deletion to other devices.
+   */
   deleteKeys(keys: readonly string[]): Promise<void>;
   clearRecords(): Promise<void>;
   table<Name extends SyncTableName>(name: Name): SyncTable<SyncRow<Name>>;

@@ -77,10 +77,12 @@ export function MoreScreen() {
     type: "recurringRules",
     liveIds: recurring.map((item) => item.id),
     confirmTitle: (count) =>
-      count === 1 ? "Delete 1 automation?" : `Delete ${count} automations?`,
+      count === 1
+        ? "Delete 1 recurring transaction?"
+        : `Delete ${count} recurring transactions?`,
     confirmMessage:
       "They will stop generating transactions, and upcoming unconfirmed ones are removed. Transactions already posted are kept.",
-    errorTitle: "Couldn’t delete automations",
+    errorTitle: "Couldn’t delete recurring transactions",
   });
 
   // Deliberately not memoized: the whole point of this row is that "Relay unreachable" and
@@ -154,7 +156,7 @@ export function MoreScreen() {
       <ScreenContainer>
         <PageHeading
           title="More"
-          subtitle="Accounts, categories, automation, portability, and appearance."
+          subtitle="Accounts, categories, recurring, portability, and appearance."
         />
         <Card variant="emphasized" style={{ gap: space.lg }}>
           <AppText
@@ -339,7 +341,7 @@ export function MoreScreen() {
             style={{ flex: wide ? 1 : undefined, width: "100%", gap: space.md }}
           >
             <SectionHeader
-              title="Automation"
+              title="Recurring"
               action={ruleSelection.selecting ? undefined : "New recurring"}
               onAction={() => router.push("/recurring")}
               secondaryAction={
