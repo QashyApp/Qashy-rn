@@ -2178,7 +2178,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         )
           continue;
         // Any other failure (dangling reference, invalid schedule) will not fix
-        // itself. Pause the rule so it surfaces as "Paused" in the Automation
+        // itself. Pause the rule so it surfaces as "Paused" in the Recurring
         // list and the user can fix the cause and re-enable it.
         if (rule.active)
           ruleChanges.push(
