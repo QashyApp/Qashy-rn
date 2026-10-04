@@ -11,7 +11,7 @@ export const IMPORT_SOURCES: readonly ImportSourceInfo[] = [
     imports: [
       "Accounts (Cashew wallets) with their currencies",
       "Categories and subcategories, with colours and matched icons",
-      "Every expense, income and transfer between wallets, with notes",
+      "Every expense, income and transfer between wallets, with notes and tags",
       "The paid, upcoming and skipped state of each transaction",
       "Subscriptions and repeating transactions, as recurring schedules that wait for your review, with each one’s next unpaid entry already waiting",
       "Budgets: amount, period, wallets, included categories and per-category limits (Cashew’s percentage limits are converted to amounts)",
