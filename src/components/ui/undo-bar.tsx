@@ -37,6 +37,7 @@ export function UndoBar({
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
+  const m3 = theme.materialControls;
 
   useEffect(() => {
     const timer = setTimeout(onDismiss, duration);
@@ -62,11 +63,14 @@ export function UndoBar({
           gap: space.md,
           paddingVertical: space.sm + 2,
           paddingHorizontal: space.lg,
-          borderRadius: radius.sheet,
+          borderRadius: m3 ? 4 : radius.sheet,
           borderCurve: "continuous",
           maxWidth: 480,
         },
-        materialStyle(theme, "overlay"),
+        // M3 snackbar: the inverse surface, with the inverse primary for the action.
+        m3
+          ? { backgroundColor: theme.inverseSurface, minHeight: 48 }
+          : materialStyle(theme, "overlay"),
         style,
       ]}
     >
@@ -74,11 +78,19 @@ export function UndoBar({
         selectable={false}
         literal={literal}
         variant="label"
-        style={{ flexShrink: 1 }}
+        style={
+          m3
+            ? { flexShrink: 1, color: theme.inverseOnSurface }
+            : { flexShrink: 1 }
+        }
       >
         {message}
       </AppText>
-      <TextButton title={actionLabel} onPress={onAction} />
+      <TextButton
+        title={actionLabel}
+        onPress={onAction}
+        color={m3 ? theme.inversePrimary : undefined}
+      />
     </MotionView>
   );
 }

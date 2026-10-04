@@ -1,16 +1,29 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useDeferredValue, useMemo, useRef, useState } from "react";
-import { ScrollView, StyleSheet, TextInput, View } from "react-native";
+import {
+  useDeferredValue,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+} from "react";
+import {
+  ScrollView,
+  SectionList,
+  StyleSheet,
+  TextInput,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { AnimatedMoney } from "@/components/finance/animated-money";
-import { StatTile } from "@/components/finance/stat-tile";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { ChoiceChip } from "@/components/ui/choice-chip";
+import { Collapsible } from "@/components/ui/collapsible";
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
 import { IconButton } from "@/components/ui/icon-button";
+import { useSharedValue } from "react-native-reanimated";
+
 import { MonthSwitcher } from "@/components/ui/month-switcher";
 import {
   MonthPager,
@@ -24,7 +37,12 @@ import {
   screenContentMetrics,
 } from "@/components/ui/screen-container";
 import { TextButton } from "@/components/ui/text-button";
+import { useScrollCollapse } from "@/components/ui/use-scroll-collapse";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
+import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
+import type { TransactionRecord } from "@/domain/models";
+import { CollapsingSummaryTiles } from "@/features/transactions/summary-tiles";
+import type { LedgerSection } from "@/features/transactions/list/sections";
 import {
   TransactionMonthList,
   type KindFilter,
@@ -90,12 +108,31 @@ export function TransactionsScreen() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchAllMonths, setSearchAllMonths] = useState(false);
   const [kind, setKind] = useState<KindFilter>("all");
-  const { visibility: fabVisibility, onScroll } = useScrollHide();
+  const { visibility: fabVisibility, onScroll: onScrollHide } = useScrollHide();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [busy, setBusy] = useState(false);
   const pagerRef = useRef<MonthPagerHandle>(null);
+  const dragProgress = useSharedValue(0);
+  const listRef =
+    useSectionScrollToTop<
+      SectionList<TransactionRecord, LedgerSection<TransactionRecord>>
+    >();
+  const [upcomingCollapsed, setUpcomingCollapsed] = useState(false);
+  // On a phone the search and filters fold away while reading down the list and the month's
+  // totals shrink to one line; both return on the way back up. They stay open while searching.
+  const phoneWidth = metrics.contentWidth < 520;
+  const { collapse, onScroll: onScrollCollapse } = useScrollCollapse({
+    enabled: phoneWidth,
+    locked: searchFocused || search.length > 0 || selectionMode,
+  });
+  const onScroll: NonNullable<
+    ComponentProps<typeof SectionList>["onScroll"]
+  > = (event) => {
+    onScrollHide(event);
+    onScrollCollapse(event);
+  };
 
   // Follow the param when something else navigates here with one (Overview's
   // "See all", the transaction sheet returning to the month it saved into).
@@ -273,6 +310,7 @@ export function TransactionsScreen() {
   const gutter = Number(content.paddingLeft ?? 0);
   const currency = state.settings.baseCurrency;
   const compactFigures = metrics.contentWidth < 520;
+  const toolbarGap = toolbarStyle.gap;
   // The floating batch bar takes the FAB's usual spot while it is open, so the
   // two never compete for the same corner of the screen — adding a transaction
   // mid-selection is also just confusing.
@@ -313,6 +351,7 @@ export function TransactionsScreen() {
                     )
                   }
                   disabled={allMonths}
+                  dragProgress={dragProgress}
                 />
               </View>
               <View
@@ -321,154 +360,152 @@ export function TransactionsScreen() {
                     ? undefined
                     : `${monthLabel(month, locale)} ${t("summary")}`
                 }
-                style={{
-                  flexDirection: "row",
-                  gap: space.sm,
-                  opacity: allMonths ? 0.45 : 1,
-                }}
+                style={{ opacity: allMonths ? 0.45 : 1 }}
               >
-                {(
-                  [
-                    ["Income", summary.incomeMinor, theme.positive],
-                    ["Spent", summary.expenseMinor, theme.text],
-                    [
-                      "Net",
-                      summary.netFlowMinor,
-                      summary.netFlowMinor > 0
-                        ? theme.positive
-                        : summary.netFlowMinor < 0
-                          ? theme.negative
-                          : theme.text,
-                    ],
-                  ] as const
-                ).map(([label, amount, color]) => (
-                  <View key={label} style={{ flex: 1, minWidth: 0 }}>
-                    <StatTile
-                      variant="sunken"
-                      label={label}
-                      value={
-                        <AnimatedMoney
-                          minor={amount}
-                          currency={currency}
-                          locale={locale}
-                          compact={compactFigures}
-                          variant="label"
-                          numeric
-                          style={{ color }}
-                        />
-                      }
-                    />
-                  </View>
-                ))}
+                <CollapsingSummaryTiles
+                  currency={currency}
+                  locale={locale}
+                  compactFigures={compactFigures}
+                  collapse={collapse}
+                  tiles={[
+                    {
+                      label: "Income",
+                      amountMinor: summary.incomeMinor,
+                      color: theme.positive,
+                    },
+                    {
+                      label: "Spent",
+                      amountMinor: summary.expenseMinor,
+                      color: theme.text,
+                    },
+                    {
+                      label: "Net",
+                      amountMinor: summary.netFlowMinor,
+                      color:
+                        summary.netFlowMinor > 0
+                          ? theme.positive
+                          : summary.netFlowMinor < 0
+                            ? theme.negative
+                            : theme.text,
+                    },
+                  ]}
+                />
               </View>
             </View>
-            <View
-              style={{
-                minHeight: 44,
-                borderRadius: radius.pill,
-                borderCurve: "continuous",
-                flexDirection: "row",
-                alignItems: "center",
-                paddingHorizontal: space.lg,
-                gap: space.sm,
-                ...materialStyle(theme, "sunken"),
-                ...(searchFocused
-                  ? { boxShadow: `inset 0 0 0 2px ${String(theme.accent)}` }
-                  : null),
-              }}
+            <Collapsible
+              collapse={collapse}
+              gapBefore={toolbarGap}
+              style={{ gap: toolbarGap }}
             >
-              <AppIcon
-                name="magnifyingglass"
-                color={theme.textMuted}
-                size={18}
-              />
-              <TextInput
-                accessibilityLabel={t("Search transactions")}
-                placeholder={t(
-                  searchAllMonths ? "Search all months" : "Search this month",
-                )}
-                placeholderTextColor={theme.textMuted}
-                value={search}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                onChangeText={(value) => {
-                  setSearch(value);
-                  clearSelection();
-                }}
+              <View
                 style={{
-                  flex: 1,
                   minHeight: 44,
-                  color: theme.text,
-                  fontSize: 16,
-                  ...fontStyle("regular", theme.type),
-                  writingDirection: isRtl ? "rtl" : "ltr",
-                  textAlign: isRtl ? "right" : "left",
+                  borderRadius: radius.pill,
+                  borderCurve: "continuous",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  paddingHorizontal: space.lg,
+                  gap: space.sm,
+                  ...materialStyle(theme, "sunken"),
+                  ...(searchFocused
+                    ? { boxShadow: `inset 0 0 0 2px ${String(theme.accent)}` }
+                    : null),
                 }}
-              />
-              {search ? (
-                <IconButton
-                  label="Clear search"
-                  icon="xmark"
-                  iconSize={17}
-                  enteringVariant="zoom"
-                  onPress={() => {
-                    setSearch("");
-                    clearSelection();
-                  }}
-                  style={{ marginEnd: -space.sm }}
-                />
-              ) : null}
-            </View>
-            {search ? (
-              <MotionView
-                variant="down"
-                exit
-                animateLayout
-                style={{ flexDirection: "row" }}
               >
-                <ChoiceChip
-                  mode="checkbox"
-                  icon="calendar"
-                  label="Search all months"
-                  selected={searchAllMonths}
-                  onPress={() => {
-                    setSearchAllMonths((current) => !current);
+                <AppIcon
+                  name="magnifyingglass"
+                  color={theme.textMuted}
+                  size={18}
+                />
+                <TextInput
+                  accessibilityLabel={t("Search transactions")}
+                  placeholder={t(
+                    searchAllMonths ? "Search all months" : "Search this month",
+                  )}
+                  placeholderTextColor={theme.textMuted}
+                  value={search}
+                  onFocus={() => setSearchFocused(true)}
+                  onBlur={() => setSearchFocused(false)}
+                  onChangeText={(value) => {
+                    setSearch(value);
                     clearSelection();
                   }}
+                  style={{
+                    flex: 1,
+                    minHeight: 44,
+                    color: theme.text,
+                    fontSize: 16,
+                    ...fontStyle("regular", theme.type),
+                    writingDirection: isRtl ? "rtl" : "ltr",
+                    textAlign: isRtl ? "right" : "left",
+                  }}
                 />
-              </MotionView>
-            ) : null}
-            {/* Five options do not fit a segmented control on a phone without
+                {search ? (
+                  <IconButton
+                    label="Clear search"
+                    icon="xmark"
+                    iconSize={17}
+                    enteringVariant="zoom"
+                    onPress={() => {
+                      setSearch("");
+                      clearSelection();
+                    }}
+                    style={{ marginEnd: -space.sm }}
+                  />
+                ) : null}
+              </View>
+              {search ? (
+                <MotionView
+                  variant="down"
+                  exit
+                  animateLayout
+                  style={{ flexDirection: "row" }}
+                >
+                  <ChoiceChip
+                    mode="checkbox"
+                    icon="calendar"
+                    label="Search all months"
+                    selected={searchAllMonths}
+                    onPress={() => {
+                      setSearchAllMonths((current) => !current);
+                      clearSelection();
+                    }}
+                  />
+                </MotionView>
+              ) : null}
+              {/* Five options do not fit a segmented control on a phone without
               truncating, so they scroll sideways as one row instead of wrapping. */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              accessibilityRole="radiogroup"
-              accessibilityLabel={t("Transaction type filter")}
-              // Bleeds to the screen edge so chips scroll out from under the gutter.
-              style={{ marginHorizontal: -gutter }}
-              contentContainerStyle={{
-                gap: space.sm,
-                paddingHorizontal: gutter,
-              }}
-            >
-              {KIND_OPTIONS.map((option) => (
-                <ChoiceChip
-                  key={option.value}
-                  label={option.label}
-                  icon={option.icon}
-                  selected={kind === option.value}
-                  onPress={() => {
-                    setKind(option.value);
-                    clearSelection();
-                  }}
-                />
-              ))}
-            </ScrollView>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                accessibilityRole="radiogroup"
+                accessibilityLabel={t("Transaction type filter")}
+                // Bleeds to the screen edge so chips scroll out from under the gutter.
+                style={{ marginHorizontal: -gutter }}
+                contentContainerStyle={{
+                  gap: space.sm,
+                  paddingHorizontal: gutter,
+                }}
+              >
+                {KIND_OPTIONS.map((option) => (
+                  <ChoiceChip
+                    key={option.value}
+                    label={option.label}
+                    icon={option.icon}
+                    selected={kind === option.value}
+                    onPress={() => {
+                      setKind(option.value);
+                      clearSelection();
+                    }}
+                  />
+                ))}
+              </ScrollView>
+            </Collapsible>
           </View>
         </View>
         <MonthPager
           ref={pagerRef}
+          dragProgress={dragProgress}
           month={month}
           disabled={allMonths || selectionMode}
           onChange={changeMonth}
@@ -486,8 +523,12 @@ export function TransactionsScreen() {
               latestMonth={latestMonth}
               content={content}
               onScroll={onScroll}
+              listRef={listRef}
+              upcomingCollapsed={upcomingCollapsed}
+              onToggleUpcoming={() => setUpcomingCollapsed((value) => !value)}
               onToggleSelectionMode={toggleSelectionMode}
               onToggleItem={toggleSelected}
+              onSetSelection={setSelectedIds}
               onLongPressItem={enterSelection}
               onResolveUpcoming={resolveUpcoming}
               onClearFilters={clearFilters}

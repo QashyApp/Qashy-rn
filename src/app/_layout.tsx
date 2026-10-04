@@ -22,6 +22,7 @@ import {
 } from "@/providers/finance-provider";
 import { SyncProvider } from "@/providers/sync-provider";
 import { NavBarStyleSheetProvider } from "@/components/navigation/nav-bar-style-sheet";
+import { AnimationLevelProvider } from "@/components/ui/animation-level";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { WebDialogHost } from "@/components/web-dialog-host";
 import { ReloadErrorBanner } from "@/components/reload-error-banner";
@@ -393,9 +394,11 @@ export default function RootLayout() {
         <SyncProvider>
           <LocalizationProvider>
             <QashyThemeProvider>
-              <NavBarStyleSheetProvider>
-                <RootNavigator />
-              </NavBarStyleSheetProvider>
+              <AnimationLevelProvider>
+                <NavBarStyleSheetProvider>
+                  <RootNavigator />
+                </NavBarStyleSheetProvider>
+              </AnimationLevelProvider>
             </QashyThemeProvider>
           </LocalizationProvider>
         </SyncProvider>

@@ -168,7 +168,10 @@ export function ProgressBar({
           ),
   }));
 
-  const trackHeight = size === "thin" ? 6 : 10;
+  const m3 = theme.materialControls;
+  // Material's linear indicator is a flat secondary-container track with a flat fill.
+  const trackHeight = m3 ? (size === "thin" ? 4 : 8) : size === "thin" ? 6 : 10;
+  const inset = m3 ? 0 : 1;
 
   return (
     <Animated.View
@@ -181,7 +184,9 @@ export function ProgressBar({
           borderRadius: radius.pill,
           overflow: "hidden",
         },
-        materialStyle(theme, "sunken"),
+        m3
+          ? { backgroundColor: theme.secondaryContainer }
+          : materialStyle(theme, "sunken"),
         trackStyle,
       ]}
     >
@@ -190,10 +195,10 @@ export function ProgressBar({
       <View
         style={{
           position: "absolute",
-          top: 1,
-          bottom: 1,
-          start: 1,
-          end: 1,
+          top: inset,
+          bottom: inset,
+          start: inset,
+          end: inset,
           borderRadius: radius.pill,
           overflow: "hidden",
         }}
@@ -216,7 +221,7 @@ export function ProgressBar({
                 borderRadius: radius.pill,
                 // Inner top highlight so the fill reads as raised material,
                 // not just a flat tinted bar inside the well.
-                boxShadow: insetHighlight(theme.mode),
+                boxShadow: m3 ? undefined : insetHighlight(theme.mode),
               },
               fillColorStyle,
             ]}
@@ -285,10 +290,11 @@ export function ProgressRing({
       : color === undefined && typeof theme.accent === "string"
         ? theme.accent
         : staticFallback;
+  const trackSource = theme.materialControls
+    ? theme.secondaryContainer
+    : theme.surfaceSunken;
   const trackColor =
-    typeof theme.surfaceSunken === "string"
-      ? theme.surfaceSunken
-      : staticFallback;
+    typeof trackSource === "string" ? trackSource : staticFallback;
 
   const pageMotion = usePageMotionRef();
   useEffect(() => {

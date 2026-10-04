@@ -62,6 +62,7 @@ export const settings = (over: Partial<AppSettings> = {}): AppSettings => ({
   accentHex: "#5966E9",
   swipeBetweenMonths: false,
   navBarStyle: "native",
+  animationLevel: "all",
   fontTextOverride: null,
   fontNumericOverride: null,
   uiIconSetOverride: null,

@@ -11,7 +11,7 @@ import type {
   ImportMode,
 } from "@/data/import/types";
 import { PlatformStorageAdapter } from "@/data/storage";
-import { NAV_BAR_STYLES } from "@/domain/models";
+import { ANIMATION_LEVELS, NAV_BAR_STYLES } from "@/domain/models";
 import {
   recordKey,
   type StorageAdapter,
@@ -737,6 +737,10 @@ export class LocalFinanceRepository implements FinanceRepository {
       patch.navBarStyle ?? this.state.settings.navBarStyle ?? "native";
     if (!NAV_BAR_STYLES.includes(navBarStyle))
       throw new Error("Choose a valid navigation bar style.");
+    const animationLevel =
+      patch.animationLevel ?? this.state.settings.animationLevel ?? "all";
+    if (!ANIMATION_LEVELS.includes(animationLevel))
+      throw new Error("Choose a valid animation level.");
     const override = (
       key:
         | "fontTextOverride"
@@ -775,6 +779,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         this.state.settings.swipeBetweenMonths ??
         false,
       navBarStyle,
+      animationLevel,
       ...overrides,
     });
     await this.persist("settings", [settings]);
@@ -4013,6 +4018,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       themeId: storedSettings.themeId ?? DEFAULT_THEME_ID,
       swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? false,
       navBarStyle: storedSettings.navBarStyle ?? "native",
+      animationLevel: storedSettings.animationLevel ?? "all",
       fontTextOverride: storedSettings.fontTextOverride ?? null,
       fontNumericOverride: storedSettings.fontNumericOverride ?? null,
       uiIconSetOverride: storedSettings.uiIconSetOverride ?? null,

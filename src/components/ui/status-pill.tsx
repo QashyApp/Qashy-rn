@@ -96,7 +96,9 @@ export function StatusPill({
         borderColor: theme.border,
         backgroundColor,
         // A subtle inner top highlight so a tone pill reads as a raised chip, not a flat label.
-        boxShadow: insetHighlight(theme.mode),
+        boxShadow: theme.materialControls
+          ? undefined
+          : insetHighlight(theme.mode),
         ...style,
       }}
     >

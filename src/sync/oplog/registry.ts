@@ -101,6 +101,7 @@ export const REGISTRY: Readonly<Record<EntityType, EntitySpec>> = {
     accentHex: { kind: "deviceLocal" },
     swipeBetweenMonths: { kind: "deviceLocal" },
     navBarStyle: { kind: "deviceLocal" },
+    animationLevel: { kind: "deviceLocal" },
     fontTextOverride: { kind: "deviceLocal" },
     fontNumericOverride: { kind: "deviceLocal" },
     uiIconSetOverride: { kind: "deviceLocal" },

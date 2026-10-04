@@ -67,6 +67,8 @@ export interface DynamicPalette {
   seed: string;
   accentContainer: string;
   onAccentContainer: string;
+  /** Neutral-variant tone 50 (60 in dark): the edge of an outlined control. */
+  outline: string;
 }
 
 export function deriveDynamicPalette(
@@ -125,6 +127,7 @@ export function deriveDynamicPalette(
     seed: dark ? a1["200"] : a1["600"],
     accentContainer: dark ? a1["700"] : a1["100"],
     onAccentContainer: dark ? a1["100"] : a1["900"],
+    outline: dark ? n2["400"] : n2["500"],
   };
 }
 

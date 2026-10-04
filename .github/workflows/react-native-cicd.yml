@@ -141,6 +141,6 @@ jobs:
       - name: 📦 Upload build artifact to GitHub
         uses: actions/upload-artifact@v7
         with:
-          name: ${{ steps.out.outputs.name }}
           path: ./${{ steps.out.outputs.file }}
+          archive: false
           retention-days: 7

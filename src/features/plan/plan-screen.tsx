@@ -13,6 +13,7 @@ import { PageHeading } from "@/components/ui/page-heading";
 import { ProgressBar, ProgressRing } from "@/components/ui/progress-bar";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { SectionHeader } from "@/components/ui/section-header";
+import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import type { BudgetStatus, Goal } from "@/domain/models";
 import {
@@ -84,6 +85,7 @@ function useMilestoneHaptics(
 }
 
 export function PlanScreen() {
+  const scrollRef = useSectionScrollToTop<ScrollView>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
@@ -148,6 +150,7 @@ export function PlanScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
     >

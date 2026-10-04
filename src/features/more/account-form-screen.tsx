@@ -13,6 +13,7 @@ import {
   type ChoiceListOption,
 } from "@/components/ui/choice-list-field";
 import { ColorSwatch } from "@/components/ui/color-swatch";
+import { MoneyField } from "@/components/finance/money-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import { FRANKFURTER_UNSUPPORTED } from "@/data/exchange-rates/frankfurter";
@@ -303,14 +304,14 @@ export function AccountFormScreen() {
             searchPlaceholder="Search by currency name or code"
           />
         )}
-        <FormField
+        <MoneyField
+          currency={currencyCode}
           label="Opening balance"
           value={opening}
           onChangeText={(value) => {
             setOpeningTouched(true);
             setOpening(value);
           }}
-          keyboardType="decimal-pad"
           error={openingError}
           hint={
             existing

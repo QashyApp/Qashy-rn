@@ -8,6 +8,7 @@ import { AppText } from "@/components/ui/app-text";
 import { QashySwitch } from "@/components/ui/qashy-switch";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
+import { MoneyField } from "@/components/finance/money-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import type { PeriodUnit } from "@/domain/models";
@@ -376,8 +377,9 @@ export function BudgetFormScreen() {
             (item) => item.id === categoryId,
           );
           return category ? (
-            <FormField
+            <MoneyField
               key={category.id}
+              currency={state.settings.baseCurrency}
               literalLabel
               label={`${category.name} ${t("cap (optional)")}`}
               value={categoryLimits[category.id] ?? ""}
@@ -387,7 +389,6 @@ export function BudgetFormScreen() {
                   [category.id]: value,
                 }))
               }
-              keyboardType="decimal-pad"
               placeholder="No cap"
               error={categoryLimitErrors[category.id]}
             />

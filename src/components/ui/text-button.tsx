@@ -1,4 +1,4 @@
-import { type PressableProps } from "react-native";
+import { type ColorValue, type PressableProps } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
@@ -10,6 +10,7 @@ export function TextButton({
   title,
   icon,
   tone = "accent",
+  color: colorOverride,
   onPress,
   disabled = false,
   style,
@@ -19,17 +20,21 @@ export function TextButton({
   title: string;
   icon?: string;
   tone?: "accent" | "muted" | "danger";
+  /** A specific content color, for a button sitting on a non-standard surface (a snackbar). */
+  color?: ColorValue;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
   const isDisabled = Boolean(disabled);
+  const m3 = theme.materialControls;
   const color =
-    tone === "danger"
+    colorOverride ??
+    (tone === "danger"
       ? theme.negative
       : tone === "muted"
         ? theme.textMuted
-        : theme.accentText;
+        : theme.accentText);
   return (
     <MotionPressable
       accessibilityLabel={t(title)}
@@ -38,17 +43,25 @@ export function TextButton({
       {...props}
       disabled={isDisabled}
       onPress={onPress}
+      stateLayerColor={color}
       style={(state) => [
         {
           minWidth: 44,
           minHeight: 44,
-          paddingHorizontal: space.sm - 2,
-          borderRadius: radius.control,
+          paddingHorizontal: m3 ? space.md : space.sm - 2,
+          // A Material text button is a full pill, so its hover wash is one too.
+          borderRadius: m3 ? radius.pill : radius.control,
           alignItems: "center",
           justifyContent: "center",
           flexDirection: "row",
           gap: space.sm - 2,
-          opacity: isDisabled ? 0.4 : state.pressed ? 0.6 : 1,
+          opacity: isDisabled
+            ? m3
+              ? 0.38
+              : 0.4
+            : state.pressed && !m3
+              ? 0.6
+              : 1,
         },
         typeof style === "function" ? style(state) : style,
       ]}

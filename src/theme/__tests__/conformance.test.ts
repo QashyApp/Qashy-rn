@@ -92,12 +92,12 @@ describe.each(BUILT_IN_THEMES.map((theme) => [theme.id, theme] as const))(
 
       it("the resolved accent carries readable on-accent text", () => {
         const tokens = accentTokens(theme.accent.default, dark, theme);
-        expect(tokens.onAccent).toBe(readableTextColor(tokens.staticAccent));
+        // A tonal scheme supplies its own on-primary role; every other theme picks black or white.
+        if (!theme.accent.tintSurfaces) {
+          expect(tokens.onAccent).toBe(readableTextColor(tokens.staticAccent));
+        }
         expect(
-          contrastRatio(
-            readableTextColor(tokens.staticAccent),
-            tokens.staticAccent,
-          ),
+          contrastRatio(tokens.onAccent as string, tokens.staticAccent),
         ).toBeGreaterThanOrEqual(4.5);
       });
     });

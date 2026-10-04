@@ -169,7 +169,9 @@ function CsvStepper({ current }: { current: number }) {
                       ? theme.surfaceElevated
                       : theme.surfaceSunken,
                   boxShadow: done
-                    ? insetHighlight(theme.mode, 0.3)
+                    ? theme.materialControls
+                      ? undefined
+                      : insetHighlight(theme.mode, 0.3)
                     : active
                       ? `inset 0 0 0 2px ${String(theme.accent)}, ${theme.shadowControl}`
                       : theme.shadowSunken,

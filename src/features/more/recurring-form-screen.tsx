@@ -9,6 +9,7 @@ import { QashySwitch } from "@/components/ui/qashy-switch";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { FormField } from "@/components/ui/form-field";
+import { CategoryPicker } from "@/features/transactions/form/category-picker";
 import { FormScreen } from "@/components/ui/form-screen";
 import type {
   CategoryKind,
@@ -594,29 +595,12 @@ export function RecurringFormScreen() {
           ))}
         </View>
         <AppText variant="label">Category</AppText>
-        <View
-          accessibilityLabel={t("Recurring category")}
-          accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
-        >
-          <ChoiceChip
-            icon="questionmark.circle"
-            label="Uncategorized"
-            selected={!categoryId}
-            onPress={() => setCategoryId("")}
-          />
-          {categories.map((item) => (
-            <ChoiceChip
-              key={item.id}
-              literal
-              icon={item.icon}
-              label={`${item.name}${item.archived ? ` (${t("Archived")})` : ""}`}
-              disabled={item.archived}
-              selected={categoryId === item.id}
-              onPress={() => setCategoryId(item.id)}
-            />
-          ))}
-        </View>
+        <CategoryPicker
+          label="Recurring category"
+          categories={categories}
+          categoryId={categoryId}
+          onSelect={setCategoryId}
+        />
         <FormField
           label="Note"
           value={note}

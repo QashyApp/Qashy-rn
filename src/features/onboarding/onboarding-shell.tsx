@@ -1,7 +1,8 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { ScrollView, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CalculatorHost } from "@/components/finance/calculator-host";
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
 import { MotionView } from "@/components/ui/motion";
@@ -36,6 +37,8 @@ export function OnboardingShell({
   const theme = useQashyTheme();
   const { space } = theme;
   const { isRtl, t } = useLocalization();
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollOffset = useRef(0);
   const insets = useSafeAreaInsets();
   // Content arrives from the side it is heading toward: forward pushes in from
   // the trailing edge, which is the left edge in a right-to-left language.
@@ -102,29 +105,36 @@ export function OnboardingShell({
       </View>
 
       <StickyFooterLayout footer={footer}>
-        <ScrollView
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={{
-            flexGrow: 1,
-            justifyContent: "center",
-            paddingHorizontal: space.xxl,
-            paddingVertical: space.xl,
-          }}
-        >
-          <MotionView
-            key={stepKey}
-            variant={fromTrailing ? "right" : "left"}
-            exit
-            style={{
-              width: "100%",
-              maxWidth: 520,
-              alignSelf: "center",
-              gap: space.xxl,
+        <CalculatorHost scrollRef={scrollRef} scrollOffset={scrollOffset}>
+          <ScrollView
+            ref={scrollRef}
+            onScroll={(event) => {
+              scrollOffset.current = event.nativeEvent.contentOffset.y;
+            }}
+            scrollEventThrottle={16}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              flexGrow: 1,
+              justifyContent: "center",
+              paddingHorizontal: space.xxl,
+              paddingVertical: space.xl,
             }}
           >
-            {children}
-          </MotionView>
-        </ScrollView>
+            <MotionView
+              key={stepKey}
+              variant={fromTrailing ? "right" : "left"}
+              exit
+              style={{
+                width: "100%",
+                maxWidth: 520,
+                alignSelf: "center",
+                gap: space.xxl,
+              }}
+            >
+              {children}
+            </MotionView>
+          </ScrollView>
+        </CalculatorHost>
       </StickyFooterLayout>
     </View>
   );

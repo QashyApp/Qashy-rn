@@ -61,7 +61,7 @@ const radius: RadiusScale = {
   sheet: 28,
   nav: 20,
   // A rounded square, not a pill.
-  fab: 18,
+  fab: 16,
   pill: 999,
 };
 
@@ -69,11 +69,11 @@ const radius: RadiusScale = {
 const scale: TypeScaleSpec = {
   hero: { ...typeScale.hero, weight: "bold", letterSpacing: -1.2 },
   display: { ...typeScale.display, weight: "bold", letterSpacing: -0.8 },
-  title: { ...typeScale.title, weight: "bold", letterSpacing: -0.3 },
+  title: { ...typeScale.title, weight: "semibold", letterSpacing: 0 },
   money: { ...typeScale.money, weight: "bold", letterSpacing: -0.2 },
-  headline: { ...typeScale.headline, weight: "bold", letterSpacing: -0.1 },
+  headline: { ...typeScale.headline, weight: "semibold", letterSpacing: 0 },
   body: { ...typeScale.body, weight: "regular" },
-  label: { ...typeScale.label, weight: "semibold", letterSpacing: 0 },
+  label: { ...typeScale.label, weight: "medium", letterSpacing: 0.1 },
   figure: { ...typeScale.figure, weight: "bold", letterSpacing: -0.1 },
   caption: { ...typeScale.caption, weight: "medium" },
   overline: { ...typeScale.overline, weight: "semibold" },

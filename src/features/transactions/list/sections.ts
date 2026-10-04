@@ -19,3 +19,44 @@ export function groupTransactionsByDay<
   }
   return Array.from(groups, ([title, data]) => ({ title, data }));
 }
+
+/** Marks the one section that gathers upcoming transactions instead of a calendar day. */
+export const UPCOMING_SECTION = "upcoming";
+
+export interface LedgerSection<T> extends DaySection<T> {
+  /** Set on the upcoming group, whose `title` is not a date. */
+  readonly kind?: "upcoming";
+  /** How many rows the group holds, which stays known while a collapsed group's `data` is empty. */
+  readonly count?: number;
+}
+
+/**
+ * Day sections, with upcoming transactions pulled out into one group at the top.
+ *
+ * Upcoming rows (recurring items still due, imported future dates) are not things that happened,
+ * so interleaving them by date made a month read as if they had. As a group they can be collapsed
+ * out of the way. A collapsed group keeps its header and `count` but holds no rows, so the list
+ * does not render them at all.
+ */
+export function groupLedgerSections<
+  T extends { readonly localDate: string; readonly status: string },
+>(
+  transactions: readonly T[],
+  options: { groupUpcoming: boolean; upcomingCollapsed: boolean },
+): LedgerSection<T>[] {
+  if (!options.groupUpcoming) return groupTransactionsByDay(transactions);
+  const upcoming = transactions.filter((item) => item.status === "upcoming");
+  if (upcoming.length === 0) return groupTransactionsByDay(transactions);
+  const days = groupTransactionsByDay(
+    transactions.filter((item) => item.status !== "upcoming"),
+  );
+  return [
+    {
+      title: UPCOMING_SECTION,
+      kind: "upcoming",
+      count: upcoming.length,
+      data: options.upcomingCollapsed ? [] : upcoming,
+    },
+    ...days,
+  ];
+}

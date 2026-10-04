@@ -198,9 +198,13 @@ test("completes onboarding and records an expense", async ({ page }) => {
   await page.getByRole("checkbox", { name: /Coffee/ }).click();
   await expect(page.getByText("1 selected")).toBeVisible();
   await page.getByRole("button", { name: "Groceries" }).click();
-  await expect(page.getByText(/Groceries · Everyday/)).toBeVisible();
+  await expect(
+    page.getByText(/Groceries · Everyday/).filter({ visible: true }),
+  ).toBeVisible();
   await page.reload();
-  await expect(page.getByText(/Groceries · Everyday/)).toBeVisible();
+  await expect(
+    page.getByText(/Groceries · Everyday/).filter({ visible: true }),
+  ).toBeVisible();
 });
 
 test("reconciles finance changes across open browser tabs", async ({
@@ -244,7 +248,9 @@ test("preserves a selected transaction type and lets an edit clear its category"
   await page.getByRole("button", { name: "Save changes" }).click();
 
   await expect(page).toHaveURL(TRANSACTIONS_URL);
-  await expect(page.getByText(/Uncategorized · Everyday/)).toBeVisible();
+  await expect(
+    page.getByText(/Uncategorized · Everyday/).filter({ visible: true }),
+  ).toBeVisible();
 });
 
 /** The goal and budget forms start empty (defaults show as placeholders); a target / limit is required. */
@@ -1199,4 +1205,64 @@ test("removes and re-adds an Overview card, and the layout survives a reload", a
   await expect(
     page.getByRole("heading", { name: "Recent activity" }),
   ).toBeVisible();
+});
+
+test("selects the rows between a held row and the finger while dragging", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Drives a touch drag.");
+  await completeOnboarding(page);
+  for (const title of ["Row A", "Row B", "Row C", "Row D", "Row E"])
+    await addExpense(page, title);
+  await page.getByRole("link", { name: /Transactions/ }).click();
+  const box = async (title: string) => {
+    const found = await page
+      .getByText(title, { exact: true })
+      .filter({ visible: true })
+      .first()
+      .boundingBox();
+    if (!found) throw new Error(`no row ${title}`);
+    return found;
+  };
+  // The list scrolls to and flashes the last saved row; wait for it to come to rest.
+  await page.waitForTimeout(1200);
+  const cdp = await context.newCDPSession(page);
+  const touch = (
+    type: "touchStart" | "touchMove" | "touchEnd",
+    y: number | null,
+  ) =>
+    cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: y === null ? [] : [{ x: 120, y }],
+    });
+  const centre = async (title: string) => {
+    const b = await box(title);
+    return b.y + b.height / 2;
+  };
+  // Newest first: E, D, C, B, A. Hold on D, drag to B.
+  const startY = await centre("Row D");
+  const endY = await centre("Row B");
+  const firstBefore = await box("Row E");
+  await touch("touchStart", startY);
+  for (let i = 0; i < 8; i++) {
+    await page.waitForTimeout(100);
+    await touch("touchMove", startY + (i % 2));
+  }
+  await expect(page.getByText("1 selected")).toBeVisible();
+  // A browser has committed the held touch to scrolling by now; a drag from a selected row (which
+  // opts out of touch scrolling) is the one that always works.
+  await touch("touchEnd", null);
+  await touch("touchStart", startY);
+  await touch("touchMove", startY + 1);
+  await page.waitForTimeout(50);
+  for (let step = 1; step <= 12; step++) {
+    await touch("touchMove", startY + ((endY - startY) * step) / 12);
+    await page.waitForTimeout(16);
+  }
+  await expect(page.getByText("3 selected")).toBeVisible();
+  await touch("touchEnd", null);
+  await expect(page.getByText("3 selected")).toBeVisible();
+  // The list itself did not scroll under the finger.
+  expect((await box("Row E")).y).toBeCloseTo(firstBefore.y, 0);
 });

@@ -43,6 +43,7 @@ export const initialSettings = (): AppSettings => {
     accentHex: QASHY_ACCENT,
     swipeBetweenMonths: false,
     navBarStyle: "native",
+    animationLevel: "all",
     fontTextOverride: null,
     fontNumericOverride: null,
     uiIconSetOverride: null,

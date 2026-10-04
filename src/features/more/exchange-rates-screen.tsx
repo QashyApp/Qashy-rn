@@ -261,7 +261,9 @@ export function ExchangeRatesScreen() {
                       backgroundColor: theme.accentContainer,
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: insetHighlight(theme.mode),
+                      boxShadow: theme.materialControls
+                        ? undefined
+                        : insetHighlight(theme.mode),
                     }}
                   >
                     <AppIcon

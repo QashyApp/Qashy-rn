@@ -48,6 +48,8 @@ export function MaterialSwitch({
   const { isRtl } = useLocalization();
 
   const progress = useSharedValue(value ? 1 : 0);
+  const hover = useSharedValue(0);
+  const press = useSharedValue(0);
   const duration = motionDuration.enter;
   useEffect(() => {
     progress.value = withTiming(value ? 1 : 0, {
@@ -64,8 +66,9 @@ export function MaterialSwitch({
     /^#[0-9a-f]{6}$/i.test(accent) && contrastRatio("#FFFFFF", accent) >= 3
       ? "#FFFFFF"
       : str(theme.onAccent);
-  const offTrack = str(theme.surfaceMuted);
-  const offOutline = str(theme.textMuted);
+  const offTrack = str(theme.surfaceSunken);
+  // M3: the off handle and track outline are the outline role (not on-surface-variant).
+  const offOutline = str(theme.outline);
   const direction = isRtl ? -1 : 1;
 
   const trackStyle = useAnimatedStyle(() => ({
@@ -85,8 +88,16 @@ export function MaterialSwitch({
     ),
     transform: [
       { translateX: direction * progress.value * THUMB_TRAVEL },
-      { scale: interpolate(progress.value, [0, 1], [THUMB_OFF_SCALE, 1]) },
+      {
+        scale:
+          interpolate(progress.value, [0, 1], [THUMB_OFF_SCALE, 1]) *
+          // The handle grows to 28px while pressed.
+          (1 + (28 / THUMB - 1) * press.value),
+      },
     ],
+  }));
+  const haloStyle = useAnimatedStyle(() => ({
+    opacity: Math.max(hover.value * 0.08, press.value * 0.1),
   }));
 
   // The check fades in over the second half of the slide.
@@ -103,6 +114,10 @@ export function MaterialSwitch({
       aria-checked={value}
       disabled={disabled}
       hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
+      onHoverIn={() => hover.set(withTiming(1, { duration: 120 }))}
+      onHoverOut={() => hover.set(withTiming(0, { duration: 120 }))}
+      onPressIn={() => press.set(withTiming(1, { duration: 100 }))}
+      onPressOut={() => press.set(withTiming(0, { duration: 150 }))}
       onPress={() => {
         hapticSelection();
         onValueChange?.(!value);
@@ -121,6 +136,25 @@ export function MaterialSwitch({
           trackStyle,
         ]}
       >
+        {/* 40px state-layer halo centered on the handle. */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              top: THUMB_TOP + THUMB / 2 - 20,
+              start: THUMB_OFF_START + THUMB / 2 - 20,
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              backgroundColor: value ? theme.accent : theme.text,
+              transform: [
+                { translateX: direction * (value ? THUMB_TRAVEL : 0) },
+              ],
+            },
+            haloStyle,
+          ]}
+        />
         <Animated.View
           style={[
             {
@@ -138,7 +172,11 @@ export function MaterialSwitch({
           ]}
         >
           <Animated.View style={checkStyle}>
-            <AppIcon name="checkmark" size={14} color={theme.accent} />
+            <AppIcon
+              name="checkmark"
+              size={14}
+              color={theme.onAccentContainer}
+            />
           </Animated.View>
         </Animated.View>
       </Animated.View>

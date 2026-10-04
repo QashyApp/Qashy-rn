@@ -35,6 +35,65 @@ export function ChoiceChip({
   const { radius, space } = theme;
   const { t } = useLocalization();
   const selectable = mode !== "button";
+  // Material 3 filter chip: 32px tall with 8px corners, outlined at rest and filled with the
+  // secondary container when selected, the check leading the label. The hit slop keeps the 44px
+  // target.
+  const m3 = theme.materialControls;
+  const content = selected
+    ? m3
+      ? theme.onSecondaryContainer
+      : theme.onAccentContainer
+    : theme.textMuted;
+  if (m3) {
+    return (
+      <MotionPressable
+        accessibilityLabel={literal ? label : t(label)}
+        accessibilityRole={mode}
+        accessibilityState={
+          selectable ? { checked: selected, disabled } : { disabled }
+        }
+        aria-checked={selectable ? selected : undefined}
+        disabled={disabled}
+        hitSlop={6}
+        onPress={() => {
+          hapticSelection();
+          onPress();
+        }}
+        stateLayerColor={content}
+        style={{
+          minHeight: 32,
+          paddingStart: selectable || icon ? space.sm : space.md,
+          paddingEnd: space.md,
+          borderRadius: 8,
+          borderWidth: selected ? 0 : 1,
+          borderColor: theme.outline,
+          backgroundColor: selected ? theme.secondaryContainer : "transparent",
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: space.xs + 2,
+          opacity: disabled ? 0.38 : 1,
+        }}
+      >
+        {selected && selectable ? (
+          <AppIcon name="checkmark" color={content} size={18} />
+        ) : icon ? (
+          <AppIcon name={icon} color={content} size={18} />
+        ) : selectable ? (
+          // Reserved, so choosing a chip never reflows the row.
+          <View style={{ width: 18, height: 18 }} />
+        ) : null}
+        <AppText
+          selectable={false}
+          literal={literal}
+          variant="label"
+          style={{ color: selected ? content : theme.text, fontWeight: "500" }}
+        >
+          {label}
+        </AppText>
+      </MotionPressable>
+    );
+  }
   return (
     <MotionPressable
       accessibilityLabel={literal ? label : t(label)}

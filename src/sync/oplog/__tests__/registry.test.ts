@@ -133,6 +133,7 @@ describe("registry coverage", () => {
       "accentHex",
       "swipeBetweenMonths",
       "navBarStyle",
+      "animationLevel",
       "fontTextOverride",
       "fontNumericOverride",
       "uiIconSetOverride",

@@ -7,6 +7,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
+import { MoneyField } from "@/components/finance/money-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -17,7 +18,16 @@ import type {
   ForeignAmountInput,
 } from "@/domain/models";
 import { AmountHero } from "@/components/finance/amount-hero";
-import { CategoryGrid } from "@/features/transactions/form/category-grid";
+import {
+  buildTitleCategoryIndex,
+  suggestCategoryForTitle,
+} from "@/features/transactions/form/title-category";
+import { announceSavedTransaction } from "@/features/transactions/list/saved-transaction-signal";
+import {
+  evaluateAmountExpression,
+  isAmountOperator,
+} from "@/utils/amount-expression";
+import { CategoryPicker } from "@/features/transactions/form/category-picker";
 import {
   ForeignFeeFields,
   type ForeignFeeKind,
@@ -90,7 +100,9 @@ export function TransactionFormScreen() {
   );
   const [title, setTitle] = useState(existing?.title ?? "");
   const [amountTouched, setAmountTouched] = useState(false);
-  const [amount, setAmount] = useState(() => {
+  // What the amount field holds: a plain number, or arithmetic typed on the keypad ("12.5 + 3 × 2").
+  // `amount` below is what the rest of the form reads, with any arithmetic already evaluated.
+  const [amountInput, setAmountInput] = useState(() => {
     if (!existing) return "";
     if (existing.foreign) {
       return minorToLocalizedDecimalString(
@@ -113,6 +125,25 @@ export function TransactionFormScreen() {
     existing?.destinationAccountId ?? "",
   );
   const [categoryId, setCategoryId] = useState(existing?.categoryId ?? "");
+  // Until the user picks (or clears) a category themselves, it follows the title: a title they have
+  // used before fills in the category it was filed under. An existing transaction already has its own.
+  const [categoryTouched, setCategoryTouched] = useState(Boolean(existing));
+  const titleCategories = useMemo(
+    () => (existing ? null : buildTitleCategoryIndex(state.transactions)),
+    [existing, state.transactions],
+  );
+  const suggestedCategoryFor = (
+    nextTitle: string,
+    nextKind: TransactionKind,
+  ) =>
+    titleCategories && nextKind !== "transfer"
+      ? (suggestCategoryForTitle(
+          titleCategories,
+          nextTitle,
+          nextKind,
+          state.categories,
+        ) ?? "")
+      : "";
   const [tagIds, setTagIds] = useState(existing?.tagIds ?? []);
   const [note, setNote] = useState(existing?.note ?? "");
   const [exchangeRate, setExchangeRate] = useState(() =>
@@ -234,6 +265,35 @@ export function TransactionFormScreen() {
         state.settings.locale,
       )
     : undefined;
+  // The currency the typed amount is in: the foreign leg when one is active, else the account's.
+  // Arithmetic rounds to this currency's minor unit, once, at the end.
+  const amountCurrency =
+    foreignActive && !foreignCurrencyError
+      ? trimmedForeignCurrency
+      : (account?.currency ?? state.settings.baseCurrency);
+  const amountExpression = useMemo(
+    () =>
+      evaluateAmountExpression(
+        amountInput,
+        amountCurrency,
+        state.settings.locale,
+      ),
+    [amountInput, amountCurrency, state.settings.locale],
+  );
+  const amount =
+    amountExpression.kind === "value" ? amountExpression.text : amountInput;
+  // A trailing operator is a calculation in progress, not an invalid amount.
+  const amountPending =
+    amountExpression.kind === "invalid" &&
+    isAmountOperator(Array.from(amountInput.trim()).at(-1) ?? "");
+  const resolveAmount = (expression: string) => {
+    const result = evaluateAmountExpression(
+      expression,
+      amountCurrency,
+      state.settings.locale,
+    );
+    return result.kind === "value" ? result.text : null;
+  };
   const foreignAppliedRate = useMemo(
     () =>
       foreignActive && account && !foreignCurrencyError
@@ -580,7 +640,7 @@ export function TransactionFormScreen() {
     values: {
       kind,
       title,
-      amount,
+      amount: amountInput,
       date,
       accountId,
       destinationAccountId,
@@ -664,7 +724,7 @@ export function TransactionFormScreen() {
           : foreignActive
             ? (foreignFeePreview.principalMinor ?? foreignPayload!.amountMinor)
             : parseMoney(amount, account.currency, state.settings.locale);
-      await repository.saveTransaction(
+      const saved = await repository.saveTransaction(
         {
           kind,
           // Trimmed like every sibling form: a whitespace-only title is truthy, so it
@@ -706,6 +766,17 @@ export function TransactionFormScreen() {
         expectedRevision,
       );
       hapticSuccess();
+      // The ledger scrolls to this row and flashes it once the sheet closes. Only when the ledger
+      // owns the sheet: an edit started from Overview has no row to point at.
+      if (ownerRoute === "/transactions") {
+        announceSavedTransaction({
+          id: saved.id,
+          localDate: date,
+          isNew: !existing,
+          previousDate: existing?.localDate,
+          today: todayLocal(),
+        });
+      }
       // Land on the month the transaction was filed under, so a back-dated
       // entry is visible the moment the sheet closes instead of "missing".
       closeToOwner(
@@ -757,7 +828,9 @@ export function TransactionFormScreen() {
         options={KIND_OPTIONS}
         onChange={(next) => {
           setKind(next);
-          setCategoryId("");
+          setCategoryId(
+            categoryTouched ? "" : suggestedCategoryFor(title, next),
+          );
         }}
       />
 
@@ -767,22 +840,47 @@ export function TransactionFormScreen() {
             ? trimmedForeignCurrency
             : (account?.currency ?? state.settings.baseCurrency)
         }
-        value={amount}
+        value={amountInput}
         onChangeText={(next) => {
           setAmountTouched(true);
-          setAmount(next);
+          setAmountInput(next);
         }}
+        // Enter on a hardware keyboard finishes a calculation the way the keypad's result key does.
+        onSubmitEditing={() => {
+          const resolved = resolveAmount(amountInput);
+          if (resolved !== null) setAmountInput(resolved);
+        }}
+        calculator="expression"
         // No blur validation: leaving the empty, autofocused field (to pick an account first)
         // would pop "Amount is required" in and shift the form under the pointer mid-press.
-        error={amountTouched || existing ? amountError : undefined}
+        error={
+          (amountTouched || existing) && !amountPending
+            ? amountError
+            : undefined
+        }
         autoFocus={!existing}
       />
+
+      {amountExpression.kind === "value" ? (
+        <AppText
+          literal
+          variant="caption"
+          muted
+          style={{ textAlign: "center" }}
+        >
+          {`= ${amountExpression.text}`}
+        </AppText>
+      ) : null}
 
       <Card style={{ gap: 16 }}>
         <FormField
           label="Title"
           value={title}
-          onChangeText={setTitle}
+          onChangeText={(next) => {
+            setTitle(next);
+            if (!categoryTouched)
+              setCategoryId(suggestedCategoryFor(next, kind));
+          }}
           placeholder={kind === "transfer" ? "Transfer" : "What was it?"}
         />
       </Card>
@@ -790,11 +888,19 @@ export function TransactionFormScreen() {
       {kind !== "transfer" ? (
         <Card style={{ gap: 14 }}>
           <AppText variant="label">Category</AppText>
-          <CategoryGrid
+          <CategoryPicker
             categories={categories}
             categoryId={categoryId}
-            onSelect={setCategoryId}
+            onSelect={(next) => {
+              setCategoryTouched(true);
+              setCategoryId(next);
+            }}
           />
+          {!categoryTouched && categoryId ? (
+            <AppText variant="caption" muted>
+              Suggested from earlier transactions with this title.
+            </AppText>
+          ) : null}
         </Card>
       ) : null}
 
@@ -884,11 +990,11 @@ export function TransactionFormScreen() {
               </AppText>
             ) : null}
             {destinationAccount && !sameCurrencyTransfer ? (
-              <FormField
+              <MoneyField
+                currency={destinationAccount.currency}
                 label={`Destination amount (${destinationAccount.currency})`}
                 value={destinationAmount}
                 onChangeText={setDestinationAmount}
-                keyboardType="decimal-pad"
                 placeholder="Calculated automatically"
                 error={destinationAmountError}
                 hint="Leave blank to calculate through your automatic or manual exchange rates."

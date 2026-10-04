@@ -1,18 +1,17 @@
 import { useState } from "react";
-import { View, type LayoutChangeEvent } from "react-native";
+import { ScrollView, View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { MotionPressable } from "@/components/ui/motion";
-import { TextButton } from "@/components/ui/text-button";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 
 import { hapticSelection } from "@/utils/haptics";
 
-export interface CategoryGridOption {
+export interface CategoryPickerOption {
   id: string;
   /** Stored data — rendered and announced exactly as entered, like `ChoiceChip`'s `literal`. */
   name: string;
@@ -21,68 +20,52 @@ export interface CategoryGridOption {
   archived: boolean;
 }
 
-/** Tiles shown before folding the rest behind "Show all". */
-const VISIBLE_LIMIT = 8;
+/** One tile's width; the row scrolls sideways, so tiles never need to share the screen's width. */
+const TILE_WIDTH = 96;
 
 /**
- * The category picker as a grid of square tiles instead of a wrapping chip
- * row, so the most-used categories read at a glance instead of as a run of
- * pills. Keeps the exact `radiogroup`/`radio` semantics and accessible names
- * the chip row had — including "Uncategorized" first and the " (archived)"
- * suffix — so nothing that targets the category picker needs to change.
+ * The category picker: one row of square tiles that scrolls sideways, so a long category list
+ * costs one tile's height instead of a block of them. Keeps the `radiogroup`/`radio` semantics
+ * and accessible names the chip row had — including "Uncategorized" first and the " (archived)"
+ * suffix — and opens already scrolled to the selected tile.
  */
-export function CategoryGrid({
+export function CategoryPicker({
   categories,
   categoryId,
   onSelect,
+  label: groupLabel = "Category",
 }: {
-  categories: CategoryGridOption[];
+  categories: CategoryPickerOption[];
   categoryId: string;
   onSelect: (id: string) => void;
+  /** The radio group's accessible name. */
+  label?: string;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
-  const [width, setWidth] = useState(0);
-  const [expanded, setExpanded] = useState(false);
-
-  const columns = width >= 520 ? 4 : width >= 340 ? 3 : 2;
   const gap = space.sm;
-  const tileWidth =
-    width > 0 ? (width - gap * (columns - 1)) / columns : undefined;
 
   // `null` stands in for "Uncategorized", which always sorts first.
-  const all: (CategoryGridOption | null)[] = [null, ...categories];
+  const all: (CategoryPickerOption | null)[] = [null, ...categories];
   const selectedIndex = all.findIndex(
     (item) => (item ? item.id : "") === categoryId,
   );
-  const overflowing = all.length > VISIBLE_LIMIT;
-  const visible =
-    !expanded && overflowing
-      ? (() => {
-          const head = all.slice(0, VISIBLE_LIMIT);
-          // The selected tile must stay visible even when it would otherwise be
-          // folded behind "Show all" — collapsing the grid must never look like
-          // it silently cleared the user's choice.
-          if (selectedIndex >= VISIBLE_LIMIT)
-            head[VISIBLE_LIMIT - 1] = all[selectedIndex]!;
-          return head;
-        })()
-      : all;
-
+  // Opens with the selected tile in view. Fixed at mount, so picking a tile never re-scrolls the row.
+  const [initialX] = useState(() =>
+    Math.max(0, selectedIndex * (TILE_WIDTH + gap) - TILE_WIDTH),
+  );
   return (
-    <View
-      style={{ gap: space.md }}
-      onLayout={(event: LayoutChangeEvent) =>
-        setWidth(event.nativeEvent.layout.width)
-      }
-    >
-      <View
-        accessibilityLabel={t("Category")}
+    <View style={{ marginHorizontal: -space.lg }}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        accessibilityLabel={t(groupLabel)}
         accessibilityRole="radiogroup"
-        style={{ flexDirection: "row", flexWrap: "wrap", gap }}
+        contentContainerStyle={{ gap, paddingHorizontal: space.lg }}
+        contentOffset={{ x: initialX, y: 0 }}
       >
-        {visible.map((item) => {
+        {all.map((item) => {
           const id = item ? item.id : "";
           const selected = categoryId === id;
           const label = item
@@ -107,9 +90,7 @@ export function CategoryGrid({
               pressedScale={0.97}
               style={[
                 {
-                  width: tileWidth,
-                  flexGrow: tileWidth ? 0 : 1,
-                  minWidth: 80,
+                  width: TILE_WIDTH,
                   minHeight: 72,
                   borderRadius: radius.tile,
                   borderCurve: "continuous",
@@ -180,15 +161,7 @@ export function CategoryGrid({
             </MotionPressable>
           );
         })}
-      </View>
-      {overflowing && !expanded ? (
-        <TextButton
-          title="Show all"
-          tone="muted"
-          onPress={() => setExpanded(true)}
-          style={{ alignSelf: "flex-start" }}
-        />
-      ) : null}
+      </ScrollView>
     </View>
   );
 }

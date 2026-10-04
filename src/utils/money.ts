@@ -478,3 +478,8 @@ export function sumMinor(values: Iterable<number>, label = "Amount") {
   for (const value of values) total = addMinor(total, value, label);
   return total;
 }
+
+/** The locale's decimal symbol. The amount keypad's decimal key types it, and the expression parser reads it back. */
+export function decimalSymbolFor(locale: string) {
+  return localeNumberParts(locale).decimalSymbol;
+}

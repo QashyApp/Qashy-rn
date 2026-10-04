@@ -7,6 +7,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
+import { MoneyField } from "@/components/finance/money-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import { TextButton } from "@/components/ui/text-button";
@@ -327,11 +328,11 @@ export function GoalFormScreen() {
           onChangeText={setName}
           placeholder={defaultGoalName}
         />
-        <FormField
+        <MoneyField
+          currency={state.settings.baseCurrency}
           label="Starting progress"
           value={initial}
           onChangeText={setInitial}
-          keyboardType="decimal-pad"
           error={initialError}
           required
         />
@@ -462,7 +463,8 @@ export function GoalFormScreen() {
           {!manualContributions.length ? (
             <AppText muted>No manual contributions yet.</AppText>
           ) : null}
-          <FormField
+          <MoneyField
+            currency={state.settings.baseCurrency}
             label={
               editingContributionId
                 ? "Contribution amount"
@@ -470,7 +472,6 @@ export function GoalFormScreen() {
             }
             value={contribution}
             onChangeText={setContribution}
-            keyboardType="decimal-pad"
             placeholder="0"
             error={contributionError}
           />

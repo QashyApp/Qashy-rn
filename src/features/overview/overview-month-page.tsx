@@ -1,5 +1,6 @@
 import { router } from "expo-router";
-import { memo, useMemo, useState } from "react";
+import { memo, useMemo, useState, type Ref } from "react";
+import type { SharedValue } from "react-native-reanimated";
 import {
   Platform,
   Pressable,
@@ -19,6 +20,7 @@ import {
   MonthSwitcher,
   type MonthDirection,
 } from "@/components/ui/month-switcher";
+import { MonthContentFade } from "@/components/ui/month-content-fade";
 import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
 import { MotionView } from "@/components/ui/motion";
 import { PageHeading } from "@/components/ui/page-heading";
@@ -57,6 +59,8 @@ export interface OverviewMonthPageProps {
   month: string;
   /** Only the current page scrolls and reports scroll offsets to the floating button. */
   isCurrent: boolean;
+  /** The month pager's drag, which slides the month title. */
+  dragProgress?: SharedValue<number>;
   editing: boolean;
   cards: readonly OverviewCard[];
   configOpenId: string | null;
@@ -66,6 +70,8 @@ export interface OverviewMonthPageProps {
   /** The hero's month switcher; the screen routes it through the pager. */
   onMonthSwitch: (month: string, direction: MonthDirection) => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  /** Attached on the current page only, so a tab re-press scrolls the page in view. */
+  scrollRef?: Ref<ScrollView>;
   onMoveCard: (id: string, delta: 1 | -1) => void;
   onResizeCard: (card: OverviewCard) => void;
   onConfigureCard: (id: string, config: Record<string, unknown>) => void;
@@ -81,6 +87,7 @@ export interface OverviewMonthPageProps {
 export const OverviewMonthPage = memo(function OverviewMonthPage({
   month,
   isCurrent,
+  dragProgress,
   editing,
   cards,
   configOpenId,
@@ -89,6 +96,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   onExitEdit,
   onMonthSwitch,
   onScroll,
+  scrollRef,
   onMoveCard,
   onResizeCard,
   onConfigureCard,
@@ -216,6 +224,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
 
   return (
     <ScrollView
+      ref={isCurrent ? scrollRef : undefined}
       contentInsetAdjustmentBehavior="automatic"
       onScroll={isCurrent ? onScroll : undefined}
       scrollEventThrottle={16}
@@ -249,7 +258,13 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
 
         <PageHero
           overline="Net worth"
-          accessory={<MonthSwitcher value={month} onChange={onMonthSwitch} />}
+          accessory={
+            <MonthSwitcher
+              value={month}
+              onChange={onMonthSwitch}
+              dragProgress={dragProgress}
+            />
+          }
           figure={
             <View
               style={{ gap: space.xs }}
@@ -385,10 +400,12 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                     numeric
                   />
                 </View>
-                <Sparkline
-                  values={cumulativeSpend}
-                  label={t("Cumulative spending")}
-                />
+                <MonthContentFade month={month}>
+                  <Sparkline
+                    values={cumulativeSpend}
+                    label={t("Cumulative spending")}
+                  />
+                </MonthContentFade>
               </View>
             ) : undefined
           }
@@ -396,68 +413,70 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
 
         {!editing ? (
           cards.length ? (
-            <View style={{ gap: space.xl }} onLayout={onGridLayout}>
-              {gridWidth === 0
-                ? cards.map((card) => (
-                    <MotionView
-                      key={card.id}
-                      animateLayout
-                      style={{ width: "100%" }}
-                    >
-                      {Platform.OS === "web" ? (
-                        renderWidget(card)
-                      ) : (
-                        <Pressable
-                          // A press-and-hold affordance for sighted users only. Left accessible it
-                          // would collapse the whole card into one screen-reader element and hide
-                          // its buttons; "Customize" is the accessible way into edit mode.
-                          accessible={false}
-                          delayLongPress={450}
-                          onLongPress={onEnterEdit}
-                          style={{ width: "100%" }}
-                        >
-                          {renderWidget(card)}
-                        </Pressable>
-                      )}
-                    </MotionView>
-                  ))
-                : rows.map((row, rowIndex) => (
-                    <View
-                      key={rowIndex}
-                      style={
-                        multiColumn
-                          ? {
-                              flexDirection: "row",
-                              gap: space.xl,
-                              alignItems: "flex-start",
-                              flexWrap: "wrap",
-                            }
-                          : { gap: space.xl }
-                      }
-                    >
-                      {row.cards.map(({ card, width }) => (
-                        <MotionView
-                          key={card.id}
-                          animateLayout
-                          style={{ width }}
-                        >
-                          {Platform.OS === "web" ? (
-                            renderWidget(card)
-                          ) : (
-                            <Pressable
-                              accessible={false}
-                              delayLongPress={450}
-                              onLongPress={onEnterEdit}
-                              style={{ width: "100%" }}
-                            >
-                              {renderWidget(card)}
-                            </Pressable>
-                          )}
-                        </MotionView>
-                      ))}
-                    </View>
-                  ))}
-            </View>
+            <MonthContentFade month={month}>
+              <View style={{ gap: space.xl }} onLayout={onGridLayout}>
+                {gridWidth === 0
+                  ? cards.map((card) => (
+                      <MotionView
+                        key={card.id}
+                        animateLayout
+                        style={{ width: "100%" }}
+                      >
+                        {Platform.OS === "web" ? (
+                          renderWidget(card)
+                        ) : (
+                          <Pressable
+                            // A press-and-hold affordance for sighted users only. Left accessible it
+                            // would collapse the whole card into one screen-reader element and hide
+                            // its buttons; "Customize" is the accessible way into edit mode.
+                            accessible={false}
+                            delayLongPress={450}
+                            onLongPress={onEnterEdit}
+                            style={{ width: "100%" }}
+                          >
+                            {renderWidget(card)}
+                          </Pressable>
+                        )}
+                      </MotionView>
+                    ))
+                  : rows.map((row, rowIndex) => (
+                      <View
+                        key={rowIndex}
+                        style={
+                          multiColumn
+                            ? {
+                                flexDirection: "row",
+                                gap: space.xl,
+                                alignItems: "flex-start",
+                                flexWrap: "wrap",
+                              }
+                            : { gap: space.xl }
+                        }
+                      >
+                        {row.cards.map(({ card, width }) => (
+                          <MotionView
+                            key={card.id}
+                            animateLayout
+                            style={{ width }}
+                          >
+                            {Platform.OS === "web" ? (
+                              renderWidget(card)
+                            ) : (
+                              <Pressable
+                                accessible={false}
+                                delayLongPress={450}
+                                onLongPress={onEnterEdit}
+                                style={{ width: "100%" }}
+                              >
+                                {renderWidget(card)}
+                              </Pressable>
+                            )}
+                          </MotionView>
+                        ))}
+                      </View>
+                    ))}
+              </View>
+            </MonthContentFade>
           ) : (
             <EmptyState
               icon="plus.circle"

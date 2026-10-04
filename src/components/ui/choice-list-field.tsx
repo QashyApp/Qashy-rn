@@ -51,6 +51,7 @@ export function ChoiceListField({
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
+  const m3 = theme.materialControls;
   const { isRtl, t } = useLocalization();
   const { height } = useWindowDimensions();
   const [open, setOpen] = useState(false);
@@ -96,14 +97,27 @@ export function ChoiceListField({
             borderCurve: "continuous",
             borderWidth: open ? 2 : 0,
             borderColor: open ? theme.accent : "transparent",
-            opacity: pressed ? 0.8 : 1,
+            opacity: pressed && !m3 ? 0.8 : 1,
             flexDirection: "row",
             alignItems: "center",
             gap: 12,
           },
           // Same raised control silhouette as any other trigger; the accent
           // ring on open replaces the previous filled-border affordance.
-          materialStyle(theme, "control"),
+          m3
+            ? {
+                // Same filled field as FormField: a 4px-topped well with a bottom indicator.
+                backgroundColor: theme.surfaceSunken,
+                borderTopStartRadius: 4,
+                borderTopEndRadius: 4,
+                borderBottomStartRadius: 0,
+                borderBottomEndRadius: 0,
+                borderWidth: 0,
+                borderBottomWidth: open ? 2 : 1,
+                borderBottomColor: open ? theme.accent : theme.textMuted,
+                minHeight: 56,
+              }
+            : materialStyle(theme, "control"),
         ]}
       >
         <View style={{ flex: 1, gap: 1 }}>
@@ -159,10 +173,12 @@ export function ChoiceListField({
                 alignSelf: "center",
                 padding: 18,
                 gap: 14,
-                borderRadius: radius.card,
+                borderRadius: m3 ? radius.sheet : radius.card,
                 borderCurve: "continuous",
               },
-              materialStyle(theme, "overlay"),
+              m3
+                ? { backgroundColor: theme.surfaceMuted }
+                : materialStyle(theme, "overlay"),
             ]}
           >
             <View

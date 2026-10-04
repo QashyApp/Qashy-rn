@@ -58,8 +58,10 @@ export function FloatingActionButton({
         label={label}
         icon={icon}
         variant="accent"
-        size={58}
-        iconSize={25}
+        // Material's FAB is 56px, in the primary container, and keeps its elevation when pressed.
+        size={theme.materialControls ? 56 : 58}
+        iconSize={theme.materialControls ? 24 : 25}
+        iconColor={theme.materialControls ? theme.onAccentContainer : undefined}
         // No entrance: the button is positioned outside the screen's transition
         // boundary, so an entrance here would replay on every visit to the tab.
         // Its motion is `visibility` — tucking away as the list scrolls.
@@ -69,7 +71,13 @@ export function FloatingActionButton({
         // tighter, darker shadow than a regular accent control at rest, and
         // presses in (inset shadow, no opacity dip) rather than dimming.
         style={(state) => ({
-          boxShadow: state.pressed ? theme.shadowControlPressed : shadow,
+          ...(theme.materialControls
+            ? { backgroundColor: theme.accentContainer }
+            : null),
+          boxShadow:
+            state.pressed && !theme.materialControls
+              ? theme.shadowControlPressed
+              : shadow,
           opacity: isDisabled ? 0.4 : 1,
         })}
       />

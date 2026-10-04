@@ -4,6 +4,13 @@ export type ThemeMode = "system" | "light" | "dark";
 export type AccentSource = "system" | "preset" | "custom";
 export type NavBarStyle = "native" | "floating";
 export const NAV_BAR_STYLES: readonly NavBarStyle[] = ["native", "floating"];
+/** How much the app animates, on top of the system's reduced-motion setting (which always wins). */
+export type AnimationLevel = "all" | "minimal" | "off";
+export const ANIMATION_LEVELS: readonly AnimationLevel[] = [
+  "all",
+  "minimal",
+  "off",
+];
 export type AccountType = "cash" | "checking" | "savings" | "credit" | "wallet";
 export type CategoryKind = "expense" | "income";
 export type TransactionKind = "expense" | "income" | "transfer";
@@ -38,6 +45,8 @@ export interface AppSettings extends SyncEntity {
   swipeBetweenMonths?: boolean;
   /** Per device (`deviceLocal`). Android only: the platform bar or an inset floating pill. Saves from before this existed read as native. */
   navBarStyle?: NavBarStyle;
+  /** Per device (`deviceLocal`). `all` is the full motion system, `minimal` keeps only quick fades, `off` shows changes instantly. Saves from before this existed read as `all`. */
+  animationLevel?: AnimationLevel;
   /**
    * Per device (`deviceLocal`). Appearance overrides that sit on top of the active theme: a font
    * registry id for text / figures, an icon-set id for the UI chrome / for category and account

@@ -1,6 +1,7 @@
-import { useState, type Ref } from "react";
+import { useImperativeHandle, useState, type Ref } from "react";
 import { Pressable, TextInput, View, type TextInputProps } from "react-native";
 
+import { useCalculatorInput } from "@/components/finance/use-calculator-input";
 import { AppText } from "@/components/ui/app-text";
 import { MotionView } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
@@ -91,6 +92,7 @@ export function AmountHero({
   returnKeyType,
   placeholder = "0.00",
   onBlur,
+  calculator = "evaluate",
   ref,
 }: {
   value: string;
@@ -115,11 +117,25 @@ export function AmountHero({
   placeholder?: string;
   /** Called alongside the field's own internal blur handling. */
   onBlur?: () => void;
+  /**
+   * How the calculator keypad (see `CalculatorHost`) hands the amount to the form: `evaluate` gives
+   * it a plain amount, `expression` gives it the text typed so far, for a form that evaluates it.
+   */
+  calculator?: "evaluate" | "expression";
   ref?: Ref<TextInput>;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
+  const [node, setNode] = useState<TextInput | null>(null);
+  const input = useCalculatorInput({
+    node,
+    value,
+    onChangeText,
+    currency,
+    mode: calculator,
+  });
+  useImperativeHandle(ref, () => node as TextInput, [node]);
   const [focused, setFocused] = useState(false);
   const [pillWidth, setPillWidth] = useState(0);
   const sunken = materialStyle(theme, "sunken");
@@ -200,13 +216,12 @@ export function AmountHero({
             style={{ width: pillWidth, opacity: 0, flexShrink: 0 }}
           />
           <TextInput
-            ref={ref}
-            value={value}
-            onChangeText={onChangeText}
+            ref={setNode}
+            value={input.value}
+            onChangeText={input.onChangeText}
             placeholder={placeholder}
             placeholderTextColor={theme.textMuted}
-            keyboardType="decimal-pad"
-            inputMode="decimal"
+            {...input.inputProps}
             autoFocus={autoFocus}
             accessibilityLabel={accessibilityLabel}
             accessibilityHint={hint !== undefined ? t(hint) : undefined}
@@ -214,7 +229,10 @@ export function AmountHero({
             {...validityProps}
             returnKeyType={returnKeyType}
             onSubmitEditing={onSubmitEditing}
-            onFocus={() => setFocused(true)}
+            onFocus={() => {
+              setFocused(true);
+              input.onFocus();
+            }}
             onBlur={() => {
               setFocused(false);
               onBlur?.();

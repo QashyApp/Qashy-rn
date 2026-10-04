@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import { PageHeading } from "@/components/ui/page-heading";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { SectionHeader } from "@/components/ui/section-header";
+import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import { SettingsRow } from "@/components/ui/settings-row";
 import { StatusPill } from "@/components/ui/status-pill";
 import {
@@ -41,6 +42,7 @@ import { useNow } from "@/utils/use-now";
 // and made one list look like several stacked ones.
 
 export function MoreScreen() {
+  const scrollRef = useSectionScrollToTop<ScrollView>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
@@ -150,6 +152,7 @@ export function MoreScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
