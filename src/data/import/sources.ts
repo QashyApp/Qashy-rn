@@ -11,14 +11,14 @@ export const IMPORT_SOURCES: readonly ImportSourceInfo[] = [
     imports: [
       "Accounts (Cashew wallets) with their currencies",
       "Categories and subcategories, with colours and matched icons",
-      "Every expense, income and transfer between wallets, with notes and tags",
+      "Every expense, income and transfer between wallets, with notes",
       "The paid, upcoming and skipped state of each transaction",
-      "Subscriptions and repeating transactions, as recurring schedules that wait for your review",
-      "Budgets: amount, period, wallets, included categories and per-category limits",
+      "Subscriptions and repeating transactions, as recurring schedules that wait for your review, with each one’s next unpaid entry already waiting",
+      "Budgets: amount, period, wallets, included categories and per-category limits (Cashew’s percentage limits are converted to amounts)",
     ],
     notImported: [
       "Loans and credit/debt entries (money lent, borrowed or deposited)",
-      "Objectives (savings goals)",
+      "Objectives (savings goals) and income budgets (saving targets)",
       'Budget transaction filters (for example "include income" or "added to another budget"), shared budgets and "added transactions only" budgets, which become ordinary budgets',
       "Associated titles (automatic category suggestions) and scanner templates",
       "Cashew app settings, widgets, cached exchange rates and cloud-sync history",

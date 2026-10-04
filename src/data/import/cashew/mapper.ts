@@ -280,6 +280,8 @@ interface SourceTransaction {
   localDate: string;
   paid: boolean;
   skipPaid: boolean;
+  /** Cashew sets this once it has made the next entry; an unpaid row that has it was un-paid by the user. */
+  createdAnother: boolean;
   status: TransactionStatus;
   type: number | null;
   reoccurrence: number | null;
@@ -300,6 +302,13 @@ type RowParse =
   { ok: true; row: SourceTransaction } | { ok: false; reason: RowRejection };
 
 const PREDICT_SUFFIX = /::predict::\d+$/;
+
+/**
+ * How many missed periods an overdue, unpaid entry may have and still count as a live series.
+ * Cashew pays every overdue entry on its next launch, so a gap of a few periods just means it was
+ * not opened; past this many, the series is taken to have been abandoned.
+ */
+const MAX_CATCH_UP_PERIODS = 12;
 
 function statusOf(paid: boolean, skipPaid: boolean): TransactionStatus {
   if (paid) return "posted";
@@ -358,6 +367,7 @@ function parseTransactionRow(
       localDate,
       paid,
       skipPaid,
+      createdAnother: flag(row, "created_another_future_transaction"),
       status: statusOf(paid, skipPaid),
       type,
       reoccurrence: num(row, "reoccurrence"),
@@ -538,7 +548,9 @@ const WARNING_MESSAGES: Record<string, string> = {
   "recurring-ended":
     "Subscriptions and repeating transactions with no upcoming entry in Cashew were treated as ended: their past payments were imported, but no schedule was created.",
   "recurring-stale":
-    "Subscriptions and repeating transactions whose upcoming entry in Cashew was overdue by more than a full period were treated as stopped: their past payments were imported, but no schedule was created.",
+    "Subscriptions and repeating transactions whose upcoming entry in Cashew was overdue and would not have been paid automatically (or had been overdue for a very long time) were treated as stopped: their past payments were imported, but no schedule was created.",
+  "recurring-catch-up":
+    "Subscriptions and repeating transactions that Cashew had not yet paid (it pays them when it is opened) were imported as schedules, so the payments missed since then will appear for your review.",
   "recurring-review":
     "Recurring transactions were imported as schedules that ask for your review before posting.",
   "shared-budget-flattened":
@@ -551,8 +563,10 @@ const WARNING_MESSAGES: Record<string, string> = {
     "Budget transaction-type filters were not imported.",
   "budget-manual-only":
     "Budgets that only count manually added transactions now count all matching transactions.",
-  "budget-absolute-limit":
-    "Budgets with an absolute spending limit were imported as regular budgets.",
+  "budget-income-skipped":
+    "Income budgets (Cashew saving goals) were not imported: budgets here track spending only.",
+  "budget-percent-limits":
+    "Category limits that Cashew keeps as percentages were converted into amounts of the budget limit.",
   "budget-currency":
     "Budget limits were imported in your base currency, which differs from some account currencies.",
   "associated-titles-dropped":
@@ -856,6 +870,7 @@ export function mapCashewBackup(
   let customPeriodGroups = 0;
   let endedGroups = 0;
   let staleGroups = 0;
+  let catchUpGroups = 0;
   const titleFor = (
     row: SourceTransaction,
     categoryName: string | null,
@@ -885,18 +900,43 @@ export function mapCashewBackup(
       ordered.find((row) => row.endDateSec !== null)?.endDateSec ??
       null;
     const endDate = localDateFromSeconds(endSeconds, timeZone);
-    if (endDate !== null && (nextDueDate > endDate || endDate < today)) {
+    // Cashew stops making entries once the next one would fall after the end date, but an entry
+    // that is already there (even an overdue final one) is still due, so only an unpaid entry
+    // *beyond* the end date means the series is over.
+    if (endDate !== null && nextDueDate > endDate) {
       endedGroups += 1;
       plans.set(groupKey, { mode: "finished", ruleExternalId: null });
       continue;
     }
-    // Stopping a subscription in Cashew often just leaves its last upcoming entry overdue.
-    // Scheduling that would back-fill every missed period, so an entry overdue by more than
-    // one full period means the series was abandoned.
+    // An unpaid entry overdue by more than a full period. Cashew pays subscriptions and repeating
+    // transactions itself when they fall due (on by default) and then creates the next entry, so
+    // an entry left overdue usually means Cashew was not opened since, and its next launch would
+    // catch up on every missed payment. Such a series is live. It is only taken to be stopped
+    // when Cashew would not pay it (auto-pay off, or the user un-paid this entry) or it has been
+    // overdue for a very long time.
     if (addRecurrence(nextDueDate, period.unit, period.interval) < today) {
-      staleGroups += 1;
-      plans.set(groupKey, { mode: "finished", ruleExternalId: null });
-      continue;
+      const autoPays =
+        (latest.type === 1
+          ? raw.autoPay?.subscriptions
+          : raw.autoPay?.repetitive) ?? true;
+      let missed = 0;
+      for (
+        let cursor = nextDueDate;
+        cursor <= today && missed <= MAX_CATCH_UP_PERIODS;
+        cursor = addRecurrence(cursor, period.unit, period.interval)
+      )
+        missed += 1;
+      if (
+        autoPays &&
+        !unpaid[0].createdAnother &&
+        missed <= MAX_CATCH_UP_PERIODS
+      ) {
+        catchUpGroups += 1;
+      } else {
+        staleGroups += 1;
+        plans.set(groupKey, { mode: "finished", ruleExternalId: null });
+        continue;
+      }
     }
     const kind = latest.sign < 0 ? "expense" : "income";
     const category = resolveCategory(latest, kind);
@@ -929,6 +969,7 @@ export function mapCashewBackup(
   warnings.add("recurring-custom-period", customPeriodGroups);
   warnings.add("recurring-ended", endedGroups);
   warnings.add("recurring-stale", staleGroups);
+  warnings.add("recurring-catch-up", catchUpGroups);
   warnings.add("recurring-review", recurringRules.length);
 
   // Transactions -----------------------------------------------------------
@@ -1034,12 +1075,20 @@ export function mapCashewBackup(
     exclusions: 0,
     filters: 0,
     manualOnly: 0,
-    absolute: 0,
+    income: 0,
+    percent: 0,
   };
   for (const row of tableRows(raw, "budgets")) {
     const pk = text(row, "budget_pk");
     if (pk === null || budgetPks.has(pk)) continue;
     budgetPks.add(pk);
+
+    // An income budget is a saving target, not a spending limit. Importing it as one would count
+    // all spending against it, so it is left out and reported.
+    if (flag(row, "income")) {
+      budgetCounters.income += 1;
+      continue;
+    }
 
     const amount = num(row, "amount");
     const limit = amount === null ? null : toMinor(amount, budgetLimitExponent);
@@ -1110,23 +1159,33 @@ export function mapCashewBackup(
 
     const categoryLimits: { categoryExternalId: string; limitMinor: number }[] =
       [];
+    // Cashew keeps a budget's category limits either as amounts ("absolute") or, by default, as
+    // percentages of the budget limit. A subcategory's percentage is of its parent category's
+    // limit (of the whole budget when the parent has none). Both are turned into amounts here.
+    const percentLimits = !flag(row, "is_absolute_spending_limit");
+    const rawLimits = new Map<string, number>();
     for (const limitRow of limitRowsByBudget.get(pk) ?? []) {
       const categoryPk = text(limitRow, "category_fk");
       const limitAmount = num(limitRow, "amount");
       if (categoryPk === null || limitAmount === null || limitAmount <= 0)
         continue;
+      if (!rawLimits.has(categoryPk)) rawLimits.set(categoryPk, limitAmount);
+    }
+    for (const [categoryPk, limitAmount] of rawLimits) {
       const categoryExternalId = `category:${categoryPk}`;
       if (!expenseCategorySet.has(categoryExternalId)) continue;
-      if (
-        categoryLimits.some(
-          (entry) => entry.categoryExternalId === categoryExternalId,
-        )
-      )
-        continue;
-      const converted = toMinor(limitAmount, budgetLimitExponent);
+      let amountMajor = limitAmount;
+      if (percentLimits) {
+        const parentPk = categoryInfos.get(categoryPk)?.parentPk ?? null;
+        const parentPercent =
+          parentPk === null ? 100 : (rawLimits.get(parentPk) ?? 100);
+        amountMajor = (limitAmount / 100) * (parentPercent / 100) * amount;
+      }
+      const converted = toMinor(amountMajor, budgetLimitExponent);
       if (converted.minor === null || converted.minor <= 0) continue;
       categoryLimits.push({ categoryExternalId, limitMinor: converted.minor });
     }
+    if (percentLimits && categoryLimits.length > 0) budgetCounters.percent += 1;
     if (categoryLimits.length > 0) {
       if (categoryExternalIds.length === 0) {
         categoryExternalIds = [...expenseCategoryIds];
@@ -1143,7 +1202,6 @@ export function mapCashewBackup(
     if (jsonList(row, "budget_transaction_filters").length > 0)
       budgetCounters.filters += 1;
     if (flag(row, "added_transactions_only")) budgetCounters.manualOnly += 1;
-    if (flag(row, "is_absolute_spending_limit")) budgetCounters.absolute += 1;
 
     budgets.push({
       externalId: `budget:${pk}`,
@@ -1164,7 +1222,8 @@ export function mapCashewBackup(
   warnings.add("budget-exclusions-flattened", budgetCounters.exclusions);
   warnings.add("budget-filters-dropped", budgetCounters.filters);
   warnings.add("budget-manual-only", budgetCounters.manualOnly);
-  warnings.add("budget-absolute-limit", budgetCounters.absolute);
+  warnings.add("budget-income-skipped", budgetCounters.income);
+  warnings.add("budget-percent-limits", budgetCounters.percent);
   if (
     budgets.length > 0 &&
     accounts.some((account) => account.currency !== fallbackCurrency)
