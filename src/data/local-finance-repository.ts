@@ -144,7 +144,19 @@ const MANUAL_TRANSFER_AMOUNT_TOLERANCE = 10;
 
 /** Case- and accent-insensitive form for search, so "cafe" finds "Café". Uses no locale-sensitive collation. */
 function foldForSearch(value: string) {
-  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase();
+  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// A transaction record is immutable once in the snapshot (edits create a new object), so its
+// folded searchable text is computed once instead of on every keystroke for every row.
+const foldedSearchText = new WeakMap<object, string>();
+function searchTextOf(transaction: { title: string; note: string }) {
+  let folded = foldedSearchText.get(transaction);
+  if (folded === undefined) {
+    folded = foldForSearch(`${transaction.title} ${transaction.note}`);
+    foldedSearchText.set(transaction, folded);
+  }
+  return folded;
 }
 // Roughly a century of daily points. A dashboard range wider than this used to
 // truncate the daily series silently and return a chart that was simply wrong.
@@ -201,6 +213,21 @@ export class LocalFinanceRepository implements FinanceRepository {
   private mutationActive = false;
   private pendingExternalRefresh = false;
   private deletedOccurrenceKeys = new Set<string>();
+  // Derived reads keyed by the identity of the snapshot arrays they were computed from.
+  // Every mutation replaces the arrays it touches, so a stale entry can never be hit.
+  private postedCache = new WeakMap<
+    TransactionRecord[],
+    { all: TransactionRecord[]; ranges: Map<string, TransactionRecord[]> }
+  >();
+  private transactionIndexCache = new WeakMap<
+    TransactionRecord[],
+    Map<string, TransactionRecord>
+  >();
+  private derivedCache: {
+    deps: readonly unknown[];
+    dashboards: Map<string, DashboardSummary>;
+    budgetStatuses: Map<string, BudgetStatus[]>;
+  } | null = null;
 
   constructor(private storage: StorageAdapter = new PlatformStorageAdapter()) {
     this.storage.subscribe?.((source) => {
@@ -1590,12 +1617,11 @@ export class LocalFinanceRepository implements FinanceRepository {
     const matchesCategory = query.categoryIds?.length
       ? this.categoryMatcher(query.categoryIds)
       : null;
-    let result = this.active(snapshot).filter((transaction) => {
+    let result = snapshot.filter((transaction) => {
+      if (transaction.deletedAt) return false;
       if (
         normalizedSearch &&
-        !foldForSearch(`${transaction.title} ${transaction.note}`).includes(
-          normalizedSearch,
-        )
+        !searchTextOf(transaction).includes(normalizedSearch)
       )
         return false;
       if (
@@ -1668,16 +1694,12 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (this.daySpan(fromDate, toDate) > MAX_DASHBOARD_DAYS) {
       throw new Error("Choose a dashboard range no longer than a century.");
     }
-    const posted = this.queryTransactions({
-      fromDate,
-      toDate,
-      statuses: ["posted"],
-      sort: false,
-    });
-    const allPosted = this.queryTransactions({
-      statuses: ["posted"],
-      sort: false,
-    });
+    const derived = this.derived();
+    const dashboardKey = `${fromDate}|${toDate}`;
+    const cachedDashboard = derived.dashboards.get(dashboardKey);
+    if (cachedDashboard) return cachedDashboard;
+    const posted = this.postedTransactions(fromDate, toDate);
+    const allPosted = this.postedTransactions();
     const accounts = this.active(this.state.accounts);
     // One pass over every posted transaction keeps balances O(n + accounts)
     // instead of O(accounts × n); a running total does not need the sort.
@@ -1862,7 +1884,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         "Net worth",
       );
     }
-    return {
+    const summary: DashboardSummary = {
       netWorthMinor,
       incomeMinor,
       expenseMinor,
@@ -1880,6 +1902,8 @@ export class LocalFinanceRepository implements FinanceRepository {
       dailySpend,
       missingExchangeRates,
     };
+    derived.dashboards.set(dashboardKey, summary);
+    return summary;
   }
 
   getBudgetStatuses(
@@ -1887,6 +1911,19 @@ export class LocalFinanceRepository implements FinanceRepository {
     options: { includeInactiveCustom?: boolean } = {},
   ): BudgetStatus[] {
     this.assertDate(onDate);
+    const derived = this.derived();
+    const statusKey = `${onDate}|${options.includeInactiveCustom === true}`;
+    const cached = derived.budgetStatuses.get(statusKey);
+    if (cached) return cached;
+    const statuses = this.computeBudgetStatuses(onDate, options);
+    derived.budgetStatuses.set(statusKey, statuses);
+    return statuses;
+  }
+
+  private computeBudgetStatuses(
+    onDate: string,
+    options: { includeInactiveCustom?: boolean },
+  ): BudgetStatus[] {
     return this.active(this.state.budgets)
       .filter((budget) => !budget.archived)
       .flatMap((budget) => {
@@ -4550,6 +4587,67 @@ export class LocalFinanceRepository implements FinanceRepository {
     sumMinor(maximumEffectiveLimits, "Budget limit total");
   }
 
+  /** Posted rows, and posted rows of a date window, shared by every caller of one snapshot. */
+  private postedTransactions(fromDate?: string, toDate?: string) {
+    const source = this.state.transactions;
+    let entry = this.postedCache.get(source);
+    if (!entry) {
+      entry = {
+        all: source.filter(
+          (item) => !item.deletedAt && item.status === "posted",
+        ),
+        ranges: new Map(),
+      };
+      this.postedCache.set(source, entry);
+    }
+    if (fromDate === undefined && toDate === undefined) return entry.all;
+    const key = `${fromDate ?? ""}|${toDate ?? ""}`;
+    let range = entry.ranges.get(key);
+    if (!range) {
+      range = entry.all.filter(
+        (item) =>
+          (fromDate === undefined || item.localDate >= fromDate) &&
+          (toDate === undefined || item.localDate <= toDate),
+      );
+      entry.ranges.set(key, range);
+    }
+    return range;
+  }
+
+  private transactionById(transactions: TransactionRecord[]) {
+    let index = this.transactionIndexCache.get(transactions);
+    if (!index) {
+      index = new Map(transactions.map((item) => [item.id, item]));
+      this.transactionIndexCache.set(transactions, index);
+    }
+    return index;
+  }
+
+  /** The cache for reads derived from the current snapshot; reset when any input array changes. */
+  private derived() {
+    const { state } = this;
+    const deps = [
+      state.transactions,
+      state.accounts,
+      state.categories,
+      state.budgets,
+      state.budgetPeriods,
+      state.budgetAdjustments,
+      state.exchangeRates,
+      state.settings,
+      todayLocal(),
+    ];
+    const cached = this.derivedCache;
+    if (cached && cached.deps.every((dep, index) => dep === deps[index]))
+      return cached;
+    this.derivedCache = {
+      deps,
+      dashboards: new Map(),
+      budgetStatuses: new Map(),
+    };
+    return this.derivedCache;
+  }
+
   private budgetSpend(
     filters: BudgetFilters,
     fromDate: string,
@@ -4559,13 +4657,8 @@ export class LocalFinanceRepository implements FinanceRepository {
       ? this.categoryMatcher(filters.categoryIds)
       : null;
     return sumMinor(
-      this.queryTransactions({
-        fromDate,
-        toDate,
-        statuses: ["posted"],
-        kinds: ["expense"],
-        sort: false,
-      })
+      this.postedTransactions(fromDate, toDate)
+        .filter((item) => item.kind === "expense")
         .filter(
           (item) =>
             !filters.accountIds.length ||
@@ -5198,14 +5291,13 @@ export class LocalFinanceRepository implements FinanceRepository {
   ) {
     const goal = goals.find((item) => item.id === goalId);
     if (!goal) throw new Error("Choose a valid goal.");
+    const transactionsById = this.transactionById(transactions);
     const manual = sumMinor(
       contributions
         .filter((item) => {
           if (item.goalId !== goal.id || item.deletedAt) return false;
           if (!item.transactionId) return true;
-          const transaction = transactions.find(
-            (candidate) => candidate.id === item.transactionId,
-          );
+          const transaction = transactionsById.get(item.transactionId);
           return Boolean(
             transaction &&
             !transaction.deletedAt &&

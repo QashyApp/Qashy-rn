@@ -1409,327 +1409,332 @@ const HEBREW: Record<string, string> = {
     "לא ניתן היה לבדוק בבטחה את גודל קובץ ערכת העיצוב. בחרו קובץ אחר.",
 };
 
-function translateDynamic(message: string) {
-  const translateField = (field: string) =>
-    translateMessage(
-      field ? `${field[0].toUpperCase()}${field.slice(1)}` : field,
-      "he",
-    );
-  const patterns: [RegExp, (...parts: string[]) => string][] = [
-    [/^(\d+) choices available$/, (count) => `${count} אפשרויות זמינות`],
-    [/^(\d+) transactions$/, (count) => `${count} תנועות`],
-    [/^(\d+) transaction$/, (count) => `תנועה אחת`],
-    [/^(\d+) selected$/, (count) => `${count} נבחרו`],
-    [
-      /^Daily spending from (.+) to (.+)\. Highest day (.+?)\.(?: Largest refund day (.+)\.)?$/,
-      (from, to, highest, refund) =>
-        `הוצאות יומיות מ־${from} עד ${to}. היום הגבוה ביותר ${highest}.${refund ? ` יום ההחזר הגדול ביותר ${refund}.` : ""}`,
-    ],
-    [
-      /^No spending from (.+) to (.+)\.$/,
-      (from, to) => `אין הוצאות מ־${from} עד ${to}.`,
-    ],
-    [
-      /^Carrying (.+) into this period\.$/,
-      (amount) => `${amount} מועברים לתקופה הזו.`,
-    ],
-    [
-      /^(.+) is remembered and returns if you turn rollover back on\.$/,
-      (amount) => `${amount} נשמרים וחוזרים אם תפעילו שוב את ההעברה.`,
-    ],
-    [
-      /^Use (\d+) characters or fewer\.$/,
-      (count) => `השתמשו ב־${count} תווים לכל היותר.`,
-    ],
-    [
-      /^Repeat interval must be (\d+) or less\.$/,
-      (count) => `מרווח החזרה חייב להיות ${count} או פחות.`,
-    ],
-    [/^Amount \((.+)\)$/, (currency) => `סכום (${currency})`],
-    [/^Opening balance \((.+)\)$/, (currency) => `יתרת פתיחה (${currency})`],
-    [/^Destination amount \((.+)\)$/, (currency) => `סכום יעד (${currency})`],
-    [/^Target \((.+)\)$/, (currency) => `יעד (${currency})`],
-    [
-      /^(.+) \((.+)\)$/,
-      (label, value) => `${translateField(label)} (${value})`,
-    ],
-    [/^Next (.+)$/, (date) => `הבא: ${date}`],
-    [/^Effective (.+)$/, (date) => `בתוקף מ־${date}`],
-    [/^No transactions in (.+)$/, (month) => `אין תנועות ב${month}`],
-    [
-      /^Nothing in (.+) matches\. Try another filter, or search all months\.$/,
-      (month) => `אין התאמות ב${month}. נסו מסנן אחר, או חפשו בכל החודשים.`,
-    ],
-    [/^Step (\d+) of (\d+)$/, (step, total) => `שלב ${step} מתוך ${total}`],
-    [/^No activity in (.+)$/, (month) => `אין פעילות ב${month}`],
-    [/^Import (\d+) transactions$/, (count) => `ייבוא ${count} תנועות`],
-    [
-      /^Row (\d+): (.+)$/,
-      (row, reason) => `שורה ${row}: ${translateMessage(reason, "he")}`,
-    ],
-    [
-      /^Use (#[0-9A-Fa-f]{6}) (.+)$/,
-      (color, item) => `שימוש ב־${color} עבור ${translateMessage(item, "he")}`,
-    ],
-    [/^Archived account · (.+)$/, (currency) => `חשבון בארכיון · ${currency}`],
-    [
-      /^Archived (.+) category$/,
-      (kind) => `קטגוריית ${translateMessage(kind, "he")} בארכיון`,
-    ],
-    [
-      /^Every (day|week|month|year)\.$/,
-      (unit) => `כל ${translateMessage(unit, "he")}`,
-    ],
-    [
-      /^Add an exchange rate for (.+) → (.+) to save\.$/,
-      (from, to) => `יש להוסיף שער חליפין מ־${from} ל־${to} כדי לשמור.`,
-    ],
-    [
-      /^Every (\d+) (day|week|month|year)s?\.$/,
-      (count, unit) => `כל ${count} ${translateMessage(unit, "he")}`,
-    ],
-    [
-      /^(\d+)% remains in this period\.$/,
-      (percent) => `${percent}% נותרו בתקופה הזו.`,
-    ],
-    [
-      /^(.+) is required\.$/,
-      (label) => `יש למלא את השדה ${translateField(label)}.`,
-    ],
-    [
-      /^(.+) must be greater than zero\.$/,
-      (label) => `${translateField(label)} חייב להיות גדול מאפס.`,
-    ],
-    [
-      /^(.+) cannot be negative\.$/,
-      (label) => `${translateField(label)} אינו יכול להיות שלילי.`,
-    ],
-    [
-      /^Enter a valid (.+)\.$/,
-      (label) => `הזינו ${translateField(label)} תקין.`,
-    ],
-    [
-      /^Use a real (.+) in YYYY-MM-DD format\.$/,
-      (label) => `השתמשו ב${translateField(label)} אמיתי בתבנית YYYY-MM-DD.`,
-    ],
-    [
-      /^(.+) must be a positive whole number\.$/,
-      (label) => `${translateField(label)} חייב להיות מספר שלם וחיובי.`,
-    ],
-    [
-      /^(.+) must be a whole number\.$/,
-      (label) => `${translateField(label)} חייב להיות מספר שלם.`,
-    ],
-    [
-      /^(.+) can have at most (\d+) decimal places\.$/,
-      (label, digits) =>
-        `ל${translateField(label)} יכולות להיות לכל היותר ${digits} ספרות אחרי הנקודה.`,
-    ],
-    [/^\+(\d+) more rejected rows$/, (count) => `ועוד ${count} שורות שנדחו`],
-    [
-      /^(.+) is outside the supported range\.$/,
-      (label) => `${translateField(label)} מחוץ לטווח הנתמך.`,
-    ],
-    [
-      /^Choose a valid (expense|income) category\.$/,
-      (kind) => `בחרו קטגוריית ${translateMessage(kind, "he")} תקינה.`,
-    ],
-    [
-      /^Choose a currency other than (.+)\.$/,
-      (currency) => `בחרו מטבע אחר מ־${currency}.`,
-    ],
-    [/^Map (.+)$/, (field) => `מיפוי ${translateField(field)}`],
-    [
-      /^Choose valid (.+) values\.$/,
-      (label) => `בחרו ערכי ${translateField(label)} תקינים.`,
-    ],
-    [
-      /^Could not find the (.+) to update\.$/,
-      (label) => `לא נמצאה רשומת ${translateField(label)} לעדכון.`,
-    ],
-    [/^(.+) is already in use\.$/, (name) => `השם ${name} כבר בשימוש.`],
-    [
-      /^Missing exchange rate for (.+) → (.+) on (.+)\.$/,
-      (from, to, date) => `חסר שער חליפין מ־${from} ל־${to} בתאריך ${date}.`,
-    ],
-    [
-      /^The (.+) category can only be assigned to (expense|income) transactions\.$/,
-      (name, kind) =>
-        `ניתן לשייך את הקטגוריה ${name} רק לתנועות ${translateMessage(kind, "he")}.`,
-    ],
-    [
-      /^Currency (.+) does not match (.+) \((.+)\)\.$/,
-      (currency, account, expected) =>
-        `המטבע ${currency} אינו תואם לחשבון ${account} (${expected}).`,
-    ],
-    [/^Unknown account: (.+)$/, (account) => `חשבון לא מוכר: ${account}`],
-    [
-      /^Unknown destination account: (.+)$/,
-      (account) => `חשבון יעד לא מוכר: ${account}`,
-    ],
-    [/^Unknown category: (.+)$/, (category) => `קטגוריה לא מוכרת: ${category}`],
-    [
-      /^Unsupported currency or locale: (.+) \((.+)\)\.$/,
-      (currency, locale) =>
-        `מטבע או הגדרת אזור אינם נתמכים: ${currency} (${locale}).`,
-    ],
-    [
-      /^This contradicts the existing (.+) → (.+) rate of (.+), which implies (.+)\. Update or remove that rate first\.$/,
-      (from, to, rate, implied) =>
-        `הערך סותר את השער הקיים מ־${from} ל־${to}, שערכו ${rate} ומשמעותו ${implied}. עדכנו או הסירו תחילה את השער הזה.`,
-    ],
-    [/^Archive (.+)\?$/, (name) => `להעביר את ${name} לארכיון?`],
-    [/^Delete the (.+) rate\?$/, (currency) => `למחוק את שער ${currency}?`],
-    [/^Delete (\d+) transactions\?$/, (count) => `למחוק ${count} תנועות?`],
-    [/^Delete (.+)\?$/, (name) => `למחוק את ${name}?`],
-    [
-      /^“(.+)” will be removed from your ledger\.$/,
-      (title) => `״${title}״ תוסר מהיומן.`,
-    ],
-    [
-      /^(.+) from (\d{4}-\d{2}-\d{2}) will be removed from this goal\.$/,
-      (amount, date) => `${amount} מתאריך ${date} יוסר מהיעד הזה.`,
-    ],
-    [/^(\d+) transactions imported\.$/, (count) => `יובאו ${count} תנועות.`],
-    [
-      /^Skipped (\d+) unreadable (row|rows)$/,
-      (count) => `דולגו ${count} שורות שלא ניתן לקרוא`,
-    ],
-    [
-      /^The rest of the file was read\. Check (?:line|lines) (.+) for stray quotes\.$/,
-      (lines) => `שאר הקובץ נקרא. בדקו בשורות ${lines} אם יש מירכאות מיותרות.`,
-    ],
-    [
-      /^Map required fields: (.+)\.$/,
-      (fields) => `מפו את שדות החובה: ${fields}.`,
-    ],
-    [
-      /^Malformed CSV quote on line (\d+)\.$/,
-      (line) => `מירכאות CSV לא תקינות בשורה ${line}.`,
-    ],
-    [
-      /^Unclosed quoted CSV field starting on line (\d+)\.$/,
-      (line) => `שדה CSV במירכאות לא נסגר החל משורה ${line}.`,
-    ],
-    [
-      /^1 (.+) equals how many (.+)\?$/,
-      (from, to) => `לכמה ${to} שווה 1 ${from}?`,
-    ],
-    [/^Edit contribution (.+)$/, (amount) => `עריכת הפקדה ${amount}`],
-    [/^Delete contribution (.+)$/, (amount) => `מחיקת הפקדה ${amount}`],
-    [/^Delete adjustment (.+)$/, (amount) => `מחיקת התאמה ${amount}`],
-    [
-      /^(.+) will be removed from this period’s limit\.$/,
-      (amount) => `${amount} יוסר מהמגבלה של התקופה הזו.`,
-    ],
+const translateField = (field: string) =>
+  translateMessage(
+    field ? `${field[0].toUpperCase()}${field.slice(1)}` : field,
+    "he",
+  );
 
-    // Sync. Singular and plural are separate entries rather than one pattern with a ternary:
-    // Hebrew inflects the noun and the verb differently for one, and `1 device · just now`
-    // reads as badly in Hebrew as "1 devices" does in English.
-    //
-    // Relative times first, because several of the composed shapes below re-enter
-    // `translateMessage` with one as their tail.
-    [/^1 minute ago$/, () => "לפני דקה"],
-    [/^(\d+) minutes ago$/, (count) => `לפני ${count} דקות`],
-    [/^1 hour ago$/, () => "לפני שעה"],
-    [/^(\d+) hours ago$/, (count) => `לפני ${count} שעות`],
-    [/^1 day ago$/, () => "לפני יום"],
-    [/^(\d+) days ago$/, (count) => `לפני ${count} ימים`],
-    [/^1 month ago$/, () => "לפני חודש"],
-    [/^(\d+) months ago$/, (count) => `לפני ${count} חודשים`],
-    // The vault size counts this device, so "1 device" is a real state, not an empty one.
-    [/^1 device$/, () => "מכשיר אחד"],
-    [/^(\d+) devices$/, (count) => `${count} מכשירים`],
-    [
-      /^1 device · (.+)$/,
-      (when) => `מכשיר אחד · ${translateMessage(when, "he")}`,
-    ],
-    [
-      /^(\d+) devices · (.+)$/,
-      (count, when) => `${count} מכשירים · ${translateMessage(when, "he")}`,
-    ],
-    [/^Direct only · 1 device$/, () => "ישיר בלבד · מכשיר אחד"],
-    [
-      /^Direct only · (\d+) devices$/,
-      (count) => `ישיר בלבד · ${count} מכשירים`,
-    ],
-    [
-      /^Last exchanged changes (.+)\.$/,
-      (when) => `שינויים הוחלפו לאחרונה ${translateMessage(when, "he")}.`,
-    ],
-    [
-      /^Last seen (.+)$/,
-      (when) => `נראה לאחרונה ${translateMessage(when, "he")}`,
-    ],
-    [/^Checked (.+)$/, (when) => `נבדק ${translateMessage(when, "he")}`],
-    [
-      /^(\d+) changes need attention$/,
-      (count) => `${count} שינויים דורשים תשומת לב`,
-    ],
-    [/^(.+) is still paired\.$/, (device) => `${device} עדיין מחובר.`],
-    // Activity log. The counts are volumes, never content — see the note on the log itself.
-    [/^Sent 1 change$/, () => "נשלח שינוי אחד"],
-    [/^Sent (\d+) changes$/, (count) => `נשלחו ${count} שינויים`],
-    [/^Received 1 change$/, () => "התקבל שינוי אחד"],
-    [/^Received (\d+) changes$/, (count) => `התקבלו ${count} שינויים`],
-    [/^Held back 1 change$/, () => "שינוי אחד הוחזק"],
-    [/^Held back (\d+) changes$/, (count) => `${count} שינויים הוחזקו`],
-    [/^Applied 1 held-back change$/, () => "הוחל שינוי אחד שהוחזק"],
-    [
-      /^Applied (\d+) held-back changes$/,
-      (count) => `הוחלו ${count} שינויים שהוחזקו`,
-    ],
-    [/^Merged 1 duplicate$/, () => "מוזגה כפילות אחת"],
-    [/^Merged (\d+) duplicates$/, (count) => `מוזגו ${count} כפילויות`],
-    [/^Cleared 1 old change$/, () => "נוקה שינוי ישן אחד"],
-    [/^Cleared (\d+) old changes$/, (count) => `נוקו ${count} שינויים ישנים`],
-    // Pairing and recovery.
-    [/^1 second left$/, () => "נותרה שנייה אחת"],
-    [/^(\d+) seconds left$/, (count) => `נותרו ${count} שניות`],
-    [
-      /^All (\d+) words, separated by spaces\.$/,
-      (count) => `כל ${count} המילים, מופרדות ברווחים.`,
-    ],
-    // The word itself is passed through untouched — it comes from a fixed English wordlist
-    // and must read identically on both devices for the comparison to mean anything.
-    [/^Word (\d+): (.+)$/, (index, word) => `מילה ${index}: ${word}`],
-    // Duplicate review.
-    [/^Merged 1 record$/, () => "מוזגה רשומה אחת"],
-    [/^Merged (\d+) records$/, (count) => `מוזגו ${count} רשומות`],
-    [
-      /^1 record now points at the copy you kept\.$/,
-      () => "רשומה אחת מפנה כעת לעותק שהשארתם.",
-    ],
-    [
-      /^(\d+) records now point at the copy you kept\.$/,
-      (count) => `${count} רשומות מפנות כעת לעותק שהשארתם.`,
-    ],
-    [/^Merge 1 group$/, () => "מיזוג קבוצה אחת"],
-    [/^Merge (\d+) groups$/, (count) => `מיזוג ${count} קבוצות`],
-    [
-      /^Keep this one, remove (\d+) copies$/,
-      (count) => `להשאיר את זו ולהסיר ${count} עותקים`,
-    ],
-    // Overview edit-mode card toolbar. `name` here is already a translated widget title (or a
-    // literal user-entered budget/goal name), so it is interpolated verbatim rather than routed
-    // back through `translateField`.
-    [/^Move (.+) up$/, (name) => `הזזת ${name} למעלה`],
-    [/^Move (.+) down$/, (name) => `הזזת ${name} למטה`],
-    [/^Change (.+) size$/, (name) => `שינוי גודל ${name}`],
-    [/^(.+) settings$/, (name) => `הגדרות ${name}`],
-    [/^Remove (.+)$/, (name) => `הסרת ${name}`],
-    [/^Drag to reorder (.+)$/, (name) => `גררו כדי לסדר מחדש את ${name}`],
-    [/^Add (.+) card$/, (name) => `הוספת כרטיס ${name}`],
-    [
-      /^(.+): (\d+)% of this month's spending$/,
-      (name, percent) => `${name}: ${percent}% מהוצאות החודש`,
-    ],
-  ];
-  for (const [pattern, replacement] of patterns) {
+// Built once: the table is static, and every non-dictionary string in Hebrew walks it.
+const DYNAMIC_PATTERNS: [RegExp, (...parts: string[]) => string][] = [
+  [/^(\d+) choices available$/, (count) => `${count} אפשרויות זמינות`],
+  [/^(\d+) transactions$/, (count) => `${count} תנועות`],
+  [/^(\d+) transaction$/, (count) => `תנועה אחת`],
+  [/^(\d+) selected$/, (count) => `${count} נבחרו`],
+  [
+    /^Daily spending from (.+) to (.+)\. Highest day (.+?)\.(?: Largest refund day (.+)\.)?$/,
+    (from, to, highest, refund) =>
+      `הוצאות יומיות מ־${from} עד ${to}. היום הגבוה ביותר ${highest}.${refund ? ` יום ההחזר הגדול ביותר ${refund}.` : ""}`,
+  ],
+  [
+    /^No spending from (.+) to (.+)\.$/,
+    (from, to) => `אין הוצאות מ־${from} עד ${to}.`,
+  ],
+  [
+    /^Carrying (.+) into this period\.$/,
+    (amount) => `${amount} מועברים לתקופה הזו.`,
+  ],
+  [
+    /^(.+) is remembered and returns if you turn rollover back on\.$/,
+    (amount) => `${amount} נשמרים וחוזרים אם תפעילו שוב את ההעברה.`,
+  ],
+  [
+    /^Use (\d+) characters or fewer\.$/,
+    (count) => `השתמשו ב־${count} תווים לכל היותר.`,
+  ],
+  [
+    /^Repeat interval must be (\d+) or less\.$/,
+    (count) => `מרווח החזרה חייב להיות ${count} או פחות.`,
+  ],
+  [/^Amount \((.+)\)$/, (currency) => `סכום (${currency})`],
+  [/^Opening balance \((.+)\)$/, (currency) => `יתרת פתיחה (${currency})`],
+  [/^Destination amount \((.+)\)$/, (currency) => `סכום יעד (${currency})`],
+  [/^Target \((.+)\)$/, (currency) => `יעד (${currency})`],
+  [/^(.+) \((.+)\)$/, (label, value) => `${translateField(label)} (${value})`],
+  [/^Next (.+)$/, (date) => `הבא: ${date}`],
+  [/^Effective (.+)$/, (date) => `בתוקף מ־${date}`],
+  [/^No transactions in (.+)$/, (month) => `אין תנועות ב${month}`],
+  [
+    /^Nothing in (.+) matches\. Try another filter, or search all months\.$/,
+    (month) => `אין התאמות ב${month}. נסו מסנן אחר, או חפשו בכל החודשים.`,
+  ],
+  [/^Step (\d+) of (\d+)$/, (step, total) => `שלב ${step} מתוך ${total}`],
+  [/^No activity in (.+)$/, (month) => `אין פעילות ב${month}`],
+  [/^Import (\d+) transactions$/, (count) => `ייבוא ${count} תנועות`],
+  [
+    /^Row (\d+): (.+)$/,
+    (row, reason) => `שורה ${row}: ${translateMessage(reason, "he")}`,
+  ],
+  [
+    /^Use (#[0-9A-Fa-f]{6}) (.+)$/,
+    (color, item) => `שימוש ב־${color} עבור ${translateMessage(item, "he")}`,
+  ],
+  [/^Archived account · (.+)$/, (currency) => `חשבון בארכיון · ${currency}`],
+  [
+    /^Archived (.+) category$/,
+    (kind) => `קטגוריית ${translateMessage(kind, "he")} בארכיון`,
+  ],
+  [
+    /^Every (day|week|month|year)\.$/,
+    (unit) => `כל ${translateMessage(unit, "he")}`,
+  ],
+  [
+    /^Add an exchange rate for (.+) → (.+) to save\.$/,
+    (from, to) => `יש להוסיף שער חליפין מ־${from} ל־${to} כדי לשמור.`,
+  ],
+  [
+    /^Every (\d+) (day|week|month|year)s?\.$/,
+    (count, unit) => `כל ${count} ${translateMessage(unit, "he")}`,
+  ],
+  [
+    /^(\d+)% remains in this period\.$/,
+    (percent) => `${percent}% נותרו בתקופה הזו.`,
+  ],
+  [
+    /^(.+) is required\.$/,
+    (label) => `יש למלא את השדה ${translateField(label)}.`,
+  ],
+  [
+    /^(.+) must be greater than zero\.$/,
+    (label) => `${translateField(label)} חייב להיות גדול מאפס.`,
+  ],
+  [
+    /^(.+) cannot be negative\.$/,
+    (label) => `${translateField(label)} אינו יכול להיות שלילי.`,
+  ],
+  [/^Enter a valid (.+)\.$/, (label) => `הזינו ${translateField(label)} תקין.`],
+  [
+    /^Use a real (.+) in YYYY-MM-DD format\.$/,
+    (label) => `השתמשו ב${translateField(label)} אמיתי בתבנית YYYY-MM-DD.`,
+  ],
+  [
+    /^(.+) must be a positive whole number\.$/,
+    (label) => `${translateField(label)} חייב להיות מספר שלם וחיובי.`,
+  ],
+  [
+    /^(.+) must be a whole number\.$/,
+    (label) => `${translateField(label)} חייב להיות מספר שלם.`,
+  ],
+  [
+    /^(.+) can have at most (\d+) decimal places\.$/,
+    (label, digits) =>
+      `ל${translateField(label)} יכולות להיות לכל היותר ${digits} ספרות אחרי הנקודה.`,
+  ],
+  [/^\+(\d+) more rejected rows$/, (count) => `ועוד ${count} שורות שנדחו`],
+  [
+    /^(.+) is outside the supported range\.$/,
+    (label) => `${translateField(label)} מחוץ לטווח הנתמך.`,
+  ],
+  [
+    /^Choose a valid (expense|income) category\.$/,
+    (kind) => `בחרו קטגוריית ${translateMessage(kind, "he")} תקינה.`,
+  ],
+  [
+    /^Choose a currency other than (.+)\.$/,
+    (currency) => `בחרו מטבע אחר מ־${currency}.`,
+  ],
+  [/^Map (.+)$/, (field) => `מיפוי ${translateField(field)}`],
+  [
+    /^Choose valid (.+) values\.$/,
+    (label) => `בחרו ערכי ${translateField(label)} תקינים.`,
+  ],
+  [
+    /^Could not find the (.+) to update\.$/,
+    (label) => `לא נמצאה רשומת ${translateField(label)} לעדכון.`,
+  ],
+  [/^(.+) is already in use\.$/, (name) => `השם ${name} כבר בשימוש.`],
+  [
+    /^Missing exchange rate for (.+) → (.+) on (.+)\.$/,
+    (from, to, date) => `חסר שער חליפין מ־${from} ל־${to} בתאריך ${date}.`,
+  ],
+  [
+    /^The (.+) category can only be assigned to (expense|income) transactions\.$/,
+    (name, kind) =>
+      `ניתן לשייך את הקטגוריה ${name} רק לתנועות ${translateMessage(kind, "he")}.`,
+  ],
+  [
+    /^Currency (.+) does not match (.+) \((.+)\)\.$/,
+    (currency, account, expected) =>
+      `המטבע ${currency} אינו תואם לחשבון ${account} (${expected}).`,
+  ],
+  [/^Unknown account: (.+)$/, (account) => `חשבון לא מוכר: ${account}`],
+  [
+    /^Unknown destination account: (.+)$/,
+    (account) => `חשבון יעד לא מוכר: ${account}`,
+  ],
+  [/^Unknown category: (.+)$/, (category) => `קטגוריה לא מוכרת: ${category}`],
+  [
+    /^Unsupported currency or locale: (.+) \((.+)\)\.$/,
+    (currency, locale) =>
+      `מטבע או הגדרת אזור אינם נתמכים: ${currency} (${locale}).`,
+  ],
+  [
+    /^This contradicts the existing (.+) → (.+) rate of (.+), which implies (.+)\. Update or remove that rate first\.$/,
+    (from, to, rate, implied) =>
+      `הערך סותר את השער הקיים מ־${from} ל־${to}, שערכו ${rate} ומשמעותו ${implied}. עדכנו או הסירו תחילה את השער הזה.`,
+  ],
+  [/^Archive (.+)\?$/, (name) => `להעביר את ${name} לארכיון?`],
+  [/^Delete the (.+) rate\?$/, (currency) => `למחוק את שער ${currency}?`],
+  [/^Delete (\d+) transactions\?$/, (count) => `למחוק ${count} תנועות?`],
+  [/^Delete (.+)\?$/, (name) => `למחוק את ${name}?`],
+  [
+    /^“(.+)” will be removed from your ledger\.$/,
+    (title) => `״${title}״ תוסר מהיומן.`,
+  ],
+  [
+    /^(.+) from (\d{4}-\d{2}-\d{2}) will be removed from this goal\.$/,
+    (amount, date) => `${amount} מתאריך ${date} יוסר מהיעד הזה.`,
+  ],
+  [/^(\d+) transactions imported\.$/, (count) => `יובאו ${count} תנועות.`],
+  [
+    /^Skipped (\d+) unreadable (row|rows)$/,
+    (count) => `דולגו ${count} שורות שלא ניתן לקרוא`,
+  ],
+  [
+    /^The rest of the file was read\. Check (?:line|lines) (.+) for stray quotes\.$/,
+    (lines) => `שאר הקובץ נקרא. בדקו בשורות ${lines} אם יש מירכאות מיותרות.`,
+  ],
+  [
+    /^Map required fields: (.+)\.$/,
+    (fields) => `מפו את שדות החובה: ${fields}.`,
+  ],
+  [
+    /^Malformed CSV quote on line (\d+)\.$/,
+    (line) => `מירכאות CSV לא תקינות בשורה ${line}.`,
+  ],
+  [
+    /^Unclosed quoted CSV field starting on line (\d+)\.$/,
+    (line) => `שדה CSV במירכאות לא נסגר החל משורה ${line}.`,
+  ],
+  [
+    /^1 (.+) equals how many (.+)\?$/,
+    (from, to) => `לכמה ${to} שווה 1 ${from}?`,
+  ],
+  [/^Edit contribution (.+)$/, (amount) => `עריכת הפקדה ${amount}`],
+  [/^Delete contribution (.+)$/, (amount) => `מחיקת הפקדה ${amount}`],
+  [/^Delete adjustment (.+)$/, (amount) => `מחיקת התאמה ${amount}`],
+  [
+    /^(.+) will be removed from this period’s limit\.$/,
+    (amount) => `${amount} יוסר מהמגבלה של התקופה הזו.`,
+  ],
+
+  // Sync. Singular and plural are separate entries rather than one pattern with a ternary:
+  // Hebrew inflects the noun and the verb differently for one, and `1 device · just now`
+  // reads as badly in Hebrew as "1 devices" does in English.
+  //
+  // Relative times first, because several of the composed shapes below re-enter
+  // `translateMessage` with one as their tail.
+  [/^1 minute ago$/, () => "לפני דקה"],
+  [/^(\d+) minutes ago$/, (count) => `לפני ${count} דקות`],
+  [/^1 hour ago$/, () => "לפני שעה"],
+  [/^(\d+) hours ago$/, (count) => `לפני ${count} שעות`],
+  [/^1 day ago$/, () => "לפני יום"],
+  [/^(\d+) days ago$/, (count) => `לפני ${count} ימים`],
+  [/^1 month ago$/, () => "לפני חודש"],
+  [/^(\d+) months ago$/, (count) => `לפני ${count} חודשים`],
+  // The vault size counts this device, so "1 device" is a real state, not an empty one.
+  [/^1 device$/, () => "מכשיר אחד"],
+  [/^(\d+) devices$/, (count) => `${count} מכשירים`],
+  [
+    /^1 device · (.+)$/,
+    (when) => `מכשיר אחד · ${translateMessage(when, "he")}`,
+  ],
+  [
+    /^(\d+) devices · (.+)$/,
+    (count, when) => `${count} מכשירים · ${translateMessage(when, "he")}`,
+  ],
+  [/^Direct only · 1 device$/, () => "ישיר בלבד · מכשיר אחד"],
+  [/^Direct only · (\d+) devices$/, (count) => `ישיר בלבד · ${count} מכשירים`],
+  [
+    /^Last exchanged changes (.+)\.$/,
+    (when) => `שינויים הוחלפו לאחרונה ${translateMessage(when, "he")}.`,
+  ],
+  [
+    /^Last seen (.+)$/,
+    (when) => `נראה לאחרונה ${translateMessage(when, "he")}`,
+  ],
+  [/^Checked (.+)$/, (when) => `נבדק ${translateMessage(when, "he")}`],
+  [
+    /^(\d+) changes need attention$/,
+    (count) => `${count} שינויים דורשים תשומת לב`,
+  ],
+  [/^(.+) is still paired\.$/, (device) => `${device} עדיין מחובר.`],
+  // Activity log. The counts are volumes, never content — see the note on the log itself.
+  [/^Sent 1 change$/, () => "נשלח שינוי אחד"],
+  [/^Sent (\d+) changes$/, (count) => `נשלחו ${count} שינויים`],
+  [/^Received 1 change$/, () => "התקבל שינוי אחד"],
+  [/^Received (\d+) changes$/, (count) => `התקבלו ${count} שינויים`],
+  [/^Held back 1 change$/, () => "שינוי אחד הוחזק"],
+  [/^Held back (\d+) changes$/, (count) => `${count} שינויים הוחזקו`],
+  [/^Applied 1 held-back change$/, () => "הוחל שינוי אחד שהוחזק"],
+  [
+    /^Applied (\d+) held-back changes$/,
+    (count) => `הוחלו ${count} שינויים שהוחזקו`,
+  ],
+  [/^Merged 1 duplicate$/, () => "מוזגה כפילות אחת"],
+  [/^Merged (\d+) duplicates$/, (count) => `מוזגו ${count} כפילויות`],
+  [/^Cleared 1 old change$/, () => "נוקה שינוי ישן אחד"],
+  [/^Cleared (\d+) old changes$/, (count) => `נוקו ${count} שינויים ישנים`],
+  // Pairing and recovery.
+  [/^1 second left$/, () => "נותרה שנייה אחת"],
+  [/^(\d+) seconds left$/, (count) => `נותרו ${count} שניות`],
+  [
+    /^All (\d+) words, separated by spaces\.$/,
+    (count) => `כל ${count} המילים, מופרדות ברווחים.`,
+  ],
+  // The word itself is passed through untouched — it comes from a fixed English wordlist
+  // and must read identically on both devices for the comparison to mean anything.
+  [/^Word (\d+): (.+)$/, (index, word) => `מילה ${index}: ${word}`],
+  // Duplicate review.
+  [/^Merged 1 record$/, () => "מוזגה רשומה אחת"],
+  [/^Merged (\d+) records$/, (count) => `מוזגו ${count} רשומות`],
+  [
+    /^1 record now points at the copy you kept\.$/,
+    () => "רשומה אחת מפנה כעת לעותק שהשארתם.",
+  ],
+  [
+    /^(\d+) records now point at the copy you kept\.$/,
+    (count) => `${count} רשומות מפנות כעת לעותק שהשארתם.`,
+  ],
+  [/^Merge 1 group$/, () => "מיזוג קבוצה אחת"],
+  [/^Merge (\d+) groups$/, (count) => `מיזוג ${count} קבוצות`],
+  [
+    /^Keep this one, remove (\d+) copies$/,
+    (count) => `להשאיר את זו ולהסיר ${count} עותקים`,
+  ],
+  // Overview edit-mode card toolbar. `name` here is already a translated widget title (or a
+  // literal user-entered budget/goal name), so it is interpolated verbatim rather than routed
+  // back through `translateField`.
+  [/^Move (.+) up$/, (name) => `הזזת ${name} למעלה`],
+  [/^Move (.+) down$/, (name) => `הזזת ${name} למטה`],
+  [/^Change (.+) size$/, (name) => `שינוי גודל ${name}`],
+  [/^(.+) settings$/, (name) => `הגדרות ${name}`],
+  [/^Remove (.+)$/, (name) => `הסרת ${name}`],
+  [/^Drag to reorder (.+)$/, (name) => `גררו כדי לסדר מחדש את ${name}`],
+  [/^Add (.+) card$/, (name) => `הוספת כרטיס ${name}`],
+  [
+    /^(.+): (\d+)% of this month's spending$/,
+    (name, percent) => `${name}: ${percent}% מהוצאות החודש`,
+  ],
+];
+
+const dynamicCache = new Map<string, string>();
+const DYNAMIC_CACHE_LIMIT = 500;
+
+function translateDynamic(message: string) {
+  const cached = dynamicCache.get(message);
+  if (cached !== undefined) return cached;
+  let result = message;
+  for (const [pattern, replacement] of DYNAMIC_PATTERNS) {
     const match = message.match(pattern);
-    if (match) return replacement(...match.slice(1));
+    if (match) {
+      result = replacement(...match.slice(1));
+      break;
+    }
   }
-  return message;
+  if (dynamicCache.size >= DYNAMIC_CACHE_LIMIT) dynamicCache.clear();
+  dynamicCache.set(message, result);
+  return result;
 }
 
 export function languageFromLocale(locale: string): AppLanguage {

@@ -207,6 +207,10 @@ function PagerImpl({
     else fade.set(1);
   }, [month, reduced, translateX, busy, fade]);
 
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useEffect(() => () => clearTimeout(commitTimer.current), []);
   const commit = useCallback(
     (direction: 1 | -1, haptic: boolean) => {
       if (haptic) hapticSelection();
@@ -216,7 +220,8 @@ function PagerImpl({
         direction > 0 ? "right" : "left",
       );
       // A parent that declines the change must not leave the pages stranded off-screen.
-      setTimeout(() => {
+      clearTimeout(commitTimer.current);
+      commitTimer.current = setTimeout(() => {
         if (monthRef.current !== from) return;
         translateX.set(0);
         fade.set(1);

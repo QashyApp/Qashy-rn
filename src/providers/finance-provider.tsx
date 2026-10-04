@@ -5,6 +5,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
   type ReactNode,
@@ -25,6 +26,9 @@ import { QASHY_ACCENT } from "@/domain/defaults";
 import type { FinanceState } from "@/domain/models";
 import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
+
+/** Resume events within this window of a finished reload are covered by it. */
+const RECONCILE_MIN_INTERVAL_MS = 2000;
 
 interface FinanceContextValue {
   repository: FinanceRepository;
@@ -100,8 +104,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       });
   }, []);
 
+  const reconciling = useRef(false);
+  const lastReconcile = useRef(0);
   const reconcile = useCallback(() => {
     if (!financeRepository.getSnapshot().ready) return;
+    // Returning to a tab fires `visibilitychange`, `focus` and `pageshow` together. Each used
+    // to run a full reload; one in flight (or one that just finished) already covers the rest.
+    if (reconciling.current) return;
+    if (Date.now() - lastReconcile.current < RECONCILE_MIN_INTERVAL_MS) return;
+    reconciling.current = true;
     financeRepository
       .refresh()
       // Refreshed before `generateRecurring()` so a rule that auto-posts today snapshots the
@@ -111,6 +122,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       .then(() => financeRepository.generateRecurring())
       .then(() => setReloadError(null))
       .catch((reason: unknown) => {
+        lastReconcile.current = 0;
         // Storage can become unusable while the app is backgrounded — an evicted
         // native handle, or IndexedDB hitting its quota. Discarding this left the app
         // showing stale figures with no sign anything had failed. Reporting it as a
@@ -123,7 +135,12 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             ? reason.message
             : "Qashy could not reload its local database.",
         );
+      })
+      .finally(() => {
+        reconciling.current = false;
+        if (lastReconcile.current !== 0) lastReconcile.current = Date.now();
       });
+    lastReconcile.current = Date.now();
   }, []);
 
   useEffect(() => {

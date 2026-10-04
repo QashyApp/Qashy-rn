@@ -1,28 +1,25 @@
 import { router } from "expo-router";
+import { memo } from "react";
 import { View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { MotionPressable, MotionView } from "@/components/ui/motion";
-import type { TransactionRecord } from "@/domain/models";
+import type { Account, Category, TransactionRecord } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { mediumDate, parseLocalDate, todayLocal } from "@/utils/date";
+import {
+  dateFormat,
+  mediumDate,
+  parseLocalDate,
+  todayLocal,
+} from "@/utils/date";
 import { formatMoney } from "@/utils/money";
 
-export function TransactionRow({
-  transaction,
-  compact = false,
-  returnTo = "/transactions",
-  selectionMode = false,
-  selected = false,
-  showDate = true,
-  onPress,
-  onLongPress,
-}: {
+interface TransactionRowProps {
   transaction: TransactionRecord;
   compact?: boolean;
   returnTo?: "/overview" | "/transactions";
@@ -37,18 +34,66 @@ export function TransactionRow({
   showDate?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
-}) {
+}
+
+// One id index per snapshot array, built lazily and dropped with the array, so a row's
+// account/category lookup is O(1) instead of a scan per row per render.
+const INDEXES = new WeakMap<object, Map<string, unknown>>();
+function lookup<T extends { id: string }>(
+  list: readonly T[],
+  id: string | null | undefined,
+): T | undefined {
+  if (!id) return undefined;
+  let index = INDEXES.get(list);
+  if (!index) {
+    index = new Map(list.map((item) => [item.id, item]));
+    INDEXES.set(list, index);
+  }
+  return index.get(id) as T | undefined;
+}
+
+/**
+ * Resolves the row's account, category and locale from the snapshot, then hands them to a
+ * memoized view. Any finance mutation re-renders this thin wrapper, but a row whose own
+ * inputs are unchanged skips the (much heavier) view entirely.
+ */
+export function TransactionRow(props: TransactionRowProps) {
   const { settings, accounts, categories } = useFinanceState();
+  const { transaction } = props;
+  return (
+    <TransactionRowView
+      {...props}
+      locale={settings.locale}
+      account={lookup(accounts, transaction.accountId)}
+      category={lookup(categories, transaction.categoryId)}
+      destination={lookup(accounts, transaction.destinationAccountId)}
+    />
+  );
+}
+
+const TransactionRowView = memo(function TransactionRowView({
+  transaction,
+  compact = false,
+  returnTo = "/transactions",
+  selectionMode = false,
+  selected = false,
+  showDate = true,
+  onPress,
+  onLongPress,
+  locale,
+  account,
+  category,
+  destination,
+}: TransactionRowProps & {
+  locale: string;
+  account: Account | undefined;
+  category: Category | undefined;
+  destination: Account | undefined;
+}) {
+  const settings = { locale };
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
-  const account = accounts.find((item) => item.id === transaction.accountId);
-  const category = categories.find(
-    (item) => item.id === transaction.categoryId,
-  );
-  const destination = accounts.find(
-    (item) => item.id === transaction.destinationAccountId,
-  );
   const isIncome = transaction.kind === "income";
   const isTransfer = transaction.kind === "transfer";
   const color = selected
@@ -87,7 +132,7 @@ export function TransactionRow({
     .filter((part): part is string => Boolean(part))
     .join(" · ");
   // Read the date the way the app displays it, not as the raw ISO string.
-  const spokenDate = new Intl.DateTimeFormat(settings.locale, {
+  const spokenDate = dateFormat(settings.locale, {
     dateStyle: "full",
   }).format(parseLocalDate(transaction.localDate));
   const rowLabel = [
@@ -261,4 +306,4 @@ export function TransactionRow({
       </View>
     </MotionPressable>
   );
-}
+});
