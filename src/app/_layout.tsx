@@ -30,7 +30,11 @@ import { QashyThemeProvider, useQashyTheme } from "@/theme/theme";
 import { QASHY_ACCENT } from "@/domain/defaults";
 import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
-import { FONT_REGISTRY, fontAssetsFor } from "@/theme/fonts";
+import {
+  STARTUP_FONT_ASSETS,
+  useBackgroundFontLoading,
+  useThemeFonts,
+} from "@/theme/use-theme-fonts";
 
 // `index` redirects to onboarding or the tabs, so anchoring the root stack to it
 // gives every deep-linked route (a form sheet, /appearance, /csv, +not-found) a
@@ -162,6 +166,11 @@ function RootNavigator() {
 
   useWebDocumentTitle();
   useTrackLocationChanges();
+  useBackgroundFontLoading();
+  // Native waits for the active theme's faces (instant for Classic, whose faces already loaded
+  // behind the splash) rather than flashing the system face. Web renders at once and swaps via
+  // the CSS fallback stack, as before.
+  const themeFontsReady = useThemeFonts(theme.type);
 
   // Without an explicit back title, a directly-loaded route labels its back
   // control from the anchor's route name ("index, back").
@@ -172,6 +181,10 @@ function RootNavigator() {
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(theme.background).catch(() => undefined);
   }, [theme.background]);
+
+  if (!themeFontsReady && process.env.EXPO_OS !== "web") {
+    return <View style={{ flex: 1, backgroundColor: theme.background }} />;
+  }
 
   return (
     <>
@@ -348,18 +361,14 @@ function RootNavigator() {
   );
 }
 
-// Loading is keyed by font id (fontIdsForTheme(theme.type) yields a theme's own list). For now every
-// registered font is loaded up front, which is simple and always correct; loading only the active
-// theme's ids lazily is a later optimisation and is deliberately not done here.
-const FONT_IDS_TO_LOAD = Object.keys(FONT_REGISTRY);
-const FONTS_TO_LOAD = fontAssetsFor(FONT_IDS_TO_LOAD);
-
 export default function RootLayout() {
   // The fonts are local assets, so this resolves in a frame or two. Native waits
   // behind the splash rather than flashing the system face; web renders at once
   // (the static export must not be blank) and swaps via the CSS fallback stack.
   // A load error falls through to the system font instead of hanging the splash.
-  const [fontsLoaded, fontError] = useFonts(FONTS_TO_LOAD);
+  // Only the default theme's faces gate the splash. The active theme's own faces are awaited
+  // in `RootNavigator`, once settings are known, and the rest load in the background.
+  const [fontsLoaded, fontError] = useFonts(STARTUP_FONT_ASSETS);
   const ready =
     fontsLoaded || fontError != null || process.env.EXPO_OS === "web";
 

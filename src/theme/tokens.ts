@@ -488,6 +488,11 @@ export interface ToneColors {
  * exposes opaque platform colors with no JS-readable value, which is what
  * `staticSurface`/`staticText` on ThemeTokens are for.
  */
+// Each entity badge asks for its tint on every render, and `ensureContrast` can bisect 18 times.
+// The inputs are plain strings, so the result is cached per tone spec (bounded, then reset).
+const TONE_CACHE = new WeakMap<ToneSpec, Map<string, ToneColors>>();
+const TONE_CACHE_LIMIT = 500;
+
 export function toneColors(
   seed: string,
   surface: string,
@@ -495,15 +500,26 @@ export function toneColors(
   dark: boolean,
   tone: ToneSpec = CLASSIC_TONE,
 ): ToneColors {
+  let cache = TONE_CACHE.get(tone);
+  if (!cache) {
+    cache = new Map();
+    TONE_CACHE.set(tone, cache);
+  }
+  const key = `${seed}|${surface}|${text}|${dark}`;
+  const cached = cache.get(key);
+  if (cached) return cached;
   const container = mixHex(
     seed,
     surface,
     dark ? tone.containerMix.dark : tone.containerMix.light,
   );
-  return {
+  const colors: ToneColors = {
     container,
     onContainer: ensureContrast(seed, container, text, tone.minContrast),
   };
+  if (cache.size >= TONE_CACHE_LIMIT) cache.clear();
+  cache.set(key, colors);
+  return colors;
 }
 
 /**

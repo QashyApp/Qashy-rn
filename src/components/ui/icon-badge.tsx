@@ -1,10 +1,9 @@
 import { View, type ColorValue } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
-import { resolveIconRender } from "@/theme/icon-sets";
+import { resolveIconRenderById } from "@/theme/icon-sets";
 import { useQashyTheme, type ThemeTokens } from "@/theme/theme";
 import { readableTextColor, toneColors } from "@/theme/tokens";
-import { parseIconId } from "@/utils/icon-id";
 
 export interface BadgeColors {
   container: ColorValue;
@@ -13,7 +12,7 @@ export interface BadgeColors {
 
 /** True when the glyph carries its own colors (emoji, Fluent Emoji) and so must not sit on a solid fill of the entity color. */
 export function isMultiColorIcon(name: string, setId: string): boolean {
-  const kind = resolveIconRender(parseIconId(name), setId).kind;
+  const kind = resolveIconRenderById(name, setId).kind;
   return kind === "emoji" || kind === "color-svg";
 }
 
