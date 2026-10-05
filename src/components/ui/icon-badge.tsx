@@ -1,10 +1,10 @@
 import { View, type ColorValue } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
-import { resolveIconRender } from "@/theme/icon-sets";
+import { resolveIconRenderById } from "@/theme/icon-sets";
 import { useQashyTheme, type ThemeTokens } from "@/theme/theme";
+import { insetHighlight } from "@/theme/highlight";
 import { readableTextColor, toneColors } from "@/theme/tokens";
-import { parseIconId } from "@/utils/icon-id";
 
 export interface BadgeColors {
   container: ColorValue;
@@ -13,7 +13,7 @@ export interface BadgeColors {
 
 /** True when the glyph carries its own colors (emoji, Fluent Emoji) and so must not sit on a solid fill of the entity color. */
 export function isMultiColorIcon(name: string, setId: string): boolean {
-  const kind = resolveIconRender(parseIconId(name), setId).kind;
+  const kind = resolveIconRenderById(name, setId).kind;
   return kind === "emoji" || kind === "color-svg";
 }
 
@@ -63,9 +63,6 @@ export function badgeColors(
   // none
   return { container: "transparent", onContainer: tinted().onContainer };
 }
-
-const HIGHLIGHT_LIGHT = "inset 0 1px 0 rgba(255,255,255,0.35)";
-const HIGHLIGHT_DARK = "inset 0 1px 0 rgba(255,255,255,0.06)";
 
 /**
  * The square or round tile behind an entity icon (category, account, goal), drawn from the
@@ -122,11 +119,7 @@ export function IconBadge({
         backgroundColor: hasContainer ? colors.container : "transparent",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: highlight
-          ? theme.mode === "dark"
-            ? HIGHLIGHT_DARK
-            : HIGHLIGHT_LIGHT
-          : undefined,
+        boxShadow: highlight ? insetHighlight(theme.mode) : undefined,
       }}
     >
       <AppIcon

@@ -23,11 +23,11 @@ import {
   saveThemeFile,
   pickThemeFileText,
 } from "@/features/more/custom-theme-files";
-import type { AccentSource, ThemeMode } from "@/domain/models";
+import type { AccentSource, AnimationLevel, ThemeMode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
-  useFinanceState,
+  useFinanceSettings,
 } from "@/providers/finance-provider";
 import {
   evaluateThemeImport,
@@ -51,12 +51,17 @@ const THEME_MODE_OPTIONS: SegmentOption<ThemeMode>[] = [
   { value: "light", label: "Light", icon: THEME_MODE_ICONS.light },
   { value: "dark", label: "Dark", icon: THEME_MODE_ICONS.dark },
 ];
+const ANIMATION_LEVEL_OPTIONS: SegmentOption<AnimationLevel>[] = [
+  { value: "all", label: "All" },
+  { value: "minimal", label: "Minimal" },
+  { value: "off", label: "Off" },
+];
 /** A representative amount for the live preview hero — never a real balance. */
 const PREVIEW_NET_WORTH_MINOR = 1284350;
 
 export function AppearanceScreen() {
   const repository = useFinanceRepository();
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
@@ -115,6 +120,19 @@ export function AppearanceScreen() {
     userAccent && source === "custom" && !validHex
       ? "Use a six-digit hex color such as #5070FF."
       : undefined;
+  // Like language, the animation level applies the moment it is chosen and is its own revision.
+  const changeAnimationLevel = async (animationLevel: AnimationLevel) => {
+    if (animationLevel === (settings.animationLevel ?? "all")) return;
+    try {
+      const updated = await repository.updateSettings({ animationLevel });
+      setExpectedRevision(updated.revision);
+    } catch (reason) {
+      showError(
+        "Couldn’t apply this setting",
+        errorMessage(reason, "Try again."),
+      );
+    }
+  };
   // Language applies immediately, exactly like the onboarding welcome step: it writes
   // `settings.locale`, and `LocalizationProvider` flips language and RTL from that — no reload.
   // Adopt the new revision so a pending "Save appearance" doesn't hit a stale-revision conflict.
@@ -241,7 +259,7 @@ export function AppearanceScreen() {
       contentContainerStyle={{
         padding: 18,
         paddingBottom: 40,
-        gap: 16,
+        gap: space.lg,
         width: "100%",
         maxWidth: 720,
         alignSelf: "center",
@@ -313,13 +331,13 @@ export function AppearanceScreen() {
         </View>
       </MotionView>
       <MotionView>
-        <Card style={{ gap: 16 }}>
+        <Card style={{ gap: space.lg }}>
           <AppText variant="headline">Language</AppText>
           <LanguageSelector value={settings.locale} onChange={changeLanguage} />
         </Card>
       </MotionView>
       <MotionView>
-        <Card style={{ gap: 16 }}>
+        <Card style={{ gap: space.lg }}>
           <AppText variant="headline">Theme</AppText>
           <AppText muted>
             Choose the overall look. Every theme has a light and a dark version.
@@ -342,7 +360,7 @@ export function AppearanceScreen() {
         <AppearanceOverridesCard />
       </MotionView>
       <MotionView>
-        <Card style={{ gap: 16 }}>
+        <Card style={{ gap: space.lg }}>
           <AppText variant="headline">Custom themes</AppText>
           <AppText muted>
             Import a theme file (.json) or export the selected custom theme.
@@ -381,7 +399,7 @@ export function AppearanceScreen() {
       </MotionView>
       {navBarSheet.available ? (
         <MotionView>
-          <Card style={{ gap: 16 }}>
+          <Card style={{ gap: space.lg }}>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={t("Navigation bar style")}
@@ -397,7 +415,7 @@ export function AppearanceScreen() {
                 gap: space.md,
               }}
             >
-              <View style={{ flex: 1, gap: 2 }}>
+              <View style={{ flex: 1, gap: space.xxs }}>
                 <AppText variant="label">Navigation bar style</AppText>
                 <AppText variant="caption" muted>
                   {settings.navBarStyle === "floating" ? "Floating" : "Native"}
@@ -409,7 +427,22 @@ export function AppearanceScreen() {
         </MotionView>
       ) : null}
       <MotionView>
-        <Card style={{ gap: 16 }}>
+        <Card style={{ gap: space.md }}>
+          <AppText variant="headline">Animations</AppText>
+          <SegmentedControl
+            label="Animations"
+            options={ANIMATION_LEVEL_OPTIONS}
+            value={settings.animationLevel ?? "all"}
+            onChange={changeAnimationLevel}
+          />
+          <AppText variant="caption" muted>
+            Minimal keeps quick fades only; Off changes things instantly. Your
+            device’s reduce-motion setting always applies on top.
+          </AppText>
+        </Card>
+      </MotionView>
+      <MotionView>
+        <Card style={{ gap: space.lg }}>
           <AppText variant="headline">Appearance</AppText>
           <SegmentedControl
             label="Appearance"
@@ -424,7 +457,7 @@ export function AppearanceScreen() {
       </MotionView>
       {!userAccent ? (
         <MotionView>
-          <Card style={{ gap: 8 }}>
+          <Card style={{ gap: space.sm }}>
             <AppText variant="headline">Accent source</AppText>
             <AppText muted>
               {accentMode === "system"
@@ -435,12 +468,12 @@ export function AppearanceScreen() {
         </MotionView>
       ) : (
         <MotionView>
-          <Card style={{ gap: 16 }}>
+          <Card style={{ gap: space.lg }}>
             <AppText variant="headline">Accent source</AppText>
             <View
               accessibilityLabel={t("Accent source")}
               accessibilityRole="radiogroup"
-              style={{ gap: 12 }}
+              style={{ gap: space.md }}
             >
               <ChoiceChip
                 label={
@@ -466,7 +499,11 @@ export function AppearanceScreen() {
                 loose on the card. `ColorSwatch` itself is untouched. */}
               <Card variant="inset">
                 <View
-                  style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}
+                  style={{
+                    flexDirection: "row",
+                    gap: space.md,
+                    flexWrap: "wrap",
+                  }}
                 >
                   {ACCENT_PRESETS.map((color) => (
                     <ColorSwatch

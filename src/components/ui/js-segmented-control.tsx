@@ -28,9 +28,11 @@ export interface SegmentOption<T extends string> {
 }
 
 /**
- * One choice out of a few, shown all at once. A sliding thumb marks the
- * selection, and the selected label also switches to the stronger text color
- * and weight so the state never rests on the thumb's fill alone.
+ * One choice out of a few, shown all at once. Material You draws an M3
+ * outlined segmented button (selected segment filled in place, with a check);
+ * other themes use a sunken track with a sliding thumb, and the selected label
+ * also switches to the stronger text color and weight so the state never rests
+ * on the thumb's fill alone.
  *
  * Use it for 2–5 short, mutually exclusive options that change a view (a
  * filter, a chart mode, a theme). Longer or open-ended lists belong in
@@ -58,6 +60,147 @@ export function JsSegmentedControl<T extends string>({
   lockLtr?: boolean;
 }) {
   const theme = useQashyTheme();
+  if (theme.materialControls) {
+    return (
+      <MaterialSegmentedControl
+        label={label}
+        options={options}
+        value={value}
+        onChange={onChange}
+        size={size}
+        lockLtr={lockLtr}
+      />
+    );
+  }
+  return (
+    <ThumbSegmentedControl
+      label={label}
+      options={options}
+      value={value}
+      onChange={onChange}
+      size={size}
+      lockLtr={lockLtr}
+    />
+  );
+}
+
+interface SegmentedProps<T extends string> {
+  label: string;
+  options: readonly SegmentOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  size: "regular" | "compact";
+  lockLtr: boolean;
+}
+
+/**
+ * Material 3 outlined segmented button. One outlined, fully rounded container; each segment is a
+ * rectangle divided by a shared outline, and the selected one fills with the secondary container
+ * in place and shows a check. Nothing slides: only the outer corners are round, so the selected
+ * fill never has a rounded edge pressing on its neighbour.
+ */
+function MaterialSegmentedControl<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  size,
+  lockLtr,
+}: SegmentedProps<T>) {
+  const theme = useQashyTheme();
+  const { space } = theme;
+  const { t, isRtl } = useLocalization();
+  const rtl = lockLtr ? false : isRtl;
+  // Material's segmented button is 40dp; the hit slop brings the target to the 44px minimum.
+  const height = size === "compact" ? 36 : 40;
+  return (
+    <DirectionScope direction={rtl ? "rtl" : "ltr"}>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={t(label)}
+        style={{
+          flexDirection: "row",
+          height,
+          borderRadius: height / 2,
+          borderWidth: 1,
+          borderColor: theme.outline,
+          overflow: "hidden",
+        }}
+      >
+        {options.map((option, index) => {
+          const selected = option.value === value;
+          const content = selected
+            ? theme.onSecondaryContainer
+            : theme.textMuted;
+          return (
+            <MotionPressable
+              key={option.value}
+              accessibilityRole="radio"
+              accessibilityLabel={
+                option.literal ? option.label : t(option.label)
+              }
+              accessibilityState={{ checked: selected }}
+              aria-checked={selected}
+              hitSlop={{ top: 4, bottom: 4 }}
+              onPress={() => {
+                if (selected) return;
+                hapticSelection();
+                onChange(option.value);
+              }}
+              stateLayerColor={content}
+              style={{
+                flex: 1,
+                // MotionPressable's inner views don't stretch with the wrapper, so the segment
+                // states its own height (the container's, less its 1px border on each side).
+                height: height - 2,
+                minWidth: 44,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: space.xs,
+                paddingHorizontal: space.sm,
+                // The divider is the start edge of every segment but the first.
+                borderStartWidth: index === 0 ? 0 : 1,
+                borderStartColor: theme.outline,
+                backgroundColor: selected
+                  ? theme.secondaryContainer
+                  : "transparent",
+              }}
+            >
+              {selected ? (
+                <AppIcon name="checkmark" size={18} color={content} />
+              ) : option.icon ? (
+                <AppIcon name={option.icon} size={18} color={content} />
+              ) : null}
+              <AppText
+                selectable={false}
+                literal={option.literal}
+                numberOfLines={1}
+                variant={size === "compact" ? "caption" : "label"}
+                style={{
+                  color: selected ? content : theme.text,
+                }}
+              >
+                {option.label}
+              </AppText>
+            </MotionPressable>
+          );
+        })}
+      </View>
+    </DirectionScope>
+  );
+}
+
+/** The sunken track with a raised sliding thumb, for the non-Material themes. */
+function ThumbSegmentedControl<T extends string>({
+  label,
+  options,
+  value,
+  onChange,
+  size,
+  lockLtr,
+}: SegmentedProps<T>) {
+  const theme = useQashyTheme();
   const { radius, space } = theme;
   const motionDuration = useMotionDurations();
   const { t, isRtl } = useLocalization();
@@ -67,13 +210,8 @@ export function JsSegmentedControl<T extends string>({
     0,
     options.findIndex((option) => option.value === value),
   );
-  // Material 3 (flat engine): an outlined group whose selected segment is filled with the
-  // secondary container and marked with a check, instead of a sunken pill with a raised thumb.
-  const m3 = theme.materialControls;
-  const inset = m3 ? 0 : space.xxs;
-  const border = m3 ? 1 : 0;
-  const segment =
-    width > 0 ? (width - 2 * (inset + border)) / options.length : 0;
+  const inset = space.xxs;
+  const segment = width > 0 ? (width - 2 * inset) / options.length : 0;
   const height = size === "compact" ? 44 : 48; // 44px is the minimum touch target
 
   const thumbStyle = useAnimatedStyle(() => ({
@@ -101,15 +239,9 @@ export function JsSegmentedControl<T extends string>({
             flexDirection: "row",
             padding: inset,
             borderRadius: radius.pill,
-            minHeight: height + 2 * (inset + border),
+            minHeight: height + 2 * inset,
           },
-          m3
-            ? {
-                borderWidth: border,
-                borderColor: theme.textMuted,
-                overflow: "hidden",
-              }
-            : materialStyle(theme, "sunken"),
+          materialStyle(theme, "sunken"),
         ]}
       >
         {segment > 0 ? (
@@ -124,36 +256,14 @@ export function JsSegmentedControl<T extends string>({
                 width: segment,
                 borderRadius: radius.pill,
               },
-              m3
-                ? { backgroundColor: theme.secondaryContainer }
-                : materialStyle(theme, "control"),
+              materialStyle(theme, "control"),
               thumbStyle,
             ]}
           />
         ) : null}
-        {m3 && segment > 0
-          ? options.slice(1).map((option, i) =>
-              // The divider sits between segment i and i + 1; the filled one hides its own edges.
-              i === index || i + 1 === index ? null : (
-                <View
-                  key={option.value}
-                  pointerEvents="none"
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    bottom: 0,
-                    start: (i + 1) * segment,
-                    width: 1,
-                    backgroundColor: theme.textMuted,
-                    opacity: 0.5,
-                  }}
-                />
-              ),
-            )
-          : null}
         {options.map((option) => {
           const selected = option.value === value;
-          const selectedColor = m3 ? theme.onSecondaryContainer : theme.text;
+          const selectedColor = theme.text;
           return (
             <MotionPressable
               key={option.value}
@@ -181,9 +291,7 @@ export function JsSegmentedControl<T extends string>({
                 borderRadius: radius.pill,
               }}
             >
-              {m3 && selected ? (
-                <AppIcon name="checkmark" size={16} color={selectedColor} />
-              ) : option.icon ? (
+              {option.icon ? (
                 <AppIcon
                   name={option.icon}
                   size={15}

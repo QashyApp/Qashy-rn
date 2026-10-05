@@ -11,8 +11,12 @@ import type {
   ImportMode,
 } from "@/data/import/types";
 import { PlatformStorageAdapter } from "@/data/storage";
-import { NAV_BAR_STYLES } from "@/domain/models";
-import type { StorageAdapter, StoredEntity } from "@/data/storage-adapter";
+import { ANIMATION_LEVELS, NAV_BAR_STYLES } from "@/domain/models";
+import {
+  recordKey,
+  type StorageAdapter,
+  type StoredEntity,
+} from "@/data/storage-adapter";
 import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";
 import type {
   Account,
@@ -30,14 +34,18 @@ import type {
   FinanceEntity,
   FinanceState,
   ForeignAmount,
+  ForeignAmountInput,
   Goal,
   GoalContribution,
   ImportResult,
   RecurringRule,
   Tag,
   TransactionFee,
+  TransactionFeeInput,
   TransactionQuery,
+  TransactionKind,
   TransactionRecord,
+  TransactionStatus,
 } from "@/domain/models";
 import type {
   AccountInput,
@@ -60,6 +68,7 @@ import type {
 import {
   applyOps,
   changedTypes,
+  eraseDeletedState,
   finalize,
   isEntityType,
   materialize,
@@ -69,7 +78,15 @@ import {
   type CausalMeta,
   type SyncOpBody,
 } from "@/sync/oplog";
-import { readAllStates, writeStates } from "@/data/sync-store";
+import {
+  hasSyncHistory,
+  readAllStates,
+  readMeta,
+  SYNC_META,
+  writeMeta,
+  writeStates,
+} from "@/data/sync-store";
+import { eraseEntity } from "@/domain/erasure";
 import { planMerge, type DuplicateGroup } from "@/sync/engine/duplicates";
 import { DEFAULT_THEME_ID, isValidThemeId } from "@/theme/themes/types";
 import {
@@ -85,6 +102,7 @@ import {
   isLocalDate,
   parseLocalDate,
   todayLocal,
+  toLocalDate,
 } from "@/utils/date";
 import {
   budgetPeriodId,
@@ -112,10 +130,9 @@ import { resolvePeriod } from "@/utils/period";
 import {
   feeMinorFor,
   normalizeFeePercent,
+  principalOf,
   totalWithFee,
 } from "@/utils/transaction-amounts";
-// Not `from 'zod'` — see `src/utils/zod.ts`; the CSP leaves no `eval` for zod's JIT probe.
-import { z } from "@/utils/zod";
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const ACCOUNT_TYPES = [
@@ -144,34 +161,173 @@ const MANUAL_TRANSFER_AMOUNT_TOLERANCE = 10;
 
 /** Case- and accent-insensitive form for search, so "cafe" finds "Café". Uses no locale-sensitive collation. */
 function foldForSearch(value: string) {
-  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLocaleLowerCase();
+  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+// A transaction record is immutable once in the snapshot (edits create a new object), so its
+// folded searchable text is computed once instead of on every keystroke for every row.
+const foldedSearchText = new WeakMap<object, string>();
+function searchTextOf(transaction: { title: string; note: string }) {
+  let folded = foldedSearchText.get(transaction);
+  if (folded === undefined) {
+    folded = foldForSearch(`${transaction.title} ${transaction.note}`);
+    foldedSearchText.set(transaction, folded);
+  }
+  return folded;
 }
 // Roughly a century of daily points. A dashboard range wider than this used to
 // truncate the daily series silently and return a chart that was simply wrong.
 const MAX_DASHBOARD_DAYS = 36_600;
-const csvRowSchema = z.object({
-  rowNumber: z.number(),
-  date: z
-    .string()
-    .regex(DATE_PATTERN)
-    .refine(isLocalDate, "Enter a real calendar date."),
-  type: z.enum(TRANSACTION_TYPES),
-  status: z.enum(TRANSACTION_STATUSES).default("posted"),
-  title: z.string().min(1),
-  amount: z.string().min(1),
-  currency: z
-    .string()
-    .regex(/^[A-Za-z]{3}$/)
-    .transform((value) => value.toUpperCase()),
-  account: z.string().min(1),
-  category: z.string().default(""),
-  tags: z.string().default(""),
-  note: z.string().default(""),
-  exchangeRate: z.string().default(""),
-  destinationAccount: z.string().default(""),
-  destinationAmount: z.string().default(""),
-  destinationBaseAmountMinor: z.string().default(""),
-});
+const CSV_YIELD_EVERY = 250;
+const yieldToEventLoop = () =>
+  new Promise<void>((resolve) => setTimeout(resolve, 0));
+/** A CSV row after validation: every optional column present, currency upper-cased. */
+interface ParsedCsvRow {
+  rowNumber: number;
+  date: string;
+  type: TransactionKind;
+  status: TransactionStatus;
+  title: string;
+  amount: string;
+  currency: string;
+  account: string;
+  category: string;
+  tags: string;
+  note: string;
+  exchangeRate: string;
+  destinationAccount: string;
+  destinationAmount: string;
+  destinationBaseAmountMinor: string;
+  foreignAmount: string;
+  foreignCurrency: string;
+  foreignExchangeRate: string;
+  feeKind: string;
+  feeValue: string;
+}
+
+type CsvRowParse =
+  { success: true; data: ParsedCsvRow } | { success: false; reason: string };
+
+/**
+ * Validates one raw CSV row. Hand-written rather than a schema library: the shape is flat, and a
+ * schema library was ~12% of the web bundle for three small validators. Reports the first
+ * problem in column order, like the schema it replaced.
+ */
+function parseCsvRow(raw: unknown): CsvRowParse {
+  const fail = (reason: string): CsvRowParse => ({ success: false, reason });
+  if (!raw || typeof raw !== "object") return fail("Invalid row");
+  const row = raw as Record<string, unknown>;
+  const text = (key: string) => {
+    const value = row[key];
+    return typeof value === "string" ? value : undefined;
+  };
+  const required = (key: string) => {
+    const value = text(key);
+    return value !== undefined && value.length > 0 ? value : null;
+  };
+  // A missing optional column is empty; a present one must still be text.
+  const optional = (key: string): string | null =>
+    row[key] === undefined
+      ? ""
+      : typeof row[key] === "string"
+        ? (row[key] as string)
+        : null;
+
+  if (typeof row.rowNumber !== "number" || Number.isNaN(row.rowNumber))
+    return fail("Row number is missing.");
+  const date = text("date");
+  if (date === undefined || !DATE_PATTERN.test(date) || !isLocalDate(date))
+    return fail("Enter a real calendar date.");
+  const type = row.type;
+  if (!(TRANSACTION_TYPES as readonly unknown[]).includes(type))
+    return fail(`Type must be one of: ${TRANSACTION_TYPES.join(", ")}.`);
+  const status = row.status === undefined ? "posted" : row.status;
+  if (!(TRANSACTION_STATUSES as readonly unknown[]).includes(status))
+    return fail(`Status must be one of: ${TRANSACTION_STATUSES.join(", ")}.`);
+  const title = required("title");
+  if (title === null) return fail("Title is required.");
+  const amount = required("amount");
+  if (amount === null) return fail("Amount is required.");
+  const currency = text("currency");
+  if (currency === undefined || !/^[A-Za-z]{3}$/.test(currency))
+    return fail("Currency must be a three-letter code.");
+  const account = required("account");
+  if (account === null) return fail("Account is required.");
+  const category = optional("category");
+  const tags = optional("tags");
+  const note = optional("note");
+  const exchangeRate = optional("exchangeRate");
+  const destinationAccount = optional("destinationAccount");
+  const destinationAmount = optional("destinationAmount");
+  const destinationBaseAmountMinor = optional("destinationBaseAmountMinor");
+  const foreignAmount = optional("foreignAmount");
+  const foreignCurrency = optional("foreignCurrency");
+  const foreignExchangeRate = optional("foreignExchangeRate");
+  const feeKind = optional("feeKind");
+  const feeValue = optional("feeValue");
+  if (
+    category === null ||
+    tags === null ||
+    note === null ||
+    exchangeRate === null ||
+    destinationAccount === null ||
+    destinationAmount === null ||
+    destinationBaseAmountMinor === null ||
+    foreignAmount === null ||
+    foreignCurrency === null ||
+    foreignExchangeRate === null ||
+    feeKind === null ||
+    feeValue === null
+  )
+    return fail("Invalid row");
+  if (foreignCurrency && !/^[A-Za-z]{3}$/.test(foreignCurrency.trim()))
+    return fail("Foreign currency must be a three-letter code.");
+  return {
+    success: true,
+    data: {
+      rowNumber: row.rowNumber,
+      date,
+      type: type as TransactionKind,
+      status: status as TransactionStatus,
+      title,
+      amount,
+      currency: currency.toUpperCase(),
+      account,
+      category,
+      tags,
+      note,
+      exchangeRate,
+      destinationAccount,
+      destinationAmount,
+      destinationBaseAmountMinor,
+      foreignAmount: foreignAmount.trim(),
+      foreignCurrency: foreignCurrency.trim().toUpperCase(),
+      foreignExchangeRate: foreignExchangeRate.trim(),
+      feeKind: feeKind.trim().toLowerCase(),
+      feeValue: feeValue.trim(),
+    },
+  };
+}
+
+/**
+ * What a replace-import deletes: every finance entity the backup stands in for. Settings and
+ * exchange rates are not part of a backup's content, so they are kept.
+ */
+const REPLACED_TYPES: EntityType[] = [
+  "accounts",
+  "categories",
+  "tags",
+  "transactions",
+  "budgets",
+  "budgetPeriods",
+  "budgetAdjustments",
+  "goals",
+  "contributions",
+  "recurringRules",
+];
+
+const REPLACE_NEEDS_NO_SYNC_MESSAGE =
+  "Your current data can’t be deleted for real while this device syncs: your other devices would keep it and send it back. Remove this device from sync first, or choose “Add to my current data”.";
 
 const ENTITY_TYPES: EntityType[] = [
   "accounts",
@@ -201,6 +357,21 @@ export class LocalFinanceRepository implements FinanceRepository {
   private mutationActive = false;
   private pendingExternalRefresh = false;
   private deletedOccurrenceKeys = new Set<string>();
+  // Derived reads keyed by the identity of the snapshot arrays they were computed from.
+  // Every mutation replaces the arrays it touches, so a stale entry can never be hit.
+  private postedCache = new WeakMap<
+    TransactionRecord[],
+    { all: TransactionRecord[]; ranges: Map<string, TransactionRecord[]> }
+  >();
+  private transactionIndexCache = new WeakMap<
+    TransactionRecord[],
+    Map<string, TransactionRecord>
+  >();
+  private derivedCache: {
+    deps: readonly unknown[];
+    dashboards: Map<string, DashboardSummary>;
+    budgetStatuses: Map<string, BudgetStatus[]>;
+  } | null = null;
 
   constructor(private storage: StorageAdapter = new PlatformStorageAdapter()) {
     this.storage.subscribe?.((source) => {
@@ -228,6 +399,7 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   private async initializeNow() {
     await this.storage.initialize();
+    await this.eraseStoredTombstones();
     await this.hydrateFromStorage();
     await this.migrateLoadedState();
     // No placeholder settings row is written here, and that is load-bearing for sync.
@@ -247,6 +419,43 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Only now is the snapshot complete enough for screens to render against.
     this.state = { ...this.state, ready: true };
     this.emit();
+  }
+
+  /**
+   * Erases, once per device, the tombstones stored before deleting erased them.
+   *
+   * Both halves: the rows in `records`, and the causal state sync keeps for them. Through
+   * `transact`, never `putMany`, because this is not an edit — it rewrites rows into the form
+   * every tombstone is now written in, and must emit no ops. Ops already in the log keep what
+   * they carried until compaction drops them, as it does every op.
+   */
+  private async eraseStoredTombstones() {
+    await this.storage.transact(
+      async (tx) => {
+        const done = await readMeta(tx, [SYNC_META.tombstonesErased]);
+        if (done.get(SYNC_META.tombstonesErased) === "1") return;
+
+        const records: StoredEntity[] = [];
+        for (const type of ALL_ENTITY_TYPES) {
+          for (const entity of await tx.readAll(type)) {
+            if (!entity.deletedAt) continue;
+            const erased = eraseEntity(type, entity);
+            if (JSON.stringify(erased) !== JSON.stringify(entity))
+              records.push({ type, entity: erased });
+          }
+        }
+        if (records.length) await tx.putMany(records);
+
+        const states: CausalMeta[] = [];
+        for (const meta of (await readAllStates(tx)).values()) {
+          const erased = eraseDeletedState(meta);
+          if (erased !== meta) states.push(erased);
+        }
+        await writeStates(tx, states);
+        await writeMeta(tx, { [SYNC_META.tombstonesErased]: "1" });
+      },
+      { silent: true },
+    );
   }
 
   refresh() {
@@ -407,9 +616,11 @@ export class LocalFinanceRepository implements FinanceRepository {
           for (const entity of entities) {
             // `finalize` settles `revision` against what is actually stored, and reports the
             // record unchanged when only the derived fields moved — so an op that re-states
-            // a value this device already holds writes nothing and bumps nothing.
+            // a value this device already holds writes nothing and bumps nothing. Compared in
+            // erased form because that is how a tombstone is stored: a duplicate the repair
+            // pass tombstones would otherwise differ from its stored self on every merge.
             const { entity: settled, changed } = finalize(
-              entity,
+              eraseEntity(type, entity),
               original.get(metaKey(type, entity.id)) ?? null,
             );
             if (!changed) continue;
@@ -552,6 +763,10 @@ export class LocalFinanceRepository implements FinanceRepository {
       patch.navBarStyle ?? this.state.settings.navBarStyle ?? "native";
     if (!NAV_BAR_STYLES.includes(navBarStyle))
       throw new Error("Choose a valid navigation bar style.");
+    const animationLevel =
+      patch.animationLevel ?? this.state.settings.animationLevel ?? "all";
+    if (!ANIMATION_LEVELS.includes(animationLevel))
+      throw new Error("Choose a valid animation level.");
     const override = (
       key:
         | "fontTextOverride"
@@ -590,6 +805,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         this.state.settings.swipeBetweenMonths ??
         false,
       navBarStyle,
+      animationLevel,
       ...overrides,
     });
     await this.persist("settings", [settings]);
@@ -1296,7 +1512,20 @@ export class LocalFinanceRepository implements FinanceRepository {
           ),
         }
       : input;
-    const normalized = this.validateRecurring(nextInput, id);
+    const validated = this.validateRecurring(nextInput, id);
+    // A NEW rule starts at its first occurrence on or after today: a start date in the past must
+    // not backfill every missed occurrence (edits are handled above and never backfill either).
+    const normalized = existing
+      ? validated
+      : {
+          ...validated,
+          nextDueDate: firstRecurrenceOnOrAfter(
+            validated.startDate,
+            validated.unit,
+            validated.interval,
+            [validated.startDate, todayLocal()].sort().at(-1)!,
+          ),
+        };
     const pausedByDependency = Boolean(
       existing?.pausedByDependency && input.active && !normalized.active,
     );
@@ -1590,12 +1819,11 @@ export class LocalFinanceRepository implements FinanceRepository {
     const matchesCategory = query.categoryIds?.length
       ? this.categoryMatcher(query.categoryIds)
       : null;
-    let result = this.active(snapshot).filter((transaction) => {
+    let result = snapshot.filter((transaction) => {
+      if (transaction.deletedAt) return false;
       if (
         normalizedSearch &&
-        !foldForSearch(`${transaction.title} ${transaction.note}`).includes(
-          normalizedSearch,
-        )
+        !searchTextOf(transaction).includes(normalizedSearch)
       )
         return false;
       if (
@@ -1668,16 +1896,12 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (this.daySpan(fromDate, toDate) > MAX_DASHBOARD_DAYS) {
       throw new Error("Choose a dashboard range no longer than a century.");
     }
-    const posted = this.queryTransactions({
-      fromDate,
-      toDate,
-      statuses: ["posted"],
-      sort: false,
-    });
-    const allPosted = this.queryTransactions({
-      statuses: ["posted"],
-      sort: false,
-    });
+    const derived = this.derived();
+    const dashboardKey = `${fromDate}|${toDate}`;
+    const cachedDashboard = derived.dashboards.get(dashboardKey);
+    if (cachedDashboard) return cachedDashboard;
+    const posted = this.postedTransactions(fromDate, toDate);
+    const allPosted = this.postedTransactions();
     const accounts = this.active(this.state.accounts);
     // One pass over every posted transaction keeps balances O(n + accounts)
     // instead of O(accounts × n); a running total does not need the sort.
@@ -1862,7 +2086,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         "Net worth",
       );
     }
-    return {
+    const summary: DashboardSummary = {
       netWorthMinor,
       incomeMinor,
       expenseMinor,
@@ -1880,6 +2104,8 @@ export class LocalFinanceRepository implements FinanceRepository {
       dailySpend,
       missingExchangeRates,
     };
+    derived.dashboards.set(dashboardKey, summary);
+    return summary;
   }
 
   getBudgetStatuses(
@@ -1887,6 +2113,19 @@ export class LocalFinanceRepository implements FinanceRepository {
     options: { includeInactiveCustom?: boolean } = {},
   ): BudgetStatus[] {
     this.assertDate(onDate);
+    const derived = this.derived();
+    const statusKey = `${onDate}|${options.includeInactiveCustom === true}`;
+    const cached = derived.budgetStatuses.get(statusKey);
+    if (cached) return cached;
+    const statuses = this.computeBudgetStatuses(onDate, options);
+    derived.budgetStatuses.set(statusKey, statuses);
+    return statuses;
+  }
+
+  private computeBudgetStatuses(
+    onDate: string,
+    options: { includeInactiveCustom?: boolean },
+  ): BudgetStatus[] {
     return this.active(this.state.budgets)
       .filter((budget) => !budget.archived)
       .flatMap((budget) => {
@@ -1976,7 +2215,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     return this.enqueueMutation(() => this.generateRecurringNow(horizonDate));
   }
 
-  private async generateRecurringNow(horizonDate: string) {
+  private async generateRecurringNow(horizonDate: string, onlyRuleId?: string) {
     this.assertDate(horizonDate);
     const today = todayLocal();
     let generated = 0;
@@ -1984,7 +2223,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const transactionChanges: TransactionRecord[] = [];
     const ruleChanges: RecurringRule[] = [];
     for (const rule of this.active(this.state.recurringRules).filter(
-      (item) => item.active,
+      (item) => item.active && (!onlyRuleId || item.id === onlyRuleId),
     )) {
       // A rule that can no longer build its transaction (dangling reference,
       // missing exchange rate) is skipped so one bad rule never blocks the
@@ -2056,7 +2295,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         )
           continue;
         // Any other failure (dangling reference, invalid schedule) will not fix
-        // itself. Pause the rule so it surfaces as "Paused" in the Automation
+        // itself. Pause the rule so it surfaces as "Paused" in the Recurring
         // list and the user can fix the cause and re-enable it.
         if (rule.active)
           ruleChanges.push(
@@ -2148,6 +2387,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (futureWaiting) return;
     await this.generateRecurringNow(
       rule.nextDueDate > today ? rule.nextDueDate : today,
+      rule.id,
     );
   }
 
@@ -2205,6 +2445,73 @@ export class LocalFinanceRepository implements FinanceRepository {
     this.state = {
       ...this.state,
       transactions,
+    };
+    this.emit();
+  }
+
+  updateTransactionsDate(ids: string[], localDate: string) {
+    return this.enqueueMutation(() =>
+      this.updateTransactionsDateNow(ids, localDate),
+    );
+  }
+
+  private async updateTransactionsDateNow(ids: string[], localDate: string) {
+    this.assertDate(localDate);
+    const selected = new Set(ids);
+    const moving = this.state.transactions.filter(
+      (item) => selected.has(item.id) && item.localDate !== localDate,
+    );
+    if (!moving.length) return;
+    // Rebuilt through `buildTransaction` as a full edit, so a moved transaction is validated and
+    // priced like one the user re-dated in the form: rate snapshots that belonged to the old day
+    // are left out and resolved again for the new one.
+    const updated = moving.map((item) =>
+      this.buildTransaction(
+        {
+          kind: item.kind,
+          status: item.status,
+          title: item.title,
+          note: item.note,
+          localDate,
+          accountId: item.accountId,
+          destinationAccountId: item.destinationAccountId,
+          categoryId: item.categoryId,
+          tagIds: item.tagIds,
+          amountMinor:
+            item.kind === "transfer" ? item.amountMinor : principalOf(item),
+          destinationAmountMinor:
+            item.kind === "transfer" &&
+            item.destinationCurrency !== item.currency
+              ? item.destinationAmountMinor
+              : null,
+          recurringRuleId: item.recurringRuleId,
+          occurrenceKey: item.occurrenceKey,
+          foreign: item.foreign
+            ? {
+                amountMinor: item.foreign.amountMinor,
+                currency: item.foreign.currency,
+              }
+            : null,
+          fee: item.fee
+            ? item.fee.kind === "percent"
+              ? { kind: "percent", percent: item.fee.percent ?? "" }
+              : { kind: "fixed", amountMinor: item.fee.amountMinor }
+            : null,
+        },
+        item.id,
+      ),
+    );
+    const replacements = new Map(updated.map((item) => [item.id, item]));
+    const transactions = this.state.transactions.map(
+      (item) => replacements.get(item.id) ?? item,
+    );
+    this.assertTransactionSetSafe(transactions);
+    await this.persist("transactions", updated);
+    this.state = {
+      ...this.state,
+      transactions: this.state.transactions.map(
+        (item) => replacements.get(item.id) ?? item,
+      ),
     };
     this.emit();
   }
@@ -2680,9 +2987,10 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   importCsv(rows: CsvImportRow[], commit = false) {
-    return commit
-      ? this.enqueueMutation(() => this.importCsvNow(rows, true))
-      : this.importCsvNow(rows, false);
+    // Preview is queued too, like a commit: a large file yields to the event loop between
+    // batches (below), and a mutation landing in one of those gaps would make the preview read
+    // two different snapshots.
+    return this.enqueueMutation(() => this.importCsvNow(rows, commit));
   }
 
   private async importCsvNow(rows: CsvImportRow[], commit = false) {
@@ -2697,21 +3005,25 @@ export class LocalFinanceRepository implements FinanceRepository {
     const duplicateKeys = new Set(
       this.state.transactions.map((item) => this.transactionDuplicateKey(item)),
     );
+    let processed = 0;
     for (const raw of rows) {
-      const parsed = csvRowSchema.safeParse(raw);
+      // A big file is thousands of validations on the JS thread. Handing control back every
+      // so often keeps scrolling, taps and animations responsive while it runs; small files
+      // never reach the first yield.
+      if (processed > 0 && processed % CSV_YIELD_EVERY === 0)
+        await yieldToEventLoop();
+      processed += 1;
+      const parsed = parseCsvRow(raw);
       if (!parsed.success) {
         result.rejectedRows.push({
           rowNumber: raw.rowNumber,
-          reason: parsed.error.issues[0]?.message ?? "Invalid row",
+          reason: parsed.reason,
         });
         continue;
       }
       const row = parsed.data;
-      // Match archived accounts too. Names stay unique across archived and active
-      // accounts, so this cannot become ambiguous, and `buildTransaction` still
-      // refuses to post new rows to an archived account. Excluding them from the
-      // lookup instead reported "Unknown account" for a name that plainly exists,
-      // which reads as a corrupt export rather than an archived destination.
+      // Archived accounts are still matched by name so they are reported as archived
+      // (below) rather than as "Unknown account", which would read as a corrupt export.
       const account = this.active(this.state.accounts).find(
         (item) => item.name.toLowerCase() === row.account.toLowerCase(),
       );
@@ -2776,9 +3088,14 @@ export class LocalFinanceRepository implements FinanceRepository {
               .split("|")
               .map((item) => item.trim())
               .filter(Boolean)
-              .map((name) => [name.toLocaleLowerCase(), name]),
+              .map((name) => [name.toLowerCase(), name]),
           ).values(),
         ];
+        const { foreign, fee, principalMinor } = this.parseCsvForeignAndFee(
+          row,
+          account.currency,
+          amountMinor,
+        );
         const input: TransactionInput = {
           kind: row.type,
           status: row.status,
@@ -2789,7 +3106,9 @@ export class LocalFinanceRepository implements FinanceRepository {
           destinationAccountId: destination?.id ?? null,
           categoryId: category?.id ?? null,
           tagIds: [],
-          amountMinor,
+          amountMinor: principalMinor,
+          ...(foreign ? { foreign } : {}),
+          ...(fee ? { fee } : {}),
           destinationAmountMinor:
             destination && row.destinationAmount
               ? parseInvariantMoney(
@@ -2808,6 +3127,20 @@ export class LocalFinanceRepository implements FinanceRepository {
         };
         // Build once during preview so rate and transfer validation errors are reported per row.
         const previewTransaction = this.buildTransaction(input);
+        // The exported `amount` is the total. A breakdown that does not add up to it would
+        // silently change the money, so the row is refused instead.
+        if (
+          (foreign || fee) &&
+          previewTransaction.amountMinor !== amountMinor
+        ) {
+          throw new Error(
+            `Amount ${row.amount} does not match the foreign amount and fee, which total ${minorToDecimalString(
+              previewTransaction.amountMinor,
+              row.currency,
+              this.state.settings.locale,
+            )}.`,
+          );
+        }
         const duplicateKey = this.transactionDuplicateKey(
           previewTransaction,
           tagNames,
@@ -2883,6 +3216,101 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (result.duplicateRows.length)
       result.warnings.push("Likely duplicates were skipped.");
     return result;
+  }
+
+  /**
+   * Reads the optional foreign-amount and fee columns of a CSV row. `amountMinor` is the row's
+   * total (what `exportCsv` writes). Without a foreign amount the principal is derived back from
+   * the total and fee; with one, `buildTransaction` derives it and the caller checks the total.
+   */
+  private parseCsvForeignAndFee(
+    row: ParsedCsvRow,
+    accountCurrency: string,
+    amountMinor: number,
+  ): {
+    foreign: ForeignAmountInput | null;
+    fee: TransactionFeeInput | null;
+    principalMinor: number;
+  } {
+    const locale = this.state.settings.locale;
+    let foreign: ForeignAmountInput | null = null;
+    if (row.foreignAmount || row.foreignCurrency || row.foreignExchangeRate) {
+      if (!row.foreignAmount || !row.foreignCurrency)
+        throw new Error(
+          "Foreign amount and foreign currency must be given together.",
+        );
+      foreign = {
+        amountMinor: parseInvariantMoney(
+          row.foreignAmount,
+          row.foreignCurrency,
+          locale,
+        ),
+        currency: row.foreignCurrency,
+        ...(row.foreignExchangeRate
+          ? { exchangeRate: row.foreignExchangeRate }
+          : {}),
+      };
+    }
+    let fee: TransactionFeeInput | null = null;
+    if (row.feeKind || row.feeValue) {
+      if (!row.feeKind || !row.feeValue)
+        throw new Error("Fee kind and fee value must be given together.");
+      if (row.feeKind === "percent") {
+        fee = { kind: "percent", percent: row.feeValue };
+      } else if (row.feeKind === "fixed") {
+        fee = {
+          kind: "fixed",
+          amountMinor: parseInvariantMoney(
+            row.feeValue,
+            accountCurrency,
+            locale,
+          ),
+        };
+      } else {
+        throw new Error("Fee kind must be percent or fixed.");
+      }
+    }
+    if (foreign || !fee || row.type === "transfer") {
+      return { foreign, fee, principalMinor: amountMinor };
+    }
+    // A fee without a foreign amount: the exported amount is the total, so recover the principal.
+    const kind = row.type as "expense" | "income";
+    const mismatch = () =>
+      new Error(
+        `Amount ${row.amount} does not match the fee (${row.feeKind} ${row.feeValue}).`,
+      );
+    if (fee.kind === "fixed") {
+      const principal =
+        kind === "expense"
+          ? amountMinor - fee.amountMinor
+          : amountMinor + fee.amountMinor;
+      if (!Number.isSafeInteger(principal) || principal <= 0) throw mismatch();
+      return { foreign, fee, principalMinor: principal };
+    }
+    const percent = Number(normalizeFeePercent(fee.percent));
+    const estimate =
+      kind === "expense"
+        ? amountMinor / (1 + percent / 100)
+        : amountMinor / (1 - percent / 100);
+    if (!Number.isFinite(estimate)) throw mismatch();
+    const center = Math.round(estimate);
+    for (let delta = 0; delta <= 3; delta += 1) {
+      for (const candidate of delta
+        ? [center - delta, center + delta]
+        : [center]) {
+        if (candidate <= 0 || !Number.isSafeInteger(candidate)) continue;
+        try {
+          if (
+            totalWithFee(kind, candidate, feeMinorFor(candidate, fee)) ===
+            amountMinor
+          )
+            return { foreign, fee, principalMinor: candidate };
+        } catch {
+          // Not a valid principal for this total; try the next candidate.
+        }
+      }
+    }
+    throw mismatch();
   }
 
   importExternalBundle(
@@ -3293,6 +3721,13 @@ export class LocalFinanceRepository implements FinanceRepository {
 
     // ---- Transactions --------------------------------------------------------------------
     const seenTransactions = new Set<string>();
+    // Occurrences the vault already has an answer for, live or tombstoned. The generator makes an
+    // upcoming occurrence for a due schedule on its own, and a user may have skipped or deleted
+    // one, so an imported upcoming entry for the same schedule and date must not add a second.
+    const storedOccurrenceKeys = new Set<string>();
+    for (const record of stored.transactions.values()) {
+      if (record.occurrenceKey) storedOccurrenceKeys.add(record.occurrenceKey);
+    }
     this.withProspectiveState(
       {
         accounts: buildAccounts,
@@ -3314,6 +3749,27 @@ export class LocalFinanceRepository implements FinanceRepository {
           // Live or tombstoned: either way the vault already has an answer for this record. The
           // tombstone case is the user's deliberate deletion, which an import must not undo.
           if (!replacing && stored.transactions.has(derivedId)) {
+            outcome.duplicateTransactions += 1;
+            continue;
+          }
+          // An upcoming entry that belongs to a schedule is that schedule's waiting occurrence, so
+          // it carries the key the generator uses for it (`<rule id>:<date>`).
+          const occurrenceRuleId =
+            item.status === "upcoming" && item.recurringRuleExternalId !== null
+              ? idOf("recurringRule", item.recurringRuleExternalId)
+              : null;
+          const occurrenceKey = occurrenceRuleId
+            ? `${occurrenceRuleId}:${item.localDate}`
+            : null;
+          if (
+            !replacing &&
+            occurrenceRuleId &&
+            occurrenceKey &&
+            (storedOccurrenceKeys.has(occurrenceKey) ||
+              stored.recurringRules.get(occurrenceRuleId)?.deletedAt)
+          ) {
+            // Either the occurrence already exists, or the user deleted the schedule: an import
+            // must not bring back an entry for something they removed.
             outcome.duplicateTransactions += 1;
             continue;
           }
@@ -3371,7 +3827,7 @@ export class LocalFinanceRepository implements FinanceRepository {
                   item.recurringRuleExternalId === null
                     ? null
                     : idOf("recurringRule", item.recurringRuleExternalId),
-                occurrenceKey: null,
+                occurrenceKey,
               },
               undefined,
               [],
@@ -3509,29 +3965,6 @@ export class LocalFinanceRepository implements FinanceRepository {
       recurringRules: newRules.length,
       budgets: newBudgets.length,
     };
-    const importedIds = {
-      accounts: new Set(newAccounts.map((item) => item.id)),
-      categories: new Set(newCategories.map((item) => item.id)),
-      tags: new Set(newTags.map((item) => item.id)),
-      transactions: new Set(newTransactions.map((item) => item.id)),
-      budgets: new Set(newBudgets.map((item) => item.id)),
-      recurringRules: new Set(newRules.map((item) => item.id)),
-    };
-
-    // Live entities that are overwritten in place by an imported row of the same id are not
-    // tombstoned separately (one row, one write), but they are still replaced.
-    const retire = <T extends FinanceEntity>(
-      live: readonly T[],
-      imported: ReadonlySet<string>,
-      at: string,
-    ) =>
-      replacing
-        ? live
-            .filter((entity) => !imported.has(entity.id))
-            .map((entity) =>
-              updateEntity(entity, { deletedAt: at } as Partial<T>),
-            )
-        : [];
     if (replacing) {
       outcome.replaced = {
         accounts: this.state.accounts.length,
@@ -3542,6 +3975,14 @@ export class LocalFinanceRepository implements FinanceRepository {
         budgets: this.state.budgets.length,
         goals: this.state.goals.length,
       };
+      // A replace really erases, and that is only coherent on a device that does not sync. The
+      // commit checks again inside its own transaction; this is what lets a preview say so first.
+      if (
+        await this.storage.transact((tx) => hasSyncHistory(tx), {
+          silent: true,
+        })
+      )
+        reject("replace", REPLACE_NEEDS_NO_SYNC_MESSAGE);
     }
 
     if (!commit) return outcome;
@@ -3551,64 +3992,20 @@ export class LocalFinanceRepository implements FinanceRepository {
       );
     }
 
-    const at = nowIso();
-    // Overwrites a tombstone (or, in `replace`, a live row) that already holds this id, bumping
-    // the revision instead of restarting it at 1, so the op log records a revival or an update
-    // and never a second "create" of the same entity.
+    // In `merge`, overwrites a tombstone that already holds this id, bumping the revision
+    // instead of restarting it at 1, so the op log records a revival and never a second "create"
+    // of the same entity. A `replace` erases the old rows first, so there is nothing to revive:
+    // every imported entity is simply new.
     const settle = <T extends FinanceEntity>(
       fresh: T,
       previous: ReadonlyMap<string, T>,
     ): T => {
-      const old = previous.get(fresh.id);
+      const old = replacing ? undefined : previous.get(fresh.id);
       return old
         ? updateEntity(old, { ...fresh, deletedAt: null } as Partial<T>)
         : fresh;
     };
     const records: StoredEntity[] = [
-      ...retire(this.state.accounts, importedIds.accounts, at).map(
-        (entity) => ({ type: "accounts" as const, entity }),
-      ),
-      ...retire(this.state.categories, importedIds.categories, at).map(
-        (entity) => ({ type: "categories" as const, entity }),
-      ),
-      ...retire(this.state.tags, importedIds.tags, at).map((entity) => ({
-        type: "tags" as const,
-        entity,
-      })),
-      // A tombstone that kept its occurrence key would suppress that occurrence on every
-      // later load, so a schedule imported again after a replace would silently skip it. The
-      // key is cleared first, exactly as a schedule change does when it retires an occurrence.
-      ...retire(this.state.transactions, importedIds.transactions, at).map(
-        (entity) => ({
-          type: "transactions" as const,
-          entity: entity.occurrenceKey
-            ? { ...entity, occurrenceKey: null }
-            : entity,
-        }),
-      ),
-      ...retire(this.state.budgets, importedIds.budgets, at).map((entity) => ({
-        type: "budgets" as const,
-        entity,
-      })),
-      ...retire(this.state.budgetPeriods, new Set(), at).map((entity) => ({
-        type: "budgetPeriods" as const,
-        entity,
-      })),
-      ...retire(this.state.budgetAdjustments, new Set(), at).map((entity) => ({
-        type: "budgetAdjustments" as const,
-        entity,
-      })),
-      ...retire(this.state.goals, new Set(), at).map((entity) => ({
-        type: "goals" as const,
-        entity,
-      })),
-      ...retire(this.state.contributions, new Set(), at).map((entity) => ({
-        type: "contributions" as const,
-        entity,
-      })),
-      ...retire(this.state.recurringRules, importedIds.recurringRules, at).map(
-        (entity) => ({ type: "recurringRules" as const, entity }),
-      ),
       ...newAccounts.map((fresh) => ({
         type: "accounts" as const,
         entity: settle(fresh, stored.accounts),
@@ -3634,12 +4031,33 @@ export class LocalFinanceRepository implements FinanceRepository {
         entity: settle(fresh, stored.recurringRules),
       })),
     ];
-    // Nothing new (a re-import) writes nothing and captures no ops.
-    if (!records.length) {
+    // Nothing new (a re-import) writes nothing and captures no ops. A replace still has the old
+    // data to erase.
+    if (!records.length && !replacing) {
       outcome.committed = true;
       return outcome;
     }
-    await this.storage.putMany(records, this);
+    if (replacing) {
+      // One transaction: the old rows (live and already-deleted alike) go and the backup's come
+      // in together, or nothing changes. Written through `transact`, which captures no ops, so
+      // it must never run where an op log exists for these rows; the check sits inside the
+      // transaction so nothing can pair this device between the preview and now.
+      await this.storage.transact(
+        async (tx) => {
+          if (await hasSyncHistory(tx))
+            throw new Error(REPLACE_NEEDS_NO_SYNC_MESSAGE);
+          for (const type of REPLACED_TYPES) {
+            const rows = await tx.readAll(type);
+            if (rows.length)
+              await tx.deleteKeys(rows.map((row) => recordKey(type, row.id)));
+          }
+          await tx.putMany(records);
+        },
+        { source: this },
+      );
+    } else {
+      await this.storage.putMany(records, this);
+    }
     // Rehydrate rather than splice: an import touches up to nine entity types, revives
     // tombstones, and (in `replace`) retires occurrence keys, all of which `hydrateFromStorage`
     // already derives from the stored rows.
@@ -3705,6 +4123,11 @@ export class LocalFinanceRepository implements FinanceRepository {
       "exchange_rate",
       "base_amount_minor",
       "transfer_id",
+      "foreign_amount",
+      "foreign_currency",
+      "foreign_exchange_rate",
+      "fee_kind",
+      "fee_value",
     ];
     const rows = this.queryTransactions({ sort: "oldest" }).map(
       (transaction) => {
@@ -3749,6 +4172,25 @@ export class LocalFinanceRepository implements FinanceRepository {
           transaction.exchangeRate,
           transaction.baseAmountMinor,
           transaction.transferGroupId ?? "",
+          transaction.foreign
+            ? minorToDecimalString(
+                transaction.foreign.amountMinor,
+                transaction.foreign.currency,
+                this.state.settings.locale,
+              )
+            : "",
+          transaction.foreign?.currency ?? "",
+          transaction.foreign?.exchangeRate ?? "",
+          transaction.fee?.kind ?? "",
+          transaction.fee
+            ? transaction.fee.kind === "percent"
+              ? (transaction.fee.percent ?? "")
+              : minorToDecimalString(
+                  transaction.fee.amountMinor,
+                  transaction.currency,
+                  this.state.settings.locale,
+                )
+            : "",
         ];
       },
     );
@@ -3820,6 +4262,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       themeId: storedSettings.themeId ?? DEFAULT_THEME_ID,
       swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? false,
       navBarStyle: storedSettings.navBarStyle ?? "native",
+      animationLevel: storedSettings.animationLevel ?? "all",
       fontTextOverride: storedSettings.fontTextOverride ?? null,
       fontNumericOverride: storedSettings.fontNumericOverride ?? null,
       uiIconSetOverride: storedSettings.uiIconSetOverride ?? null,
@@ -3842,9 +4285,17 @@ export class LocalFinanceRepository implements FinanceRepository {
     // first step of `initializeNow`; migrations, the settings seed, and recurring
     // generation still follow. Flipping `ready` here published a half-initialized
     // snapshot to any render that polled `getSnapshot` before `emit()` ran.
+    // Reuse the current settings object when nothing in it changed. A reload builds a fresh one
+    // every time, and its identity is what the settings-only subscribers key on, so without this
+    // every resume would re-render the root navigator and both providers for no reason.
+    const previousSettings = this.state.settings;
+    const stableSettings =
+      JSON.stringify(previousSettings) === JSON.stringify(settings)
+        ? previousSettings
+        : settings;
     const next = {
       ...createInitialState(),
-      settings,
+      settings: stableSettings,
       ready: this.state.ready,
     } as FinanceState;
     ENTITY_TYPES.forEach((type, index) => {
@@ -4550,6 +5001,67 @@ export class LocalFinanceRepository implements FinanceRepository {
     sumMinor(maximumEffectiveLimits, "Budget limit total");
   }
 
+  /** Posted rows, and posted rows of a date window, shared by every caller of one snapshot. */
+  private postedTransactions(fromDate?: string, toDate?: string) {
+    const source = this.state.transactions;
+    let entry = this.postedCache.get(source);
+    if (!entry) {
+      entry = {
+        all: source.filter(
+          (item) => !item.deletedAt && item.status === "posted",
+        ),
+        ranges: new Map(),
+      };
+      this.postedCache.set(source, entry);
+    }
+    if (fromDate === undefined && toDate === undefined) return entry.all;
+    const key = `${fromDate ?? ""}|${toDate ?? ""}`;
+    let range = entry.ranges.get(key);
+    if (!range) {
+      range = entry.all.filter(
+        (item) =>
+          (fromDate === undefined || item.localDate >= fromDate) &&
+          (toDate === undefined || item.localDate <= toDate),
+      );
+      entry.ranges.set(key, range);
+    }
+    return range;
+  }
+
+  private transactionById(transactions: TransactionRecord[]) {
+    let index = this.transactionIndexCache.get(transactions);
+    if (!index) {
+      index = new Map(transactions.map((item) => [item.id, item]));
+      this.transactionIndexCache.set(transactions, index);
+    }
+    return index;
+  }
+
+  /** The cache for reads derived from the current snapshot; reset when any input array changes. */
+  private derived() {
+    const { state } = this;
+    const deps = [
+      state.transactions,
+      state.accounts,
+      state.categories,
+      state.budgets,
+      state.budgetPeriods,
+      state.budgetAdjustments,
+      state.exchangeRates,
+      state.settings,
+      todayLocal(),
+    ];
+    const cached = this.derivedCache;
+    if (cached && cached.deps.every((dep, index) => dep === deps[index]))
+      return cached;
+    this.derivedCache = {
+      deps,
+      dashboards: new Map(),
+      budgetStatuses: new Map(),
+    };
+    return this.derivedCache;
+  }
+
   private budgetSpend(
     filters: BudgetFilters,
     fromDate: string,
@@ -4559,13 +5071,8 @@ export class LocalFinanceRepository implements FinanceRepository {
       ? this.categoryMatcher(filters.categoryIds)
       : null;
     return sumMinor(
-      this.queryTransactions({
-        fromDate,
-        toDate,
-        statuses: ["posted"],
-        kinds: ["expense"],
-        sort: false,
-      })
+      this.postedTransactions(fromDate, toDate)
+        .filter((item) => item.kind === "expense")
         .filter(
           (item) =>
             !filters.accountIds.length ||
@@ -5198,14 +5705,13 @@ export class LocalFinanceRepository implements FinanceRepository {
   ) {
     const goal = goals.find((item) => item.id === goalId);
     if (!goal) throw new Error("Choose a valid goal.");
+    const transactionsById = this.transactionById(transactions);
     const manual = sumMinor(
       contributions
         .filter((item) => {
           if (item.goalId !== goal.id || item.deletedAt) return false;
           if (!item.transactionId) return true;
-          const transaction = transactions.find(
-            (candidate) => candidate.id === item.transactionId,
-          );
+          const transaction = transactionsById.get(item.transactionId);
           return Boolean(
             transaction &&
             !transaction.deletedAt &&
@@ -5219,11 +5725,14 @@ export class LocalFinanceRepository implements FinanceRepository {
       return addMinor(goal.initialMinor, manual, `${goal.name} progress`);
     }
     let linked = 0;
+    // Linked progress only counts activity from the goal's creation date onward.
+    const goalStart = toLocalDate(new Date(goal.createdAt));
     const matchesCategory = goal.linkedCategoryId
       ? this.categoryMatcher([goal.linkedCategoryId])
       : null;
     for (const item of transactions) {
       if (item.deletedAt || item.status !== "posted") continue;
+      if (item.localDate < goalStart) continue;
       if (matchesCategory && !matchesCategory(item.categoryId)) continue;
       if (goal.kind === "spending") {
         if (item.kind !== "expense") continue;
@@ -5318,19 +5827,24 @@ export class LocalFinanceRepository implements FinanceRepository {
       recurringRules,
       exchangeRates,
     } = repaired;
+    // Tombstones are erased, so their content is blank by design and validating it would
+    // reject every merge that carries a delete. Accounts stay whole: an erased account keeps
+    // its type and currency, and the lookups below resolve references through it.
+    const liveOnly = <T extends FinanceEntity>(rows: readonly T[]) =>
+      rows.filter((row) => !row.deletedAt);
     this.assertMergedDomainValues({
       settings,
       accounts,
-      categories,
-      tags,
-      transactions,
-      budgets,
-      budgetPeriods,
-      budgetAdjustments,
-      goals,
-      contributions,
-      recurringRules,
-      exchangeRates,
+      categories: liveOnly(categories),
+      tags: liveOnly(tags),
+      transactions: liveOnly(transactions),
+      budgets: liveOnly(budgets),
+      budgetPeriods: liveOnly(budgetPeriods),
+      budgetAdjustments: liveOnly(budgetAdjustments),
+      goals: liveOnly(goals),
+      contributions: liveOnly(contributions),
+      recurringRules: liveOnly(recurringRules),
+      exchangeRates: liveOnly(exchangeRates),
     });
     const posted = transactions.filter(
       (item) => !item.deletedAt && item.status === "posted",
@@ -5675,54 +6189,61 @@ export class LocalFinanceRepository implements FinanceRepository {
     accounts = this.state.accounts,
     exchangeRates = this.state.exchangeRates,
   ) {
-    const posted = transactions.filter(
-      (item) => !item.deletedAt && item.status === "posted",
-    );
+    // One pass over the transactions. Each account's running balance sees exactly the operations
+    // the old per-account loop applied, in the same order, so overflow is detected identically
+    // — but the cost is O(transactions + accounts) instead of O(accounts × transactions).
+    const activeAccounts = accounts.filter((item) => !item.deletedAt);
     const balances = new Map<string, number>();
-    for (const account of accounts.filter((item) => !item.deletedAt)) {
-      let balance = account.openingBalanceMinor;
-      this.assertSafeMinor(balance, `${account.name} balance`);
-      for (const transaction of posted) {
-        if (transaction.accountId === account.id) {
-          if (transaction.kind === "income") {
-            balance = addMinor(
-              balance,
-              transaction.amountMinor,
-              `${account.name} balance`,
-            );
-          } else {
-            balance = subtractMinor(
-              balance,
-              transaction.amountMinor,
-              `${account.name} balance`,
-            );
-          }
-        }
-        if (
-          transaction.kind === "transfer" &&
-          transaction.destinationAccountId === account.id
-        ) {
-          balance = addMinor(
-            balance,
-            transaction.destinationAmountMinor ?? 0,
-            `${account.name} balance`,
+    const names = new Map<string, string>();
+    for (const account of activeAccounts) {
+      this.assertSafeMinor(
+        account.openingBalanceMinor,
+        `${account.name} balance`,
+      );
+      balances.set(account.id, account.openingBalanceMinor);
+      names.set(account.id, account.name);
+    }
+    let incomeTotal = 0;
+    let expenseTotal = 0;
+    for (const transaction of transactions) {
+      if (transaction.deletedAt || transaction.status !== "posted") continue;
+      const source = balances.get(transaction.accountId);
+      if (source !== undefined) {
+        const label = `${names.get(transaction.accountId)} balance`;
+        balances.set(
+          transaction.accountId,
+          transaction.kind === "income"
+            ? addMinor(source, transaction.amountMinor, label)
+            : subtractMinor(source, transaction.amountMinor, label),
+        );
+      }
+      if (transaction.kind === "transfer" && transaction.destinationAccountId) {
+        const destination = balances.get(transaction.destinationAccountId);
+        if (destination !== undefined) {
+          balances.set(
+            transaction.destinationAccountId,
+            addMinor(
+              destination,
+              transaction.destinationAmountMinor ?? 0,
+              `${names.get(transaction.destinationAccountId)} balance`,
+            ),
           );
         }
       }
-      balances.set(account.id, balance);
+      if (transaction.kind === "income") {
+        incomeTotal = addMinor(
+          incomeTotal,
+          transaction.baseAmountMinor,
+          "Income total",
+        );
+      } else if (transaction.kind === "expense") {
+        expenseTotal = addMinor(
+          expenseTotal,
+          transaction.baseAmountMinor,
+          "Expense total",
+        );
+      }
     }
-    sumMinor(
-      posted
-        .filter((item) => item.kind === "income")
-        .map((item) => item.baseAmountMinor),
-      "Income total",
-    );
-    sumMinor(
-      posted
-        .filter((item) => item.kind === "expense")
-        .map((item) => item.baseAmountMinor),
-      "Expense total",
-    );
     this.state.goals.forEach((goal) => {
       this.assertGoalProgressSafe(
         goal.id,
@@ -5734,7 +6255,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     let netWorth = 0;
     // Archived accounts are included so this overflow guard covers exactly the
     // set `getDashboard` now sums, rather than a narrower one.
-    for (const account of accounts.filter((item) => !item.deletedAt)) {
+    for (const account of activeAccounts) {
       let rate: string;
       try {
         rate = this.resolveRate(

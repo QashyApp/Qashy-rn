@@ -1,4 +1,4 @@
-import { Children, useMemo } from "react";
+import { Children } from "react";
 import { Text, type TextProps, type TextStyle } from "react-native";
 
 import { useLocalization } from "@/localization/localization";
@@ -18,6 +18,21 @@ const TABULAR: TextStyle["fontVariant"] = ["tabular-nums"];
  * they render in the numeric display face (Space Grotesk) rather than Rubik.
  */
 const NUMERIC_VARIANTS = new Set<TextVariant>(NUMERIC_FACE_VARIANTS);
+
+// One table per theme scale, shared by every `AppText` instance rather than rebuilt in each.
+const VARIANT_CACHE = new WeakMap<
+  TypeScaleSpec,
+  Record<TextVariant, TextStyle>
+>();
+
+function variantsFor(scale: TypeScaleSpec) {
+  let variants = VARIANT_CACHE.get(scale);
+  if (!variants) {
+    variants = buildVariants(scale);
+    VARIANT_CACHE.set(scale, variants);
+  }
+  return variants;
+}
 
 function buildVariants(scale: TypeScaleSpec): Record<TextVariant, TextStyle> {
   return Object.fromEntries(
@@ -76,10 +91,7 @@ export function AppText({
 }) {
   const theme = useQashyTheme();
   const { isRtl, t } = useLocalization();
-  const variants = useMemo(
-    () => buildVariants(theme.type.scale),
-    [theme.type.scale],
-  );
+  const variants = variantsFor(theme.type.scale);
   const localizedChildren = literal
     ? children
     : Children.map(children, (child) =>

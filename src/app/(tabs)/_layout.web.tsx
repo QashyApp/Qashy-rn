@@ -1,5 +1,12 @@
-import { Link, Slot, usePathname } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { Link, useIsFocused, usePathname } from "expo-router";
+import { Tabs, type BottomTabBarProps } from "expo-router/tabs";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactElement,
+} from "react";
 import {
   Pressable,
   View,
@@ -18,6 +25,7 @@ import Animated, {
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { useLocalization } from "@/localization/localization";
@@ -54,6 +62,33 @@ const NAV_ITEMS = [
     match: "/more",
   },
 ];
+
+/** Long enough to read as a fade, short enough that it never makes a section feel slow to open. */
+const SECTION_FADE_MS = 250;
+
+/**
+ * A section that has been left stays mounted (that is the point), but once its fade-out is over
+ * it is removed from layout, so it cannot be tabbed into, read by a screen reader or matched by
+ * a query for what is on screen.
+ */
+function SectionVisibility({ children }: { children: ReactElement }) {
+  const focused = useIsFocused();
+  const [expired, setExpired] = useState(!focused);
+  useEffect(() => {
+    if (focused) return;
+    const timer = setTimeout(() => setExpired(true), SECTION_FADE_MS + 50);
+    return () => {
+      clearTimeout(timer);
+      setExpired(false);
+    };
+  }, [focused]);
+  const hidden = !focused && expired;
+  return (
+    <View style={{ flex: 1, display: hidden ? "none" : "flex" }}>
+      {children}
+    </View>
+  );
+}
 
 /** The selected section switches to the solid glyph, as the native tabs do. */
 const activeIconName = (icon: string) => `${icon}.fill`;
@@ -120,6 +155,45 @@ function isActiveItem(item: NavItem, pathname: string) {
   );
 }
 
+/**
+ * What the section tabs hand back to the layout around them. The sidebar and the bottom bar are
+ * drawn by the layout, outside the tab navigator, so they cannot emit navigator events themselves;
+ * the invisible tab bar below publishes this instead.
+ */
+interface TabPressBridge {
+  /** Emits `tabPress` for the section, as a tab bar does; screens' `useScrollToTop` listens for it. */
+  press: (section: string) => void;
+}
+
+/** Renders nothing. Exists only to expose the navigator's `emit` to the layout. */
+function TabPressPublisher({
+  state,
+  navigation,
+  bridgeRef,
+}: BottomTabBarProps & {
+  bridgeRef: { current: TabPressBridge | null };
+}) {
+  useEffect(() => {
+    bridgeRef.current = {
+      press: (section) => {
+        const route = state.routes.find(
+          (candidate) => candidate.name === section,
+        );
+        if (!route) return;
+        navigation.emit({
+          type: "tabPress",
+          target: route.key,
+          canPreventDefault: true,
+        });
+      },
+    };
+    return () => {
+      bridgeRef.current = null;
+    };
+  }, [bridgeRef, navigation, state.routes]);
+  return null;
+}
+
 function NavigationItem({
   item,
   active,
@@ -127,6 +201,7 @@ function NavigationItem({
   mobile,
   narrow,
   onMeasure,
+  onActivePress,
 }: {
   item: NavItem;
   active: boolean;
@@ -135,14 +210,22 @@ function NavigationItem({
   /** Viewports where a quarter of the bar is too tight for "Transactions". */
   narrow: boolean;
   onMeasure: (href: string, metrics: NavMetrics) => void;
+  /** Pressing the section that is already showing: scroll it back to the top. */
+  onActivePress: (href: string) => void;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
+  const m3 = theme.materialControls;
+  // M3 navigation bar / rail: the icon sits in a pill (64x32 bar, 56x32 rail) with the label
+  // below it; the expanded sidebar is a drawer whose item is the pill. No tooltip, no slide.
+  const stacked = m3 && (mobile || compact);
   const { isRtl, t } = useLocalization();
   const [showTooltip, setShowTooltip] = useState(false);
   const currentPageProps = active ? { "aria-current": "page" as const } : {};
   const foreground = active
-    ? theme.onAccentContainer
+    ? m3
+      ? theme.onSecondaryContainer
+      : theme.onAccentContainer
     : showTooltip
       ? theme.text
       : theme.textMuted;
@@ -154,7 +237,7 @@ function NavigationItem({
   // The selected item already carries the accent indicator, so it never shows
   // the hover background underneath it.
   const highlighted = showTooltip && !active;
-  const tooltipShown = compact && !mobile && showTooltip;
+  const tooltipShown = compact && !mobile && showTooltip && !m3;
   const highlight = useSharedValue(0);
   const tooltipProgress = useSharedValue(0);
 
@@ -186,7 +269,9 @@ function NavigationItem({
           plain style object; animated feedback lives on the inner views. */}
       <Pressable
         {...currentPageProps}
-        accessibilityHint={compact && !mobile ? t(item.label) : undefined}
+        accessibilityHint={
+          compact && !mobile && !m3 ? t(item.label) : undefined
+        }
         accessibilityLabel={t(item.label)}
         accessibilityRole="link"
         accessibilityState={{ selected: active }}
@@ -199,14 +284,35 @@ function NavigationItem({
           const { x, y, width, height } = event.nativeEvent.layout;
           onMeasure(item.href, { x, y, width, height });
         }}
-        onPressIn={() => pressScale.set(withSpring(0.95, pressSpring))}
-        onPressOut={() => pressScale.set(withSpring(1, pressSpring))}
+        onPress={() => {
+          if (active) onActivePress(item.href);
+        }}
+        onPressIn={() => {
+          if (!m3) pressScale.set(withSpring(0.95, pressSpring));
+        }}
+        onPressOut={() => {
+          if (!m3) pressScale.set(withSpring(1, pressSpring));
+        }}
         style={{
-          minHeight: 48,
-          minWidth: mobile ? 64 : compact ? RAIL_ITEM_SIZE : undefined,
+          minHeight: stacked ? (mobile ? 64 : 56) : m3 ? 56 : 48,
+          minWidth: stacked
+            ? undefined
+            : mobile
+              ? 64
+              : compact
+                ? RAIL_ITEM_SIZE
+                : undefined,
           flex: mobile ? 1 : undefined,
-          paddingHorizontal: mobile ? (narrow ? 2 : 4) : compact ? 12 : 16,
-          borderRadius: radius.nav,
+          paddingHorizontal: stacked
+            ? 0
+            : mobile
+              ? narrow
+                ? 2
+                : 4
+              : compact
+                ? 12
+                : 16,
+          borderRadius: m3 && !stacked ? 28 : radius.nav,
           borderCurve: "continuous",
           backgroundColor: "transparent",
           position: "relative",
@@ -222,19 +328,34 @@ function NavigationItem({
               right: 0,
               bottom: 0,
               left: 0,
-              borderRadius: radius.nav,
+              borderRadius: m3 && !stacked ? 28 : radius.nav,
               borderCurve: "continuous",
               backgroundColor: theme.surfaceMuted,
+              display: stacked ? "none" : "flex",
             },
             highlightStyle,
           ]}
         />
+        {m3 && !stacked && active ? (
+          <View
+            pointerEvents="none"
+            style={{
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              borderRadius: 28,
+              backgroundColor: theme.secondaryContainer,
+            }}
+          />
+        ) : null}
         <Animated.View
           style={[
             {
               flex: 1,
               alignSelf: "stretch",
-              flexDirection: mobile ? "column" : !compact ? "row" : "column",
+              flexDirection: mobile || compact ? "column" : "row",
               alignItems: "center",
               // Only the expanded sidebar starts its content at the leading edge,
               // because there the icon is followed by a label and the labels have
@@ -247,20 +368,59 @@ function NavigationItem({
             contentStyle,
           ]}
         >
-          <AppIcon
-            name={active ? activeIconName(item.icon) : item.icon}
-            color={foreground as string}
-            size={mobile ? 22 : 20}
-          />
-          {mobile || !compact ? (
+          {stacked ? (
+            <View
+              style={{
+                width: mobile ? 64 : 56,
+                height: 32,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: active
+                  ? theme.secondaryContainer
+                  : "transparent",
+              }}
+            >
+              {!active ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    {
+                      position: "absolute",
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      left: 0,
+                      borderRadius: 16,
+                      backgroundColor: theme.surfaceMuted,
+                    },
+                    highlightStyle,
+                  ]}
+                />
+              ) : null}
+              <AppIcon
+                name={active ? activeIconName(item.icon) : item.icon}
+                color={foreground as string}
+                size={24}
+              />
+            </View>
+          ) : (
+            <AppIcon
+              name={active ? activeIconName(item.icon) : item.icon}
+              color={foreground as string}
+              size={mobile ? 22 : 20}
+            />
+          )}
+          {mobile || !compact || stacked ? (
             <AppText
               selectable={false}
               variant="label"
               numberOfLines={1}
               style={{
-                color: foreground,
-                fontSize: mobile ? (narrow ? 10 : 11) : undefined,
-                letterSpacing: mobile && narrow ? -0.2 : undefined,
+                color: m3 && !active ? theme.textMuted : foreground,
+                fontSize: m3 ? 12 : mobile ? (narrow ? 10 : 11) : undefined,
+                fontWeight: m3 ? "500" : undefined,
+                letterSpacing: mobile && narrow && !m3 ? -0.2 : undefined,
               }}
             >
               {item.label}
@@ -270,7 +430,7 @@ function NavigationItem({
         {/* Mounted for the whole time the rail is compact, so only a breakpoint
             change adds or removes it. `aria-hidden` keeps a faded-out tooltip
             out of the accessibility tree exactly as unmounting used to. */}
-        {compact && !mobile ? (
+        {compact && !mobile && !m3 ? (
           <Animated.View
             aria-hidden={!showTooltip}
             pointerEvents="none"
@@ -315,11 +475,13 @@ function NavigationBar({
   compact,
   narrow,
   pathname,
+  onActivePress,
 }: {
   mobile: boolean;
   compact: boolean;
   narrow: boolean;
   pathname: string;
+  onActivePress: (href: string) => void;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
@@ -392,24 +554,26 @@ function NavigationBar({
         zIndex: mobile ? undefined : 10,
       }}
     >
-      <Animated.View
-        pointerEvents="none"
-        style={[
-          {
-            position: "absolute",
-            top: 0,
-            left: 0,
-            borderRadius: radius.nav,
-            borderCurve: "continuous",
-            backgroundColor: theme.accentContainer,
-            // The selected item reads as pressed into the surface rather than a
-            // flat tinted rectangle — the same "physically depressing" language
-            // as every other active/pressed control in the tactile system.
-            boxShadow: theme.shadowControlPressed,
-          },
-          indicatorStyle,
-        ]}
-      />
+      {theme.materialControls ? null : (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              top: 0,
+              left: 0,
+              borderRadius: radius.nav,
+              borderCurve: "continuous",
+              backgroundColor: theme.accentContainer,
+              // The selected item reads as pressed into the surface rather than a
+              // flat tinted rectangle — the same "physically depressing" language
+              // as every other active/pressed control in the tactile system.
+              boxShadow: theme.shadowControlPressed,
+            },
+            indicatorStyle,
+          ]}
+        />
+      )}
       {NAV_ITEMS.map((item) => (
         <NavigationItem
           key={item.label}
@@ -419,6 +583,7 @@ function NavigationBar({
           mobile={mobile}
           narrow={narrow}
           onMeasure={handleMeasure}
+          onActivePress={onActivePress}
         />
       ))}
     </View>
@@ -438,6 +603,13 @@ export default function WebTabsLayout() {
   // Screens size themselves against this rather than the window, so the rail
   // widening at 1200 no longer pushes their internal breakpoints around.
   const railWidth = navigationRailWidth(width);
+  const reducedMotion = useReducedMotion();
+  const animationLevel = useAnimationLevel();
+  const fadeBetweenSections = !reducedMotion && animationLevel !== "off";
+  const tabPressBridge = useRef<TabPressBridge | null>(null);
+  const pressActiveSection = useCallback((href: string) => {
+    tabPressBridge.current?.press(href.slice(1));
+  }, []);
 
   return (
     <View
@@ -465,10 +637,27 @@ export default function WebTabsLayout() {
           // the 84pt the layout reserves. Padding chosen independently of the
           // target made the items wider than the box that held them, so both the
           // icons and the selected pill overhung the divider.
-          paddingStart: (compact ? RAIL_GUTTER : space.xl) + insets.left,
-          paddingEnd: compact ? RAIL_GUTTER : space.xl,
-          borderEndWidth: 1,
+          paddingStart:
+            (theme.materialControls
+              ? compact
+                ? 0
+                : space.md
+              : compact
+                ? RAIL_GUTTER
+                : space.xl) + insets.left,
+          paddingEnd: theme.materialControls
+            ? compact
+              ? 0
+              : space.md
+            : compact
+              ? RAIL_GUTTER
+              : space.xl,
+          // M3 rails and drawers sit on the container color with no divider.
+          borderEndWidth: theme.materialControls ? 0 : 1,
           borderEndColor: theme.border,
+          backgroundColor: theme.materialControls
+            ? theme.navBackground
+            : undefined,
           gap: space.xxl,
         }}
       >
@@ -510,6 +699,7 @@ export default function WebTabsLayout() {
             compact={compact}
             narrow={narrow}
             pathname={pathname}
+            onActivePress={pressActiveSection}
           />
         ) : null}
         {!compact ? (
@@ -528,7 +718,33 @@ export default function WebTabsLayout() {
       </View>
       <ContentWidthContext value={Math.max(width - railWidth, 0)}>
         <View style={{ flex: 1 }}>
-          <Slot />
+          {/* The sections are tabs without a tab bar of their own (the rail and the bottom bar
+              above are the bar). That keeps every section that has been visited mounted, so
+              coming back to Transactions finds its scroll position, search and month where they
+              were, and the switch is a short cross-fade instead of a remount. */}
+          <Tabs
+            screenOptions={{
+              headerShown: false,
+              lazy: true,
+              animation: fadeBetweenSections ? "fade" : "none",
+              transitionSpec: {
+                animation: "timing",
+                config: { duration: SECTION_FADE_MS },
+              },
+              sceneStyle: { backgroundColor: theme.background },
+            }}
+            screenLayout={({ children }) => (
+              <SectionVisibility>{children}</SectionVisibility>
+            )}
+            tabBar={(props) => (
+              <TabPressPublisher {...props} bridgeRef={tabPressBridge} />
+            )}
+          >
+            <Tabs.Screen name="overview" />
+            <Tabs.Screen name="transactions" />
+            <Tabs.Screen name="plan" />
+            <Tabs.Screen name="more" />
+          </Tabs>
         </View>
       </ContentWidthContext>
       <View
@@ -538,19 +754,24 @@ export default function WebTabsLayout() {
           {
             display: mobile ? "flex" : "none",
             position: "absolute",
-            left: space.md + insets.left,
-            right: space.md + insets.right,
-            bottom: space.md + insets.bottom,
-            minHeight: 64,
-            borderRadius: radius.sheet,
+            left: theme.materialControls ? 0 : space.md + insets.left,
+            right: theme.materialControls ? 0 : space.md + insets.right,
+            bottom: theme.materialControls ? 0 : space.md + insets.bottom,
+            minHeight: theme.materialControls ? 80 + insets.bottom : 64,
+            borderRadius: theme.materialControls ? 0 : radius.sheet,
             borderCurve: "continuous",
             flexDirection: "row",
-            alignItems: "center",
+            alignItems: theme.materialControls ? "flex-start" : "center",
             paddingLeft: space.sm,
             paddingRight: space.sm,
-            paddingVertical: space.xs,
+            paddingTop: theme.materialControls ? 12 : space.xs,
+            paddingBottom: theme.materialControls
+              ? 16 + insets.bottom
+              : space.xs,
           },
-          materialStyle(theme, "raised"),
+          theme.materialControls
+            ? { backgroundColor: theme.navBackground }
+            : materialStyle(theme, "raised"),
         ]}
       >
         {mobile ? (
@@ -559,6 +780,7 @@ export default function WebTabsLayout() {
             compact={false}
             narrow={narrow}
             pathname={pathname}
+            onActivePress={pressActiveSection}
           />
         ) : null}
       </View>

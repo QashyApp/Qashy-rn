@@ -16,13 +16,14 @@ import {
 import { DirectionScope } from "@/components/ui/direction-scope";
 import type { AccentSource } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 import { useCustomThemes } from "@/theme/custom/use-custom-themes";
+import { clampPaletteContrast } from "@/theme/custom/contrast";
 import {
   deriveDynamicPalette,
-  tintPaletteWithSeed,
   type SystemPalettes,
 } from "@/theme/dynamic-palette";
+import { materialRoles } from "@/theme/material-scheme";
 import { applyAppearanceOverrides } from "@/theme/overrides";
 import { NO_SHADOW, bevelAccentShadow, flatShadowSet } from "@/theme/shadow";
 import { useSystemPalettes } from "@/theme/use-system-palettes";
@@ -48,6 +49,7 @@ import {
   mixHex,
   readableTextColor,
   withAlpha,
+  type BaseTokens,
 } from "@/theme/tokens";
 
 export interface ThemeTokens {
@@ -92,7 +94,17 @@ export interface ThemeTokens {
   surfaceSunken: ColorValue;
   text: ColorValue;
   textMuted: ColorValue;
+  /** The quiet divider and card edge (Material's outline-variant). */
   border: ColorValue;
+  /**
+   * The edge of an outlined control (segmented button, chip, text-field bar, switch track): firmer
+   * than `border`, softer than `textMuted`. Meets 3:1 against the surface it sits on.
+   */
+  outline: ColorValue;
+  /** A snackbar: the inverse of the page, its text and its action color. */
+  inverseSurface: ColorValue;
+  inverseOnSurface: ColorValue;
+  inversePrimary: ColorValue;
   positive: ColorValue;
   onPositive: ColorValue;
   negative: ColorValue;
@@ -186,6 +198,16 @@ function accentMaterial(accent: string, dark: boolean, material: MaterialSpec) {
   return { accentGradient, shadowAccent };
 }
 
+/** An outline for a palette with no Material role for it: the muted text pulled toward the page. */
+function fallbackOutline(base: BaseTokens, dark: boolean): string {
+  return ensureContrast(
+    mixHex(base.textMuted, base.background, dark ? 0.3 : 0.25),
+    base.surface,
+    base.text,
+    3,
+  );
+}
+
 // Hand-tuned neutral surfaces with a single accent family. The user's accent
 // only drives accent/accentContainer colors; surfaces stay neutral so the app
 // keeps a conventional, high-contrast look in both modes.
@@ -195,11 +217,14 @@ export function accentTokens(
   sourceTheme: ThemeDefinition = classicTheme,
 ): ThemeTokens {
   const scheme = dark ? "dark" : "light";
-  // A picked accent can wash the neutral surfaces too (Material You); shadows that are rings of the
-  // border color must follow the tinted palette.
+  // A tinted theme (Material You) takes its whole palette from the seed's Material 3 tonal scheme;
+  // shadows that are rings of the border color must follow that palette.
   const tinted = sourceTheme.accent.tintSurfaces === true;
-  const base = tinted
-    ? tintPaletteWithSeed(seed, scheme, sourceTheme.palette[scheme])
+  const roles = tinted
+    ? materialRoles(seed, scheme, sourceTheme.palette[scheme])
+    : null;
+  const base = roles
+    ? clampPaletteContrast(scheme, roles.palette).palette
     : sourceTheme.palette[scheme];
   const theme: ThemeDefinition = tinted
     ? {
@@ -214,8 +239,26 @@ export function accentTokens(
             : sourceTheme.shadows,
       }
     : sourceTheme;
-  const accent = accessibleAccentColor(seed, base.surface, base.text);
-  const accentContainer = mixHex(accent, base.surface, dark ? 0.78 : 0.86);
+  const accent = roles
+    ? roles.primary
+    : accessibleAccentColor(seed, base.surface, base.text);
+  const accentContainer = roles
+    ? roles.primaryContainer
+    : mixHex(accent, base.surface, dark ? 0.78 : 0.86);
+  const outline = roles
+    ? ensureContrast(roles.outline, base.surface, base.text, 3)
+    : fallbackOutline(base, dark);
+  const inverseSurface = roles
+    ? roles.inverseSurface
+    : dark
+      ? base.text
+      : mixHex(base.text, base.background, 0.15);
+  const inverseOnSurface = roles
+    ? roles.inverseOnSurface
+    : readableTextColor(inverseSurface);
+  const inversePrimary = roles
+    ? roles.inversePrimary
+    : ensureContrast(accent, inverseSurface, inverseOnSurface, 3);
   const surfaceGradient = dark
     ? `linear-gradient(180deg, ${mixHex(base.surface, "#FFFFFF", 0.035)}, ${base.surface})`
     : `linear-gradient(180deg, #FFFFFF, ${mixHex("#FFFFFF", base.background, 0.35)})`;
@@ -250,9 +293,11 @@ export function accentTokens(
         ),
       accent,
     ),
-    onAccent: readableTextColor(accent),
+    onAccent: roles ? roles.onPrimary : readableTextColor(accent),
     accentContainer,
-    onAccentContainer: ensureContrast(accent, accentContainer, base.text),
+    onAccentContainer: roles
+      ? roles.onPrimaryContainer
+      : ensureContrast(accent, accentContainer, base.text),
     background: base.background,
     surface: base.surface,
     surfaceElevated: base.surfaceElevated,
@@ -261,6 +306,10 @@ export function accentTokens(
     text: base.text,
     textMuted: base.textMuted,
     border: base.border,
+    outline,
+    inverseSurface,
+    inverseOnSurface,
+    inversePrimary,
     positive: base.positive,
     onPositive: readableTextColor(base.positive),
     negative: base.negative,
@@ -315,6 +364,7 @@ function systemTokens(
     text: Color.android.dynamic.onSurface,
     textMuted: Color.android.dynamic.onSurfaceVariant,
     border: Color.android.dynamic.outlineVariant,
+    outline: Color.android.dynamic.outline,
     // `surface` is now an opaque platform color with no JS-readable hex, so a
     // gradient computed from it would be meaningless; the accent gradient is
     // still derived from a real hex seed and stays valid.
@@ -351,6 +401,12 @@ function paletteTokens(
     ...accentTokens(derived.seed, dark, derivedTheme),
     accentContainer: derived.accentContainer,
     onAccentContainer: derived.onAccentContainer,
+    outline: ensureContrast(
+      derived.outline,
+      derived.palette.surface,
+      derived.palette.text,
+      3,
+    ),
   };
 }
 
@@ -397,7 +453,7 @@ export function resolveAccentChoice(
 }
 
 export function QashyThemeProvider({ children }: { children: ReactNode }) {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const systemScheme = useColorScheme();
   const mode =
@@ -508,49 +564,51 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
     );
   }, [mode, settings.themeMode, theme, tokens]);
 
-  const baseNavigation = mode === "dark" ? DarkTheme : DefaultTheme;
-  const navigationTheme = {
-    ...baseNavigation,
-    // Native stack headers (titles, large titles, back labels) use the app face too.
-    fonts: {
-      regular: {
-        fontFamily: fontStyle("regular", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
+  const navigationTheme = useMemo(() => {
+    const baseNavigation = mode === "dark" ? DarkTheme : DefaultTheme;
+    return {
+      ...baseNavigation,
+      // Native stack headers (titles, large titles, back labels) use the app face too.
+      fonts: {
+        regular: {
+          fontFamily: fontStyle("regular", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
+        medium: {
+          fontFamily: fontStyle("medium", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
+        bold: {
+          fontFamily: fontStyle("semibold", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
+        heavy: {
+          fontFamily: fontStyle("bold", theme.type).fontFamily as string,
+          fontWeight: "normal" as const,
+        },
       },
-      medium: {
-        fontFamily: fontStyle("medium", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
+      colors: {
+        ...baseNavigation.colors,
+        primary: tokens.staticAccent,
+        background:
+          typeof tokens.background === "string"
+            ? tokens.background
+            : baseNavigation.colors.background,
+        card:
+          typeof tokens.surface === "string"
+            ? tokens.surface
+            : baseNavigation.colors.card,
+        text:
+          typeof tokens.text === "string"
+            ? tokens.text
+            : baseNavigation.colors.text,
+        border:
+          typeof tokens.border === "string"
+            ? tokens.border
+            : baseNavigation.colors.border,
       },
-      bold: {
-        fontFamily: fontStyle("semibold", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
-      },
-      heavy: {
-        fontFamily: fontStyle("bold", theme.type).fontFamily as string,
-        fontWeight: "normal" as const,
-      },
-    },
-    colors: {
-      ...baseNavigation.colors,
-      primary: tokens.staticAccent,
-      background:
-        typeof tokens.background === "string"
-          ? tokens.background
-          : baseNavigation.colors.background,
-      card:
-        typeof tokens.surface === "string"
-          ? tokens.surface
-          : baseNavigation.colors.card,
-      text:
-        typeof tokens.text === "string"
-          ? tokens.text
-          : baseNavigation.colors.text,
-      border:
-        typeof tokens.border === "string"
-          ? tokens.border
-          : baseNavigation.colors.border,
-    },
-  };
+    };
+  }, [mode, theme.type, tokens]);
 
   return (
     <ThemeContext value={tokens}>
@@ -574,7 +632,9 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
 }
 
 export function useQashyTheme() {
-  useColorScheme();
+  // No `useColorScheme()` here: the provider already resolves the scheme and republishes the
+  // tokens through this context, so a per-component subscription only added hundreds of
+  // listeners that re-rendered consumers a second time.
   const theme = use(ThemeContext);
   if (!theme)
     throw new Error("useQashyTheme must be used inside QashyThemeProvider.");

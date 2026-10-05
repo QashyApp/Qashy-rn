@@ -11,6 +11,7 @@ import {
 import {
   Pressable,
   StyleSheet,
+  type ColorValue,
   View,
   type PressableProps,
   type PressableStateCallbackType,
@@ -30,6 +31,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { useQashyTheme } from "@/theme/theme";
 import type { MotionSpec } from "@/theme/themes/types";
 
@@ -57,10 +59,19 @@ export function motionDurationsFor(motion: MotionSpec): MotionDurations {
   };
 }
 
-/** The active theme's durations. */
+/** The active theme's durations, shortened to quick fades at the `minimal` animation level. */
 export function useMotionDurations(): MotionDurations {
   const { motion } = useQashyTheme();
-  return useMemo(() => motionDurationsFor(motion), [motion]);
+  const level = useAnimationLevel();
+  return useMemo(() => {
+    const durations = motionDurationsFor(motion);
+    if (level !== "minimal") return durations;
+    return {
+      enter: Math.min(durations.enter, motion.duration.fast),
+      exit: Math.min(durations.exit, motion.duration.fast),
+      layout: 0,
+    };
+  }, [motion, level]);
 }
 
 // How far anything travels while it fades. Small enough to read as a settle
@@ -235,7 +246,9 @@ function useEntrance(
     );
   }, [delay, duration, enabled, progress]);
 
-  const start = ENTRANCE_START[variant];
+  // At the minimal level everything arrives as a plain fade, with no travel or scaling.
+  const level = useAnimationLevel();
+  const start = ENTRANCE_START[level === "minimal" ? "fade" : variant];
   const style = useAnimatedStyle(() => {
     const remaining = 1 - progress.value;
     return {
@@ -285,8 +298,9 @@ const ScreenEntranceContext = createContext<SettledRef | null>(null);
  */
 function useEntranceAllowed(enabled: boolean) {
   const settled = useContext(ScreenEntranceContext);
+  const level = useAnimationLevel();
   const [allowedAtMount] = useState(() => settled === null || settled.current);
-  return enabled && allowedAtMount;
+  return enabled && allowedAtMount && level !== "off";
 }
 
 const NEVER_SETTLED: SettledRef = { current: false };
@@ -440,15 +454,7 @@ export function ScreenTransition({ style, ...props }: ViewProps) {
   );
 }
 
-export function MotionView({
-  variant = "up",
-  delay = 0,
-  duration,
-  animateLayout = false,
-  exit = false,
-  entrance = true,
-  ...props
-}: ViewProps & {
+type MotionViewProps = ViewProps & {
   variant?: MotionVariant;
   delay?: number;
   duration?: number;
@@ -459,39 +465,50 @@ export function MotionView({
    * only means the row scrolled into the render window.
    */
   entrance?: boolean;
-}) {
+};
+
+/** The exit and layout animations, shared by the entrance and static variants of `MotionView`. */
+function useMotionViewParts(animateLayout: boolean, exit: boolean) {
   const durations = useMotionDurations();
-  const allowEntrance = useEntranceAllowed(entrance);
-  const entranceStyle = useEntrance(
-    variant,
-    delay,
-    duration ?? durations.enter,
-    allowEntrance,
-  );
   const exitsAllowed = useContext(ExitContext);
+  const level = useAnimationLevel();
   const exiting = useMemo(
-    () => (exit && exitsAllowed ? exitingAnimation(durations) : undefined),
-    [exit, exitsAllowed, durations],
+    () =>
+      exit && exitsAllowed && level !== "off"
+        ? exitingAnimation(durations)
+        : undefined,
+    [exit, exitsAllowed, level, durations],
   );
   // Only the transition is gated, never `animateLayout` itself: that would change the tree
   // shape and remount the content.
   const layoutAllowed = useContext(LayoutTransitionContext);
   const layout = useMemo(
     () =>
-      animateLayout && layoutAllowed
+      animateLayout && layoutAllowed && level === "all"
         ? LinearTransition.duration(durations.layout)
             .easing(EASE_STANDARD)
             .reduceMotion(ReduceMotion.System)
         : undefined,
-    [animateLayout, layoutAllowed, durations.layout],
+    [animateLayout, layoutAllowed, level, durations.layout],
   );
+  return { durations, exiting, layout };
+}
 
+function renderMotionView(
+  props: ViewProps,
+  animateLayout: boolean,
+  parts: {
+    exiting: ReturnType<typeof useMotionViewParts>["exiting"];
+    layout: ReturnType<typeof useMotionViewParts>["layout"];
+  },
+  entranceStyle: ReturnType<typeof useEntrance>,
+) {
   if (!animateLayout) {
     const { style: plainStyle, ...plainProps } = props;
     return (
       <Animated.View
         {...plainProps}
-        exiting={exiting}
+        exiting={parts.exiting}
         style={[plainStyle, entranceStyle]}
       />
     );
@@ -504,17 +521,113 @@ export function MotionView({
   const { style, ...viewProps } = props;
   const { wrapperStyle, contentStyle } = splitWrapperStyle(style);
   return (
-    <Animated.View collapsable={false} layout={layout} style={wrapperStyle}>
+    <Animated.View
+      collapsable={false}
+      layout={parts.layout}
+      style={wrapperStyle}
+    >
       <Animated.View
         {...viewProps}
-        exiting={exiting}
+        exiting={parts.exiting}
         style={[contentStyle, entranceStyle]}
       />
     </Animated.View>
   );
 }
 
-export function MotionPressable({
+export function MotionView(props: MotionViewProps) {
+  // `entrance={false}` is a static opt-out (virtualised rows) and is never toggled on a mounted
+  // view, so choosing the component here cannot remount anything. The opted-out path skips the
+  // shared value and animated style the entrance allocates, once per row of a long list.
+  return props.entrance === false ? (
+    <StaticMotionView {...props} />
+  ) : (
+    <EntranceMotionView {...props} />
+  );
+}
+
+function StaticMotionView({
+  variant: _variant,
+  delay: _delay,
+  duration: _duration,
+  animateLayout = false,
+  exit = false,
+  entrance: _entrance,
+  ...props
+}: MotionViewProps) {
+  const parts = useMotionViewParts(animateLayout, exit);
+  return renderMotionView(props, animateLayout, parts, null);
+}
+
+function EntranceMotionView({
+  variant = "up",
+  delay = 0,
+  duration,
+  animateLayout = false,
+  exit = false,
+  entrance = true,
+  ...props
+}: MotionViewProps) {
+  const parts = useMotionViewParts(animateLayout, exit);
+  const allowEntrance = useEntranceAllowed(entrance);
+  const entranceStyle = useEntrance(
+    variant,
+    delay,
+    duration ?? parts.durations.enter,
+    allowEntrance,
+  );
+  return renderMotionView(props, animateLayout, parts, entranceStyle);
+}
+
+type MotionPressableProps = Omit<PressableProps, "children" | "style"> & {
+  children?: ReactNode | ((state: ExtendedPressableState) => ReactNode);
+  style?: PressableProps["style"];
+  pressedScale?: number;
+  hoverScale?: number;
+  liftOnHover?: boolean;
+  active?: boolean;
+  enteringVariant?: "fade" | "zoom";
+  enteringDelay?: number;
+  /**
+   * Material 3 state layer: a translucent wash of the control's content color that fades in on
+   * hover (8%) and press (10%). Only drawn by themes with Material controls; `false` opts out.
+   */
+  stateLayer?: boolean;
+  /** The wash color. Defaults to the theme's text color; pass the control's own `on…` color. */
+  stateLayerColor?: ColorValue;
+};
+
+const STATE_LAYER_HOVER = 0.08;
+const STATE_LAYER_PRESS = 0.1;
+
+export function MotionPressable(props: MotionPressableProps) {
+  // `enteringVariant` is fixed per call site, so choosing the component here never remounts a
+  // live control. Most pressables have no entrance; they skip the shared value and animated
+  // style it allocates, which adds up across a list of rows.
+  return props.enteringVariant ? (
+    <EnteringPressable {...props} />
+  ) : (
+    <MotionPressableBase {...props} entranceStyle={null} />
+  );
+}
+
+function EnteringPressable({
+  enteringVariant,
+  enteringDelay = 0,
+  ...props
+}: MotionPressableProps) {
+  const durations = useMotionDurations();
+  const allowEntrance = useEntranceAllowed(Boolean(enteringVariant));
+  const entranceStyle = useEntrance(
+    enteringVariant ?? "fade",
+    enteringDelay,
+    durations.enter,
+    allowEntrance,
+  );
+  return <MotionPressableBase {...props} entranceStyle={entranceStyle} />;
+}
+
+function MotionPressableBase({
   children,
   style,
   onPressIn,
@@ -526,21 +639,25 @@ export function MotionPressable({
   hoverScale = 1.008,
   liftOnHover = true,
   active = false,
-  enteringVariant,
-  enteringDelay = 0,
+  enteringVariant: _enteringVariant,
+  enteringDelay: _enteringDelay,
+  stateLayer = true,
+  stateLayerColor,
+  entranceStyle,
   ...props
-}: Omit<PressableProps, "children" | "style"> & {
-  children?: ReactNode | ((state: ExtendedPressableState) => ReactNode);
-  style?: PressableProps["style"];
-  pressedScale?: number;
-  hoverScale?: number;
-  liftOnHover?: boolean;
-  active?: boolean;
-  enteringVariant?: "fade" | "zoom";
-  enteringDelay?: number;
-}) {
-  const reduceMotion = useReducedMotion();
-  const { motion } = useQashyTheme();
+}: MotionPressableProps & { entranceStyle: ReturnType<typeof useEntrance> }) {
+  const level = useAnimationLevel();
+  // Press feedback is movement, so only the full level keeps it.
+  const reduceMotion = useReducedMotion() || level !== "all";
+  const { motion, materialControls, text: themeText } = useQashyTheme();
+  const layerEnabled = materialControls && stateLayer && !disabled;
+  const layer = useSharedValue(0);
+  const layerStyle = useAnimatedStyle(() => ({ opacity: layer.value }));
+  const layerTiming = {
+    duration: 120,
+    easing: EASE_STANDARD,
+    reduceMotion: ReduceMotion.System,
+  } as const;
   const durations = useMotionDurations();
   // A translate theme sinks a control by shifting it down instead of shrinking it, and
   // never scales on hover or on the 'active' pop either.
@@ -675,13 +792,6 @@ export function MotionPressable({
     splitWrapperStyle(flattenedStyle);
   const resolvedChildren =
     typeof children === "function" ? children(state) : children;
-  const allowEntrance = useEntranceAllowed(Boolean(enteringVariant));
-  const entranceStyle = useEntrance(
-    enteringVariant ?? "fade",
-    enteringDelay,
-    durations.enter,
-    allowEntrance,
-  );
 
   return (
     <Animated.View collapsable={false} style={[wrapperStyle, entranceStyle]}>
@@ -693,6 +803,13 @@ export function MotionPressable({
           onHoverIn={(event) => {
             hoveredRef.current = true;
             isHovered.set(1);
+            if (layerEnabled)
+              layer.set(
+                withTiming(
+                  pressedRef.current ? STATE_LAYER_PRESS : STATE_LAYER_HOVER,
+                  layerTiming,
+                ),
+              );
             if (usesJsState) setJsHovered(true);
             if (!pressedRef.current && !disabled) {
               scale.set(withTiming(staticPress ? 1 : hoverScale, timingConfig));
@@ -705,6 +822,8 @@ export function MotionPressable({
           onHoverOut={(event) => {
             hoveredRef.current = false;
             isHovered.set(0);
+            if (layerEnabled && !pressedRef.current)
+              layer.set(withTiming(0, layerTiming));
             if (usesJsState) setJsHovered(false);
             if (!pressedRef.current) {
               scale.set(withTiming(1, timingConfig));
@@ -715,6 +834,8 @@ export function MotionPressable({
           onPressIn={(event) => {
             pressedRef.current = true;
             isPressed.set(1);
+            if (layerEnabled)
+              layer.set(withTiming(STATE_LAYER_PRESS, layerTiming));
             if (usesJsState) setJsPressed(true);
             if (!disabled) {
               scale.set(
@@ -732,6 +853,13 @@ export function MotionPressable({
           onPressOut={(event) => {
             pressedRef.current = false;
             isPressed.set(0);
+            if (layerEnabled)
+              layer.set(
+                withTiming(
+                  hoveredRef.current ? STATE_LAYER_HOVER : 0,
+                  layerTiming,
+                ),
+              );
             if (usesJsState) setJsPressed(false);
             scale.set(
               withSpring(
@@ -749,6 +877,23 @@ export function MotionPressable({
           }}
           style={[pressableStyle, overrideStyle]}
         >
+          {layerEnabled ? (
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                {
+                  position: "absolute",
+                  top: 0,
+                  right: 0,
+                  bottom: 0,
+                  left: 0,
+                  borderRadius: restStyle.borderRadius ?? 0,
+                  backgroundColor: stateLayerColor ?? themeText,
+                },
+                layerStyle,
+              ]}
+            />
+          ) : null}
           {resolvedChildren}
         </AnimatedPressable>
       </Animated.View>

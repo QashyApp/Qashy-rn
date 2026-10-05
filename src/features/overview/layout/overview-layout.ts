@@ -14,8 +14,6 @@
  * willing to render, defaulting to `DEFAULT_OVERVIEW_LAYOUT` rather than throwing.
  */
 
-import { z } from "@/utils/zod";
-
 export const OVERVIEW_WIDGET_TYPES = [
   "insight",
   "budget-pulse",
@@ -276,17 +274,37 @@ export function overviewLayoutReducer(
 // Normalization
 // ---------------------------------------------------------------------------
 
-const rawCardSchema = z.object({
-  id: z.string().min(1),
-  type: z.string(),
-  size: z.string().optional(),
-  config: z.unknown().optional(),
-});
+interface RawCard {
+  id: string;
+  type: string;
+  size?: string;
+  config?: unknown;
+}
 
-const rawLayoutSchema = z.object({
-  version: z.literal(1),
-  cards: z.array(rawCardSchema),
-});
+/**
+ * The persisted layout's outer shape, or `null` when it is not one. Any card that is malformed
+ * rejects the whole layout (the caller falls back to the default), as the schema it replaces did.
+ */
+function parseRawLayout(raw: unknown): { cards: RawCard[] } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const layout = raw as Record<string, unknown>;
+  if (layout.version !== 1 || !Array.isArray(layout.cards)) return null;
+  const cards: RawCard[] = [];
+  for (const entry of layout.cards) {
+    if (!entry || typeof entry !== "object") return null;
+    const card = entry as Record<string, unknown>;
+    if (typeof card.id !== "string" || card.id.length === 0) return null;
+    if (typeof card.type !== "string") return null;
+    if (card.size !== undefined && typeof card.size !== "string") return null;
+    cards.push({
+      id: card.id,
+      type: card.type,
+      size: card.size as string | undefined,
+      config: card.config,
+    });
+  }
+  return { cards };
+}
 
 const isWidgetType = (value: string): value is OverviewWidgetType =>
   (OVERVIEW_WIDGET_TYPES as readonly string[]).includes(value);
@@ -312,14 +330,14 @@ const normalizeConfig = (value: unknown): Readonly<Record<string, unknown>> => {
  * preserved rather than treated as "missing".
  */
 export function normalizeOverviewLayout(raw: unknown): OverviewLayout {
-  const parsed = rawLayoutSchema.safeParse(raw);
-  if (!parsed.success) return DEFAULT_OVERVIEW_LAYOUT;
+  const parsed = parseRawLayout(raw);
+  if (!parsed) return DEFAULT_OVERVIEW_LAYOUT;
 
   const seenIds = new Set<string>();
   const seenSingleTypes = new Set<OverviewWidgetType>();
   const cards: OverviewCard[] = [];
 
-  for (const raw of parsed.data.cards) {
+  for (const raw of parsed.cards) {
     if (!isWidgetType(raw.type)) continue;
     if (seenIds.has(raw.id)) continue;
 

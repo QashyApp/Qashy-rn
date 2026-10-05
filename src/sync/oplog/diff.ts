@@ -14,6 +14,7 @@
  * outside the transaction, over batches — see the sealer in the engine.
  */
 
+import { eraseEntity } from "@/domain/erasure";
 import type { EntityType, FinanceEntity } from "@/domain/models";
 import { OP_SCHEMA_VERSION } from "@/sync/crypto";
 import { canonicalJson } from "@/utils/canonical-json";
@@ -94,8 +95,15 @@ export function diffEntity(
   const entityId = next.id;
 
   if (!previous) {
+    // A record that is already deleted when it is first described travels erased. Its create
+    // op stays in the log until compaction and goes to every peer, so it must not carry what
+    // the delete removed.
     return {
-      ops: [body(entityType, entityId, hlc, "create", { entity: next })],
+      ops: [
+        body(entityType, entityId, hlc, "create", {
+          entity: eraseEntity(entityType, next),
+        }),
+      ],
       warnings: [],
     };
   }
@@ -114,6 +122,17 @@ export function diffEntity(
         `${entityType}.${field} changed on ${entityId} but is immutable; not synced.`,
       );
     }
+  }
+
+  // A tombstone's contents never travel. Deleting sends the delete and nothing else, and a
+  // write to a record that is already deleted sends nothing at all: storage erases the
+  // tombstone, and an op carrying the values it held would put them back in every peer's log.
+  if (next.deletedAt) {
+    if (!previous.deletedAt)
+      ops.push(
+        body(entityType, entityId, hlc, "delete", { at: next.deletedAt }),
+      );
+    return ops.length || warnings.length ? { ops, warnings } : EMPTY;
   }
 
   const registers: Record<string, unknown> = {};
@@ -181,9 +200,7 @@ export function diffEntity(
     }
   }
 
-  if (next.deletedAt && !previous.deletedAt) {
-    ops.push(body(entityType, entityId, hlc, "delete", { at: next.deletedAt }));
-  } else if (!next.deletedAt && previous.deletedAt) {
+  if (previous.deletedAt) {
     ops.push(body(entityType, entityId, hlc, "restore", {}));
   }
 

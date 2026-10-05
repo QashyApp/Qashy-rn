@@ -28,6 +28,7 @@ import {
   makeVault,
   type TestDevice,
 } from "@/sync/engine/__tests__/helpers";
+import { emptyMeta } from "@/sync/oplog";
 
 /** A sealed frame from Alice to Bob at a given channel position. */
 const sealed = (alice: TestDevice, bob: TestDevice, seq = 0) =>
@@ -299,6 +300,33 @@ describe("batch codec — structural gate", () => {
     expect(() =>
       decodeBatch(bytesOf(alice.batch([{ ...op, hlc: other.hlc }]))),
     ).toThrow(/belongs to a different device/);
+  });
+
+  it("rejects an erasure threshold that could blank a live record", async () => {
+    const [alice] = await makeVault();
+    const [created, removed] = alice.author([
+      alice.body("accounts", "a1"),
+      alice.body("accounts", "a1"),
+    ]);
+    const base = emptyMeta("accounts", "a1", removed.hlc);
+    const deleted = { ...base, deleted: { hlc: removed.hlc, at: "2026-01-01T00:00:00.000Z" } };
+    const decode = (state: unknown) =>
+      decodeBatch(
+        bytesOf(alice.batch([], { fullState: [state as never], heads: {} })),
+      );
+
+    expect(() => decode({ ...deleted, erasedThrough: "zzzz" })).toThrow(
+      /malformed erasure state/,
+    );
+    // Only a delete can set one.
+    expect(() => decode({ ...base, erasedThrough: created.hlc })).toThrow(
+      /malformed erasure state/,
+    );
+    // Never past the newest reading the entry has seen.
+    expect(() =>
+      decode({ ...deleted, maxHlc: created.hlc, erasedThrough: removed.hlc }),
+    ).toThrow(/malformed erasure state/);
+    expect(() => decode({ ...deleted, erasedThrough: removed.hlc })).not.toThrow();
   });
 
   it("rejects an op with a malformed clock reading", async () => {

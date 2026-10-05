@@ -6,7 +6,7 @@ const expoPreset = require("jest-expo/jest-preset.js");
 // the scopes it *will* transform, so the fix is to add ours to that list. Derived from the
 // preset rather than pasted, because a hard-coded copy silently stops matching the day
 // jest-expo adds a scope of its own.
-const TRANSFORM_ALSO = "@noble|@scure";
+const TRANSFORM_ALSO = "@noble|@scure|@material";
 const transformIgnorePatterns = expoPreset.transformIgnorePatterns.map(
   (pattern) =>
     pattern.startsWith("/node_modules/(?!(")

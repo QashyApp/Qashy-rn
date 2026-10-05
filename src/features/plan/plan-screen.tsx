@@ -13,6 +13,7 @@ import { PageHeading } from "@/components/ui/page-heading";
 import { ProgressBar, ProgressRing } from "@/components/ui/progress-bar";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { SectionHeader } from "@/components/ui/section-header";
+import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import type { BudgetStatus, Goal } from "@/domain/models";
 import {
@@ -27,7 +28,8 @@ import {
 } from "@/providers/finance-provider";
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
-import { mediumDate, todayLocal } from "@/utils/date";
+import { mediumDate, toLocalDate } from "@/utils/date";
+import { useNow } from "@/utils/use-now";
 import { hapticSuccess } from "@/utils/haptics";
 import { formatMoney } from "@/utils/money";
 import { budgetPace, type BudgetPaceStatus } from "@/utils/pace";
@@ -84,12 +86,13 @@ function useMilestoneHaptics(
 }
 
 export function PlanScreen() {
+  const scrollRef = useSectionScrollToTop<ScrollView>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { contentWidth } = useScreenMetrics();
   const wide = contentWidth >= WIDE_GRID_BREAKPOINT;
-  const today = todayLocal();
+  const today = toLocalDate(new Date(useNow()));
   // The repository reads these state slices internally, so they must stay in
   // the deps even though the callback does not reference them directly.
   const budgets = useMemo(
@@ -148,6 +151,7 @@ export function PlanScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
@@ -360,6 +364,7 @@ function BudgetCard({
 }) {
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const {
     budget,
@@ -405,7 +410,7 @@ function BudgetCard({
       style={fill ? { height: "100%" } : undefined}
     >
       <Card style={fill ? { gap: 14, height: "100%" } : { gap: 14 }}>
-        <View style={{ gap: 2 }}>
+        <View style={{ gap: space.xxs }}>
           <AppText literal variant="headline">
             {budget.name}
           </AppText>
@@ -418,7 +423,7 @@ function BudgetCard({
           style={{
             flexDirection: "row",
             alignItems: "baseline",
-            gap: 8,
+            gap: space.sm,
             flexWrap: "wrap",
           }}
         >
@@ -447,7 +452,7 @@ function BudgetCard({
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 8,
+            gap: space.sm,
             flexWrap: "wrap",
           }}
         >
@@ -478,7 +483,7 @@ function BudgetCard({
                     style={{
                       flexDirection: "row",
                       justifyContent: "space-between",
-                      gap: 8,
+                      gap: space.sm,
                     }}
                   >
                     <AppText literal variant="caption">
@@ -511,7 +516,7 @@ function BudgetCard({
           </Card>
         ) : null}
 
-        <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flexDirection: "row", gap: space.sm }}>
           <View style={{ flex: 1 }}>
             <ActionButton
               title="Edit"
@@ -552,6 +557,7 @@ function GoalCard({
   progress: number;
   fill: boolean;
 }) {
+  const { space } = useQashyTheme();
   const state = useFinanceState();
   const { t, isRtl } = useLocalization();
   const displayProgress = Math.max(0, progress);
@@ -577,7 +583,7 @@ function GoalCard({
           >
             <AppText literal numeric variant="label">{`${percent}%`}</AppText>
           </ProgressRing>
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
             <AppText literal variant="headline">
               {goal.name}
             </AppText>
@@ -594,7 +600,7 @@ function GoalCard({
             flexDirection: "row",
             alignItems: "baseline",
             justifyContent: "space-between",
-            gap: 8,
+            gap: space.sm,
             flexWrap: "wrap",
           }}
         >

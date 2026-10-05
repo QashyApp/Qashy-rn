@@ -5,7 +5,10 @@ import type { StorageAdapter } from "@/data/storage-adapter";
 import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";
 import type { EntityType } from "@/domain/models";
 import { DEVICE_A } from "@/sync/oplog/__tests__/helpers";
-import { externalImportId } from "@/utils/deterministic-id";
+import {
+  externalImportId,
+  occurrenceTransactionId,
+} from "@/utils/deterministic-id";
 
 const NOW = new Date("2026-07-15T09:00:00Z");
 
@@ -25,6 +28,19 @@ async function createRepository(
     accentHex: "#5966E9",
   });
   return { repository, storage };
+}
+
+/** The imported rows: everything except occurrences the schedule generated on its own. */
+function importedTransactions(snapshot: {
+  transactions: { id: string; occurrenceKey: string | null }[];
+  recurringRules: { id: string }[];
+}) {
+  const ruleId = snapshot.recurringRules[0]?.id;
+  return snapshot.transactions.filter(
+    (item) =>
+      item.occurrenceKey === null ||
+      item.occurrenceKey === `${ruleId}:2026-07-20`,
+  );
 }
 
 /** Synthetic data only: a small vault-shaped bundle that exercises every entity type. */
@@ -244,6 +260,131 @@ async function withClock(work: () => Promise<void>) {
   }
 }
 
+/** The default bundle with its schedule's waiting occurrence already due (2026-07-10, before the test clock). */
+function overdueRentBundle(withRentRow = true): ImportBundle {
+  const base = makeBundle();
+  return {
+    ...base,
+    transactions: base.transactions
+      .filter((item) => withRentRow || item.externalId !== "x-rent")
+      .map((item) =>
+        item.externalId === "x-rent"
+          ? { ...item, localDate: "2026-07-10" }
+          : item,
+      ),
+    recurringRules: base.recurringRules.map((rule) => ({
+      ...rule,
+      startDate: "2026-07-10",
+      nextDueDate: "2026-07-10",
+    })),
+  };
+}
+
+describe("importing a schedule's waiting occurrence", () => {
+  const waiting = (
+    repository: LocalFinanceRepository,
+    ruleId: string,
+    date: string,
+  ) =>
+    repository
+      .getSnapshot()
+      .transactions.filter(
+        (item) => item.occurrenceKey === `${ruleId}:${date}`,
+      );
+
+  it("is not generated a second time when the schedule runs", async () => {
+    await withClock(async () => {
+      const { repository } = await createRepository();
+      await repository.importExternalBundle(
+        overdueRentBundle(),
+        { mode: "merge" },
+        true,
+      );
+      await repository.generateRecurring();
+      const rule = repository.getSnapshot().recurringRules[0];
+      expect(waiting(repository, rule.id, "2026-07-10")).toHaveLength(1);
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.filter((item) => item.recurringRuleId === rule.id),
+      ).toHaveLength(1);
+      // The schedule has moved on to the following month without creating anything extra.
+      expect(rule.nextDueDate).toBe("2026-08-10");
+    });
+  });
+
+  it("is skipped as a duplicate on a second import", async () => {
+    await withClock(async () => {
+      const { repository } = await createRepository();
+      await repository.importExternalBundle(
+        overdueRentBundle(),
+        { mode: "merge" },
+        true,
+      );
+      const before = repository.getSnapshot().transactions.length;
+      const again = await repository.importExternalBundle(
+        overdueRentBundle(),
+        { mode: "merge" },
+        true,
+      );
+      expect(again.duplicateTransactions).toBe(4);
+      expect(repository.getSnapshot().transactions).toHaveLength(before);
+    });
+  });
+
+  it("does not duplicate an occurrence the schedule already generated", async () => {
+    await withClock(async () => {
+      const { repository } = await createRepository();
+      // An earlier import brought the schedule but not its waiting entry; the generator made it.
+      await repository.importExternalBundle(
+        overdueRentBundle(false),
+        { mode: "merge" },
+        true,
+      );
+      await repository.generateRecurring();
+      const rule = repository.getSnapshot().recurringRules[0];
+      expect(waiting(repository, rule.id, "2026-07-10")).toHaveLength(1);
+
+      const outcome = await repository.importExternalBundle(
+        overdueRentBundle(),
+        { mode: "merge" },
+        true,
+      );
+      expect(outcome.duplicateTransactions).toBeGreaterThanOrEqual(1);
+      expect(waiting(repository, rule.id, "2026-07-10")).toHaveLength(1);
+    });
+  });
+
+  it("does not come back after the user deleted the schedule", async () => {
+    await withClock(async () => {
+      const { repository } = await createRepository();
+      await repository.importExternalBundle(
+        overdueRentBundle(),
+        { mode: "merge" },
+        true,
+      );
+      const rule = repository.getSnapshot().recurringRules[0];
+      await repository.deleteEntities("recurringRules", [rule.id]);
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.filter((item) => item.status === "upcoming"),
+      ).toEqual([]);
+
+      await repository.importExternalBundle(
+        overdueRentBundle(),
+        { mode: "merge" },
+        true,
+      );
+      expect(
+        repository
+          .getSnapshot()
+          .transactions.filter((item) => item.status === "upcoming"),
+      ).toEqual([]);
+    });
+  });
+});
+
 describe("importExternalBundle", () => {
   it("previews the full outcome without mutating or writing anything", async () => {
     const { repository, storage } = await createRepository();
@@ -343,13 +484,16 @@ describe("importExternalBundle", () => {
       const generated = snapshot.transactions.filter(
         (item) => item.occurrenceKey !== null,
       );
-      // Nothing is generated ahead of time: the 2026-08-01 occurrence appears once it is due.
-      expect(generated).toEqual([]);
-      const rent = snapshot.transactions.find(
-        (item) => item.id === idOf("transaction", "x-rent"),
-      )!;
+      // Nothing is generated ahead of time: the 2026-08-01 occurrence appears once it is due. The
+      // only keyed row is the imported waiting occurrence itself.
+      expect(generated).toHaveLength(1);
+      // An occurrence's id comes from its key, as for every generated one, so two devices that
+      // import the same file (or generate it) agree on the row.
+      const rent = generated[0];
+      expect(rent.id).toBe(occurrenceTransactionId(`${rule.id}:2026-07-20`));
       expect(rent.recurringRuleId).toBe(rule.id);
-      expect(rent.occurrenceKey).toBeNull();
+      // It carries the generator's key, so the schedule will not make a second one for that date.
+      expect(rent.occurrenceKey).toBe(`${rule.id}:2026-07-20`);
       const lunch = snapshot.transactions.find(
         (item) => item.id === idOf("transaction", "x-lunch"),
       )!;
@@ -747,7 +891,7 @@ describe("importExternalBundle", () => {
     expect(repository.getSnapshot().transactions).toHaveLength(3);
   });
 
-  it("replaces the vault atomically, tombstoning rather than deleting, and keeps settings and rates", async () => {
+  it("replaces the vault atomically, erasing the old rows for real, and keeps settings and rates", async () => {
     await withClock(async () => {
       const { repository, storage } = await createRepository();
       const everyday = repository.getSnapshot().accounts[0];
@@ -818,41 +962,41 @@ describe("importExternalBundle", () => {
       expect(snapshot.transactions.some((item) => item.title === "Old")).toBe(
         false,
       );
-      expect(
-        snapshot.transactions.filter((item) => item.occurrenceKey === null),
-      ).toHaveLength(4);
+      expect(importedTransactions(snapshot)).toHaveLength(4);
       expect(snapshot.settings).toEqual(settings);
       expect(snapshot.exchangeRates.map((item) => item.id)).toEqual([rate.id]);
 
-      // Soft deletion: the old rows are still stored, marked deleted, with their revision bumped.
-      const storedAccounts = await allRows(storage, "accounts");
-      const oldAccount = storedAccounts.find(
-        (item) => item.id === everyday.id,
-      )!;
-      expect(oldAccount.deletedAt).not.toBeNull();
-      expect(oldAccount.revision).toBe(everyday.revision + 1);
+      // A real delete: the old rows are gone from storage, not marked deleted, and nothing of
+      // the replaced types is left behind as a tombstone.
       expect(
-        (await allRows(storage, "goals")).every(
-          (item) => item.deletedAt !== null,
+        (await allRows(storage, "accounts")).some(
+          (item) => item.id === everyday.id,
         ),
-      ).toBe(true);
-      expect(
-        (await allRows(storage, "categories")).filter(
-          (item) => item.deletedAt !== null,
-        ),
-      ).toHaveLength(8);
+      ).toBe(false);
+      expect(await allRows(storage, "goals")).toEqual([]);
+      for (const type of [
+        "accounts",
+        "categories",
+        "tags",
+        "transactions",
+        "goals",
+      ] as const) {
+        expect(
+          (await allRows(storage, type)).filter(
+            (item) => item.deletedAt !== null,
+          ),
+        ).toEqual([]);
+      }
+      expect(await allRows(storage, "categories")).toHaveLength(3);
     });
   });
 
-  it("revives tombstoned entities that carry a derived id, bumping their revision", async () => {
+  it("erases a previous import's rows on the next replace and recreates them fresh if the backup comes back", async () => {
     await withClock(async () => {
       const { repository, storage } = await createRepository();
       const bundle = makeBundle();
       await repository.importExternalBundle(bundle, { mode: "replace" }, true);
       const cashId = externalImportId("cashew", "account", "a-cash");
-      const originalRevision = (await allRows(storage, "accounts")).find(
-        (item) => item.id === cashId,
-      )!.revision;
 
       const other = makeBundle({
         accounts: [
@@ -877,10 +1021,11 @@ describe("importExternalBundle", () => {
       expect(
         repository.getSnapshot().accounts.map((item) => item.name),
       ).toEqual(["Other"]);
+      // Gone, not marked deleted.
       expect(
-        (await allRows(storage, "accounts")).find((item) => item.id === cashId)
-          ?.deletedAt,
-      ).not.toBeNull();
+        (await allRows(storage, "accounts")).find((item) => item.id === cashId),
+      ).toBeUndefined();
+      expect(await allRows(storage, "transactions")).toEqual([]);
 
       const back = await repository.importExternalBundle(
         bundle,
@@ -893,13 +1038,11 @@ describe("importExternalBundle", () => {
         "Bank",
         "Cash",
       ]);
-      const revived = snapshot.accounts.find((item) => item.id === cashId)!;
-      expect(revived.deletedAt).toBeNull();
-      expect(revived.revision).toBeGreaterThan(originalRevision + 1);
-      expect(
-        snapshot.transactions.filter((item) => item.occurrenceKey === null),
-      ).toHaveLength(4);
-      // A same-id row written twice is one entity, not two.
+      const recreated = snapshot.accounts.find((item) => item.id === cashId)!;
+      expect(recreated.deletedAt).toBeNull();
+      // A new row, not a revived one.
+      expect(recreated.revision).toBe(1);
+      expect(importedTransactions(snapshot)).toHaveLength(4);
       expect(
         (await allRows(storage, "accounts")).filter(
           (item) => item.id === cashId,
@@ -909,7 +1052,7 @@ describe("importExternalBundle", () => {
     });
   });
 
-  it("replaces an earlier replace-import in place without duplicating or tombstoning it", async () => {
+  it("replaces an earlier replace-import without duplicating anything or leaving tombstones", async () => {
     await withClock(async () => {
       const { repository, storage } = await createRepository();
       const bundle = makeBundle();
@@ -930,15 +1073,15 @@ describe("importExternalBundle", () => {
       });
       const snapshot = repository.getSnapshot();
       expect(snapshot.accounts).toHaveLength(2);
-      expect(
-        snapshot.transactions.filter((item) => item.occurrenceKey === null),
-      ).toHaveLength(4);
+      expect(importedTransactions(snapshot)).toHaveLength(4);
       expect(balances(repository).get("Cash")).toBe(29_500);
       const cash = (await allRows(storage, "accounts")).find(
         (item) => item.id === externalImportId("cashew", "account", "a-cash"),
       )!;
       expect(cash.deletedAt).toBeNull();
-      expect(cash.revision).toBe(2);
+      expect(cash.revision).toBe(1);
+      // Two accounts stored, and no tombstone of the first import's rows.
+      expect(await allRows(storage, "accounts")).toHaveLength(2);
     });
   });
 
@@ -1007,6 +1150,22 @@ describe("importExternalBundle", () => {
       ) {
         if (this.fail) throw new Error("simulated disk failure");
         await super.putMany(records, source);
+      }
+
+      // A replace erases and writes inside one transaction.
+      override async transact<T>(
+        work: Parameters<MemoryStorageAdapter["transact"]>[0] extends (
+          tx: infer Tx,
+        ) => Promise<unknown>
+          ? (tx: Tx) => Promise<T>
+          : never,
+        options?: Parameters<MemoryStorageAdapter["transact"]>[1],
+      ): Promise<T> {
+        return super.transact(async (tx) => {
+          const result = await work(tx);
+          if (this.fail) throw new Error("simulated disk failure");
+          return result;
+        }, options);
       }
     }
     const storage = new FailingStorage();
@@ -1331,45 +1490,62 @@ describe("importExternalBundle", () => {
     });
   });
 
-  it("captures delete and restore ops for a replace when sync is armed", async () => {
+  it("refuses to erase for real on a device that syncs, and changes nothing", async () => {
     await withClock(async () => {
       const inner = new MemoryStorageAdapter();
       const syncing = new SyncingStorageAdapter(inner, DEVICE_A);
       const { repository } = await createRepository(syncing);
-      const everyday = repository.getSnapshot().accounts[0];
+      const before = JSON.stringify(repository.getSnapshot());
       const readOps = async () =>
-        (await syncing.transact((tx) => tx.table("syncOps").all())).map(
-          (row) => `${row.entityType}:${row.kind}:${row.entityId}`,
-        );
-      const bundle = makeBundle();
+        (await syncing.transact((tx) => tx.table("syncOps").all())).length;
+      const opsBefore = await readOps();
+      expect(opsBefore).toBeGreaterThan(0);
 
-      await repository.importExternalBundle(bundle, { mode: "replace" }, true);
-      const afterFirst = await readOps();
-      expect(afterFirst).toContain(`accounts:delete:${everyday.id}`);
-      expect(afterFirst).toContain(
-        `accounts:create:${externalImportId("cashew", "account", "a-cash")}`,
-      );
-      expect(afterFirst).toContain(
-        `transactions:create:${externalImportId("cashew", "transaction", "x-lunch")}`,
-      );
-
-      const other = makeBundle({
-        accounts: [],
-        categories: [],
-        tags: [],
-        transactions: [],
-        recurringRules: [],
-        budgets: [],
+      // The preview says why, so the screen can block the button.
+      const preview = await repository.importExternalBundle(makeBundle(), {
+        mode: "replace",
       });
-      await repository.importExternalBundle(other, { mode: "replace" }, true);
-      await repository.importExternalBundle(bundle, { mode: "replace" }, true);
-      const afterBack = await readOps();
-      expect(afterBack).toContain(
-        `accounts:restore:${externalImportId("cashew", "account", "a-cash")}`,
+      expect(preview.rejected).toHaveLength(1);
+      expect(preview.rejected[0].reason).toContain("while this device syncs");
+
+      await expect(
+        repository.importExternalBundle(
+          makeBundle(),
+          { mode: "replace" },
+          true,
+        ),
+      ).rejects.toThrow("Import blocked");
+      expect(JSON.stringify(repository.getSnapshot())).toBe(before);
+      expect(await readOps()).toBe(opsBefore);
+
+      // Adding to the data is unaffected: it goes through the normal, synced path.
+      const merged = await repository.importExternalBundle(
+        makeBundle(),
+        { mode: "merge" },
+        true,
       );
-      expect(afterBack).toContain(
-        `transactions:restore:${externalImportId("cashew", "transaction", "x-lunch")}`,
-      );
+      expect(merged.committed).toBe(true);
+    });
+  });
+
+  it("refuses to commit once the device has joined sync, even after a clean preview", async () => {
+    await withClock(async () => {
+      const { repository, storage } = await createRepository();
+      const preview = await repository.importExternalBundle(makeBundle(), {
+        mode: "replace",
+      });
+      expect(preview.rejected).toEqual([]);
+      // The device is paired between the preview and the commit.
+      await storage.transact(async (tx) => {
+        await tx.table("syncMeta").put([{ key: "deviceId", value: "dev-x" }]);
+      });
+      await expect(
+        repository.importExternalBundle(
+          makeBundle(),
+          { mode: "replace" },
+          true,
+        ),
+      ).rejects.toThrow("Import blocked");
     });
   });
 });

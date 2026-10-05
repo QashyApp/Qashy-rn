@@ -1,5 +1,10 @@
-import { useState } from "react";
-import { Modal, Pressable, View } from "react-native";
+import { useState, type ComponentProps } from "react";
+import { Modal, Pressable, View, type LayoutChangeEvent } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  type SharedValue,
+} from "react-native-reanimated";
 
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
@@ -31,12 +36,15 @@ export function MonthSwitcher({
   onChange,
   max,
   disabled = false,
+  dragProgress,
 }: {
   value: string;
   onChange: (month: string, direction: MonthDirection) => void;
   /** First day of the latest selectable month. Omit to allow any future month. */
   max?: string;
   disabled?: boolean;
+  /** A month pager's drag, in page widths: the title slides with the pages below it. */
+  dragProgress?: SharedValue<number>;
 }) {
   const theme = useQashyTheme();
   const { motion, radius, space } = theme;
@@ -87,16 +95,10 @@ export function MonthSwitcher({
           justifyContent: "center",
           paddingHorizontal: space.sm,
           borderRadius: radius.pill,
+          overflow: "hidden",
         }}
       >
-        <AppText
-          literal
-          variant="label"
-          numeric
-          style={{ textAlign: "center" }}
-        >
-          {monthLabel(value, locale)}
-        </AppText>
+        <MonthTitle value={value} dragProgress={dragProgress} />
       </MotionPressable>
       <IconButton
         label="Next month"
@@ -118,6 +120,105 @@ export function MonthSwitcher({
           }
         }}
       />
+    </View>
+  );
+}
+
+/**
+ * The month name. With a `dragProgress` the previous and next names wait just outside the
+ * pill and travel with the pages, so the title is part of the swipe instead of a label that
+ * changes after it.
+ */
+/** Clears the pill's padding, so a waiting month name is never seen at the edge. */
+const TITLE_GAP = 64;
+
+function MonthTitle({
+  value,
+  dragProgress,
+}: {
+  value: string;
+  dragProgress?: SharedValue<number>;
+}) {
+  const { locale, isRtl } = useLocalization();
+  const titleWidth = useSharedValue(0);
+  const sign = isRtl ? -1 : 1;
+  const current = (
+    <AppText
+      literal
+      variant="label"
+      numeric
+      numberOfLines={1}
+      style={{ textAlign: "center" }}
+    >
+      {monthLabel(value, locale)}
+    </AppText>
+  );
+  const currentStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX: (dragProgress?.get() ?? 0) * (titleWidth.get() + TITLE_GAP),
+      },
+    ],
+  }));
+  const previousStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX:
+          ((dragProgress?.get() ?? 0) - sign) * (titleWidth.get() + TITLE_GAP),
+      },
+    ],
+  }));
+  const nextStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX:
+          ((dragProgress?.get() ?? 0) + sign) * (titleWidth.get() + TITLE_GAP),
+      },
+    ],
+  }));
+  if (!dragProgress) return current;
+  const neighbour = (
+    delta: number,
+    style: ComponentProps<typeof Animated.View>["style"],
+  ) => (
+    <Animated.View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={[
+        {
+          position: "absolute",
+          // Wider than the title, so a longer month name never wraps to fit it.
+          left: -TITLE_GAP,
+          right: -TITLE_GAP,
+          top: 0,
+          bottom: 0,
+          alignItems: "center",
+          justifyContent: "center",
+        },
+        style,
+      ]}
+    >
+      <AppText
+        literal
+        variant="label"
+        numeric
+        numberOfLines={1}
+        style={{ textAlign: "center" }}
+      >
+        {monthLabel(moveMonth(value, delta), locale)}
+      </AppText>
+    </Animated.View>
+  );
+  return (
+    <View
+      onLayout={(event: LayoutChangeEvent) =>
+        titleWidth.set(event.nativeEvent.layout.width)
+      }
+    >
+      <Animated.View style={currentStyle}>{current}</Animated.View>
+      {neighbour(-1, previousStyle)}
+      {neighbour(1, nextStyle)}
     </View>
   );
 }

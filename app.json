@@ -2,7 +2,7 @@
   "expo": {
     "name": "Qashy",
     "slug": "qashy",
-    "version": "26.10.0-Dev",
+    "version": "1.7-Dev",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "backgroundColor": "#F1F2F5",
@@ -33,7 +33,14 @@
       "backgroundColor": "#F1F2F5"
     },
     "plugins": [
-      "expo-router",
+      [
+        "expo-router",
+        {
+          "asyncRoutes": {
+            "web": "production"
+          }
+        }
+      ],
       [
         "expo-splash-screen",
         {

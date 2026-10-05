@@ -24,6 +24,7 @@
 
 import type { Budget, Category, TransactionRecord } from "@/domain/models";
 import { convertMinor } from "@/utils/money";
+import { RESTORED_ACCOUNT_NAME } from "@/sync/oplog/repair";
 import {
   activityOf,
   BASE_CURRENCY,
@@ -531,7 +532,15 @@ describe("merge scenarios — repairing a jointly-invalid state", () => {
     // transaction pointing at a row that is not there is not a state the finance core can
     // render. Archiving keeps it out of the pickers without rewriting history.
     const resurrected = converged.accounts.find((row) => row.id === savings.id);
-    expect(resurrected).toMatchObject({ deletedAt: null, archived: true });
+    // The delete erased its name and opening balance on every device, so it returns under a
+    // placeholder rather than with the content the user asked Qashy to forget.
+    expect(resurrected).toMatchObject({
+      deletedAt: null,
+      archived: true,
+      name: RESTORED_ACCOUNT_NAME,
+      openingBalanceMinor: 0,
+      currency: BASE_CURRENCY,
+    });
 
     const before = await Promise.all([opsOf(alice), opsOf(bob)]);
     await alice.repository.deleteEntities("transactions", [booked.id]);

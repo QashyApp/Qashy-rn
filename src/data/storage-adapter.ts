@@ -4,6 +4,7 @@ import {
   type SyncRow,
   type SyncTableName,
 } from "@/data/sync-tables";
+import { eraseEntity } from "@/domain/erasure";
 import type { EntityType, FinanceEntity } from "@/domain/models";
 
 export interface StoredEntity {
@@ -13,6 +14,18 @@ export interface StoredEntity {
 
 /** The primary key of a `records` row, on every platform. */
 export const recordKey = (type: EntityType, id: string) => `${type}:${id}`;
+
+/**
+ * The form a record is written in: a tombstone loses everything but its kept fields.
+ *
+ * Every adapter's `StorageTx.putMany` writes through this, which is what makes erasure hold for
+ * every path into `records` — a local delete, a merged-in delete from another device, the
+ * repair pass, a backup restore — without any of them having to remember it.
+ */
+export const toStoredForm = ({ type, entity }: StoredEntity): StoredEntity => ({
+  type,
+  entity: eraseEntity(type, entity),
+});
 
 export function compareStoredEntities(
   first: FinanceEntity,
@@ -53,8 +66,12 @@ export interface StorageTx {
   readAll(type: EntityType): Promise<FinanceEntity[]>;
   /** Keys are `${type}:${id}`. Misses are omitted rather than returned as holes. */
   readKeys(keys: readonly string[]): Promise<StoredEntity[]>;
+  /** Writes tombstones in their erased form; see `toStoredForm`. */
   putMany(records: readonly StoredEntity[]): Promise<void>;
-  /** Compaction and `clear` only — finance entities are soft-deleted, never removed. */
+  /**
+   * Compaction, `clear`, and the replace-import on a device that does not sync. Everywhere else
+   * a deleted entity leaves an erased tombstone: it is what carries a deletion to other devices.
+   */
   deleteKeys(keys: readonly string[]): Promise<void>;
   clearRecords(): Promise<void>;
   table<Name extends SyncTableName>(name: Name): SyncTable<SyncRow<Name>>;

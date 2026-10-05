@@ -7,6 +7,8 @@ import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
+import { MoneyField } from "@/components/finance/money-field";
+import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import { TextButton } from "@/components/ui/text-button";
@@ -33,6 +35,7 @@ export function GoalFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const defaultGoalName = state.settings.locale
     .toLocaleLowerCase()
@@ -288,7 +291,7 @@ export function GoalFormScreen() {
   if (id && !existing) return <Redirect href="/plan" />;
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>
       <AmountHero
         label="Target"
         size="display"
@@ -300,11 +303,11 @@ export function GoalFormScreen() {
         autoFocus={!existing}
       />
 
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <View
           accessibilityLabel={t("Goal type")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}
         >
           {(["saving", "spending"] as GoalKind[]).map((item) => (
             <View key={item} style={{ flexGrow: 1, flexBasis: 150 }}>
@@ -327,20 +330,20 @@ export function GoalFormScreen() {
           onChangeText={setName}
           placeholder={defaultGoalName}
         />
-        <FormField
+        <MoneyField
+          currency={state.settings.baseCurrency}
           label="Starting progress"
           value={initial}
           onChangeText={setInitial}
-          keyboardType="decimal-pad"
           error={initialError}
           required
         />
-        <FormField
+        <DateField
           label="Target date (optional)"
           value={targetDate}
-          onChangeText={setTargetDate}
-          placeholder="YYYY-MM-DD"
+          onChange={setTargetDate}
           error={targetDateError}
+          optional
         />
       </Card>
 
@@ -354,7 +357,7 @@ export function GoalFormScreen() {
         <View
           accessibilityLabel={t("Linked account")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           <ChoiceChip
             icon="xmark.circle"
@@ -378,7 +381,7 @@ export function GoalFormScreen() {
         <View
           accessibilityLabel={t("Linked category")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           <ChoiceChip
             icon="xmark.circle"
@@ -414,7 +417,7 @@ export function GoalFormScreen() {
                 key={item.id}
                 style={{
                   gap: 6,
-                  paddingBottom: 8,
+                  paddingBottom: space.sm,
                   borderBottomWidth: 1,
                   borderBottomColor: theme.border,
                 }}
@@ -424,10 +427,10 @@ export function GoalFormScreen() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    gap: 12,
+                    gap: space.md,
                   }}
                 >
-                  <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flex: 1, gap: space.xxs }}>
                     <AppText literal variant="label">
                       {amountLabel}
                     </AppText>
@@ -462,7 +465,8 @@ export function GoalFormScreen() {
           {!manualContributions.length ? (
             <AppText muted>No manual contributions yet.</AppText>
           ) : null}
-          <FormField
+          <MoneyField
+            currency={state.settings.baseCurrency}
             label={
               editingContributionId
                 ? "Contribution amount"
@@ -470,16 +474,13 @@ export function GoalFormScreen() {
             }
             value={contribution}
             onChangeText={setContribution}
-            keyboardType="decimal-pad"
             placeholder="0"
             error={contributionError}
           />
-          <FormField
+          <DateField
             label="Contribution date"
             value={contributionDate}
-            onChangeText={setContributionDate}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
+            onChange={setContributionDate}
             error={contributionDateError}
             required
           />
@@ -489,7 +490,13 @@ export function GoalFormScreen() {
             onChangeText={setContributionNote}
             placeholder="Optional context"
           />
-          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: space.sm,
+              alignItems: "center",
+            }}
+          >
             <ActionButton
               title={
                 editingContributionId ? "Save contribution" : "Add contribution"

@@ -7,6 +7,7 @@ import {
   ChoiceListField,
   type ChoiceListOption,
 } from "@/components/ui/choice-list-field";
+import { MoneyField } from "@/components/finance/money-field";
 import { FormField } from "@/components/ui/form-field";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TextButton } from "@/components/ui/text-button";
@@ -127,7 +128,7 @@ export function ForeignFeeFields({
           gap: 14,
         }}
       >
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, gap: space.xxs }}>
           <AppText variant="label">Paid in another currency</AppText>
           <AppText variant="caption" muted>
             Track the original amount and convert it to this account’s currency.
@@ -144,7 +145,7 @@ export function ForeignFeeFields({
       </View>
 
       {foreignEnabled ? (
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: space.md }}>
           <ChoiceListField
             label="Foreign currency"
             value={foreignCurrency.trim().toUpperCase()}
@@ -222,7 +223,7 @@ export function ForeignFeeFields({
         </View>
       ) : null}
 
-      <View style={{ gap: 12 }}>
+      <View style={{ gap: space.md }}>
         <AppText variant="label">Extra fee</AppText>
         <SegmentedControl
           label="Extra fee"
@@ -251,7 +252,8 @@ export function ForeignFeeFields({
             error={feeTouched ? errors.fee : undefined}
           />
         ) : feeKind === "fixed" ? (
-          <FormField
+          <MoneyField
+            currency={accountCurrency}
             label={`Fee (${accountCurrency})`}
             literalLabel
             value={feeValue}
@@ -260,7 +262,6 @@ export function ForeignFeeFields({
               onChangeFeeValue(value);
             }}
             onBlur={() => setFeeTouched(true)}
-            keyboardType="decimal-pad"
             placeholder="0.00"
             error={feeTouched ? errors.fee : undefined}
           />

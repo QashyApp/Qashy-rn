@@ -13,7 +13,7 @@ import type { NavBarStyle } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
-  useFinanceState,
+  useFinanceSettings,
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
@@ -52,7 +52,7 @@ function NavBarStyleSheetContent({ onClose }: { onClose: () => void }) {
   const { space } = theme;
   const { t, isRtl } = useLocalization();
   const repository = useFinanceRepository();
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const { width: windowWidth } = useWindowDimensions();
   const sheetRef = useRef<ModalBottomSheetRef>(null);
   const current: NavBarStyle = settings.navBarStyle ?? "native";

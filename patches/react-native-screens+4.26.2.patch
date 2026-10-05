@@ -1,3 +1,76 @@
+diff --git a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/SheetAnimationCoordinator.kt b/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/SheetAnimationCoordinator.kt
+index 337436e..903471a 100644
+--- a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/SheetAnimationCoordinator.kt
++++ b/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/bottomsheet/SheetAnimationCoordinator.kt
+@@ -3,7 +3,9 @@ package com.swmansion.rnscreens.bottomsheet
+ import android.animation.Animator
+ import android.animation.AnimatorListenerAdapter
+ import android.animation.AnimatorSet
++import android.animation.TimeInterpolator
+ import android.animation.ValueAnimator
++import android.view.animation.PathInterpolator
+ import androidx.coordinatorlayout.widget.CoordinatorLayout
+ import androidx.core.view.WindowInsetsCompat
+ import com.google.android.material.bottomsheet.BottomSheetBehavior
+@@ -14,6 +16,38 @@ import com.swmansion.rnscreens.events.ScreenEventEmitter
+ import com.swmansion.rnscreens.ext.asScreenStackFragment
+ import com.swmansion.rnscreens.transition.ExternalBoundaryValuesEvaluator
+ import java.lang.ref.WeakReference
++import kotlin.math.cos
++import kotlin.math.exp
++import kotlin.math.min
++import kotlin.math.sin
++import kotlin.math.sqrt
++
++/**
++ * Qashy: a damped spring's step response as an interpolator, so the sheet rises the way a flung
++ * sheet would: off the mark at once, then settling softly. The platform default it replaces (300 ms
++ * accelerate-decelerate) spends its first frames barely moving, which reads as a delay, and its
++ * symmetric curve reads as linear. Clamped at the target, so the sheet never lifts off the bottom.
++ */
++internal class SpringInterpolator(
++    private val dampingRatio: Double,
++    private val durationSeconds: Double,
++) : TimeInterpolator {
++    // The envelope has decayed to e^-7.5 (0.06%) by the end, so finishing exactly on 1 is invisible.
++    private val omega = 7.5 / (dampingRatio * durationSeconds)
++    private val omegaDamped = omega * sqrt(1 - dampingRatio * dampingRatio)
++
++    override fun getInterpolation(input: Float): Float {
++        if (input >= 1f) return 1f
++        val t = input * durationSeconds
++        val envelope = exp(-dampingRatio * omega * t)
++        val progress =
++            1 - envelope * (cos(omegaDamped * t) + dampingRatio * omega / omegaDamped * sin(omegaDamped * t))
++        return min(progress.toFloat(), 1f)
++    }
++}
++
++private const val SHEET_ENTER_DURATION_MS = 560L
++private const val SHEET_EXIT_DURATION_MS = 240L
+ 
+ internal class SheetAnimationCoordinator(
+     screen: Screen,
+@@ -49,6 +83,9 @@ internal class SheetAnimationCoordinator(
+             .takeIf {
+                 dimmingDelegate.willDimForDetentIndex(screen, screen.sheetInitialDetentIndex)
+             }?.with(alphaAnimator)
++        animatorSet.duration = SHEET_ENTER_DURATION_MS
++        animatorSet.interpolator =
++            SpringInterpolator(dampingRatio = 0.86, durationSeconds = SHEET_ENTER_DURATION_MS / 1000.0)
+ 
+         attachCommonListeners(animatorSet, isEnter = true, screenStackFragment)
+ 
+@@ -67,6 +104,9 @@ internal class SheetAnimationCoordinator(
+         val slideAnimator = createSheetSlideOutAnimator(coordinatorLayout)
+ 
+         animatorSet.play(alphaAnimator).with(slideAnimator)
++        // Qashy: leaving accelerates away (Material's emphasized-accelerate), faster than arriving.
++        animatorSet.duration = SHEET_EXIT_DURATION_MS
++        animatorSet.interpolator = PathInterpolator(0.3f, 0f, 0.8f, 0.15f)
+ 
+         attachCommonListeners(animatorSet, isEnter = false, screenStackFragment)
+ 
 diff --git a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt b/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt
 index 27e2254..132c909 100644
 --- a/node_modules/react-native-screens/android/src/main/java/com/swmansion/rnscreens/gamma/tabs/container/TabsContainer.kt

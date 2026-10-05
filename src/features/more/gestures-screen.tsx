@@ -6,15 +6,16 @@ import { QashySwitch } from "@/components/ui/qashy-switch";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
-  useFinanceState,
+  useFinanceSettings,
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
 
 export function GesturesScreen() {
   const repository = useFinanceRepository();
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
 
   // Applies immediately, like language and theme.
@@ -36,13 +37,13 @@ export function GesturesScreen() {
       contentContainerStyle={{
         padding: 18,
         paddingBottom: 40,
-        gap: 16,
+        gap: space.lg,
         width: "100%",
         maxWidth: 720,
         alignSelf: "center",
       }}
     >
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <View
           style={{
             minHeight: 48,
@@ -52,7 +53,7 @@ export function GesturesScreen() {
             gap: 14,
           }}
         >
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Swipe to change month</AppText>
             <AppText variant="caption" muted>
               Swipe left or right on Overview and Transactions to move between

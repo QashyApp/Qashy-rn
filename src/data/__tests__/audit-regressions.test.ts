@@ -215,6 +215,8 @@ describe("editing a recurring schedule", () => {
 
   it("keeps overdue pending occurrences when only the end date changes", async () => {
     const repository = await createRepository();
+    // A new rule starts at its first occurrence on or after today, so create it on its start date.
+    at("2026-07-01");
     const account = repository.getSnapshot().accounts[0];
     const rule = await repository.saveRecurringRule({
       template: {

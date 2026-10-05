@@ -54,6 +54,15 @@ function safeZoneMark(markSvg, { size, scale = 0.66 }) {
   </svg>`;
 }
 
+/** Clips a 1024-viewBox icon to a rounded rectangle; `radius` is a fraction of the side. */
+function roundedSvg(svg, { size, radius }) {
+  const r = 1024 * radius;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
+    <clipPath id="round"><rect width="1024" height="1024" rx="${r}" ry="${r}"/></clipPath>
+    <g clip-path="url(#round)">${innerMarkup(svg)}</g>
+  </svg>`;
+}
+
 /** The adaptive icon background layer: a flat blue background layer, no mark, no rounded corners (Android supplies its own mask). */
 function backgroundOnlySvg({ size }) {
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 1024 1024">
@@ -82,11 +91,13 @@ const targets = [
   // (see app.json), so the splash image has to carry its own color rather
   // than being a white glyph meant for an indigo backdrop — the full,
   // self-contained icon reads correctly on both the light and dark splash.
+  // Android draws the image as-is (no mask), so the rounded corners are baked
+  // in with a transparent background.
   {
     out: "assets/images/splash-icon.png",
-    svg: APP_ICON_SVG,
+    svg: roundedSvg(APP_ICON_SVG, { size: 512, radius: 0.25 }),
     size: 512,
-    transparent: false,
+    transparent: true,
   },
   {
     out: "assets/images/favicon.png",

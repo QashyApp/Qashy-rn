@@ -225,7 +225,7 @@ describe("deletion", () => {
     ]);
   });
 
-  it("emits both the field change and the delete when they happen together", () => {
+  it("emits only the delete, never the content written alongside it", () => {
     const before = tag({ id: "tag-1" });
     const after = {
       ...before,
@@ -233,7 +233,27 @@ describe("deletion", () => {
       deletedAt: "2026-05-05T00:00:00.000Z",
     };
     const { ops } = diffEntity("tags", before, after, HLC);
-    expect(ops.map((op) => op.kind)).toEqual(["set", "delete"]);
+    expect(ops.map((op) => op.kind)).toEqual(["delete"]);
+    expect(JSON.stringify(ops)).not.toContain("Gone");
+  });
+
+  it("emits nothing for a write to a row that is already deleted", () => {
+    const before = tag({ id: "tag-1", deletedAt: "2026-05-05T00:00:00.000Z" });
+    const after = { ...before, name: "Late edit" };
+    expect(diffEntity("tags", before, after, HLC).ops).toEqual([]);
+  });
+
+  it("creates a row born deleted with its content already erased", () => {
+    const born = transaction({
+      id: "txn-1",
+      title: "Secret",
+      amountMinor: 900,
+      deletedAt: "2026-05-05T00:00:00.000Z",
+    });
+    const { ops } = diffEntity("transactions", null, born, HLC);
+    expect(ops.map((op) => op.kind)).toEqual(["create"]);
+    expect(JSON.stringify(ops)).not.toContain("Secret");
+    expect(JSON.stringify(ops)).not.toContain("900");
   });
 });
 
@@ -273,10 +293,9 @@ describe("one write, one clock reading", () => {
       ...before,
       amountMinor: 5,
       tagIds: ["a"],
-      deletedAt: "2026-06-06T00:00:00.000Z",
     };
     const { ops } = diffEntity("transactions", before, after, HLC);
-    expect(ops.length).toBeGreaterThan(3);
+    expect(ops.length).toBeGreaterThan(2);
     expect(new Set(ops.map((op) => op.hlc))).toEqual(new Set([HLC]));
   });
 });

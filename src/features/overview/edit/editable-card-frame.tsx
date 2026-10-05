@@ -37,8 +37,9 @@ import type { WidgetSize } from "@/features/overview/layout/overview-layout";
 
 /** A plain three-bar grip, drawn directly rather than through a not-yet-mapped icon name. */
 function DragGripGlyph({ color }: { color: string }) {
+  const { space } = useQashyTheme();
   return (
-    <View style={{ gap: 3, paddingHorizontal: 4 }}>
+    <View style={{ gap: 3, paddingHorizontal: space.xs }}>
       {[0, 1, 2].map((row) => (
         <View
           key={row}

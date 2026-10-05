@@ -76,8 +76,9 @@ export function SettingsRow({
         flexDirection: "row",
         alignItems: "center",
         gap: space.md,
-        opacity: disabled ? 0.5 : pressed ? 0.62 : 1,
+        opacity: disabled ? 0.5 : pressed && !theme.materialControls ? 0.62 : 1,
       })}
+      stateLayer
     >
       <IconBadge
         icon={icon}
@@ -123,9 +124,10 @@ export function SettingsRow({
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
           style={{
-            width: 24,
-            height: 24,
-            borderRadius: 12,
+            // M3 checkbox: an 18px square with a 2px radius.
+            width: theme.materialControls ? 18 : 24,
+            height: theme.materialControls ? 18 : 24,
+            borderRadius: theme.materialControls ? 2 : 12,
             alignItems: "center",
             justifyContent: "center",
             borderWidth: 2,
@@ -134,7 +136,13 @@ export function SettingsRow({
           }}
         >
           {selected ? (
-            <AppIcon name="checkmark" color={theme.staticSurface} size={14} />
+            <AppIcon
+              name="checkmark"
+              color={
+                theme.materialControls ? theme.onAccent : theme.staticSurface
+              }
+              size={theme.materialControls ? 14 : 14}
+            />
           ) : null}
         </View>
       ) : onPress ? (

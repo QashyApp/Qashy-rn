@@ -4,7 +4,7 @@ import type MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { FLUENT_EMOJI, FLUENT_EMOJI_BY_ION } from "@/theme/fluent-emoji-glyphs";
 import type { FluentShape } from "@/theme/fluent-emoji-glyphs";
 import { MATERIAL_BY_ION } from "@/theme/material-glyphs";
-import type { ParsedIconId } from "@/utils/icon-id";
+import { parseIconId, type ParsedIconId } from "@/utils/icon-id";
 
 /**
  * Icon sets decide how a stored icon id is DRAWN on this device. The id itself (`ion:<glyph>`,
@@ -858,4 +858,26 @@ export function resolveIconRender(
   }
   const name = mapped ?? FALLBACK_GLYPH;
   return set.resolve(name) ?? { kind: "ionicon", name };
+}
+
+const RENDER_CACHE = new Map<string, IconRender>();
+const RENDER_CACHE_LIMIT = 1000;
+
+/**
+ * `resolveIconRender` for a stored icon id, cached by `(id, set, ios)`. Rows and badges resolve the
+ * same few ids on every render; the result depends on nothing else, and callers only read it.
+ */
+export function resolveIconRenderById(
+  name: string,
+  setId: string,
+  ios = false,
+): IconRender {
+  const key = `${setId}|${ios ? 1 : 0}|${name}`;
+  let render = RENDER_CACHE.get(key);
+  if (!render) {
+    render = resolveIconRender(parseIconId(name), setId, ios);
+    if (RENDER_CACHE.size >= RENDER_CACHE_LIMIT) RENDER_CACHE.clear();
+    RENDER_CACHE.set(key, render);
+  }
+  return render;
 }

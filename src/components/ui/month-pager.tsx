@@ -24,6 +24,7 @@ import {
 import Animated, {
   cancelAnimation,
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -36,7 +37,7 @@ import { EntranceScope } from "@/components/ui/motion";
 import type { MonthDirection } from "@/components/ui/month-switcher";
 import { resolveSwipe } from "@/components/ui/resolve-swipe";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import { useFinanceSettings } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { moveMonth } from "@/utils/date";
 import { hapticSelection } from "@/utils/haptics";
@@ -50,6 +51,16 @@ const CROSSFADE_OUT = 90;
 const CROSSFADE_IN = 140;
 /** If the parent ignores `onChange`, put the pages back after this long. */
 const COMMIT_TIMEOUT = 400;
+
+/**
+ * Style for the scroll container inside a pager page. `touch-action` only counts up to the nearest
+ * scroll container, so the pager's own `pan-y` is overridden by the page's scroller (`auto`) and
+ * the browser claims horizontal drags (cancelling the pointer, or navigating history). The
+ * scroller has to carry `pan-y` itself for a finger swipe to reach the gesture handler.
+ */
+export const PAGER_SCROLLER_STYLE: ViewStyle | undefined = WEB
+  ? ({ touchAction: "pan-y" } as ViewStyle)
+  : undefined;
 
 export interface MonthPagerHandle {
   /** Slide one month forward (`1`) or back (`-1`), exactly like a committed swipe. */
@@ -79,6 +90,17 @@ export interface MonthPagerProps {
    * must fail before a swipe may start, so inner horizontal scrolling wins.
    */
   blockedBy?: readonly ExternalGesture[];
+  /**
+   * Written with the drag in page widths (0 at rest, -1 once the next month has slid fully in), so
+   * a control outside the pager, such as the month title, can move with the same gesture.
+   */
+  dragProgress?: SharedValue<number>;
+  /**
+   * `false` keeps the page where it is: the swipe still tracks the finger, settles and commits
+   * exactly the same, but only `dragProgress` moves, for a screen that slides just the parts
+   * that change. No neighbouring pages are mounted and the page is not re-created per month.
+   */
+  slide?: boolean;
   style?: ViewStyle;
   ref?: Ref<MonthPagerHandle>;
 }
@@ -122,10 +144,12 @@ function PagerImpl({
   onChange,
   renderPage,
   blockedBy,
+  dragProgress,
+  slide = true,
   style,
   ref,
 }: MonthPagerProps) {
-  const { settings } = useFinanceState();
+  const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const { background, motion } = useQashyTheme();
   const reduced = useReducedMotion();
@@ -156,12 +180,20 @@ function PagerImpl({
   const touchY = useSharedValue(0);
   const touchOk = useSharedValue(false);
 
+  useAnimatedReaction(
+    () => (width > 0 ? translateX.get() / width : 0),
+    (progress) => {
+      if (dragProgress) dragProgress.set(progress);
+    },
+    [width, dragProgress],
+  );
+
   const prevMonth = useMemo(() => moveMonth(month, -1), [month]);
   const nextMonth = useMemo(() => moveMonth(month, 1), [month]);
   const canForward = !(max != null && nextMonth > max);
   const pagesEnabled = !disabled && width > 0;
   const swipeEnabled = pagesEnabled && Boolean(settings.swipeBetweenMonths);
-  const neighbours = pagesEnabled && readyFor === month;
+  const neighbours = slide && pagesEnabled && readyFor === month;
   const sign = isRtl ? -1 : 1;
 
   // Latest props for callbacks that outlive a render (animation completions).
@@ -202,11 +234,18 @@ function PagerImpl({
   // for the new month, so the slide offset goes back to zero before the next frame.
   useLayoutEffect(() => {
     translateX.set(0);
+    // The title follows `translateX` a frame late; reset it with the pages so the new month's
+    // name never lands for a frame at the old offset.
+    dragProgress?.set(0);
     busy.set(false);
     if (reduced) fade.set(withTiming(1, { duration: CROSSFADE_IN }));
     else fade.set(1);
-  }, [month, reduced, translateX, busy, fade]);
+  }, [month, reduced, translateX, dragProgress, busy, fade]);
 
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useEffect(() => () => clearTimeout(commitTimer.current), []);
   const commit = useCallback(
     (direction: 1 | -1, haptic: boolean) => {
       if (haptic) hapticSelection();
@@ -216,7 +255,8 @@ function PagerImpl({
         direction > 0 ? "right" : "left",
       );
       // A parent that declines the change must not leave the pages stranded off-screen.
-      setTimeout(() => {
+      clearTimeout(commitTimer.current);
+      commitTimer.current = setTimeout(() => {
         if (monthRef.current !== from) return;
         translateX.set(0);
         fade.set(1);
@@ -413,6 +453,11 @@ function PagerImpl({
           style,
         ]}
       >
+        {!slide ? (
+          <View style={{ flex: 1 }}>
+            {renderPage(month, { isCurrent: true })}
+          </View>
+        ) : null}
         {neighbours ? (
           <PagerPage
             key={prevMonth}
@@ -427,18 +472,20 @@ function PagerImpl({
             {renderPage(prevMonth, { isCurrent: false })}
           </PagerPage>
         ) : null}
-        <PagerPage
-          key={month}
-          offset={0}
-          width={width}
-          translateX={translateX}
-          fade={fade}
-          current
-          initial={!booted}
-          paging={paging}
-        >
-          {renderPage(month, { isCurrent: true })}
-        </PagerPage>
+        {slide ? (
+          <PagerPage
+            key={month}
+            offset={0}
+            width={width}
+            translateX={translateX}
+            fade={fade}
+            current
+            initial={!booted}
+            paging={paging}
+          >
+            {renderPage(month, { isCurrent: true })}
+          </PagerPage>
+        ) : null}
         {neighbours && canForward ? (
           <PagerPage
             key={nextMonth}

@@ -6,6 +6,7 @@ import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
+import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import {
@@ -129,7 +130,7 @@ export function ExchangeRateScreen() {
     );
 
   return (
-    <FormScreen maxWidth={620} contentContainerStyle={{ gap: 16 }}>
+    <FormScreen maxWidth={620} contentContainerStyle={{ gap: space.lg }}>
       {/* A hero read-out of the pair being defined, in the same sunken-well material as a
           numeric hero field, so the rate this form edits reads as the primary subject rather
           than one of three equally weighted fields. */}
@@ -153,7 +154,7 @@ export function ExchangeRateScreen() {
           {rate || "—"}
         </AppText>
       </View>
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="From currency"
           value={fromCurrency}
@@ -171,11 +172,10 @@ export function ExchangeRateScreen() {
           error={rateError}
           required
         />
-        <FormField
+        <DateField
           label="Effective date"
           value={effectiveDate}
-          onChangeText={setEffectiveDate}
-          placeholder="YYYY-MM-DD"
+          onChange={setEffectiveDate}
           error={dateError}
           required
         />

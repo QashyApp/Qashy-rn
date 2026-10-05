@@ -792,12 +792,16 @@ describe("mapCashewBackup recurring transactions", () => {
       autoPost: false,
       active: true,
     });
-    expect(bundle.transactions.map((item) => item.externalId)).toEqual([
-      "transaction:r1",
-      "transaction:r1::predict::1",
+    // The paid history, plus the earliest unpaid entry as the schedule's waiting occurrence. The
+    // later unpaid one (predict::3) is left for the schedule to generate when it comes due.
+    expect(
+      bundle.transactions.map((item) => [item.externalId, item.status]),
+    ).toEqual([
+      ["transaction:r1", "posted"],
+      ["transaction:r1::predict::1", "posted"],
+      ["transaction:r1::predict::2", "upcoming"],
     ]);
     bundle.transactions.forEach((item) => {
-      expect(item.status).toBe("posted");
       expect(item.recurringRuleExternalId).toBe("recurring:r1");
     });
     expect(warning(bundle, "recurring-review")?.count).toBe(1);
@@ -1054,17 +1058,169 @@ describe("mapCashewBackup recurring transactions", () => {
       status: "posted",
       recurringRuleExternalId: "recurring:s",
     });
-    expect(bundle.transactions).toHaveLength(2);
+    // The skipped entry stays as history; the next unpaid one is the waiting occurrence.
+    expect(byId(bundle, "transaction:s::predict::2")).toMatchObject({
+      status: "upcoming",
+      recurringRuleExternalId: "recurring:s",
+    });
+    expect(bundle.transactions).toHaveLength(3);
   });
 
-  it("treats a series whose upcoming entry is overdue by more than a period as stopped", () => {
+  it("carries only the earliest unpaid entry of a live series, and none for a finished one", () => {
     const bundle = map(
       rawData({
         transactions: [
-          transaction({ ...series("old"), date_created: sec("2025-06-05") }),
+          transaction({
+            ...series("live"),
+            date_created: sec("2025-12-05"),
+            name: "Live",
+          }),
+          transaction({
+            ...series("live::predict::1"),
+            date_created: sec("2026-01-10"),
+            name: "Live",
+            paid: 0,
+          }),
+          transaction({
+            ...series("live::predict::2"),
+            date_created: sec("2026-02-10"),
+            name: "Live",
+            paid: 0,
+          }),
+          transaction({
+            ...series("live::predict::3"),
+            date_created: sec("2026-03-10"),
+            name: "Live",
+            paid: 0,
+          }),
+          // A series whose only unpaid entry is long overdue is stopped: nothing is carried.
+          transaction({
+            ...series("old"),
+            date_created: sec("2024-06-05"),
+            name: "Old",
+          }),
           transaction({
             ...series("old::predict::1"),
-            date_created: sec("2025-07-05"),
+            date_created: sec("2024-07-05"),
+            name: "Old",
+            paid: 0,
+          }),
+        ],
+      }),
+    );
+    const upcoming = bundle.transactions.filter(
+      (item) => item.status === "upcoming",
+    );
+    expect(upcoming.map((item) => item.externalId)).toEqual([
+      "transaction:live::predict::1",
+    ]);
+    expect(upcoming[0]).toMatchObject({
+      localDate: "2026-01-10",
+      recurringRuleExternalId: "recurring:live",
+    });
+    // The schedule's next due date is the same entry, so the generator will not make it again.
+    expect(bundle.recurringRules.map((rule) => rule.nextDueDate)).toEqual([
+      "2026-01-10",
+    ]);
+    expect(
+      bundle.transactions.some((item) =>
+        item.externalId.startsWith("transaction:old::"),
+      ),
+    ).toBe(false);
+  });
+
+  // Cashew pays subscriptions itself when they fall due and then creates the next entry, so an
+  // entry that is overdue just means it has not been opened since.
+  const overdueSeries = (overrides: Record<string, unknown> = {}, extra = {}) =>
+    rawData(
+      {
+        transactions: [
+          transaction({ ...series("late"), date_created: sec("2025-09-05") }),
+          transaction({
+            ...series("late::predict::1"),
+            date_created: sec("2025-10-05"),
+            paid: 0,
+            ...overrides,
+          }),
+        ],
+      },
+      extra,
+    );
+
+  it("keeps a series Cashew had not paid yet, because Cashew pays it when it is opened", () => {
+    const bundle = map(overdueSeries());
+    expect(bundle.recurringRules).toHaveLength(1);
+    expect(bundle.recurringRules[0].nextDueDate).toBe("2025-10-05");
+    expect(warning(bundle, "recurring-catch-up")?.count).toBe(1);
+    expect(warning(bundle, "recurring-stale")).toBeUndefined();
+  });
+
+  it("treats the same series as stopped when Cashew is set not to pay it automatically", () => {
+    for (const autoPay of [
+      { subscriptions: false, repetitive: false },
+      { subscriptions: false, repetitive: true },
+    ]) {
+      const bundle = map(overdueSeries({}, { autoPay }));
+      // The fixture series is a repeating transaction (type 2) when only subscriptions are off.
+      const stopped = autoPay.repetitive === false;
+      expect(bundle.recurringRules).toHaveLength(stopped ? 0 : 1);
+      expect(warning(bundle, "recurring-stale")?.count).toBe(
+        stopped ? 1 : undefined,
+      );
+    }
+  });
+
+  it("uses the subscription preference for subscriptions and the repeating one for repeating", () => {
+    const subscription = (autoPay: {
+      subscriptions: boolean | null;
+      repetitive: boolean | null;
+    }) =>
+      map(
+        rawData(
+          {
+            transactions: [
+              transaction({
+                ...series("s", { type: 1 }),
+                date_created: sec("2025-09-05"),
+              }),
+              transaction({
+                ...series("s::predict::1", { type: 1 }),
+                date_created: sec("2025-10-05"),
+                paid: 0,
+              }),
+            ],
+          },
+          { autoPay },
+        ),
+      );
+    expect(
+      subscription({ subscriptions: true, repetitive: false }).recurringRules,
+    ).toHaveLength(1);
+    expect(
+      subscription({ subscriptions: false, repetitive: true }).recurringRules,
+    ).toHaveLength(0);
+    // The backup not saying is Cashew's default: on.
+    expect(
+      subscription({ subscriptions: null, repetitive: null }).recurringRules,
+    ).toHaveLength(1);
+  });
+
+  it("treats an entry the user un-paid as stopped: Cashew will not pay it again", () => {
+    const bundle = map(
+      overdueSeries({ created_another_future_transaction: 1 }),
+    );
+    expect(bundle.recurringRules).toHaveLength(0);
+    expect(warning(bundle, "recurring-stale")?.count).toBe(1);
+  });
+
+  it("treats a series overdue for a very long time as stopped", () => {
+    const bundle = map(
+      rawData({
+        transactions: [
+          transaction({ ...series("old"), date_created: sec("2024-06-05") }),
+          transaction({
+            ...series("old::predict::1"),
+            date_created: sec("2024-07-05"),
             paid: 0,
           }),
         ],
@@ -1095,7 +1251,29 @@ describe("mapCashewBackup recurring transactions", () => {
     expect(warning(bundle, "recurring-stale")).toBeUndefined();
   });
 
-  it("treats a series whose end date has passed as ended", () => {
+  it("treats a series whose next entry falls after its end date as ended", () => {
+    const bundle = map(
+      rawData({
+        transactions: [
+          transaction({
+            ...series("x"),
+            date_created: sec("2025-12-01"),
+            end_date: sec("2025-12-20"),
+          }),
+          transaction({
+            ...series("x::predict::1"),
+            date_created: sec("2026-01-01"),
+            end_date: sec("2025-12-20"),
+            paid: 0,
+          }),
+        ],
+      }),
+    );
+    expect(bundle.recurringRules).toHaveLength(0);
+    expect(warning(bundle, "recurring-ended")?.count).toBe(1);
+  });
+
+  it("keeps the final entry of a series whose end date has just passed: it is still due", () => {
     const bundle = map(
       rawData({
         transactions: [
@@ -1113,8 +1291,12 @@ describe("mapCashewBackup recurring transactions", () => {
         ],
       }),
     );
-    expect(bundle.recurringRules).toHaveLength(0);
-    expect(warning(bundle, "recurring-ended")?.count).toBe(1);
+    expect(bundle.recurringRules).toHaveLength(1);
+    expect(bundle.recurringRules[0]).toMatchObject({
+      nextDueDate: "2026-01-01",
+      endDate: "2026-01-01",
+    });
+    expect(warning(bundle, "recurring-ended")).toBeUndefined();
   });
 
   it("groups Cashew occurrences that each have their own pk into one series", () => {
@@ -1334,7 +1516,7 @@ describe("mapCashewBackup budgets", () => {
           category({ category_pk: "c3", name: "Bills" }),
           category({ category_pk: "c2", name: "Salary", income: 1 }),
         ],
-        budgets: [budget()],
+        budgets: [budget({ is_absolute_spending_limit: 1 })],
         category_budget_limits: [
           { category_fk: "c1", budget_fk: "b1", amount: 300.5 },
           { category_fk: "c1", budget_fk: "b1", amount: 999 },
@@ -1351,6 +1533,80 @@ describe("mapCashewBackup budgets", () => {
       "category:c1",
       "category:c3",
     ]);
+  });
+
+  // Cashew's default: category limits are percentages of the budget limit.
+  it("converts percentage category limits into amounts of the budget limit", () => {
+    const bundle = map(
+      rawData({
+        categories: [
+          category(),
+          category({ category_pk: "c3", name: "Bills" }),
+          category({
+            category_pk: "c1a",
+            name: "Pizza",
+            main_category_pk: "c1",
+          }),
+        ],
+        // The fixture budget is 2500.00.
+        budgets: [budget()],
+        category_budget_limits: [
+          { category_fk: "c1", budget_fk: "b1", amount: 20 },
+          { category_fk: "c3", budget_fk: "b1", amount: 10 },
+          // A subcategory's percentage is of its parent's limit: 50% of 20% of 2500.
+          { category_fk: "c1a", budget_fk: "b1", amount: 50 },
+        ],
+      }),
+    );
+    const caps = Object.fromEntries(
+      bundle.budgets[0].categoryLimits.map((entry) => [
+        entry.categoryExternalId,
+        entry.limitMinor,
+      ]),
+    );
+    expect(caps).toEqual({
+      "category:c1": 50000,
+      "category:c3": 25000,
+      "category:c1a": 25000,
+    });
+    expect(warning(bundle, "budget-percent-limits")?.count).toBe(1);
+  });
+
+  it("reads a subcategory percentage against the whole budget when its parent has no limit", () => {
+    const bundle = map(
+      rawData({
+        categories: [
+          category(),
+          category({
+            category_pk: "c1a",
+            name: "Pizza",
+            main_category_pk: "c1",
+          }),
+        ],
+        budgets: [budget()],
+        category_budget_limits: [
+          { category_fk: "c1a", budget_fk: "b1", amount: 10 },
+        ],
+      }),
+    );
+    expect(bundle.budgets[0].categoryLimits).toEqual([
+      { categoryExternalId: "category:c1a", limitMinor: 25000 },
+    ]);
+  });
+
+  it("does not import an income budget (a saving goal) as a spending budget", () => {
+    const bundle = map(
+      rawData({
+        budgets: [
+          budget({ budget_pk: "spend" }),
+          budget({ budget_pk: "save", name: "Saving target", income: 1 }),
+        ],
+      }),
+    );
+    expect(bundle.budgets.map((item) => item.externalId)).toEqual([
+      "budget:spend",
+    ]);
+    expect(warning(bundle, "budget-income-skipped")?.count).toBe(1);
   });
 
   it("reports each dropped budget feature with the number of budgets affected", () => {
@@ -1376,7 +1632,7 @@ describe("mapCashewBackup budgets", () => {
     expect(warning(bundle, "budget-filters-dropped")?.count).toBe(1);
     expect(warning(bundle, "shared-budget-flattened")?.count).toBe(2);
     expect(warning(bundle, "budget-manual-only")?.count).toBe(1);
-    expect(warning(bundle, "budget-absolute-limit")?.count).toBe(1);
+    expect(warning(bundle, "budget-percent-limits")).toBeUndefined();
     expect(warning(bundle, "budget-currency")).toBeUndefined();
   });
 

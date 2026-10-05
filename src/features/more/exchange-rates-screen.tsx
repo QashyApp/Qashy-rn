@@ -25,6 +25,7 @@ import { errorMessage, showError } from "@/utils/confirm";
 import { endOfMonth, mediumDate, startOfMonth } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
 import { isFetchedRate } from "@/utils/deterministic-id";
+import { insetHighlight } from "@/theme/highlight";
 
 // A settings row is a 38pt icon tile plus a 12pt gap; matches `more-screen.tsx`'s own rows so
 // the divider lines up with the text rather than the icon.
@@ -138,13 +139,13 @@ export function ExchangeRatesScreen() {
       contentContainerStyle={{
         padding: 18,
         paddingBottom: 40,
-        gap: 16,
+        gap: space.lg,
         width: "100%",
         maxWidth: 720,
         alignSelf: "center",
       }}
     >
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <AppText variant="headline">Exchange rates</AppText>
         <View
           style={{
@@ -155,7 +156,7 @@ export function ExchangeRatesScreen() {
             gap: 14,
           }}
         >
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Fetch rates automatically</AppText>
             <AppText variant="caption" muted>
               On by default. Sends only currency codes and dates to
@@ -260,7 +261,9 @@ export function ExchangeRatesScreen() {
                       backgroundColor: theme.accentContainer,
                       alignItems: "center",
                       justifyContent: "center",
-                      boxShadow: `inset 0 1px 0 rgba(255,255,255,${theme.mode === "dark" ? 0.06 : 0.35})`,
+                      boxShadow: theme.materialControls
+                        ? undefined
+                        : insetHighlight(theme.mode),
                     }}
                   >
                     <AppIcon

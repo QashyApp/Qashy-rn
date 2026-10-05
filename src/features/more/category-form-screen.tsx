@@ -158,7 +158,7 @@ export function CategoryFormScreen() {
   );
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg }}>
       {/* Updates live as icon/color change below, the same tinted-tile derivation the category
           appears with everywhere else (More's category list, transaction rows, chips). */}
       <View
@@ -184,7 +184,7 @@ export function CategoryFormScreen() {
           </AppText>
         ) : null}
       </View>
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="Category name"
           value={name}
@@ -195,7 +195,7 @@ export function CategoryFormScreen() {
         <View
           accessibilityLabel={t("Category kind")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8 }}
+          style={{ flexDirection: "row", gap: space.sm }}
         >
           {(["expense", "income"] as CategoryKind[]).map((item) => (
             <View key={item} style={{ flex: 1 }}>
@@ -255,7 +255,7 @@ export function CategoryFormScreen() {
         <View
           accessibilityLabel={t("Parent category")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           <ChoiceChip
             icon="xmark.circle"

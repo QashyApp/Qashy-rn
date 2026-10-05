@@ -1,6 +1,7 @@
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import { View, type LayoutChangeEvent } from "react-native";
+import { ScrollView, View, type LayoutChangeEvent } from "react-native";
+import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
@@ -12,6 +13,7 @@ import {
 import { floatingActionMetrics } from "@/components/ui/screen-container";
 import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
+import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import {
   DEFAULT_OVERVIEW_LAYOUT,
   WIDGET_RULES,
@@ -46,7 +48,9 @@ export function OverviewScreen() {
   const insets = useSafeAreaInsets();
   const [month, setMonth] = useState(startOfMonth());
   const { visibility: fabVisibility, onScroll } = useScrollHide();
+  const scrollRef = useSectionScrollToTop<ScrollView>();
   const pagerRef = useRef<MonthPagerHandle>(null);
+  const dragProgress = useSharedValue(0);
 
   const { layout, status, dispatch } = useOverviewLayout();
   const cards =
@@ -161,9 +165,12 @@ export function OverviewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* The whole window slides between months; the floating chrome below does not. */}
+      {/* A swipe does not move the window: it drives `dragProgress`, which slides the month
+          title and the figures that differ, and the rest fades when the month commits. */}
       <MonthPager
         ref={pagerRef}
+        slide={false}
+        dragProgress={dragProgress}
         month={month}
         disabled={editing}
         onChange={changeMonth}
@@ -172,6 +179,7 @@ export function OverviewScreen() {
           <OverviewMonthPage
             month={pageMonth}
             isCurrent={isCurrent}
+            dragProgress={dragProgress}
             editing={editing}
             cards={cards}
             configOpenId={configOpenId}
@@ -188,6 +196,7 @@ export function OverviewScreen() {
               )
             }
             onScroll={onScroll}
+            scrollRef={scrollRef}
             onMoveCard={moveCard}
             onResizeCard={resizeCard}
             onConfigureCard={configureCard}

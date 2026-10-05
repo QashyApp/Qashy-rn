@@ -13,6 +13,7 @@ import {
   type ChoiceListOption,
 } from "@/components/ui/choice-list-field";
 import { ColorSwatch } from "@/components/ui/color-swatch";
+import { MoneyField } from "@/components/finance/money-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import { FRANKFURTER_UNSUPPORTED } from "@/data/exchange-rates/frankfurter";
@@ -223,7 +224,7 @@ export function AccountFormScreen() {
   if (id && !existing) return <Redirect href="/more" />;
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg }}>
       {/* A hero preview of the tinted, raised tile this account will show everywhere else
           (More's account list, transaction rows, the picker) — the same `toneColors` derivation
           those rows use, so choosing an account color here previews exactly what it becomes. */}
@@ -250,7 +251,7 @@ export function AccountFormScreen() {
           </AppText>
         ) : null}
       </View>
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="Account name"
           value={name}
@@ -262,7 +263,7 @@ export function AccountFormScreen() {
         <View
           accessibilityLabel={t("Account type")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {(
             ["checking", "cash", "savings", "credit", "wallet"] as AccountType[]
@@ -303,14 +304,14 @@ export function AccountFormScreen() {
             searchPlaceholder="Search by currency name or code"
           />
         )}
-        <FormField
+        <MoneyField
+          currency={currencyCode}
           label="Opening balance"
           value={opening}
           onChangeText={(value) => {
             setOpeningTouched(true);
             setOpening(value);
           }}
-          keyboardType="decimal-pad"
           error={openingError}
           hint={
             existing
@@ -337,7 +338,7 @@ export function AccountFormScreen() {
         </View>
       </Card>
       {showRatesCard ? (
-        <Card variant="inset" style={{ gap: 12 }}>
+        <Card variant="inset" style={{ gap: space.md }}>
           {currencyUnsupported ? (
             <AppText
               literal

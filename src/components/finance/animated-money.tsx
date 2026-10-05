@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, type TextProps, type TextStyle } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
 
+import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
 import { useQashyTheme } from "@/theme/theme";
 import type { CurrencyCode } from "@/domain/models";
@@ -19,7 +20,10 @@ function easeOutCubic(t: number) {
  * subsequent changes animate. Reduced motion always snaps.
  */
 export function useAnimatedMinorAmount(target: number) {
-  const reduceMotion = useReducedMotion();
+  // A count-up is movement: it runs only at the full animation level.
+  const systemReduced = useReducedMotion();
+  const level = useAnimationLevel();
+  const reduceMotion = systemReduced || level !== "all";
   const [display, setDisplay] = useState(target);
   const displayRef = useRef(target);
   const frameRef = useRef<number | null>(null);
@@ -31,12 +35,7 @@ export function useAnimatedMinorAmount(target: number) {
       frameRef.current = null;
     }
     const from = displayRef.current;
-    // A large jump (e.g. a new budget period or account switch) reads as a
-    // snap, not motion; counting up through it would feel sluggish.
-    const largeChange =
-      Math.abs(target - from) >
-      Math.max(Math.abs(from), Math.abs(target)) * 0.5;
-    if (!mountedRef.current || reduceMotion || from === target || largeChange) {
+    if (!mountedRef.current || reduceMotion || from === target) {
       mountedRef.current = true;
       displayRef.current = target;
       setDisplay(target);

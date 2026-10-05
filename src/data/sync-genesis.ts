@@ -32,6 +32,7 @@ import {
   writeMeta,
   SYNC_META,
 } from "@/data/sync-store";
+import { eraseEntity } from "@/domain/erasure";
 import {
   ENTITY_TYPES,
   type EntityType,
@@ -85,8 +86,9 @@ function genesisOps(
   counter: number,
 ) {
   const created = hlcFromTimestamp(entity.createdAt, counter, deviceId);
+  // A tombstone is described from its erased form, even if an older build stored it whole.
   const live: FinanceEntity = entity.deletedAt
-    ? { ...entity, deletedAt: null }
+    ? { ...eraseEntity(type, entity), deletedAt: null }
     : entity;
   const ops: SyncOpBody[] = [...diffEntity(type, null, live, created).ops];
   if (entity.deletedAt) {

@@ -9,10 +9,38 @@ export const SUPPORTED_CURRENCY_CODES =
 
 const SUPPORTED_CURRENCIES = new Set(SUPPORTED_CURRENCY_CODES);
 
+const NUMBER_FORMATS = new Map<string, Intl.NumberFormat>();
+
+/**
+ * `Intl.NumberFormat` is expensive to construct (Hermes especially) and a list renders
+ * several amounts per row, so formatters are built once per locale + options. A construction
+ * that throws (bad locale or currency) is never cached, so callers see the same errors.
+ */
+function numberFormat(locale: string, options?: Intl.NumberFormatOptions) {
+  const key = `${locale}|${options ? JSON.stringify(options) : ""}`;
+  let format = NUMBER_FORMATS.get(key);
+  if (!format) {
+    format = new Intl.NumberFormat(locale, options);
+    NUMBER_FORMATS.set(key, format);
+  }
+  return format;
+}
+
+const NUMBER_PARTS = new Map<string, ReturnType<typeof computeNumberParts>>();
+
 function localeNumberParts(locale: string) {
-  const formatter = new Intl.NumberFormat(locale);
+  let parts = NUMBER_PARTS.get(locale);
+  if (!parts) {
+    parts = computeNumberParts(locale);
+    NUMBER_PARTS.set(locale, parts);
+  }
+  return parts;
+}
+
+function computeNumberParts(locale: string) {
+  const formatter = numberFormat(locale);
   const parts = formatter.formatToParts(-12345.6);
-  const plusParts = new Intl.NumberFormat(locale, {
+  const plusParts = numberFormat(locale, {
     signDisplay: "always",
   }).formatToParts(1);
   return {
@@ -23,7 +51,7 @@ function localeNumberParts(locale: string) {
       plusParts.find((part) => part.type === "plusSign")?.value ?? "+",
     digits: new Map(
       Array.from({ length: 10 }, (_, digit) => [
-        new Intl.NumberFormat(locale, { useGrouping: false }).format(digit),
+        numberFormat(locale, { useGrouping: false }).format(digit),
         String(digit),
       ]),
     ),
@@ -93,7 +121,7 @@ function minorFromDecimal(
 }
 
 function localizeAsciiDigits(value: string, locale: string) {
-  const formatter = new Intl.NumberFormat(locale, { useGrouping: false });
+  const formatter = numberFormat(locale, { useGrouping: false });
   return Array.from(value, (character) =>
     /\d/.test(character) ? formatter.format(Number(character)) : character,
   ).join("");
@@ -132,7 +160,7 @@ export function currencyDigits(currency: CurrencyCode, locale = "en-US") {
   if (SUPPORTED_CURRENCIES.has(code)) return MINOR_DIGITS.get(code) ?? 2;
   try {
     return (
-      new Intl.NumberFormat(locale, {
+      numberFormat(locale, {
         style: "currency",
         currency,
       }).resolvedOptions().maximumFractionDigits ?? 2
@@ -272,12 +300,12 @@ function moneyPartsList(
   if (!compact) {
     const fixed = minorToDecimalString(Math.abs(minor), currency, locale);
     const [integer, fraction = ""] = fixed.split(".");
-    const numberParts = new Intl.NumberFormat(locale, {
+    const numberParts = numberFormat(locale, {
       useGrouping: true,
       maximumFractionDigits: 0,
     }).formatToParts(Number(integer));
     const sample = minor < 0 ? -1 : minor > 0 ? 1 : 0;
-    const pattern = new Intl.NumberFormat(locale, {
+    const pattern = numberFormat(locale, {
       style: "currency",
       currency,
       signDisplay: options?.sign ? "exceptZero" : "auto",
@@ -308,14 +336,103 @@ function moneyPartsList(
       return { type: part.type, value: part.value };
     });
   }
-  const value = new Decimal(minor).div(new Decimal(10).pow(digits)).toNumber();
-  return new Intl.NumberFormat(locale, {
+  if (compactNotationSupported(locale)) {
+    const value = new Decimal(minor)
+      .div(new Decimal(10).pow(digits))
+      .toNumber();
+    return numberFormat(locale, {
+      style: "currency",
+      currency,
+      notation: "compact",
+      signDisplay: options?.sign ? "exceptZero" : "auto",
+      maximumFractionDigits: 1,
+    }).formatToParts(value);
+  }
+  return manualCompactParts(minor, currency, locale, digits, options);
+}
+
+const COMPACT_SUPPORT = new Map<string, boolean>();
+let compactSupportOverride: boolean | undefined;
+
+/** Test seam: force the compact-notation probe result (`undefined` restores real detection). */
+export function setCompactNotationSupportOverride(value: boolean | undefined) {
+  compactSupportOverride = value;
+}
+
+/**
+ * Hermes on Android ignores `notation: "compact"` and prints "1,462.0" instead of "1.5K". Probe
+ * the runtime once per locale: real compact notation abbreviates a million, so the full grouped
+ * digits must not appear in its output. A million rather than a thousand, because some locales
+ * (German) deliberately leave thousands unabbreviated.
+ */
+function compactNotationSupported(locale: string) {
+  if (compactSupportOverride !== undefined) return compactSupportOverride;
+  let supported = COMPACT_SUPPORT.get(locale);
+  if (supported === undefined) {
+    try {
+      const compact = new Intl.NumberFormat(locale, {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }).format(1_500_000);
+      const plain = new Intl.NumberFormat(locale).format(1_500_000);
+      supported = !compact.includes(plain);
+    } catch {
+      supported = false;
+    }
+    COMPACT_SUPPORT.set(locale, supported);
+  }
+  return supported;
+}
+
+const COMPACT_SUFFIXES = ["", "K", "M", "B", "T"];
+
+/** K/M/B/T abbreviation with at most one fraction digit, laid out by the locale's currency pattern. */
+function manualCompactParts(
+  minor: number,
+  currency: CurrencyCode,
+  locale: string,
+  digits: number,
+  options?: MoneyOptions,
+): { type: string; value: string }[] {
+  const absolute = new Decimal(minor).abs().div(new Decimal(10).pow(digits));
+  let unit = 0;
+  while (unit < 4 && absolute.gte(new Decimal(1000).pow(unit + 1))) unit++;
+  let scaled = absolute
+    .div(new Decimal(1000).pow(unit))
+    .toDecimalPlaces(1, Decimal.ROUND_HALF_UP);
+  if (scaled.gte(1000) && unit < 4) {
+    unit++;
+    scaled = absolute
+      .div(new Decimal(1000).pow(unit))
+      .toDecimalPlaces(1, Decimal.ROUND_HALF_UP);
+  }
+  const pattern = numberFormat(locale, {
     style: "currency",
     currency,
-    notation: "compact",
     signDisplay: options?.sign ? "exceptZero" : "auto",
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
-  }).formatToParts(value);
+  }).formatToParts(minor < 0 ? -scaled.toNumber() : scaled.toNumber());
+  let lastNumeric = -1;
+  pattern.forEach((part, index) => {
+    if (
+      part.type === "integer" ||
+      part.type === "group" ||
+      part.type === "decimal" ||
+      part.type === "fraction"
+    )
+      lastNumeric = index;
+  });
+  const result: { type: string; value: string }[] = pattern.map((part) => ({
+    type: part.type,
+    value: part.value,
+  }));
+  if (lastNumeric >= 0)
+    result.splice(lastNumeric + 1, 0, {
+      type: "compact",
+      value: COMPACT_SUFFIXES[unit],
+    });
+  return result;
 }
 
 export function formatMoney(
@@ -449,4 +566,9 @@ export function sumMinor(values: Iterable<number>, label = "Amount") {
   let total = 0;
   for (const value of values) total = addMinor(total, value, label);
   return total;
+}
+
+/** The locale's decimal symbol. The amount keypad's decimal key types it, and the expression parser reads it back. */
+export function decimalSymbolFor(locale: string) {
+  return localeNumberParts(locale).decimalSymbol;
 }

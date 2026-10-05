@@ -1,4 +1,8 @@
-import { type PressableProps, type ViewStyle } from "react-native";
+import {
+  type ColorValue,
+  type PressableProps,
+  type ViewStyle,
+} from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { MotionPressable } from "@/components/ui/motion";
@@ -12,6 +16,7 @@ export function IconButton({
   onPress,
   size = 44,
   iconSize = 19,
+  iconColor,
   variant = "plain",
   disabled = false,
   enteringVariant,
@@ -24,6 +29,8 @@ export function IconButton({
   icon: string;
   size?: number;
   iconSize?: number;
+  /** Overrides the glyph color the variant would pick. */
+  iconColor?: ColorValue;
   variant?: "plain" | "surface" | "accent";
   enteringVariant?: "fade" | "zoom";
   enteringDelay?: number;
@@ -32,10 +39,24 @@ export function IconButton({
   const { motion } = theme;
   const { t } = useLocalization();
   const isDisabled = Boolean(disabled);
-  const color = variant === "accent" ? theme.onAccent : theme.textMuted;
+  const m3 = theme.materialControls;
+  const color =
+    iconColor ??
+    (variant === "accent"
+      ? theme.onAccent
+      : m3 && variant === "surface"
+        ? theme.onSecondaryContainer
+        : theme.textMuted);
   // 'plain' is a ghost button: no fill or shadow at rest, but it still presses
   // in like a raised control once touched, so it doesn't feel inert.
   const materialFor = (pressed: boolean): ViewStyle => {
+    // Material: pressing washes the content color over the fill (the state layer), it never sinks.
+    if (m3) {
+      if (variant === "accent") return { backgroundColor: theme.accent };
+      if (variant === "surface")
+        return { backgroundColor: theme.secondaryContainer };
+      return { backgroundColor: "transparent" };
+    }
     if (variant === "accent")
       return materialStyle(theme, pressed ? "accentPressed" : "accent");
     if (variant === "surface")
@@ -56,6 +77,7 @@ export function IconButton({
       onPress={onPress}
       pressedScale={motion.pressScale}
       hoverScale={1.04}
+      stateLayerColor={color}
       style={(state) => [
         {
           width: size,

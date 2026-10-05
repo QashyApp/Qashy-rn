@@ -1,4 +1,9 @@
-import { formatMoney, formatMoneyParts, type MoneyParts } from "@/utils/money";
+import {
+  formatMoney,
+  formatMoneyParts,
+  setCompactNotationSupportOverride,
+  type MoneyParts,
+} from "@/utils/money";
 import type { CurrencyCode } from "@/domain/models";
 
 /**
@@ -94,5 +99,37 @@ describe("formatMoneyParts", () => {
   it("round-trips zero amounts", () => {
     expectRoundTrip(0, "USD", "en-US");
     expectRoundTrip(0, "JPY", "ja-JP");
+  });
+});
+
+describe("compact money without runtime compact notation (Hermes Android)", () => {
+  beforeEach(() => setCompactNotationSupportOverride(false));
+  afterEach(() => setCompactNotationSupportOverride(undefined));
+
+  it("abbreviates en-US USD manually", () => {
+    expect(formatMoney(146235, "USD", "en-US", { compact: true })).toBe(
+      "$1.5K",
+    );
+    expect(formatMoney(-146235, "USD", "en-US", { compact: true })).toBe(
+      "-$1.5K",
+    );
+    expect(formatMoney(123450000, "USD", "en-US", { compact: true })).toBe(
+      "$1.2M",
+    );
+    expect(formatMoney(99995000, "USD", "en-US", { compact: true })).toBe(
+      "$1M",
+    );
+    expect(
+      formatMoney(146235, "USD", "en-US", { compact: true, sign: true }),
+    ).toBe("+$1.5K");
+    expectRoundTrip(146235, "USD", "en-US", { compact: true });
+  });
+
+  it("abbreviates he-IL ILS manually and keeps parts in sync", () => {
+    const text = formatMoney(146235, "ILS", "he-IL", { compact: true });
+    expect(text).toContain("1.5K");
+    expect(text).toContain("₪");
+    expectRoundTrip(146235, "ILS", "he-IL", { compact: true });
+    expectRoundTrip(-146235, "ILS", "he-IL", { compact: true });
   });
 });

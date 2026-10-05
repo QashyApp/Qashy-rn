@@ -98,6 +98,9 @@ export interface RepairOutput extends RepairInput {
 
 const isLive = (entity: FinanceEntity) => !entity.deletedAt;
 
+/** The name a resurrected account gets when deleting it had erased its own. */
+export const RESTORED_ACCOUNT_NAME = "Restored account";
+
 /**
  * The one ordering used wherever a repair has to pick a winner.
  *
@@ -351,10 +354,17 @@ function resurrectReferencedAccounts(draft: Draft) {
 
   for (const account of draft.all<Account>("accounts").sort(byCreationThenId)) {
     if (isLive(account) || !referenced.has(account.id)) continue;
+    // Deleting erased the account's name along with everything else it held. It keeps its
+    // currency, icon and color for exactly this case, but the name has to be a placeholder —
+    // a constant, so every device that runs this repair writes the same one.
     draft.patch<Account>(
       "accounts",
       account,
-      { deletedAt: null, archived: true },
+      {
+        deletedAt: null,
+        archived: true,
+        ...(account.name.trim() ? {} : { name: RESTORED_ACCOUNT_NAME }),
+      },
       {
         code: "accountResurrected",
         entityType: "accounts",

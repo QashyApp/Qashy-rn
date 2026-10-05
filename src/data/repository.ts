@@ -104,6 +104,7 @@ export type SettingsInput = Partial<
     | "accentHex"
     | "swipeBetweenMonths"
     | "navBarStyle"
+    | "animationLevel"
     | "fontTextOverride"
     | "fontNumericOverride"
     | "uiIconSetOverride"
@@ -278,6 +279,12 @@ export interface FinanceRepository {
     ids: string[],
     categoryId: string | null,
   ): Promise<void>;
+  /**
+   * Moves the given transactions to `localDate`, atomically. Each is rebuilt exactly as an edit
+   * of its date would be, so exchange rates are re-resolved for the new day; one that cannot be
+   * (a missing rate) fails the whole batch and nothing moves.
+   */
+  updateTransactionsDate(ids: string[], localDate: string): Promise<void>;
   deleteEntities(type: keyof FinanceState, ids: string[]): Promise<void>;
   /**
    * Collapses user-confirmed duplicates into one record each, atomically.

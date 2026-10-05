@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 
 /** Confirms the in-app dialog (replaces the browser confirm). Cancel renders first, confirm last. */
 async function confirmDialog(page: Page) {
@@ -8,12 +8,46 @@ async function confirmDialog(page: Page) {
   await expect(dialog).toHaveCount(0);
 }
 
+/**
+ * Types into an amount field. On a touch screen the field opens the calculator keypad over the whole
+ * screen, so the keypad is closed afterwards the way a person closes it: with "Set amount".
+ */
+async function fillAmount(field: Locator, value: string) {
+  await field.fill(value);
+  const page = field.page();
+  const touch = await page.evaluate(
+    () => window.matchMedia("(pointer: coarse)").matches,
+  );
+  if (!touch) return;
+  const setAmount = page.getByRole("button", {
+    name: /(Set amount|קביעת סכום)$/,
+  });
+  await setAmount.click();
+  await expect(setAmount).toHaveCount(0);
+}
+
+/**
+ * Closes the calculator keypad an autofocused amount field opened, by tapping the dimmed screen
+ * behind it the way a person does, so the form underneath can be used. A no-op without touch.
+ */
+async function dismissKeypad(page: Page) {
+  const touch = await page.evaluate(
+    () => window.matchMedia("(pointer: coarse)").matches,
+  );
+  if (!touch) return;
+  const keypad = page.getByRole("group", { name: "Amount keypad" });
+  await expect(keypad).toBeVisible();
+  // The top of the screen is always the dimmed part, never the keypad.
+  await page.mouse.click(10, 10);
+  await expect(keypad).toHaveCount(0);
+}
+
 async function completeOnboarding(page: Page) {
   await page.goto("/");
   await page.getByRole("button", { name: "Get started" }).click();
   // Currency, then the first account.
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel("Opening balance (USD)").fill("1000");
+  await fillAmount(page.getByLabel("Opening balance (USD)"), "1000");
   await page.getByRole("button", { name: "Continue" }).click();
   // Appearance, then the review step.
   await page.getByRole("button", { name: "Continue" }).click();
@@ -24,7 +58,7 @@ async function completeOnboarding(page: Page) {
 /** Adds an expense through the transaction sheet from wherever the page is. */
 async function addExpense(page: Page, title: string, date?: string) {
   await page.getByLabel("Add transaction").first().click();
-  await page.getByLabel("Amount (USD)").fill("12");
+  await fillAmount(page.getByLabel("Amount (USD)"), "12");
   await page.getByLabel("Title").fill(title);
   if (date) {
     // Date lives behind "More details" on a fresh transaction — collapsed by
@@ -87,7 +121,7 @@ test("chooses readable locale and currency options during onboarding", async ({
   await expect(currencyField.getByText(/שקל/)).toBeVisible();
 
   await page.getByRole("button", { name: "המשך" }).click();
-  await page.getByLabel("יתרת פתיחה (ILS)").fill("1000");
+  await fillAmount(page.getByLabel("יתרת פתיחה (ILS)"), "1000");
   await page.getByRole("button", { name: "המשך" }).click();
   await page.getByRole("button", { name: "המשך" }).click();
   await expect(page.getByText("קטגוריות התחלתיות")).toBeVisible();
@@ -103,7 +137,7 @@ test("chooses readable locale and currency options during onboarding", async ({
     page.getByRole("radiogroup", { name: "סוג תנועה" }),
   ).toBeVisible();
   await expect(page.getByRole("radio", { name: "מסעדות" })).toBeVisible();
-  await page.getByLabel("סכום (ILS)").fill("10");
+  await fillAmount(page.getByLabel("סכום (ILS)"), "10");
   await page.getByLabel("כותרת").fill("בדיקת נגישות");
   await page.getByRole("button", { name: "הוספת תנועה" }).click();
   await expect(
@@ -114,14 +148,23 @@ test("chooses readable locale and currency options during onboarding", async ({
   ).toHaveCount(0);
 
   await page.goto("/goal");
-  await expect(page.getByLabel("שם היעד")).toHaveValue("קרן ליום גשום");
+  // The form starts empty: the localized default name shows as the placeholder and is used on save.
+  await expect(page.getByLabel("שם היעד")).toHaveAttribute(
+    "placeholder",
+    "קרן ליום גשום",
+  );
+  await fillAmount(page.getByPlaceholder("0.00").first(), "5000");
   await page.getByRole("button", { name: "יצירת יעד" }).click();
   await expect(page).toHaveURL(/\/plan$/);
   await expect(page.getByText("יעד חיסכון")).toBeVisible();
   await expect(page.getByText("saving goal")).toHaveCount(0);
 
   await page.goto("/budget");
-  await expect(page.getByLabel("שם התקציב")).toHaveValue("הוצאות יומיומיות");
+  await expect(page.getByLabel("שם התקציב")).toHaveAttribute(
+    "placeholder",
+    "הוצאות יומיומיות",
+  );
+  await fillAmount(page.getByPlaceholder("0.00").first(), "1000");
   await page.getByRole("button", { name: "יצירת תקציב" }).click();
   await expect(page).toHaveURL(/\/plan$/);
   await expect(page.getByText(/ to /)).toHaveCount(0);
@@ -176,7 +219,7 @@ test("completes onboarding and records an expense", async ({ page }) => {
   await expect(page.getByText("Net worth", { exact: true })).toBeVisible();
 
   await page.getByLabel("Add transaction").first().click();
-  await page.getByLabel("Amount (USD)").fill("12.50");
+  await fillAmount(page.getByLabel("Amount (USD)"), "12.50");
   await page.getByLabel("Title").fill("Coffee");
   await page.getByRole("radio", { name: "Dining" }).click();
   await page.getByRole("button", { name: "Add transaction" }).click();
@@ -188,10 +231,17 @@ test("completes onboarding and records an expense", async ({ page }) => {
   await page.getByRole("button", { name: "Select" }).click();
   await page.getByRole("checkbox", { name: /Coffee/ }).click();
   await expect(page.getByText("1 selected")).toBeVisible();
+  // Category changes live behind the batch bar's Edit button.
+  await page.getByRole("button", { name: "Edit (1)" }).click();
+  await page.getByRole("button", { name: "Change category" }).click();
   await page.getByRole("button", { name: "Groceries" }).click();
-  await expect(page.getByText(/Groceries · Everyday/)).toBeVisible();
+  await expect(
+    page.getByText(/Groceries · Everyday/).filter({ visible: true }),
+  ).toBeVisible();
   await page.reload();
-  await expect(page.getByText(/Groceries · Everyday/)).toBeVisible();
+  await expect(
+    page.getByText(/Groceries · Everyday/).filter({ visible: true }),
+  ).toBeVisible();
 });
 
 test("reconciles finance changes across open browser tabs", async ({
@@ -204,7 +254,7 @@ test("reconciles finance changes across open browser tabs", async ({
   await expect(secondPage.getByText("No transactions yet")).toBeVisible();
 
   await page.getByLabel("Add transaction").first().click();
-  await page.getByLabel("Amount (USD)").fill("8");
+  await fillAmount(page.getByLabel("Amount (USD)"), "8");
   await page.getByLabel("Title").fill("Cross-tab update");
   await page.getByRole("button", { name: "Add transaction" }).click();
 
@@ -218,7 +268,7 @@ test("preserves a selected transaction type and lets an edit clear its category"
 }) => {
   await completeOnboarding(page);
   await page.getByLabel("Add transaction").first().click();
-  await page.getByLabel("Amount (USD)").fill("12.50");
+  await fillAmount(page.getByLabel("Amount (USD)"), "12.50");
   await page.getByLabel("Title").fill("Category edit");
   await page.getByRole("radio", { name: "Dining" }).click();
   await page.getByRole("radio", { name: "Expense" }).click();
@@ -235,23 +285,41 @@ test("preserves a selected transaction type and lets an edit clear its category"
   await page.getByRole("button", { name: "Save changes" }).click();
 
   await expect(page).toHaveURL(TRANSACTIONS_URL);
-  await expect(page.getByText(/Uncategorized · Everyday/)).toBeVisible();
+  await expect(
+    page.getByText(/Uncategorized · Everyday/).filter({ visible: true }),
+  ).toBeVisible();
 });
+
+/** The goal and budget forms start empty (defaults show as placeholders); a target / limit is required. */
+async function createDefaultGoal(page: Page, target = "5000") {
+  await page.goto("/goal");
+  await fillAmount(
+    page.getByRole("textbox", { name: /^Target \(USD\)/ }),
+    target,
+  );
+  await page.getByRole("button", { name: "Create goal" }).click();
+}
+
+async function fillBudgetLimit(page: Page, limit = "1000") {
+  await fillAmount(
+    page.getByRole("textbox", { name: /^Total limit \(USD\)/ }),
+    limit,
+  );
+}
 
 test("edits and deletes manual goal contributions", async ({ page }) => {
   await completeOnboarding(page);
-  await page.goto("/goal");
-  await page.getByRole("button", { name: "Create goal" }).click();
+  await createDefaultGoal(page);
   await page.getByRole("button", { name: "Open" }).click();
 
-  await page.getByLabel("Add a manual contribution").fill("25");
+  await fillAmount(page.getByLabel("Add a manual contribution"), "25");
   await page.getByLabel("Contribution date").fill("2026-07-10");
   await page.getByLabel("Contribution note").fill("First amount");
   await page.getByRole("button", { name: "Add contribution" }).click();
   await expect(page.getByText(/First amount/)).toBeVisible();
 
   await page.getByRole("button", { name: /Edit contribution/ }).click();
-  await page.getByLabel("Contribution amount").fill("30");
+  await fillAmount(page.getByLabel("Contribution amount"), "30");
   await page.getByLabel("Contribution note").fill("Corrected amount");
   await page.getByRole("button", { name: "Save contribution" }).click();
   await expect(page.getByText(/Corrected amount/)).toBeVisible();
@@ -267,11 +335,12 @@ test("adds, persists, guards and removes a one-time budget adjustment", async ({
 }) => {
   await completeOnboarding(page);
   await page.goto("/budget");
+  await fillBudgetLimit(page);
   await page.getByRole("button", { name: "Create budget" }).click();
   await expect(page.getByText("of $1,000.00")).toBeVisible();
 
   await page.getByRole("button", { name: /^Adjust Everyday spending/ }).click();
-  await page.getByLabel("Amount (USD)").fill("250");
+  await fillAmount(page.getByLabel("Amount (USD)"), "250");
   await page.getByLabel("Note (optional)").fill("Birthday money");
   await expect(page.getByText(/\$1,000\.00 → \$1,250\.00/)).toBeVisible();
   await page.getByRole("button", { name: "Add funds" }).last().click();
@@ -285,8 +354,9 @@ test("adds, persists, guards and removes a one-time budget adjustment", async ({
 
   // A cut that would take the limit below zero is refused before it is saved.
   await page.getByRole("button", { name: /^Adjust Everyday spending/ }).click();
+  await dismissKeypad(page);
   await page.getByRole("radio", { name: "Reduce budget" }).click();
-  await page.getByLabel("Amount (USD)").fill("2000");
+  await fillAmount(page.getByLabel("Amount (USD)"), "2000");
   await expect(
     page.getByText("This would reduce the budget below zero."),
   ).toBeVisible();
@@ -295,10 +365,11 @@ test("adds, persists, guards and removes a one-time budget adjustment", async ({
   ).toBeDisabled();
 
   // A smaller one goes through, and the +$250 can then be removed from the sheet.
-  await page.getByLabel("Amount (USD)").fill("100");
+  await fillAmount(page.getByLabel("Amount (USD)"), "100");
   await page.getByRole("button", { name: "Reduce budget" }).last().click();
   await expect(page.getByText(/adjusted \+\$150\.00/)).toBeVisible();
   await page.getByRole("button", { name: /^Adjust Everyday spending/ }).click();
+  await dismissKeypad(page);
   await page
     .getByRole("button", { name: "Delete adjustment +$250.00" })
     .click();
@@ -311,9 +382,10 @@ test("shows every category cap and the actual recurring interval", async ({
 }) => {
   await completeOnboarding(page);
   await page.goto("/budget");
+  await fillBudgetLimit(page, "1000");
   for (const category of ["Groceries", "Dining", "Transport", "Home"]) {
     await page.getByRole("checkbox", { name: category }).click();
-    await page.getByLabel(`${category} cap (optional)`).fill("100");
+    await fillAmount(page.getByLabel(`${category} cap (optional)`), "100");
   }
   await page.getByRole("button", { name: "Create budget" }).click();
   for (const category of ["Groceries", "Dining", "Transport", "Home"]) {
@@ -323,14 +395,14 @@ test("shows every category cap and the actual recurring interval", async ({
   await page.getByRole("link", { name: "More" }).click();
   await page.getByRole("button", { name: "New recurring" }).click();
   await page.getByLabel("Title").fill("Quarterly bill");
-  await page.getByLabel("Amount (USD)").fill("10");
+  await fillAmount(page.getByLabel("Amount (USD)"), "10");
   await page.getByRole("textbox", { name: "Every, required" }).fill("3");
   await page
     .getByRole("textbox", { name: "Starts, required" })
     .fill("2099-01-01");
   await page.getByRole("button", { name: "Create schedule" }).click();
   await expect(
-    page.getByText(/Every 3 months\. · Next 2099-01-01/),
+    page.getByText(/Every 3 months\. · Next Jan 1, 2099/),
   ).toBeVisible();
 });
 
@@ -341,7 +413,7 @@ test("uncategorizes, pauses, and resumes a recurring schedule", async ({
   await page.getByRole("link", { name: "More" }).click();
   await page.getByRole("button", { name: "New recurring" }).click();
   await page.getByLabel("Title").fill("Flexible schedule");
-  await page.getByLabel("Amount (USD)").fill("10");
+  await fillAmount(page.getByLabel("Amount (USD)"), "10");
   await page.getByRole("radio", { name: "Dining" }).click();
   await page
     .getByRole("textbox", { name: "Starts, required" })
@@ -371,7 +443,7 @@ test("uncategorizes, pauses, and resumes a recurring schedule", async ({
   await page.getByRole("switch", { name: "Schedule active" }).click();
   await page.getByRole("button", { name: "Save schedule" }).click();
   await expect(
-    page.getByRole("button", { name: /Flexible schedule.*Next 2099-01-01/ }),
+    page.getByRole("button", { name: /Flexible schedule.*Next Jan 1, 2099/ }),
   ).toBeVisible();
 });
 
@@ -380,20 +452,21 @@ test("selects a custom budget start date and labels progress controls", async ({
 }) => {
   await completeOnboarding(page);
   await page.goto("/budget");
+  await dismissKeypad(page);
   await page.getByRole("radio", { name: "Custom" }).click();
   await page.getByLabel("Start date").fill("2099-01-01");
   await page.getByLabel("End date").fill("2099-01-31");
+  await fillBudgetLimit(page);
   await expect(page.getByRole("switch", { name: "Rollover" })).toBeVisible();
   await page.getByRole("button", { name: "Create budget" }).click();
-  await expect(page.getByText(/2099-01-01 to 2099-01-31/)).toBeVisible();
+  await expect(page.getByText(/Jan 1, 2099 to Jan 31, 2099/)).toBeVisible();
   await expect(
     page.getByRole("progressbar", {
       name: "Everyday spending: Budget progress",
     }),
   ).toBeVisible();
 
-  await page.goto("/goal");
-  await page.getByRole("button", { name: "Create goal" }).click();
+  await createDefaultGoal(page);
   await expect(
     page.getByRole("progressbar", { name: "Rainy day fund: Goal progress" }),
   ).toBeVisible();
@@ -470,6 +543,7 @@ test("labels compact navigation and recovers a one-account transfer draft", asyn
   await expect(page.getByRole("link", { name: "Transactions" })).toBeVisible();
 
   await page.getByLabel("Add transaction").first().click();
+  await dismissKeypad(page);
   await page.getByRole("radio", { name: "Transfer" }).click();
   await expect(page.getByText("Transfers need two accounts")).toBeVisible();
   await page.getByRole("button", { name: "Add another account" }).click();
@@ -480,17 +554,20 @@ test("labels compact navigation and recovers a one-account transfer draft", asyn
     .getByRole("radiogroup", { name: "To account" })
     .getByRole("radio", { name: /Savings · USD/ });
   await expect(destination).toBeVisible();
-  await page.getByLabel("Amount (USD)").fill("10");
+  await fillAmount(page.getByLabel("Amount (USD)"), "10");
   await destination.click();
   await page.getByRole("button", { name: "Add transaction" }).click();
   await page.getByRole("link", { name: /Transactions/ }).click();
   await page.getByRole("button", { name: "Select" }).click();
   await page.getByRole("checkbox", { name: /Transfer/ }).click();
+  await page.getByRole("button", { name: "Edit (1)" }).click();
+  // The sheet explains why, and the category step cannot be opened.
   await expect(
-    page.getByText(
-      "Transfers do not have categories. Select only income or expense transactions to change categories.",
-    ),
+    page.getByText("Transfers do not have categories."),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Change category/ }),
+  ).toBeDisabled();
   await expect(page.getByRole("button", { name: "Uncategorized" })).toHaveCount(
     0,
   );
@@ -530,7 +607,7 @@ test("clears batch selection when the transaction search changes", async ({
 }) => {
   await completeOnboarding(page);
   await page.getByLabel("Add transaction").first().click();
-  await page.getByLabel("Amount (USD)").fill("12.50");
+  await fillAmount(page.getByLabel("Amount (USD)"), "12.50");
   await page.getByLabel("Title").fill("Coffee");
   await page.getByRole("button", { name: "Add transaction" }).click();
   await page.getByRole("link", { name: /Transactions/ }).click();
@@ -954,7 +1031,7 @@ async function completeOnboardingWithCurrency(page: Page, currency: string) {
   await page.getByRole("button", { name: "Get started" }).click();
   await page.getByRole("radio", { name: currency, exact: true }).click();
   await page.getByRole("button", { name: "Continue" }).click();
-  await page.getByLabel(`Opening balance (${currency})`).fill("1000");
+  await fillAmount(page.getByLabel(`Opening balance (${currency})`), "1000");
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Continue" }).click();
   await page.getByRole("button", { name: "Start using Qashy" }).click();
@@ -1014,6 +1091,7 @@ test("never contacts frankfurter.dev once automatic rates are turned off", async
   // Opening the form for a genuinely foreign account is exactly the moment `ensureRatesFor`
   // would fire if the flag were on.
   await page.getByLabel("Add transaction").first().click();
+  await dismissKeypad(page);
   await page.getByRole("radio", { name: "Card · USD" }).click();
   await expect(page.getByText("No rate for this date.")).toBeVisible();
 
@@ -1061,6 +1139,7 @@ test("fetches automatic rates by default and applies them to a transaction", asy
   // Automatic rates are on by default: picking the foreign account is enough to fetch its rate.
   await page.getByRole("link", { name: "Overview" }).click();
   await page.getByLabel("Add transaction").first().click();
+  await dismissKeypad(page);
   await page.getByRole("radio", { name: "Card · USD" }).click();
 
   await expect.poll(() => requests.length).toBeGreaterThan(0);
@@ -1073,7 +1152,7 @@ test("fetches automatic rates by default and applies them to a transaction", asy
   // 1 EUR = 1.25 USD, EUR is the base, so 1 USD = 1 / 1.25 = 0.8 EUR.
   await expect(page.getByText(/1 USD = 0\.8 EUR.*Automatic/)).toBeVisible();
 
-  await page.getByLabel("Amount (USD)").fill("25");
+  await fillAmount(page.getByLabel("Amount (USD)"), "25");
   await page.getByLabel("Title").fill("Coffee in USD");
   await page.getByRole("button", { name: "Add transaction" }).click();
   await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
@@ -1135,7 +1214,7 @@ test("shows a clear error when frankfurter fails, and the rest of the app keeps 
   await page.goBack();
   await page.getByRole("link", { name: "Overview" }).click();
   await page.getByLabel("Add transaction").first().click();
-  await page.getByLabel("Amount (EUR)").fill("5");
+  await fillAmount(page.getByLabel("Amount (EUR)"), "5");
   await page.getByLabel("Title").fill("Still works");
   await page.getByRole("button", { name: "Add transaction" }).click();
   await expect(page).toHaveURL(/\/overview$/, { timeout: 15_000 });
@@ -1178,4 +1257,67 @@ test("removes and re-adds an Overview card, and the layout survives a reload", a
   await expect(
     page.getByRole("heading", { name: "Recent activity" }),
   ).toBeVisible();
+});
+
+test("selects the rows between a held row and the finger while dragging", async ({
+  page,
+  context,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Drives a touch drag.");
+  await completeOnboarding(page);
+  for (const title of ["Row A", "Row B", "Row C", "Row D", "Row E"])
+    await addExpense(page, title);
+  await page.getByRole("link", { name: /Transactions/ }).click();
+  const box = async (title: string) => {
+    const found = await page
+      .getByText(title, { exact: true })
+      .filter({ visible: true })
+      .first()
+      .boundingBox();
+    if (!found) throw new Error(`no row ${title}`);
+    return found;
+  };
+  // The list scrolls to and flashes the last saved row; wait for it to come to rest.
+  await page.waitForTimeout(1200);
+  const cdp = await context.newCDPSession(page);
+  const touch = (
+    type: "touchStart" | "touchMove" | "touchEnd",
+    y: number | null,
+  ) =>
+    cdp.send("Input.dispatchTouchEvent", {
+      type,
+      touchPoints: y === null ? [] : [{ x: 120, y }],
+    });
+  const centre = async (title: string) => {
+    const b = await box(title);
+    return b.y + b.height / 2;
+  };
+  // Newest first: E, D, C, B, A. Hold on D, drag to B.
+  const startY = await centre("Row D");
+  await touch("touchStart", startY);
+  for (let i = 0; i < 8; i++) {
+    await page.waitForTimeout(100);
+    await touch("touchMove", startY + (i % 2));
+  }
+  await expect(page.getByText("1 selected")).toBeVisible();
+  // A browser has committed the held touch to scrolling by now; a drag from a selected row (which
+  // opts out of touch scrolling) is the one that always works.
+  await touch("touchEnd", null);
+  // Lifting the finger folds the top section away for selection mode, which moves the rows up.
+  await page.waitForTimeout(600);
+  const firstBefore = await box("Row E");
+  const grabY = await centre("Row D");
+  const targetY = await centre("Row B");
+  await touch("touchStart", grabY);
+  await touch("touchMove", grabY + 1);
+  await page.waitForTimeout(50);
+  for (let step = 1; step <= 12; step++) {
+    await touch("touchMove", grabY + ((targetY - grabY) * step) / 12);
+    await page.waitForTimeout(16);
+  }
+  await expect(page.getByText("3 selected")).toBeVisible();
+  await touch("touchEnd", null);
+  await expect(page.getByText("3 selected")).toBeVisible();
+  // The list itself did not scroll under the finger.
+  expect((await box("Row E")).y).toBeCloseTo(firstBefore.y, 0);
 });

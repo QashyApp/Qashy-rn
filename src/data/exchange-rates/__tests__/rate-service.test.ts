@@ -455,7 +455,7 @@ describe("ensureRatesForPending", () => {
     });
     await rig.service.ensureRatesForPending();
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(calledUrls[0]).toContain("from=2026-08-01&to=2026-09-01");
+    expect(calledUrls[0]).toContain("from=2026-07-25&to=2026-09-01");
     const [rates] = rig.saveFetchedRates.mock.calls[0]!;
     expect(rates.map((rate) => rate.effectiveDate).sort()).toEqual([
       "2026-08-01",
@@ -559,7 +559,7 @@ describe("ensureRatesFor", () => {
 
     expect(result.ok).toBe(true);
     expect(fetch).toHaveBeenCalledTimes(1);
-    expect(calledUrls[0]).toContain("from=2026-09-18&to=2026-09-25");
+    expect(calledUrls[0]).toContain("from=2026-09-11&to=2026-09-25");
     expect(calledUrls[0]).toContain("quotes=JPY,USD");
     expect(calledUrls[0]).not.toContain("GBP");
     expect(calledUrls[0]).not.toContain("ZWL");
@@ -581,7 +581,7 @@ describe("ensureRatesFor", () => {
     );
   });
 
-  it("issues a single-date request (not a range) when every wanted pair falls on the same day", async () => {
+  it("widens a single-date request backwards into a range", async () => {
     const calledUrls: string[] = [];
     const fetch = fakeFetch({ "2026-09-20": { USD: 1.1, GBP: 0.86 } }, (url) =>
       calledUrls.push(url),
@@ -593,8 +593,8 @@ describe("ensureRatesFor", () => {
       { currency: "GBP", localDate: "2026-09-20" },
     ]);
 
-    expect(calledUrls[0]).toContain("date=2026-09-20");
-    expect(calledUrls[0]).not.toContain("from=");
+    // Widened backwards so a non-business day still finds a preceding published day.
+    expect(calledUrls[0]).toContain("from=2026-09-13&to=2026-09-20");
   });
 
   it("never throws and reports ok: false on a request failure", async () => {
@@ -663,5 +663,70 @@ describe("ensureRatesFor", () => {
     ]);
     expect(fetch).not.toHaveBeenCalled();
     expect(result).toEqual({ ok: true, conflicts: [] });
+  });
+});
+
+describe("weekend and holiday dates", () => {
+  // 2026-09-26 is a Saturday, 2026-09-25 the Friday before it.
+  it("answers a Saturday with Friday's rate, saved under Saturday", async () => {
+    const fetch = fakeFetch({
+      "2026-09-24": { USD: 1.0, EUR: 1 },
+      "2026-09-25": { USD: 1.25 },
+    });
+    const rig = await harness({ fetch, today: "2026-09-26" });
+    const result = await rig.service.ensureRatesFor([
+      { currency: "USD", localDate: "2026-09-26" },
+    ]);
+    expect(result.ok).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const [rates] = rig.saveFetchedRates.mock.calls[0]!;
+    expect(rates).toHaveLength(1);
+    expect(rates[0]).toMatchObject({
+      fromCurrency: "USD",
+      effectiveDate: "2026-09-26",
+      rate: "0.8",
+    });
+    // Covered now, so a second call does not fetch.
+    rig.state = makeState({
+      exchangeRates: [
+        exchangeRate({ fromCurrency: "USD", effectiveDate: "2026-09-26" }),
+      ],
+    });
+    await rig.service.ensureRatesFor([
+      { currency: "USD", localDate: "2026-09-26" },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("handles a range whose first wanted date is a weekend, saving only wanted dates", async () => {
+    const fetch = fakeFetch({
+      "2026-09-25": { USD: 1.25 },
+      "2026-09-28": { USD: 2 },
+    });
+    const rig = await harness({ fetch, today: "2026-09-28" });
+    await rig.service.ensureRatesFor([
+      { currency: "USD", localDate: "2026-09-27" },
+      { currency: "USD", localDate: "2026-09-28" },
+    ]);
+    const [rates] = rig.saveFetchedRates.mock.calls[0]!;
+    expect(rates.map((rate) => [rate.effectiveDate, rate.rate]).sort()).toEqual(
+      [
+        ["2026-09-27", "0.8"],
+        ["2026-09-28", "0.5"],
+      ],
+    );
+  });
+
+  it("still negative-caches a pair with no data on or before its date", async () => {
+    const fetch = fakeFetch({ "2026-09-28": { USD: 2 } });
+    const rig = await harness({ fetch, today: "2026-09-28" });
+    await rig.service.ensureRatesFor([
+      { currency: "USD", localDate: "2026-09-26" },
+    ]);
+    expect(rig.saveFetchedRates).not.toHaveBeenCalled();
+    await rig.service.ensureRatesFor([
+      { currency: "USD", localDate: "2026-09-26" },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });
