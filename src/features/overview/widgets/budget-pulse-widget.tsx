@@ -15,7 +15,8 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
-import { todayLocal } from "@/utils/date";
+import { endOfMonth, startOfMonth, toLocalDate } from "@/utils/date";
+import { useNow } from "@/utils/use-now";
 import { formatMoney } from "@/utils/money";
 import type {
   WidgetConfigSheetProps,
@@ -35,13 +36,19 @@ export function BudgetPulseWidget({ card, month }: WidgetProps) {
   const budgetId =
     typeof card.config.budgetId === "string" ? card.config.budgetId : undefined;
 
-  const today = todayLocal();
+  const today = toLocalDate(new Date(useNow()));
+  // Same rule as `getDashboard`: today when the viewed month contains it, else the month's end.
+  const budgetDate =
+    today >= startOfMonth(month) && today <= endOfMonth(month)
+      ? today
+      : endOfMonth(month);
   const budgetStatuses = useMemo(
-    () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
+    () =>
+      repository.getBudgetStatuses(budgetDate, { includeInactiveCustom: true }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
     [
       repository,
-      today,
+      budgetDate,
       state.budgets,
       state.budgetPeriods,
       state.budgetAdjustments,
@@ -187,7 +194,7 @@ export function BudgetPulseConfigSheet({
 }: WidgetConfigSheetProps) {
   const repository = useFinanceRepository();
   const state = useFinanceState();
-  const today = todayLocal();
+  const today = toLocalDate(new Date(useNow()));
   const budgetStatuses = useMemo(
     () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally

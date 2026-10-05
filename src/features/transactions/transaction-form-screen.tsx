@@ -89,6 +89,7 @@ export function TransactionFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const existing = id
     ? state.transactions.find((item) => item.id === id)
@@ -908,7 +909,7 @@ export function TransactionFormScreen() {
         </AppText>
       ) : null}
 
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="Title"
           value={title}
@@ -945,7 +946,7 @@ export function TransactionFormScreen() {
         <View
           accessibilityLabel={t("From account")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {accountChoices.map((item) => (
             <ChoiceChip
@@ -977,7 +978,11 @@ export function TransactionFormScreen() {
               <View
                 accessibilityLabel={t("To account")}
                 accessibilityRole="radiogroup"
-                style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+                style={{
+                  flexDirection: "row",
+                  gap: space.sm,
+                  flexWrap: "wrap",
+                }}
               >
                 {destinationChoices.map((item) => (
                   <ChoiceChip
@@ -1001,7 +1006,7 @@ export function TransactionFormScreen() {
                 style={{
                   gap: 10,
                   padding: 14,
-                  borderRadius: 14,
+                  borderRadius: theme.radius.control,
                   backgroundColor: theme.surfaceMuted,
                 }}
               >
@@ -1100,7 +1105,11 @@ export function TransactionFormScreen() {
               <View
                 accessibilityLabel={t("Transaction tags")}
                 role="group"
-                style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+                style={{
+                  flexDirection: "row",
+                  gap: space.sm,
+                  flexWrap: "wrap",
+                }}
               >
                 {state.tags.map((tag) => (
                   <ChoiceChip
@@ -1117,7 +1126,7 @@ export function TransactionFormScreen() {
           ) : null}
 
           {needsRate && account ? (
-            <View style={{ gap: 12 }}>
+            <View style={{ gap: space.md }}>
               {appliedRate ? (
                 <AppText literal variant="caption" muted>
                   {`1 ${account.currency} = ${localizeDecimalString(appliedRate.rate, state.settings.locale)} ${state.settings.baseCurrency} · ${mediumDate(appliedRate.effectiveDate, state.settings.locale)} · ${appliedRate.automatic ? t("Automatic") : t("Manual")}`}

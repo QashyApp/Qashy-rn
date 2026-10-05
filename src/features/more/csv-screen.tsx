@@ -440,7 +440,7 @@ export function CsvScreen() {
   return (
     <FormScreen
       maxWidth={760}
-      contentContainerStyle={{ gap: 16, paddingBottom: 40 }}
+      contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}
     >
       <Card style={{ gap: 14 }}>
         <AppText variant="headline">Export transactions</AppText>
@@ -472,7 +472,7 @@ export function CsvScreen() {
         </AppText>
         <ActionButton title="Choose CSV" variant="secondary" onPress={pick} />
         {sourceRows.length ? (
-          <View style={{ gap: 12, paddingTop: 6 }}>
+          <View style={{ gap: space.md, paddingTop: 6 }}>
             <AppText variant="headline">Column mapping</AppText>
             <AppText variant="caption" muted>
               Choose the source column for each Qashy field. Optional fields can
@@ -488,12 +488,12 @@ export function CsvScreen() {
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 12,
+                  gap: space.md,
                   borderBottomWidth: 1,
                   borderBottomColor: theme.border,
                 }}
               >
-                <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flex: 1, gap: space.xxs }}>
                   <AppText variant="label">
                     {field.label}
                     {isOptionalField(field) ? "" : " *"}
@@ -538,7 +538,7 @@ export function CsvScreen() {
             <View
               accessibilityLabel={t("Default account")}
               accessibilityRole="radiogroup"
-              style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+              style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
             >
               {state.accounts
                 .filter((item) => !item.archived)
@@ -560,7 +560,7 @@ export function CsvScreen() {
             <View
               accessibilityLabel={t("Default category")}
               accessibilityRole="radiogroup"
-              style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+              style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
             >
               <ChoiceChip
                 icon="xmark.circle"

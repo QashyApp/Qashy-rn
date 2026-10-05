@@ -34,6 +34,7 @@ export function BudgetFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const defaultBudgetName = state.settings.locale
     .toLocaleLowerCase()
@@ -254,7 +255,7 @@ export function BudgetFormScreen() {
   if (id && !existing) return <Redirect href="/plan" />;
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>
       <AmountHero
         label="Total limit"
         size="display"
@@ -266,7 +267,7 @@ export function BudgetFormScreen() {
         autoFocus={!existing}
       />
 
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="Budget name"
           value={name}
@@ -277,7 +278,7 @@ export function BudgetFormScreen() {
         <View
           accessibilityLabel={t("Budget period")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {(["day", "week", "month", "year", "custom"] as PeriodUnit[]).map(
             (item) => (
@@ -317,10 +318,10 @@ export function BudgetFormScreen() {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 16,
+            gap: space.lg,
           }}
         >
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Rollover</AppText>
             <AppText variant="caption" muted>
               Carry both surplus and overspend forward.
@@ -333,7 +334,7 @@ export function BudgetFormScreen() {
           />
         </View>
         {existing && carriedMinor !== 0 ? (
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: space.sm }}>
             <AppText variant="caption" muted>
               {rollover
                 ? `Carrying ${formatMoney(carriedMinor, state.settings.baseCurrency, state.settings.locale)} into this period.`
@@ -358,7 +359,7 @@ export function BudgetFormScreen() {
         <View
           accessibilityLabel={t("Included categories")}
           role="group"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {expenseCategories.map((category) => (
             <ChoiceChip
