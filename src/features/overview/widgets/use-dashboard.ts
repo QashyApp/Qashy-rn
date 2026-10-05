@@ -12,7 +12,8 @@ import {
   useFinanceRepository,
   useFinanceState,
 } from "@/providers/finance-provider";
-import { endOfMonth, startOfMonth } from "@/utils/date";
+import { endOfMonth, startOfMonth, toLocalDate } from "@/utils/date";
+import { useNow } from "@/utils/use-now";
 
 export function useDashboardRange(fromDate: string, toDate: string) {
   // The React Compiler drops the `void state.x` reads below as dead code and then memoizes on
@@ -22,8 +23,11 @@ export function useDashboardRange(fromDate: string, toDate: string) {
   "use no memo";
   const repository = useFinanceRepository();
   const state = useFinanceState();
+  // `getDashboard` depends on today (budget date, net-worth rate date, upcoming list).
+  const today = toLocalDate(new Date(useNow()));
   return useMemo(() => {
     // Repository reads are synchronous; these references make their external-store inputs explicit.
+    void today;
     void state.accounts;
     void state.budgetPeriods;
     void state.budgetAdjustments;
@@ -37,6 +41,7 @@ export function useDashboardRange(fromDate: string, toDate: string) {
     repository,
     fromDate,
     toDate,
+    today,
     state.accounts,
     state.budgetPeriods,
     state.budgetAdjustments,
