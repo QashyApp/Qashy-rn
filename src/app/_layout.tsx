@@ -40,7 +40,6 @@ import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
 import {
   STARTUP_FONT_ASSETS,
-  useBackgroundFontLoading,
   useThemeFonts,
 } from "@/theme/use-theme-fonts";
 
@@ -180,7 +179,6 @@ function RootNavigator() {
 
   useWebDocumentTitle();
   useTrackLocationChanges();
-  useBackgroundFontLoading();
   // Native waits for the active theme's faces (instant for Classic, whose faces already loaded
   // behind the splash) rather than flashing the system face. Web renders at once and swaps via
   // the CSS fallback stack, as before.
