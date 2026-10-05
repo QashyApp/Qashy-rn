@@ -23,7 +23,7 @@ import { AmountKeypad } from "@/components/finance/amount-keypad";
 import { ActionButton } from "@/components/ui/action-button";
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
-import { motionCurves, motionSpring } from "@/components/ui/motion";
+import { motionCurves } from "@/components/ui/motion";
 import type { CurrencyCode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
@@ -67,8 +67,29 @@ export function useCalculatorHost() {
  */
 const PRESENTATION_SETTLE_MS = 550;
 
-/** Closing is the same spring, stiffer: an exit gets out of the way faster than an entrance arrives. */
-const closeSpring = { ...motionSpring, stiffness: 560 } as const;
+/**
+ * The keypad arrives on an underdamped spring that is left to run its course: it leaves at once,
+ * rises a few percent past its place and settles back (about 0.5 s in all). A clamped spring stops
+ * dead the moment it first reaches its target, still at full speed, which reads as abrupt.
+ * (ω = 16 rad/s, ζ = 0.72: about 4% overshoot.)
+ */
+const openSpring = {
+  mass: 1,
+  stiffness: 256,
+  damping: 23,
+  reduceMotion: ReduceMotion.System,
+} as const;
+
+/** Leaving is critically damped and quicker (ω = 24 rad/s): no bounce on the way out. */
+const closeSpring = {
+  mass: 1,
+  stiffness: 576,
+  damping: 48,
+  reduceMotion: ReduceMotion.System,
+} as const;
+
+/** The panel runs on this far below the screen's edge, so its overshoot never opens a gap. */
+const OVERSHOOT_BLEED = 48;
 
 /**
  * Gives a screen's amount fields the calculator keypad in place of the system keyboard.
@@ -181,7 +202,7 @@ function CalculatorLayer({
         return;
       }
       progress.set(
-        withSpring(show ? 1 : 0, show ? motionSpring : closeSpring, settled),
+        withSpring(show ? 1 : 0, show ? openSpring : closeSpring, settled),
       );
     },
     [level, progress],
@@ -272,7 +293,9 @@ function CalculatorLayer({
               overflow: "hidden",
               paddingHorizontal: space.lg,
               paddingTop: space.lg,
-              paddingBottom: Math.max(insets.bottom, space.md) + space.sm,
+              paddingBottom:
+                Math.max(insets.bottom, space.md) + space.sm + OVERSHOOT_BLEED,
+              marginBottom: -OVERSHOOT_BLEED,
               gap: space.md,
             },
             sheet,
