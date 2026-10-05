@@ -177,6 +177,10 @@ describe("FinanceRepository balance guard across accounts", () => {
 });
 
 describe("FinanceRepository contract", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it("bounds a transaction query to one calendar month, edges included", async () => {
     const { repository } = await createRepository();
     const accountId = repository.getSnapshot().accounts[0].id;
@@ -681,6 +685,7 @@ describe("FinanceRepository contract", () => {
   });
 
   it("tracks linked savings goals with transfer-aware net movement", async () => {
+    jest.useFakeTimers({ now: new Date("2026-06-01T12:00:00Z") });
     const { repository } = await createRepository();
     const checking = repository.getSnapshot().accounts[0];
     const savings = await repository.saveAccount({
@@ -1017,6 +1022,7 @@ describe("FinanceRepository contract", () => {
   });
 
   it("measures linked-goal inflows by the destination leg of cross-currency transfers", async () => {
+    jest.useFakeTimers({ now: new Date("2026-06-01T12:00:00Z") });
     const { repository } = await createRepository();
     const savings = await repository.saveAccount({
       name: "Savings",
@@ -2164,6 +2170,7 @@ describe("FinanceRepository contract", () => {
   });
 
   it("snapshots the destination base value used by cross-currency goal progress", async () => {
+    jest.useFakeTimers({ now: new Date("2026-06-01T12:00:00Z") });
     const { repository } = await createRepository();
     const eur = await repository.saveAccount({
       name: "Euro",
@@ -3549,6 +3556,7 @@ describe("FinanceRepository contract", () => {
   });
 
   it("includes child-category activity in parent budgets and goals", async () => {
+    jest.useFakeTimers({ now: new Date("2026-06-01T12:00:00Z") });
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const parent = await repository.saveCategory({
@@ -3810,6 +3818,7 @@ describe("FinanceRepository contract", () => {
   });
 
   it("validates linked-goal ranges before batch category changes persist", async () => {
+    jest.useFakeTimers({ now: new Date("2026-06-01T12:00:00Z") });
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const salary = repository
@@ -5731,12 +5740,13 @@ describe("FinanceRepository deletion erases", () => {
     // What an older build stored: a soft-deleted row with every field intact, written past
     // the adapter's own erasure, and no record that the one-time pass has run.
     const legacy = { ...saved, deletedAt: "2026-07-16T00:00:00.000Z" };
-    (
-      storage as unknown as { records: Map<string, unknown> }
-    ).records.set(`transactions:${saved.id}`, {
-      type: "transactions",
-      entity: legacy,
-    });
+    (storage as unknown as { records: Map<string, unknown> }).records.set(
+      `transactions:${saved.id}`,
+      {
+        type: "transactions",
+        entity: legacy,
+      },
+    );
     await storage.transact((tx) =>
       tx.table("syncMeta").delete(["tombstonesErased"]),
     );
@@ -5749,5 +5759,95 @@ describe("FinanceRepository deletion erases", () => {
     expect(row?.deletedAt).toBe(legacy.deletedAt);
     expect(JSON.stringify(row)).not.toContain("Private coffee");
     expect(reloaded.getSnapshot().transactions).toHaveLength(0);
+  });
+
+  it("confirming an upcoming item only generates ahead for its own rule", async () => {
+    jest.useFakeTimers({ now: new Date("2026-07-15T12:00:00Z") });
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const template = (title: string) => ({
+      kind: "expense" as const,
+      title,
+      note: "",
+      accountId: account.id,
+      categoryId: null,
+      tagIds: [],
+      amountMinor: 100,
+      currency: "USD",
+    });
+    const monthly = await repository.saveRecurringRule({
+      template: template("Monthly"),
+      unit: "month",
+      interval: 1,
+      startDate: "2026-07-15",
+      endDate: null,
+      nextDueDate: "2026-07-15",
+      autoPost: false,
+      active: true,
+    });
+    await repository.generateRecurring();
+    const daily = await repository.saveRecurringRule({
+      template: template("Daily"),
+      unit: "day",
+      interval: 1,
+      startDate: "2026-07-16",
+      endDate: null,
+      nextDueDate: "2026-07-16",
+      autoPost: false,
+      active: true,
+    });
+    const dailyBefore = repository
+      .getSnapshot()
+      .transactions.filter((item) => item.recurringRuleId === daily.id).length;
+    const first = repository
+      .getSnapshot()
+      .transactions.find((item) => item.recurringRuleId === monthly.id);
+    expect(first).toBeDefined();
+    await repository.confirmUpcoming(first!.id);
+    const after = repository.getSnapshot().transactions;
+    expect(
+      after.filter((item) => item.recurringRuleId === daily.id),
+    ).toHaveLength(dailyBefore);
+    const monthlyUpcoming = after.filter(
+      (item) =>
+        item.recurringRuleId === monthly.id && item.status === "upcoming",
+    );
+    expect(monthlyUpcoming.map((item) => item.localDate)).toEqual([
+      "2026-08-15",
+    ]);
+  });
+
+  it("ignores linked transactions dated before the goal was created", async () => {
+    jest.useFakeTimers({ now: new Date("2026-07-15T12:00:00Z") });
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await repository.saveTransaction({
+      kind: "income",
+      title: "Before",
+      localDate: "2026-07-01",
+      accountId: account.id,
+      amountMinor: 5000,
+    });
+    const goal = await repository.saveGoal({
+      name: "Fresh",
+      kind: "saving",
+      icon: "target",
+      color: "#5966E9",
+      targetMinor: 10000,
+      initialMinor: 0,
+      targetDate: null,
+      linkedAccountId: account.id,
+      linkedCategoryId: null,
+      archived: false,
+    });
+    expect(repository.getGoalProgress(goal.id)).toBe(0);
+    await repository.saveTransaction({
+      kind: "income",
+      title: "After",
+      localDate: "2026-07-16",
+      accountId: account.id,
+      amountMinor: 700,
+    });
+    expect(repository.getGoalProgress(goal.id)).toBe(700);
   });
 });

@@ -100,6 +100,7 @@ import {
   isLocalDate,
   parseLocalDate,
   todayLocal,
+  toLocalDate,
 } from "@/utils/date";
 import {
   budgetPeriodId,
@@ -2176,7 +2177,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     return this.enqueueMutation(() => this.generateRecurringNow(horizonDate));
   }
 
-  private async generateRecurringNow(horizonDate: string) {
+  private async generateRecurringNow(horizonDate: string, onlyRuleId?: string) {
     this.assertDate(horizonDate);
     const today = todayLocal();
     let generated = 0;
@@ -2184,7 +2185,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const transactionChanges: TransactionRecord[] = [];
     const ruleChanges: RecurringRule[] = [];
     for (const rule of this.active(this.state.recurringRules).filter(
-      (item) => item.active,
+      (item) => item.active && (!onlyRuleId || item.id === onlyRuleId),
     )) {
       // A rule that can no longer build its transaction (dangling reference,
       // missing exchange rate) is skipped so one bad rule never blocks the
@@ -2348,6 +2349,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (futureWaiting) return;
     await this.generateRecurringNow(
       rule.nextDueDate > today ? rule.nextDueDate : today,
+      rule.id,
     );
   }
 
@@ -2915,11 +2917,8 @@ export class LocalFinanceRepository implements FinanceRepository {
         continue;
       }
       const row = parsed.data;
-      // Match archived accounts too. Names stay unique across archived and active
-      // accounts, so this cannot become ambiguous, and `buildTransaction` still
-      // refuses to post new rows to an archived account. Excluding them from the
-      // lookup instead reported "Unknown account" for a name that plainly exists,
-      // which reads as a corrupt export rather than an archived destination.
+      // Archived accounts are still matched by name so they are reported as archived
+      // (below) rather than as "Unknown account", which would read as a corrupt export.
       const account = this.active(this.state.accounts).find(
         (item) => item.name.toLowerCase() === row.account.toLowerCase(),
       );
@@ -2984,7 +2983,7 @@ export class LocalFinanceRepository implements FinanceRepository {
               .split("|")
               .map((item) => item.trim())
               .filter(Boolean)
-              .map((name) => [name.toLocaleLowerCase(), name]),
+              .map((name) => [name.toLowerCase(), name]),
           ).values(),
         ];
         const input: TransactionInput = {
@@ -5481,11 +5480,14 @@ export class LocalFinanceRepository implements FinanceRepository {
       return addMinor(goal.initialMinor, manual, `${goal.name} progress`);
     }
     let linked = 0;
+    // Linked progress only counts activity from the goal's creation date onward.
+    const goalStart = toLocalDate(new Date(goal.createdAt));
     const matchesCategory = goal.linkedCategoryId
       ? this.categoryMatcher([goal.linkedCategoryId])
       : null;
     for (const item of transactions) {
       if (item.deletedAt || item.status !== "posted") continue;
+      if (item.localDate < goalStart) continue;
       if (matchesCategory && !matchesCategory(item.categoryId)) continue;
       if (goal.kind === "spending") {
         if (item.kind !== "expense") continue;
