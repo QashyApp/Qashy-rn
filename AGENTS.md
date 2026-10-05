@@ -84,7 +84,8 @@ Use Expo Router and preserve real public web paths such as `/overview`, `/transa
 
 - Mobile uses four native tabs with nested stacks.
 - Web uses bottom navigation below 768px, a compact rail from 768–1199px, and a full sidebar at 1200px and above.
-- Creation and editing flows use form-sheet presentation where supported.
+- Creation and editing flows use form-sheet presentation where supported. iOS and web use the native form sheet; Android uses `AndroidSheet` (`src/components/navigation/android-sheet.tsx`), a transparent-modal route animated with Reanimated, because the native one cannot be restyled without modifying a library.
+- Never modify a third-party package: no `patch-package`, no edits under `node_modules`, no vendored forks. Reach for a public API, a local Expo module in `modules/`, or an upstream contribution instead.
 - After a sheet mutation, return to or replace with its owning section so repository projections render fresh data on web.
 - Route files should generally import and export a feature screen rather than contain business logic.
 

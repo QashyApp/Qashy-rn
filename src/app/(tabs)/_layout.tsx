@@ -10,6 +10,7 @@ import {
   sectionOfPathname,
   type TabSection,
 } from "@/components/navigation/tab-sections";
+import { useTabLongPress } from "@/components/navigation/use-tab-long-press";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
 import {
@@ -109,6 +110,9 @@ function NativeTabsLayout() {
   const theme = useQashyTheme();
   const { t } = useLocalization();
   const { open } = useNavBarStyleSheet();
+  // Android-only (a no-op elsewhere). The bar is Android's own, so the press comes from the local
+  // `qashy-tab-gestures` module rather than from a React prop; the bar shows no tooltip for it.
+  useTabLongPress(open);
   // No SafeAreaView here. Each section stack now shows a native header, and the
   // platform header applies the top inset itself; padding the tab host as well
   // would push every screen down by a second status bar's worth.
@@ -132,9 +136,6 @@ function NativeTabsLayout() {
       // as every other divider, instead of the system default.
       shadowColor={theme.border}
       minimizeBehavior="onScrollDown"
-      // Android-only. `onTabLongPress` exists only in the patched react-native-screens (see
-      // patches/ and "Native patches" in the README); the bar itself shows no tooltip for it.
-      unstable_nativeProps={IS_ANDROID ? { onTabLongPress: open } : undefined}
     >
       <NativeTabs.Trigger name="overview">
         <NativeTabs.Trigger.Label>{t("Overview")}</NativeTabs.Trigger.Label>

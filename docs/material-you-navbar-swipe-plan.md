@@ -1,3 +1,5 @@
+> **Superseded in part:** the `react-native-screens` patch this plan proposes was replaced by the local `modules/qashy-tab-gestures` module (see "No patched libraries" in the README); Qashy no longer patches any library.
+
 # Plan: Cashew-style Material You, Android nav-bar customization, month pagers
 
 Status: proposal, not started. Three independent workstreams (A, B, C) that can be handed to separate owners.
