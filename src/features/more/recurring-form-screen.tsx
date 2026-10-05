@@ -8,6 +8,7 @@ import { AppText } from "@/components/ui/app-text";
 import { QashySwitch } from "@/components/ui/qashy-switch";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
+import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { CategoryPicker } from "@/features/transactions/form/category-picker";
 import { FormScreen } from "@/components/ui/form-screen";
@@ -34,7 +35,7 @@ import {
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { isLocalDate, todayLocal } from "@/utils/date";
+import { isLocalDate, mediumDate, todayLocal } from "@/utils/date";
 import {
   validateCurrencyCode,
   validateDateInput,
@@ -52,6 +53,11 @@ import {
 } from "@/utils/money";
 import { appliedCrossRateFor } from "@/utils/rates";
 import {
+  MAX_OCCURRENCE_COUNT,
+  nthOccurrenceDate,
+  occurrenceCountUntil,
+} from "@/utils/recurrence-count";
+import {
   feeMinorFor,
   normalizeFeePercent,
   totalWithFee,
@@ -68,6 +74,14 @@ function intervalHint(interval: string, unit: RecurrenceUnit) {
   if (!Number.isInteger(count) || count < 1) return `Every ${unit}.`;
   return count === 1 ? `Every ${unit}.` : `Every ${count} ${unit}s.`;
 }
+
+type EndMode = "never" | "date" | "count";
+
+const END_MODES: { value: EndMode; label: string; icon: string }[] = [
+  { value: "never", label: "Never", icon: "ion:infinite-outline" },
+  { value: "date", label: "On a date", icon: "calendar" },
+  { value: "count", label: "After a number of times", icon: "repeat" },
+];
 
 export function RecurringFormScreen() {
   const { space } = useQashyTheme();
@@ -124,6 +138,12 @@ export function RecurringFormScreen() {
     existing?.startDate ?? todayLocal(),
   );
   const [endDate, setEndDate] = useState(existing?.endDate ?? "");
+  // How the schedule ends. "count" is a way to *enter* an end date — "12 payments" for an
+  // installment plan — and is stored as the date of the last one, so nothing else changes.
+  const [endMode, setEndMode] = useState<EndMode>(
+    existing?.endDate ? "date" : "never",
+  );
+  const [occurrenceCount, setOccurrenceCount] = useState("");
   const [autoPost, setAutoPost] = useState(existing?.autoPost ?? false);
   const [active, setActive] = useState(existing?.active ?? true);
   const [foreignEnabled, setForeignEnabled] = useState(() =>
@@ -377,6 +397,8 @@ export function RecurringFormScreen() {
       interval,
       startDate,
       endDate,
+      endMode,
+      occurrenceCount,
       autoPost,
       active,
       foreignEnabled,
@@ -410,12 +432,52 @@ export function RecurringFormScreen() {
     !endDateFormatError && endDate && startDate && endDate < startDate
       ? "End date must not precede the start date."
       : endDateFormatError;
+  const occurrenceCountError =
+    // Empty is not an error yet, only unfinished: saving waits for `countedEndDate` regardless.
+    endMode !== "count" || !occurrenceCount.trim()
+      ? undefined
+      : (validatePositiveInteger(occurrenceCount, "Number of times") ??
+        (Number(occurrenceCount) > MAX_OCCURRENCE_COUNT
+          ? `Number of times must be ${MAX_OCCURRENCE_COUNT} or less.`
+          : undefined));
+  const scheduleReady = !intervalError && !startDateError;
+  // The date a count resolves to, shown under the field and saved as the end date.
+  const countedEndDate =
+    endMode === "count" &&
+    scheduleReady &&
+    occurrenceCount.trim() &&
+    !occurrenceCountError
+      ? nthOccurrenceDate(
+          startDate,
+          unit,
+          Math.floor(Number(interval)),
+          Number(occurrenceCount),
+        )
+      : null;
+  const missingEndDate =
+    endMode === "date" && !endDate ? "Choose the end date." : undefined;
+  const changeEndMode = (next: EndMode) => {
+    if (next === endMode) return;
+    // Carry the end over between the two ways of entering it, so switching shows the same end.
+    if (next === "count" && endDate && scheduleReady) {
+      const count = occurrenceCountUntil(
+        startDate,
+        unit,
+        Math.floor(Number(interval)),
+        endDate,
+      );
+      if (count !== null) setOccurrenceCount(String(count));
+    }
+    if (next === "date" && countedEndDate) setEndDate(countedEndDate);
+    setEndMode(next);
+  };
   const canSave =
     Boolean(account) &&
     !amountError &&
     !intervalError &&
     !startDateError &&
-    !endDateError &&
+    (endMode !== "date" || (!endDateError && !missingEndDate)) &&
+    (endMode !== "count" || (!occurrenceCountError && !!countedEndDate)) &&
     !foreignCurrencyError &&
     !foreignRateError &&
     !feeError;
@@ -432,7 +494,12 @@ export function RecurringFormScreen() {
     setBusy(true);
     try {
       const normalizedInterval = Math.max(1, Math.floor(Number(interval) || 1));
-      const normalizedEndDate = endDate || null;
+      const normalizedEndDate =
+        endMode === "count"
+          ? countedEndDate
+          : endMode === "date"
+            ? endDate || null
+            : null;
       // A recurring template snapshots the original amount and any rate override, but
       // a blank rate stays blank here (unlike the transaction form, which reuses an
       // unchanged snapshot) — each occurrence resolves its own rate as it posts.
@@ -701,21 +768,56 @@ export function RecurringFormScreen() {
           hint={intervalHint(interval, unit)}
           required
         />
-        <FormField
+        <DateField
           label="Starts"
           value={startDate}
-          onChangeText={setStartDate}
-          placeholder="YYYY-MM-DD"
+          onChange={setStartDate}
           error={startDateError}
           required
         />
-        <FormField
-          label="Ends (optional)"
-          value={endDate}
-          onChangeText={setEndDate}
-          placeholder="YYYY-MM-DD"
-          error={endDateError}
-        />
+        <View style={{ gap: space.sm }}>
+          <AppText variant="label">Ends</AppText>
+          <View
+            accessibilityLabel={t("When the schedule ends")}
+            accessibilityRole="radiogroup"
+            style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
+          >
+            {END_MODES.map((option) => (
+              <ChoiceChip
+                key={option.value}
+                icon={option.icon}
+                label={option.label}
+                selected={endMode === option.value}
+                onPress={() => changeEndMode(option.value)}
+              />
+            ))}
+          </View>
+        </View>
+        {endMode === "date" ? (
+          <DateField
+            label="End date"
+            value={endDate}
+            onChange={setEndDate}
+            error={endDateError ?? missingEndDate}
+            minimumDate={isLocalDate(startDate) ? startDate : undefined}
+            required
+          />
+        ) : endMode === "count" ? (
+          <FormField
+            label="Number of times"
+            value={occurrenceCount}
+            onChangeText={setOccurrenceCount}
+            keyboardType="number-pad"
+            placeholder="12"
+            error={occurrenceCountError}
+            hint={
+              countedEndDate
+                ? `The last one is on ${mediumDate(countedEndDate, state.settings.locale)}.`
+                : "For a set number of payments, like an installment plan."
+            }
+            required
+          />
+        ) : null}
         <View
           style={{
             minHeight: 48,
