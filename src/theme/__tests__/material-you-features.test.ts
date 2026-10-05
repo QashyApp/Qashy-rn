@@ -1,6 +1,12 @@
 import { badgeColors, isMultiColorIcon } from "@/components/ui/icon-badge";
 import { FONT_REGISTRY } from "@/theme/fonts";
-import { ICON_SETS, getIconSet, resolveIconRender } from "@/theme/icon-sets";
+import {
+  ICON_SETS,
+  getIconSet,
+  isIconSetReady,
+  loadIconSet,
+  resolveIconRender,
+} from "@/theme/icon-sets";
 import { materialStyle } from "@/theme/materials";
 import { applyAppearanceOverrides } from "@/theme/overrides";
 import { NO_SHADOW, flatShadowSet, shadowBlurs } from "@/theme/shadow";
@@ -76,6 +82,13 @@ describe("applyAppearanceOverrides", () => {
 });
 
 describe("icon sets: material and fluent-emoji-flat", () => {
+  beforeAll(() => loadIconSet("fluent-emoji-flat"));
+
+  it("fetches the Fluent drawings on demand", () => {
+    expect(isIconSetReady("fluent-emoji-flat")).toBe(true);
+    expect(isIconSetReady("material")).toBe(true);
+  });
+
   it("registers both with matching ids", () => {
     for (const id of ["material", "fluent-emoji-flat"]) {
       expect(ICON_SETS[id]?.id).toBe(id);
