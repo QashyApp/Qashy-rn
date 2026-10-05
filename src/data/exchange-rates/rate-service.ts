@@ -49,6 +49,18 @@ const NEGATIVE_CACHE_MS = 5 * 60 * 1000;
 /** Most occurrences of one recurring rule whose rates are looked up in a single pass. */
 const MAX_PENDING_OCCURRENCES_PER_RULE = 500;
 
+/**
+ * How far before the earliest wanted date a request reaches. Frankfurter only publishes on ECB
+ * business days, so a weekend or holiday date is answered by the latest earlier business day;
+ * a week of lead covers any realistic run of closures.
+ */
+const LOOKBACK_DAYS = 7;
+
+function shiftDate(localDate: string, days: number): string {
+  const ms = Date.parse(`${localDate}T00:00:00.000Z`) + days * 86_400_000;
+  return new Date(ms).toISOString().slice(0, 10);
+}
+
 /** One currency that needs a rate as of one local calendar date. */
 export interface RatePair {
   readonly currency: string;
@@ -324,14 +336,30 @@ export class ExchangeRateService {
       const quotes = [...new Set([...currencies, base])];
       const rows = await fetchEurRates(
         { fetch: this.deps.fetch, timeoutMs: this.deps.timeoutMs },
-        minDate === maxDate
-          ? { quotes, date: minDate }
-          : { quotes, from: minDate, to: maxDate },
+        { quotes, from: shiftDate(minDate, -LOOKBACK_DAYS), to: maxDate },
       );
       const derived = deriveBaseRates(rows, base, currencies);
-      const filtered = derived.filter((rate) =>
-        wanted.has(pairKey(rate.fromCurrency, rate.effectiveDate)),
-      );
+      // Each wanted pair is answered by the latest published rate on or before its date, saved
+      // under the wanted date so the exact-date coverage check holds and it is not refetched.
+      const latestByCurrency = new Map<string, typeof derived>();
+      for (const rate of derived) {
+        const list = latestByCurrency.get(rate.fromCurrency) ?? [];
+        list.push(rate);
+        latestByCurrency.set(rate.fromCurrency, list);
+      }
+      const filtered: typeof derived = [];
+      for (const entry of wanted.values()) {
+        let best: (typeof derived)[number] | undefined;
+        for (const rate of latestByCurrency.get(entry.currency) ?? []) {
+          if (
+            rate.effectiveDate <= entry.localDate &&
+            (!best || rate.effectiveDate > best.effectiveDate)
+          ) {
+            best = rate;
+          }
+        }
+        if (best) filtered.push({ ...best, effectiveDate: entry.localDate });
+      }
       const result: FetchedRateResult = filtered.length
         ? await this.deps.repository.saveFetchedRates(filtered)
         : { written: 0, skippedManual: 0, conflicts: [] };
