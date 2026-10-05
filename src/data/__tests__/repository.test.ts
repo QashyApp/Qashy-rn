@@ -4,7 +4,6 @@ import type {
   CsvImportRow,
   EntityType,
   FinanceEntity,
-  RecurringRule,
   TransactionKind,
   TransactionStatus,
 } from "@/domain/models";
@@ -1989,46 +1988,6 @@ describe("FinanceRepository contract", () => {
     ).toMatchObject({ active: false, pausedByDependency: false });
   });
 
-  it("migrates legacy recurring schedules without pause provenance", async () => {
-    const { repository, storage } = await createRepository();
-    const account = repository.getSnapshot().accounts[0];
-    const rule = await repository.saveRecurringRule({
-      template: {
-        kind: "expense",
-        title: "Legacy",
-        note: "",
-        accountId: account.id,
-        categoryId: null,
-        tagIds: [],
-        amountMinor: 100,
-        currency: "USD",
-      },
-      unit: "month",
-      interval: 1,
-      startDate: "2099-01-01",
-      endDate: null,
-      nextDueDate: "2099-01-01",
-      autoPost: false,
-      active: false,
-    });
-    const { pausedByDependency: _legacyField, ...legacyRule } = rule;
-    await storage.putMany([
-      { type: "recurringRules", entity: legacyRule as RecurringRule },
-    ]);
-
-    const reloaded = new LocalFinanceRepository(storage);
-    await reloaded.initialize();
-
-    expect(
-      reloaded.getSnapshot().recurringRules.find((item) => item.id === rule.id),
-    ).toMatchObject({ active: false, pausedByDependency: false });
-    expect(
-      (await storage.readAll("recurringRules")).find(
-        (item) => item.id === rule.id,
-      ),
-    ).toMatchObject({ pausedByDependency: false });
-  });
-
   it("updates generated upcoming transactions when a recurring template changes", async () => {
     jest.useFakeTimers();
     try {
@@ -2508,34 +2467,6 @@ describe("FinanceRepository contract", () => {
       repository.getSnapshot().goals.find((item) => item.id === goal.id)?.name,
     ).toBe("Original");
     expect(repository.getSnapshot().contributions).toHaveLength(0);
-  });
-
-  it("migrates legacy duplicate names to unique values", async () => {
-    const storage = new MemoryStorageAdapter();
-    const { repository } = await createRepository(storage);
-    const account = repository.getSnapshot().accounts[0];
-    await storage.putMany([
-      {
-        type: "accounts",
-        entity: {
-          ...account,
-          id: "legacy-duplicate-account",
-          archived: true,
-          revision: 1,
-        },
-      },
-    ]);
-    const reloaded = new LocalFinanceRepository(storage);
-    await reloaded.initialize();
-    const normalizedNames = reloaded
-      .getSnapshot()
-      .accounts.map((item) => item.name.toLocaleLowerCase());
-    expect(new Set(normalizedNames).size).toBe(normalizedNames.length);
-    expect(
-      reloaded
-        .getSnapshot()
-        .accounts.find((item) => item.id === "legacy-duplicate-account")?.name,
-    ).toContain("(archived");
   });
 
   it("rejects transactions whose account or analytics totals exceed safe integers", async () => {

@@ -112,7 +112,7 @@ import {
 } from "@/utils/deterministic-id";
 import { createEntity, makeId, nowIso, updateEntity } from "@/utils/entity";
 import { isValidIconId } from "@/utils/icon-id";
-import { disambiguateNames, normalizeName } from "@/utils/naming";
+import { normalizeName } from "@/utils/naming";
 import { escapeCsv } from "@/utils/csv";
 import { validateLocale } from "@/utils/form-validation";
 import {
@@ -401,7 +401,6 @@ export class LocalFinanceRepository implements FinanceRepository {
     await this.storage.initialize();
     await this.eraseStoredTombstones();
     await this.hydrateFromStorage();
-    await this.migrateLoadedState();
     // No placeholder settings row is written here, and that is load-bearing for sync.
     //
     // `baseCurrency` is `createOnly` in the merge registry — deliberately, because rebasing
@@ -4256,7 +4255,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const storedSettings = (settingsRecords.find(
       (item) => item.id === "settings" && !item.deletedAt,
     ) ?? initialSettings()) as AppSettings;
-    // Saves from before themes existed have no id; the default theme is what they were already showing.
+    // A row missing a device-local field reads as its default.
     const settings: AppSettings = {
       ...storedSettings,
       themeId: storedSettings.themeId ?? DEFAULT_THEME_ID,
@@ -4282,7 +4281,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         .map((transaction) => transaction.occurrenceKey!),
     );
     // Carry the current readiness rather than asserting it. Hydration is only the
-    // first step of `initializeNow`; migrations, the settings seed, and recurring
+    // first step of `initializeNow`; the settings seed and recurring
     // generation still follow. Flipping `ready` here published a half-initialized
     // snapshot to any render that polled `getSnapshot` before `emit()` ran.
     // Reuse the current settings object when nothing in it changed. A reload builds a fresh one
@@ -5487,152 +5486,6 @@ export class LocalFinanceRepository implements FinanceRepository {
         foreign: normalizedForeign,
         fee: normalizedFee,
       },
-    };
-  }
-
-  private async migrateLoadedState() {
-    const transactionUpdates = this.state.transactions.flatMap(
-      (transaction) => {
-        const destinationBaseAmountMinor = (
-          transaction as TransactionRecord & {
-            destinationBaseAmountMinor?: number | null;
-          }
-        ).destinationBaseAmountMinor;
-        if (transaction.kind !== "transfer") {
-          if (
-            transaction.destinationAccountId === null &&
-            transaction.destinationAmountMinor === null &&
-            destinationBaseAmountMinor === null &&
-            transaction.destinationCurrency === null &&
-            transaction.transferGroupId === null
-          )
-            return [];
-          return [
-            updateEntity(transaction, {
-              destinationAccountId: null,
-              destinationAmountMinor: null,
-              destinationBaseAmountMinor: null,
-              destinationCurrency: null,
-              transferGroupId: null,
-            }),
-          ];
-        }
-        if (
-          typeof destinationBaseAmountMinor === "number" &&
-          isSafeMinor(destinationBaseAmountMinor) &&
-          destinationBaseAmountMinor > 0
-        )
-          return [];
-        return [
-          updateEntity(transaction, {
-            destinationBaseAmountMinor:
-              this.legacyTransferInflowBaseMinor(transaction),
-          }),
-        ];
-      },
-    );
-    const accountMigration = this.disambiguateNames(this.state.accounts);
-    const categoryMigration = this.disambiguateNames(this.state.categories);
-    const tagMigration = this.disambiguateNames(this.state.tags);
-    const recurringRuleUpdates = this.state.recurringRules.flatMap((rule) =>
-      typeof (rule as RecurringRule & { pausedByDependency?: boolean })
-        .pausedByDependency === "boolean"
-        ? []
-        : [updateEntity(rule, { pausedByDependency: false })],
-    );
-    const records: StoredEntity[] = [
-      ...transactionUpdates.map((entity) => ({
-        type: "transactions" as const,
-        entity,
-      })),
-      ...accountMigration.changed.map((entity) => ({
-        type: "accounts" as const,
-        entity,
-      })),
-      ...categoryMigration.changed.map((entity) => ({
-        type: "categories" as const,
-        entity,
-      })),
-      ...tagMigration.changed.map((entity) => ({
-        type: "tags" as const,
-        entity,
-      })),
-      ...recurringRuleUpdates.map((entity) => ({
-        type: "recurringRules" as const,
-        entity,
-      })),
-    ];
-    if (!records.length) return;
-    await this.storage.putMany(records, this);
-    const transactionReplacements = new Map(
-      transactionUpdates.map((entity) => [entity.id, entity]),
-    );
-    const recurringRuleReplacements = new Map(
-      recurringRuleUpdates.map((entity) => [entity.id, entity]),
-    );
-    this.state = {
-      ...this.state,
-      accounts: accountMigration.entities,
-      categories: categoryMigration.entities,
-      tags: tagMigration.entities,
-      transactions: this.state.transactions.map(
-        (entity) => transactionReplacements.get(entity.id) ?? entity,
-      ),
-      recurringRules: this.state.recurringRules.map(
-        (entity) => recurringRuleReplacements.get(entity.id) ?? entity,
-      ),
-    };
-  }
-
-  private legacyTransferInflowBaseMinor(transaction: TransactionRecord) {
-    const destinationAmount = transaction.destinationAmountMinor;
-    const destinationCurrency = transaction.destinationCurrency;
-    if (destinationAmount === null || !destinationCurrency)
-      return transaction.baseAmountMinor;
-    if (destinationCurrency === this.state.settings.baseCurrency)
-      return destinationAmount;
-    if (destinationCurrency === transaction.currency)
-      return transaction.baseAmountMinor;
-    try {
-      return convertMinor(
-        destinationAmount,
-        destinationCurrency,
-        this.state.settings.baseCurrency,
-        this.resolveRate(
-          destinationCurrency,
-          this.state.settings.baseCurrency,
-          transaction.localDate,
-        ),
-        this.state.settings.locale,
-      );
-    } catch {
-      return transaction.baseAmountMinor;
-    }
-  }
-
-  /**
-   * Resolve name collisions on load, using the same pure function the merge's repair pass
-   * calls.
-   *
-   * The naming itself lives in `@/utils/naming` rather than here because the two have to
-   * agree exactly: the repair emits no ops, so convergence depends on every device deriving
-   * the same names from the same merged set — and a second copy of this logic is a copy
-   * that drifts. All that is left here is turning renames into entity updates.
-   */
-  private disambiguateNames<T extends Account | Category | Tag>(entities: T[]) {
-    const replacements = new Map<string, T>();
-    const byId = new Map(entities.map((entity) => [entity.id, entity]));
-    for (const rename of disambiguateNames(entities)) {
-      const entity = byId.get(rename.id);
-      if (entity)
-        replacements.set(
-          rename.id,
-          updateEntity(entity, { name: rename.name } as Partial<T>),
-        );
-    }
-    return {
-      entities: entities.map((entity) => replacements.get(entity.id) ?? entity),
-      changed: [...replacements.values()],
     };
   }
 

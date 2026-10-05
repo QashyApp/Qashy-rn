@@ -184,52 +184,14 @@ describe("native storage migrations", () => {
       .filter((match): match is RegExpExecArray => match !== null)
       .map((match) => Number(match[1]));
 
-  /**
-   * `[1, 2, … DATABASE_VERSION]`, derived rather than written out.
-   *
-   * Every added step would otherwise fail these two tests for the wrong reason — a literal
-   * here asserts the ladder's *length*, which is not a property anyone cares about, and the
-   * fix is to bump a number, which teaches you nothing. What matters is that the steps run
-   * in order, none is skipped, and none repeats.
-   */
-  const ladder = Array.from(
-    { length: DATABASE_VERSION },
-    (_, index) => index + 1,
-  );
-
-  it("walks a fresh database up the whole ladder", async () => {
+  it("creates the whole schema on a fresh database in one step", async () => {
     await new PlatformStorageAdapter().initialize();
 
-    expect(versionBumps(mockOpened[0])).toEqual(ladder);
+    expect(versionBumps(mockOpened[0])).toEqual([DATABASE_VERSION]);
     expect(mockOpened[0].userVersion).toBe(DATABASE_VERSION);
-  });
-
-  it("runs only the steps a database has not already seen", async () => {
-    mockStartVersion = 1;
-    await new PlatformStorageAdapter().initialize();
-
-    // Re-running step 1 would be harmless (every statement is `IF NOT EXISTS`), but a ladder
-    // that cannot skip is a ladder that gets slower with every release.
-    expect(versionBumps(mockOpened[0])).toEqual(ladder.slice(1));
-    expect(
-      mockOpened[0].statements.some((sql) => sql.includes("sync_ops")),
-    ).toBe(true);
-  });
-
-  it("adds the revocation cutoff column and fails closed for existing revoked peers", async () => {
-    mockStartVersion = 3;
-    await new PlatformStorageAdapter().initialize();
-
-    const migration = mockOpened[0].statements.find((sql) =>
-      sql.includes("revoked_seq"),
-    );
-    expect(migration).toContain(
-      "ALTER TABLE sync_peers ADD COLUMN revoked_seq INTEGER",
-    );
-    expect(migration).toContain(
-      "UPDATE sync_peers SET revoked_seq = 0 WHERE revoked_at IS NOT NULL",
-    );
-    expect(mockOpened[0].userVersion).toBe(DATABASE_VERSION);
+    const schema = mockOpened[0].statements.join(" ");
+    expect(schema).toContain("CREATE TABLE IF NOT EXISTS sync_ops");
+    expect(schema).toContain("revoked_seq");
   });
 
   it("does nothing at all once the database is current", async () => {
@@ -242,8 +204,7 @@ describe("native storage migrations", () => {
     ).toBe(false);
   });
 
-  it("leaves the version where it was when a step fails, and retries cleanly", async () => {
-    mockStartVersion = 1;
+  it("leaves the version where it was when the schema fails, and retries cleanly", async () => {
     mockFailOnExec = "sync_ops";
 
     await expect(new PlatformStorageAdapter().initialize()).rejects.toThrow(
@@ -251,8 +212,8 @@ describe("native storage migrations", () => {
     );
     const failed = mockOpened[0];
     // The bump was issued inside the transaction that rolled back, so it never landed. A
-    // database that reported version 2 with no `sync_ops` table would never repair itself.
-    expect(failed.userVersion).toBe(1);
+    // database that reported itself current with no `sync_ops` table would never repair itself.
+    expect(failed.userVersion).toBe(0);
     expect(failed.statements.some((sql) => sql.trim() === "ROLLBACK")).toBe(
       true,
     );

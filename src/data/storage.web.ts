@@ -55,16 +55,13 @@ class QashyDatabase extends Dexie {
 
   constructor(onBlocked: () => void) {
     super("qashy");
-    this.version(1).stores({
-      records: "&key, type, entityId, updatedAt, deletedAt",
-    });
-    // No `upgrade()` callback: no existing row changes shape, so Dexie adds the stores and
-    // the compound index and leaves `records` exactly as it found it.
+    // One declaration of the current shape. Earlier builds reached it through versions 1–3; it
+    // keeps their number so a browser already at it opens without an upgrade.
     //
     // IndexedDB cannot index `null` or a boolean, which is why `sealed` is `0 | 1` and an
     // absent `signature` is `''` — a nullable column simply drops out of its index, and
     // `[sealed+deviceId+seq]` is how the sealer finds its work.
-    this.version(2).stores({
+    this.version(4).stores({
       records: "&key, type, entityId, updatedAt, deletedAt, [type+updatedAt]",
       syncOps:
         "&opId, [deviceId+seq], [entityType+entityId], hlc, [sealed+deviceId+seq]",
@@ -72,28 +69,8 @@ class QashyDatabase extends Dexie {
       syncPeers: "&peerId",
       syncMeta: "&key",
       syncQuarantine: "&key",
-    });
-    // Append-only, exactly like the SQLite ladder: a browser that already upgraded to v2 gets
-    // the activity store from here, and editing v2 in place would leave it without one.
-    this.version(3).stores({
       syncActivity: "&key",
     });
-    // Structured-clone rows do not need a schema change for a non-indexed field, but existing
-    // revoked rows need a fail-closed cutoff. Active rows keep null until revocation records
-    // the chain head this device had accepted.
-    this.version(4)
-      .stores({ syncPeers: "&peerId" })
-      .upgrade((transaction) =>
-        transaction
-          .table("syncPeers")
-          .toCollection()
-          .modify(
-            (row: { revokedAt?: unknown; revokedSeq?: number | null }) => {
-              if (row.revokedSeq === undefined)
-                row.revokedSeq = row.revokedAt ? 0 : null;
-            },
-          ),
-      );
     // Without this, shipping a new `version()` while a second tab holds the old one blocks
     // the upgrade *indefinitely* — and two open tabs is a routine PWA state, not an edge
     // case. Closing here lets the upgrading tab through; this tab's next query reopens at
