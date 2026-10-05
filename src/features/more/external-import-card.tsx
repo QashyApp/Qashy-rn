@@ -232,7 +232,7 @@ function BulletList({
             gap: space.sm,
           }}
         >
-          <View style={{ paddingTop: 2 }}>
+          <View style={{ paddingTop: space.xxs }}>
             <AppIcon name={icon} color={color} size={16} />
           </View>
           <AppText variant="caption" style={{ flex: 1 }}>
@@ -489,7 +489,7 @@ function PreviewSummary({
                 gap: space.sm,
               }}
             >
-              <View style={{ paddingTop: 2 }}>
+              <View style={{ paddingTop: space.xxs }}>
                 <AppIcon name="info.circle" color={theme.textMuted} size={16} />
               </View>
               <AppText variant="caption" style={{ flex: 1 }}>

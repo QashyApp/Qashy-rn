@@ -128,7 +128,7 @@ export function ForeignFeeFields({
           gap: 14,
         }}
       >
-        <View style={{ flex: 1, gap: 2 }}>
+        <View style={{ flex: 1, gap: space.xxs }}>
           <AppText variant="label">Paid in another currency</AppText>
           <AppText variant="caption" muted>
             Track the original amount and convert it to this account’s currency.
@@ -145,7 +145,7 @@ export function ForeignFeeFields({
       </View>
 
       {foreignEnabled ? (
-        <View style={{ gap: 12 }}>
+        <View style={{ gap: space.md }}>
           <ChoiceListField
             label="Foreign currency"
             value={foreignCurrency.trim().toUpperCase()}
@@ -223,7 +223,7 @@ export function ForeignFeeFields({
         </View>
       ) : null}
 
-      <View style={{ gap: 12 }}>
+      <View style={{ gap: space.md }}>
         <AppText variant="label">Extra fee</AppText>
         <SegmentedControl
           label="Extra fee"

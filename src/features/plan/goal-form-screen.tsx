@@ -34,6 +34,7 @@ export function GoalFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const defaultGoalName = state.settings.locale
     .toLocaleLowerCase()
@@ -289,7 +290,7 @@ export function GoalFormScreen() {
   if (id && !existing) return <Redirect href="/plan" />;
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>
       <AmountHero
         label="Target"
         size="display"
@@ -301,11 +302,11 @@ export function GoalFormScreen() {
         autoFocus={!existing}
       />
 
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <View
           accessibilityLabel={t("Goal type")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}
+          style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}
         >
           {(["saving", "spending"] as GoalKind[]).map((item) => (
             <View key={item} style={{ flexGrow: 1, flexBasis: 150 }}>
@@ -355,7 +356,7 @@ export function GoalFormScreen() {
         <View
           accessibilityLabel={t("Linked account")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           <ChoiceChip
             icon="xmark.circle"
@@ -379,7 +380,7 @@ export function GoalFormScreen() {
         <View
           accessibilityLabel={t("Linked category")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           <ChoiceChip
             icon="xmark.circle"
@@ -415,7 +416,7 @@ export function GoalFormScreen() {
                 key={item.id}
                 style={{
                   gap: 6,
-                  paddingBottom: 8,
+                  paddingBottom: space.sm,
                   borderBottomWidth: 1,
                   borderBottomColor: theme.border,
                 }}
@@ -425,10 +426,10 @@ export function GoalFormScreen() {
                     flexDirection: "row",
                     justifyContent: "space-between",
                     alignItems: "center",
-                    gap: 12,
+                    gap: space.md,
                   }}
                 >
-                  <View style={{ flex: 1, gap: 2 }}>
+                  <View style={{ flex: 1, gap: space.xxs }}>
                     <AppText literal variant="label">
                       {amountLabel}
                     </AppText>
@@ -490,7 +491,13 @@ export function GoalFormScreen() {
             onChangeText={setContributionNote}
             placeholder="Optional context"
           />
-          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+          <View
+            style={{
+              flexDirection: "row",
+              gap: space.sm,
+              alignItems: "center",
+            }}
+          >
             <ActionButton
               title={
                 editingContributionId ? "Save contribution" : "Add contribution"

@@ -45,6 +45,7 @@ export function BudgetAdjustmentScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const today = todayLocal();
   const { baseCurrency, locale } = state.settings;
@@ -149,8 +150,8 @@ export function BudgetAdjustmentScreen() {
   };
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
-      <Card style={{ gap: 4 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>
+      <Card style={{ gap: space.xs }}>
         <AppText literal variant="headline">
           {budget.name}
         </AppText>
@@ -181,7 +182,7 @@ export function BudgetAdjustmentScreen() {
         autoFocus
       />
 
-      <Card style={{ gap: 12 }}>
+      <Card style={{ gap: space.md }}>
         <FormField
           label="Note (optional)"
           value={note}
@@ -215,7 +216,7 @@ export function BudgetAdjustmentScreen() {
               key={item.id}
               style={{
                 gap: 6,
-                paddingBottom: 8,
+                paddingBottom: space.sm,
                 borderBottomWidth: 1,
                 borderBottomColor: theme.border,
               }}
@@ -225,10 +226,10 @@ export function BudgetAdjustmentScreen() {
                   flexDirection: "row",
                   justifyContent: "space-between",
                   alignItems: "center",
-                  gap: 12,
+                  gap: space.md,
                 }}
               >
-                <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flex: 1, gap: space.xxs }}>
                   <AppText literal numeric variant="label">
                     {amountLabel}
                   </AppText>

@@ -112,6 +112,36 @@ const CSV_FIELDS: {
     optional: true,
     aliases: ["destination_base_amount_minor", "destinationbaseamountminor"],
   },
+  {
+    key: "foreignAmount",
+    label: "Foreign amount",
+    optional: true,
+    aliases: ["foreign_amount", "foreignamount"],
+  },
+  {
+    key: "foreignCurrency",
+    label: "Foreign currency",
+    optional: true,
+    aliases: ["foreign_currency", "foreigncurrency"],
+  },
+  {
+    key: "foreignExchangeRate",
+    label: "Foreign exchange rate",
+    optional: true,
+    aliases: ["foreign_exchange_rate", "foreignexchangerate", "foreign_rate"],
+  },
+  {
+    key: "feeKind",
+    label: "Fee kind (percent or fixed)",
+    optional: true,
+    aliases: ["fee_kind", "feekind", "fee_type"],
+  },
+  {
+    key: "feeValue",
+    label: "Fee value",
+    optional: true,
+    aliases: ["fee_value", "feevalue"],
+  },
 ];
 
 const CSV_STEPS = ["Choose file", "Map columns", "Preview", "Import"] as const;
@@ -371,6 +401,11 @@ export function CsvScreen() {
         destinationAccount: value(record, "destinationAccount"),
         destinationAmount: value(record, "destinationAmount"),
         destinationBaseAmountMinor: value(record, "destinationBaseAmountMinor"),
+        foreignAmount: value(record, "foreignAmount"),
+        foreignCurrency: value(record, "foreignCurrency"),
+        foreignExchangeRate: value(record, "foreignExchangeRate"),
+        feeKind: value(record, "feeKind"),
+        feeValue: value(record, "feeValue"),
       };
     });
     setRows(parsed);
@@ -378,7 +413,27 @@ export function CsvScreen() {
     // whose currency and date already have a fetched rate stops needing a manual one. A no-op
     // when auto-fetch is off, and it never throws — a failure here falls through to the same
     // "no rate for this date" rejection `importCsv` has always produced.
-    const ratePairs = extractCsvRatePairs(parsed, state.settings.baseCurrency);
+    // A foreign amount without its own rate needs its currency's rate for the row date too.
+    const foreignPairs = extractCsvRatePairs(
+      parsed
+        .filter((row) => row.foreignAmount && row.foreignCurrency)
+        .map((row) => ({
+          date: row.date,
+          currency: row.foreignCurrency,
+          exchangeRate: row.foreignExchangeRate,
+        })),
+      state.settings.baseCurrency,
+    );
+    const seenPairs = new Set<string>();
+    const ratePairs = [
+      ...extractCsvRatePairs(parsed, state.settings.baseCurrency),
+      ...foreignPairs,
+    ].filter((pair) => {
+      const key = `${pair.currency}|${pair.localDate}`;
+      if (seenPairs.has(key)) return false;
+      seenPairs.add(key);
+      return true;
+    });
     if (ratePairs.length) await exchangeRateService.ensureRatesFor(ratePairs);
     setPreview(await repository.importCsv(parsed, false));
   };
@@ -440,7 +495,7 @@ export function CsvScreen() {
   return (
     <FormScreen
       maxWidth={760}
-      contentContainerStyle={{ gap: 16, paddingBottom: 40 }}
+      contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}
     >
       <Card style={{ gap: 14 }}>
         <AppText variant="headline">Export transactions</AppText>
@@ -472,7 +527,7 @@ export function CsvScreen() {
         </AppText>
         <ActionButton title="Choose CSV" variant="secondary" onPress={pick} />
         {sourceRows.length ? (
-          <View style={{ gap: 12, paddingTop: 6 }}>
+          <View style={{ gap: space.md, paddingTop: 6 }}>
             <AppText variant="headline">Column mapping</AppText>
             <AppText variant="caption" muted>
               Choose the source column for each Qashy field. Optional fields can
@@ -488,12 +543,12 @@ export function CsvScreen() {
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 12,
+                  gap: space.md,
                   borderBottomWidth: 1,
                   borderBottomColor: theme.border,
                 }}
               >
-                <View style={{ flex: 1, gap: 2 }}>
+                <View style={{ flex: 1, gap: space.xxs }}>
                   <AppText variant="label">
                     {field.label}
                     {isOptionalField(field) ? "" : " *"}
@@ -538,7 +593,7 @@ export function CsvScreen() {
             <View
               accessibilityLabel={t("Default account")}
               accessibilityRole="radiogroup"
-              style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+              style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
             >
               {state.accounts
                 .filter((item) => !item.archived)
@@ -560,7 +615,7 @@ export function CsvScreen() {
             <View
               accessibilityLabel={t("Default category")}
               accessibilityRole="radiogroup"
-              style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+              style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
             >
               <ChoiceChip
                 icon="xmark.circle"

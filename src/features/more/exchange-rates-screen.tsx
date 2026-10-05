@@ -139,13 +139,13 @@ export function ExchangeRatesScreen() {
       contentContainerStyle={{
         padding: 18,
         paddingBottom: 40,
-        gap: 16,
+        gap: space.lg,
         width: "100%",
         maxWidth: 720,
         alignSelf: "center",
       }}
     >
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <AppText variant="headline">Exchange rates</AppText>
         <View
           style={{
@@ -156,7 +156,7 @@ export function ExchangeRatesScreen() {
             gap: 14,
           }}
         >
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Fetch rates automatically</AppText>
             <AppText variant="caption" muted>
               On by default. Sends only currency codes and dates to

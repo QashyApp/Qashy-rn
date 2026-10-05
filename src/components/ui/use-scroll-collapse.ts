@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import {
   Easing,
@@ -56,6 +56,22 @@ export function useScrollCollapse({
       }),
     );
   };
+
+  // Entering selection mode (locked) or disabling must expand right away: the list may not
+  // scroll again (drag-select), so waiting for an `onScroll` would leave it folded.
+  const held = !enabled || locked;
+  useEffect(() => {
+    if (!held || !collapsed.current) return;
+    collapsed.current = false;
+    changedAt.current = Date.now();
+    collapse.set(
+      withTiming(0, {
+        duration: level === "off" ? 0 : level === "minimal" ? 120 : 220,
+        easing: Easing.out(Easing.cubic),
+        reduceMotion: ReduceMotion.System,
+      }),
+    );
+  }, [held, collapse, level]);
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;

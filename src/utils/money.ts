@@ -336,14 +336,103 @@ function moneyPartsList(
       return { type: part.type, value: part.value };
     });
   }
-  const value = new Decimal(minor).div(new Decimal(10).pow(digits)).toNumber();
-  return numberFormat(locale, {
+  if (compactNotationSupported(locale)) {
+    const value = new Decimal(minor)
+      .div(new Decimal(10).pow(digits))
+      .toNumber();
+    return numberFormat(locale, {
+      style: "currency",
+      currency,
+      notation: "compact",
+      signDisplay: options?.sign ? "exceptZero" : "auto",
+      maximumFractionDigits: 1,
+    }).formatToParts(value);
+  }
+  return manualCompactParts(minor, currency, locale, digits, options);
+}
+
+const COMPACT_SUPPORT = new Map<string, boolean>();
+let compactSupportOverride: boolean | undefined;
+
+/** Test seam: force the compact-notation probe result (`undefined` restores real detection). */
+export function setCompactNotationSupportOverride(value: boolean | undefined) {
+  compactSupportOverride = value;
+}
+
+/**
+ * Hermes on Android ignores `notation: "compact"` and prints "1,462.0" instead of "1.5K". Probe
+ * the runtime once per locale: real compact notation abbreviates a million, so the full grouped
+ * digits must not appear in its output. A million rather than a thousand, because some locales
+ * (German) deliberately leave thousands unabbreviated.
+ */
+function compactNotationSupported(locale: string) {
+  if (compactSupportOverride !== undefined) return compactSupportOverride;
+  let supported = COMPACT_SUPPORT.get(locale);
+  if (supported === undefined) {
+    try {
+      const compact = new Intl.NumberFormat(locale, {
+        notation: "compact",
+        maximumFractionDigits: 1,
+      }).format(1_500_000);
+      const plain = new Intl.NumberFormat(locale).format(1_500_000);
+      supported = !compact.includes(plain);
+    } catch {
+      supported = false;
+    }
+    COMPACT_SUPPORT.set(locale, supported);
+  }
+  return supported;
+}
+
+const COMPACT_SUFFIXES = ["", "K", "M", "B", "T"];
+
+/** K/M/B/T abbreviation with at most one fraction digit, laid out by the locale's currency pattern. */
+function manualCompactParts(
+  minor: number,
+  currency: CurrencyCode,
+  locale: string,
+  digits: number,
+  options?: MoneyOptions,
+): { type: string; value: string }[] {
+  const absolute = new Decimal(minor).abs().div(new Decimal(10).pow(digits));
+  let unit = 0;
+  while (unit < 4 && absolute.gte(new Decimal(1000).pow(unit + 1))) unit++;
+  let scaled = absolute
+    .div(new Decimal(1000).pow(unit))
+    .toDecimalPlaces(1, Decimal.ROUND_HALF_UP);
+  if (scaled.gte(1000) && unit < 4) {
+    unit++;
+    scaled = absolute
+      .div(new Decimal(1000).pow(unit))
+      .toDecimalPlaces(1, Decimal.ROUND_HALF_UP);
+  }
+  const pattern = numberFormat(locale, {
     style: "currency",
     currency,
-    notation: "compact",
     signDisplay: options?.sign ? "exceptZero" : "auto",
+    minimumFractionDigits: 0,
     maximumFractionDigits: 1,
-  }).formatToParts(value);
+  }).formatToParts(minor < 0 ? -scaled.toNumber() : scaled.toNumber());
+  let lastNumeric = -1;
+  pattern.forEach((part, index) => {
+    if (
+      part.type === "integer" ||
+      part.type === "group" ||
+      part.type === "decimal" ||
+      part.type === "fraction"
+    )
+      lastNumeric = index;
+  });
+  const result: { type: string; value: string }[] = pattern.map((part) => ({
+    type: part.type,
+    value: part.value,
+  }));
+  if (lastNumeric >= 0)
+    result.splice(lastNumeric + 1, 0, {
+      type: "compact",
+      value: COMPACT_SUFFIXES[unit],
+    });
+  return result;
 }
 
 export function formatMoney(

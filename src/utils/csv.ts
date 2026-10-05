@@ -22,6 +22,18 @@ const HEADER_ALIASES: Record<string, string> = {
   destination_amount: "destinationAmount",
   destination_base_amount_minor: "destinationBaseAmountMinor",
   destinationbaseamountminor: "destinationBaseAmountMinor",
+  foreign_amount: "foreignAmount",
+  foreignamount: "foreignAmount",
+  foreign_currency: "foreignCurrency",
+  foreigncurrency: "foreignCurrency",
+  foreign_exchange_rate: "foreignExchangeRate",
+  foreignexchangerate: "foreignExchangeRate",
+  foreign_rate: "foreignExchangeRate",
+  fee_kind: "feeKind",
+  feekind: "feeKind",
+  fee_type: "feeKind",
+  fee_value: "feeValue",
+  feevalue: "feeValue",
 };
 
 export function unescapeCsvFormula(value: string) {

@@ -246,7 +246,7 @@ export function AppearanceOverridesCard() {
             <View
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
-              style={{ flex: 1, gap: 2 }}
+              style={{ flex: 1, gap: space.xxs }}
             >
               <AppText variant="label">{spec.title}</AppText>
               <AppText variant="caption" muted literal>

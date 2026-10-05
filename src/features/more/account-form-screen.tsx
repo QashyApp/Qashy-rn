@@ -224,7 +224,7 @@ export function AccountFormScreen() {
   if (id && !existing) return <Redirect href="/more" />;
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg }}>
       {/* A hero preview of the tinted, raised tile this account will show everywhere else
           (More's account list, transaction rows, the picker) — the same `toneColors` derivation
           those rows use, so choosing an account color here previews exactly what it becomes. */}
@@ -251,7 +251,7 @@ export function AccountFormScreen() {
           </AppText>
         ) : null}
       </View>
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="Account name"
           value={name}
@@ -263,7 +263,7 @@ export function AccountFormScreen() {
         <View
           accessibilityLabel={t("Account type")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {(
             ["checking", "cash", "savings", "credit", "wallet"] as AccountType[]
@@ -338,7 +338,7 @@ export function AccountFormScreen() {
         </View>
       </Card>
       {showRatesCard ? (
-        <Card variant="inset" style={{ gap: 12 }}>
+        <Card variant="inset" style={{ gap: space.md }}>
           {currencyUnsupported ? (
             <AppText
               literal

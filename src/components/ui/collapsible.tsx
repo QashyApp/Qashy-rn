@@ -11,6 +11,10 @@ import Animated, {
  * (`gapBefore`) and its opacity all shrink together. The content keeps its natural size inside,
  * so it is measured once and never reflows while it folds. Hidden content is taken out of the
  * accessibility tree and touch handling by the clipped height and zero opacity at rest.
+ *
+ * Once measured, the content is laid out absolutely, so the folded height can never constrain
+ * it. In flow, Android could report the content at its folded size; that height of 0 was then
+ * kept, and the block never unfolded again.
  */
 export function Collapsible({
   collapse,
@@ -36,11 +40,22 @@ export function Collapsible({
   return (
     <Animated.View style={[{ overflow: "hidden" }, animated]}>
       <View
-        style={style}
-        onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
+        style={[height === null ? null : MEASURED_STYLE, style]}
+        onLayout={(event) => {
+          const next = event.nativeEvent.layout.height;
+          // Nothing folds to nothing: a zero is a clipped measurement, never the content's size.
+          if (next > 0) setHeight(next);
+        }}
       >
         {children}
       </View>
     </Animated.View>
   );
 }
+
+const MEASURED_STYLE = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+} as const;

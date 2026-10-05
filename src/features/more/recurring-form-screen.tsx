@@ -32,6 +32,7 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { useLocalization } from "@/localization/localization";
+import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { isLocalDate, todayLocal } from "@/utils/date";
 import {
@@ -69,6 +70,7 @@ function intervalHint(interval: string, unit: RecurrenceUnit) {
 }
 
 export function RecurringFormScreen() {
+  const { space } = useQashyTheme();
   const params = useLocalSearchParams<{
     id?: string;
     draftId?: string;
@@ -523,7 +525,7 @@ export function RecurringFormScreen() {
   if (params.id && !existing) return <Redirect href="/more" />;
 
   return (
-    <FormScreen contentContainerStyle={{ gap: 16, paddingBottom: 40 }}>
+    <FormScreen contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>
       <AmountHero
         currency={
           foreignEnabled && trimmedForeignCurrency
@@ -539,11 +541,11 @@ export function RecurringFormScreen() {
         // would pop "Amount is required" in and shift the form under the pointer mid-press.
         error={amountTouched || existing ? amountError : undefined}
       />
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <View
           accessibilityLabel={t("Recurring transaction kind")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8 }}
+          style={{ flexDirection: "row", gap: space.sm }}
         >
           {(["expense", "income"] as CategoryKind[]).map((item) => (
             <View key={item} style={{ flex: 1 }}>
@@ -576,7 +578,7 @@ export function RecurringFormScreen() {
         <View
           accessibilityLabel={t("Recurring account")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {accountChoices.map((item) => (
             <ChoiceChip
@@ -615,7 +617,7 @@ export function RecurringFormScreen() {
             <View
               accessibilityLabel={t("Recurring tags")}
               role="group"
-              style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+              style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
             >
               {state.tags.map((tag) => (
                 <ChoiceChip
@@ -671,12 +673,12 @@ export function RecurringFormScreen() {
         </Card>
       ) : null}
 
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <AppText variant="label">Repeats</AppText>
         <View
           accessibilityLabel={t("Recurrence period")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {(["day", "week", "month", "year"] as RecurrenceUnit[]).map(
             (item) => (
@@ -723,7 +725,7 @@ export function RecurringFormScreen() {
             gap: 14,
           }}
         >
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Post automatically</AppText>
             <AppText variant="caption" muted>
               Off by default. Upcoming items wait for your review.
@@ -744,7 +746,7 @@ export function RecurringFormScreen() {
             gap: 14,
           }}
         >
-          <View style={{ flex: 1, gap: 2 }}>
+          <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Schedule active</AppText>
             <AppText variant="caption" muted>
               Pause without deleting this schedule.

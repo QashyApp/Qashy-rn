@@ -129,7 +129,7 @@ export function ExchangeRateScreen() {
     );
 
   return (
-    <FormScreen maxWidth={620} contentContainerStyle={{ gap: 16 }}>
+    <FormScreen maxWidth={620} contentContainerStyle={{ gap: space.lg }}>
       {/* A hero read-out of the pair being defined, in the same sunken-well material as a
           numeric hero field, so the rate this form edits reads as the primary subject rather
           than one of three equally weighted fields. */}
@@ -153,7 +153,7 @@ export function ExchangeRateScreen() {
           {rate || "—"}
         </AppText>
       </View>
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="From currency"
           value={fromCurrency}

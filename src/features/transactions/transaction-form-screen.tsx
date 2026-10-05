@@ -89,6 +89,7 @@ export function TransactionFormScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { space } = theme;
   const { t } = useLocalization();
   const existing = id
     ? state.transactions.find((item) => item.id === id)
@@ -177,6 +178,42 @@ export function TransactionFormScreen() {
         )
       : "",
   );
+  // The rate fields are pre-filled with the saved snapshot when editing. Only a rate the user
+  // typed is an override; an untouched one must not pin the old date's rate to a moved date.
+  const [exchangeRateEdited, setExchangeRateEdited] = useState(false);
+  const [foreignRateEdited, setForeignRateEdited] = useState(false);
+  const typeExchangeRate = (value: string) => {
+    setExchangeRate(value);
+    setExchangeRateEdited(true);
+  };
+  const typeForeignRate = (value: string) => {
+    setForeignRate(value);
+    setForeignRateEdited(true);
+  };
+  const changeDate = (value: string) => {
+    setDate(value);
+    if (!existing) return;
+    const unchanged = value === existing.localDate;
+    if (!exchangeRateEdited) {
+      setExchangeRate(
+        unchanged && existing.exchangeRate
+          ? localizeDecimalString(existing.exchangeRate, state.settings.locale)
+          : "",
+      );
+      if (!unchanged) setRateOverrideOpen(false);
+      else setRateOverrideOpen(Boolean(existing.exchangeRate?.trim()));
+    }
+    if (!foreignRateEdited) {
+      setForeignRate(
+        unchanged && existing.foreign?.exchangeRate
+          ? localizeDecimalString(
+              existing.foreign.exchangeRate,
+              state.settings.locale,
+            )
+          : "",
+      );
+    }
+  };
   const [feeKind, setFeeKind] = useState<ForeignFeeKind>(
     () => existing?.fee?.kind ?? "none",
   );
@@ -872,7 +909,7 @@ export function TransactionFormScreen() {
         </AppText>
       ) : null}
 
-      <Card style={{ gap: 16 }}>
+      <Card style={{ gap: space.lg }}>
         <FormField
           label="Title"
           value={title}
@@ -909,7 +946,7 @@ export function TransactionFormScreen() {
         <View
           accessibilityLabel={t("From account")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
         >
           {accountChoices.map((item) => (
             <ChoiceChip
@@ -923,6 +960,8 @@ export function TransactionFormScreen() {
                 if (item.id === accountId) return;
                 setAccountId(item.id);
                 setExchangeRate("");
+                setExchangeRateEdited(false);
+                setForeignRateEdited(false);
                 setRateOverrideOpen(false);
                 setDestinationAmount("");
                 setForeignRate("");
@@ -939,7 +978,11 @@ export function TransactionFormScreen() {
               <View
                 accessibilityLabel={t("To account")}
                 accessibilityRole="radiogroup"
-                style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+                style={{
+                  flexDirection: "row",
+                  gap: space.sm,
+                  flexWrap: "wrap",
+                }}
               >
                 {destinationChoices.map((item) => (
                   <ChoiceChip
@@ -963,7 +1006,7 @@ export function TransactionFormScreen() {
                 style={{
                   gap: 10,
                   padding: 14,
-                  borderRadius: 14,
+                  borderRadius: theme.radius.control,
                   backgroundColor: theme.surfaceMuted,
                 }}
               >
@@ -1022,7 +1065,7 @@ export function TransactionFormScreen() {
             foreignCurrency={foreignCurrency}
             onChangeForeignCurrency={setForeignCurrency}
             rateText={foreignRate}
-            onChangeRateText={setForeignRate}
+            onChangeRateText={typeForeignRate}
             appliedRate={foreignAppliedRate}
             fetchingRate={fetchingRate}
             onTurnOnRates={rateStatus.enabled ? undefined : turnOnRates}
@@ -1049,7 +1092,7 @@ export function TransactionFormScreen() {
           <FormField
             label="Date"
             value={date}
-            onChangeText={setDate}
+            onChangeText={changeDate}
             placeholder="YYYY-MM-DD"
             autoCapitalize="none"
             error={dateError}
@@ -1062,7 +1105,11 @@ export function TransactionFormScreen() {
               <View
                 accessibilityLabel={t("Transaction tags")}
                 role="group"
-                style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}
+                style={{
+                  flexDirection: "row",
+                  gap: space.sm,
+                  flexWrap: "wrap",
+                }}
               >
                 {state.tags.map((tag) => (
                   <ChoiceChip
@@ -1079,7 +1126,7 @@ export function TransactionFormScreen() {
           ) : null}
 
           {needsRate && account ? (
-            <View style={{ gap: 12 }}>
+            <View style={{ gap: space.md }}>
               {appliedRate ? (
                 <AppText literal variant="caption" muted>
                   {`1 ${account.currency} = ${localizeDecimalString(appliedRate.rate, state.settings.locale)} ${state.settings.baseCurrency} · ${mediumDate(appliedRate.effectiveDate, state.settings.locale)} · ${appliedRate.automatic ? t("Automatic") : t("Manual")}`}
@@ -1121,7 +1168,7 @@ export function TransactionFormScreen() {
                 <FormField
                   label={`1 ${account.currency} equals how many ${state.settings.baseCurrency}?`}
                   value={exchangeRate}
-                  onChangeText={setExchangeRate}
+                  onChangeText={typeExchangeRate}
                   keyboardType="decimal-pad"
                   placeholder="Use the applied rate above"
                   error={exchangeRateError}
