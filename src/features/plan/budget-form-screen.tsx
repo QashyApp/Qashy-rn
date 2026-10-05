@@ -9,6 +9,7 @@ import { QashySwitch } from "@/components/ui/qashy-switch";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { MoneyField } from "@/components/finance/money-field";
+import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import type { PeriodUnit } from "@/domain/models";
@@ -294,19 +295,17 @@ export function BudgetFormScreen() {
         </View>
         {unit === "custom" ? (
           <>
-            <FormField
+            <DateField
               label="Start date"
               value={startDate}
-              onChangeText={setStartDate}
-              placeholder="YYYY-MM-DD"
+              onChange={setStartDate}
               error={startDateError}
               required
             />
-            <FormField
+            <DateField
               label="End date"
               value={endDate}
-              onChangeText={setEndDate}
-              placeholder="YYYY-MM-DD"
+              onChange={setEndDate}
               error={endDateError}
               required
             />

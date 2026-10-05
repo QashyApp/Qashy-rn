@@ -6,6 +6,7 @@ import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
+import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import {
@@ -171,11 +172,10 @@ export function ExchangeRateScreen() {
           error={rateError}
           required
         />
-        <FormField
+        <DateField
           label="Effective date"
           value={effectiveDate}
-          onChangeText={setEffectiveDate}
-          placeholder="YYYY-MM-DD"
+          onChange={setEffectiveDate}
           error={dateError}
           required
         />

@@ -6070,3 +6070,133 @@ describe("CSV foreign amount and fee round trip", () => {
     expect(created.fee ?? null).toBeNull();
   });
 });
+
+describe("FinanceRepository batch date change", () => {
+  it("moves transactions to a new date and keeps their amounts and fees", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const plain = await repository.saveTransaction({
+      kind: "expense",
+      title: "Lunch",
+      localDate: "2026-07-10",
+      accountId: account.id,
+      amountMinor: 1500,
+    });
+    const withFee = await repository.saveTransaction({
+      kind: "expense",
+      title: "Card purchase",
+      localDate: "2026-07-11",
+      accountId: account.id,
+      amountMinor: 10000,
+      fee: { kind: "percent", percent: "2.5" },
+    });
+
+    await repository.updateTransactionsDate(
+      [plain.id, withFee.id],
+      "2026-08-03",
+    );
+
+    const byId = new Map(
+      repository.getSnapshot().transactions.map((item) => [item.id, item]),
+    );
+    expect(byId.get(plain.id)).toMatchObject({
+      localDate: "2026-08-03",
+      amountMinor: 1500,
+      title: "Lunch",
+    });
+    expect(byId.get(withFee.id)).toMatchObject({
+      localDate: "2026-08-03",
+      amountMinor: 10250,
+      fee: { kind: "percent", percent: "2.5", amountMinor: 250 },
+    });
+  });
+
+  it("re-prices a foreign-currency account at the new day's rate", async () => {
+    const { repository } = await createRepository();
+    const eur = await repository.saveAccount({
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.1",
+      effectiveDate: "2026-07-01",
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.2",
+      effectiveDate: "2026-08-01",
+    });
+    const item = await repository.saveTransaction({
+      kind: "expense",
+      title: "Train",
+      localDate: "2026-07-15",
+      accountId: eur.id,
+      amountMinor: 1000,
+    });
+    expect(item.baseAmountMinor).toBe(1100);
+
+    await repository.updateTransactionsDate([item.id], "2026-08-15");
+
+    expect(
+      repository.getSnapshot().transactions.find((row) => row.id === item.id),
+    ).toMatchObject({
+      localDate: "2026-08-15",
+      exchangeRate: "1.2",
+      baseAmountMinor: 1200,
+    });
+  });
+
+  it("moves nothing when one transaction cannot be priced on the new date", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const eur = await repository.saveAccount({
+      name: "Euro",
+      type: "checking",
+      currency: "EUR",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
+    await repository.saveExchangeRate({
+      fromCurrency: "EUR",
+      toCurrency: "USD",
+      rate: "1.1",
+      effectiveDate: "2026-07-01",
+    });
+    const local = await repository.saveTransaction({
+      kind: "expense",
+      title: "Local",
+      localDate: "2026-07-15",
+      accountId: account.id,
+      amountMinor: 500,
+    });
+    const foreign = await repository.saveTransaction({
+      kind: "expense",
+      title: "Foreign",
+      localDate: "2026-07-15",
+      accountId: eur.id,
+      amountMinor: 500,
+    });
+
+    await expect(
+      repository.updateTransactionsDate([local.id, foreign.id], "2026-06-01"),
+    ).rejects.toThrow("Missing exchange rate");
+
+    const dates = repository
+      .getSnapshot()
+      .transactions.filter(
+        (row) => row.id === local.id || row.id === foreign.id,
+      )
+      .map((row) => row.localDate);
+    expect(dates).toEqual(["2026-07-15", "2026-07-15"]);
+  });
+});

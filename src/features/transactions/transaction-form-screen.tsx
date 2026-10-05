@@ -8,6 +8,7 @@ import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { MoneyField } from "@/components/finance/money-field";
+import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import { SegmentedControl } from "@/components/ui/segmented-control";
@@ -1089,12 +1090,10 @@ export function TransactionFormScreen() {
           expanded={moreOpen}
           onToggle={() => setMoreOpen((open) => !open)}
         >
-          <FormField
+          <DateField
             label="Date"
             value={date}
-            onChangeText={changeDate}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
+            onChange={changeDate}
             error={dateError}
             required
           />

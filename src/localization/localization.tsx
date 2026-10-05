@@ -1410,6 +1410,26 @@ const HEBREW: Record<string, string> = {
     "הקובץ הזה גדול מדי מכדי להיות ערכת עיצוב.",
   "The theme file size could not be checked safely. Choose another file.":
     "לא ניתן היה לבדוק בבטחה את גודל קובץ ערכת העיצוב. בחרו קובץ אחר.",
+  // Date picker field.
+  "Choose a date": "בחירת תאריך",
+  "Not set": "לא נקבע",
+  "Opens a date picker.": "פותח בורר תאריכים.",
+  "Clear date": "ניקוי התאריך",
+  // How a recurring schedule ends.
+  Ends: "מסתיים",
+  "When the schedule ends": "מתי התזמון מסתיים",
+  Never: "אף פעם",
+  "On a date": "בתאריך",
+  "After a number of times": "אחרי מספר פעמים",
+  "Number of times": "מספר פעמים",
+  "Choose the end date.": "בחרו את תאריך הסיום.",
+  "For a set number of payments, like an installment plan.":
+    "למספר קבוע של תשלומים, כמו עסקת תשלומים.",
+  // Batch editing a selection.
+  "Change date": "שינוי תאריך",
+  "Edit 1 transaction": "עריכת תנועה אחת",
+  "Move 1 transaction": "העברת תנועה אחת",
+  "Couldn’t change the date": "לא ניתן היה לשנות את התאריך",
 };
 
 const translateField = (field: string) =>
@@ -1420,6 +1440,14 @@ const translateField = (field: string) =>
 
 // Built once: the table is static, and every non-dictionary string in Hebrew walks it.
 const DYNAMIC_PATTERNS: [RegExp, (...parts: string[]) => string][] = [
+  [/^Edit \((\d+)\)$/, (count) => `עריכה (${count})`],
+  [/^Edit (\d+) transactions$/, (count) => `עריכת ${count} תנועות`],
+  [/^Move (\d+) transactions$/, (count) => `העברת ${count} תנועות`],
+  [/^The last one is on (.+)\.$/, (date) => `האחרון ב־${date}.`],
+  [
+    /^Number of times must be (\d+) or less\.$/,
+    (count) => `מספר הפעמים חייב להיות ${count} או פחות.`,
+  ],
   [/^(\d+) choices available$/, (count) => `${count} אפשרויות זמינות`],
   [/^(\d+) transactions$/, (count) => `${count} תנועות`],
   [/^(\d+) transaction$/, (count) => `תנועה אחת`],

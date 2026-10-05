@@ -197,6 +197,9 @@ test("completes onboarding and records an expense", async ({ page }) => {
   await page.getByRole("button", { name: "Select" }).click();
   await page.getByRole("checkbox", { name: /Coffee/ }).click();
   await expect(page.getByText("1 selected")).toBeVisible();
+  // Category changes live behind the batch bar's Edit button.
+  await page.getByRole("button", { name: "Edit (1)" }).click();
+  await page.getByRole("button", { name: "Change category" }).click();
   await page.getByRole("button", { name: "Groceries" }).click();
   await expect(
     page.getByText(/Groceries · Everyday/).filter({ visible: true }),
@@ -513,11 +516,14 @@ test("labels compact navigation and recovers a one-account transfer draft", asyn
   await page.getByRole("link", { name: /Transactions/ }).click();
   await page.getByRole("button", { name: "Select" }).click();
   await page.getByRole("checkbox", { name: /Transfer/ }).click();
+  await page.getByRole("button", { name: "Edit (1)" }).click();
+  // The sheet explains why, and the category step cannot be opened.
   await expect(
-    page.getByText(
-      "Transfers do not have categories. Select only income or expense transactions to change categories.",
-    ),
+    page.getByText("Transfers do not have categories."),
   ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: /Change category/ }),
+  ).toBeDisabled();
   await expect(page.getByRole("button", { name: "Uncategorized" })).toHaveCount(
     0,
   );
@@ -1242,8 +1248,6 @@ test("selects the rows between a held row and the finger while dragging", async 
   };
   // Newest first: E, D, C, B, A. Hold on D, drag to B.
   const startY = await centre("Row D");
-  const endY = await centre("Row B");
-  const firstBefore = await box("Row E");
   await touch("touchStart", startY);
   for (let i = 0; i < 8; i++) {
     await page.waitForTimeout(100);
@@ -1253,11 +1257,16 @@ test("selects the rows between a held row and the finger while dragging", async 
   // A browser has committed the held touch to scrolling by now; a drag from a selected row (which
   // opts out of touch scrolling) is the one that always works.
   await touch("touchEnd", null);
-  await touch("touchStart", startY);
-  await touch("touchMove", startY + 1);
+  // Lifting the finger folds the top section away for selection mode, which moves the rows up.
+  await page.waitForTimeout(600);
+  const firstBefore = await box("Row E");
+  const grabY = await centre("Row D");
+  const targetY = await centre("Row B");
+  await touch("touchStart", grabY);
+  await touch("touchMove", grabY + 1);
   await page.waitForTimeout(50);
   for (let step = 1; step <= 12; step++) {
-    await touch("touchMove", startY + ((endY - startY) * step) / 12);
+    await touch("touchMove", grabY + ((targetY - grabY) * step) / 12);
     await page.waitForTimeout(16);
   }
   await expect(page.getByText("3 selected")).toBeVisible();

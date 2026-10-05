@@ -87,6 +87,8 @@ export interface TransactionMonthListProps {
   onSetSelection: (ids: string[]) => void;
   /** Long-press on a row: enters selection mode and selects it. */
   onLongPressItem: (id: string) => void;
+  /** A held row is being dragged across others; true from the hold until the finger lifts. */
+  onDragActiveChange?: (active: boolean) => void;
   onResolveUpcoming: (id: string, action: "skip" | "confirm") => void;
   onClearFilters: () => void;
   onGoToMonth: (month: string, direction: MonthDirection) => void;
@@ -117,6 +119,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   onToggleItem,
   onSetSelection,
   onLongPressItem,
+  onDragActiveChange,
   onResolveUpcoming,
   onClearFilters,
   onGoToMonth,
@@ -281,6 +284,9 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     containerRef,
     scrollBy,
   });
+  useEffect(() => {
+    if (isCurrent) onDragActiveChange?.(dragging);
+  }, [isCurrent, dragging, onDragActiveChange]);
 
   return (
     <GestureDetector gesture={gesture}>
@@ -345,7 +351,9 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               children would leave "transactions" on its own with no key. */}
               <AppText literal variant="caption" muted>
                 {t(
-                  `${transactions.length} ${transactions.length === 1 ? "transaction" : "transactions"}`,
+                  selectionMode
+                    ? `${selectedIds.length} selected`
+                    : `${transactions.length} ${transactions.length === 1 ? "transaction" : "transactions"}`,
                 )}
               </AppText>
               <View
