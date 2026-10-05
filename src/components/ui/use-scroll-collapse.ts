@@ -29,14 +29,17 @@ const AT_END_SLACK = 2;
 /**
  * Tracks scroll direction and exposes a 0–1 collapse value: scrolling down collapses (1),
  * scrolling up or resting near the top expands (0). Attach `onScroll` to a scrollable with
- * `scrollEventThrottle={16}`. `enabled` false (or `locked`) holds it expanded.
+ * `scrollEventThrottle={16}`. `enabled` false (or `locked`) holds it expanded; `forceCollapsed`
+ * holds it collapsed (selection mode wants the room) and wins over `locked`.
  */
 export function useScrollCollapse({
   enabled,
   locked = false,
+  forceCollapsed = false,
 }: {
   enabled: boolean;
   locked?: boolean;
+  forceCollapsed?: boolean;
 }) {
   const collapse = useSharedValue(0);
   const level = useAnimationLevel();
@@ -44,8 +47,10 @@ export function useScrollCollapse({
   const collapsed = useRef(false);
   const changedAt = useRef(0);
 
-  const setCollapsed = (next: boolean) => {
-    if (collapsed.current === next) return;
+  const forced = enabled && forceCollapsed;
+  const held = !enabled || (locked && !forced);
+
+  const animateTo = (next: boolean) => {
     collapsed.current = next;
     changedAt.current = Date.now();
     collapse.set(
@@ -56,22 +61,25 @@ export function useScrollCollapse({
       }),
     );
   };
+  const setCollapsed = (next: boolean) => {
+    if (collapsed.current !== next) animateTo(next);
+  };
 
-  // Entering selection mode (locked) or disabling must expand right away: the list may not
-  // scroll again (drag-select), so waiting for an `onScroll` would leave it folded.
-  const held = !enabled || locked;
+  // Being held open or forced shut takes effect right away, not on the next scroll: the list may
+  // not scroll at all meanwhile (drag-select), or be too short to. When a forced collapse ends
+  // near the top of the list, open again, since there is no scroll up left to do it.
   useEffect(() => {
-    if (!held || !collapsed.current) return;
-    collapsed.current = false;
-    changedAt.current = Date.now();
-    collapse.set(
-      withTiming(0, {
-        duration: level === "off" ? 0 : level === "minimal" ? 120 : 220,
-        easing: Easing.out(Easing.cubic),
-        reduceMotion: ReduceMotion.System,
-      }),
-    );
-  }, [held, collapse, level]);
+    if (forced) {
+      if (!collapsed.current) animateTo(true);
+    } else if (
+      collapsed.current &&
+      (held || lastOffset.current <= COLLAPSE_AFTER_OFFSET)
+    ) {
+      animateTo(false);
+    }
+    // `animateTo` only touches refs and the shared value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forced, held]);
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -79,7 +87,8 @@ export function useScrollCollapse({
     const maxOffset = contentSize.height - layoutMeasurement.height;
     const delta = offset - lastOffset.current;
     lastOffset.current = offset;
-    if (!enabled || locked) {
+    if (forced) return;
+    if (held) {
       setCollapsed(false);
       return;
     }

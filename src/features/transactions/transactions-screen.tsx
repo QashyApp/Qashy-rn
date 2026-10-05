@@ -1,12 +1,14 @@
 import { router, useLocalSearchParams } from "expo-router";
 import {
   useDeferredValue,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type ComponentProps,
 } from "react";
 import {
+  BackHandler,
   ScrollView,
   SectionList,
   StyleSheet,
@@ -17,7 +19,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ActionButton } from "@/components/ui/action-button";
 import { AppIcon } from "@/components/ui/app-icon";
-import { AppText } from "@/components/ui/app-text";
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { Collapsible } from "@/components/ui/collapsible";
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
@@ -36,12 +37,12 @@ import {
   floatingActionMetrics,
   screenContentMetrics,
 } from "@/components/ui/screen-container";
-import { TextButton } from "@/components/ui/text-button";
 import { useScrollCollapse } from "@/components/ui/use-scroll-collapse";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import type { TransactionRecord } from "@/domain/models";
 import { CollapsingSummaryTiles } from "@/features/transactions/summary-tiles";
+import { BatchEditSheet } from "@/features/transactions/list/batch-edit-sheet";
 import type { LedgerSection } from "@/features/transactions/list/sections";
 import {
   TransactionMonthList,
@@ -63,6 +64,7 @@ import {
   monthLabel,
   parseMonthKey,
   startOfMonth,
+  todayLocal,
 } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
 import { hapticSelection, hapticSuccess } from "@/utils/haptics";
@@ -112,6 +114,10 @@ export function TransactionsScreen() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  // A drag-select in progress: the top section folds only once the finger lifts, so the rows
+  // do not slide out from under it mid-drag.
+  const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const pagerRef = useRef<MonthPagerHandle>(null);
   const dragProgress = useSharedValue(0);
@@ -123,9 +129,12 @@ export function TransactionsScreen() {
   // On a phone the search and filters fold away while reading down the list and the month's
   // totals shrink to one line; both return on the way back up. They stay open while searching.
   const phoneWidth = metrics.contentWidth < 520;
+  // Selecting folds them too, the same way scrolling does: the batch bar takes room at the
+  // bottom, so the list needs all it can get at the top. Typing in search keeps them open.
   const { collapse, onScroll: onScrollCollapse } = useScrollCollapse({
     enabled: phoneWidth,
-    locked: searchFocused || search.length > 0 || selectionMode,
+    locked: searchFocused || search.length > 0,
+    forceCollapsed: selectionMode && !dragActive && !searchFocused,
   });
   const onScroll: NonNullable<
     ComponentProps<typeof SectionList>["onScroll"]
@@ -191,6 +200,32 @@ export function TransactionsScreen() {
 
   const clearSelection = () => setSelectedIds([]);
 
+  const exitSelection = () => {
+    setSelectedIds([]);
+    setSelectionMode(false);
+    setEditOpen(false);
+  };
+
+  // The hardware back button leaves selection mode before it leaves the screen.
+  useEffect(() => {
+    if (!selectionMode || process.env.EXPO_OS !== "android") return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        exitSelection();
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [selectionMode]);
+
+  // Where the batch date picker starts: the selection's own day when every row shares one.
+  const selectedDates = new Set(
+    selectedTransactions.map((item) => item.localDate),
+  );
+  const batchInitialDate =
+    selectedDates.size === 1 ? [...selectedDates][0] : todayLocal();
+
   const toggleSelectionMode = () => {
     setSelectionMode((current) => !current);
     setSelectedIds([]);
@@ -220,13 +255,30 @@ export function TransactionsScreen() {
     try {
       await repository.updateTransactionsCategory(ids, categoryId);
       hapticSuccess();
-      setSelectedIds([]);
-      setSelectionMode(false);
+      exitSelection();
     } catch (reason) {
       showError(
         "Couldn’t change category",
         errorMessage(reason, "Try a compatible category."),
       );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const changeDate = async (localDate: string) => {
+    if (busy) return;
+    const ids = [...selectedIds];
+    setBusy(true);
+    try {
+      await repository.updateTransactionsDate(ids, localDate);
+      hapticSuccess();
+      exitSelection();
+      // Follow the transactions to their new month, so the move is visible.
+      if (monthKey(localDate) !== monthKey(month))
+        changeMonth(startOfMonth(localDate));
+    } catch (reason) {
+      showError("Couldn’t change the date", errorMessage(reason, "Try again."));
     } finally {
       setBusy(false);
     }
@@ -249,8 +301,7 @@ export function TransactionsScreen() {
     try {
       await repository.deleteEntities("transactions", ids);
       hapticSuccess();
-      setSelectedIds([]);
-      setSelectionMode(false);
+      exitSelection();
     } catch (reason) {
       showError(
         "Couldn’t delete transactions",
@@ -530,6 +581,7 @@ export function TransactionsScreen() {
               onToggleItem={toggleSelected}
               onSetSelection={setSelectedIds}
               onLongPressItem={enterSelection}
+              onDragActiveChange={setDragActive}
               onResolveUpcoming={resolveUpcoming}
               onClearFilters={clearFilters}
               onGoToMonth={changeMonth}
@@ -551,111 +603,35 @@ export function TransactionsScreen() {
             alignSelf: "center",
           }}
         >
+          {/* One compact row: what to do with the selection on one side, deleting it on the
+            other. The choices behind "Edit" live in a sheet, so the bar never grows into the
+            list it is acting on. The count and "Done selecting" sit at the top of the list. */}
           <View
             style={{
-              gap: space.md,
-              padding: space.lg,
+              flexDirection: "row",
+              gap: space.sm,
+              padding: space.sm,
               borderRadius: radius.sheet,
               borderCurve: "continuous",
               ...materialStyle(theme, "overlay"),
             }}
           >
-            <View
-              style={{
-                flexDirection: "row",
-                flexWrap: "wrap",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: space.md,
-              }}
-            >
-              <MotionView
-                key={selectedIds.length}
-                variant="fade"
-                animateLayout
-                style={{ flexShrink: 1 }}
-              >
-                <AppText literal variant="headline">
-                  {t(`${selectedIds.length} selected`)}
-                </AppText>
-              </MotionView>
-              <TextButton
-                title="Cancel"
-                tone="muted"
-                onPress={() => {
-                  setSelectedIds([]);
-                  setSelectionMode(false);
-                }}
-              />
-            </View>
-            {selectedIds.length ? (
-              <>
-                {hasSelectedTransfers ? (
-                  <AppText variant="caption" muted>
-                    Transfers do not have categories. Select only income or
-                    expense transactions to change categories.
-                  </AppText>
-                ) : (
-                  <>
-                    <AppText variant="caption" muted>
-                      Change category
-                    </AppText>
-                    {selectedKinds.length > 1 ? (
-                      <AppText variant="caption" muted>
-                        Select only income or only expense transactions to
-                        assign a category.
-                      </AppText>
-                    ) : null}
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      contentContainerStyle={{
-                        flexDirection: "row",
-                        gap: space.sm,
-                      }}
-                    >
-                      <ChoiceChip
-                        mode="button"
-                        icon="questionmark.circle"
-                        label="Uncategorized"
-                        selected={false}
-                        disabled={busy}
-                        onPress={() => changeCategory(null)}
-                      />
-                      {state.categories
-                        .filter(
-                          (item) =>
-                            item.kind === compatibleCategoryKind &&
-                            !item.archived,
-                        )
-                        .map((category) => (
-                          <ChoiceChip
-                            mode="button"
-                            key={category.id}
-                            literal
-                            icon={category.icon}
-                            label={category.name}
-                            selected={false}
-                            disabled={busy}
-                            onPress={() => changeCategory(category.id)}
-                          />
-                        ))}
-                    </ScrollView>
-                  </>
-                )}
-                <ActionButton
-                  title="Delete selected"
-                  icon="trash"
-                  variant="danger"
-                  disabled={busy}
-                  onPress={deleteSelected}
-                />
-              </>
-            ) : (
-              <AppText variant="caption" muted>
-                Choose one or more transactions below.
-              </AppText>
-            )}
+            <ActionButton
+              title={`Edit (${selectedIds.length})`}
+              icon="ion:create-outline"
+              variant="secondary"
+              disabled={busy || !selectedIds.length}
+              onPress={() => setEditOpen(true)}
+              style={{ flex: 1 }}
+            />
+            <ActionButton
+              title="Delete"
+              icon="trash"
+              variant="danger"
+              disabled={busy || !selectedIds.length}
+              onPress={deleteSelected}
+              style={{ flex: 1 }}
+            />
           </View>
         </MotionView>
       ) : (
@@ -671,6 +647,30 @@ export function TransactionsScreen() {
           style={floatingActionMetrics(metrics, insets, space)}
         />
       )}
+      <BatchEditSheet
+        visible={selectionMode && editOpen}
+        count={selectedIds.length}
+        categories={
+          compatibleCategoryKind && !hasSelectedTransfers
+            ? state.categories.filter(
+                (item) =>
+                  item.kind === compatibleCategoryKind && !item.archived,
+              )
+            : []
+        }
+        categoryBlockedReason={
+          hasSelectedTransfers
+            ? "Transfers do not have categories."
+            : selectedKinds.length > 1
+              ? "Select only income or only expense transactions to assign a category."
+              : null
+        }
+        initialDate={batchInitialDate}
+        busy={busy}
+        onChangeCategory={changeCategory}
+        onChangeDate={changeDate}
+        onClose={() => setEditOpen(false)}
+      />
     </View>
   );
 }

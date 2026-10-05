@@ -130,6 +130,7 @@ import { resolvePeriod } from "@/utils/period";
 import {
   feeMinorFor,
   normalizeFeePercent,
+  principalOf,
   totalWithFee,
 } from "@/utils/transaction-amounts";
 
@@ -2444,6 +2445,73 @@ export class LocalFinanceRepository implements FinanceRepository {
     this.state = {
       ...this.state,
       transactions,
+    };
+    this.emit();
+  }
+
+  updateTransactionsDate(ids: string[], localDate: string) {
+    return this.enqueueMutation(() =>
+      this.updateTransactionsDateNow(ids, localDate),
+    );
+  }
+
+  private async updateTransactionsDateNow(ids: string[], localDate: string) {
+    this.assertDate(localDate);
+    const selected = new Set(ids);
+    const moving = this.state.transactions.filter(
+      (item) => selected.has(item.id) && item.localDate !== localDate,
+    );
+    if (!moving.length) return;
+    // Rebuilt through `buildTransaction` as a full edit, so a moved transaction is validated and
+    // priced like one the user re-dated in the form: rate snapshots that belonged to the old day
+    // are left out and resolved again for the new one.
+    const updated = moving.map((item) =>
+      this.buildTransaction(
+        {
+          kind: item.kind,
+          status: item.status,
+          title: item.title,
+          note: item.note,
+          localDate,
+          accountId: item.accountId,
+          destinationAccountId: item.destinationAccountId,
+          categoryId: item.categoryId,
+          tagIds: item.tagIds,
+          amountMinor:
+            item.kind === "transfer" ? item.amountMinor : principalOf(item),
+          destinationAmountMinor:
+            item.kind === "transfer" &&
+            item.destinationCurrency !== item.currency
+              ? item.destinationAmountMinor
+              : null,
+          recurringRuleId: item.recurringRuleId,
+          occurrenceKey: item.occurrenceKey,
+          foreign: item.foreign
+            ? {
+                amountMinor: item.foreign.amountMinor,
+                currency: item.foreign.currency,
+              }
+            : null,
+          fee: item.fee
+            ? item.fee.kind === "percent"
+              ? { kind: "percent", percent: item.fee.percent ?? "" }
+              : { kind: "fixed", amountMinor: item.fee.amountMinor }
+            : null,
+        },
+        item.id,
+      ),
+    );
+    const replacements = new Map(updated.map((item) => [item.id, item]));
+    const transactions = this.state.transactions.map(
+      (item) => replacements.get(item.id) ?? item,
+    );
+    this.assertTransactionSetSafe(transactions);
+    await this.persist("transactions", updated);
+    this.state = {
+      ...this.state,
+      transactions: this.state.transactions.map(
+        (item) => replacements.get(item.id) ?? item,
+      ),
     };
     this.emit();
   }
