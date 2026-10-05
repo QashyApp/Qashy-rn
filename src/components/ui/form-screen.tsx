@@ -22,7 +22,8 @@ export function FormScreen({
 }: ScrollViewProps & { maxWidth?: number }) {
   const theme = useQashyTheme();
   // A native sheet starts sliding in only once everything in it has mounted, so a long form held
-  // the slide back by however long the whole form took to build. The form now mounts a frame
+  // the slide back by however long the whole form took to build (Android's own sheet starts at
+  // once, but a form that builds mid-spring drops frames from it). The form now mounts a frame
   // after its sheet: the slide starts on the tap, and the form is in place well before the sheet
   // has risen far enough to show it. The sheet's height comes from its detents, not its content,
   // so nothing resizes when the form arrives.
@@ -39,11 +40,6 @@ export function FormScreen({
         scrollEventThrottle={16}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
-        // Android-only: without it, this ScrollView never registers as a nested
-        // scrolling child, so the form sheet's own BottomSheetBehavior treats
-        // every scroll drag as its own — collapsing or dismissing the sheet
-        // instead of scrolling the content, even on an untouched form.
-        nestedScrollEnabled
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={[
           {

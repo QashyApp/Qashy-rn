@@ -21,6 +21,10 @@ import {
   useFinanceSettings,
 } from "@/providers/finance-provider";
 import { SyncProvider } from "@/providers/sync-provider";
+import {
+  ANDROID_SHEET_OPTIONS,
+  sheetScreenLayout,
+} from "@/components/navigation/android-sheet";
 import { NavBarStyleSheetProvider } from "@/components/navigation/nav-bar-style-sheet";
 import { AnimationLevelProvider } from "@/components/ui/animation-level";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
@@ -90,6 +94,12 @@ function useWebDocumentTitle() {
 // `transaction` carried the detents and transparent content style, so the other
 // six sheets opened at a different height with an opaque backdrop.
 function formSheetOptions(title: string, backTitle: string, fallback: Href) {
+  // Android draws and animates its own sheet (`AndroidSheet`, mounted by `sheetScreenLayout`) rather
+  // than use the native one, which cannot be restyled or re-timed without patching a library. The
+  // sheet carries the title and the close control, so there is no native header.
+  if (process.env.EXPO_OS === "android") {
+    return { ...ANDROID_SHEET_OPTIONS, title };
+  }
   return {
     headerShown: true,
     title,
@@ -194,6 +204,7 @@ function RootNavigator() {
     <>
       <StatusBar style={theme.mode === "dark" ? "light" : "dark"} />
       <Stack
+        screenLayout={sheetScreenLayout}
         screenOptions={{
           headerShown: false,
           freezeOnBlur: false,

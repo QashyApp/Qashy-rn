@@ -1,0 +1,21 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.qashytabgestures'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.qashytabgestures"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // Compile-time only: the app already ships Material (react-native-screens' native tab bar is a
+  // BottomNavigationView), so the runtime class comes from there and no second copy is bundled.
+  compileOnly "com.google.android.material:material:1.12.0"
+}
