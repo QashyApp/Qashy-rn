@@ -33,3 +33,20 @@ export function resolveSwipe(
   if (forward) return canForward ? 1 : 0;
   return -1;
 }
+
+/**
+ * The spring a committed swipe settles on: the theme's own stiffness and mass, damped critically.
+ * Underdamped and clamped, a spring reaches its target for the first time at speed and stops dead,
+ * which reads as a linear slide with a hard stop. Critically damped, the pages decelerate into
+ * place and never overshoot. Springing back to where the drag began keeps the theme's own spring.
+ */
+export function commitSpring(spring: {
+  damping: number;
+  stiffness: number;
+  mass: number;
+}) {
+  return {
+    ...spring,
+    damping: 2 * Math.sqrt(spring.stiffness * spring.mass),
+  };
+}

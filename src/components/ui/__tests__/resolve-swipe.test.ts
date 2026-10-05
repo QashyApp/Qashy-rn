@@ -1,4 +1,4 @@
-import { resolveSwipe } from "@/components/ui/resolve-swipe";
+import { commitSpring, resolveSwipe } from "@/components/ui/resolve-swipe";
 
 const W = 400;
 
@@ -38,5 +38,18 @@ describe("resolveSwipe", () => {
   it("ignores a zero-width page and a motionless flick", () => {
     expect(resolveSwipe(-50, 0, 0, true, false)).toBe(0);
     expect(resolveSwipe(0, 0, W, true, false)).toBe(0);
+  });
+});
+
+describe("commitSpring", () => {
+  it("keeps the theme's stiffness and mass and damps critically", () => {
+    const spring = { damping: 22, stiffness: 320, mass: 0.8 };
+    const committed = commitSpring(spring);
+    expect(committed.stiffness).toBe(320);
+    expect(committed.mass).toBe(0.8);
+    // ζ = c / (2·√(k·m)) = 1
+    expect(
+      committed.damping / (2 * Math.sqrt(committed.stiffness * committed.mass)),
+    ).toBeCloseTo(1, 10);
   });
 });

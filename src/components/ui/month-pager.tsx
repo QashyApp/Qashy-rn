@@ -33,9 +33,10 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
+import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { EntranceScope } from "@/components/ui/motion";
 import type { MonthDirection } from "@/components/ui/month-switcher";
-import { resolveSwipe } from "@/components/ui/resolve-swipe";
+import { commitSpring, resolveSwipe } from "@/components/ui/resolve-swipe";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
@@ -124,7 +125,8 @@ export function navigateMonth(
 /**
  * Previous / current / next month side by side. The drag tracks the finger 1:1, the
  * month being swiped toward slides in from its side, and release either commits
- * (a quarter of the width, or a flick) or springs back.
+ * (a quarter of the width, or a flick), decelerating into place on a critically damped
+ * spring, or springs back.
  *
  * On web only touch drags swipe (mobile browsers, the installed PWA): mouse and pen are
  * inert so desktop text selection is untouched, and `touch-action: pan-y` leaves vertical
@@ -152,8 +154,14 @@ function PagerImpl({
   const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const { background, motion } = useQashyTheme();
-  const reduced = useReducedMotion();
+  const systemReduced = useReducedMotion();
+  const level = useAnimationLevel();
+  // The system's reduced-motion setting and the in-app Animations level (Minimal, Off) both turn the
+  // slide into a crossfade; Off makes it instant.
+  const reduced = systemReduced || level !== "all";
+  const fadeScale = level === "off" ? 0 : 1;
   const spring = motion.spring.snappy;
+  const committing = useMemo(() => commitSpring(spring), [spring]);
 
   const [width, setWidth] = useState(0);
   // The month the neighbours were last mounted for; stale means "not yet".
@@ -238,9 +246,10 @@ function PagerImpl({
     // name never lands for a frame at the old offset.
     dragProgress?.set(0);
     busy.set(false);
-    if (reduced) fade.set(withTiming(1, { duration: CROSSFADE_IN }));
+    if (reduced)
+      fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
     else fade.set(1);
-  }, [month, reduced, translateX, dragProgress, busy, fade]);
+  }, [month, reduced, fadeScale, translateX, dragProgress, busy, fade]);
 
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -285,7 +294,7 @@ function PagerImpl({
     busy.set(true);
     if (reduced) {
       fade.set(
-        withTiming(0, { duration: CROSSFADE_OUT }, (finished) => {
+        withTiming(0, { duration: CROSSFADE_OUT * fadeScale }, (finished) => {
           if (finished) runOnJS(commit)(direction, haptic);
           else busy.set(false);
         }),
@@ -295,7 +304,7 @@ function PagerImpl({
     translateX.set(
       withSpring(
         -direction * sign * width,
-        { ...spring, velocity, overshootClamping: true },
+        { ...committing, velocity, overshootClamping: true },
         (finished) => {
           if (finished) runOnJS(commit)(direction, haptic);
           else busy.set(false);
@@ -390,7 +399,9 @@ function PagerImpl({
     isRtl,
     sign,
     reduced,
+    fadeScale,
     spring,
+    committing,
     blockedBy,
     markReady,
     clearReady,
@@ -425,9 +436,11 @@ function PagerImpl({
       neighbours,
       disabled,
       reduced,
+      fadeScale,
       width,
       sign,
       spring,
+      committing,
       commit,
       busy,
     ],
