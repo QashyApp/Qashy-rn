@@ -120,20 +120,6 @@ export const SYNC_META = {
   relayUrl: "relayUrl",
   /** `'0'` disables the drop-box. Absent means on, because a configured relay is meant to be used. */
   relayEnabled: "relayEnabled",
-  /** `'0'` disables direct connections, leaving the drop-box. Absent means on. */
-  directEnabled: "directEnabled",
-  /** Comma-separated STUN URLs. `''` means none, which still leaves LAN sync working. */
-  stunUrls: "stunUrls",
-  /**
-   * A user-supplied TURN server, and the credentials it issued them.
-   *
-   * Never defaulted and never shipped. A TURN relay sees both endpoints' addresses and every
-   * byte's worth of traffic volume, which is strictly more than the drop-box sees, so it is
-   * only ever something the user deliberately opts into for their own infrastructure.
-   */
-  turnUrl: "turnUrl",
-  turnUsername: "turnUsername",
-  turnCredential: "turnCredential",
 
   // -- Relay health cache. Advisory, never consulted before syncing.
 

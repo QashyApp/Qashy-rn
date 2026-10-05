@@ -9,9 +9,9 @@
  * - **One verdict, computed once.** The hero, the More row, and the relay pill all descend from
  *   `summarizeSync` and one `RelayHealth` value held here. Two components deriving "is this
  *   fine?" independently is how a screen ends up saying "Up to date" above "Unreachable".
- * - **Every state says what still works.** A relay outage is not a sync outage — two devices on
- *   the same network never needed the relay — and copy that blurs the two sends people to
- *   restart routers over nothing.
+ * - **Every state says what still works.** A relay outage is not a sync outage — a transfer
+ *   file never needed the relay — and copy that blurs the two sends people to restart routers
+ *   over nothing.
  * - **Nothing here contacts the network on a schedule.** The relay is measured on foreground,
  *   on pull-to-refresh, and on the two explicit buttons — never on a timer. A relay contacted on
  *   a schedule is itself a traffic pattern, which is the thing the design went to some trouble
@@ -310,15 +310,8 @@ export function SyncScreen() {
           exists only on devices you paired in person. Nothing else can open it.
         </Explains>
         <Explains
-          icon="point.3.connected.trianglepath.dotted"
-          title="Directly when it can"
-        >
-          On the same network your devices talk to each other and contact no
-          server at all.
-        </Explains>
-        <Explains
           icon="antenna.radiowaves.left.and.right"
-          title="A blind drop-box when it can’t"
+          title="A blind drop-box in between"
         >
           When your other device is closed, sealed changes wait on a relay. It
           sees a random-looking address and padded ciphertext — never who you

@@ -5,11 +5,11 @@ that reading it in full is a realistic thing to ask of you before you deploy it.
 
 It does three things:
 
-| Route                              | What it does                                                                                                                                                                                   |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /health`                      | Returns `{ "ok": true, "version": 2 }`. No id, no auth, nothing correlatable. This is what the app's **More → Sync** relay-status row asks.                                                    |
-| `GET /rendezvous/:id` (WebSocket)  | Relays opaque text between exactly two parties at the same rotating id. Once both are connected it sends the fixed `qashy-rendezvous-ready:1` marker, then relays opaque text. Stores nothing. |
-| `PUT`/`GET`/`DELETE` `/bucket/:id` | A drop-box of sealed, padded frames addressed to a blinded route tag.                                                                                                                          |
+| Route                              | What it does                                                                                                                                                                                             |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`                      | Returns `{ "ok": true, "version": 2 }`. No id, no auth, nothing correlatable. This is what the app's **More → Sync** relay-status row asks.                                                              |
+| `GET /rendezvous/:id` (WebSocket)  | Relays opaque pairing text between exactly two parties at the same single-use id. Once both are connected it sends the fixed `qashy-rendezvous-ready:1` marker, then relays opaque text. Stores nothing. |
+| `PUT`/`GET`/`DELETE` `/bucket/:id` | A drop-box of sealed, padded frames addressed to a blinded route tag.                                                                                                                                    |
 
 ## What this server can see
 
@@ -31,9 +31,8 @@ previous op. A gap, a rewind, or a fork is rejected by the receiving device rath
 That is the property the app's threat model claims, and it is the reason this server is allowed
 to be this simple.
 
-The one thing end-to-end encryption cannot hide is your IP address, which is why the app tries
-a direct WebRTC connection first and only falls back to this. Two devices on the same Wi-Fi
-never contact this server for data at all.
+The one thing end-to-end encryption cannot hide is your IP address. A device that must not
+reveal it can blank the relay address and sync only through transfer files.
 
 ## Deploying it
 
@@ -50,7 +49,7 @@ npx wrangler deploy
 
 `wrangler deploy` prints a URL like `https://qashy-relay.<your-subdomain>.workers.dev`. The app
 ships pointed at the project's own relay; paste yours into **More → Sync → Advanced → Relay
-address** to replace it, or blank the field to keep this device direct-only.
+address** to replace it, or blank the field to sync only through transfer files.
 
 Verify it before trusting it:
 
@@ -101,7 +100,7 @@ to prevent. If you turn it on to debug a deploy, turn it back off.
 
 | Limit                                    | Value                               | Response                                                                    |
 | ---------------------------------------- | ----------------------------------- | --------------------------------------------------------------------------- |
-| Frame size                               | 1 400 000 base64url characters      | `413` → the app shows "too large"; direct sync unaffected                   |
+| Frame size                               | 1 400 000 base64url characters      | `413` → the app shows "too large"; transfer files unaffected                |
 | Request body                             | 2 MiB, counted while streaming      | `413` before a Durable Object is created                                    |
 | Blobs per bucket                         | 5 000                               | `429` → the app shows a relay error and names the device that has been away |
 | Page size                                | 500 (default 100)                   | silently clamped                                                            |

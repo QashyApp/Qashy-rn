@@ -11,8 +11,8 @@
  *    correlatable. It exists so the app can say "the relay is down" instead of leaving the
  *    user to infer it from sync being quiet.
  * 2. `GET /rendezvous/:id` (WebSocket) — relays opaque text between exactly two parties that
- *    independently arrived at the same rotating id. It stores nothing, not even in memory
- *    between messages, and the id changes every five minutes.
+ *    independently derived the same single-use pairing id. It stores nothing, not even in
+ *    memory between messages.
  * 3. `PUT|GET|DELETE /bucket/:id` — a drop-box. Devices leave sealed, padded frames addressed
  *    to a blinded route tag; devices collect what is addressed to them, from a cursor.
  *
@@ -84,7 +84,7 @@ const TAG_PATTERN = /^[A-Za-z0-9_-]{8,64}$/;
  * A full 1 000-op batch seals and pads to comfortably under this. Durable Object SQLite caps
  * a single value at 2 MB, so this leaves real headroom rather than sitting on the limit. A
  * frame past it is refused with `413`, which the app classifies as `tooLarge` and shows to the
- * user — a visible, actionable failure, and direct sync is unaffected.
+ * user — a visible, actionable failure, and transfer files still work.
  */
 const MAX_FRAME_CHARS = 1_400_000;
 
@@ -101,7 +101,7 @@ const DEFAULT_PAGE_SIZE = 100;
 /** Matches `MAX_SIGNAL_BYTES` in the app. A handshake message is a few hundred bytes. */
 const MAX_SIGNAL_CHARS = 64 * 1024;
 
-/** A rendezvous id rotates every five minutes; twice that is generous for a slow handshake. */
+/** A pairing QR expires within minutes; ten is generous for a slow handshake. */
 const RENDEZVOUS_TTL_MS = 10 * 60 * 1000;
 
 const DEFAULT_RETENTION_DAYS = 14;
@@ -481,13 +481,12 @@ export class BucketRoom {
 // ---------------------------------------------------------------------------
 
 /**
- * Two parties, one rotating id, and no memory.
+ * Two parties, one single-use pairing id, and no memory.
  *
  * Everything crossing this socket is already sealed: the app runs its PSK-authenticated
- * handshake here *first*, and only then exchanges SDP and ICE candidates encrypted under the
- * keys that handshake derived. That ordering is what makes a hostile signaling server
- * harmless — it cannot swap a DTLS fingerprint it cannot read — and it is why this class can
- * be as simple as it is.
+ * pairing handshake here *first*, and everything after it is encrypted under the keys that
+ * handshake derived. That ordering is what makes a hostile signaling server harmless, and it
+ * is why this class can be as simple as it is.
  *
  * Hibernating WebSockets rather than held references, so an idle rendezvous costs nothing and
  * there is no per-connection state to leak or to lose on eviction.

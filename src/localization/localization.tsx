@@ -699,7 +699,7 @@ const HEBREW: Record<string, string> = {
   "Up to date": "מעודכן",
   "Syncing…": "מסנכרן…",
   "No other devices yet": "אין עדיין מכשירים אחרים",
-  "Direct connections only": "חיבורים ישירים בלבד",
+  "Transfer files only": "קובצי העברה בלבד",
   "Relay unreachable": "הממסר אינו נגיש",
   "Relay rejected this device": "הממסר דחה את המכשיר הזה",
   "Relay errors": "שגיאות ממסר",
@@ -735,20 +735,20 @@ const HEBREW: Record<string, string> = {
     "Qashy לא הצליח להגיע לאחסון המאובטח, ולכן אין לו מקום לשמור את מפתח הכספת. הנתונים הפיננסיים שלכם לא נפגעו.",
   "They are kept, passed on to your other devices, and retried on every sync — so a correction from any device fixes them on its own.":
     "הם נשמרים, מועברים למכשירים האחרים שלכם ומנוסים שוב בכל סנכרון — כך שתיקון מכל מכשיר פותר אותם מעצמו.",
-  "No relay is set, so your devices sync when both are open at the same time and on a network that lets them reach each other.":
-    "לא הוגדר ממסר, ולכן המכשירים שלכם מסתנכרנים כששניהם פתוחים בו־זמנית וברשת שמאפשרת להם להגיע זה לזה.",
+  "No relay is set, so your devices sync only through transfer files you carry between them.":
+    "לא הוגדר ממסר, ולכן המכשירים שלכם מסתנכרנים רק דרך קובצי העברה שאתם מעבירים ביניהם.",
   "Pair a second device to start. You compare a six-word code on both screens, and nothing is sent until you confirm it matches.":
     "חברו מכשיר שני כדי להתחיל. תשוו קוד של שש מילים בשני המסכים, ושום דבר אינו נשלח עד שתאשרו שהוא זהה.",
   "This is the only device in the vault. Add another and Qashy keeps them in step.":
     "זהו המכשיר היחיד בכספת. הוסיפו עוד אחד ו־Qashy ישמור עליהם מסונכרנים.",
   "Paired and ready. Nothing has needed to move between your devices yet.":
     "מחובר ומוכן. עדיין לא היה צורך להעביר דבר בין המכשירים שלכם.",
-  "Devices on the same network still sync directly. Only catching up while your other device is closed needs the relay.":
-    "מכשירים באותה רשת ממשיכים להסתנכרן ישירות. רק השלמת פערים כשהמכשיר האחר סגור זקוקה לממסר.",
+  "Your changes are kept here and go out once it answers. A transfer file still works in the meantime.":
+    "השינויים שלכם שמורים כאן ויישלחו ברגע שהוא יענה. בינתיים קובץ העברה עדיין עובד.",
   "It answered but refused this vault. Check the relay address in Sync settings — a relay that was replaced or redeployed is the usual cause.":
     "הוא ענה אך דחה את הכספת הזו. בדקו את כתובת הממסר בהגדרות הסנכרון — ממסר שהוחלף או נפרס מחדש הוא הסיבה הרגילה.",
-  "It answers, but uploads are failing. Devices on the same network still sync directly.":
-    "הוא עונה, אך ההעלאות נכשלות. מכשירים באותה רשת ממשיכים להסתנכרן ישירות.",
+  "It answers, but uploads are failing. A transfer file still works in the meantime.":
+    "הוא עונה, אך ההעלאות נכשלות. בינתיים קובץ העברה עדיין עובד.",
   "Nothing is wrong with sync. Your changes are saved here and will catch up when this device is back on a network.":
     "אין תקלה בסנכרון. השינויים שלכם שמורים כאן וישלימו פערים כשהמכשיר הזה יחזור לרשת.",
 
@@ -767,8 +767,7 @@ const HEBREW: Record<string, string> = {
   Activity: "פעילות",
   Recovery: "שחזור",
   "Danger zone": "אזור מסוכן",
-  "Directly when it can": "ישירות כשאפשר",
-  "A blind drop-box when it can’t": "תיבת הפקדה עיוורת כשלא",
+  "A blind drop-box in between": "תיבת הפקדה עיוורת באמצע",
   "No account, ever": "ללא חשבון, אף פעם",
   "Only your devices can read it": "רק המכשירים שלכם יכולים לקרוא אותו",
   // The bodies under "How this works" are the app's privacy claim stated in prose. Leaving
@@ -776,8 +775,6 @@ const HEBREW: Record<string, string> = {
   // which is exactly the wrong place to fall back.
   "Every change is sealed on the device that made it, with a key that exists only on devices you paired in person. Nothing else can open it.":
     "כל שינוי נאטם במכשיר שיצר אותו, במפתח שקיים רק במכשירים שחיברתם פנים אל פנים. שום דבר אחר אינו יכול לפתוח אותו.",
-  "On the same network your devices talk to each other and contact no server at all.":
-    "באותה רשת המכשירים שלכם מדברים זה עם זה ואינם פונים לשום שרת.",
   "When your other device is closed, sealed changes wait on a relay. It sees a random-looking address and padded ciphertext — never who you are, what changed, or how much you have.":
     "כשהמכשיר האחר שלכם סגור, שינויים אטומים ממתינים בממסר. הוא רואה כתובת שנראית אקראית וטקסט מוצפן מרופד — לעולם לא מי אתם, מה השתנה או כמה יש לכם.",
   "There is no sign-in, no server-side identity, and nothing to recover through us. The recovery phrase is the only key.":
@@ -817,10 +814,7 @@ const HEBREW: Record<string, string> = {
 
   // /sync → Connections
   Connections: "חיבורים",
-  "Direct connections": "חיבורים ישירים",
   "Relay server": "שרת ממסר",
-  "Devices talk to each other, encrypted end to end. On the same network this contacts no server at all.":
-    "המכשירים מדברים זה עם זה בהצפנה מקצה לקצה. באותה רשת אין פנייה לשום שרת.",
   "Holds sealed changes for a device that is closed. It can never read them.":
     "שומר שינויים חתומים עבור מכשיר שסגור. הוא לעולם אינו יכול לקרוא אותם.",
   "Check now": "בדיקה עכשיו",
@@ -829,19 +823,11 @@ const HEBREW: Record<string, string> = {
   "Hide addresses": "הסתרת הכתובות",
   "Relay address": "כתובת הממסר",
   "Save addresses": "שמירת הכתובות",
-  "Leave this blank to contact nothing but devices on your own network.":
-    "השאירו ריק כדי לפנות רק למכשירים ברשת שלכם.",
-  "STUN servers": "שרתי STUN",
-  "Used only when a direct connection fails. A STUN server learns an IP address and never sees your data.":
-    "בשימוש רק כשחיבור ישיר נכשל. שרת STUN לומד כתובת IP ולעולם אינו רואה את הנתונים שלכם.",
-  "TURN server": "שרת TURN",
-  "TURN username": "שם משתמש ל־TURN",
-  "TURN password": "סיסמה ל־TURN",
-  "Only add one you run yourself. A TURN server sees both devices’ addresses and how much data moves between them.":
-    "הוסיפו רק שרת שאתם עצמכם מפעילים. שרת TURN רואה את הכתובות של שני המכשירים וכמה נתונים עוברים ביניהם.",
+  "Leave this blank to contact nothing and sync only through transfer files.":
+    "השאירו ריק כדי לא לפנות לשום דבר ולסנכרן רק דרך קובצי העברה.",
   "What the server said": "מה השרת אמר",
-  "No relay address is set, so this device only syncs when another one is open at the same time.":
-    "לא הוגדרה כתובת ממסר, ולכן המכשיר הזה מסתנכרן רק כשמכשיר אחר פתוח בו־זמנית.",
+  "No relay address is set, so this device only syncs through transfer files you carry yourself.":
+    "לא הוגדרה כתובת ממסר, ולכן המכשיר הזה מסתנכרן רק דרך קובצי העברה שאתם מעבירים בעצמכם.",
   "Couldn’t save these addresses": "לא ניתן לשמור את הכתובות",
   "Couldn’t save that": "לא ניתן לשמור את זה",
   "Couldn’t reach the relay": "לא ניתן להגיע לממסר",
@@ -1680,8 +1666,11 @@ const DYNAMIC_PATTERNS: [RegExp, (...parts: string[]) => string][] = [
     /^(\d+) devices · (.+)$/,
     (count, when) => `${count} מכשירים · ${translateMessage(when, "he")}`,
   ],
-  [/^Direct only · 1 device$/, () => "ישיר בלבד · מכשיר אחד"],
-  [/^Direct only · (\d+) devices$/, (count) => `ישיר בלבד · ${count} מכשירים`],
+  [/^Transfer files only · 1 device$/, () => "קובצי העברה בלבד · מכשיר אחד"],
+  [
+    /^Transfer files only · (\d+) devices$/,
+    (count) => `קובצי העברה בלבד · ${count} מכשירים`,
+  ],
   [
     /^Last exchanged changes (.+)\.$/,
     (when) => `שינויים הוחלפו לאחרונה ${translateMessage(when, "he")}.`,

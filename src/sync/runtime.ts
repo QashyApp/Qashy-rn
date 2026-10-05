@@ -2,25 +2,20 @@
  * The one place that turns configuration into a running sync.
  *
  * Everything below this file is deliberately incapable of starting itself. `SyncSession` is
- * handed transports and a key; `RelayTransport` is handed a bucket id it could not derive;
- * `DirectTransport` is handed a rendezvous it did not compute. That is what makes each of
- * them testable without a keystore, a network, or a clock — and it leaves exactly one file
+ * handed transports and a key; `RelayTransport` is handed a bucket id it could not derive.
+ * That is what makes each of them testable without a keystore, a network, or a clock — and it leaves exactly one file
  * that has to know how the pieces fit, which is this one.
  *
  * Three things it owns, and they are the three that were nobody else's job:
  *
  * 1. **Deriving the vault's public-facing identifiers** — bucket id, write token, route tags,
- *    rendezvous — from the root key, so no transport ever holds one. A transport that cannot
- *    reach a key cannot leak one.
- * 2. **Deciding which transports exist at all.** Direct is offered only when this build can do
- *    WebRTC and the user has not switched it off; the drop-box only when an address is
+ *    from the root key, so no transport ever holds one. A transport that cannot reach a key
+ *    cannot leak one.
+ * 2. **Deciding which transports exist at all.** The drop-box exists only when an address is
  *    configured. A user who blanks the relay address gets a device that genuinely contacts
- *    nothing but its peers, and that has to be true of the object graph, not just the UI.
- * 3. **Keeping them alive between passes.** A WebRTC data channel takes seconds and two
- *    servers' worth of round trips to establish; rebuilding the transports on every foreground
- *    to refresh a rotating rendezvous id would throw away the connection each time. The
- *    transports are cached and only rebuilt when something they were built from actually
- *    changed — see `fingerprint`.
+ *    nothing, and that has to be true of the object graph, not just the UI.
+ * 3. **Keeping them alive between passes.** The transports are cached and only rebuilt when
+ *    something they were built from actually changed — see `fingerprint`.
  *
  * There are still no timers here. `reconcile()` is called from the same lifecycle seam the
  * repository's own reconcile hangs on, and the relay is contacted then and at no other moment.
@@ -34,9 +29,7 @@ import {
   deriveBucketId,
   deriveBucketToken,
   deriveContentKey,
-  deriveRendezvousId,
   deriveRouteTag,
-  rendezvousWindow,
   toBase64Url,
 } from "@/sync/crypto";
 import {
@@ -46,7 +39,6 @@ import {
 } from "@/sync/keystore";
 import { SyncSession, type ReconcileOutcome } from "@/sync/engine/session";
 import type { SyncTransport } from "@/sync/engine/transport";
-import { DirectTransport } from "@/sync/transport/direct";
 import { readEndpoints, type SyncEndpoints } from "@/sync/transport/endpoints";
 import {
   FileTransport,
@@ -61,9 +53,6 @@ import {
   readRelayHealth,
   type RelayHealth,
 } from "@/sync/transport/relay-health";
-import type { RawSocket } from "@/sync/transport/signaling";
-import { rtcFactory as platformRtcFactory } from "@/sync/transport/webrtc";
-import type { RtcFactory } from "@/sync/transport/webrtc-core";
 import { nowIso as defaultNowIso } from "@/utils/entity";
 
 /**
@@ -125,9 +114,6 @@ export interface SyncRuntimeDeps {
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => number;
   readonly nowIso?: () => string;
-  /** Overridden in tests; on device it is whatever WebRTC this build has, or none. */
-  readonly rtcFactory?: RtcFactory;
-  readonly openSocket?: (url: string) => RawSocket;
   readonly requestTimeoutMs?: number;
   /** Relay upload jitter. Set to zero in tests so a pass is instant. */
   readonly uploadJitterMs?: number;
@@ -175,9 +161,7 @@ export class SyncRuntime {
   /**
    * The transports in use right now, in the order the session tries them.
    *
-   * Empty until the first pass wires anything. The sync screen reads it to say whether this
-   * device can reach a peer directly or only through the drop-box, which is the difference
-   * between "your laptop will pick this up in a moment" and "when you next open it".
+   * Empty until the first pass wires anything.
    */
   get transports(): readonly SyncTransport[] {
     return this.wiring?.transports ?? [];
@@ -225,8 +209,7 @@ export class SyncRuntime {
     });
 
     if (!enabled) {
-      // Closed rather than left holding a data channel. "Off" that keeps a socket open to
-      // another device is not off, and the switch would be a lie.
+      // Closed rather than left wired. "Off" that keeps a transport live is not off.
       await this.close();
       return { reason: "disabled", outcome: null, health: await this.health() };
     }
@@ -263,8 +246,8 @@ export class SyncRuntime {
   /**
    * Seals everything the peers are missing into one file the user carries themselves.
    *
-   * The whole point of this path is that it involves nobody. No relay, no signaling, no STUN,
-   * no WebRTC — export here, move the file by whatever means you like, import it there. It is
+   * The whole point of this path is that it involves nobody. No relay, no signaling,
+   * export here, move the file by whatever means you like, import it there. It is
    * the answer when the relay is down, when two devices are never on the same network, and
    * when someone would simply rather no server existed at all.
    *
@@ -409,8 +392,7 @@ export class SyncRuntime {
    * The transports and session for this vault and configuration, reusing them when nothing
    * relevant has changed.
    *
-   * The fingerprint is what makes reuse safe. Rebuilding on every pass would drop live data
-   * channels; never rebuilding would leave a device uploading to a relay the user replaced
+   * The fingerprint is what makes reuse safe. Never rebuilding would leave a device uploading to a relay the user replaced
    * ten minutes ago, or sealing under a key that has since been rotated.
    */
   private wire(vault: StoredVault, endpoints: SyncEndpoints): Wiring {
@@ -419,16 +401,6 @@ export class SyncRuntime {
       vault.epoch,
       endpoints.relayUrl,
       endpoints.relayEnabled ? "1" : "0",
-      endpoints.directEnabled ? "1" : "0",
-      // Username and credential ride along with the URL: the transport hands them to the ICE
-      // agent at connection time, so a credential-only change must rebuild the wiring or the
-      // direct path would keep authenticating with the old one.
-      endpoints.iceServers
-        .map(
-          (server) =>
-            `${server.urls}|${server.username ?? ""}|${server.credential ?? ""}`,
-        )
-        .join(" "),
     ].join("\0");
 
     const held = this.wiring;
@@ -442,13 +414,7 @@ export class SyncRuntime {
     }
 
     const relay = this.buildRelay(vault, endpoints);
-    const direct = this.buildDirect(vault, endpoints);
-
-    // Direct first, always. It is the path that contacts no server once established, and the
-    // drop-box exists to cover the case where it cannot be made — not to be preferred to it.
-    const transports: SyncTransport[] = [];
-    if (direct) transports.push(direct);
-    if (relay) transports.push(relay);
+    const transports: SyncTransport[] = relay ? [relay] : [];
 
     const built: Wiring = {
       fingerprint,
@@ -554,35 +520,6 @@ export class SyncRuntime {
         ),
       onUpload: (error) => this.noteUpload(error),
       jitterMs: this.deps.uploadJitterMs,
-    });
-  }
-
-  private buildDirect(
-    vault: StoredVault,
-    endpoints: SyncEndpoints,
-  ): DirectTransport | null {
-    // A rendezvous is the one thing the direct path cannot do without. Two devices have to
-    // agree on a meeting point before they can describe a connection to each other, and this
-    // build has nowhere else to meet — which is why blanking the relay address turns off
-    // automatic sync entirely and leaves the manual bundle as the only path.
-    if (!endpoints.directEnabled || !endpoints.relayUrl) return null;
-
-    const factory = this.deps.rtcFactory ?? platformRtcFactory;
-    if (!factory.available) return null;
-
-    const now = this.deps.now ?? Date.now;
-    return new DirectTransport({
-      identity: vault.identity,
-      psk: vault.vaultKey,
-      epoch: vault.epoch,
-      baseUrl: endpoints.relayUrl,
-      // A function, not a value: the id rotates every five minutes and this transport
-      // outlives several windows.
-      rendezvousId: () =>
-        deriveRendezvousId(vault.vaultKey, rendezvousWindow(now() / 1000)),
-      iceServers: endpoints.iceServers,
-      factory,
-      openSocket: this.deps.openSocket,
     });
   }
 

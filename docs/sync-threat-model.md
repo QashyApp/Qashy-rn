@@ -36,14 +36,14 @@ a blind pipe.
 | Threat                          | Defence                                                                                                                                                                                                                                                                                                                                                                                                                                             | Where it lives                                              |
 | ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
 | Malicious or compromised relay  | The relay only ever holds AEAD ciphertext under a key it has never seen. Every batch is signed by its claimed sender, and every op is separately signed and hash-chained by its author, so the relay cannot forge, reorder, or silently drop history without detection.                                                                                                                                                                             | `src/sync/crypto/envelope.ts`, `src/sync/engine/receive.ts` |
-| Passive observer                | TLS on the outside, an independent end-to-end envelope on the inside. WebRTC's DTLS is **not** trusted alone — its fingerprints pass through signaling, so a hostile signaling server could substitute them.                                                                                                                                                                                                                                        | `src/sync/transport/`                                       |
+| Passive observer                | TLS on the outside, an independent end-to-end envelope on the inside. The relay never sees a key, and transfer files carry the same sealed frames.                                                                                                                                                                                                                                                                                                  | `src/sync/transport/`                                       |
 | Active attacker during pairing  | The pairing secret travels optically (QR), not over the network. The handshake is PSK-authenticated with that secret.                                                                                                                                                                                                                                                                                                                               | `src/sync/crypto/handshake.ts`                              |
 | Photographed or relayed QR code | A 6-word Short Authentication String derived from the handshake transcript is shown on **both** screens and must be compared by a human. An attacker who raced the handshake produces a different SAS. The QR is single-use with a 90-second TTL.                                                                                                                                                                                                   | `src/sync/crypto/sas.ts`                                    |
 | Lost or stolen device           | Revoke it from the device roster; the revocation records the highest accepted sequence for that author, and signed roster snapshots propagate both values. Peers reject direct batches from it and forwarded ops above the fixed cutoff, while still accepting attributable pre-revocation history. Rotating the vault key additionally removes its relay access and ability to decrypt new frames. It keeps the plaintext it already had — see §4. | `sync_peers`, `src/sync/engine/roster.ts`                   |
 | Replay or truncation of history | Per-device monotonic `seq` plus a `prevHash` chain. A gap, a rewind, or a fork is rejected loudly and surfaced, never silently merged.                                                                                                                                                                                                                                                                                                              | `src/sync/engine/receive.ts`                                |
 | Protocol downgrade              | The protocol version is bound into the handshake transcript that both sides sign. An unknown major version refuses to connect.                                                                                                                                                                                                                                                                                                                      | `src/sync/crypto/handshake.ts`                              |
-| Metadata leakage                | Bucket and rendezvous ids are HKDF outputs; the rendezvous id rotates every 5 minutes, so an observer cannot link one vault across time. Blobs are padded to power-of-two size buckets so byte counts do not reveal "three transactions were added". Uploads are jittered.                                                                                                                                                                          | `src/sync/transport/relay.ts`                               |
-| IP exposure                     | No STUN or TURN server is configured by default, so LAN ICE gathering contacts no candidate service. A user may explicitly configure STUN/TURN for cross-network direct sync; ICE may contact configured servers while gathering, before a local route is known to work.                                                                                                                                                                            | `src/sync/transport/endpoints.ts`                           |
+| Metadata leakage                | Bucket and pairing rendezvous ids are HKDF outputs, and a pairing rendezvous is single-use. Blobs are padded to power-of-two size buckets so byte counts do not reveal "three transactions were added". Uploads are jittered.                                                                                                                                                                                                                       | `src/sync/transport/relay.ts`                               |
+| IP exposure                     | The relay sees the IP address of each device that contacts it. Blanking the relay address contacts no server at all; devices then sync only through transfer files.                                                                                                                                                                                                                                                                                 | `src/sync/transport/endpoints.ts`                           |
 
 ## 4. What this does **not** defend against
 
@@ -92,8 +92,6 @@ Vault Root Key (VRK) — 32 random bytes, created once on the first device.
 ├─ HKDF(VRK, "qashy/sync/v1/content")     → content key      (seals op batches)
 ├─ HKDF(VRK, "qashy/sync/v1/bucket")      → relay bucket id  (opaque to the relay)
 ├─ HKDF(VRK, "qashy/sync/v1/bucket-auth") → relay write capability token
-├─ HKDF(VRK, "qashy/sync/v1/rendezvous" ‖ floor(unixSeconds / 300))
-│                                         → rotating signaling rendezvous id
 └─ HKDF(VRK, "qashy/sync/v1/backup")      → encrypted-backup key
 
 Per device, generated locally; private halves never leave the device:
@@ -155,10 +153,9 @@ Also used for every reconnect, with the VRK in place of `PS`.
 Mixing the PSK into the HKDF gives confidentiality against non-members; the ephemeral ECDH gives forward
 secrecy; the signed transcript defeats MITM; binding `version` into the transcript defeats downgrade.
 
-**Ordering is a security requirement.** Over WebRTC, this handshake runs on the signaling channel _first_.
-Only then are SDP and ICE candidates exchanged, encrypted under the derived session keys. That is what stops
-a hostile signaling server from substituting DTLS fingerprints. Op batches are then encrypted _again_ inside
-the data channel, so DTLS is defence in depth rather than the only defence.
+**Ordering is a security requirement.** During pairing, this handshake runs on the signaling channel
+_first_. Everything exchanged after it is encrypted under the derived session keys, so a hostile signaling
+server only ever relays ciphertext it cannot read or alter undetected.
 
 ## 9. The server
 
@@ -167,14 +164,14 @@ One tiny stateless service. Three endpoints:
 - `GET /health` — a static `{ ok, version }`. No bucket id, no auth, nothing correlatable. Polled only on app
   foreground and on explicit user request, never on a timer, because a scheduled ping is itself a traffic
   pattern.
-- `GET/WS /rendezvous/:rotatingId` — relays opaque handshake blobs between two parties presenting the same
-  rotating id. Keeps nothing.
+- `GET/WS /rendezvous/:pairingId` — relays opaque pairing handshake blobs between two parties presenting the
+  same single-use id. Keeps nothing.
 - `PUT/GET/DELETE /bucket/:bucketId` — an encrypted drop-box. Padded ciphertext, size- and rate-capped,
   auto-expiring. Request bodies are counted while streaming before a Durable Object is named, and one
   aggregate edge quota prevents fresh bucket ids from creating fresh quotas.
 
 The server sees an opaque 32-byte id, padded ciphertext, and an IP address. It cannot see who you are, what
-changed, how many records you have, or link one day's rendezvous to another's. It is replaceable or blankable
+changed, how many records you have, or link one pairing rendezvous to another. It is replaceable or blankable
 in settings, and sync is off until you turn it on.
 
 ## 10. Process rules

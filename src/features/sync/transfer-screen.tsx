@@ -21,8 +21,8 @@
  *   replaced. The same preview-then-commit shape the CSV screen uses, for a stronger reason:
  *   this is the one genuinely irreversible button in the whole feature.
  *
- * The `.qashysync` half is the transport that involves nobody: no relay, no signaling, no STUN.
- * It is the answer when the relay is down, when two devices are never on the same network, and
+ * The `.qashysync` half is the transport that involves nobody: no relay and no signaling.
+ * It is the answer when the relay is down, when no relay is configured at all, and
  * for anyone who would simply rather no server existed.
  */
 

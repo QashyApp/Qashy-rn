@@ -8,13 +8,12 @@
  * - **A device that has not been paired must not act as if it had.** "Sync is on" with an
  *   empty keystore is a screen that says everything is fine while nothing has ever left the
  *   device, and it is indistinguishable from working until the day you need the other copy.
- * - **Switching sync off has to close things.** An "off" that keeps a data channel open to
- *   another device is not off.
+ * - **Switching sync off has to close things.** An "off" that keeps polling a relay is not
+ *   off.
  * - **Blanking the relay address has to contact nothing.** That claim is the reason the field
  *   is editable at all, so it is asserted against the actual object graph rather than the UI.
- * - **A live connection has to survive a pass.** WebRTC takes seconds and two servers' worth
- *   of round trips to establish; a runtime that rebuilt its transports every foreground would
- *   turn "sync" into "renegotiate, then sync".
+ * - **A transport has to survive a pass.** A runtime that rebuilt its transports every
+ *   foreground would throw away the relay's backoff and health state each time.
  * - **…but not survive a change it was built from.** Reuse that outlived a rotated key or a
  *   replaced relay address would sync to the wrong place under the wrong key, silently.
  *
@@ -37,9 +36,7 @@ import {
   createVaultRootKey,
   deriveBucketId,
   deriveBucketToken,
-  deriveRendezvousId,
   deriveRouteTag,
-  rendezvousWindow,
   toBase64Url,
   type DeviceIdentity,
   type VaultRootKey,
@@ -56,18 +53,11 @@ import {
   recordPairedPeer,
   type SyncSetupDeps,
 } from "@/sync/setup";
-import type { RawSocket } from "@/sync/transport/signaling";
-import { UNAVAILABLE_RTC } from "@/sync/transport/webrtc-core";
 import {
   fetchDouble,
   type FetchDouble,
   type Reply,
 } from "@/sync/transport/__tests__/http-double";
-import { FakeRtcNetwork } from "@/sync/transport/__tests__/rtc-double";
-import {
-  SocketHub,
-  type FakeSocket,
-} from "@/sync/transport/__tests__/socket-double";
 
 const RELAY = "https://relay.example.com";
 const NOW = Date.parse("2026-06-01T12:00:00.000Z");
@@ -105,7 +95,6 @@ interface Rig {
   readonly storage: MemoryStorageAdapter;
   readonly keystore: MemoryKeystore;
   readonly http: FetchDouble;
-  readonly hub: SocketHub;
   readonly vaultKey: VaultRootKey;
   readonly deviceId: string;
   readonly peerIds: readonly string[];
@@ -119,7 +108,6 @@ interface RigOptions {
   readonly enabled?: boolean;
   readonly relayUrl?: string;
   readonly paired?: boolean;
-  readonly webrtc?: boolean;
   readonly peers?: number;
   readonly replies?: readonly Reply[];
   readonly over?: Partial<SyncRuntimeDeps>;
@@ -148,7 +136,6 @@ const rig = async ({
   enabled = true,
   relayUrl = RELAY,
   paired = true,
-  webrtc = true,
   peers = 1,
   replies = PASS,
   over = {},
@@ -176,20 +163,6 @@ const rig = async ({
   });
 
   const http = fetchDouble(...replies);
-  const hub = new SocketHub();
-  // The rendezvous refuses instead of accepting and then saying nothing. Nobody else is at it
-  // in this file, and the production idle timeout is forty-five seconds — a suite that waited
-  // it out once per peer per pass would take minutes to prove things that have nothing to do
-  // with WebRTC. What is under test here is that a rendezvous was *opened*, and to where.
-  hub.autoAccept = false;
-  const openSocket = (url: string): RawSocket => {
-    const socket = hub.open(url) as FakeSocket;
-    // Deferred for the same reason `SocketHub.open` defers its accept: the client attaches
-    // `onerror` after this returns.
-    void Promise.resolve().then(() => socket.error());
-    return socket;
-  };
-
   const runtime = new SyncRuntime({
     storage,
     repository,
@@ -197,8 +170,6 @@ const rig = async ({
     fetch: http.fetch,
     now: () => NOW,
     nowIso: () => NOW_ISO,
-    rtcFactory: webrtc ? new FakeRtcNetwork().factory : UNAVAILABLE_RTC,
-    openSocket,
     uploadJitterMs: 0,
     ...over,
   });
@@ -208,7 +179,6 @@ const rig = async ({
     storage,
     keystore,
     http,
-    hub,
     vaultKey,
     deviceId: identity.deviceId,
     peerIds: roster.map((peer) => peer.deviceId),
@@ -234,7 +204,6 @@ describe("a pass that does not run", () => {
     // Not one request, not even the health check. "Off" that still pings a server every time
     // the app is opened is a claim the settings screen would be making falsely.
     expect(target.http.calls).toHaveLength(0);
-    expect(target.hub.opened).toHaveLength(0);
     expect(target.runtime.transports).toHaveLength(0);
   });
 
@@ -278,68 +247,28 @@ describe("a pass that does not run", () => {
 });
 
 describe("what gets wired", () => {
-  it("tries the direct path before the drop-box", async () => {
-    const target = await rig();
-    await target.runtime.reconcile();
-
-    expect(
-      target.runtime.transports.map((transport) => transport.kind),
-    ).toEqual(["p2p", "relay"]);
-  });
-
-  it("leaves out the direct path on a build without WebRTC", async () => {
-    const target = await rig({ webrtc: false });
-    await target.runtime.reconcile();
-
-    expect(
-      target.runtime.transports.map((transport) => transport.kind),
-    ).toEqual(["relay"]);
-    // And no rendezvous was opened, because there was never anything to negotiate.
-    expect(target.hub.opened).toHaveLength(0);
-  });
-
   it("contacts nothing when the relay address is blank", async () => {
     const target = await rig({ relayUrl: "" });
 
     const pass = await target.runtime.reconcile();
 
-    // Both transports are gone, and the direct one with them: two devices have to agree on a
-    // meeting point before they can describe a connection to each other, and this build has
-    // nowhere else to meet. That makes a blank address a real "contact nothing", which is the
-    // whole reason the field is editable.
+    // A blank address is a real "contact nothing", which is the whole reason the field is
+    // editable.
     expect(target.runtime.transports).toHaveLength(0);
     expect(target.http.calls).toHaveLength(0);
-    expect(target.hub.opened).toHaveLength(0);
     expect(pass.reason).toBe("ok");
     expect(pass.health.status).toBe("disabled");
   });
 
-  it("leaves out the drop-box when it is switched off but keeps the direct path", async () => {
+  it("contacts nothing when the drop-box is switched off", async () => {
     const target = await rig();
     await target.set({ [SYNC_META.relayEnabled]: "0" });
 
     const pass = await target.runtime.reconcile();
 
-    expect(
-      target.runtime.transports.map((transport) => transport.kind),
-    ).toEqual(["p2p"]);
-    // A rendezvous was still opened — signaling is not the drop-box, and turning off the
-    // store-and-forward path must not turn off the path that makes it unnecessary.
-    expect(target.hub.opened.length).toBeGreaterThan(0);
+    expect(target.runtime.transports).toHaveLength(0);
     expect(bucketCalls(target.http)).toHaveLength(0);
     expect(pass.health.status).toBe("disabled");
-  });
-
-  it("leaves out the direct path when it is switched off", async () => {
-    const target = await rig();
-    await target.set({ [SYNC_META.directEnabled]: "0" });
-
-    await target.runtime.reconcile();
-
-    expect(
-      target.runtime.transports.map((transport) => transport.kind),
-    ).toEqual(["relay"]);
-    expect(target.hub.opened).toHaveLength(0);
   });
 });
 
@@ -372,17 +301,6 @@ describe("what the relay is told", () => {
     expect(upload?.body).toMatchObject({
       to: deriveRouteTag(target.vaultKey, target.peerId),
     });
-  });
-
-  it("meets peers at the current rendezvous window", async () => {
-    const target = await rig();
-    await target.runtime.reconcile();
-
-    const expected = deriveRendezvousId(
-      target.vaultKey,
-      rendezvousWindow(NOW / 1000),
-    );
-    expect(target.hub.opened[0].url).toContain(expected);
   });
 
   it("resumes the drop-box from the stored cursor and advances it", async () => {
@@ -430,10 +348,8 @@ describe("reuse between passes", () => {
 
     await target.runtime.reconcile();
 
-    // Identity, not shape: a rebuilt direct transport would have dropped whatever data channel
-    // it was holding, and the second pass would renegotiate from scratch.
+    // Identity, not shape: a rebuilt transport would have dropped its backoff and health state.
     expect(target.runtime.transports[0]).toBe(first[0]);
-    expect(target.runtime.transports[1]).toBe(first[1]);
   });
 
   it("rebuilds when the relay address is replaced", async () => {
@@ -444,30 +360,12 @@ describe("reuse between passes", () => {
     await target.set({ [SYNC_META.relayUrl]: "https://other.example.com" });
     await target.runtime.reconcile();
 
-    expect(target.runtime.transports[1]).not.toBe(first[1]);
+    expect(target.runtime.transports[0]).not.toBe(first[0]);
     expect(
       bucketCalls(target.http).some((url) =>
         url.startsWith("https://other.example.com"),
       ),
     ).toBe(true);
-  });
-
-  it("rebuilds when a TURN credential changes even though the URL does not", async () => {
-    const target = await rig({ replies: [...PASS, ...PASS] });
-    await target.set({
-      [SYNC_META.turnUrl]: "turn:relay.example.com:3478",
-      [SYNC_META.turnUsername]: "alice",
-      [SYNC_META.turnCredential]: "first-secret",
-    });
-    await target.runtime.reconcile();
-    const first = target.runtime.transports;
-
-    // The URL is unchanged, but the credential is what the ICE agent presents to the TURN
-    // server. A wiring that outlived the change would keep authenticating with the old one.
-    await target.set({ [SYNC_META.turnCredential]: "rotated-secret" });
-    await target.runtime.reconcile();
-
-    expect(target.runtime.transports[0]).not.toBe(first[0]);
   });
 
   it("rebuilds when the vault key is rotated", async () => {
@@ -487,7 +385,7 @@ describe("reuse between passes", () => {
     });
     await target.runtime.reconcile();
 
-    expect(target.runtime.transports[1]).not.toBe(first[1]);
+    expect(target.runtime.transports[0]).not.toBe(first[0]);
     expect(
       bucketCalls(target.http).some((url) =>
         url.includes(deriveBucketId(rotated)),
@@ -498,7 +396,7 @@ describe("reuse between passes", () => {
   it("drops everything when sync is switched off mid-life", async () => {
     const target = await rig();
     await target.runtime.reconcile();
-    expect(target.runtime.transports).toHaveLength(2);
+    expect(target.runtime.transports).toHaveLength(1);
 
     await target.set({ [SYNC_META.enabled]: "0" });
     await target.runtime.reconcile();
@@ -514,7 +412,7 @@ describe("reuse between passes", () => {
     expect(target.runtime.transports).toHaveLength(0);
 
     await target.runtime.reconcile();
-    expect(target.runtime.transports).toHaveLength(2);
+    expect(target.runtime.transports).toHaveLength(1);
   });
 });
 
@@ -540,7 +438,6 @@ describe("relay health", () => {
     // pass's single probe, which is exactly one bucket read and one upload per peer.
     const target = await rig({
       peers: 3,
-      webrtc: false,
       replies: [
         { kind: "json", body: { blobs: [] } },
         { kind: "status", status: 500 },
@@ -563,7 +460,6 @@ describe("relay health", () => {
   it("clears the run as soon as one upload lands", async () => {
     const target = await rig({
       peers: 3,
-      webrtc: false,
       replies: [
         { kind: "json", body: { blobs: [] } },
         { kind: "status", status: 500 },
@@ -733,10 +629,6 @@ const carrier = async (
     // returned something plausible would let a regression through unnoticed.
     fetch: () =>
       Promise.reject(new Error("the file path must not contact a server")),
-    openSocket: () => {
-      throw new Error("the file path must not open a rendezvous");
-    },
-    rtcFactory: UNAVAILABLE_RTC,
     now: () => NOW,
     nowIso: () => NOW_ISO,
   });
@@ -828,7 +720,7 @@ describe("a bundle carried between two devices", () => {
   });
 
   it("contacts nothing to do it", async () => {
-    // Asserted by construction — the `fetch` and `openSocket` in this rig throw — so reaching
+    // Asserted by construction — the `fetch` in this rig throws — so reaching
     // the end of a successful round trip *is* the proof. Stated as its own test because it is
     // the claim the feature is sold on, and a future refactor that added a health probe to
     // `exportBundle` would otherwise look like an unrelated failure.

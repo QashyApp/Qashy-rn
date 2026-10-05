@@ -9,14 +9,10 @@ import {
   deriveContentKey,
   deriveDeviceId,
   derivePairingRendezvousId,
-  deriveRendezvousId,
   deviceIdentityBytes,
   formatDeviceId,
-  rendezvousIds,
-  rendezvousWindow,
   restoreDeviceIdentity,
 } from "@/sync/crypto/keys";
-import { RENDEZVOUS_WINDOW_SECONDS } from "@/sync/crypto/labels";
 import {
   fromHex,
   signingPublicKeyFrom,
@@ -24,11 +20,7 @@ import {
   toHex,
   utf8Bytes,
 } from "@/sync/crypto/primitives";
-import {
-  brand,
-  type PairingSecret,
-  type VaultRootKey,
-} from "@/sync/crypto/types";
+import { brand, type VaultRootKey } from "@/sync/crypto/types";
 
 const vault = createVaultRootKey();
 const otherVault = createVaultRootKey();
@@ -78,39 +70,6 @@ describe("key hierarchy", () => {
   });
 });
 
-describe("rendezvous rotation", () => {
-  it("changes every five minutes, so sessions cannot be linked across time", () => {
-    expect(RENDEZVOUS_WINDOW_SECONDS).toBe(300);
-    const at = 1_800_000_000;
-    expect(rendezvousWindow(at + 299)).toBe(rendezvousWindow(at));
-    expect(deriveRendezvousId(vault, rendezvousWindow(at))).not.toBe(
-      deriveRendezvousId(vault, rendezvousWindow(at) + 1),
-    );
-  });
-
-  it("offers the neighbouring windows too, so a clock a second off still meets", () => {
-    // Two devices either side of a boundary compute different current windows. Without the
-    // neighbours this fails intermittently and unreproducibly, which is the worst kind of
-    // failure to debug.
-    const boundary =
-      1_800_000_000 - (1_800_000_000 % RENDEZVOUS_WINDOW_SECONDS);
-    const justBefore = rendezvousIds(vault, boundary - 1);
-    const justAfter = rendezvousIds(vault, boundary + 1);
-    expect(justBefore).toHaveLength(3);
-    expect(justBefore.some((id) => justAfter.includes(id))).toBe(true);
-  });
-
-  it("lists the previous, current, and next window in order", () => {
-    const at = 1_800_000_123;
-    const current = rendezvousWindow(at);
-    expect(rendezvousIds(vault, at)).toEqual([
-      deriveRendezvousId(vault, current - 1),
-      deriveRendezvousId(vault, current),
-      deriveRendezvousId(vault, current + 1),
-    ]);
-  });
-});
-
 describe("the pairing rendezvous", () => {
   it("is a function of the pairing secret alone, so both devices compute it without talking", () => {
     const secret = createPairingSecret();
@@ -123,15 +82,6 @@ describe("the pairing rendezvous", () => {
   it("gives every pairing attempt its own meeting point", () => {
     expect(derivePairingRendezvousId(createPairingSecret())).not.toBe(
       derivePairingRendezvousId(createPairingSecret()),
-    );
-  });
-
-  it("is domain-separated from the vault rendezvous derived from the same bytes", () => {
-    // Both take 32 secret bytes and both produce a 52-character base32 id, so a shared label
-    // would be invisible until a pairing and a live session collided on one meeting point.
-    const shared = fromHex("4a".repeat(32));
-    expect(derivePairingRendezvousId(brand<PairingSecret>(shared))).not.toBe(
-      deriveRendezvousId(brand<VaultRootKey>(shared), 0),
     );
   });
 

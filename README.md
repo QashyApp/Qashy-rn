@@ -27,18 +27,16 @@ Qashy can sync between your own devices. It is **off until you turn it on**, the
 end-to-end encrypted with keys that never leave your devices.
 
 - Devices are paired in person by scanning a QR code and confirming a 6-word code shown on both screens.
-- On the same network, devices connect directly and contact no server at all.
-- When they can't, sealed and padded ciphertext is left in a blind drop-box for the other device to collect.
+- Sealed and padded ciphertext is left in a blind drop-box for the other device to collect.
   The server sees an opaque identifier, ciphertext, and an IP address — never who you are, what changed, or
   how much of it there is. The app ships pointed at the project's own relay; swap or blank it under
-  **More → Sync → Advanced**.
+  **More → Sync → Advanced**. With no relay, devices sync only through transfer files you carry
+  between them yourself.
 - Conflicting edits merge automatically without losing either side; deletions and rejected updates are
   recorded in a visible activity log rather than applied silently.
 
 Read [docs/sync-threat-model.md](docs/sync-threat-model.md) for the full model, including a plain list of
 what sync deliberately does **not** protect against.
-
-Sync uses WebRTC through a native module, so **Expo Go cannot run it** — use a development build.
 
 <H3 div align="center"> Exchange rates </H3>
 Accounts in another currency can convert automatically. It is the app's second deliberate network

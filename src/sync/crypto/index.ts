@@ -16,7 +16,6 @@ export {
   OP_SCHEMA_VERSION,
   PAIRING_TTL_SECONDS,
   PROTOCOL_VERSION,
-  RENDEZVOUS_WINDOW_SECONDS,
 } from "@/sync/crypto/labels";
 
 export {
@@ -42,12 +41,9 @@ export {
   deriveContentKey,
   deriveDeviceId,
   derivePairingRendezvousId,
-  deriveRendezvousId,
   deriveRouteTag,
   deviceIdentityBytes,
   formatDeviceId,
-  rendezvousIds,
-  rendezvousWindow,
   restoreDeviceIdentity,
   restorePeerKeys,
   restoreVaultRootKey,

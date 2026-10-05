@@ -1,18 +1,12 @@
 /**
- * The rendezvous — how two devices find each other without telling anyone who they are.
+ * The rendezvous — how two pairing devices find each other without telling anyone who they are.
  *
- * WebRTC cannot start without an out-of-band exchange of connection descriptions, so
- * something in the middle has to pass a few kilobytes between two parties before they can
- * talk directly. That something is this: a WebSocket to `/rendezvous/<id>`, where the id is
- * `HKDF(vaultRootKey, "…/rendezvous" ‖ floor(unixSeconds / 300))`.
- *
- * Three properties follow from that derivation, and they are the whole reason it is a derived
- * id rather than an account:
+ * Pairing has to pass a few small messages between two devices before they share a key. They
+ * meet over a WebSocket to `/rendezvous/<id>`, where the id is derived from the single-use
+ * pairing secret (`derivePairingRendezvousId`):
  *
  * - **Both devices compute it independently.** Nothing is registered, nothing is looked up,
  *   and the server is never told which vault is asking — it sees an opaque string appear.
- * - **It rotates every five minutes.** A server logging every rendezvous it ever brokered
- *   cannot link Monday's session to Tuesday's, because the ids share no structure.
  * - **Holding it proves nothing.** It is a meeting point, not a credential. Everything that
  *   crosses it is either a public key or sealed, and §1.5's signed transcript is what
  *   actually authenticates the peer.
@@ -29,8 +23,8 @@ import { RelayError } from "@/sync/transport/http";
 /**
  * The largest signaling message accepted.
  *
- * An SDP offer with a handful of ICE candidates is a few kilobytes; this is generous by two
- * orders of magnitude and still refuses a server trying to make a phone allocate megabytes on
+ * A pairing message is well under a kilobyte; this is generous by orders of magnitude and still
+ * refuses a server trying to make a phone allocate megabytes on
  * behalf of a peer that may not exist.
  */
 export const MAX_SIGNAL_BYTES = 64 * 1024;
@@ -72,7 +66,7 @@ export interface RawSocket {
 export interface SignalingDeps {
   /** The relay origin, already validated by `normalizeEndpointUrl`. */
   readonly baseUrl: string;
-  /** The current rendezvous id. Rotates; see `rendezvousIds`. */
+  /** The rendezvous id: see `derivePairingRendezvousId`. */
   readonly rendezvousId: string;
   /** Injected so tests never open a socket, and so React Native's global is not imported. */
   readonly open: (url: string) => RawSocket;

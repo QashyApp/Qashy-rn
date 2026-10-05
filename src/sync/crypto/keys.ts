@@ -13,7 +13,7 @@
  * from a roster would accomplish nothing.
  */
 
-import { LABELS, RENDEZVOUS_WINDOW_SECONDS } from "@/sync/crypto/labels";
+import { LABELS } from "@/sync/crypto/labels";
 import {
   KEY_LENGTH,
   assertLength,
@@ -22,7 +22,6 @@ import {
   randomBytes,
   sha256,
   toBase32,
-  u64be,
   utf8Bytes,
   agreementKeygen,
   agreementPublicKeyFrom,
@@ -97,33 +96,6 @@ export const deriveRouteTag = (vrk: VaultRootKey, deviceId: string) =>
     ROUTE_TAG_LENGTH,
   );
 
-/**
- * The signaling rendezvous identifier for a given 5-minute window.
- *
- * Both devices compute this independently and never tell the server who they are, and it
- * changes every window so an observer cannot link one session to the next.
- */
-export const deriveRendezvousId = (vrk: VaultRootKey, windowIndex: number) =>
-  toBase32(hkdf(vrk, u64be(windowIndex), LABELS.rendezvous)).slice(0, 52);
-
-export const rendezvousWindow = (unixSeconds: number) =>
-  Math.floor(unixSeconds / RENDEZVOUS_WINDOW_SECONDS);
-
-/**
- * The ids worth listening on right now: the current window plus its neighbours.
- *
- * Two devices whose clocks differ by seconds will land either side of a window boundary
- * and compute different ids, so a single-window implementation fails intermittently and
- * unreproducibly — the worst possible failure mode. Listening on three windows costs
- * nothing and removes the class.
- */
-export const rendezvousIds = (vrk: VaultRootKey, unixSeconds: number) => {
-  const current = rendezvousWindow(unixSeconds);
-  return [current - 1, current, current + 1].map((index) =>
-    deriveRendezvousId(vrk, index),
-  );
-};
-
 /** A fresh single-use pairing secret. Crosses the optical channel, never the network. */
 export const createPairingSecret = () =>
   brand<PairingSecret>(randomBytes(KEY_LENGTH));
@@ -131,16 +103,14 @@ export const createPairingSecret = () =>
 /**
  * The rendezvous a pairing pair meets at.
  *
- * Separate from `deriveRendezvousId` for a structural reason rather than a stylistic one: that
- * one is keyed on the vault root key, and the entire point of pairing is that the joining
- * device does not have it yet. The pairing secret is the only thing both devices hold at this
+ * Not keyed on the vault root key: the entire point of pairing is that the joining device does
+ * not have it yet. The pairing secret is the only thing both devices hold at this
  * moment, and it reached the second device optically, so an id derived from it is one a network
  * observer cannot compute.
  *
  * Deliberately **not** windowed. A rotating id exists to stop a server linking one session to
  * the next, which needs the id to outlive a session; this one lives ninety seconds and is used
- * once, so rotation would buy nothing and would reintroduce the clock-straddling failure that
- * `rendezvousIds` has to spend three lookups working around.
+ * once, so rotation would buy nothing and would introduce a clock-straddling failure.
  */
 export const derivePairingRendezvousId = (pairingSecret: PairingSecret) =>
   toBase32(hkdf(pairingSecret, EMPTY_SALT, LABELS.pairingRendezvous)).slice(
