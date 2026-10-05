@@ -66,7 +66,14 @@ describe("eraseEntity", () => {
       recurringRuleId: null,
     });
     const text = JSON.stringify(erased);
-    for (const secret of ["Pharmacy", "Prescription", "4250", "acc-1", "cat-1", "tag-1"])
+    for (const secret of [
+      "Pharmacy",
+      "Prescription",
+      "4250",
+      "acc-1",
+      "cat-1",
+      "tag-1",
+    ])
       expect(text).not.toContain(secret);
   });
 
@@ -106,7 +113,12 @@ describe("eraseEntity", () => {
       icon: "cart",
       color: "#5F9F78",
       limitMinor: 50_000,
-      period: { unit: "month", interval: 1, anchorDate: "2026-01-01", endDate: null },
+      period: {
+        unit: "month",
+        interval: 1,
+        anchorDate: "2026-01-01",
+        endDate: null,
+      },
       rollover: true,
       filters: { accountIds: ["acc-1"], categoryIds: ["cat-1"], tagIds: [] },
       categoryLimits: [{ categoryId: "cat-1", limitMinor: 1_000 }],
@@ -146,17 +158,21 @@ describe("eraseEntity", () => {
       pausedByDependency: false,
     } as RecurringRule;
     const erasedRule = eraseEntity("recurringRules", rule);
-    expect(erasedRule.template).toMatchObject({ kind: "expense", title: "", amountMinor: 0 });
+    expect(erasedRule.template).toMatchObject({
+      kind: "expense",
+      title: "",
+      amountMinor: 0,
+    });
     expect(JSON.stringify(erasedRule)).not.toContain("Rent");
     expect(JSON.stringify(erasedRule)).not.toContain("2026-06-01");
   });
 
   it("drops a field this build does not know rather than keeping it", () => {
     const fromNewerBuild = { ...transaction, merchant: "Corner shop" };
-    const erased = eraseEntity("transactions", fromNewerBuild) as unknown as Record<
-      string,
-      unknown
-    >;
+    const erased = eraseEntity(
+      "transactions",
+      fromNewerBuild,
+    ) as unknown as Record<string, unknown>;
     expect("merchant" in erased).toBe(false);
     expect(eraseField("transactions", "merchant", "Corner shop")).toBeNull();
   });

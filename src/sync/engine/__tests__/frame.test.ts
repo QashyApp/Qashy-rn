@@ -309,7 +309,10 @@ describe("batch codec — structural gate", () => {
       alice.body("accounts", "a1"),
     ]);
     const base = emptyMeta("accounts", "a1", removed.hlc);
-    const deleted = { ...base, deleted: { hlc: removed.hlc, at: "2026-01-01T00:00:00.000Z" } };
+    const deleted = {
+      ...base,
+      deleted: { hlc: removed.hlc, at: "2026-01-01T00:00:00.000Z" },
+    };
     const decode = (state: unknown) =>
       decodeBatch(
         bytesOf(alice.batch([], { fullState: [state as never], heads: {} })),
@@ -326,7 +329,9 @@ describe("batch codec — structural gate", () => {
     expect(() =>
       decode({ ...deleted, maxHlc: created.hlc, erasedThrough: removed.hlc }),
     ).toThrow(/malformed erasure state/);
-    expect(() => decode({ ...deleted, erasedThrough: removed.hlc })).not.toThrow();
+    expect(() =>
+      decode({ ...deleted, erasedThrough: removed.hlc }),
+    ).not.toThrow();
   });
 
   it("rejects an op with a malformed clock reading", async () => {
