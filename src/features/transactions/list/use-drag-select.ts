@@ -1,5 +1,12 @@
 /* eslint-disable react-hooks/refs -- the gesture builder runs its handlers later, off the render path; they only touch refs */
-import { useCallback, useEffect, useMemo, useRef, type RefObject } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject,
+} from "react";
 import type { View } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 
@@ -25,6 +32,10 @@ const TICK_MS = 16;
  * bottom of the list it scrolls itself, to reach rows that are not on screen.
  *
  * The list is virtualised, so rows are found by measuring the ones that are mounted (`registerRow`).
+ *
+ * `dragging` is true from the hold until the finger lifts. A native list must stop scrolling for
+ * that span (`scrollEnabled`): this pan only activates once JS has seen the move, and by then the
+ * native scroll view has already claimed the touch and cancelled the drag.
  */
 export function useDragSelect({
   enabled,
@@ -51,6 +62,9 @@ export function useDragSelect({
   useEffect(() => {
     latest.current = { orderedIds, selectedIds, onSelect, scrollBy };
   }, [orderedIds, selectedIds, onSelect, scrollBy]);
+  const [dragging, setDragging] = useState(false);
+  /** A finger is down on the list and this pan is still following it. */
+  const tracking = useRef(false);
   const finger = useRef(0);
   const fingerStart = useRef<number | null>(null);
   const touchStart = useRef<{ x: number; y: number } | null>(null);
@@ -130,9 +144,11 @@ export function useDragSelect({
   }, []);
 
   const stop = () => {
+    tracking.current = false;
     armed.current = null;
     clearInterval(timer.current);
     timer.current = undefined;
+    setDragging(false);
   };
 
   // On the web a selected row cannot be scrolled (see above), so pressing one grabs it: moving from
@@ -143,7 +159,7 @@ export function useDragSelect({
     rows.current.forEach((node, id) => {
       if (!chosen.includes(id)) return;
       node.measureInWindow((_x, top, _width, height) => {
-        if (y >= top && y <= top + height && !armed.current)
+        if (tracking.current && !armed.current && y >= top && y <= top + height)
           armed.current = { anchor: id, base: [...chosen], last: id };
       });
     });
@@ -156,6 +172,9 @@ export function useDragSelect({
         .runOnJS(true)
         .manualActivation(true)
         .onTouchesDown((event) => {
+          // A new touch starts clean: nothing armed by an earlier one may carry over into it.
+          tracking.current = true;
+          armed.current = null;
           const touch = event.allTouches[0];
           touchStart.current = touch
             ? { x: touch.absoluteX, y: touch.absoluteY }
@@ -196,6 +215,12 @@ export function useDragSelect({
           if (!timer.current) timer.current = setInterval(tick, TICK_MS);
           hitTest();
         })
+        // The pan normally ends through onFinalize; lifting or losing the last finger also ends it,
+        // so the list can never be left unable to scroll.
+        .onTouchesUp((event) => {
+          if (event.allTouches.length <= event.changedTouches.length) stop();
+        })
+        .onTouchesCancelled(() => stop())
         .onFinalize(() => {
           bounds.current = null;
           fingerStart.current = null;
@@ -211,6 +236,11 @@ export function useDragSelect({
     else rows.current.delete(id);
   }, []);
   const arm = useCallback((id: string) => {
+    // The long-press can still fire after this pan has given the touch up (the finger drifted
+    // past HOLD_SLOP, or the list started scrolling). Arming then would leave a drag waiting for
+    // the next, unrelated touch, which would select rows instead of scrolling.
+    if (!tracking.current) return;
+    setDragging(true);
     armed.current = {
       anchor: id,
       base: [...new Set([...latest.current.selectedIds, id])],
@@ -219,5 +249,5 @@ export function useDragSelect({
   }, []);
 
   /** `registerRow` is for each row's view; `arm` is called when a row's long-press fires. */
-  return { gesture, registerRow, arm };
+  return { gesture, registerRow, arm, dragging };
 }

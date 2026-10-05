@@ -273,7 +273,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     },
     [listRef],
   );
-  const { gesture, registerRow, arm } = useDragSelect({
+  const { gesture, registerRow, arm, dragging } = useDragSelect({
     enabled: isCurrent,
     orderedIds,
     selectedIds,
@@ -297,7 +297,11 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               : undefined
           }
           scrollEventThrottle={16}
-          scrollEnabled={isCurrent}
+          // A drag-select owns the finger until it lifts. The web cancels its touch scrolling
+          // instead (see `useDragSelect`), and changing overflow there mid-touch would jump.
+          scrollEnabled={
+            isCurrent && !(dragging && process.env.EXPO_OS !== "web")
+          }
           initialNumToRender={isCurrent ? 10 : 6}
           style={[
             { flex: 1, backgroundColor: theme.background },
