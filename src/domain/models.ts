@@ -346,6 +346,12 @@ export interface CsvImportRow {
   destinationAmount: string;
   destinationBaseAmountMinor?: string;
   status?: TransactionStatus;
+  /** Optional breakdown columns written by `exportCsv`; `amount` stays the total including the fee. */
+  foreignAmount?: string;
+  foreignCurrency?: string;
+  foreignExchangeRate?: string;
+  feeKind?: string;
+  feeValue?: string;
 }
 
 export interface ImportResult {

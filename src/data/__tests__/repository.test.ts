@@ -10,7 +10,7 @@ import type {
 } from "@/domain/models";
 import { diffEntity, hlcFromTimestamp } from "@/sync/oplog";
 import type { StorageTx, TransactOptions } from "@/data/storage-adapter";
-import { parseCsvTable } from "@/utils/csv";
+import { parseCsvTable, parseCsvText } from "@/utils/csv";
 import { fetchedRateId } from "@/utils/deterministic-id";
 
 async function createRepository(
@@ -340,17 +340,17 @@ describe("FinanceRepository contract", () => {
       },
       unit: "month",
       interval: 1,
-      startDate: "2026-01-31",
-      endDate: "2026-03-31",
-      nextDueDate: "2026-01-31",
+      startDate: "2099-01-31",
+      endDate: "2099-03-31",
+      nextDueDate: "2099-01-31",
       autoPost: false,
       active: true,
     });
-    await repository.generateRecurring("2026-03-31");
-    await repository.generateRecurring("2026-03-31");
+    await repository.generateRecurring("2099-03-31");
+    await repository.generateRecurring("2099-03-31");
     expect(
       repository.getSnapshot().transactions.map((item) => item.localDate),
-    ).toEqual(["2026-01-31", "2026-02-28", "2026-03-31"]);
+    ).toEqual(["2099-01-31", "2099-02-28", "2099-03-31"]);
   });
 
   it("commits a CSV batch atomically when storage fails", async () => {
@@ -3295,7 +3295,7 @@ describe("FinanceRepository contract", () => {
       },
       unit: "month",
       interval: 1,
-      startDate: "2099-01-01",
+      startDate: "2099-09-01",
       endDate: null,
       nextDueDate: "2099-09-01",
       autoPost: false,
@@ -5641,6 +5641,8 @@ describe("foreign amounts and fees", () => {
       rate: "0.95",
       effectiveDate: "2026-02-01",
     });
+    // A new rule starts at its first occurrence on or after today, so create it "on" its start date.
+    jest.useFakeTimers({ now: new Date(2026, 0, 31, 12) });
     await repository.saveRecurringRule({
       template: {
         kind: "expense",
@@ -5662,6 +5664,7 @@ describe("foreign amounts and fees", () => {
       autoPost: false,
       active: true,
     });
+    jest.useRealTimers();
     await repository.generateRecurring("2026-02-28");
     const generated = repository
       .getSnapshot()
@@ -5849,5 +5852,221 @@ describe("FinanceRepository deletion erases", () => {
       amountMinor: 700,
     });
     expect(repository.getGoalProgress(goal.id)).toBe(700);
+  });
+});
+
+describe("recurring rule creation", () => {
+  const ruleInput = (accountId: string, overrides = {}) => ({
+    template: {
+      kind: "expense" as const,
+      title: "Rent",
+      note: "",
+      accountId,
+      categoryId: null,
+      tagIds: [],
+      amountMinor: 1000,
+      currency: "USD",
+    },
+    unit: "month" as const,
+    interval: 1,
+    startDate: "2026-01-15",
+    endDate: null,
+    nextDueDate: "2026-01-15",
+    autoPost: false,
+    active: true,
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    jest.useFakeTimers({ now: new Date(2026, 9, 5, 12) });
+  });
+  afterEach(() => jest.useRealTimers());
+
+  it("starts a new rule with a past start date at its next occurrence, without backfilling", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const rule = await repository.saveRecurringRule(ruleInput(account.id));
+    expect(rule.nextDueDate).toBe("2026-10-15");
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.filter((item) => item.recurringRuleId === rule.id),
+    ).toHaveLength(0);
+    await repository.generateRecurring();
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.filter((item) => item.recurringRuleId === rule.id),
+    ).toHaveLength(0);
+  });
+
+  it("does not post history for a new auto-post rule started in the past", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await repository.saveRecurringRule(
+      ruleInput(account.id, { autoPost: true, startDate: "2026-10-01" }),
+    );
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.filter((t) => t.status === "posted"),
+    ).toHaveLength(0);
+  });
+
+  it("keeps a future start date and ignores a caller-supplied nextDueDate on create", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const future = await repository.saveRecurringRule(
+      ruleInput(account.id, {
+        startDate: "2026-12-01",
+        nextDueDate: "2026-12-01",
+      }),
+    );
+    expect(future.nextDueDate).toBe("2026-12-01");
+    const supplied = await repository.saveRecurringRule(
+      ruleInput(account.id, { nextDueDate: "2026-02-15" }),
+    );
+    expect(supplied.nextDueDate).toBe("2026-10-15");
+  });
+
+  it("still backfills when an edit moves the start date earlier", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    const rule = await repository.saveRecurringRule(
+      ruleInput(account.id, { startDate: "2026-08-15" }),
+    );
+    await repository.saveRecurringRule(
+      { ...rule, startDate: "2026-07-15" },
+      rule.id,
+    );
+    await repository.generateRecurring();
+    expect(
+      repository
+        .getSnapshot()
+        .transactions.filter((item) => item.recurringRuleId === rule.id)
+        .map((item) => item.localDate)
+        .sort(),
+    ).toEqual(["2026-07-15", "2026-08-15", "2026-09-15"]);
+  });
+});
+
+describe("CSV foreign amount and fee round trip", () => {
+  async function roundTrip(source: LocalFinanceRepository) {
+    const rows = parseCsvText(source.exportCsv());
+    const { repository: target } = await createRepository();
+    const preview = await target.importCsv(rows as never, false);
+    expect(preview.rejectedRows).toEqual([]);
+    await target.importCsv(rows as never, true);
+    return { rows, target };
+  }
+
+  it("keeps a foreign amount with a percent fee", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Hotel",
+      localDate: "2026-07-01",
+      accountId: account.id,
+      amountMinor: 1,
+      foreign: { amountMinor: 1000, currency: "EUR", exchangeRate: "1.1" },
+      fee: { kind: "percent", percent: "2" },
+    });
+    const original = repository.getSnapshot().transactions[0];
+    expect(original.amountMinor).toBe(1122);
+    const csv = repository.exportCsv();
+    expect(csv).toContain("foreign_amount");
+    const { target } = await roundTrip(repository);
+    const [copy] = target.getSnapshot().transactions;
+    expect(copy.amountMinor).toBe(1122);
+    expect(copy.foreign).toEqual(original.foreign);
+    expect(copy.fee).toEqual(original.fee);
+    // Re-importing the same export is a duplicate, not a second copy.
+    const again = await target.importCsv(
+      parseCsvText(repository.exportCsv()) as never,
+      true,
+    );
+    expect(again.duplicateRows).toHaveLength(1);
+    expect(target.getSnapshot().transactions).toHaveLength(1);
+  });
+
+  it("keeps a foreign amount with a fixed fee, and a fee on its own", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Flight",
+      localDate: "2026-07-02",
+      accountId: account.id,
+      amountMinor: 1,
+      foreign: { amountMinor: 2000, currency: "EUR", exchangeRate: "1.1" },
+      fee: { kind: "fixed", amountMinor: 150 },
+    });
+    await repository.saveTransaction({
+      kind: "income",
+      title: "Payout",
+      localDate: "2026-07-03",
+      accountId: account.id,
+      amountMinor: 10000,
+      fee: { kind: "percent", percent: "2.5" },
+    });
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Lunch",
+      localDate: "2026-07-04",
+      accountId: account.id,
+      amountMinor: 999,
+      fee: { kind: "fixed", amountMinor: 101 },
+    });
+    const originals = repository.getSnapshot().transactions;
+    const { target } = await roundTrip(repository);
+    const copies = target.getSnapshot().transactions;
+    expect(copies).toHaveLength(3);
+    for (const original of originals) {
+      const copy = copies.find((item) => item.title === original.title)!;
+      expect(copy.amountMinor).toBe(original.amountMinor);
+      expect(copy.foreign ?? null).toEqual(original.foreign ?? null);
+      expect(copy.fee).toEqual(original.fee);
+    }
+    expect(copies.find((item) => item.title === "Flight")!.amountMinor).toBe(
+      2350,
+    );
+  });
+
+  it("rejects a row whose amount contradicts its breakdown", async () => {
+    const { repository } = await createRepository();
+    const account = repository.getSnapshot().accounts[0];
+    await repository.saveTransaction({
+      kind: "expense",
+      title: "Hotel",
+      localDate: "2026-07-01",
+      accountId: account.id,
+      amountMinor: 1,
+      foreign: { amountMinor: 1000, currency: "EUR", exchangeRate: "1.1" },
+      fee: { kind: "percent", percent: "2" },
+    });
+    const rows = parseCsvText(repository.exportCsv()).map((row) => ({
+      ...row,
+      amount: "99.99",
+    }));
+    const { repository: target } = await createRepository();
+    const result = await target.importCsv(rows as never, true);
+    expect(result.validRows).toHaveLength(0);
+    expect(result.rejectedRows[0].reason).toMatch(/does not match/);
+    expect(target.getSnapshot().transactions).toHaveLength(0);
+  });
+
+  it("imports an old-format CSV without the new columns exactly as before", async () => {
+    const { repository } = await createRepository();
+    const csv = [
+      "date,type,title,amount,currency,account,category,tags,note,exchange_rate",
+      "2026-07-01,expense,Coffee,4.50,USD,Everyday,,,,",
+    ].join("\n");
+    const result = await repository.importCsv(parseCsvText(csv) as never, true);
+    expect(result.rejectedRows).toEqual([]);
+    const [created] = repository.getSnapshot().transactions;
+    expect(created.amountMinor).toBe(450);
+    expect(created.foreign ?? null).toBeNull();
+    expect(created.fee ?? null).toBeNull();
   });
 });

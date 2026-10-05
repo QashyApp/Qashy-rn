@@ -34,12 +34,14 @@ import type {
   FinanceEntity,
   FinanceState,
   ForeignAmount,
+  ForeignAmountInput,
   Goal,
   GoalContribution,
   ImportResult,
   RecurringRule,
   Tag,
   TransactionFee,
+  TransactionFeeInput,
   TransactionQuery,
   TransactionKind,
   TransactionRecord,
@@ -195,6 +197,11 @@ interface ParsedCsvRow {
   destinationAccount: string;
   destinationAmount: string;
   destinationBaseAmountMinor: string;
+  foreignAmount: string;
+  foreignCurrency: string;
+  foreignExchangeRate: string;
+  feeKind: string;
+  feeValue: string;
 }
 
 type CsvRowParse =
@@ -252,6 +259,11 @@ function parseCsvRow(raw: unknown): CsvRowParse {
   const destinationAccount = optional("destinationAccount");
   const destinationAmount = optional("destinationAmount");
   const destinationBaseAmountMinor = optional("destinationBaseAmountMinor");
+  const foreignAmount = optional("foreignAmount");
+  const foreignCurrency = optional("foreignCurrency");
+  const foreignExchangeRate = optional("foreignExchangeRate");
+  const feeKind = optional("feeKind");
+  const feeValue = optional("feeValue");
   if (
     category === null ||
     tags === null ||
@@ -259,9 +271,16 @@ function parseCsvRow(raw: unknown): CsvRowParse {
     exchangeRate === null ||
     destinationAccount === null ||
     destinationAmount === null ||
-    destinationBaseAmountMinor === null
+    destinationBaseAmountMinor === null ||
+    foreignAmount === null ||
+    foreignCurrency === null ||
+    foreignExchangeRate === null ||
+    feeKind === null ||
+    feeValue === null
   )
     return fail("Invalid row");
+  if (foreignCurrency && !/^[A-Za-z]{3}$/.test(foreignCurrency.trim()))
+    return fail("Foreign currency must be a three-letter code.");
   return {
     success: true,
     data: {
@@ -280,6 +299,11 @@ function parseCsvRow(raw: unknown): CsvRowParse {
       destinationAccount,
       destinationAmount,
       destinationBaseAmountMinor,
+      foreignAmount: foreignAmount.trim(),
+      foreignCurrency: foreignCurrency.trim().toUpperCase(),
+      foreignExchangeRate: foreignExchangeRate.trim(),
+      feeKind: feeKind.trim().toLowerCase(),
+      feeValue: feeValue.trim(),
     },
   };
 }
@@ -1487,7 +1511,20 @@ export class LocalFinanceRepository implements FinanceRepository {
           ),
         }
       : input;
-    const normalized = this.validateRecurring(nextInput, id);
+    const validated = this.validateRecurring(nextInput, id);
+    // A NEW rule starts at its first occurrence on or after today: a start date in the past must
+    // not backfill every missed occurrence (edits are handled above and never backfill either).
+    const normalized = existing
+      ? validated
+      : {
+          ...validated,
+          nextDueDate: firstRecurrenceOnOrAfter(
+            validated.startDate,
+            validated.unit,
+            validated.interval,
+            [validated.startDate, todayLocal()].sort().at(-1)!,
+          ),
+        };
     const pausedByDependency = Boolean(
       existing?.pausedByDependency && input.active && !normalized.active,
     );
@@ -2986,6 +3023,11 @@ export class LocalFinanceRepository implements FinanceRepository {
               .map((name) => [name.toLowerCase(), name]),
           ).values(),
         ];
+        const { foreign, fee, principalMinor } = this.parseCsvForeignAndFee(
+          row,
+          account.currency,
+          amountMinor,
+        );
         const input: TransactionInput = {
           kind: row.type,
           status: row.status,
@@ -2996,7 +3038,9 @@ export class LocalFinanceRepository implements FinanceRepository {
           destinationAccountId: destination?.id ?? null,
           categoryId: category?.id ?? null,
           tagIds: [],
-          amountMinor,
+          amountMinor: principalMinor,
+          ...(foreign ? { foreign } : {}),
+          ...(fee ? { fee } : {}),
           destinationAmountMinor:
             destination && row.destinationAmount
               ? parseInvariantMoney(
@@ -3015,6 +3059,20 @@ export class LocalFinanceRepository implements FinanceRepository {
         };
         // Build once during preview so rate and transfer validation errors are reported per row.
         const previewTransaction = this.buildTransaction(input);
+        // The exported `amount` is the total. A breakdown that does not add up to it would
+        // silently change the money, so the row is refused instead.
+        if (
+          (foreign || fee) &&
+          previewTransaction.amountMinor !== amountMinor
+        ) {
+          throw new Error(
+            `Amount ${row.amount} does not match the foreign amount and fee, which total ${minorToDecimalString(
+              previewTransaction.amountMinor,
+              row.currency,
+              this.state.settings.locale,
+            )}.`,
+          );
+        }
         const duplicateKey = this.transactionDuplicateKey(
           previewTransaction,
           tagNames,
@@ -3090,6 +3148,101 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (result.duplicateRows.length)
       result.warnings.push("Likely duplicates were skipped.");
     return result;
+  }
+
+  /**
+   * Reads the optional foreign-amount and fee columns of a CSV row. `amountMinor` is the row's
+   * total (what `exportCsv` writes). Without a foreign amount the principal is derived back from
+   * the total and fee; with one, `buildTransaction` derives it and the caller checks the total.
+   */
+  private parseCsvForeignAndFee(
+    row: ParsedCsvRow,
+    accountCurrency: string,
+    amountMinor: number,
+  ): {
+    foreign: ForeignAmountInput | null;
+    fee: TransactionFeeInput | null;
+    principalMinor: number;
+  } {
+    const locale = this.state.settings.locale;
+    let foreign: ForeignAmountInput | null = null;
+    if (row.foreignAmount || row.foreignCurrency || row.foreignExchangeRate) {
+      if (!row.foreignAmount || !row.foreignCurrency)
+        throw new Error(
+          "Foreign amount and foreign currency must be given together.",
+        );
+      foreign = {
+        amountMinor: parseInvariantMoney(
+          row.foreignAmount,
+          row.foreignCurrency,
+          locale,
+        ),
+        currency: row.foreignCurrency,
+        ...(row.foreignExchangeRate
+          ? { exchangeRate: row.foreignExchangeRate }
+          : {}),
+      };
+    }
+    let fee: TransactionFeeInput | null = null;
+    if (row.feeKind || row.feeValue) {
+      if (!row.feeKind || !row.feeValue)
+        throw new Error("Fee kind and fee value must be given together.");
+      if (row.feeKind === "percent") {
+        fee = { kind: "percent", percent: row.feeValue };
+      } else if (row.feeKind === "fixed") {
+        fee = {
+          kind: "fixed",
+          amountMinor: parseInvariantMoney(
+            row.feeValue,
+            accountCurrency,
+            locale,
+          ),
+        };
+      } else {
+        throw new Error("Fee kind must be percent or fixed.");
+      }
+    }
+    if (foreign || !fee || row.type === "transfer") {
+      return { foreign, fee, principalMinor: amountMinor };
+    }
+    // A fee without a foreign amount: the exported amount is the total, so recover the principal.
+    const kind = row.type as "expense" | "income";
+    const mismatch = () =>
+      new Error(
+        `Amount ${row.amount} does not match the fee (${row.feeKind} ${row.feeValue}).`,
+      );
+    if (fee.kind === "fixed") {
+      const principal =
+        kind === "expense"
+          ? amountMinor - fee.amountMinor
+          : amountMinor + fee.amountMinor;
+      if (!Number.isSafeInteger(principal) || principal <= 0) throw mismatch();
+      return { foreign, fee, principalMinor: principal };
+    }
+    const percent = Number(normalizeFeePercent(fee.percent));
+    const estimate =
+      kind === "expense"
+        ? amountMinor / (1 + percent / 100)
+        : amountMinor / (1 - percent / 100);
+    if (!Number.isFinite(estimate)) throw mismatch();
+    const center = Math.round(estimate);
+    for (let delta = 0; delta <= 3; delta += 1) {
+      for (const candidate of delta
+        ? [center - delta, center + delta]
+        : [center]) {
+        if (candidate <= 0 || !Number.isSafeInteger(candidate)) continue;
+        try {
+          if (
+            totalWithFee(kind, candidate, feeMinorFor(candidate, fee)) ===
+            amountMinor
+          )
+            return { foreign, fee, principalMinor: candidate };
+        } catch {
+          // Not a valid principal for this total; try the next candidate.
+        }
+      }
+    }
+    throw mismatch();
   }
 
   importExternalBundle(
@@ -3902,6 +4055,11 @@ export class LocalFinanceRepository implements FinanceRepository {
       "exchange_rate",
       "base_amount_minor",
       "transfer_id",
+      "foreign_amount",
+      "foreign_currency",
+      "foreign_exchange_rate",
+      "fee_kind",
+      "fee_value",
     ];
     const rows = this.queryTransactions({ sort: "oldest" }).map(
       (transaction) => {
@@ -3946,6 +4104,25 @@ export class LocalFinanceRepository implements FinanceRepository {
           transaction.exchangeRate,
           transaction.baseAmountMinor,
           transaction.transferGroupId ?? "",
+          transaction.foreign
+            ? minorToDecimalString(
+                transaction.foreign.amountMinor,
+                transaction.foreign.currency,
+                this.state.settings.locale,
+              )
+            : "",
+          transaction.foreign?.currency ?? "",
+          transaction.foreign?.exchangeRate ?? "",
+          transaction.fee?.kind ?? "",
+          transaction.fee
+            ? transaction.fee.kind === "percent"
+              ? (transaction.fee.percent ?? "")
+              : minorToDecimalString(
+                  transaction.fee.amountMinor,
+                  transaction.currency,
+                  this.state.settings.locale,
+                )
+            : "",
         ];
       },
     );
