@@ -8,6 +8,7 @@ import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { MoneyField } from "@/components/finance/money-field";
+import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
 import { TextButton } from "@/components/ui/text-button";
@@ -337,12 +338,12 @@ export function GoalFormScreen() {
           error={initialError}
           required
         />
-        <FormField
+        <DateField
           label="Target date (optional)"
           value={targetDate}
-          onChangeText={setTargetDate}
-          placeholder="YYYY-MM-DD"
+          onChange={setTargetDate}
           error={targetDateError}
+          optional
         />
       </Card>
 
@@ -476,12 +477,10 @@ export function GoalFormScreen() {
             placeholder="0"
             error={contributionError}
           />
-          <FormField
+          <DateField
             label="Contribution date"
             value={contributionDate}
-            onChangeText={setContributionDate}
-            placeholder="YYYY-MM-DD"
-            autoCapitalize="none"
+            onChange={setContributionDate}
             error={contributionDateError}
             required
           />
