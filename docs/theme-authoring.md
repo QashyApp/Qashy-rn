@@ -2,8 +2,6 @@
 
 This is for developers adding a theme that ships with the app. Users who want their own look should read [CUSTOM_THEME_GUIDE.md](../CUSTOM_THEME_GUIDE.md) instead: custom themes are JSON data, built-in themes are TypeScript.
 
-Background and history: [theming-plan.md](theming-plan.md).
-
 ## The model
 
 A theme is one `ThemeDefinition` (`src/theme/themes/types.ts`) in its own file under `src/theme/themes/`. The active theme is resolved by `getTheme(id, custom)` in `src/theme/themes/registry.ts`; an unknown id, or a theme not offered on the current platform, falls back to `classic`. Components never see the definition directly: they read the resolved result from `useQashyTheme()`.

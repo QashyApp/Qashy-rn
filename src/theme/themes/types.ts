@@ -153,8 +153,7 @@ export interface ChartSpec {
  * (or a user following the system) to invent colors, so `palette` and `shadows` are keyed by
  * both and `assertThemeDefinition` rejects a theme missing either.
  *
- * This is the Phase 1 surface of `docs/theming-plan.md`. Later phases add shape, spacing,
- * material recipes, typography, motion, icons and charts to this same object.
+ * See docs/theme-authoring.md.
  */
 export interface ThemeDefinition {
   /** Stable, lowercase, hyphenated. Stored per device in `AppSettings.themeId`; never reused for another look. */
