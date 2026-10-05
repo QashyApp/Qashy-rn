@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   ScrollView,
@@ -20,6 +21,17 @@ export function FormScreen({
   ...props
 }: ScrollViewProps & { maxWidth?: number }) {
   const theme = useQashyTheme();
+  // A native sheet starts sliding in only once everything in it has mounted, so a long form held
+  // the slide back by however long the whole form took to build. The form now mounts a frame
+  // after its sheet: the slide starts on the tap, and the form is in place well before the sheet
+  // has risen far enough to show it. The sheet's height comes from its detents, not its content,
+  // so nothing resizes when the form arrives.
+  const [bodyMounted, setBodyMounted] = useState(process.env.EXPO_OS === "web");
+  useEffect(() => {
+    if (bodyMounted) return;
+    const frame = requestAnimationFrame(() => setBodyMounted(true));
+    return () => cancelAnimationFrame(frame);
+  }, [bodyMounted]);
   const scroll = (
     <ScreenTransition style={{ flex: 1 }}>
       <ScrollView
@@ -46,7 +58,7 @@ export function FormScreen({
         ]}
         {...props}
       >
-        {children}
+        {bodyMounted ? children : null}
       </ScrollView>
     </ScreenTransition>
   );
