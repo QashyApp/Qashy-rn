@@ -7,28 +7,26 @@ import {
   useRef,
   useState,
   type ReactNode,
-  type RefObject,
 } from "react";
-import {
-  View,
-  type GestureResponderEvent,
-  type ScrollView,
-} from "react-native";
+import { Modal, Pressable, View } from "react-native";
 import Animated, {
-  Easing,
   ReduceMotion,
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
+  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AmountKeypad } from "@/components/finance/amount-keypad";
+import { ActionButton } from "@/components/ui/action-button";
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
-import { TextButton } from "@/components/ui/text-button";
+import { AppText } from "@/components/ui/app-text";
+import { motionCurves, motionSpring } from "@/components/ui/motion";
 import type { CurrencyCode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
+import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { evaluateAmountExpression } from "@/utils/amount-expression";
 
@@ -41,24 +39,11 @@ export interface CalculatorFieldConfig {
   currency: CurrencyCode;
   /** Takes focus off the field, so tapping it again opens the keypad again. */
   blur: () => void;
-  /** Reports where the field is in the window, so a tap on it is not a tap outside it. */
-  measure: (
-    report: (rect: {
-      x: number;
-      y: number;
-      width: number;
-      height: number;
-    }) => void,
-  ) => void;
 }
 
 interface CalculatorHostApi {
-  /** Shows the keypad for a field. `measureBottom` reports the field's bottom edge in the window. */
-  open: (
-    id: string,
-    config: CalculatorFieldConfig,
-    measureBottom: (report: (bottom: number) => void) => void,
-  ) => void;
+  /** Shows the keypad for a field. */
+  open: (id: string, config: CalculatorFieldConfig) => void;
   /** Keeps the keypad in step with the field's latest value; ignored unless `id` is the open field. */
   sync: (id: string, config: CalculatorFieldConfig) => void;
   /** Hides the keypad, but only if `id` is the field it is open for. */
@@ -75,220 +60,271 @@ export function useCalculatorHost() {
 }
 
 /**
- * Lays out a screen's body with the calculator keypad beneath it.
- *
- * The keypad replaces the system keyboard for the amount fields in the body: it appears when one
- * of them takes focus and goes away with "Done" or when another kind of field is focused. It is part
- * of the screen's own layout rather than an overlay, so the body shrinks above it the way it does
- * above a keyboard, and the focused field is scrolled clear of it.
+ * A field that focuses while its screen is still being presented (an autofocused amount in a sheet
+ * that is sliding up) waits this long after the host mounts before the keypad opens. iOS refuses to
+ * present a modal while another presentation is in flight, and dimming a sheet mid-slide reads as a
+ * glitch anywhere. A field focused later opens the keypad on the same frame.
  */
-export function CalculatorHost({
-  children,
-  scrollRef,
-  scrollOffset,
-}: {
-  children: ReactNode;
-  /** The body's scroll view, for scrolling the focused field into view. */
-  scrollRef: RefObject<ScrollView | null>;
-  /** The body's current scroll offset. */
-  scrollOffset: RefObject<number>;
-}) {
-  const theme = useQashyTheme();
-  const { space, radius } = theme;
-  const insets = useSafeAreaInsets();
-  const { locale } = useLocalization();
+const PRESENTATION_SETTLE_MS = 550;
+
+/** Closing is the same spring, stiffer: an exit gets out of the way faster than an entrance arrives. */
+const closeSpring = { ...motionSpring, stiffness: 560 } as const;
+
+/**
+ * Gives a screen's amount fields the calculator keypad in place of the system keyboard.
+ *
+ * The keypad is a layer over the whole screen, not part of the screen's layout: it rises from the
+ * bottom edge of the display (wherever the sheet holding the form happens to sit), the screen behind
+ * it dims, and the form never resizes or scrolls underneath it. Because the form is covered, the
+ * keypad shows the amount being typed itself. "Set amount", a tap on the dimmed screen, or back on
+ * Android all finish the calculation and close it.
+ */
+export function CalculatorHost({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<{
     id: string;
     config: CalculatorFieldConfig;
   } | null>(null);
-  const level = useAnimationLevel();
-  const panelRef = useRef<View>(null);
-  const touch = useRef<{ x: number; y: number; at: number } | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+  const mountedAt = useRef(0);
+  useEffect(() => {
+    mountedAt.current = Date.now();
+  }, []);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
-  useEffect(() => () => clearTimeout(closeTimer.current), []);
-  const revealTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  useEffect(() => () => clearTimeout(revealTimer.current), []);
-
-  const reveal = useCallback(
-    (measureBottom: (report: (bottom: number) => void) => void) => {
-      clearTimeout(revealTimer.current);
-      // After the body has been resized above the keypad.
-      revealTimer.current = setTimeout(() => {
-        measureBottom((fieldBottom) => {
-          panelRef.current?.measureInWindow((_x, panelTop) => {
-            const overlap = fieldBottom + space.lg - panelTop;
-            if (overlap > 0)
-              scrollRef.current?.scrollTo({
-                y: scrollOffset.current + overlap,
-                animated: true,
-              });
-          });
-        });
-      }, 280);
-    },
-    [scrollOffset, scrollRef, space.lg],
-  );
+  useEffect(() => () => clearTimeout(openTimer.current), []);
 
   const api = useMemo<CalculatorHostApi>(
     () => ({
-      open: (id, config, measureBottom) => {
-        clearTimeout(closeTimer.current);
-        setActive({ id, config });
-        reveal(measureBottom);
+      open: (id, config) => {
+        clearTimeout(openTimer.current);
+        // The keypad does the typing, so the field gives up focus at once. Left focused, it would get
+        // focus back when the layer closes (the web restores focus to what held it before), and that
+        // would open the keypad again.
+        config.blur();
+        const wait = mountedAt.current + PRESENTATION_SETTLE_MS - Date.now();
+        if (process.env.EXPO_OS === "web" || wait <= 0) {
+          setActive({ id, config });
+          return;
+        }
+        openTimer.current = setTimeout(() => setActive({ id, config }), wait);
       },
       sync: (id, config) =>
         setActive((current) => (current?.id === id ? { id, config } : current)),
-      release: (id) =>
-        setActive((current) => (current?.id === id ? null : current)),
-      dismiss: () => setActive(null),
+      release: (id) => {
+        clearTimeout(openTimer.current);
+        setActive((current) => (current?.id === id ? null : current));
+      },
+      dismiss: () => {
+        clearTimeout(openTimer.current);
+        setActive(null);
+      },
     }),
-    [reveal],
+    [],
   );
 
-  const config = active?.config;
-  const activeConfig = useRef(config);
-  useEffect(() => {
-    activeConfig.current = config;
-  }, [config]);
+  return (
+    <CalculatorHostContext value={api}>
+      {children}
+      <CalculatorLayer
+        config={active?.config}
+        onClose={() => setActive(null)}
+      />
+    </CalculatorHostContext>
+  );
+}
 
-  // A tap (not a scroll or a drag) anywhere in the body but on the field being edited closes the
-  // keypad. The close waits a beat so a tap that lands on another amount field hands the keypad
-  // over to it instead (its focus cancels the close).
-  const onBodyTouchEnd = (event: GestureResponderEvent) => {
-    const start = touch.current;
-    touch.current = null;
-    const field = activeConfig.current;
-    if (!start || !field) return;
-    const { pageX, pageY } = event.nativeEvent;
-    if (
-      Math.hypot(pageX - start.x, pageY - start.y) > 10 ||
-      Date.now() - start.at > 500
-    )
-      return;
-    field.measure(({ x, y, width, height }) => {
-      const pad = 4;
-      const inside =
-        pageX >= x - pad &&
-        pageX <= x + width + pad &&
-        pageY >= y - pad &&
-        pageY <= y + height + pad;
-      if (inside) return;
-      clearTimeout(closeTimer.current);
-      closeTimer.current = setTimeout(() => {
-        activeConfig.current?.blur();
-        setActive(null);
-      }, 120);
-    });
-  };
+function CalculatorLayer({
+  config,
+  onClose,
+}: {
+  config: CalculatorFieldConfig | undefined;
+  onClose: () => void;
+}) {
+  const theme = useQashyTheme();
+  const { space, radius } = theme;
+  const insets = useSafeAreaInsets();
+  const { locale, t } = useLocalization();
+  const level = useAnimationLevel();
 
-  // The panel keeps showing the last field's keys while it slides away. It is one view moved by one
-  // transform, measured before it is ever shown, so no part of it can appear ahead of the rest.
-  const [held, setHeld] = useState(active);
-  if (active && held !== active) setHeld(active);
-  const [panelHeight, setPanelHeight] = useState(0);
-  const progress = useSharedValue(0);
+  // The layer keeps showing the last field's keys while it slides away.
+  const [held, setHeld] = useState(config);
+  if (config && held !== config) setHeld(config);
   const visible = Boolean(config);
+
+  // 0 = off the bottom edge, 1 = in place. The panel's height lives on the UI thread, and the slide
+  // starts from the panel's very first layout, so none of the motion plays out while it is hidden.
+  const progress = useSharedValue(0);
+  const panelHeight = useSharedValue(0);
+  const wantVisible = useRef(visible);
+  const animate = useCallback(
+    (show: boolean) => {
+      const settled = (finished?: boolean) => {
+        "worklet";
+        if (finished && !show) runOnJS(setHeld)(undefined);
+      };
+      if (level === "off") {
+        progress.set(withTiming(show ? 1 : 0, { duration: 0 }, settled));
+        return;
+      }
+      if (level === "minimal") {
+        progress.set(
+          withTiming(
+            show ? 1 : 0,
+            {
+              duration: 120,
+              easing: show ? motionCurves.standard : motionCurves.exit,
+              reduceMotion: ReduceMotion.System,
+            },
+            settled,
+          ),
+        );
+        return;
+      }
+      progress.set(
+        withSpring(show ? 1 : 0, show ? motionSpring : closeSpring, settled),
+      );
+    },
+    [level, progress],
+  );
   useEffect(() => {
-    if (!visible && !held) return;
-    progress.set(
-      withTiming(
-        visible ? 1 : 0,
-        {
-          duration:
-            level === "off" ? 0 : visible ? (level === "all" ? 240 : 120) : 180,
-          easing: Easing.out(Easing.cubic),
-          reduceMotion: ReduceMotion.System,
-        },
-        (finished) => {
-          if (finished && !visible) runOnJS(setHeld)(null);
-        },
-      ),
-    );
-    // `held` only decides whether there is anything to animate; `visible` drives it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, level, progress]);
-  const slide = useAnimatedStyle(() => ({
-    opacity: panelHeight === 0 ? 0 : 1,
-    transform: [{ translateY: panelHeight * (1 - progress.get()) }],
-  }));
+    wantVisible.current = visible;
+    // Before the panel has been measured its first layout starts the slide (see `onLayout`).
+    if (panelHeight.get() > 0) animate(visible);
+  }, [visible, animate, panelHeight]);
+  useEffect(() => {
+    if (!held) {
+      panelHeight.set(0);
+      progress.set(0);
+    }
+  }, [held, panelHeight, progress]);
+
+  const scrim = useAnimatedStyle(() => ({ opacity: progress.get() }));
+  const slide = useAnimatedStyle(() => {
+    const height = panelHeight.get();
+    return {
+      opacity: height === 0 ? 0 : 1,
+      transform: [{ translateY: height * (1 - progress.get()) }],
+    };
+  });
+
   const resolve = (expression: string) => {
-    if (!config) return null;
-    const result = evaluateAmountExpression(
-      expression,
-      config.currency,
-      locale,
-    );
+    if (!held) return null;
+    const result = evaluateAmountExpression(expression, held.currency, locale);
     return result.kind === "value" ? result.text : null;
   };
-  const result = config ? resolve(config.value) : null;
+  const result = held ? resolve(held.value) : null;
 
   const done = () => {
     if (!config) return;
     // A calculation still showing is finished, so the form is left holding a plain amount.
     if (result !== null) config.onChange(result);
     config.blur();
-    setActive(null);
+    onClose();
   };
 
+  if (!held) return null;
+  const sheet = theme.materialControls
+    ? { backgroundColor: theme.surfaceMuted }
+    : materialStyle(theme, "overlay");
   return (
-    <CalculatorHostContext value={api}>
-      <View style={{ flex: 1 }}>
-        <View
-          style={{ flex: 1 }}
-          onTouchStart={(event) => {
-            touch.current = {
-              x: event.nativeEvent.pageX,
-              y: event.nativeEvent.pageY,
-              at: Date.now(),
-            };
-          }}
-          onTouchEnd={onBodyTouchEnd}
+    <Modal
+      transparent
+      visible
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={done}
+    >
+      <View
+        pointerEvents={visible ? "auto" : "none"}
+        style={{ flex: 1, justifyContent: "flex-end" }}
+      >
+        <Animated.View
+          style={[
+            { position: "absolute", inset: 0, backgroundColor: theme.scrim },
+            scrim,
+          ]}
         >
-          {children}
-        </View>
-        {held ? (
-          <Animated.View
-            pointerEvents={visible ? "auto" : "none"}
-            onLayout={(event) =>
-              setPanelHeight(event.nativeEvent.layout.height)
-            }
-            style={slide}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={t("Close")}
+            onPress={done}
+            style={{ flex: 1 }}
+          />
+        </Animated.View>
+        <Animated.View
+          accessibilityViewIsModal
+          importantForAccessibility="yes"
+          onLayout={(event) => {
+            const height = event.nativeEvent.layout.height;
+            const first = panelHeight.get() === 0;
+            panelHeight.set(height);
+            if (first && height > 0) animate(wantVisible.current);
+          }}
+          style={[
+            {
+              width: "100%",
+              maxWidth: 560,
+              alignSelf: "center",
+              borderTopLeftRadius: radius.sheet,
+              borderTopRightRadius: radius.sheet,
+              borderCurve: "continuous",
+              overflow: "hidden",
+              paddingHorizontal: space.lg,
+              paddingTop: space.lg,
+              paddingBottom: Math.max(insets.bottom, space.md) + space.sm,
+              gap: space.md,
+            },
+            sheet,
+            slide,
+          ]}
+        >
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: space.sm,
+            }}
           >
+            <AppText variant="title" accessibilityRole="header">
+              Enter amount
+            </AppText>
             <View
-              ref={panelRef}
-              collapsable={false}
               style={{
-                borderTopLeftRadius: radius.sheet,
-                borderTopRightRadius: radius.sheet,
-                borderCurve: "continuous",
-                boxShadow: "0 -4px 16px rgba(0,0,0,0.12)",
-                paddingHorizontal: space.lg,
-                paddingTop: space.xs,
-                paddingBottom: Math.max(insets.bottom, space.md),
-                gap: space.xs,
-                borderTopWidth: 1,
-                borderTopColor: theme.border,
-                backgroundColor: theme.background,
+                borderRadius: radius.pill,
+                paddingHorizontal: space.md,
+                paddingVertical: space.xs,
+                ...materialStyle(theme, "control"),
               }}
             >
-              <View style={{ alignItems: "flex-end" }}>
-                <TextButton title="Done" icon="checkmark" onPress={done} />
-              </View>
-              <AmountKeypad
-                value={held.config.value}
-                onChange={held.config.onChange}
-                locale={locale}
-                result={result}
-                resolve={resolve}
-              />
+              <AppText literal variant="label" style={{ fontWeight: "700" }}>
+                {held.currency}
+              </AppText>
             </View>
-          </Animated.View>
-        ) : null}
+          </View>
+          <AppText
+            literal
+            figure
+            variant="hero"
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            accessibilityLiveRegion="polite"
+            muted={held.value.length === 0}
+            style={{ textAlign: "right", writingDirection: "ltr" }}
+          >
+            {held.value.length > 0 ? held.value : "0"}
+          </AppText>
+          <AmountKeypad
+            value={held.value}
+            onChange={held.onChange}
+            locale={locale}
+            result={result}
+            resolve={resolve}
+          />
+          <ActionButton title="Set amount" icon="checkmark" onPress={done} />
+        </Animated.View>
       </View>
-    </CalculatorHostContext>
+    </Modal>
   );
 }

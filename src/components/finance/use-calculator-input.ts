@@ -66,43 +66,27 @@ export function useCalculatorInput({
   );
 
   const blur = useCallback(() => node?.blur(), [node]);
-  const measure = useCallback(
-    (
-      report: (rect: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-      }) => void,
-    ) =>
-      node?.measureInWindow((x, y, width, height) =>
-        report({ x, y, width, height }),
-      ),
-    [node],
-  );
   useEffect(() => {
     if (keypad)
-      host.sync(id, {
-        value: shown,
-        onChange: change,
-        currency,
-        blur,
-        measure,
-      });
-  }, [keypad, host, id, shown, change, currency, blur, measure]);
+      host.sync(id, { value: shown, onChange: change, currency, blur });
+  }, [keypad, host, id, shown, change, currency, blur]);
   useEffect(() => {
     if (!host) return;
     return () => host.release(id);
   }, [host, id]);
 
-  const onFocus = () => {
+  const onFocus = (event?: { currentTarget?: unknown }) => {
     if (!keypad) return;
-    host.open(
-      id,
-      { value: shown, onChange: change, currency, blur, measure },
-      (report) =>
-        node?.measureInWindow((_x, y, _width, height) => report(y + height)),
-    );
+    // A field that focuses itself as it mounts (`autoFocus`) does so before `node` reaches state, so
+    // the focus event's own target is what can give the focus up.
+    const target = (node ?? event?.currentTarget) as
+      Pick<TextInput, "blur"> | null | undefined;
+    host.open(id, {
+      value: shown,
+      onChange: change,
+      currency,
+      blur: () => target?.blur?.(),
+    });
   };
 
   const inputProps: Pick<

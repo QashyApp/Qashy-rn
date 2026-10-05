@@ -43,7 +43,7 @@ export function MoneyField({
       value={calculator.value}
       onChangeText={calculator.onChangeText}
       onFocus={(event) => {
-        calculator.onFocus();
+        calculator.onFocus(event);
         onFocus?.(event);
       }}
     />

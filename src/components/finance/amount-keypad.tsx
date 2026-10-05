@@ -49,8 +49,8 @@ const operator = (value: AmountOperator): KeyDefinition => ({
  * backspace and a result key.
  *
  * It exists for two reasons. The system keyboard resizes and reflows the sheet each time it opens,
- * which is most of why the transaction sheet felt heavy on a phone; this keypad is part of the
- * form's own layout, so nothing moves. And splitting a bill, or adding a tip, no longer needs a
+ * which is most of why the transaction sheet felt heavy on a phone; this keypad rises over the
+ * screen instead (see `CalculatorHost`), so the form never moves. And splitting a bill, or adding a tip, no longer needs a
  * calculator app. The field's text is the expression; the form evaluates it with `Decimal` and
  * rounds to the currency's minor unit exactly once (see `evaluateAmountExpression`).
  */
