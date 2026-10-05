@@ -106,6 +106,9 @@ const springConfig = {
   reduceMotion: ReduceMotion.System,
 } as const;
 
+/** The shared spring: quick off the mark, settling without overshoot. For `withSpring` outside this file. */
+export const motionSpring = springConfig;
+
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 // PressableStateCallbackType in RN 0.86 is { pressed: boolean } only. The motion

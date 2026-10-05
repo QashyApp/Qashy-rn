@@ -229,9 +229,9 @@ export function AmountHero({
             {...validityProps}
             returnKeyType={returnKeyType}
             onSubmitEditing={onSubmitEditing}
-            onFocus={() => {
+            onFocus={(event) => {
               setFocused(true);
-              input.onFocus();
+              input.onFocus(event);
             }}
             onBlur={() => {
               setFocused(false);

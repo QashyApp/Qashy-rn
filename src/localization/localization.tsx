@@ -180,6 +180,8 @@ const HEBREW: Record<string, string> = {
   "Import or export": "ייבוא או ייצוא",
   Clear: "ניקוי",
   Done: "סיום",
+  "Enter amount": "הזנת סכום",
+  "Set amount": "קביעת סכום",
   "Change category": "שינוי קטגוריה",
   "Select only income or only expense transactions to assign a category.":
     "בחרו רק תנועות הכנסה או רק תנועות הוצאה כדי לשייך קטגוריה.",

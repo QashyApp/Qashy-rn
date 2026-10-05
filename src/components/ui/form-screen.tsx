@@ -1,9 +1,6 @@
-import { useRef } from "react";
 import {
   KeyboardAvoidingView,
   ScrollView,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
   type ScrollViewProps,
 } from "react-native";
 
@@ -14,7 +11,7 @@ import { useQashyTheme } from "@/theme/theme";
 // Shared scroll container for form screens: taps on chips and buttons land on
 // the first touch while the keyboard is open, and iOS keeps the focused field
 // above the keyboard. Amount fields inside it use the calculator keypad, which
-// the screen lays out beneath the scroll view (see `CalculatorHost`).
+// rises over the whole screen (see `CalculatorHost`).
 export function FormScreen({
   children,
   contentContainerStyle,
@@ -23,17 +20,10 @@ export function FormScreen({
   ...props
 }: ScrollViewProps & { maxWidth?: number }) {
   const theme = useQashyTheme();
-  const scrollRef = useRef<ScrollView>(null);
-  const scrollOffset = useRef(0);
-  const trackScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    scrollOffset.current = event.nativeEvent.contentOffset.y;
-    onScroll?.(event);
-  };
   const scroll = (
     <ScreenTransition style={{ flex: 1 }}>
       <ScrollView
-        ref={scrollRef}
-        onScroll={trackScroll}
+        onScroll={onScroll}
         scrollEventThrottle={16}
         contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
@@ -60,11 +50,7 @@ export function FormScreen({
       </ScrollView>
     </ScreenTransition>
   );
-  const hosted = (
-    <CalculatorHost scrollRef={scrollRef} scrollOffset={scrollOffset}>
-      {scroll}
-    </CalculatorHost>
-  );
+  const hosted = <CalculatorHost>{scroll}</CalculatorHost>;
   if (process.env.EXPO_OS === "web") return hosted;
   return (
     <KeyboardAvoidingView
