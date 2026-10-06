@@ -28,7 +28,6 @@ import { useSharedValue } from "react-native-reanimated";
 import { MonthSwitcher } from "@/components/ui/month-switcher";
 import {
   MonthPager,
-  monthIndex,
   navigateMonth,
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
@@ -121,8 +120,7 @@ export function TransactionsScreen() {
   const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const pagerRef = useRef<MonthPagerHandle>(null);
-  // The pager's place on the month axis, shared with the month title so it slides with the swipe.
-  const monthPosition = useSharedValue(monthIndex(month));
+  const dragProgress = useSharedValue(0);
   const listRef =
     useSectionScrollToTop<
       SectionList<TransactionRecord, LedgerSection<TransactionRecord>>
@@ -411,7 +409,7 @@ export function TransactionsScreen() {
                     )
                   }
                   disabled={allMonths}
-                  position={monthPosition}
+                  dragProgress={dragProgress}
                 />
               </View>
               <View
@@ -565,7 +563,7 @@ export function TransactionsScreen() {
         </View>
         <MonthPager
           ref={pagerRef}
-          position={monthPosition}
+          dragProgress={dragProgress}
           month={month}
           disabled={allMonths || selectionMode}
           onChange={changeMonth}

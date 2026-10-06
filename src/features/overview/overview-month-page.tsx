@@ -59,8 +59,8 @@ export interface OverviewMonthPageProps {
   month: string;
   /** Only the current page scrolls and reports scroll offsets to the floating button. */
   isCurrent: boolean;
-  /** The month pager's position, which slides the month title. */
-  monthPosition?: SharedValue<number>;
+  /** The month pager's drag, which slides the month title. */
+  dragProgress?: SharedValue<number>;
   editing: boolean;
   cards: readonly OverviewCard[];
   configOpenId: string | null;
@@ -87,7 +87,7 @@ export interface OverviewMonthPageProps {
 export const OverviewMonthPage = memo(function OverviewMonthPage({
   month,
   isCurrent,
-  monthPosition,
+  dragProgress,
   editing,
   cards,
   configOpenId,
@@ -262,7 +262,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
             <MonthSwitcher
               value={month}
               onChange={onMonthSwitch}
-              position={monthPosition}
+              dragProgress={dragProgress}
             />
           }
           figure={
