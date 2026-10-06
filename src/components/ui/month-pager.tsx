@@ -24,6 +24,7 @@ import {
 import Animated, {
   cancelAnimation,
   runOnJS,
+  runOnUI,
   useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
@@ -62,6 +63,11 @@ const COMMIT_TIMEOUT = 400;
 export const PAGER_SCROLLER_STYLE: ViewStyle | undefined = WEB
   ? ({ touchAction: "pan-y" } as ViewStyle)
   : undefined;
+
+/** A month's position on a continuous axis, so neighbouring months are exactly one apart. */
+function monthIndex(month: string) {
+  return Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7));
+}
 
 export interface MonthPagerHandle {
   /** Slide one month forward (`1`) or back (`-1`), exactly like a committed swipe. */
@@ -180,6 +186,10 @@ function PagerImpl({
   const [paging, setPaging] = useState(false);
 
   const translateX = useSharedValue(0);
+  // The month index sitting at the centre. Pages place themselves from their own (fixed) index
+  // against this, so the commit swaps the centre and zeroes the drag in one UI-thread step instead
+  // of re-slotting every page in a separate update that could land a frame apart.
+  const baseIndex = useSharedValue(monthIndex(month));
   const fade = useSharedValue(1);
   const startX = useSharedValue(0);
   const busy = useSharedValue(false);
@@ -241,15 +251,29 @@ function PagerImpl({
   // The swap and the reset land in the same commit: the pages have just been re-keyed
   // for the new month, so the slide offset goes back to zero before the next frame.
   useLayoutEffect(() => {
-    translateX.set(0);
-    // The title follows `translateX` a frame late; reset it with the pages so the new month's
-    // name never lands for a frame at the old offset.
-    dragProgress?.set(0);
-    busy.set(false);
-    if (reduced)
-      fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
-    else fade.set(1);
-  }, [month, reduced, fadeScale, translateX, dragProgress, busy, fade]);
+    const index = monthIndex(month);
+    runOnUI(() => {
+      "worklet";
+      baseIndex.set(index);
+      translateX.set(0);
+      // The title follows `translateX` a frame late; reset it with the pages so the new month's
+      // name never lands for a frame at the old offset.
+      dragProgress?.set(0);
+      busy.set(false);
+      if (reduced)
+        fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
+      else fade.set(1);
+    })();
+  }, [
+    month,
+    reduced,
+    fadeScale,
+    baseIndex,
+    translateX,
+    dragProgress,
+    busy,
+    fade,
+  ]);
 
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
@@ -359,6 +383,9 @@ function PagerImpl({
           });
     const pan = activating
       .onStart(() => {
+        // A swipe already committing owns the pages: grabbing them mid-slide restarted the drag
+        // from a half-way offset and read as a second swipe.
+        if (busy.get()) return;
         cancelAnimation(translateX);
         startX.set(translateX.get());
       })
@@ -375,7 +402,8 @@ function PagerImpl({
       .onEnd((event) => {
         if (busy.get()) return;
         const direction = resolveSwipe(
-          event.translationX,
+          // The whole offset, not just this touch: a spring-back caught mid-way keeps its start.
+          startX.get() + event.translationX,
           event.velocityX,
           width,
           canForward,
@@ -474,7 +502,9 @@ function PagerImpl({
         {neighbours ? (
           <PagerPage
             key={prevMonth}
-            offset={-sign * width}
+            index={monthIndex(prevMonth)}
+            sign={sign}
+            baseIndex={baseIndex}
             width={width}
             translateX={translateX}
             fade={fade}
@@ -488,7 +518,9 @@ function PagerImpl({
         {slide ? (
           <PagerPage
             key={month}
-            offset={0}
+            index={monthIndex(month)}
+            sign={sign}
+            baseIndex={baseIndex}
             width={width}
             translateX={translateX}
             fade={fade}
@@ -502,7 +534,9 @@ function PagerImpl({
         {neighbours && canForward ? (
           <PagerPage
             key={nextMonth}
-            offset={sign * width}
+            index={monthIndex(nextMonth)}
+            sign={sign}
+            baseIndex={baseIndex}
             width={width}
             translateX={translateX}
             fade={fade}
@@ -519,7 +553,9 @@ function PagerImpl({
 }
 
 function PagerPage({
-  offset,
+  index,
+  sign,
+  baseIndex,
   width,
   translateX,
   fade,
@@ -528,7 +564,10 @@ function PagerPage({
   paging,
   children,
 }: {
-  offset: number;
+  /** This page's month on the continuous month axis; never changes for a mounted page. */
+  index: number;
+  sign: 1 | -1;
+  baseIndex: SharedValue<number>;
   width: number;
   translateX: SharedValue<number>;
   fade: SharedValue<number>;
@@ -568,14 +607,14 @@ function PagerPage({
       cancelAnimationFrame(inner);
     };
   }, [current]);
-  const slot = useSharedValue(offset);
-  useLayoutEffect(() => {
-    slot.set(offset);
-  }, [offset, slot]);
-  const animated = useAnimatedStyle(() => ({
-    opacity: fade.get(),
-    transform: [{ translateX: slot.get() + translateX.get() }],
-  }));
+  const animated = useAnimatedStyle(() => {
+    const distance = index - baseIndex.get();
+    return {
+      // A page more than one slot from the centre is only ever a stale frame, never a real view.
+      opacity: Math.abs(distance) > 1 ? 0 : fade.get(),
+      transform: [{ translateX: distance * sign * width + translateX.get() }],
+    };
+  });
   return (
     <Animated.View
       collapsable={false}

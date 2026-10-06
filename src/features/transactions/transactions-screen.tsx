@@ -149,9 +149,15 @@ export function TransactionsScreen() {
   // one frame of the previous month first.
   const paramMonth = parseMonthKey(params.month);
   const [followedParam, setFollowedParam] = useState(paramMonth);
+  // Params this screen wrote itself and has not seen come back yet. The router echoes them late, so
+  // a quick second swipe would otherwise be yanked back to the first one's month when it lands.
+  const [ownParams, setOwnParams] = useState<string[]>([]);
   if (paramMonth !== followedParam) {
     setFollowedParam(paramMonth);
-    if (paramMonth && paramMonth !== month) {
+    const echo = paramMonth ? ownParams.indexOf(monthKey(paramMonth)) : -1;
+    if (echo >= 0) {
+      setOwnParams(ownParams.slice(echo + 1));
+    } else if (paramMonth && paramMonth !== month) {
       setMonth(paramMonth);
       setSelectedIds([]);
     }
@@ -160,6 +166,7 @@ export function TransactionsScreen() {
   const changeMonth = (next: string) => {
     setMonth(next);
     setSelectedIds([]);
+    setOwnParams((own) => [...own, monthKey(next)]);
     router.setParams({ month: monthKey(next) });
   };
 
