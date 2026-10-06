@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
 import {
   MonthPager,
+  monthIndex,
   navigateMonth,
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
@@ -50,7 +51,8 @@ export function OverviewScreen() {
   const { visibility: fabVisibility, onScroll } = useScrollHide();
   const scrollRef = useSectionScrollToTop<ScrollView>();
   const pagerRef = useRef<MonthPagerHandle>(null);
-  const dragProgress = useSharedValue(0);
+  // The pager's place on the month axis, shared with the month title so it slides with the swipe.
+  const monthPosition = useSharedValue(monthIndex(month));
 
   const { layout, status, dispatch } = useOverviewLayout();
   const cards =
@@ -165,12 +167,12 @@ export function OverviewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* A swipe does not move the window: it drives `dragProgress`, which slides the month
+      {/* A swipe does not move the window: it drives `monthPosition`, which slides the month
           title and the figures that differ, and the rest fades when the month commits. */}
       <MonthPager
         ref={pagerRef}
         slide={false}
-        dragProgress={dragProgress}
+        position={monthPosition}
         month={month}
         disabled={editing}
         onChange={changeMonth}
@@ -179,7 +181,7 @@ export function OverviewScreen() {
           <OverviewMonthPage
             month={pageMonth}
             isCurrent={isCurrent}
-            dragProgress={dragProgress}
+            monthPosition={monthPosition}
             editing={editing}
             cards={cards}
             configOpenId={configOpenId}

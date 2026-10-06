@@ -1,6 +1,7 @@
-import { useState, type ComponentProps } from "react";
+import { useState, type ReactNode } from "react";
 import { Modal, Pressable, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
+  useAnimatedReaction,
   useAnimatedStyle,
   useSharedValue,
   type SharedValue,
@@ -8,7 +9,9 @@ import Animated, {
 
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
+import { slotDistance, useMonthSlot } from "@/components/ui/month-slot";
 import { MotionPressable, MotionView } from "@/components/ui/motion";
+import { monthIndex } from "@/components/ui/resolve-swipe";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -36,15 +39,15 @@ export function MonthSwitcher({
   onChange,
   max,
   disabled = false,
-  dragProgress,
+  position,
 }: {
   value: string;
   onChange: (month: string, direction: MonthDirection) => void;
   /** First day of the latest selectable month. Omit to allow any future month. */
   max?: string;
   disabled?: boolean;
-  /** A month pager's drag, in page widths: the title slides with the pages below it. */
-  dragProgress?: SharedValue<number>;
+  /** A month pager's `position`: the title slides with the pages below it. */
+  position?: SharedValue<number>;
 }) {
   const theme = useQashyTheme();
   const { motion, radius, space } = theme;
@@ -98,7 +101,7 @@ export function MonthSwitcher({
           overflow: "hidden",
         }}
       >
-        <MonthTitle value={value} dragProgress={dragProgress} />
+        <MonthTitle value={value} position={position} />
       </MotionPressable>
       <IconButton
         label="Next month"
@@ -124,25 +127,38 @@ export function MonthSwitcher({
   );
 }
 
-/**
- * The month name. With a `dragProgress` the previous and next names wait just outside the
- * pill and travel with the pages, so the title is part of the swipe instead of a label that
- * changes after it.
- */
 /** Clears the pill's padding, so a waiting month name is never seen at the edge. */
 const TITLE_GAP = 64;
 
+/**
+ * The month name. With a pager `position` the previous and next names wait just outside the
+ * pill and travel with the pages, so the title is part of the swipe instead of a label that
+ * changes after it. Each name is keyed by its month and placed from that month and the shared
+ * position, exactly like the pages, so a re-render for the new month never moves a name.
+ */
 function MonthTitle({
   value,
-  dragProgress,
+  position,
 }: {
   value: string;
-  dragProgress?: SharedValue<number>;
+  position?: SharedValue<number>;
 }) {
-  const { locale, isRtl } = useLocalization();
+  const { locale } = useLocalization();
+  // The step between names. The pill is as wide as the current name, which changes when the new
+  // month renders, possibly mid-slide; the step only adopts a new width once the title is at
+  // rest, so the names never jump a few pixels on the way.
+  const measuredWidth = useSharedValue(0);
   const titleWidth = useSharedValue(0);
-  const sign = isRtl ? -1 : 1;
-  const current = (
+  useAnimatedReaction(
+    () => {
+      const at = position?.get() ?? 0;
+      return Math.abs(at - Math.round(at)) < 0.001 ? measuredWidth.get() : -1;
+    },
+    (width) => {
+      if (width >= 0) titleWidth.set(width);
+    },
+  );
+  const label = (month: string) => (
     <AppText
       literal
       variant="label"
@@ -150,76 +166,80 @@ function MonthTitle({
       numberOfLines={1}
       style={{ textAlign: "center" }}
     >
-      {monthLabel(value, locale)}
+      {monthLabel(month, locale)}
     </AppText>
   );
-  const currentStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX: (dragProgress?.get() ?? 0) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  const previousStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          ((dragProgress?.get() ?? 0) - sign) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  const nextStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          ((dragProgress?.get() ?? 0) + sign) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  if (!dragProgress) return current;
-  const neighbour = (
-    delta: number,
-    style: ComponentProps<typeof Animated.View>["style"],
-  ) => (
-    <Animated.View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      pointerEvents="none"
-      style={[
-        {
-          position: "absolute",
-          // Wider than the title, so a longer month name never wraps to fit it.
-          left: -TITLE_GAP,
-          right: -TITLE_GAP,
-          top: 0,
-          bottom: 0,
-          alignItems: "center",
-          justifyContent: "center",
-        },
-        style,
-      ]}
-    >
-      <AppText
-        literal
-        variant="label"
-        numeric
-        numberOfLines={1}
-        style={{ textAlign: "center" }}
-      >
-        {monthLabel(moveMonth(value, delta), locale)}
-      </AppText>
-    </Animated.View>
-  );
+  if (!position) return label(value);
   return (
     <View
       onLayout={(event: LayoutChangeEvent) =>
-        titleWidth.set(event.nativeEvent.layout.width)
+        measuredWidth.set(event.nativeEvent.layout.width)
       }
     >
-      <Animated.View style={currentStyle}>{current}</Animated.View>
-      {neighbour(-1, previousStyle)}
-      {neighbour(1, nextStyle)}
+      {[moveMonth(value, -1), value, moveMonth(value, 1)].map((month) => (
+        <TitleSlot
+          key={month}
+          index={monthIndex(month)}
+          current={month === value}
+          position={position}
+          titleWidth={titleWidth}
+        >
+          {label(month)}
+        </TitleSlot>
+      ))}
     </View>
+  );
+}
+
+function TitleSlot({
+  index,
+  current,
+  position,
+  titleWidth,
+  children,
+}: {
+  index: number;
+  current: boolean;
+  position: SharedValue<number>;
+  titleWidth: SharedValue<number>;
+  children: ReactNode;
+}) {
+  const { isRtl } = useLocalization();
+  const sign = isRtl ? -1 : 1;
+  const pinned = useMonthSlot(index, position, current);
+  const animated = useAnimatedStyle(() => {
+    const distance = slotDistance(index, position, pinned);
+    return {
+      opacity: Math.abs(distance) > 1 ? 0 : 1,
+      transform: [
+        { translateX: distance * sign * (titleWidth.get() + TITLE_GAP) },
+      ],
+    };
+  });
+  return (
+    <Animated.View
+      // The current name sizes the pill; the others wait outside it.
+      accessibilityElementsHidden={!current}
+      importantForAccessibility={current ? "auto" : "no-hide-descendants"}
+      pointerEvents="none"
+      style={[
+        current
+          ? null
+          : {
+              position: "absolute",
+              // Wider than the title, so a longer month name never wraps to fit it.
+              left: -TITLE_GAP,
+              right: -TITLE_GAP,
+              top: 0,
+              bottom: 0,
+              alignItems: "center",
+              justifyContent: "center",
+            },
+        animated,
+      ]}
+    >
+      {children}
+    </Animated.View>
   );
 }
 
