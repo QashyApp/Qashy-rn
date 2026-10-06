@@ -167,11 +167,20 @@ function PagerImpl({
   const reduced = systemReduced || level !== "all";
   const fadeScale = level === "off" ? 0 : 1;
   const spring = motion.spring.snappy;
-  const committing = useMemo(() => commitSpring(spring), [spring]);
+  // A committed slide is stiffer than the theme's own spring: the next swipe cannot start until it
+  // lands, so every millisecond of settling is a millisecond of apparent lag.
+  const committing = useMemo(
+    () => commitSpring({ ...spring, stiffness: spring.stiffness * 1.6 }),
+    [spring],
+  );
 
   const [width, setWidth] = useState(0);
   // The month the neighbours were last mounted for; stale means "not yet".
   const [readyFor, setReadyFor] = useState<string | null>(null);
+  // Native: once warm the neighbours stay mounted across month changes (pages are keyed by month,
+  // so a commit only mounts the one new far page). Dropping them on every change left the next
+  // swipe sliding over blank space until they came back.
+  const [warm, setWarm] = useState(false);
   // Pages mounted with the pager share the screen's first paint; any page mounted later (a
   // neighbour, or the new month after a flick outran its neighbour) must arrive without
   // replaying entrances.
@@ -193,6 +202,12 @@ function PagerImpl({
   const fade = useSharedValue(1);
   const startX = useSharedValue(0);
   const busy = useSharedValue(false);
+  // This gesture moves the pages. A touch that lands while a commit is in flight never does, even
+  // if the commit finishes mid-touch: it would otherwise start following the finger from a stale
+  // offset with no neighbour beside it.
+  const tracking = useSharedValue(false);
+  // Native: only the very first touch needs to reach JS (to mount the neighbours early).
+  const warmed = useSharedValue(false);
   // Web touch gating: where the touch landed, and whether it is a finger at all.
   const touchX = useSharedValue(0);
   const touchY = useSharedValue(0);
@@ -211,7 +226,7 @@ function PagerImpl({
   const canForward = !(max != null && nextMonth > max);
   const pagesEnabled = !disabled && width > 0;
   const swipeEnabled = pagesEnabled && Boolean(settings.swipeBetweenMonths);
-  const neighbours = slide && pagesEnabled && readyFor === month;
+  const neighbours = slide && pagesEnabled && (WEB ? readyFor === month : warm);
   const sign = isRtl ? -1 : 1;
 
   // Latest props for callbacks that outlive a render (animation completions).
@@ -226,14 +241,16 @@ function PagerImpl({
   useEffect(() => {
     if (WEB || width <= 0) return;
     const handle = InteractionManager.runAfterInteractions(() => {
-      setReadyFor(month);
+      setWarm(true);
     });
     return () => handle.cancel();
   }, [month, width]);
   const markReady = useCallback(() => {
     setPaging(true);
+    setWarm(true);
     setReadyFor(monthRef.current);
   }, []);
+  const beginPaging = useCallback(() => setPaging(true), []);
   const endPaging = useCallback(() => setPaging(false), []);
   // Two frames after the swap, like the pages themselves: the old page is gone by then.
   useEffect(() => {
@@ -328,7 +345,15 @@ function PagerImpl({
     translateX.set(
       withSpring(
         -direction * sign * width,
-        { ...committing, velocity, overshootClamping: true },
+        {
+          ...committing,
+          velocity,
+          overshootClamping: true,
+          // Done once within about half a pixel. The default keeps running for ~250ms of motion
+          // too small to see, and the month (and the next swipe) waits for it.
+          energyThreshold:
+            width > 0 ? Math.max(1e-7, (0.5 / width) ** 2) : 1e-6,
+        },
         (finished) => {
           if (finished) runOnJS(commit)(direction, haptic);
           else busy.set(false);
@@ -379,18 +404,23 @@ function PagerImpl({
           // `markReady` reads a ref only when the touch lands, never in render.
           // eslint-disable-next-line react-hooks/refs
           .onBegin(() => {
+            if (warmed.get()) return;
+            warmed.set(true);
             runOnJS(markReady)();
           });
     const pan = activating
       .onStart(() => {
         // A swipe already committing owns the pages: grabbing them mid-slide restarted the drag
         // from a half-way offset and read as a second swipe.
-        if (busy.get()) return;
+        tracking.set(!busy.get());
+        if (!tracking.get()) return;
+        // Native: a swipe has begun (web already said so on activation).
+        if (!WEB) runOnJS(beginPaging)();
         cancelAnimation(translateX);
         startX.set(translateX.get());
       })
       .onUpdate((event) => {
-        if (busy.get() || reduced) return;
+        if (!tracking.get() || reduced) return;
         const raw = startX.get() + event.translationX;
         const towardForward = raw * sign < 0;
         const followed =
@@ -400,7 +430,8 @@ function PagerImpl({
       // The refs behind `commit` are only read when an animation finishes, never in render.
       // eslint-disable-next-line react-hooks/refs
       .onEnd((event) => {
-        if (busy.get()) return;
+        if (!tracking.get()) return;
+        tracking.set(false);
         const direction = resolveSwipe(
           // The whole offset, not just this touch: a spring-back caught mid-way keeps its start.
           startX.get() + event.translationX,
@@ -432,6 +463,8 @@ function PagerImpl({
     committing,
     blockedBy,
     markReady,
+    beginPaging,
+    warmed,
     clearReady,
     endPaging,
     commit,
@@ -441,6 +474,7 @@ function PagerImpl({
     translateX,
     startX,
     busy,
+    tracking,
     fade,
   ]);
 
