@@ -53,6 +53,8 @@ const CROSSFADE_OUT = 90;
 const CROSSFADE_IN = 140;
 /** If the parent ignores `onChange`, put the pages back after this long. */
 const COMMIT_TIMEOUT = 400;
+/** How long a page that just became current waits before its own layout transitions resume. */
+const SETTLE_DELAY = 300;
 
 /**
  * Style for the scroll container inside a pager page. `touch-action` only counts up to the nearest
@@ -274,7 +276,6 @@ function PagerImpl({
     setWarm(true);
     setReadyFor(monthRef.current);
   }, []);
-  const beginPaging = useCallback(() => setPaging(true), []);
   const endPaging = useCallback(() => setPaging(false), []);
   // Two frames after the swap, like the pages themselves: the old page is gone by then.
   useEffect(() => {
@@ -481,8 +482,9 @@ function PagerImpl({
           return;
         }
         tracking.set(true);
-        // Native: a swipe has begun (web already said so on activation).
-        if (!WEB) runOnJS(beginPaging)();
+        // No JS round trip here: on native the page swiped away stays mounted as a neighbour, so
+        // `paging` (web sets it on activation) has nothing to guard, and setting it re-rendered
+        // every row of the page at the start of each swipe, delaying the commit behind it.
         cancelAnimation(translateX);
         startX.set(translateX.get());
       })
@@ -535,7 +537,6 @@ function PagerImpl({
     committing,
     blockedBy,
     markReady,
-    beginPaging,
     warmed,
     clearReady,
     endPaging,
@@ -692,9 +693,9 @@ function PagerPage({
   // move there made the overview cards' layout transitions replay the slide (visibly on web).
   // It is set in a layout effect, which runs in the same commit as the pager's own
   // `translateX` reset, so the two land in one frame.
-  // Layout transitions inside the page stay paused while it is a neighbour and for two frames
+  // Layout transitions inside the page stay paused while it is a neighbour and for a moment
   // after it becomes current, so the commit re-render does not animate anything on its own.
-  // Both updates are deferred to a frame; the `current` check below covers the gap. A page
+  // Both updates are deferred; the `current` check below covers the gap. A page
   // that mounts already current by paging (a flick that outran its neighbour) starts unsettled
   // too, so it arrives drawn and still instead of playing its entrances.
   const [settled, setSettled] = useState(current && initial);
@@ -704,18 +705,14 @@ function PagerPage({
     entranceSettled.current = current && settled;
   });
   useEffect(() => {
-    let inner = 0;
-    const outer = requestAnimationFrame(() => {
-      if (!current) {
-        setSettled(false);
-        return;
-      }
-      inner = requestAnimationFrame(() => setSettled(true));
-    });
-    return () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-    };
+    if (!current) {
+      const id = requestAnimationFrame(() => setSettled(false));
+      return () => cancelAnimationFrame(id);
+    }
+    // Settling re-renders every row of the page (their layout transitions and exits read it), so
+    // it waits until swiping pauses: a run of quick swipes never pays for it between months.
+    const id = setTimeout(() => setSettled(true), SETTLE_DELAY);
+    return () => clearTimeout(id);
   }, [current]);
   const animated = useAnimatedStyle(() => {
     const distance = index - baseIndex.get();

@@ -2,7 +2,6 @@ import { useRef, useState } from "react";
 import { Modal, Pressable, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   useAnimatedStyle,
-  useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -131,10 +130,13 @@ const monthAt = (index: number) =>
   `${Math.floor((index - 1) / 12)}-${String(((index - 1) % 12) + 1).padStart(2, "0")}-01`;
 
 /**
- * The month name. With a `dragProgress` the previous, current and next names are placed by their
- * own month index against the pager's absolute position, so the title is part of the swipe and a
- * month change (which swaps the names and the position in separate steps) never shows the wrong
- * month for a frame. Every name keeps its identity across the change.
+ * The month name. With a `dragProgress` the previous, current and next names sit side by side in
+ * one strip that travels with the pages, so the title is part of the swipe.
+ *
+ * The strip is re-created for every month and its offset is measured from that month, so it rests
+ * at zero whatever the month. Nothing on screen keeps a month-specific resting transform: names
+ * placed by their own month index each rested somewhere different, and on Android the title went
+ * blank (an older transform re-applied by a later commit leaves the name off the pill).
  *
  * Without one it is just the current name. Either way the pill is as wide as the longest month name,
  * so it keeps one size from month to month.
@@ -147,13 +149,12 @@ function MonthTitle({
   dragProgress?: SharedValue<number>;
 }) {
   const { locale, isRtl } = useLocalization();
-  const titleWidth = useSharedValue(0);
+  const [titleWidth, setTitleWidth] = useState(0);
   const [lineHeight, setLineHeight] = useState(0);
   // Each name's own width, measured one by one. The widest sets a floor under the title, so the
   // pill keeps its size even if a platform sizes the stack of names differently.
   const widths = useRef<number[]>([]);
   const [nameWidth, setNameWidth] = useState(0);
-  const sign = isRtl ? -1 : 1;
   const centre = Number(value.slice(0, 4)) * 12 + Number(value.slice(5, 7));
   // Every month name, laid out invisibly: the width is the longest one's.
   const sizer = (
@@ -216,78 +217,97 @@ function MonthTitle({
   return (
     <View
       style={{ minWidth: nameWidth }}
-      onLayout={(event: LayoutChangeEvent) =>
-        titleWidth.set(event.nativeEvent.layout.width)
-      }
+      onLayout={(event: LayoutChangeEvent) => {
+        const next = Math.round(event.nativeEvent.layout.width);
+        setTitleWidth((current) => (current === next ? current : next));
+      }}
     >
       {/* The sizer holds the row's width and one line of height; the names sit over it. */}
       {sizer}
-      {[centre - 1, centre, centre + 1].map((index) => (
-        <TitleName
-          key={index}
-          index={index}
-          current={index === centre}
-          sign={sign}
-          position={dragProgress}
-          titleWidth={titleWidth}
-          label={monthLabel(monthAt(index), locale)}
-        />
-      ))}
+      <TitleStrip
+        key={value}
+        centre={centre}
+        sign={isRtl ? -1 : 1}
+        position={dragProgress}
+        step={titleWidth > 0 ? titleWidth + TITLE_GAP : 0}
+        labels={[
+          monthLabel(monthAt(centre - 1), locale),
+          monthLabel(value, locale),
+          monthLabel(monthAt(centre + 1), locale),
+        ]}
+      />
     </View>
   );
 }
 
-function TitleName({
-  index,
-  current,
+/**
+ * The previous, current and next names, one `step` apart, moved as one by the pager's position.
+ * Keyed by month: a new strip arrives with its own month already at the centre, so the labels and
+ * their offset can never come from different months. The neighbours wait for the title's width
+ * (`step` 0), so they are never drawn inside the pill.
+ */
+function TitleStrip({
+  centre,
   sign,
   position,
-  titleWidth,
-  label,
+  step,
+  labels,
 }: {
-  index: number;
-  current: boolean;
+  centre: number;
   sign: 1 | -1;
   position: SharedValue<number>;
-  titleWidth: SharedValue<number>;
-  label: string;
+  step: number;
+  labels: readonly [string, string, string];
 }) {
-  const style = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          (index * sign + position.get()) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
+  const style = useAnimatedStyle(() => {
+    // The drag in page widths, measured from this strip's month.
+    const offset = centre * sign + position.get();
+    // Only a jump the pager has not reached yet (the month picker) is ever farther than one month
+    // away; the new name simply waits at the centre for it.
+    return {
+      transform: [{ translateX: Math.abs(offset) > 1 ? 0 : offset * step }],
+    };
+  });
   return (
     <Animated.View
-      accessibilityElementsHidden={!current}
-      importantForAccessibility={current ? "auto" : "no-hide-descendants"}
       pointerEvents="none"
       style={[
-        {
-          position: "absolute",
-          // Wider than the title, so a longer month name never wraps to fit it.
-          left: -TITLE_GAP,
-          right: -TITLE_GAP,
-          top: 0,
-          bottom: 0,
-          alignItems: "center",
-          justifyContent: "center",
-        },
+        { position: "absolute", left: 0, right: 0, top: 0, bottom: 0 },
         style,
       ]}
     >
-      <AppText
-        literal
-        variant="label"
-        numeric
-        numberOfLines={1}
-        style={{ textAlign: "center" }}
-      >
-        {label}
-      </AppText>
+      {labels.map((label, slot) =>
+        slot !== 1 && step === 0 ? null : (
+          <View
+            key={slot}
+            accessibilityElementsHidden={slot !== 1}
+            importantForAccessibility={
+              slot === 1 ? "auto" : "no-hide-descendants"
+            }
+            style={{
+              position: "absolute",
+              // Wider than the title, so a longer month name never wraps to fit it.
+              left: -TITLE_GAP,
+              right: -TITLE_GAP,
+              top: 0,
+              bottom: 0,
+              alignItems: "center",
+              justifyContent: "center",
+              transform: [{ translateX: (slot - 1) * sign * step }],
+            }}
+          >
+            <AppText
+              literal
+              variant="label"
+              numeric
+              numberOfLines={1}
+              style={{ textAlign: "center" }}
+            >
+              {label}
+            </AppText>
+          </View>
+        ),
+      )}
     </Animated.View>
   );
 }
