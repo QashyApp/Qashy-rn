@@ -253,6 +253,9 @@ test("reconciles finance changes across open browser tabs", async ({
   await secondPage.goto("/transactions");
   await expect(secondPage.getByText("No transactions yet")).toBeVisible();
 
+  // Opening the second tab backgrounds this one, and a hidden tab never finishes the keypad's
+  // close animation on touch devices.
+  await page.bringToFront();
   await page.getByLabel("Add transaction").first().click();
   await fillAmount(page.getByLabel("Amount (USD)"), "8");
   await page.getByLabel("Title").fill("Cross-tab update");
