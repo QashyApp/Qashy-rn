@@ -29,6 +29,7 @@ import { MonthSwitcher } from "@/components/ui/month-switcher";
 import {
   MonthPager,
   navigateMonth,
+  restingPosition,
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
 import { MotionView, ScreenTransition } from "@/components/ui/motion";
@@ -68,6 +69,9 @@ import {
 } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
 import { hapticSelection, hapticSuccess } from "@/utils/haptics";
+
+/** How long the month has to hold still before the URL is updated to it. */
+const PARAM_DELAY = 400;
 
 const KIND_OPTIONS = [
   { value: "all", label: "All", icon: "list.bullet.rectangle" },
@@ -120,7 +124,7 @@ export function TransactionsScreen() {
   const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const pagerRef = useRef<MonthPagerHandle>(null);
-  const dragProgress = useSharedValue(0);
+  const dragProgress = useSharedValue(restingPosition(month, isRtl));
   const listRef =
     useSectionScrollToTop<
       SectionList<TransactionRecord, LedgerSection<TransactionRecord>>
@@ -149,19 +153,43 @@ export function TransactionsScreen() {
   // one frame of the previous month first.
   const paramMonth = parseMonthKey(params.month);
   const [followedParam, setFollowedParam] = useState(paramMonth);
+  // Params this screen wrote itself and has not seen come back yet. The router echoes them late, so
+  // a quick second swipe would otherwise be yanked back to the first one's month when it lands.
+  const [ownParams, setOwnParams] = useState<string[]>([]);
+  // This screen's own month change, not yet written to the URL.
+  const [paramDue, setParamDue] = useState(false);
   if (paramMonth !== followedParam) {
     setFollowedParam(paramMonth);
-    if (paramMonth && paramMonth !== month) {
-      setMonth(paramMonth);
-      setSelectedIds([]);
+    const echo = paramMonth ? ownParams.indexOf(monthKey(paramMonth)) : -1;
+    if (echo >= 0) {
+      setOwnParams(ownParams.slice(echo + 1));
+    } else {
+      // Something else navigated here: its month wins over one this screen had yet to write.
+      setParamDue(false);
+      if (paramMonth && paramMonth !== month) {
+        setMonth(paramMonth);
+        setSelectedIds([]);
+      }
     }
   }
 
   const changeMonth = (next: string) => {
     setMonth(next);
-    setSelectedIds([]);
-    router.setParams({ month: monthKey(next) });
+    // Kept as is when already empty: a new array re-rendered every mounted month page.
+    setSelectedIds((current) => (current.length ? [] : current));
+    setParamDue(true);
   };
+  // The URL follows once the month stops changing. Writing it on every swipe re-rendered the
+  // screen twice more per month (the write, then the router's echo), right as the next swipe began.
+  useEffect(() => {
+    if (!paramDue) return;
+    const timer = setTimeout(() => {
+      setParamDue(false);
+      setOwnParams((own) => [...own, monthKey(month)]);
+      router.setParams({ month: monthKey(month) });
+    }, PARAM_DELAY);
+    return () => clearTimeout(timer);
+  }, [paramDue, month]);
 
   const allMonths = searchAllMonths && search.trim().length > 0;
   const fromDate = startOfMonth(month);

@@ -8,8 +8,10 @@ import { FloatingActionButton } from "@/components/ui/floating-action-button";
 import {
   MonthPager,
   navigateMonth,
+  restingPosition,
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
+import { useLocalization } from "@/localization/localization";
 import { floatingActionMetrics } from "@/components/ui/screen-container";
 import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
@@ -46,11 +48,12 @@ export function OverviewScreen() {
   const { space } = theme;
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
+  const { isRtl } = useLocalization();
   const [month, setMonth] = useState(startOfMonth());
   const { visibility: fabVisibility, onScroll } = useScrollHide();
   const scrollRef = useSectionScrollToTop<ScrollView>();
   const pagerRef = useRef<MonthPagerHandle>(null);
-  const dragProgress = useSharedValue(0);
+  const dragProgress = useSharedValue(restingPosition(month, isRtl));
 
   const { layout, status, dispatch } = useOverviewLayout();
   const cards =
