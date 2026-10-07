@@ -29,6 +29,7 @@ import { MonthSwitcher } from "@/components/ui/month-switcher";
 import {
   MonthPager,
   navigateMonth,
+  restingPosition,
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
 import { MotionView, ScreenTransition } from "@/components/ui/motion";
@@ -120,7 +121,7 @@ export function TransactionsScreen() {
   const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const pagerRef = useRef<MonthPagerHandle>(null);
-  const dragProgress = useSharedValue(0);
+  const dragProgress = useSharedValue(restingPosition(month, isRtl));
   const listRef =
     useSectionScrollToTop<
       SectionList<TransactionRecord, LedgerSection<TransactionRecord>>

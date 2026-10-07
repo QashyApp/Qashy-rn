@@ -64,6 +64,15 @@ export const PAGER_SCROLLER_STYLE: ViewStyle | undefined = WEB
   ? ({ touchAction: "pan-y" } as ViewStyle)
   : undefined;
 
+/**
+ * Where a pager's `dragProgress` rests on `month`. A screen seeds its shared value with this, so a
+ * control placing names by the position is correct from its very first render, not only after
+ * the pager's first write.
+ */
+export function restingPosition(month: string, isRtl: boolean) {
+  return -monthIndex(month) * (isRtl ? -1 : 1);
+}
+
 /** A month's position on a continuous axis, so neighbouring months are exactly one apart. */
 function monthIndex(month: string) {
   return Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7));
@@ -397,6 +406,9 @@ function PagerImpl({
   };
 
   const gesture = useMemo(() => {
+    // Every callback below is marked `worklet`: the chain is split, so the babel plugin does not
+    // workletize them on its own, and without it the gesture runs on the JS thread, queued behind
+    // each month's render.
     const base = Gesture.Pan()
       .enabled(swipeEnabled)
       .hitSlop({ left: -EDGE_GUARD, right: -EDGE_GUARD });
@@ -406,6 +418,7 @@ function PagerImpl({
         base
           .manualActivation(true)
           .onTouchesDown((event, manager) => {
+            "worklet";
             const touch = event.allTouches[0];
             if (event.pointerType !== PointerType.TOUCH || !touch) {
               touchOk.set(false);
@@ -419,6 +432,7 @@ function PagerImpl({
           // `markReady` reads a ref only when a finger starts a swipe, never in render.
           // eslint-disable-next-line react-hooks/refs
           .onTouchesMove((event, manager) => {
+            "worklet";
             const touch = event.allTouches[0];
             if (!touchOk.get() || !touch) return;
             const dx = touch.absoluteX - touchX.get();
@@ -438,6 +452,7 @@ function PagerImpl({
           // `markReady` reads a ref only when the touch lands, never in render.
           // eslint-disable-next-line react-hooks/refs
           .onBegin(() => {
+            "worklet";
             if (warmed.get()) return;
             warmed.set(true);
             runOnJS(markReady)();
@@ -446,6 +461,7 @@ function PagerImpl({
       // The refs behind `commit` are only read when a touch grabs a slide, never in render.
       // eslint-disable-next-line react-hooks/refs
       .onStart((event) => {
+        "worklet";
         touching.set(true);
         lastDx.set(event.translationX);
         // A swipe already committing owns the pages. A new touch does not restart the drag from a
@@ -471,6 +487,7 @@ function PagerImpl({
         startX.set(translateX.get());
       })
       .onUpdate((event) => {
+        "worklet";
         lastDx.set(event.translationX);
         if (!tracking.get() || reduced) return;
         const raw = startX.get() + event.translationX;
@@ -482,6 +499,7 @@ function PagerImpl({
       // The refs behind `commit` are only read when an animation finishes, never in render.
       // eslint-disable-next-line react-hooks/refs
       .onEnd((event) => {
+        "worklet";
         if (!tracking.get()) return;
         tracking.set(false);
         const direction = resolveSwipe(
@@ -496,6 +514,7 @@ function PagerImpl({
       })
       // A touch that never became a committed swipe (a tap, a scroll, a spring-back).
       .onFinalize(() => {
+        "worklet";
         touching.set(false);
         if (!busy.get()) runOnJS(endPaging)();
       });
