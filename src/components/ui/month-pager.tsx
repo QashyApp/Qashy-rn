@@ -206,6 +206,14 @@ function PagerImpl({
   // if the commit finishes mid-touch: it would otherwise start following the finger from a stale
   // offset with no neighbour beside it.
   const tracking = useSharedValue(false);
+  // A touch is down. With `lastDx` (its latest translation) and `awaiting` it lets a touch that
+  // lands during a commit take over the pages the moment the new month arrives, instead of being
+  // ignored for the rest of the slide.
+  const touching = useSharedValue(false);
+  const lastDx = useSharedValue(0);
+  const awaiting = useSharedValue(false);
+  // The direction of the commit spring in flight; 0 once it has landed or been cut short.
+  const pendingDir = useSharedValue<-1 | 0 | 1>(0);
   // Native: only the very first touch needs to reach JS (to mount the neighbours early).
   const warmed = useSharedValue(false);
   // Web touch gating: where the touch landed, and whether it is a finger at all.
@@ -280,6 +288,14 @@ function PagerImpl({
       if (reduced)
         fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
       else fade.set(1);
+      // A finger that went down during the slide carries on from here, relative to where it was.
+      if (awaiting.get()) {
+        awaiting.set(false);
+        if (touching.get()) {
+          tracking.set(true);
+          startX.set(-lastDx.get());
+        }
+      }
     })();
   }, [
     month,
@@ -290,6 +306,11 @@ function PagerImpl({
     dragProgress,
     busy,
     fade,
+    awaiting,
+    touching,
+    tracking,
+    startX,
+    lastDx,
   ]);
 
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -311,10 +332,11 @@ function PagerImpl({
         translateX.set(0);
         fade.set(1);
         busy.set(false);
+        awaiting.set(false);
         setPaging(false);
       }, COMMIT_TIMEOUT);
     },
-    [translateX, fade, busy],
+    [translateX, fade, busy, awaiting],
   );
 
   const settle = (direction: -1 | 0 | 1, velocity: number, haptic: boolean) => {
@@ -333,9 +355,11 @@ function PagerImpl({
       return;
     }
     busy.set(true);
+    pendingDir.set(direction);
     if (reduced) {
       fade.set(
         withTiming(0, { duration: CROSSFADE_OUT * fadeScale }, (finished) => {
+          pendingDir.set(0);
           if (finished) runOnJS(commit)(direction, haptic);
           else busy.set(false);
         }),
@@ -355,8 +379,11 @@ function PagerImpl({
             width > 0 ? Math.max(1e-7, (0.5 / width) ** 2) : 1e-6,
         },
         (finished) => {
-          if (finished) runOnJS(commit)(direction, haptic);
-          else busy.set(false);
+          // A touch that grabbed the slide has already committed it; the cut-off spring says nothing.
+          if (finished && pendingDir.get() === direction) {
+            pendingDir.set(0);
+            runOnJS(commit)(direction, haptic);
+          } else if (!awaiting.get()) busy.set(false);
         },
       ),
     );
@@ -409,17 +436,35 @@ function PagerImpl({
             runOnJS(markReady)();
           });
     const pan = activating
-      .onStart(() => {
-        // A swipe already committing owns the pages: grabbing them mid-slide restarted the drag
-        // from a half-way offset and read as a second swipe.
-        tracking.set(!busy.get());
-        if (!tracking.get()) return;
+      // The refs behind `commit` are only read when a touch grabs a slide, never in render.
+      // eslint-disable-next-line react-hooks/refs
+      .onStart((event) => {
+        touching.set(true);
+        lastDx.set(event.translationX);
+        // A swipe already committing owns the pages. A new touch does not restart the drag from a
+        // half-way offset (that read as a second swipe): it lands the slide at once and carries on
+        // from the new month, so there is no dead moment between swipes.
+        if (busy.get()) {
+          tracking.set(false);
+          if (!reduced) {
+            awaiting.set(true);
+            const pending = pendingDir.get();
+            if (pending !== 0) {
+              pendingDir.set(0);
+              translateX.set(-pending * sign * width);
+              runOnJS(commit)(pending, false);
+            }
+          }
+          return;
+        }
+        tracking.set(true);
         // Native: a swipe has begun (web already said so on activation).
         if (!WEB) runOnJS(beginPaging)();
         cancelAnimation(translateX);
         startX.set(translateX.get());
       })
       .onUpdate((event) => {
+        lastDx.set(event.translationX);
         if (!tracking.get() || reduced) return;
         const raw = startX.get() + event.translationX;
         const towardForward = raw * sign < 0;
@@ -444,6 +489,7 @@ function PagerImpl({
       })
       // A touch that never became a committed swipe (a tap, a scroll, a spring-back).
       .onFinalize(() => {
+        touching.set(false);
         if (!busy.get()) runOnJS(endPaging)();
       });
     return blockedBy?.length
@@ -476,6 +522,10 @@ function PagerImpl({
     busy,
     tracking,
     fade,
+    touching,
+    lastDx,
+    awaiting,
+    pendingDir,
   ]);
 
   useImperativeHandle(
