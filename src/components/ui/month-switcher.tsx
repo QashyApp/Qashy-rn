@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Modal, Pressable, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -149,6 +149,10 @@ function MonthTitle({
   const { locale, isRtl } = useLocalization();
   const titleWidth = useSharedValue(0);
   const [lineHeight, setLineHeight] = useState(0);
+  // Each name's own width, measured one by one. The widest sets a floor under the title, so the
+  // pill keeps its size even if a platform sizes the stack of names differently.
+  const widths = useRef<number[]>([]);
+  const [nameWidth, setNameWidth] = useState(0);
   const sign = isRtl ? -1 : 1;
   const centre = Number(value.slice(0, 4)) * 12 + Number(value.slice(5, 7));
   // Every month name, laid out invisibly: the width is the longest one's.
@@ -164,31 +168,38 @@ function MonthTitle({
       }}
     >
       {Array.from({ length: 12 }, (_, month) => (
-        <AppText
+        <View
           key={month}
-          literal
-          variant="label"
-          numeric
-          numberOfLines={1}
-          style={{ textAlign: "center" }}
-          onLayout={
-            month === 0
-              ? (event: LayoutChangeEvent) =>
-                  setLineHeight(event.nativeEvent.layout.height)
-              : undefined
-          }
+          style={{ alignSelf: "flex-start" }}
+          onLayout={(event: LayoutChangeEvent) => {
+            const { width, height } = event.nativeEvent.layout;
+            widths.current[month] = width;
+            const widest = Math.ceil(
+              Math.max(...widths.current.filter(Boolean)),
+            );
+            setNameWidth((current) => (current === widest ? current : widest));
+            if (month === 0) setLineHeight(height);
+          }}
         >
-          {monthLabel(
-            `${value.slice(0, 4)}-${String(month + 1).padStart(2, "0")}-01`,
-            locale,
-          )}
-        </AppText>
+          <AppText
+            literal
+            variant="label"
+            numeric
+            numberOfLines={1}
+            style={{ textAlign: "center" }}
+          >
+            {monthLabel(
+              `${value.slice(0, 4)}-${String(month + 1).padStart(2, "0")}-01`,
+              locale,
+            )}
+          </AppText>
+        </View>
       ))}
     </View>
   );
   if (!dragProgress) {
     return (
-      <View>
+      <View style={{ minWidth: nameWidth }}>
         {sizer}
         <AppText
           literal
@@ -204,6 +215,7 @@ function MonthTitle({
   }
   return (
     <View
+      style={{ minWidth: nameWidth }}
       onLayout={(event: LayoutChangeEvent) =>
         titleWidth.set(event.nativeEvent.layout.width)
       }
