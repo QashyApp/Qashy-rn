@@ -1,4 +1,4 @@
-import { useState, type ComponentProps } from "react";
+import { useState } from "react";
 import { Modal, Pressable, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   useAnimatedStyle,
@@ -124,14 +124,21 @@ export function MonthSwitcher({
   );
 }
 
-/**
- * The month name. With a `dragProgress` the previous and next names wait just outside the
- * pill and travel with the pages, so the title is part of the swipe instead of a label that
- * changes after it.
- */
 /** Clears the pill's padding, so a waiting month name is never seen at the edge. */
 const TITLE_GAP = 64;
 
+const monthAt = (index: number) =>
+  `${Math.floor((index - 1) / 12)}-${String(((index - 1) % 12) + 1).padStart(2, "0")}-01`;
+
+/**
+ * The month name. With a `dragProgress` the previous, current and next names are placed by their
+ * own month index against the pager's absolute position, so the title is part of the swipe and a
+ * month change (which swaps the names and the position in separate steps) never shows the wrong
+ * month for a frame. Every name keeps its identity across the change.
+ *
+ * Without one it is just the current name. Either way the pill is as wide as the longest month name,
+ * so it keeps one size from month to month.
+ */
 function MonthTitle({
   value,
   dragProgress,
@@ -141,26 +148,20 @@ function MonthTitle({
 }) {
   const { locale, isRtl } = useLocalization();
   const titleWidth = useSharedValue(0);
+  const [lineHeight, setLineHeight] = useState(0);
   const sign = isRtl ? -1 : 1;
-  const current = (
-    <AppText
-      literal
-      variant="label"
-      numeric
-      numberOfLines={1}
-      style={{ textAlign: "center" }}
-    >
-      {monthLabel(value, locale)}
-    </AppText>
-  );
-  // Every month name, laid out invisibly at zero height: the pill is as wide as the
-  // longest one, so it keeps one size instead of resizing from month to month.
+  const centre = Number(value.slice(0, 4)) * 12 + Number(value.slice(5, 7));
+  // Every month name, laid out invisibly: the width is the longest one's.
   const sizer = (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
-      style={{ height: 0, overflow: "hidden", opacity: 0 }}
+      style={{
+        height: dragProgress ? lineHeight : 0,
+        overflow: "hidden",
+        opacity: 0,
+      }}
     >
       {Array.from({ length: 12 }, (_, month) => (
         <AppText
@@ -170,6 +171,12 @@ function MonthTitle({
           numeric
           numberOfLines={1}
           style={{ textAlign: "center" }}
+          onLayout={
+            month === 0
+              ? (event: LayoutChangeEvent) =>
+                  setLineHeight(event.nativeEvent.layout.height)
+              : undefined
+          }
         >
           {monthLabel(
             `${value.slice(0, 4)}-${String(month + 1).padStart(2, "0")}-01`,
@@ -179,44 +186,72 @@ function MonthTitle({
       ))}
     </View>
   );
-  const currentStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX: (dragProgress?.get() ?? 0) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  const previousStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          ((dragProgress?.get() ?? 0) - sign) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  const nextStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          ((dragProgress?.get() ?? 0) + sign) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
   if (!dragProgress) {
     return (
       <View>
         {sizer}
-        {current}
+        <AppText
+          literal
+          variant="label"
+          numeric
+          numberOfLines={1}
+          style={{ textAlign: "center" }}
+        >
+          {monthLabel(value, locale)}
+        </AppText>
       </View>
     );
   }
-  const neighbour = (
-    delta: number,
-    style: ComponentProps<typeof Animated.View>["style"],
-  ) => (
+  return (
+    <View
+      onLayout={(event: LayoutChangeEvent) =>
+        titleWidth.set(event.nativeEvent.layout.width)
+      }
+    >
+      {/* The sizer holds the row's width and one line of height; the names sit over it. */}
+      {sizer}
+      {[centre - 1, centre, centre + 1].map((index) => (
+        <TitleName
+          key={index}
+          index={index}
+          current={index === centre}
+          sign={sign}
+          position={dragProgress}
+          titleWidth={titleWidth}
+          label={monthLabel(monthAt(index), locale)}
+        />
+      ))}
+    </View>
+  );
+}
+
+function TitleName({
+  index,
+  current,
+  sign,
+  position,
+  titleWidth,
+  label,
+}: {
+  index: number;
+  current: boolean;
+  sign: 1 | -1;
+  position: SharedValue<number>;
+  titleWidth: SharedValue<number>;
+  label: string;
+}) {
+  const style = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateX:
+          (index * sign + position.get()) * (titleWidth.get() + TITLE_GAP),
+      },
+    ],
+  }));
+  return (
     <Animated.View
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
+      accessibilityElementsHidden={!current}
+      importantForAccessibility={current ? "auto" : "no-hide-descendants"}
       pointerEvents="none"
       style={[
         {
@@ -239,21 +274,9 @@ function MonthTitle({
         numberOfLines={1}
         style={{ textAlign: "center" }}
       >
-        {monthLabel(moveMonth(value, delta), locale)}
+        {label}
       </AppText>
     </Animated.View>
-  );
-  return (
-    <View
-      onLayout={(event: LayoutChangeEvent) =>
-        titleWidth.set(event.nativeEvent.layout.width)
-      }
-    >
-      {sizer}
-      <Animated.View style={currentStyle}>{current}</Animated.View>
-      {neighbour(-1, previousStyle)}
-      {neighbour(1, nextStyle)}
-    </View>
   );
 }
 

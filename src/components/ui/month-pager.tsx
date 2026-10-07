@@ -98,8 +98,11 @@ export interface MonthPagerProps {
    */
   blockedBy?: readonly ExternalGesture[];
   /**
-   * Written with the drag in page widths (0 at rest, -1 once the next month has slid fully in), so
-   * a control outside the pager, such as the month title, can move with the same gesture.
+   * Written with the pager's absolute position, in page widths: the drag (0 at rest, -1 once the
+   * next month has slid fully in) minus the centre month's index (plus it, right-to-left). A
+   * control outside the pager, such as the month title, places the month with index `k` at
+   * `(k * sign + dragProgress)` page widths, so it moves with the same gesture and stays correct
+   * through a month change.
    */
   dragProgress?: SharedValue<number>;
   /**
@@ -174,6 +177,7 @@ function PagerImpl({
     [spring],
   );
 
+  const sign = isRtl ? -1 : 1;
   const [width, setWidth] = useState(0);
   // The month the neighbours were last mounted for; stale means "not yet".
   const [readyFor, setReadyFor] = useState<string | null>(null);
@@ -221,12 +225,16 @@ function PagerImpl({
   const touchY = useSharedValue(0);
   const touchOk = useSharedValue(false);
 
+  // `dragProgress` is an absolute position, not just the drag: the drag in page widths minus the
+  // centre month's index (flipped for right-to-left). A control that places each month name by its
+  // own index against it needs no separate swap, so the new name can land a frame before or after
+  // the reset without ever showing the wrong month.
   useAnimatedReaction(
-    () => (width > 0 ? translateX.get() / width : 0),
-    (progress) => {
-      if (dragProgress) dragProgress.set(progress);
+    () => (width > 0 ? translateX.get() / width : 0) - baseIndex.get() * sign,
+    (position) => {
+      if (dragProgress) dragProgress.set(position);
     },
-    [width, dragProgress],
+    [width, dragProgress, sign],
   );
 
   const prevMonth = useMemo(() => moveMonth(month, -1), [month]);
@@ -235,7 +243,6 @@ function PagerImpl({
   const pagesEnabled = !disabled && width > 0;
   const swipeEnabled = pagesEnabled && Boolean(settings.swipeBetweenMonths);
   const neighbours = slide && pagesEnabled && (WEB ? readyFor === month : warm);
-  const sign = isRtl ? -1 : 1;
 
   // Latest props for callbacks that outlive a render (animation completions).
   const monthRef = useRef(month);
@@ -281,9 +288,8 @@ function PagerImpl({
       "worklet";
       baseIndex.set(index);
       translateX.set(0);
-      // The title follows `translateX` a frame late; reset it with the pages so the new month's
-      // name never lands for a frame at the old offset.
-      dragProgress?.set(0);
+      // The title follows `translateX` a frame late; reset it with the pages.
+      dragProgress?.set(-index * sign);
       busy.set(false);
       if (reduced)
         fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
@@ -304,6 +310,7 @@ function PagerImpl({
     baseIndex,
     translateX,
     dragProgress,
+    sign,
     busy,
     fade,
     awaiting,
