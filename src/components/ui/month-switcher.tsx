@@ -153,6 +153,32 @@ function MonthTitle({
       {monthLabel(value, locale)}
     </AppText>
   );
+  // Every month name, laid out invisibly at zero height: the pill is as wide as the
+  // longest one, so it keeps one size instead of resizing from month to month.
+  const sizer = (
+    <View
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      pointerEvents="none"
+      style={{ height: 0, overflow: "hidden", opacity: 0 }}
+    >
+      {Array.from({ length: 12 }, (_, month) => (
+        <AppText
+          key={month}
+          literal
+          variant="label"
+          numeric
+          numberOfLines={1}
+          style={{ textAlign: "center" }}
+        >
+          {monthLabel(
+            `${value.slice(0, 4)}-${String(month + 1).padStart(2, "0")}-01`,
+            locale,
+          )}
+        </AppText>
+      ))}
+    </View>
+  );
   const currentStyle = useAnimatedStyle(() => ({
     transform: [
       {
@@ -176,7 +202,14 @@ function MonthTitle({
       },
     ],
   }));
-  if (!dragProgress) return current;
+  if (!dragProgress) {
+    return (
+      <View>
+        {sizer}
+        {current}
+      </View>
+    );
+  }
   const neighbour = (
     delta: number,
     style: ComponentProps<typeof Animated.View>["style"],
@@ -216,6 +249,7 @@ function MonthTitle({
         titleWidth.set(event.nativeEvent.layout.width)
       }
     >
+      {sizer}
       <Animated.View style={currentStyle}>{current}</Animated.View>
       {neighbour(-1, previousStyle)}
       {neighbour(1, nextStyle)}
