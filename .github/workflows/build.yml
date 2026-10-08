@@ -1,15 +1,21 @@
-name: React Native CI/CD
+name: Build
 
+# Android builds only. Nothing here depends on the Test workflow.
+#   push to main      -> preview APK
+#   push of a v* tag  -> preview APK + production AAB
+#   manual dispatch   -> whichever buildType you pick
 on:
   push:
-    branches: [main, master, dev]
+    branches: [main]
     tags: ["v*"]
     paths-ignore:
       - "**.md"
       - "LICENSE"
       - "docs/**"
-  pull_request:
-    branches: [main, master]
+      - "e2e/**"
+      - "scripts/**"
+      - ".github/dependabot.yml"
+      - ".github/workflows/test.yml"
   workflow_dispatch:
     inputs:
       buildType:
@@ -21,44 +27,20 @@ on:
           - production
           - all
 
+permissions:
+  contents: read
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+  cancel-in-progress: false
 
 jobs:
-  test:
+  plan:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       matrix: ${{ steps.plan.outputs.matrix }}
     steps:
-      - name: 🏗 Checkout repository
-        uses: actions/checkout@v7
-
-      - name: 🏗 Setup Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version: "24"
-          cache: "npm"
-
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🧪 Run TypeScript check
-        run: npm run typecheck
-
-      - name: 🧹 Run ESLint
-        run: npm run lint
-
-      - name: 🎨 Run Prettier check
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: npm run format:check
-
-      # Pushes to dev build preview only; pushes to main/master and tags build
-      # preview + production. The dev profile runs only from manual dispatch.
-      # Manual runs pick builds from the buildType input.
       - name: 🗺 Plan builds
         id: plan
         env:
@@ -77,45 +59,50 @@ jobs:
               production) list="$production" ;;
               *) list="$dev,$preview,$production" ;;
             esac
-          elif [ "$EVENT" = "push" ] && [ "$REF" = "refs/heads/dev" ]; then
-            list="$preview"
-          elif [ "$EVENT" = "push" ]; then
+          elif [[ "$REF" == refs/tags/* ]]; then
             list="$preview,$production"
           else
-            list=""
+            list="$preview"
           fi
 
           echo "matrix={\"include\":[$list]}" >> "$GITHUB_OUTPUT"
 
   build:
-    needs: test
-    if: github.event_name != 'pull_request'
+    needs: plan
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: ${{ fromJSON(needs.test.outputs.matrix) }}
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     name: build (${{ matrix.name }})
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
     steps:
       - name: 🏗 Checkout repository
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
+      # No npm cache here: `npm ci` is quick and each matrix job would otherwise
+      # write its own copy.
       - name: 🏗 Setup Node.js
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: "24"
-          cache: "npm"
 
       - name: 🏗 Setup Java
-        uses: actions/setup-java@v6
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
         with:
           distribution: temurin
           java-version: "17"
 
+      # Only builds on main may write the Gradle cache (~1.7 GB per set); tag and
+      # manual runs read it but never add to it.
       - name: 🏗 Setup Gradle cache
-        uses: gradle/actions/setup-gradle@v6
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
 
       - name: 🏗 Setup EAS CLI
-        uses: expo/expo-github-action@v9
+        uses: expo/expo-github-action@eab7a230208c952974db8c3245cfd78402c7b385 # v9
         with:
           eas-version: 24.x
           packager: npm
@@ -126,20 +113,25 @@ jobs:
 
       - name: 🏷 Name build output
         id: out
+        env:
+          PREFIX: ${{ matrix.prefix }}
+          EXT: ${{ matrix.ext }}
         run: |
           version=$(node -p "require('./app.json').expo.version")
-          echo "name=${{ matrix.prefix }}-${version}" >> "$GITHUB_OUTPUT"
-          echo "file=${{ matrix.prefix }}-${version}.${{ matrix.ext }}" >> "$GITHUB_OUTPUT"
+          echo "name=${PREFIX}-${version}" >> "$GITHUB_OUTPUT"
+          echo "file=${PREFIX}-${version}.${EXT}" >> "$GITHUB_OUTPUT"
 
       - name: 📱 Build ${{ matrix.name }}
-        run: |
-          export NODE_OPTIONS="--max_old_space_size=4096"
-          eas build --platform android --profile ${{ matrix.profile }} --local --non-interactive --output=./${{ steps.out.outputs.file }}
         env:
           NODE_ENV: ${{ matrix.node_env }}
+          PROFILE: ${{ matrix.profile }}
+          OUTPUT_FILE: ${{ steps.out.outputs.file }}
+        run: |
+          export NODE_OPTIONS="--max_old_space_size=4096"
+          eas build --platform android --profile "$PROFILE" --local --non-interactive --output="./$OUTPUT_FILE"
 
       - name: 📦 Upload build artifact to GitHub
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           path: ./${{ steps.out.outputs.file }}
           archive: false
