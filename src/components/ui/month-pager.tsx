@@ -317,6 +317,7 @@ function PagerImpl({
       if (requested !== 0) {
         if (index === requested) {
           requestedIndex.set(0);
+          busy.set(false);
         } else if (
           Math.min(previous, requested) < index &&
           index < Math.max(previous, requested)
@@ -400,7 +401,6 @@ function PagerImpl({
     const next = baseIndex.get() + direction;
     baseIndex.set(next);
     translateX.set(translateX.get() + direction * sign * width);
-    busy.set(false);
     requestedIndex.set(next);
     runOnJS(commit)(next, direction, haptic);
   };
