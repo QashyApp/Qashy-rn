@@ -135,11 +135,11 @@ export function NavBarStyleCard({
           ) : null}
         </View>
         <AppText variant="label" style={{ flex: 1 }}>
-          {label}
+          {t(label)}
         </AppText>
       </View>
       <AppText variant="caption" muted style={{ paddingHorizontal: space.xs }}>
-        {caption}
+        {t(caption)}
       </AppText>
     </Pressable>
   );

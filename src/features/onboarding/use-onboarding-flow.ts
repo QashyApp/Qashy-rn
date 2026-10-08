@@ -106,6 +106,7 @@ export function useOnboardingFlow() {
   const [step, setStep] = useState<OnboardingStep>("welcome");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [saving, setSaving] = useState(false);
+  const savingRef = useRef(false);
   const [draft, setDraft] = useState<OnboardingDraft>(() => {
     const locale =
       languageFromLocale(start.locale) === "he" ? "he-IL" : "en-US";
@@ -203,7 +204,10 @@ export function useOnboardingFlow() {
   };
 
   const finish = async () => {
-    if (saving || !stepIsValid("ready", draft)) return;
+    // A ref, not `saving`: a second tap before the re-render would otherwise start a second
+    // completeOnboarding write.
+    if (savingRef.current || !stepIsValid("ready", draft)) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       await pendingSettingsWrite.current;
@@ -223,6 +227,7 @@ export function useOnboardingFlow() {
         errorMessage(reason, "Check the form and try again."),
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };

@@ -32,6 +32,7 @@ import { WebDialogHost } from "@/components/web-dialog-host";
 import { ReloadErrorBanner } from "@/components/reload-error-banner";
 import {
   LocalizationProvider,
+  translateCurrent,
   useLocalization,
 } from "@/localization/localization";
 import { QashyThemeProvider, useQashyTheme } from "@/theme/theme";
@@ -122,10 +123,16 @@ function formSheetOptions(title: string, backTitle: string, fallback: Href) {
  * it sits above QashyThemeProvider and has to theme itself from the static token
  * sets exactly like the FinanceProvider error state does.
  */
-export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   const scheme = useColorScheme();
   // Settings are not loaded here, so the user's theme is unknown: classic is the only truthful choice.
   const tokens = classicTheme.palette[scheme === "dark" ? "dark" : "light"];
+  // The raw error message is never shown: it can carry record details from a render. The
+  // language is the last one the app applied, since no provider is mounted here.
+  const heading = translateCurrent("Something went wrong");
+  const detail = translateCurrent(
+    "Qashy hit an unexpected error while rendering this screen.",
+  );
 
   useEffect(hideSplashScreen, []);
 
@@ -144,11 +151,10 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         selectable
         style={{ fontSize: 20, fontWeight: "700", color: tokens.text }}
       >
-        Something went wrong
+        {heading}
       </Text>
       <Text selectable style={{ textAlign: "center", color: tokens.textMuted }}>
-        {error.message ||
-          "Qashy hit an unexpected error while rendering this screen."}
+        {detail}
       </Text>
       <Pressable
         accessibilityRole="button"
@@ -165,7 +171,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         <Text
           style={{ color: readableTextColor(QASHY_ACCENT), fontWeight: "700" }}
         >
-          Try again
+          {translateCurrent("Try again")}
         </Text>
       </Pressable>
     </View>

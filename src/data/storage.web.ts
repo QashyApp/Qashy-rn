@@ -61,16 +61,29 @@ class QashyDatabase extends Dexie {
     // IndexedDB cannot index `null` or a boolean, which is why `sealed` is `0 | 1` and an
     // absent `signature` is `''` — a nullable column simply drops out of its index, and
     // `[sealed+deviceId+seq]` is how the sealer finds its work.
-    this.version(4).stores({
-      records: "&key, type, entityId, updatedAt, deletedAt, [type+updatedAt]",
-      syncOps:
-        "&opId, [deviceId+seq], [entityType+entityId], hlc, [sealed+deviceId+seq]",
-      syncState: "&key, type, maxHlc",
-      syncPeers: "&peerId",
-      syncMeta: "&key",
-      syncQuarantine: "&key",
-      syncActivity: "&key",
-    });
+    this.version(4)
+      .stores({
+        records: "&key, type, entityId, updatedAt, deletedAt, [type+updatedAt]",
+        syncOps:
+          "&opId, [deviceId+seq], [entityType+entityId], hlc, [sealed+deviceId+seq]",
+        syncState: "&key, type, maxHlc",
+        syncPeers: "&peerId",
+        syncMeta: "&key",
+        syncQuarantine: "&key",
+        syncActivity: "&key",
+      })
+      // A browser arriving from version 3 has peers with no `revokedSeq`. Revoked peers get the
+      // fail-closed cutoff 0 and active ones get null, matching the SQLite backfill. Rows that
+      // already carry the field are left alone, so re-running the upgrade changes nothing.
+      .upgrade((transaction) =>
+        transaction
+          .table("syncPeers")
+          .toCollection()
+          .modify((row: { revokedAt?: unknown; revokedSeq?: unknown }) => {
+            if (row.revokedSeq === undefined)
+              row.revokedSeq = row.revokedAt ? 0 : null;
+          }),
+      );
     // Without this, shipping a new `version()` while a second tab holds the old one blocks
     // the upgrade *indefinitely* — and two open tabs is a routine PWA state, not an edge
     // case. Closing here lets the upgrading tab through; this tab's next query reopens at
@@ -192,15 +205,17 @@ export class PlatformStorageAdapter implements StorageAdapter {
   private readonly instanceId = makeId();
   private writeCounter = 0;
   private lastSeenToken: string | null = null;
+  /** Kept so `dispose()` can remove exactly the listener this adapter added. */
+  private readonly onStorageEvent = (event: StorageEvent) => {
+    if (event.key === STORAGE_CHANGE_KEY) this.notifyLocalListeners();
+  };
 
   constructor() {
     this.db = new QashyDatabase(() =>
       this.blockedListeners.forEach((listener) => listener()),
     );
     if (typeof globalThis.addEventListener === "function") {
-      globalThis.addEventListener("storage", (event: StorageEvent) => {
-        if (event.key === STORAGE_CHANGE_KEY) this.notifyLocalListeners();
-      });
+      globalThis.addEventListener("storage", this.onStorageEvent);
     }
   }
 
@@ -327,6 +342,9 @@ export class PlatformStorageAdapter implements StorageAdapter {
   // `liveQuery` subscription in normal use. Tests create adapters per case and need
   // to hand the database back.
   async dispose() {
+    if (typeof globalThis.removeEventListener === "function") {
+      globalThis.removeEventListener("storage", this.onStorageEvent);
+    }
     this.observation?.unsubscribe();
     this.observation = null;
     this.lastSeenToken = null;

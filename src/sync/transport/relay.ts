@@ -11,9 +11,11 @@
  *
  * - **The bucket id.** An HKDF output of the vault root key. It identifies a vault without
  *   naming one, and it cannot be reversed into anything else derived from the same root.
- * - **A route tag per blob.** Also an HKDF output, per vault. It lets the relay group blobs by
- *   recipient — which it must, or a device would have to download every other device's traffic
- *   — while learning nothing that survives outside this vault. See `deriveRouteTag`.
+ * - **A route tag per blob.** An HKDF output of the vault, the epoch, the UTC day, and the device.
+ *   It lets the relay group blobs by recipient — which it must, or a device would have to download
+ *   every other device's traffic — while learning nothing that survives outside this vault. Tags
+ *   rotate daily, so the relay can link one device's traffic within a UTC day but not across days.
+ *   See `deriveRouteTag`.
  * - **A frame sequence.** A small integer, authenticated but not secret.
  * - **Padded ciphertext.** Bucketed to a power of two by the envelope, so the byte count does
  *   not read out how many transactions were added.
@@ -66,6 +68,18 @@ export const MAX_RELAY_PAGES = 20;
  */
 export const UPLOAD_JITTER_MS = 400;
 
+/**
+ * Frames held for one sender whose channel has not connected yet.
+ *
+ * A sender's frames can arrive before this device has opened its channel. Holding them is
+ * what makes that safe, but the hold has to be bounded: the cursor moves past every blob it
+ * reads, so a frame that is evicted here is recovered only by the sender re-offering it, which
+ * the outbox does because it is unacknowledged. A cap therefore costs latency, not data.
+ */
+export const MAX_HELD_FRAMES_PER_TAG = 64;
+/** Distinct senders with held frames at once. */
+export const MAX_HELD_TAGS = 16;
+
 interface Blob {
   readonly slot: number;
   /** Opaque sender route tag, used only to select the recipient's peer channel. */
@@ -87,13 +101,40 @@ export interface RelayTransportDeps extends HttpDeps {
   readonly bucketId: string;
   /** base64url `deriveBucketToken(vrk)`. A bare write capability that identifies nobody. */
   readonly token: string;
-  /** This device's route tag, so it can recognise what is addressed to it. */
-  readonly selfTag: string;
-  /** A peer's route tag. Precomputed by the caller, which is the layer that holds the key. */
+  /**
+   * This device's route tag for the current UTC day, read at each upload. The caller holds the
+   * key; this transport only ever sees the result.
+   */
+  readonly selfTag: () => string;
+  /**
+   * The tags a blob may be addressed to this device by: today's and yesterday's, so a sender whose
+   * clock has just crossed midnight is still heard. Read once per poll.
+   */
+  readonly recipientTags: () => ReadonlySet<string>;
+  /**
+   * A peer's route tag for the current UTC day. Read at each send, never cached, so a channel that
+   * outlives midnight addresses the day's tag rather than yesterday's.
+   */
   readonly tagFor: (peerId: string) => string;
+  /**
+   * The tags of the peers currently allowed to send to this device, each mapped back to the
+   * device id: today's and yesterday's tag for every active roster member. A blob from any other
+   * tag is dropped rather than held, because nothing will ever claim it. Read once per poll.
+   */
+  readonly senderTags: () => Promise<ReadonlyMap<string, string>>;
   /** Persisted so a blob is never collected twice, and never missed after a restart. */
   readonly readCursor: () => Promise<number>;
   readonly writeCursor: (slot: number) => Promise<void>;
+  /**
+   * A poll that failed. Raised from `connect`, which still returns a channel: a bucket that
+   * cannot be read says nothing about whether this device can upload.
+   */
+  readonly onPollError?: (error: unknown) => void;
+  /**
+   * Blobs that were read and deliberately not dispatched: from a sender outside the roster, or
+   * evicted from a full hold. Reported once per poll, with a count and nothing else.
+   */
+  readonly onDropped?: (error: RelayError) => void;
   /**
    * Told how each upload went — `null` for one that landed, the error for one that did not.
    *
@@ -136,7 +177,8 @@ class RelayChannel implements SyncChannel {
       seq: number,
       to: string,
     ) => Promise<void>,
-    private readonly tag: string,
+    /** Asked at each send: the peer's tag for the day the frame is sent on, not the day it was opened. */
+    private readonly addressee: () => string,
   ) {}
 
   send(frame: Uint8Array, seq: number): Promise<void> {
@@ -144,7 +186,7 @@ class RelayChannel implements SyncChannel {
       return Promise.reject(
         new RelayError("That channel is closed.", "unreachable"),
       );
-    return this.upload(frame, seq, this.tag);
+    return this.upload(frame, seq, this.addressee());
   }
 
   onFrame(handler: (frame: Uint8Array, seq: number) => void): () => void {
@@ -174,7 +216,8 @@ export class RelayTransport implements SyncTransport {
   readonly kind: TransportKind = "relay";
 
   private readonly channels = new Map<string, RelayChannel>();
-  private readonly pendingByTag = new Map<
+  /** Frames held per sender device id, until that sender's channel connects. */
+  private readonly pendingByPeer = new Map<
     string,
     { frame: Uint8Array; seq: number }[]
   >();
@@ -207,7 +250,18 @@ export class RelayTransport implements SyncTransport {
     if (signal.aborted)
       throw new RelayError("Sync was cancelled.", "unreachable");
     const channel = this.channelFor(peer.deviceId);
-    await this.poll(signal);
+    try {
+      await this.poll(signal);
+    } catch (error) {
+      // Cancellation is the one thing that must still stop the connect; everything else is a
+      // relay that could not be read, and is reported like any other relay failure.
+      if (signal.aborted) throw error;
+      this.deps.onPollError?.(error);
+    }
+    // A pass that was cancelled stops quietly, so the abort is checked here rather than
+    // inferred from the poll having thrown.
+    if (signal.aborted)
+      throw new RelayError("Sync was cancelled.", "unreachable");
     return channel;
   }
 
@@ -227,11 +281,21 @@ export class RelayTransport implements SyncTransport {
     return run;
   }
 
+  /**
+   * One drop-box read covers both of this device's live tags.
+   *
+   * The relay's `GET` is a single slot sequence over the whole bucket, with no filter by recipient,
+   * so there is one cursor and one read per page. Each blob is then matched against today's and
+   * yesterday's recipient tags, and its sender against every active peer's tags for those days.
+   * A second cursor per tag would walk the same slots and advance in lockstep.
+   */
   private async drain(signal?: AbortSignal): Promise<number> {
-    const { baseUrl, bucketId, token, selfTag, readCursor, writeCursor } =
-      this.deps;
+    const { baseUrl, bucketId, token, readCursor, writeCursor } = this.deps;
     let cursor = await readCursor();
+    const recipients = this.deps.recipientTags();
+    const senders = await this.deps.senderTags();
     let delivered = 0;
+    let dropped = 0;
 
     for (let page = 0; page < MAX_RELAY_PAGES; page += 1) {
       if (signal?.aborted) break;
@@ -243,35 +307,76 @@ export class RelayTransport implements SyncTransport {
         token,
         signal,
       });
-      const blobs = parseBlobs(body);
-      if (!blobs.length) break;
+      const { blobs, top } = parseBlobs(body);
+      // No row on the page carried a usable position, so there is nothing to advance to.
+      if (top === null) break;
 
       for (const blob of blobs) {
-        cursor = Math.max(cursor, blob.slot);
-        if (blob.to !== selfTag) continue;
+        if (!recipients.has(blob.to)) continue;
         const frame = decodeFrame(blob.frame);
         // A blob that will not decode is dropped rather than allowed to stall the cursor.
         // The sender's ops are still in its outbox and unacknowledged, so they come back on
         // the next pass; a cursor that refuses to advance past one bad blob would instead
         // re-download it forever and never reach the good ones behind it.
         if (!frame) continue;
-        const channel = [...this.channels.values()].find(
-          (candidate) => this.deps.tagFor(candidate.peerId) === blob.from,
-        );
-        if (channel) channel.deliver(frame, blob.seq);
-        else {
-          const held = this.pendingByTag.get(blob.from) ?? [];
-          held.push({ frame, seq: blob.seq });
-          this.pendingByTag.set(blob.from, held);
+        // Only roster members can ever be claimed by a channel. Anything else is noise, and
+        // holding it would let a hostile relay grow this device's memory without limit.
+        const peerId = senders.get(blob.from);
+        if (peerId === undefined) {
+          dropped += 1;
+          continue;
         }
+        const channel = this.channels.get(peerId);
+        if (channel) channel.deliver(frame, blob.seq);
+        else dropped += this.hold(peerId, frame, blob.seq);
         delivered += 1;
       }
 
+      // Advanced past the whole page, including rows that were addressed elsewhere or would
+      // not parse. Re-reading them every launch would grow with the vault's history.
+      cursor = Math.max(cursor, top);
       await writeCursor(cursor);
       if (body.more !== true) break;
     }
 
+    if (dropped) {
+      this.deps.onDropped?.(
+        new RelayError(
+          `${dropped} relay ${dropped === 1 ? "message was" : "messages were"} not delivered: the sender is not an active device, or the frame was evicted.`,
+          "malformed",
+        ),
+      );
+    }
+
     return delivered;
+  }
+
+  /**
+   * Holds a frame for a sender with no channel yet. Returns how many frames were evicted.
+   *
+   * Both limits evict the oldest: a new sender beyond the tag cap pushes out the sender that
+   * has waited longest, and a sender past the frame cap loses its earliest frame.
+   */
+  private hold(peerId: string, frame: Uint8Array, seq: number): number {
+    let evicted = 0;
+    let held = this.pendingByPeer.get(peerId);
+    if (!held) {
+      if (this.pendingByPeer.size >= MAX_HELD_TAGS) {
+        for (const oldest of this.pendingByPeer.keys()) {
+          evicted += this.pendingByPeer.get(oldest)?.length ?? 0;
+          this.pendingByPeer.delete(oldest);
+          break;
+        }
+      }
+      held = [];
+      this.pendingByPeer.set(peerId, held);
+    }
+    held.push({ frame, seq });
+    if (held.length > MAX_HELD_FRAMES_PER_TAG) {
+      held.shift();
+      evicted += 1;
+    }
+    return evicted;
   }
 
   /**
@@ -303,7 +408,12 @@ export class RelayTransport implements SyncTransport {
         method: "PUT",
         url: `${baseUrl}/bucket/${encodeURIComponent(bucketId)}`,
         token,
-        body: { from: this.deps.selfTag, to, seq, frame: toBase64Url(frame) },
+        body: {
+          from: this.deps.selfTag(),
+          to,
+          seq,
+          frame: toBase64Url(frame),
+        },
       });
     } catch (error) {
       // A payload the relay refuses as too large is this device's fault, not the relay's —
@@ -338,23 +448,22 @@ export class RelayTransport implements SyncTransport {
   close(): Promise<void> {
     for (const channel of this.channels.values()) channel.close();
     this.channels.clear();
-    this.pendingByTag.clear();
+    this.pendingByPeer.clear();
     return Promise.resolve();
   }
 
   private channelFor(peerId: string): RelayChannel {
     const existing = this.channels.get(peerId);
     if (existing) return existing;
-    const tag = this.deps.tagFor(peerId);
     const created = new RelayChannel(
       peerId,
       (frame, seq, to) => this.upload(frame, seq, to),
-      tag,
+      () => this.deps.tagFor(peerId),
     );
     this.channels.set(peerId, created);
-    const pending = this.pendingByTag.get(tag);
+    const pending = this.pendingByPeer.get(peerId);
     if (pending) {
-      this.pendingByTag.delete(tag);
+      this.pendingByPeer.delete(peerId);
       for (const held of pending) created.deliver(held.frame, held.seq);
     }
     return created;
@@ -369,7 +478,15 @@ export class RelayTransport implements SyncTransport {
  * The relay is not trusted to be well-behaved — it is not trusted at all — so "the server
  * sent nonsense" has to be an ordinary, survivable outcome rather than an exception.
  */
-function parseBlobs(body: FetchResponse): Blob[] {
+function parseBlobs(body: FetchResponse): {
+  readonly blobs: Blob[];
+  /**
+   * The highest slot any row on the page carried, well-formed or not. Null when no row had a
+   * usable slot. The cursor moves to this, so a page of nothing but malformed rows is still
+   * consumed rather than re-fetched forever.
+   */
+  readonly top: number | null;
+} {
   if (!Array.isArray(body.blobs)) {
     throw new RelayError(
       "The relay sent something that is not a Qashy relay response.",
@@ -377,6 +494,7 @@ function parseBlobs(body: FetchResponse): Blob[] {
     );
   }
   const blobs: Blob[] = [];
+  let top: number | null = null;
   for (const entry of body.blobs) {
     if (!entry || typeof entry !== "object") continue;
     const row = entry as Record<string, unknown>;
@@ -386,6 +504,7 @@ function parseBlobs(body: FetchResponse): Blob[] {
       row.slot < 0
     )
       continue;
+    top = top === null ? row.slot : Math.max(top, row.slot);
     if (
       typeof row.from !== "string" ||
       !row.from ||
@@ -409,7 +528,10 @@ function parseBlobs(body: FetchResponse): Blob[] {
   }
   // Ascending, so the cursor written after the page is a true high-water mark even if the
   // relay returned the page in some other order.
-  return blobs.sort((first, second) => first.slot - second.slot);
+  return {
+    blobs: blobs.sort((first, second) => first.slot - second.slot),
+    top,
+  };
 }
 
 /**

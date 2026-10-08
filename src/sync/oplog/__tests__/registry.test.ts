@@ -2,14 +2,17 @@ import type { EntityType, FinanceEntity } from "@/domain/models";
 import {
   ENTITY_TYPES,
   REGISTRY,
+  allMissingMeansNull,
   createOnlyFieldsOf,
   elementSetsOf,
   isEntityType,
   keyedMapsOf,
   readPath,
+  readRegisteredPath,
   registerOf,
   registersOf,
   specFor,
+  withMissingMeansNull,
   writePath,
 } from "@/sync/oplog/registry";
 import {
@@ -293,5 +296,47 @@ describe("dotted paths", () => {
 
   it("creates intermediate objects", () => {
     expect(writePath({}, "a.b.c", 1)).toEqual({ a: { b: { c: 1 } } });
+  });
+});
+
+describe("legacy-optional fields", () => {
+  it("names only registered group fields, so the null reading is always carried", () => {
+    const entries = allMissingMeansNull();
+    expect(entries.length).toBeGreaterThan(0);
+    for (const { entityType, path } of entries) {
+      expect(specFor(entityType)[path]).toEqual({
+        kind: "group",
+        group: expect.any(String),
+      });
+    }
+  });
+
+  it("reads an absent legacy key as null, and leaves any other gap undefined", () => {
+    const legacy: Partial<ReturnType<typeof transaction>> = transaction({
+      id: "t",
+    });
+    delete legacy.foreign;
+    expect(readRegisteredPath("transactions", legacy, "foreign")).toBeNull();
+    expect(readRegisteredPath("transactions", legacy, "amountMinor")).toBe(
+      1000,
+    );
+    delete legacy.amountMinor;
+    expect(
+      readRegisteredPath("transactions", legacy, "amountMinor"),
+    ).toBeUndefined();
+  });
+
+  it("writes missing legacy keys as null and leaves present values alone", () => {
+    const legacy: Partial<ReturnType<typeof transaction>> = transaction({
+      id: "t",
+      fee: { amountMinor: 50 } as never,
+    });
+    delete legacy.foreign;
+    const filled = withMissingMeansNull("transactions", legacy);
+    expect(filled.foreign).toBeNull();
+    expect(filled.fee).toEqual({ amountMinor: 50 });
+    // A type with no legacy-optional fields is returned untouched.
+    const tagValue = tag({ id: "tag-1" });
+    expect(withMissingMeansNull("tags", tagValue)).toBe(tagValue);
   });
 });

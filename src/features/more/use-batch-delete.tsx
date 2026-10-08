@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -28,6 +28,7 @@ export function useBatchDelete(options: {
   const [selecting, setSelecting] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+  const flowRef = useRef(false);
   const liveSelected = selectedIds.filter((id) => options.liveIds.includes(id));
 
   const toggleMode = () => {
@@ -42,25 +43,35 @@ export function useBatchDelete(options: {
     );
 
   const deleteSelected = async () => {
-    if (deleting || !liveSelected.length) return;
-    const ids = [...liveSelected];
-    const confirmed = await confirmDestructive({
-      title: options.confirmTitle(ids.length),
-      message:
-        typeof options.confirmMessage === "function"
-          ? options.confirmMessage(ids)
-          : options.confirmMessage,
-    });
-    if (!confirmed) return;
-    setDeleting(true);
+    // Held from the first tap through the confirm dialog, so a second tap cannot open a second
+    // dialog or start a second delete. Checked against a ref because state is stale in that tap.
+    if (flowRef.current || !liveSelected.length) return;
+    flowRef.current = true;
     try {
-      await repository.deleteEntities(options.type as keyof FinanceState, ids);
-      setSelectedIds([]);
-      setSelecting(false);
-    } catch (reason) {
-      showError(options.errorTitle, errorMessage(reason, "Try again."));
+      const ids = [...liveSelected];
+      const confirmed = await confirmDestructive({
+        title: options.confirmTitle(ids.length),
+        message:
+          typeof options.confirmMessage === "function"
+            ? options.confirmMessage(ids)
+            : options.confirmMessage,
+      });
+      if (!confirmed) return;
+      setDeleting(true);
+      try {
+        await repository.deleteEntities(
+          options.type as keyof FinanceState,
+          ids,
+        );
+        setSelectedIds([]);
+        setSelecting(false);
+      } catch (reason) {
+        showError(options.errorTitle, errorMessage(reason, "Try again."));
+      } finally {
+        setDeleting(false);
+      }
     } finally {
-      setDeleting(false);
+      flowRef.current = false;
     }
   };
 

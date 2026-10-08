@@ -54,6 +54,7 @@ import type {
   Tag,
   TransactionRecord,
 } from "@/domain/models";
+import { sumMinor } from "@/utils/money";
 import { compareInvariant, normalizeName } from "@/utils/naming";
 import { nowIso, updateEntity } from "@/utils/entity";
 
@@ -76,6 +77,11 @@ export interface DuplicateGroup {
    * different fix".
    */
   readonly blocked: string | null;
+  /**
+   * True when confirming this group adds the copies' opening balances onto the record kept, so
+   * the balance the user sees is preserved. The review screen says so before the merge runs.
+   */
+  readonly combinesOpeningBalances?: boolean;
 }
 
 export interface MergePlan {
@@ -151,6 +157,16 @@ function accountBlocker(members: readonly Account[], state: FinanceState) {
   if (currencies.size > 1) {
     return `These accounts use different currencies (${[...currencies].sort().join(", ")}).`;
   }
+  // The kept account's balance is its opening balance plus every posted transaction, so the
+  // copies' opening balances have to be carried over or the merge silently changes the total.
+  try {
+    sumMinor(
+      members.map((account) => account.openingBalanceMinor),
+      "Opening balance",
+    );
+  } catch {
+    return "The combined opening balance of these accounts is outside the supported range.";
+  }
   const ids = new Set(members.map((account) => account.id));
   // A transfer between two accounts that became one account is a transfer to itself, which
   // `validateTransaction` rejects — so the merged vault would be unwritable rather than wrong.
@@ -203,7 +219,8 @@ export function transactionDuplicateKey(
         ),
       ),
     ].sort(),
-    transaction.exchangeRate,
+    // Matches LocalFinanceRepository.transactionDuplicateKey: a null rate and an empty one are the same key.
+    transaction.exchangeRate ?? "",
   ]);
 }
 
@@ -224,6 +241,10 @@ export function suggestDuplicates(state: FinanceState): DuplicateGroup[] {
         mergeIds: merge.map((row) => row.id),
         label: keep.name,
         blocked: blocker(bucket),
+        ...("openingBalanceMinor" in keep &&
+        merge.some((row) => (row as Account).openingBalanceMinor !== 0)
+          ? { combinesOpeningBalances: true }
+          : {}),
       });
     }
   };
@@ -287,7 +308,10 @@ function remapFilters(
  *
  * The winner's own limit is kept rather than summing the two. A sum is a guess about intent
  * and it is the kind of guess that silently doubles a budget; keeping the one the user can
- * already see on the surviving category is at worst a number they can edit.
+ * already see on the surviving category is at worst a number they can edit. When the winner
+ * has no limit of its own, the loser whose id sorts first supplies it. The winner's own entry
+ * is ordered ahead of every loser's, and the losers are ordered by id, so the result does not
+ * depend on the order the budget happens to list them in.
  */
 function remapLimits(
   limits: readonly BudgetCategoryLimit[],
@@ -295,11 +319,15 @@ function remapLimits(
 ) {
   if (!limits.some((limit) => categories.has(limit.categoryId)))
     return undefined;
+  const ordered = [...limits].sort(
+    (first, second) =>
+      Number(categories.has(first.categoryId)) -
+        Number(categories.has(second.categoryId)) ||
+      compareInvariant(first.categoryId, second.categoryId),
+  );
   const kept = new Map<string, BudgetCategoryLimit>();
-  for (const limit of limits) {
+  for (const limit of ordered) {
     const categoryId = categories.get(limit.categoryId) ?? limit.categoryId;
-    // Whichever entry the budget already listed first survives the collapse. Arbitrary between
-    // two limits, but stable — it does not depend on which side of the merge a device is on.
     if (!kept.has(categoryId)) kept.set(categoryId, { ...limit, categoryId });
   }
   return [...kept.values()];
@@ -354,6 +382,12 @@ export function planMerge(
       remaps[group.kind].set(id, group.keepId);
     }
   }
+  // The same check from the other side: a record kept by one group and merged away by another
+  // would leave its references pointing at a tombstone, whichever group was listed first.
+  for (const group of groups) {
+    if (remaps[group.kind].has(group.keepId))
+      throw new Error("That record is already being merged into another.");
+  }
 
   const { accounts, categories, tags, transactions } = remaps;
   const records: StoredEntity[] = [];
@@ -368,6 +402,30 @@ export function planMerge(
     records.push({ type, entity: updateEntity(entity, changes) });
     retargeted += 1;
   };
+
+  // Each kept account absorbs the opening balances of its copies, so its balance after the merge
+  // is the sum of what the two balances were. Throws on overflow, like every other money sum.
+  const keptAccounts = new Set<string>();
+  for (const group of groups) {
+    if (group.kind !== "accounts") continue;
+    if (keptAccounts.has(group.keepId))
+      throw new Error("That record is already being merged into another.");
+    keptAccounts.add(group.keepId);
+    const keeper = byId.get(`accounts:${group.keepId}`) as Account;
+    const total = sumMinor(
+      [
+        keeper.openingBalanceMinor,
+        ...group.mergeIds
+          .filter((id) => id !== group.keepId)
+          .map(
+            (id) => (byId.get(`accounts:${id}`) as Account).openingBalanceMinor,
+          ),
+      ],
+      "Opening balance",
+    );
+    if (total !== keeper.openingBalanceMinor)
+      push<Account>("accounts", keeper, { openingBalanceMinor: total });
+  }
 
   for (const transaction of live(state.transactions)) {
     if (transactions.has(transaction.id)) continue;

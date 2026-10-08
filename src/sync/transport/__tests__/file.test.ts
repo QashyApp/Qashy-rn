@@ -16,6 +16,8 @@ import {
   BundleError,
   FileTransport,
   MAX_BUNDLE_FRAMES,
+  MAX_BUNDLE_ID_LENGTH,
+  MAX_BUNDLE_TEXT_LENGTH,
   bundleFileName,
   decodeBundle,
   encodeBundle,
@@ -28,11 +30,16 @@ const PEER = { deviceId: "device-b", name: "Laptop" };
 const PEER_TAG = "tag-for-b";
 
 const transportFor = (
-  overrides: Partial<{ deviceId: string; selfTag: string }> = {},
+  overrides: Partial<{
+    deviceId: string;
+    selfTag: string;
+    recipientTags: ReadonlySet<string>;
+  }> = {},
 ) =>
   new FileTransport({
     deviceId: overrides.deviceId ?? SELF,
     selfTag: overrides.selfTag ?? SELF_TAG,
+    recipientTags: overrides.recipientTags ?? new Set([SELF_TAG]),
     tagFor: (peerId) =>
       peerId === PEER.deviceId ? PEER_TAG : `tag-for-${peerId}`,
   });
@@ -49,7 +56,8 @@ describe("FileTransport", () => {
 
     expect(transport.bundle()).toEqual({
       version: BUNDLE_VERSION,
-      from: SELF,
+      // The sender is written as its route tag, never as the plaintext device id.
+      from: SELF_TAG,
       frames: [
         { to: PEER_TAG, seq: 0, frame: bytes(1, 2, 3) },
         { to: PEER_TAG, seq: 1, frame: bytes(4) },
@@ -361,6 +369,30 @@ describe("what a bundle reveals", () => {
     expect(Object.keys(decoded).sort()).toEqual(["frames", "from", "version"]);
   });
 
+  it("accepts a frame for any day in its recipient window, and skips a tag outside it", async () => {
+    const OLD_DAY_TAG = "tag-for-a-day-minus-29";
+    const OUTSIDE_TAG = "tag-for-a-day-minus-31";
+    const transport = transportFor({
+      recipientTags: new Set([SELF_TAG, OLD_DAY_TAG]),
+    });
+    const channel = await transport.connect(PEER);
+    const seen: number[] = [];
+    channel.onFrame((_bytes, seq) => seen.push(seq));
+
+    const delivered = transport.ingest({
+      version: BUNDLE_VERSION,
+      from: PEER.deviceId,
+      frames: [
+        { to: OLD_DAY_TAG, seq: 1, frame: bytes(1) },
+        { to: OUTSIDE_TAG, seq: 2, frame: bytes(2) },
+        { to: SELF_TAG, seq: 3, frame: bytes(3) },
+      ],
+    });
+
+    expect(delivered).toBe(2);
+    expect(seen).toEqual([1, 3]);
+  });
+
   it("addresses frames by route tag, not by device id", async () => {
     const transport = transportFor();
     const channel = await transport.connect(PEER);
@@ -369,5 +401,59 @@ describe("what a bundle reveals", () => {
     const bundle: SyncBundle = transport.bundle();
     expect(bundle.frames[0].to).toBe(PEER_TAG);
     expect(bundle.frames[0].to).not.toBe(PEER.deviceId);
+  });
+});
+
+describe("sender blinding and input bounds", () => {
+  it("writes the sender as its route tag, so the file names no device", async () => {
+    const transport = transportFor();
+    const channel = await transport.connect(PEER);
+    await channel.send(bytes(1), 0);
+
+    const text = encodeBundle(transport.bundle());
+
+    expect(text).not.toContain(SELF);
+    expect(JSON.parse(text).from).toBe(SELF_TAG);
+  });
+
+  it("refuses text longer than any valid bundle before it is parsed", () => {
+    const parse = jest.spyOn(JSON, "parse");
+    try {
+      expect(() =>
+        decodeBundle("x".repeat(MAX_BUNDLE_TEXT_LENGTH + 1)),
+      ).toThrow(BundleError);
+      expect(parse).not.toHaveBeenCalled();
+    } finally {
+      parse.mockRestore();
+    }
+  });
+
+  it("refuses a sender or recipient field longer than a route tag or device id can be", () => {
+    const long = "a".repeat(MAX_BUNDLE_ID_LENGTH + 1);
+    const version = BUNDLE_VERSION;
+
+    expect(() =>
+      decodeBundle(JSON.stringify({ version, from: long, frames: [] })),
+    ).toThrow(BundleError);
+    expect(() =>
+      decodeBundle(
+        JSON.stringify({
+          version,
+          from: "tag",
+          frames: [{ to: long, seq: 0, frame: toBase64Url(bytes(1)) }],
+        }),
+      ),
+    ).toThrow(BundleError);
+  });
+
+  it("still reads a file whose sender is a bare device id, from before blinding", () => {
+    const decoded = decodeBundle(
+      JSON.stringify({
+        version: BUNDLE_VERSION,
+        from: PEER.deviceId,
+        frames: [],
+      }),
+    );
+    expect(decoded.from).toBe(PEER.deviceId);
   });
 });

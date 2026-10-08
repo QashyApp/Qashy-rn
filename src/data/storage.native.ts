@@ -26,11 +26,51 @@ const chunk = <T>(items: readonly T[], size: number) => {
 
 /**
  * The whole schema, created in one transaction that also sets `user_version`, so a crash
- * part-way through leaves a database that still calls itself empty and retries cleanly. Earlier
- * builds reached this shape through a ladder of steps; it is numbered as the ladder's last rung
- * so a database that already climbed it is left alone.
+ * part-way through leaves a database that still calls itself empty and retries cleanly.
+ *
+ * Earlier builds reached this shape through a ladder of steps (versions 1–4) and can have
+ * stopped at any rung. `SCHEMA` creates any table such a database lacks, but `CREATE TABLE IF
+ * NOT EXISTS` never adds a column to a table that is already there, so the columns the ladder
+ * added with `ALTER TABLE` are listed in `ADDED_COLUMNS` and repaired on every upgrade. A database
+ * is therefore the same shape whichever rung it stopped at.
  */
 export const DATABASE_VERSION = 4;
+
+/** A column an earlier ladder step added with `ALTER TABLE` to a table that already existed. */
+export interface AddedColumn {
+  readonly table: string;
+  readonly column: string;
+  readonly definition: string;
+  /** Run once, only when the column was just added, to fill it for rows that predate it. */
+  readonly backfill?: string;
+}
+
+export const ADDED_COLUMNS: readonly AddedColumn[] = [
+  {
+    table: "sync_peers",
+    column: "revoked_seq",
+    definition: "INTEGER",
+    backfill:
+      "UPDATE sync_peers SET revoked_seq = 0 WHERE revoked_at IS NOT NULL",
+  },
+];
+
+/**
+ * The entries of `ADDED_COLUMNS` whose column is absent from the live table.
+ *
+ * `present` maps each table name to its column names as `PRAGMA table_info` reports them. A
+ * table that is not in `present` is skipped: `SCHEMA` has just created it, and it already has
+ * every column.
+ */
+export function missingAddedColumns(
+  present: Readonly<Record<string, readonly string[]>>,
+  added: readonly AddedColumn[] = ADDED_COLUMNS,
+): readonly AddedColumn[] {
+  return added.filter((entry) => {
+    const columns = present[entry.table];
+    return columns !== undefined && !columns.includes(entry.column);
+  });
+}
 
 const SCHEMA = `
   CREATE TABLE IF NOT EXISTS records (
@@ -419,7 +459,8 @@ export class PlatformStorageAdapter implements StorageAdapter {
         "PRAGMA user_version",
       );
       const current = row?.user_version ?? 0;
-      if (current < DATABASE_VERSION) await this.createSchema(database);
+      if (current < DATABASE_VERSION)
+        await this.createSchema(database, current);
       return database;
     } catch (reason) {
       await database.closeAsync().catch(() => undefined);
@@ -427,7 +468,7 @@ export class PlatformStorageAdapter implements StorageAdapter {
     }
   }
 
-  private async createSchema(database: SQLiteDatabase) {
+  private async createSchema(database: SQLiteDatabase, current: number) {
     // `BEGIN IMMEDIATE`, not the deferred `BEGIN` that `withExclusiveTransactionAsync` issues
     // on a connection of its own: a deferred transaction that upgrades a read lock to a write
     // lock fails outright with SQLITE_BUSY_SNAPSHOT under WAL rather than waiting, and cannot
@@ -435,6 +476,10 @@ export class PlatformStorageAdapter implements StorageAdapter {
     await database.execAsync("BEGIN IMMEDIATE");
     try {
       await database.execAsync(SCHEMA);
+      // A database from an earlier build (version 1 or later) may be missing columns that the
+      // old ladder added with ALTER TABLE, which SCHEMA cannot add. Fresh databases already
+      // have them from SCHEMA, so they are skipped.
+      if (current >= 1) await this.addMissingColumns(database);
       // Transactional, because `user_version` lives in the database header. That is what makes
       // a half-created schema impossible.
       await database.execAsync(`PRAGMA user_version = ${DATABASE_VERSION}`);
@@ -442,6 +487,23 @@ export class PlatformStorageAdapter implements StorageAdapter {
     } catch (reason) {
       await database.execAsync("ROLLBACK").catch(() => undefined);
       throw reason;
+    }
+  }
+
+  /** Runs inside `createSchema`'s transaction, so a failed ALTER rolls back with everything else. */
+  private async addMissingColumns(database: SQLiteDatabase) {
+    const present: Record<string, string[]> = {};
+    for (const table of new Set(ADDED_COLUMNS.map((entry) => entry.table))) {
+      const columns = await database.getAllAsync<{ name: string }>(
+        `PRAGMA table_info(${table})`,
+      );
+      present[table] = columns.map((column) => column.name);
+    }
+    for (const entry of missingAddedColumns(present)) {
+      await database.execAsync(
+        `ALTER TABLE ${entry.table} ADD COLUMN ${entry.column} ${entry.definition}`,
+      );
+      if (entry.backfill) await database.execAsync(entry.backfill);
     }
   }
 

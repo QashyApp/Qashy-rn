@@ -67,14 +67,17 @@ export function OverviewScreen() {
 
   const changeMonth = (next: string) => setMonth(next);
 
+  // Resolves to whether the change was persisted, so callers never act on a failed change.
   const dispatchGuarded = async (
     action: OverviewLayoutAction,
     failureTitle: string,
-  ) => {
+  ): Promise<boolean> => {
     try {
       await dispatch(action);
+      return true;
     } catch (reason) {
       showError(failureTitle, errorMessage(reason, "Try again."));
+      return false;
     }
   };
 
@@ -104,8 +107,9 @@ export function OverviewScreen() {
     void dispatchGuarded(
       { type: "remove", id: card.id },
       "Couldn’t update your overview",
-    ).then(() => {
-      setUndo({ card, index });
+    ).then((removed) => {
+      // Offer undo only once the removal has actually been saved.
+      if (removed) setUndo({ card, index });
     });
   };
 

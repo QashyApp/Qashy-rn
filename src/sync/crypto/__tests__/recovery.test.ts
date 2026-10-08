@@ -1,7 +1,10 @@
 import { createDeviceIdentity, createVaultRootKey } from "@/sync/crypto/keys";
 import { fromHex, toHex, utf8Bytes } from "@/sync/crypto/primitives";
 import {
+  MIN_PASSPHRASE_LENGTH,
+  PASSPHRASE_WEAKNESS_MESSAGES,
   RECOVERY_WORD_COUNT,
+  assessPassphrase,
   createPassphraseBackup,
   createVaultBundle,
   createVaultKeyBackup,
@@ -88,23 +91,23 @@ describe("the passphrase-protected backup", () => {
 
   it("round-trips under the right passphrase", () => {
     const file = createPassphraseBackup(
-      "correct horse battery",
+      "marigold teapot lantern",
       payload,
       params,
     );
-    expect(openPassphraseBackup("correct horse battery", file)).toEqual(
+    expect(openPassphraseBackup("marigold teapot lantern", file)).toEqual(
       payload,
     );
   });
 
   it("salts every backup, so two backups of the same data look unrelated", () => {
     const one = createPassphraseBackup(
-      "correct horse battery",
+      "marigold teapot lantern",
       payload,
       params,
     );
     const two = createPassphraseBackup(
-      "correct horse battery",
+      "marigold teapot lantern",
       payload,
       params,
     );
@@ -113,23 +116,23 @@ describe("the passphrase-protected backup", () => {
 
   it("leads with the likely cause on a wrong passphrase", () => {
     const file = createPassphraseBackup(
-      "correct horse battery",
+      "marigold teapot lantern",
       payload,
       params,
     );
-    expect(() => openPassphraseBackup("correct horse bettery", file)).toThrow(
+    expect(() => openPassphraseBackup("marigold teapot lantren", file)).toThrow(
       /Wrong passphrase, or the backup file is damaged/,
     );
   });
 
   it("rejects a tampered file", () => {
     const file = createPassphraseBackup(
-      "correct horse battery",
+      "marigold teapot lantern",
       payload,
       params,
     );
     file[file.length - 5] ^= 0x01;
-    expect(() => openPassphraseBackup("correct horse battery", file)).toThrow(
+    expect(() => openPassphraseBackup("marigold teapot lantern", file)).toThrow(
       SyncCryptoError,
     );
   });
@@ -142,27 +145,27 @@ describe("the passphrase-protected backup", () => {
 
   it("rejects a file that is not a Qashy backup", () => {
     expect(() =>
-      openPassphraseBackup("correct horse battery", new Uint8Array(10)),
+      openPassphraseBackup("marigold teapot lantern", new Uint8Array(10)),
     ).toThrow(/not a Qashy backup/);
     const file = createPassphraseBackup(
-      "correct horse battery",
+      "marigold teapot lantern",
       payload,
       params,
     );
     file[0] ^= 0xff;
-    expect(() => openPassphraseBackup("correct horse battery", file)).toThrow(
+    expect(() => openPassphraseBackup("marigold teapot lantern", file)).toThrow(
       /not a Qashy backup/,
     );
   });
 
   it("rejects a backup written by a newer format", () => {
     const file = createPassphraseBackup(
-      "correct horse battery",
+      "marigold teapot lantern",
       payload,
       params,
     );
     file[4] = 2;
-    expect(() => openPassphraseBackup("correct horse battery", file)).toThrow(
+    expect(() => openPassphraseBackup("marigold teapot lantern", file)).toThrow(
       /newer version/,
     );
   });
@@ -170,7 +173,7 @@ describe("the passphrase-protected backup", () => {
   describe("a hostile header", () => {
     const withParams = (over: Partial<{ N: number; r: number; p: number }>) => {
       const file = createPassphraseBackup(
-        "correct horse battery",
+        "marigold teapot lantern",
         payload,
         params,
       );
@@ -186,7 +189,7 @@ describe("the passphrase-protected backup", () => {
       // unbounded it is a denial of service that the victim's own device carries out.
       expect(() =>
         openPassphraseBackup(
-          "correct horse battery",
+          "marigold teapot lantern",
           withParams({ N: 2 ** 17 }),
         ),
       ).toThrow(/unreasonable amount of work/);
@@ -195,7 +198,7 @@ describe("the passphrase-protected backup", () => {
     it("refuses CPU amplification hidden in the parallelization field", () => {
       expect(() =>
         openPassphraseBackup(
-          "correct horse battery",
+          "marigold teapot lantern",
           withParams({ N: 2 ** 16, r: 1, p: 5 }),
         ),
       ).toThrow(/unreasonable amount of work/);
@@ -203,7 +206,10 @@ describe("the passphrase-protected backup", () => {
 
     it("refuses parameters too weak to have protected anything", () => {
       expect(() =>
-        openPassphraseBackup("correct horse battery", withParams({ N: 1024 })),
+        openPassphraseBackup(
+          "marigold teapot lantern",
+          withParams({ N: 1024 }),
+        ),
       ).toThrow(/4096/);
     });
   });
@@ -244,9 +250,9 @@ describe("the vault-keyed bundle", () => {
     // rather than half-parse: the two files carry the same data under very different
     // assumptions about who can read them.
     const bundle = createVaultBundle(vault, sender, 1, 7, payload);
-    expect(() => openPassphraseBackup("correct horse battery", bundle)).toThrow(
-      /not a Qashy backup/,
-    );
+    expect(() =>
+      openPassphraseBackup("marigold teapot lantern", bundle),
+    ).toThrow(/not a Qashy backup/);
   });
 });
 
@@ -298,14 +304,14 @@ describe("the vault-keyed backup file", () => {
     // Both carry the same archive; only one of them is safe to hand to someone else. Reading
     // one as the other must fail on the magic, not decrypt under a key that happens to work.
     const keyed = createVaultKeyBackup(vault, payload);
-    const guarded = createPassphraseBackup("correct horse battery", payload, {
+    const guarded = createPassphraseBackup("marigold teapot lantern", payload, {
       N: 4096,
       r: 8,
       p: 1,
     });
-    expect(() => openPassphraseBackup("correct horse battery", keyed)).toThrow(
-      /not a Qashy backup/,
-    );
+    expect(() =>
+      openPassphraseBackup("marigold teapot lantern", keyed),
+    ).toThrow(/not a Qashy backup/);
     expect(() => openVaultKeyBackup(vault, guarded)).toThrow(
       /not a Qashy backup/,
     );
@@ -323,7 +329,7 @@ describe("reading which secret a file wants", () => {
     ).toBe("vaultKey");
     expect(
       readBackupKind(
-        createPassphraseBackup("correct horse battery", payload, {
+        createPassphraseBackup("marigold teapot lantern", payload, {
           N: 4096,
           r: 8,
           p: 1,
@@ -358,5 +364,94 @@ describe("a vault key restored from a phrase", () => {
     expect(
       toHex(openVaultBundle(restored, "ORIGINALDEVICE", 0, 0, bundle)),
     ).toBe("deadbeef");
+  });
+});
+
+describe("assessPassphrase", () => {
+  const reasonOf = (passphrase: string) => {
+    const result = assessPassphrase(passphrase);
+    return result.ok ? "ok" : result.reason;
+  };
+
+  it("accepts a passphrase of several unrelated words", () => {
+    expect(assessPassphrase("marigold teapot lantern river")).toEqual({
+      ok: true,
+    });
+  });
+
+  it("keeps the twelve-character minimum", () => {
+    expect(MIN_PASSPHRASE_LENGTH).toBe(12);
+    expect(reasonOf("xq9Zv!rt2Lm")).toBe("tooShort");
+    expect(reasonOf("xq9Zv!rt2Lmw")).toBe("ok");
+  });
+
+  it("measures length after NFKC normalization, not in raw UTF-16 units", () => {
+    // Six "e" + combining acute: twelve code units, but six characters once composed.
+    expect(reasonOf("é".repeat(6))).toBe("tooShort");
+  });
+
+  it("refuses a single character class under sixteen characters", () => {
+    expect(reasonOf("xqzvbwmtkprh")).toBe("singleClass");
+    expect(reasonOf("xqzvbwmtkprhj")).toBe("singleClass");
+  });
+
+  it("accepts a single class from sixteen characters up", () => {
+    expect(reasonOf("xqzvbwmtkprhjfdn")).toBe("ok");
+  });
+
+  it("refuses a run of four identical characters", () => {
+    expect(reasonOf("Xk9pAAAA2mQ7rLz")).toBe("repetitive");
+  });
+
+  it("refuses a passphrase that is one unit repeated", () => {
+    expect(reasonOf("Qz7!Qz7!Qz7!")).toBe("repetitive");
+  });
+
+  it("refuses an alphabetic or numeric run of four", () => {
+    expect(reasonOf("Kq9abcd2xWr7")).toBe("sequential");
+    expect(reasonOf("Kq9x4321Wr7m")).toBe("sequential");
+  });
+
+  it("refuses four keys in a row from a keyboard row, forwards or backwards", () => {
+    expect(reasonOf("Mz8qwer4Tp1k")).toBe("sequential");
+    expect(reasonOf("Mz8rewq4Tp1k")).toBe("sequential");
+  });
+
+  it("refuses a common password even when it is padded or leet-spelled", () => {
+    expect(reasonOf("Password2024!")).toBe("common");
+    expect(reasonOf("P@ssw0rd!!Xy")).toBe("common");
+    expect(reasonOf("correct horse battery staple")).toBe("common");
+  });
+
+  it("refuses a passphrase whose estimated entropy is under fifty bits", () => {
+    // Two character classes, six effective characters: about 31 bits.
+    expect(reasonOf("aabbcc11ddee")).toBe("lowEntropy");
+  });
+
+  it("gives every refusal a message the UI can show", () => {
+    for (const reason of Object.keys(PASSPHRASE_WEAKNESS_MESSAGES)) {
+      expect(
+        PASSPHRASE_WEAKNESS_MESSAGES[
+          reason as keyof typeof PASSPHRASE_WEAKNESS_MESSAGES
+        ].length,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it("is what the backup writer enforces, with the reason in the error", () => {
+    expect(() =>
+      createPassphraseBackup("password2024!", new Uint8Array(1), {
+        N: 4096,
+        r: 8,
+        p: 1,
+      }),
+    ).toThrow(PASSPHRASE_WEAKNESS_MESSAGES.common);
+    try {
+      createPassphraseBackup("password2024!", new Uint8Array(1));
+      throw new Error("expected a refusal");
+    } catch (reason) {
+      expect(reason).toBeInstanceOf(SyncCryptoError);
+      expect((reason as SyncCryptoError).code).toBe("badPassphrase");
+    }
   });
 });

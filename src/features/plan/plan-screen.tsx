@@ -591,7 +591,7 @@ function GoalCard({
               literal
               variant="caption"
               muted
-            >{`${t(goal.kind === "saving" ? "Savings goal" : "Planned purchase")}${goal.targetDate ? ` · ${t("by")} ${goal.targetDate}` : ""}`}</AppText>
+            >{`${t(goal.kind === "saving" ? "Savings goal" : "Planned purchase")}${goal.targetDate ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}` : ""}`}</AppText>
           </View>
         </View>
 
@@ -621,8 +621,8 @@ function GoalCard({
               of the English "$X remaining" order, so the fragments are composed per
               direction rather than concatenated in a single fixed order. */}
           {isRtl
-            ? `${t("remaining")} ${formatMoney(remainingMinor, state.settings.baseCurrency, state.settings.locale)}${goal.targetDate ? ` · ${t("by")} ${goal.targetDate}` : ""}`
-            : `${formatMoney(remainingMinor, state.settings.baseCurrency, state.settings.locale)} ${t("remaining")}${goal.targetDate ? ` · ${t("by")} ${goal.targetDate}` : ""}`}
+            ? `${t("remaining")} ${formatMoney(remainingMinor, state.settings.baseCurrency, state.settings.locale)}${goal.targetDate ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}` : ""}`
+            : `${formatMoney(remainingMinor, state.settings.baseCurrency, state.settings.locale)} ${t("remaining")}${goal.targetDate ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}` : ""}`}
         </AppText>
 
         <ActionButton

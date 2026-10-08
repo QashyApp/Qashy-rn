@@ -612,15 +612,20 @@ export function TransactionFormScreen() {
     manualDestination &&
     (account?.currency === baseCurrency ||
       destinationAccount?.currency === baseCurrency);
+  // An upcoming transaction is priced when it is paid, so editing one may save without a rate. A
+  // foreign amount still needs its rate, because that rate sets the principal.
+  const rateDeferred = existing?.status === "upcoming";
   const accountRateMissing =
     Boolean(needsRate) &&
     !appliedRate &&
     !exchangeRate.trim() &&
-    !pricedByDestinationAmount;
+    !pricedByDestinationAmount &&
+    !rateDeferred;
   // The other transfer leg needs a rate too when no typed amount supplies it. Without this the
   // gap only surfaced at save time as a reversed-direction "Missing exchange rate" alert.
   const transferLegMissingPair = (() => {
     if (!crossCurrencyTransfer || !account || !destinationAccount) return null;
+    if (rateDeferred) return null;
     // Re-saving an unchanged historical transfer keeps its own snapshots.
     if (
       existing?.kind === "transfer" &&
@@ -924,7 +929,7 @@ export function TransactionFormScreen() {
       </Card>
 
       {kind !== "transfer" ? (
-        <Card style={{ gap: 14 }}>
+        <Card style={{ gap: space.md }}>
           <AppText variant="label">Category</AppText>
           <CategoryPicker
             categories={categories}
@@ -942,7 +947,7 @@ export function TransactionFormScreen() {
         </Card>
       ) : null}
 
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="label">From account</AppText>
         <View
           accessibilityLabel={t("From account")}
@@ -954,7 +959,7 @@ export function TransactionFormScreen() {
               key={item.id}
               literal
               icon={item.icon}
-              label={`${item.name} · ${item.currency}${item.archived ? " (archived)" : ""}`}
+              label={`${item.name} · ${item.currency}${item.archived ? ` ${t("(archived)")}` : ""}`}
               disabled={item.archived}
               selected={accountId === item.id}
               onPress={() => {
@@ -990,7 +995,7 @@ export function TransactionFormScreen() {
                     key={item.id}
                     literal
                     icon={item.icon}
-                    label={`${item.name} · ${item.currency}${item.archived ? " (archived)" : ""}`}
+                    label={`${item.name} · ${item.currency}${item.archived ? ` ${t("(archived)")}` : ""}`}
                     disabled={item.archived}
                     selected={destinationAccountId === item.id}
                     onPress={() => {
@@ -1005,8 +1010,8 @@ export function TransactionFormScreen() {
               <View
                 role="alert"
                 style={{
-                  gap: 10,
-                  padding: 14,
+                  gap: space.sm,
+                  padding: space.lg,
                   borderRadius: theme.radius.control,
                   backgroundColor: theme.surfaceMuted,
                 }}
@@ -1054,7 +1059,7 @@ export function TransactionFormScreen() {
       </Card>
 
       {kind !== "transfer" && account ? (
-        <Card style={{ gap: 14 }}>
+        <Card style={{ gap: space.md }}>
           <ForeignFeeFields
             accountCurrency={account.currency}
             locale={state.settings.locale}
@@ -1085,7 +1090,7 @@ export function TransactionFormScreen() {
         </Card>
       ) : null}
 
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <MoreDetails
           expanded={moreOpen}
           onToggle={() => setMoreOpen((open) => !open)}
@@ -1099,7 +1104,7 @@ export function TransactionFormScreen() {
           />
 
           {state.tags.length && kind !== "transfer" ? (
-            <View style={{ gap: 14 }}>
+            <View style={{ gap: space.md }}>
               <AppText variant="label">Tags</AppText>
               <View
                 accessibilityLabel={t("Transaction tags")}
@@ -1135,7 +1140,7 @@ export function TransactionFormScreen() {
                   Fetching rate…
                 </AppText>
               ) : (
-                <View style={{ gap: 6 }}>
+                <View style={{ gap: space.sm }}>
                   <AppText variant="caption" muted>
                     No rate for this date.
                   </AppText>

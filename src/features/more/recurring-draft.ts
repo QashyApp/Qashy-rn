@@ -27,6 +27,18 @@ export const stashRecurringDraft = (draft: RecurringDraft): string => {
   return id;
 };
 
+/**
+ * Reads a draft without consuming it. Safe to call during render: React may run a render or a
+ * state initializer more than once (StrictMode), and every run must see the same draft.
+ */
+export const peekRecurringDraft = (
+  id: string | undefined,
+): RecurringDraft | null => (id ? (drafts.get(id) ?? null) : null);
+
+/**
+ * Consumes a draft. Call once, from an effect, after the form has taken its values: the draft is
+ * single use, and a render must not delete it.
+ */
 export const takeRecurringDraft = (
   id: string | undefined,
 ): RecurringDraft | null => {

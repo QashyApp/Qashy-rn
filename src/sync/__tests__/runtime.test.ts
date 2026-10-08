@@ -35,8 +35,10 @@ import {
   createDeviceIdentity,
   createVaultRootKey,
   deriveBucketId,
+  ROUTE_DAY_MS,
   deriveBucketToken,
   deriveRouteTag,
+  routeDayOf,
   toBase64Url,
   type DeviceIdentity,
   type VaultRootKey,
@@ -221,7 +223,7 @@ describe("a pass that does not run", () => {
     // and conflating them is how a user gets talked into a fresh pairing that orphans the
     // vault they already have.
     const target = await rig();
-    await target.keystore.setPassphrase("correct horse battery");
+    await target.keystore.setPassphrase("marigold teapot lantern");
     target.keystore.lock();
 
     expect(await target.runtime.reconcile()).toMatchObject({
@@ -298,9 +300,69 @@ describe("what the relay is told", () => {
 
     const upload = target.http.calls.find((call) => call.method === "PUT");
     expect(upload).toBeDefined();
+    // Epoch 1 (the rig's vault), and the UTC day of the rig's fixed clock.
     expect(upload?.body).toMatchObject({
-      to: deriveRouteTag(target.vaultKey, target.peerId),
+      to: deriveRouteTag(target.vaultKey, 1, routeDayOf(NOW), target.peerId),
     });
+  });
+
+  it("moves uploads to the next day's tag when the UTC day turns", async () => {
+    let clock = NOW;
+    const target = await rig({
+      replies: [...PASS, ...PASS],
+      over: { now: () => clock },
+    });
+    await target.runtime.reconcile();
+    clock += ROUTE_DAY_MS;
+    await target.runtime.reconcile();
+
+    const tags = target.http.calls
+      .filter((call) => call.method === "PUT")
+      .map((call) => (call.body as { to: string }).to);
+    expect(tags.length).toBeGreaterThanOrEqual(2);
+    expect(tags[0]).toBe(
+      deriveRouteTag(target.vaultKey, 1, routeDayOf(NOW), target.peerId),
+    );
+    expect(tags[tags.length - 1]).toBe(
+      deriveRouteTag(target.vaultKey, 1, routeDayOf(NOW) + 1, target.peerId),
+    );
+  });
+
+  it("hears a peer whose tag is yesterday's, and still drops a stranger", async () => {
+    // The bucket reply is built up after the rig exists, because the tags depend on its key. The
+    // double serves the reply object it was given, so the blobs added here are the ones it sends.
+    const bucket: { kind: "json"; body: { blobs: unknown[]; more: boolean } } =
+      { kind: "json", body: { blobs: [], more: false } };
+    const errors: unknown[] = [];
+    const target = await rig({
+      replies: [bucket, { kind: "status", status: 200 }],
+      over: { onError: (error) => errors.push(error) },
+    });
+    const selfToday = deriveRouteTag(
+      target.vaultKey,
+      1,
+      routeDayOf(NOW),
+      target.deviceId,
+    );
+    const peerYesterday = deriveRouteTag(
+      target.vaultKey,
+      1,
+      routeDayOf(NOW) - 1,
+      target.peerId,
+    );
+    bucket.body.blobs.push(
+      { slot: 5, from: peerYesterday, to: selfToday, seq: 0, frame: "AA" },
+      { slot: 6, from: "stranger-tag", to: selfToday, seq: 0, frame: "AA" },
+    );
+
+    await target.runtime.reconcile();
+
+    const notDelivered = errors.filter(
+      (error) =>
+        error instanceof Error && error.message.includes("not delivered"),
+    );
+    // Exactly one: the stranger. The peer's yesterday-tagged blob reaches its channel.
+    expect(notDelivered).toHaveLength(1);
   });
 
   it("resumes the drop-box from the stored cursor and advances it", async () => {
@@ -841,5 +903,43 @@ describe("a bundle carried between two devices", () => {
     await expect(
       b.runtime.importBundle("id,date,amount\n1,2026-01-01,10"),
     ).rejects.toThrow();
+  });
+});
+
+describe("sync runtime hardening", () => {
+  it("writes a bundle that never names the sending device in plaintext", async () => {
+    const { a, hostId } = await carriers();
+
+    const exported = await a.runtime.exportBundle();
+
+    expect(exported.frames).toBeGreaterThan(0);
+    expect(exported.text).not.toContain(hostId);
+  });
+
+  it("runs one pass at a time, and coalesces triggers during it into exactly one follow-up", async () => {
+    const { a } = await carriers();
+    const reads = jest.spyOn(a.keystore, "read");
+
+    const first = a.runtime.reconcile();
+    const second = a.runtime.reconcile();
+    const third = a.runtime.reconcile();
+
+    // The second and third trigger share one queued follow-up pass.
+    expect(third).toBe(second);
+    await Promise.all([first, second, third]);
+
+    // Each pass reads the vault exactly once when sync is on: the first pass, then the single
+    // follow-up. Three triggers, two passes.
+    expect(reads).toHaveBeenCalledTimes(2);
+  });
+
+  it("lets a pass that arrives after the last one start a fresh pass", async () => {
+    const { a } = await carriers();
+    const reads = jest.spyOn(a.keystore, "read");
+
+    await a.runtime.reconcile();
+    await a.runtime.reconcile();
+
+    expect(reads).toHaveBeenCalledTimes(2);
   });
 });

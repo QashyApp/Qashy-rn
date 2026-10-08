@@ -278,9 +278,9 @@ Text that is too faint to read would make money unreadable, so Qashy does not tr
 
 | Color                             | Must reach | Against                                       |
 | --------------------------------- | ---------- | --------------------------------------------- |
-| `text`                            | 4.5:1      | `surface`, `surfaceElevated` and `background` |
-| `textMuted`                       | 4.5:1      | `surface`                                     |
-| `positive`, `negative`, `warning` | 3:1        | `surface`                                     |
+| `text`                            | 4.5:1      | `surface`, `surfaceElevated`, `background`, `surfaceSunken` and `surfaceMuted` |
+| `textMuted`                       | 4.5:1      | the same five surfaces                        |
+| `positive`, `negative`, `warning` | 3:1        | the same five surfaces                        |
 
 If a color is too faint, it is not rejected. It is moved toward a readable shade (lighter or darker, whichever helps) just far enough, and a warning is shown after import. Your file is stored exactly as you wrote it; the correction is applied when the theme is drawn.
 
@@ -303,8 +303,8 @@ The warnings look like this, one per changed color:
 <!-- warnings -->
 
 ```text
-palette.light.textMuted changed from #AAAAAA to #767678 to keep 4.5:1 contrast against surface
-palette.light.positive changed from #9FE0B0 to #739F80 to keep 3:1 contrast against surface
+palette.light.textMuted changed from #AAAAAA to #69696D to keep 4.5:1 contrast against surfaceSunken
+palette.light.positive changed from #9FE0B0 to #698F75 to keep 3:1 contrast against surfaceSunken
 ```
 
 The exact replacement shades depend on your other colors. If your colors make it impossible to reach the minimum at all (for example one `text` color that has to read on a very light `surface` and a very dark `background` at once), the theme is rejected with a message starting `palette.<scheme>.<color>: cannot reach` and you need to change the colors yourself.

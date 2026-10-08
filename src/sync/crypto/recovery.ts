@@ -60,6 +60,296 @@ export const RECOVERY_WORD_COUNT = 24;
 export const MIN_PASSPHRASE_LENGTH = 12;
 
 // ---------------------------------------------------------------------------
+// Passphrase strength
+// ---------------------------------------------------------------------------
+
+/** Below this a single-class passphrase is refused whatever its length. */
+const SINGLE_CLASS_MIN_LENGTH = 16;
+/** Conservative floor for the estimate below. Roughly a 4-word diceware phrase, with margin. */
+const MIN_ENTROPY_BITS = 50;
+
+/**
+ * Why a passphrase was refused. The UI maps each code to its own sentence, so the message can
+ * say what to change instead of only that something is wrong.
+ */
+export type PassphraseWeakness =
+  | "tooShort"
+  | "singleClass"
+  | "repetitive"
+  | "sequential"
+  | "common"
+  | "lowEntropy";
+
+export type PassphraseAssessment =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: PassphraseWeakness };
+
+/**
+ * A short list of the passwords and phrases attackers try first. Matched after lowercasing and
+ * undoing common leet substitutions, so `P@ssw0rd!` is `password`. It is a floor, not a
+ * dictionary: a passphrase that avoids these is not thereby strong, and the entropy estimate
+ * still has to pass.
+ */
+const COMMON_PASSPHRASES: readonly string[] = [
+  "password",
+  "passw0rd",
+  "password1",
+  "password123",
+  "passwordpassword",
+  "123456",
+  "1234567",
+  "12345678",
+  "123456789",
+  "1234567890",
+  "111111",
+  "000000",
+  "qwerty",
+  "qwerty123",
+  "qwertyuiop",
+  "qwertyui",
+  "asdfgh",
+  "asdfghjkl",
+  "zxcvbn",
+  "zxcvbnm",
+  "abc123",
+  "abcdef",
+  "letmein",
+  "letmeinnow",
+  "welcome",
+  "welcome1",
+  "monkey",
+  "dragon",
+  "master",
+  "sunshine",
+  "princess",
+  "football",
+  "baseball",
+  "iloveyou",
+  "iloveu",
+  "trustno1",
+  "shadow",
+  "superman",
+  "batman",
+  "michael",
+  "jessica",
+  "charlie",
+  "donald",
+  "starwars",
+  "freedom",
+  "whatever",
+  "qazwsx",
+  "admin",
+  "administrator",
+  "login",
+  "hello",
+  "helloworld",
+  "secret",
+  "mustang",
+  "access",
+  "flower",
+  "hunter",
+  "ranger",
+  "buster",
+  "soccer",
+  "hockey",
+  "killer",
+  "pepper",
+  "joshua",
+  "daniel",
+  "andrew",
+  "thomas",
+  "jordan",
+  "harley",
+  "robert",
+  "matthew",
+  "computer",
+  "internet",
+  "samsung",
+  "google",
+  "changeme",
+  "default",
+  "lovely",
+  "butterfly",
+  "summer",
+  "winter",
+  "spring",
+  "autumn",
+  "orange",
+  "banana",
+  "cookie",
+  "diamond",
+  "tigger",
+  "forever",
+  "secure",
+  "system",
+  "guest",
+  "root",
+  "test",
+  "testing",
+  "thequickbrownfox",
+  "opensesame",
+  "iamthebest",
+  "ilovepassword",
+  "correcthorsebatterystaple",
+  "correcthorse",
+  "batterystaple",
+  "mypassword",
+  "mypass",
+  "qwertyuiopasdfghjkl",
+  "letmein123",
+  "trustno",
+  "dragon123",
+  "monkey123",
+];
+
+const KEYBOARD_ROWS = ["1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm"];
+
+const LEET: Readonly<Record<string, string>> = {
+  "0": "o",
+  "1": "i",
+  "3": "e",
+  "4": "a",
+  "5": "s",
+  "7": "t",
+};
+
+const SYMBOL_LETTERS: Readonly<Record<string, string>> = {
+  "@": "a",
+  $: "s",
+  "!": "i",
+};
+
+/** Printable-ASCII symbol count is 33 with space; `other` is a deliberately round, generous 100. */
+const CLASS_SIZES = [26, 26, 10, 33, 100] as const;
+
+const charClass = (ch: string): number => {
+  const code = ch.codePointAt(0) ?? 0;
+  if (code >= 0x61 && code <= 0x7a) return 0;
+  if (code >= 0x41 && code <= 0x5a) return 1;
+  if (code >= 0x30 && code <= 0x39) return 2;
+  if (code < 0x80) return 3;
+  return 4;
+};
+
+/**
+ * Judges a passphrase before it protects a file. Pure, with no dependency and no network, so the
+ * screen can call it on every keystroke.
+ *
+ * Length is measured after the same NFKC normalization the key derivation applies, in code
+ * points: what the user sees as characters is what counts, and a decomposed `é` is not two.
+ * The entropy figure is `effective length × log2(pool)`, where the pool is the classes actually
+ * used and a character repeating its predecessor adds nothing. It is an estimate of guessing
+ * cost against a generic attacker, not a measurement, and it errs low.
+ */
+export const assessPassphrase = (passphrase: string): PassphraseAssessment => {
+  const chars = Array.from(passphrase.normalize("NFKC"));
+  const fail = (reason: PassphraseWeakness): PassphraseAssessment => ({
+    ok: false,
+    reason,
+  });
+  if (chars.length < MIN_PASSPHRASE_LENGTH) return fail("tooShort");
+
+  const classes = new Set(chars.map(charClass));
+  if (classes.size === 1 && chars.length < SINGLE_CLASS_MIN_LENGTH) {
+    return fail("singleClass");
+  }
+
+  let run = 1;
+  let longestRun = 1;
+  for (let index = 1; index < chars.length; index += 1) {
+    run = chars[index] === chars[index - 1] ? run + 1 : 1;
+    longestRun = Math.max(longestRun, run);
+  }
+  if (longestRun >= 4 || isRepeatedUnit(chars)) return fail("repetitive");
+
+  const lowered = chars.join("").toLowerCase();
+  if (hasSequence(lowered)) return fail("sequential");
+
+  // Two views: as typed (digits kept, so `abc123` matches), and with leet substitutions undone and
+  // the remaining digits dropped (so `P@ssw0rd!` matches `password`).
+  const symbolsAsLetters = lowered.replace(
+    /[@$!]/g,
+    (ch) => SYMBOL_LETTERS[ch] ?? ch,
+  );
+  const squashed = symbolsAsLetters.replace(/[^a-z0-9]/g, "");
+  const folded = squashed
+    .replace(/[0-9]/g, (ch) => LEET[ch] ?? "")
+    .replace(/[^a-z]/g, "");
+  const matchesCommon = (view: string) =>
+    COMMON_PASSPHRASES.some(
+      (entry) => view === entry || (entry.length >= 8 && view.includes(entry)),
+    );
+  if (matchesCommon(squashed) || matchesCommon(folded)) return fail("common");
+
+  let pool = 0;
+  for (const cls of classes) pool += CLASS_SIZES[cls];
+  let effective = 0;
+  for (let index = 0; index < chars.length; index += 1) {
+    if (index === 0 || chars[index] !== chars[index - 1]) effective += 1;
+  }
+  const bits = effective * Math.log2(pool);
+  if (bits < MIN_ENTROPY_BITS) return fail("lowEntropy");
+
+  return { ok: true };
+};
+
+const isRepeatedUnit = (chars: readonly string[]): boolean => {
+  for (let period = 1; period <= chars.length / 2; period += 1) {
+    if (chars.length % period !== 0) continue;
+    let repeats = true;
+    for (let index = period; index < chars.length && repeats; index += 1) {
+      repeats = chars[index] === chars[index - period];
+    }
+    if (repeats) return true;
+  }
+  return false;
+};
+
+/**
+ * Four characters climbing or falling by one (`abcd`, `4321`), or four in a row from a keyboard
+ * row (`qwer`, `asdf`, reversed or not). Only same-class runs count, so `ab12` is not a sequence.
+ */
+const hasSequence = (lowered: string): boolean => {
+  const codes = Array.from(lowered);
+  for (let index = 0; index + 3 < codes.length; index += 1) {
+    const window = codes.slice(index, index + 4).join("");
+    for (const row of KEYBOARD_ROWS) {
+      if (
+        row.includes(window) ||
+        row.split("").reverse().join("").includes(window)
+      ) {
+        return true;
+      }
+    }
+    const step = codes[index + 1].charCodeAt(0) - codes[index].charCodeAt(0);
+    if (Math.abs(step) !== 1) continue;
+    let straight = true;
+    for (let offset = 1; offset < 4 && straight; offset += 1) {
+      const current = codes[index + offset].charCodeAt(0);
+      const prior = codes[index + offset - 1].charCodeAt(0);
+      straight =
+        current - prior === step &&
+        charClass(codes[index + offset]) === charClass(codes[index]);
+    }
+    if (straight && charClass(codes[index]) !== 4) return true;
+  }
+  return false;
+};
+
+/** English fallback for the same reasons the UI localizes. Thrown by `createPassphraseBackup`. */
+export const PASSPHRASE_WEAKNESS_MESSAGES: Readonly<
+  Record<PassphraseWeakness, string>
+> = {
+  tooShort: `Use a passphrase of at least ${MIN_PASSPHRASE_LENGTH} characters.`,
+  singleClass: `Mix letters with digits or symbols, or make it at least ${SINGLE_CLASS_MIN_LENGTH} characters.`,
+  repetitive: "Avoid repeating the same character or pattern.",
+  sequential: "Avoid counting or keyboard sequences such as 1234 or qwer.",
+  common: "That passphrase is too common. Choose words only you would use.",
+  lowEntropy:
+    "That passphrase is too easy to guess. Use more words or a wider mix.",
+};
+
+// ---------------------------------------------------------------------------
 // Recovery phrase
 // ---------------------------------------------------------------------------
 
@@ -162,9 +452,10 @@ export const createPassphraseBackup = (
   payload: Uint8Array,
   params: ScryptParams = SCRYPT_DEFAULTS,
 ) => {
-  if (passphrase.length < MIN_PASSPHRASE_LENGTH) {
+  const assessment = assessPassphrase(passphrase);
+  if (!assessment.ok) {
     throw new SyncCryptoError(
-      `Use a passphrase of at least ${MIN_PASSPHRASE_LENGTH} characters.`,
+      PASSPHRASE_WEAKNESS_MESSAGES[assessment.reason],
       "badPassphrase",
     );
   }

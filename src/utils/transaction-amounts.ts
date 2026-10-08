@@ -30,7 +30,8 @@ export function normalizeFeePercent(value: string): string {
   if (!percent.isFinite() || percent.lte(0) || percent.gt(100)) {
     throw new Error("Fee percentage must be greater than 0 and at most 100.");
   }
-  return percent.toString();
+  // Plain fixed-point, like `normalizeDecimalString`: `toString` would emit exponent form for tiny values.
+  return percent.toFixed();
 }
 
 /** The fee amount in account-currency minor units for a given principal and fee input. */

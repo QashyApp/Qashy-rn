@@ -47,14 +47,19 @@ import {
   MemoryKeystore,
   type MemoryKeystoreCell,
 } from "@/sync/keystore";
-import { INITIAL_EPOCH, enableSync, type SyncSetupDeps } from "@/sync/setup";
+import {
+  INITIAL_EPOCH,
+  enableSync,
+  revokePeer,
+  type SyncSetupDeps,
+} from "@/sync/setup";
 import { account, settings, transaction } from "@/sync/oplog/__tests__/helpers";
 
 const NOW_ISO = "2026-06-01T12:00:00.000Z";
 const LATER_ISO = "2026-09-14T09:30:00.000Z";
 
 const PROFILE = { name: "Phone", platform: "ios" } as const;
-const PASSPHRASE = "correct horse battery staple";
+const PASSPHRASE = "marigold teapot lantern river";
 
 /**
  * scrypt at the shipped parameters is ~64 MiB of deliberate work, and the passphrase path pays
@@ -439,6 +444,89 @@ describe("restoring onto a replacement device", () => {
     expect(await target.activity()).toContain("recovered");
   });
 
+  it("returns the keystore to empty when the data write fails, so the restore can be retried", async () => {
+    const from = await source();
+    const archive = await opened(from, await sealed(from));
+    const target = await rig();
+    const failing = new Proxy(target.storage, {
+      get(store, property) {
+        if (property === "transact") {
+          return async () => {
+            throw new Error("the disk filled up mid-restore");
+          };
+        }
+        const value = Reflect.get(store, property, store);
+        return typeof value === "function" ? value.bind(store) : value;
+      },
+    });
+
+    await expect(
+      restoreVaultBackup({ ...target.deps, storage: failing }, archive),
+    ).rejects.toThrow(/disk filled up/);
+
+    // The key was written first. If it stayed, `vaultPresent` would refuse every retry.
+    expect(await target.keystore.status()).toBe("empty");
+    expect(await target.keystore.read()).toBeNull();
+
+    await expect(
+      restoreVaultBackup(target.deps, archive),
+    ).resolves.toMatchObject({ deviceId: from.deviceId });
+  });
+
+  it("re-applies a signed revocation that the archive's own peer row forgot", async () => {
+    const from = await source();
+    await revokePeer(from.deps, from.peer.deviceId);
+    const archive = await opened(from, await sealed(from));
+    // A peer row that says active while the signed op log says revoked: the disagreement a
+    // restore must not carry forward.
+    const stale: VaultArchive = {
+      ...archive,
+      peers: archive.peers.map((row) =>
+        row.peerId === from.peer.deviceId
+          ? { ...row, revokedAt: null, revokedSeq: null }
+          : row,
+      ),
+    };
+
+    const target = await rig();
+    await restoreVaultBackup(target.deps, stale);
+
+    const peer = (await target.roster()).find(
+      (row) => row.deviceId === from.peer.deviceId,
+    );
+    expect(peer?.revokedAt).not.toBeNull();
+    expect(peer?.revokedSeq).not.toBeNull();
+  });
+
+  it("records the signed revocation cutoff, not the revoked peer's ops the archive holds above it", async () => {
+    const from = await source();
+    // The source never held the peer's ops, so the signed cutoff is 0.
+    await revokePeer(from.deps, from.peer.deviceId);
+    const archive = await opened(from, await sealed(from));
+    // An archive whose op log does hold the peer's chain above that cutoff. Restore does not
+    // verify archived ops, so these rows only need to exist, which is exactly the case under test.
+    const template = archive.ops[0];
+    const peerOps = [1, 2, 3].map((seq) => ({
+      ...template,
+      opId: `${from.peer.deviceId}:${seq}`,
+      deviceId: from.peer.deviceId,
+      seq,
+    }));
+    const withPeerOps: VaultArchive = {
+      ...archive,
+      ops: [...archive.ops, ...peerOps],
+    };
+
+    const target = await rig();
+    await restoreVaultBackup(target.deps, withPeerOps);
+
+    const peer = (await target.roster()).find(
+      (row) => row.deviceId === from.peer.deviceId,
+    );
+    expect(peer?.revokedAt).not.toBeNull();
+    expect(peer?.revokedSeq).toBe(0);
+  });
+
   it("refuses a device that is already part of a vault", async () => {
     const from = await source();
     const archive = await opened(from, await sealed(from));
@@ -542,7 +630,7 @@ describe("a backup sealed with a passphrase", () => {
       await expect(
         readVaultBackup(file, {
           kind: "passphrase",
-          passphrase: "correct horse battery stapl",
+          passphrase: "marigold teapot lantern rive",
         }),
       ).rejects.toThrow(/Wrong passphrase, or the backup file is damaged/);
     },

@@ -21,7 +21,7 @@
  * combined message under the button.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
@@ -79,9 +79,15 @@ export function RelayCard({
   const [advanced, setAdvanced] = useState(false);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Refs for the in-flight checks: state is stale inside a double tap.
+  const checkingRef = useRef(false);
+  const savingRef = useRef(false);
 
   const { endpoints } = status;
-  const [relayUrl, setRelayUrl] = useState(endpoints.relayUrl);
+  // `null` means the user is not editing, so the field follows the saved address (a change from
+  // elsewhere, or the save that just landed). A string is an unsaved draft that wins until saved.
+  const [draftRelay, setDraftRelay] = useState<string | null>(null);
+  const relayUrl = draftRelay ?? endpoints.relayUrl;
   const [error, setError] = useState<string | undefined>();
 
   const relay = describeRelay(health);
@@ -100,7 +106,8 @@ export function RelayCard({
   };
 
   const check = async () => {
-    if (checking) return;
+    if (checkingRef.current) return;
+    checkingRef.current = true;
     setChecking(true);
     try {
       await onCheck();
@@ -113,13 +120,14 @@ export function RelayCard({
         errorMessage(reason, "Try again in a moment."),
       );
     } finally {
+      checkingRef.current = false;
       setChecking(false);
     }
   };
 
   /** Validated before saving, so the error lands under the box rather than in a dialog. */
   const save = async () => {
-    if (saving) return;
+    if (savingRef.current) return;
     try {
       normalizeEndpointUrl(relayUrl);
       setError(undefined);
@@ -132,9 +140,11 @@ export function RelayCard({
       return;
     }
 
+    savingRef.current = true;
     setSaving(true);
     try {
       await setEndpoints(setup, { relayUrl });
+      setDraftRelay(null);
       await onChanged();
     } catch (reason) {
       showError(
@@ -142,6 +152,7 @@ export function RelayCard({
         errorMessage(reason, "Check them and try again."),
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -234,7 +245,7 @@ export function RelayCard({
             <FormField
               label="Relay address"
               value={relayUrl}
-              onChangeText={setRelayUrl}
+              onChangeText={(value) => setDraftRelay(value)}
               autoCapitalize="none"
               autoCorrect={false}
               inputMode="url"

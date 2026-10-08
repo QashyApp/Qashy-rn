@@ -7,6 +7,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { TextButton } from "@/components/ui/text-button";
+import {
+  markUpcomingPaid,
+  upcomingCurrencies,
+} from "@/features/transactions/mark-upcoming-paid";
+import { useExchangeRateService } from "@/providers/exchange-rate-provider";
 import { useFinanceRepository } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
@@ -17,6 +22,7 @@ import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 export function UpcomingWidget({ month, editing }: WidgetProps) {
   const { space } = useQashyTheme();
   const repository = useFinanceRepository();
+  const exchangeRateService = useExchangeRateService();
   const summary = useDashboard(month);
   const [pendingUpcomingId, setPendingUpcomingId] = useState<string | null>(
     null,
@@ -26,9 +32,17 @@ export function UpcomingWidget({ month, editing }: WidgetProps) {
     if (pendingUpcomingId) return;
     setPendingUpcomingId(id);
     try {
+      const transaction = summary.upcomingTransactions.find(
+        (item) => item.id === id,
+      );
       await (action === "skip"
         ? repository.skipUpcoming(id)
-        : repository.confirmUpcoming(id));
+        : markUpcomingPaid(
+            repository,
+            exchangeRateService,
+            id,
+            transaction ? upcomingCurrencies(transaction) : [],
+          ));
       if (action === "confirm") hapticSuccess();
       else hapticSelection();
     } catch (reason) {

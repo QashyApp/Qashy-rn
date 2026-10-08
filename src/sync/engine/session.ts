@@ -54,6 +54,7 @@ import { openBatch, sealBatch, type FrameContext } from "@/sync/engine/frame";
 import {
   projectableOps,
   receiveBatch,
+  storedCutoffs,
   type ReceiveOutcome,
 } from "@/sync/engine/receive";
 import { activePeers, readRoster, type Peer } from "@/sync/engine/roster";
@@ -65,7 +66,7 @@ import {
   type SendSnapshot,
 } from "@/sync/engine/send";
 import type { SyncChannel, SyncTransport } from "@/sync/engine/transport";
-import type { SyncBatch } from "@/sync/engine/types";
+import { SyncEngineError, type SyncBatch } from "@/sync/engine/types";
 
 /**
  * How many batches one peer gets in a single pass.
@@ -76,6 +77,21 @@ import type { SyncBatch } from "@/sync/engine/types";
  * into a several-minute upload the user cannot see or cancel.
  */
 export const MAX_BATCHES_PER_PASS = 20;
+
+/**
+ * Frames that may wait for one channel's receive queue.
+ *
+ * A transport that delivers faster than a batch can be applied would otherwise queue an
+ * unbounded number of decrypt-and-apply jobs, each holding its frame. Past this depth the
+ * newest frame is dropped and reported; it is not lost to the peer, because the sender still
+ * holds it in its unacknowledged outbox and offers it again.
+ */
+export const MAX_ABSORB_QUEUE = 256;
+
+interface ReceiveQueue {
+  depth: number;
+  tail: Promise<void>;
+}
 
 export interface SyncSessionDeps {
   readonly storage: StorageAdapter;
@@ -163,25 +179,64 @@ export class SyncSession {
    */
   private readonly attached = new WeakSet<SyncChannel>();
 
+  /**
+   * Per-channel receive queues. Frames from one channel are absorbed strictly one at a time,
+   * in arrival order, so a chain of batches is verified in the order it was sealed and two
+   * storage transactions never race over the same op log.
+   */
+  private readonly queues = new WeakMap<SyncChannel, ReceiveQueue>();
+
   constructor(private readonly deps: SyncSessionDeps) {}
 
   /**
    * Installs the receive pump on a channel.
    *
-   * The handler is deliberately fire-and-forget: a transport hands over a frame and must not
-   * be made to wait on a storage transaction, and it certainly must not be handed a rejected
-   * promise it has no idea what to do with. Every failure path already writes to the activity
-   * log inside `receiveBatch`, so what is swallowed here is the *throw*, not the information.
+   * The handler is fire-and-forget: a transport hands over a frame and must not be made to
+   * wait on a storage transaction. The frame is queued behind the channel's earlier frames
+   * instead, with a bounded depth. Every failure path already writes to the activity log, so
+   * what is swallowed here is the *throw*, and it is reported through `onError`.
    */
   attach(channel: SyncChannel): () => void {
     const detach = channel.onFrame((frame, seq) => {
-      void this.absorb(channel, frame, seq);
+      this.enqueue(channel, frame, seq);
     });
     this.attached.add(channel);
     return () => {
       this.attached.delete(channel);
       detach();
     };
+  }
+
+  private enqueue(channel: SyncChannel, frame: Uint8Array, seq: number): void {
+    let queue = this.queues.get(channel);
+    if (!queue) {
+      queue = { depth: 0, tail: Promise.resolve() };
+      this.queues.set(channel, queue);
+    }
+    if (queue.depth >= MAX_ABSORB_QUEUE) {
+      this.deps.onError?.(
+        new SyncEngineError(
+          `Dropped a frame: ${MAX_ABSORB_QUEUE} are already waiting from this device.`,
+          "tooLarge",
+          channel.peerId,
+        ),
+        channel.peerId,
+      );
+      return;
+    }
+    const current = queue;
+    current.depth += 1;
+    current.tail = current.tail
+      .then(() => this.absorb(channel, frame, seq))
+      .then(
+        () => undefined,
+        (error: unknown) => {
+          this.deps.onError?.(error, channel.peerId);
+        },
+      )
+      .then(() => {
+        current.depth -= 1;
+      });
   }
 
   /**
@@ -208,9 +263,12 @@ export class SyncSession {
         await this.deps.storage.transact((tx) => appendActivity(tx, [entry]), {
           silent: true,
         });
-      } finally {
-        this.deps.onError?.(error, channel.peerId);
+      } catch (storeError) {
+        // A failing write must not turn a refused batch into an unhandled rejection; it is
+        // reported alongside the refusal it failed to record.
+        this.deps.onError?.(storeError, channel.peerId);
       }
+      this.deps.onError?.(error, channel.peerId);
       return null;
     }
     try {
@@ -339,7 +397,7 @@ export class SyncSession {
 
     for (const peer of peers) {
       if (signal?.aborted) break;
-      const channel = await this.reach(peer, signal);
+      const channel = await this.reach(peer, signal, activity);
       if (!channel) {
         failures += 1;
         continue;
@@ -427,7 +485,10 @@ export class SyncSession {
     readonly quarantined: number;
   }> {
     const { storage, repository, now, nowIso, onError } = this.deps;
-    const stored = await storage.transact((tx) => findUnprojected(tx));
+    const { stored, cutoffs } = await storage.transact(async (tx) => ({
+      stored: await findUnprojected(tx),
+      cutoffs: storedCutoffs(await readRoster(tx)),
+    }));
     if (!stored.length) {
       // Nothing new to project, but the repair pass still has to run. Repairs are a pure
       // function of the merged op log and are re-derived every pass so that they can *un*-
@@ -444,7 +505,9 @@ export class SyncSession {
       return { reprojected: 0, recovered: 0, quarantined: 0 };
     }
 
-    const { ready, deferred } = projectableOps(stored, now());
+    // Ops above a revoked author's signed cutoff are withheld here too, so a re-projection cannot
+    // resurrect history the receive path refused.
+    const { ready, deferred } = projectableOps(stored, now(), cutoffs);
     let applied = 0;
     let failure: unknown = null;
     if (ready.length) {
@@ -520,10 +583,17 @@ export class SyncSession {
     );
   }
 
-  /** The first transport that yields a channel, or null when the peer is simply not there. */
+  /**
+   * The first transport that yields a channel, or null when none does.
+   *
+   * Each failed transport is recorded: the error goes to `onError` and a relay line goes into
+   * the activity log, the same as a failed push. Errors from an aborted pass are the user
+   * leaving, not a fault, and are not recorded.
+   */
   private async reach(
     peer: Peer,
-    signal?: AbortSignal,
+    signal: AbortSignal | undefined,
+    activity: SyncActivityInput[],
   ): Promise<SyncChannel | null> {
     const effective = signal ?? new AbortController().signal;
     for (const transport of this.deps.transports) {
@@ -534,10 +604,18 @@ export class SyncSession {
         );
         if (!this.attached.has(channel)) this.attach(channel);
         return channel;
-      } catch {
-        // Unreachable over this transport is not a failure worth reporting on its own — that
-        // is what a relay is the fallback *for*. Only exhausting every transport is news.
-        continue;
+      } catch (error) {
+        if (effective.aborted) return null;
+        this.deps.onError?.(error, peer.deviceId);
+        activity.push(
+          activityEntry({
+            kind: "relay",
+            recordedAt: this.deps.nowIso(),
+            peerId: peer.deviceId,
+            code: activityCode(error),
+            detail: transportDetail(error),
+          }),
+        );
       }
     }
     return null;

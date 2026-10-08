@@ -110,7 +110,9 @@ export function readCashewBackup(bytes: Uint8Array): CashewRawData {
     );
   }
 
-  const result: Record<string, RawRow[]> = {};
+  // Null-prototype, like the SQLite reader's table map: a table named "__proto__" is data, not a
+  // prototype assignment.
+  const result: Record<string, RawRow[]> = Object.create(null);
   for (const name of REQUIRED_TABLES) result[name] = tables[name];
   for (const name of OPTIONAL_TABLES) result[name] = tables[name] ?? [];
   // Keep any other tables the backup carries; the mapper simply ignores them.

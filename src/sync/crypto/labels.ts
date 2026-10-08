@@ -30,8 +30,12 @@ export const LABELS = {
   bucketAuth: "qashy/sync/v1/bucket-auth",
   /** HKDF info → the one-shot rendezvous a pairing pair meets at, derived from the pairing secret. */
   pairingRendezvous: "qashy/sync/v1/pairing-rendezvous",
-  /** HKDF info → the per-vault tag a relay blob is addressed to. Salted with the device id. */
-  route: "qashy/sync/v1/route",
+  /**
+   * HKDF info → the tag a relay blob is addressed to, for one device on one UTC day within one vault
+   * epoch. Salted with the epoch, the day, and the device id. Versioned on its own, like `batchAuth`:
+   * the handshake's PROTOCOL_VERSION is unaffected, but older builds cannot derive these tags.
+   */
+  routeDay: "qashy/sync/route/v2/day",
   /** HKDF info → the passphrase-independent half of the backup key. */
   backup: "qashy/sync/v1/backup",
   /** HKDF info → the two directional session keys. */

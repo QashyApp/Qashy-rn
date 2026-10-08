@@ -31,6 +31,7 @@ export {
 
 export {
   DEVICE_ID_LENGTH,
+  ROUTE_DAY_MS,
   ROUTE_TAG_LENGTH,
   createDeviceIdentity,
   createPairingSecret,
@@ -45,6 +46,7 @@ export {
   deviceIdentityBytes,
   formatDeviceId,
   restoreDeviceIdentity,
+  routeDayOf,
   restorePeerKeys,
   restoreVaultRootKey,
   type DeviceIdentity,
@@ -76,7 +78,9 @@ export { signBatchPayload, verifyBatchPayload } from "@/sync/crypto/batch-auth";
 
 export {
   MIN_PASSPHRASE_LENGTH,
+  PASSPHRASE_WEAKNESS_MESSAGES,
   RECOVERY_WORD_COUNT,
+  assessPassphrase,
   createPassphraseBackup,
   createVaultBundle,
   createVaultKeyBackup,

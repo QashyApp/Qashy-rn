@@ -20,7 +20,7 @@
  */
 
 import { router } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Platform, View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -69,6 +69,8 @@ export function DeviceCard({
   const [renaming, setRenaming] = useState(false);
   const [name, setName] = useState(status.deviceName);
   const [saving, setSaving] = useState(false);
+  // State is stale inside a double tap; the ref is what the in-flight check reads.
+  const savingRef = useRef(false);
   const isOwner = status.revocation.ownerDeviceId === status.deviceId;
 
   // Newest first among the live ones, then the removed ones. Someone opening this screen after
@@ -83,7 +85,8 @@ export function DeviceCard({
 
   const save = async () => {
     const trimmed = name.trim();
-    if (!trimmed || saving) return;
+    if (!trimmed || savingRef.current) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       await renameDevice(setup, trimmed);
@@ -95,6 +98,7 @@ export function DeviceCard({
         errorMessage(reason, "Try a different name."),
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -121,12 +125,21 @@ export function DeviceCard({
   };
 
   const changePolicy = async (mode: "any" | "quorum" | "owner") => {
+    // The rule governs every paired device at once, so it is confirmed like the other
+    // destructive changes on this screen rather than applied on a single tap.
+    const confirmed = await confirmDestructive({
+      title: "Change who can remove devices?",
+      message:
+        "This applies to every paired device straight away. Removing a device is forward-only, so this only decides who may stop one from writing to this vault.",
+      confirmLabel: "Change rule",
+    });
+    if (!confirmed) return;
     try {
       await setRevocationPolicy(setup, mode);
       await onChanged();
     } catch (reason) {
       showError(
-        "Couldnâ€™t change removal policy",
+        "Couldn’t change removal policy",
         errorMessage(reason, "Only the vault owner can change it."),
       );
     }
@@ -145,7 +158,7 @@ export function DeviceCard({
       await onChanged();
     } catch (reason) {
       showError(
-        "Couldnâ€™t transfer ownership",
+        "Couldn’t transfer ownership",
         errorMessage(reason, "The current vault owner must make this change."),
       );
     }
@@ -245,7 +258,7 @@ export function DeviceCard({
         {status.proposals.length ? (
           <AppText variant="caption" muted>
             A removal proposal is waiting for more device approvals. Tap that
-            device in the list to add this deviceâ€™s approval.
+            device in the list to add this device’s approval.
           </AppText>
         ) : null}
       </Card>

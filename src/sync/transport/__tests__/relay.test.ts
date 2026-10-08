@@ -9,9 +9,12 @@
 import { MAX_FRAME_BYTES, toBase64Url } from "@/sync/crypto";
 import { RelayError } from "@/sync/transport/http";
 import {
+  MAX_HELD_FRAMES_PER_TAG,
+  MAX_HELD_TAGS,
   MAX_RELAY_PAGES,
   RELAY_PAGE_SIZE,
   RelayTransport,
+  type RelayTransportDeps,
 } from "@/sync/transport/relay";
 import {
   fetchDouble,
@@ -37,8 +40,10 @@ function harness(http: FetchDouble): Harness {
     baseUrl: BASE,
     bucketId: "bucket-1",
     token: "token-1",
-    selfTag: SELF,
+    selfTag: () => SELF,
+    recipientTags: RECIPIENTS,
     tagFor: () => PEER,
+    senderTags: ALL_SENDERS,
     readCursor: () => Promise.resolve(cursor),
     writeCursor: (slot) => {
       cursor = slot;
@@ -64,6 +69,18 @@ const blob = (
   frame: toBase64Url(bytes),
 });
 
+/** Every sender tag this harness knows, mapped to the device id it belongs to. */
+const ALL_SENDERS = () =>
+  Promise.resolve(
+    new Map([
+      [PEER, "peer"],
+      ["tag-b", "b"],
+      ["tag-a", "a"],
+    ]),
+  );
+/** This device accepts blobs addressed to its own tag only. */
+const RECIPIENTS = () => new Set([SELF]);
+
 const abort = () => new AbortController().signal;
 
 describe("RelayTransport.connect", () => {
@@ -81,8 +98,10 @@ describe("RelayTransport.connect", () => {
       baseUrl: BASE,
       bucketId: "bucket-1",
       token: "token-1",
-      selfTag: SELF,
+      selfTag: () => SELF,
+      recipientTags: RECIPIENTS,
       tagFor: (peerId) => (peerId === "b" ? "tag-b" : "tag-a"),
+      senderTags: ALL_SENDERS,
       readCursor: () => Promise.resolve(cursor),
       writeCursor: (slot) => {
         cursor = slot;
@@ -383,8 +402,10 @@ describe("RelayTransport uploads", () => {
       baseUrl: BASE,
       bucketId: "bucket-1",
       token: "token-1",
-      selfTag: SELF,
+      selfTag: () => SELF,
+      recipientTags: RECIPIENTS,
       tagFor: () => PEER,
+      senderTags: ALL_SENDERS,
       readCursor: () => Promise.resolve(0),
       writeCursor: () => Promise.resolve(),
       jitterMs: 0,
@@ -413,8 +434,10 @@ describe("RelayTransport uploads", () => {
       baseUrl: BASE,
       bucketId: "bucket-1",
       token: "token-1",
-      selfTag: SELF,
+      selfTag: () => SELF,
+      recipientTags: RECIPIENTS,
       tagFor: () => PEER,
+      senderTags: ALL_SENDERS,
       readCursor: () => Promise.resolve(0),
       writeCursor: () => Promise.resolve(),
       jitterMs: 0,
@@ -440,8 +463,10 @@ describe("RelayTransport uploads", () => {
       baseUrl: BASE,
       bucketId: "bucket-1",
       token: "token-1",
-      selfTag: SELF,
+      selfTag: () => SELF,
+      recipientTags: RECIPIENTS,
       tagFor: () => PEER,
+      senderTags: ALL_SENDERS,
       readCursor: () => Promise.resolve(0),
       writeCursor: () => Promise.resolve(),
       jitterMs: 1000,
@@ -485,6 +510,308 @@ describe("RelayTransport uploads", () => {
     expect(http.calls[0]).toMatchObject({
       method: "DELETE",
       url: `${BASE}/bucket/bucket-1`,
+    });
+  });
+});
+
+describe("RelayTransport resilience", () => {
+  const tagged = (peerId: string) => `tag-${peerId}`;
+  const ROSTER = ALL_SENDERS;
+
+  function build(
+    http: FetchDouble,
+    overrides: Partial<RelayTransportDeps> = {},
+  ): { transport: RelayTransport; cursor: () => number } {
+    let cursor = 0;
+    const transport = new RelayTransport({
+      fetch: http.fetch,
+      baseUrl: BASE,
+      bucketId: "bucket-1",
+      token: "token-1",
+      selfTag: () => SELF,
+      recipientTags: RECIPIENTS,
+      tagFor: tagged,
+      senderTags: ROSTER,
+      readCursor: () => Promise.resolve(cursor),
+      writeCursor: (slot) => {
+        cursor = slot;
+        return Promise.resolve();
+      },
+      jitterMs: 0,
+      ...overrides,
+    });
+    return { transport, cursor: () => cursor };
+  }
+
+  const EMPTY = { kind: "json", body: { blobs: [], more: false } } as const;
+
+  it("returns a channel when the bucket cannot be read, and reports the failure", async () => {
+    const http = fetchDouble({ kind: "status", status: 500 });
+    const failures: unknown[] = [];
+    const { transport } = build(http, {
+      onPollError: (error) => failures.push(error),
+    });
+
+    const channel = await transport.connect(
+      { deviceId: "b", name: "Laptop" },
+      abort(),
+    );
+
+    expect(channel.peerId).toBe("b");
+    expect(failures).toHaveLength(1);
+    expect(failures[0]).toBeInstanceOf(RelayError);
+  });
+
+  it("still rejects a connect that is cancelled while it polls", async () => {
+    const http = fetchDouble({ kind: "hang" });
+    const controller = new AbortController();
+    const failures: unknown[] = [];
+    const { transport } = build(http, {
+      onPollError: (error) => failures.push(error),
+    });
+
+    const pending = transport.connect(
+      { deviceId: "b", name: "" },
+      controller.signal,
+    );
+    controller.abort();
+
+    await expect(pending).rejects.toBeDefined();
+    expect(failures).toHaveLength(0);
+  });
+
+  it("drops a blob from a sender outside the roster, holds nothing for it, and reports the drop", async () => {
+    const http = fetchDouble(
+      {
+        kind: "json",
+        body: {
+          blobs: [
+            blob(1, SELF, 0, frame(1), "stranger-tag"),
+            blob(2, SELF, 1, frame(2), PEER),
+          ],
+          more: false,
+        },
+      },
+      EMPTY,
+    );
+    const dropped: RelayError[] = [];
+    const { transport, cursor } = build(http, {
+      senderTags: () => Promise.resolve(new Map([[PEER, "peer"]])),
+      tagFor: (peerId) =>
+        peerId === "stranger" ? "stranger-tag" : tagged(peerId),
+      onDropped: (error) => dropped.push(error),
+    });
+
+    await transport.poll();
+    expect(dropped).toHaveLength(1);
+    expect(dropped[0].message).toContain("1 relay message was not delivered");
+    expect(cursor()).toBe(2);
+
+    const seen: number[] = [];
+    const stranger = await transport.connect(
+      { deviceId: "stranger", name: "" },
+      abort(),
+    );
+    stranger.onFrame((_bytes, seq) => seen.push(seq));
+    expect(seen).toEqual([]);
+  });
+
+  it("holds at most MAX_HELD_FRAMES_PER_TAG frames for a sender and evicts the oldest", async () => {
+    const count = MAX_HELD_FRAMES_PER_TAG + 1;
+    const blobs = Array.from({ length: count }, (_value, index) =>
+      blob(index + 1, SELF, index, frame(index % 256)),
+    );
+    const framed = blobs.map((row) => ({ ...row, from: "tag-b" }));
+    const http = fetchDouble(
+      { kind: "json", body: { blobs: framed, more: false } },
+      EMPTY,
+    );
+    const dropped: RelayError[] = [];
+    const { transport } = build(http, {
+      senderTags: () => Promise.resolve(new Map([["tag-b", "b"]])),
+      onDropped: (error) => dropped.push(error),
+    });
+
+    await transport.poll();
+    const channel = await transport.connect(
+      { deviceId: "b", name: "" },
+      abort(),
+    );
+    const seqs: number[] = [];
+    channel.onFrame((_bytes, seq) => seqs.push(seq));
+
+    expect(seqs).toHaveLength(MAX_HELD_FRAMES_PER_TAG);
+    expect(seqs[0]).toBe(1);
+    expect(seqs[seqs.length - 1]).toBe(MAX_HELD_FRAMES_PER_TAG);
+    expect(dropped).toHaveLength(1);
+  });
+
+  it("holds at most MAX_HELD_TAGS senders and evicts the one that has waited longest", async () => {
+    const senders = Array.from(
+      { length: MAX_HELD_TAGS + 1 },
+      (_value, index) => `p${index}`,
+    );
+    const blobs = senders.map((peerId, index) =>
+      blob(index + 1, SELF, 0, frame(index + 1), tagged(peerId)),
+    );
+    const http = fetchDouble(
+      { kind: "json", body: { blobs, more: false } },
+      EMPTY,
+    );
+    const { transport } = build(http, {
+      senderTags: () =>
+        Promise.resolve(
+          new Map(senders.map((peerId) => [tagged(peerId), peerId])),
+        ),
+    });
+
+    await transport.poll();
+    const evicted = await transport.connect(
+      { deviceId: "p0", name: "" },
+      abort(),
+    );
+    const kept = await transport.connect(
+      { deviceId: `p${MAX_HELD_TAGS}`, name: "" },
+      abort(),
+    );
+    const evictedSeen: number[] = [];
+    const keptSeen: number[] = [];
+    evicted.onFrame((_bytes, seq) => evictedSeen.push(seq));
+    kept.onFrame((_bytes, seq) => keptSeen.push(seq));
+
+    expect(evictedSeen).toEqual([]);
+    expect(keptSeen).toEqual([0]);
+  });
+
+  it("advances the cursor past a page made only of malformed rows", async () => {
+    const http = fetchDouble({
+      kind: "json",
+      body: {
+        blobs: [{ slot: 7, from: 5, to: SELF, seq: 0, frame: "x" }],
+        more: false,
+      },
+    });
+    const { transport, cursor } = build(http);
+
+    await expect(transport.poll()).resolves.toBe(0);
+    expect(cursor()).toBe(7);
+  });
+
+  it("does not move the cursor for a page with no usable position at all", async () => {
+    const writes: number[] = [];
+    const http = fetchDouble({
+      kind: "json",
+      body: { blobs: [{ slot: "seven", from: PEER }], more: false },
+    });
+    const { transport } = build(http, {
+      writeCursor: (slot) => {
+        writes.push(slot);
+        return Promise.resolve();
+      },
+    });
+
+    await transport.poll();
+    expect(writes).toEqual([]);
+  });
+});
+
+describe("RelayTransport daily route tags", () => {
+  const SELF_TODAY = "self-today";
+  const SELF_YESTERDAY = "self-yesterday";
+  const SELF_OLD = "self-two-days-ago";
+  const PEER_TODAY = "peer-today";
+  const PEER_YESTERDAY = "peer-yesterday";
+
+  it("accepts a blob addressed to yesterday's tag, and ignores one from two days ago", async () => {
+    // Two pages: the first poll reads both blobs, and connect()'s own poll then starts after the
+    // cursor and finds nothing new. A relay honours `after`, so the double must too.
+    const http = fetchDouble(
+      {
+        kind: "json",
+        body: {
+          blobs: [
+            blob(1, SELF_YESTERDAY, 0, frame(1), PEER_YESTERDAY),
+            blob(2, SELF_OLD, 1, frame(2), PEER_TODAY),
+          ],
+          more: false,
+        },
+      },
+      { kind: "json", body: { blobs: [], more: false } },
+    );
+    const dropped: RelayError[] = [];
+    let cursor = 0;
+    const transport = new RelayTransport({
+      fetch: http.fetch,
+      baseUrl: BASE,
+      bucketId: "bucket-1",
+      token: "token-1",
+      selfTag: () => SELF_TODAY,
+      recipientTags: () => new Set([SELF_TODAY, SELF_YESTERDAY]),
+      tagFor: () => PEER_TODAY,
+      senderTags: () =>
+        Promise.resolve(
+          new Map([
+            [PEER_TODAY, "peer"],
+            [PEER_YESTERDAY, "peer"],
+          ]),
+        ),
+      readCursor: () => Promise.resolve(cursor),
+      writeCursor: (slot) => {
+        cursor = slot;
+        return Promise.resolve();
+      },
+      jitterMs: 0,
+      onDropped: (error) => dropped.push(error),
+    });
+
+    await transport.poll();
+    const channel = await transport.connect(
+      { deviceId: "peer", name: "" },
+      abort(),
+    );
+    const seen: number[] = [];
+    channel.onFrame((_bytes, seq) => seen.push(seq));
+
+    // The blob for yesterday's tag is delivered; the one for an older day is never this
+    // device's business, so it is skipped silently rather than reported as a drop.
+    expect(seen).toEqual([0]);
+    expect(dropped).toEqual([]);
+    expect(cursor).toBe(2);
+  });
+
+  it("addresses each upload with the peer's tag for the day it is sent", async () => {
+    const http = fetchDouble({
+      kind: "json",
+      body: { blobs: [], more: false },
+    });
+    let day = "day-100";
+    const transport = new RelayTransport({
+      fetch: http.fetch,
+      baseUrl: BASE,
+      bucketId: "bucket-1",
+      token: "token-1",
+      selfTag: () => `${SELF_TODAY}-${day}`,
+      recipientTags: () => new Set([SELF_TODAY]),
+      tagFor: () => `${PEER_TODAY}-${day}`,
+      senderTags: () => Promise.resolve(new Map()),
+      readCursor: () => Promise.resolve(0),
+      writeCursor: () => Promise.resolve(),
+      jitterMs: 0,
+    });
+    const channel = await transport.connect(
+      { deviceId: "peer", name: "" },
+      abort(),
+    );
+
+    // The channel was opened on day 100 and is used on day 101: the frame must follow the day.
+    day = "day-101";
+    await channel.send(frame(4), 0);
+
+    const put = http.calls[http.calls.length - 1];
+    expect(put.method).toBe("PUT");
+    expect(put.body).toMatchObject({
+      from: `${SELF_TODAY}-day-101`,
+      to: `${PEER_TODAY}-day-101`,
     });
   });
 });

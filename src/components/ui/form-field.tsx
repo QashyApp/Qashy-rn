@@ -9,7 +9,11 @@ import Animated, {
 
 import { useCalculatorHost } from "@/components/finance/calculator-host";
 import { AppText } from "@/components/ui/app-text";
-import { motionCurves, MotionView } from "@/components/ui/motion";
+import {
+  motionCurves,
+  MotionView,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -87,16 +91,21 @@ function MaterialFormField({
     ...(process.env.EXPO_OS === "web" ? { "aria-invalid": isInvalid } : null),
   } as TextInputProps;
 
+  // The floating label moves and scales, so below the full animation level it jumps into place.
+  const { travel } = useMotionPreference();
   const progress = useSharedValue(floated ? 1 : 0);
   useEffect(() => {
+    const target = floated ? 1 : 0;
     progress.set(
-      withTiming(floated ? 1 : 0, {
-        duration: 150,
-        easing: motionCurves.standard,
-        reduceMotion: ReduceMotion.System,
-      }),
+      travel
+        ? withTiming(target, {
+            duration: 150,
+            easing: motionCurves.standard,
+            reduceMotion: ReduceMotion.System,
+          })
+        : target,
     );
-  }, [floated, progress]);
+  }, [floated, progress, travel]);
   const labelStyle = useAnimatedStyle(() => ({
     transform: [
       { translateY: -9 * progress.value },

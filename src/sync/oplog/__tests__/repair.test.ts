@@ -998,3 +998,90 @@ describe("pass interaction", () => {
     });
   });
 });
+
+describe("category hierarchy after a grandparent is deleted", () => {
+  const DELETED = "2026-02-01T00:00:00.000Z";
+  const GRANDPARENT = category({
+    id: "cat-g",
+    name: "Grandparent",
+    deletedAt: DELETED,
+    createdAt: "2026-01-01T00:00:00.000Z",
+  });
+
+  it("clears the middle link and keeps the grandchild under the middle one", () => {
+    const output = repairMergedState(
+      input({
+        categories: [
+          GRANDPARENT,
+          category({
+            id: "cat-p",
+            name: "Parent",
+            parentId: "cat-g",
+            createdAt: "2026-01-02T00:00:00.000Z",
+          }),
+          category({
+            id: "cat-c",
+            name: "Child",
+            parentId: "cat-p",
+            createdAt: "2026-01-03T00:00:00.000Z",
+          }),
+        ],
+      }),
+    );
+    expect(find(output.categories, "cat-p").parentId).toBeNull();
+    // The bug: the snapshot still showed P under G, so C was cleared although P is top-level now.
+    expect(find(output.categories, "cat-c").parentId).toBe("cat-p");
+  });
+
+  it("reaches the same answer when the child is visited before its parent", () => {
+    const output = repairMergedState(
+      input({
+        categories: [
+          GRANDPARENT,
+          category({
+            id: "cat-c",
+            name: "Child",
+            parentId: "cat-p",
+            createdAt: "2025-12-01T00:00:00.000Z",
+          }),
+          category({
+            id: "cat-p",
+            name: "Parent",
+            parentId: "cat-g",
+            createdAt: "2026-01-02T00:00:00.000Z",
+          }),
+        ],
+      }),
+    );
+    expect(find(output.categories, "cat-p").parentId).toBeNull();
+    expect(find(output.categories, "cat-c").parentId).toBe("cat-p");
+  });
+
+  it("still clears the grandchild when the grandparent survives", () => {
+    const output = repairMergedState(
+      input({
+        categories: [
+          category({
+            id: "cat-g",
+            name: "Grandparent",
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+          category({
+            id: "cat-p",
+            name: "Parent",
+            parentId: "cat-g",
+            createdAt: "2026-01-02T00:00:00.000Z",
+          }),
+          category({
+            id: "cat-c",
+            name: "Child",
+            parentId: "cat-p",
+            createdAt: "2026-01-03T00:00:00.000Z",
+          }),
+        ],
+      }),
+    );
+    expect(find(output.categories, "cat-p").parentId).toBe("cat-g");
+    expect(find(output.categories, "cat-c").parentId).toBeNull();
+  });
+});

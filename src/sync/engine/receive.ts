@@ -14,8 +14,11 @@
  *   1. epoch and base currency — two integers and two strings, and both are unmergeable
  *   2. the sender is a live member of the roster and its batch signature authenticates the roster
  *   3. ops we already hold match what we hold, then drop them — re-delivery costs nothing
- *   4. every remaining op's author is known, is within its revocation cutoff, and its signature verifies
- *   5. every chain continues our history without a gap, a rewind, or a rewrite
+ *   4. chains by devices already in the roster are verified, and their `add` controls are the
+ *      only thing that can introduce a new device
+ *   5. the roster is merged, and every chain by a newly introduced device is verified
+ *   6. every chain continues our history without a gap, a rewind, or a rewrite, and no op
+ *      lies beyond its author's signed revocation cutoff
  *
  * **All of that happens inside one storage transaction, and that is deliberate.** The roster
  * and the chain heads are read and acted on atomically, so a revocation committing in another
@@ -33,13 +36,16 @@
 import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
 import {
   SYNC_META,
+  STATE_COVERED_HASH,
   appendActivity,
   readChainState,
   readControlOps,
   readHeldChains,
   readMeta,
+  readStateHeads,
   storeOps,
   writeMeta,
+  writeStateHeads,
   type SyncActivityInput,
 } from "@/data/sync-store";
 import type { ApplyResult, FinanceRepository } from "@/data/repository";
@@ -54,8 +60,10 @@ import {
   observe,
   parseHlc,
   pendingByDevice,
+  registersOf,
   verifyChain,
   verifyOpSignature,
+  type CausalMeta,
   type ChainHead,
   type HlcClock,
   type SyncOp,
@@ -76,6 +84,8 @@ import {
   requireAuthorSequence,
   requireSender,
   writePeers,
+  type Peer,
+  type Roster,
 } from "@/sync/engine/roster";
 import {
   SyncEngineError,
@@ -154,16 +164,23 @@ function asEngineError(error: unknown, peerId: string): unknown {
  * local time catches up or the other device's clock is corrected. Filtering per op rather
  * than per entity matters — an entity whose `create` is fine and whose newest `set` is skewed
  * still projects, at its previous values, instead of vanishing from the app entirely.
+ *
+ * An op above its author's signed revocation cutoff is withheld outright, neither ready nor
+ * deferred. It is history this device must not project, whichever path brought it here.
  */
 export function projectableOps(
   ops: readonly SyncOp[],
   nowMs: number,
+  cutoffs: ReadonlyMap<string, number> = new Map(),
 ): { readonly ready: SyncOp[]; readonly deferred: SyncOp[] } {
   const horizon = Math.floor(nowMs) + MAX_CLOCK_SKEW_MS;
   const ready: SyncOp[] = [];
   const deferred: SyncOp[] = [];
-  for (const op of ops)
+  for (const op of ops) {
+    const cutoff = cutoffs.get(op.deviceId);
+    if (cutoff !== undefined && op.seq > cutoff) continue;
     (parseHlc(op.hlc).wall > horizon ? deferred : ready).push(op);
+  }
   return { ready, deferred };
 }
 
@@ -183,6 +200,118 @@ const clockAfter = (
 ): HlcClock =>
   ops.reduce((current, op) => observe(current, op.hlc, nowMs).clock, clock);
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The devices a set of ops introduces through a signed `add` control.
+ *
+ * Only the ids are read. A key is never taken from a control, because the control carries an id
+ * and the roster carries the key, and the id is the hash of the key, which is what ties them
+ * together.
+ */
+const addedDevices = (ops: readonly SyncOp[]): string[] =>
+  ops
+    .filter(
+      (op) =>
+        String(op.entityType) === SYNC_CONTROL_ENTITY && op.kind === "set",
+    )
+    .flatMap((op) => {
+      const payload: unknown = op.payload;
+      return isRecord(payload) &&
+        payload.control === "add" &&
+        typeof payload.deviceId === "string"
+        ? [payload.deviceId]
+        : [];
+    });
+
+/**
+ * The highest sequence each revoked author may still have accepted, by device id.
+ *
+ * A cutoff already in the stored roster is authoritative. One derived from this batch's controls
+ * applies only where no cutoff is stored yet, which is the same rule `writePeers` uses below, so
+ * the check and the write cannot disagree.
+ */
+const effectiveCutoffs = (
+  roster: Roster,
+  revocations: ReturnType<typeof deriveRevocationState>["revocations"],
+): Map<string, number> => {
+  const cutoffs = new Map<string, number>();
+  for (const peer of roster.values()) {
+    if (peer.revokedAt) cutoffs.set(peer.deviceId, peer.revokedSeq ?? 0);
+  }
+  for (const decision of revocations) {
+    if (cutoffs.has(decision.targetId) || !roster.has(decision.targetId))
+      continue;
+    cutoffs.set(decision.targetId, decision.cutoff);
+  }
+  return cutoffs;
+};
+
+/**
+ * The cutoffs already recorded in the roster, for paths that re-project ops this device stored
+ * earlier. Those paths see no fresh revocation controls, so the stored cutoffs are the whole truth.
+ */
+export const storedCutoffs = (roster: Roster): ReadonlyMap<string, number> =>
+  effectiveCutoffs(roster, []);
+
+/**
+ * Refuses a full-state snapshot that could not be projected safely, before anything is written.
+ *
+ * Two checks, both of which the delta path already makes and the snapshot path did not. A clock
+ * reading past the tolerated skew is refused rather than held: a snapshot is merged whole, so
+ * holding part of it would leave a partially applied state. A registered field group must arrive
+ * complete, because a partial group that wins the merge erases the fields it omitted.
+ */
+function assertFullStateSound(
+  states: readonly CausalMeta[] | undefined,
+  nowMs: number,
+  sender: string,
+): void {
+  if (!states) return;
+  const horizon = Math.floor(nowMs) + MAX_CLOCK_SKEW_MS;
+  const badState = (state: CausalMeta, reason: string) =>
+    new SyncEngineError(
+      `The snapshot for ${state.entityType} ${state.entityId} ${reason}.`,
+      "badBatch",
+      sender,
+    );
+
+  for (const state of states) {
+    const readings: string[] = [state.maxHlc];
+    if (state.created) readings.push(state.created.hlc);
+    if (state.deleted) readings.push(state.deleted.hlc);
+    for (const register of Object.values(state.registers))
+      readings.push(register.hlc);
+    for (const elements of Object.values(state.sets)) {
+      for (const element of Object.values(elements)) {
+        if (element.addHlc) readings.push(element.addHlc);
+        if (element.removeHlc) readings.push(element.removeHlc);
+      }
+    }
+    for (const entries of Object.values(state.maps)) {
+      for (const entry of Object.values(entries)) readings.push(entry.hlc);
+    }
+    if (readings.some((hlc) => parseHlc(hlc).wall > horizon)) {
+      throw badState(state, "is stamped ahead of this device's clock");
+    }
+
+    for (const spec of registersOf(state.entityType)) {
+      const register = state.registers[spec.name];
+      if (!register) continue;
+      const value: unknown = register.value;
+      if (
+        typeof value !== "object" ||
+        value === null ||
+        Array.isArray(value) ||
+        spec.fields.some((field) => !(field in value))
+      ) {
+        throw badState(state, `has a partial ${spec.name} field group`);
+      }
+    }
+  }
+}
+
 /**
  * The verified half: everything that must be atomic with reading the roster.
  *
@@ -197,6 +326,7 @@ async function verifyAndStore(
 ): Promise<{
   readonly accepted: SyncOp[];
   readonly fullState?: SyncBatch["fullState"];
+  readonly cutoffs: ReadonlyMap<string, number>;
 }> {
   const meta = await readMeta(tx, [
     SYNC_META.epoch,
@@ -241,33 +371,6 @@ async function verifyAndStore(
     new Set(batch.ops.map((op) => op.opId)),
   );
   const existingControls = await readControlOps(tx);
-  const authorizedAddIds = new Set(
-    [...existingControls, ...batch.ops]
-      .filter(
-        (op) =>
-          String(op.entityType) === SYNC_CONTROL_ENTITY && op.kind === "set",
-      )
-      .map((op) => op.payload)
-      .filter(
-        (payload): payload is Record<string, unknown> =>
-          typeof payload === "object" &&
-          payload !== null &&
-          payload.control === "add" &&
-          typeof payload.deviceId === "string",
-      )
-      .map((payload) => payload.deviceId as string),
-  );
-  for (const op of batch.ops) authorizedAddIds.add(op.deviceId);
-  const rosterMerge = mergeAuthenticatedRoster(
-    storedRoster,
-    batch.roster,
-    batch.epoch,
-    batch.sender,
-    held,
-    meta.get(SYNC_META.deviceId) ?? "",
-    authorizedAddIds,
-  );
-  const roster = rosterMerge.roster;
 
   // Re-delivery is ordinary: a relay hands back overlapping ranges, and a peer that lost its
   // ack record resends from the start. Every one of those ops is dropped as already-held a
@@ -290,15 +393,13 @@ async function verifyAndStore(
     }
   }
 
+  assertFullStateSound(batch.fullState, nowMs, batch.sender);
+
   const chains = pendingByDevice(batch.ops, held);
 
-  const accepted: SyncOp[] = [];
-  for (const [deviceId, ops] of chains) {
-    // The author, not the sender. A laptop that has been closed for a week catches up on the
-    // phone's history through the tablet, so these are routinely different devices — and the
-    // author is allowed to be revoked, because what it wrote while it was a member is still
-    // history everybody else holds.
-    const author = requireAuthor(roster, deviceId, batch.sender);
+  // Verifies one chain end to end: authorship window, every signature, every field group, and
+  // continuity with what we hold. Writes the chain's new head into `held` on success.
+  const verifyChainOf = (deviceId: string, ops: SyncOp[], author: Peer) => {
     for (const op of ops) {
       requireAuthorSequence(author, op.seq);
       if (!op.signature) {
@@ -323,24 +424,62 @@ async function verifyAndStore(
         );
       }
     }
+    const known = held.get(deviceId) ?? { seq: 0, headHash: GENESIS_HASH };
+    // A chain a snapshot established has a position but no hash at it, so its first op anchors
+    // the chain. The op's signature still covers its own hash; see `STATE_COVERED_HASH`.
+    // `seq > 0` is required: a device with no held chain is at GENESIS, whose hash is also the
+    // empty string, and anchoring there would accept a seq-1 op with any `prevHash`.
+    const start: ChainHead =
+      known.seq > 0 && known.headHash === STATE_COVERED_HASH && ops.length
+        ? { seq: known.seq, headHash: ops[0].prevHash }
+        : known;
     try {
-      held.set(
-        deviceId,
-        verifyChain(
-          ops,
-          held.get(deviceId) ?? { seq: 0, headHash: GENESIS_HASH },
-        ),
-      );
+      held.set(deviceId, verifyChain(ops, start));
     } catch (error) {
       throw asEngineError(error, batch.sender);
     }
+  };
+
+  // Phase one: chains by devices already in the stored roster. Their signatures are checked
+  // against keys this device already trusts, so the `add` controls among them can be believed.
+  // A device cannot be introduced by a batch's own roster, or by an op authored by a device the
+  // batch introduces — that would let any member mint an identity with no authority behind it.
+  const authorizedAddIds = new Set(addedDevices(existingControls));
+  const accepted: SyncOp[] = [];
+  for (const [deviceId, ops] of chains) {
+    const author = storedRoster.get(deviceId);
+    if (!author) continue;
+    verifyChainOf(deviceId, ops, author);
+    for (const id of addedDevices(ops)) authorizedAddIds.add(id);
+    accepted.push(...ops);
+  }
+
+  const rosterMerge = mergeAuthenticatedRoster(
+    storedRoster,
+    batch.roster,
+    batch.epoch,
+    batch.sender,
+    meta.get(SYNC_META.deviceId) ?? "",
+    authorizedAddIds,
+  );
+  const roster = rosterMerge.roster;
+
+  // Phase two: chains by the devices this batch introduces. Each must be authored by an id an
+  // authenticated `add` control named, which the merge above has just enforced.
+  for (const [deviceId, ops] of chains) {
+    if (storedRoster.has(deviceId)) continue;
+    // The author, not the sender. A laptop that has been closed for a week catches up on the
+    // phone's history through the tablet, so these are routinely different devices — and the
+    // author is allowed to be revoked, because what it wrote while it was a member is still
+    // history everybody else holds.
+    const author = requireAuthor(roster, deviceId, batch.sender);
+    verifyChainOf(deviceId, ops, author);
     accepted.push(...ops);
   }
 
   // Past every refusal. From here the batch is being kept.
   let revocations: ReturnType<typeof deriveRevocationState>["revocations"];
   try {
-    const existing = existingControls;
     const initial = {
       ownerDeviceId:
         meta.get(SYNC_META.ownerDeviceId) ?? meta.get(SYNC_META.deviceId) ?? "",
@@ -352,7 +491,7 @@ async function verifyAndStore(
             : ("any" as const),
     };
     revocations = deriveRevocationState(
-      [...existing, ...accepted],
+      [...existingControls, ...accepted],
       roster,
       initial,
       meta.get(SYNC_META.deviceId) ?? "",
@@ -362,6 +501,22 @@ async function verifyAndStore(
       throw new SyncEngineError(error.message, "badBatch", batch.sender);
     }
     throw error;
+  }
+
+  // Authoritative: an op above its author's signed cutoff is refused whichever order the batch
+  // and its revocation arrived in. Accepting it here when another device refuses it would make
+  // the two projections disagree permanently.
+  const cutoffs = effectiveCutoffs(roster, revocations);
+  for (const op of accepted) {
+    const cutoff = cutoffs.get(op.deviceId);
+    if (cutoff !== undefined && op.seq > cutoff) {
+      const author = roster.get(op.deviceId);
+      throw new SyncEngineError(
+        `${author?.name ?? "A device"} was removed at change ${cutoff}; change ${op.seq} is not accepted.`,
+        "revokedPeer",
+        batch.sender,
+      );
+    }
   }
   await storeOps(tx, accepted, 1);
 
@@ -400,19 +555,18 @@ async function verifyAndStore(
             {
               ...peer,
               revokedAt: decision.at,
-              // The signed decision records what the author had seen. This receiver may already
-              // hold more of the target chain, and those earlier ops must remain replayable.
-              revokedSeq: Math.max(
-                decision.cutoff,
-                held.get(decision.targetId)?.seq ?? 0,
-              ),
+              // The signed cutoff, and nothing else. The cutoff has to be the same value on every
+              // device that has seen the same controls, so it cannot depend on how much of the
+              // target's chain this device happens to hold. Ops it holds above the cutoff are
+              // neither forwarded nor projected from here on.
+              revokedSeq: decision.cutoff,
             },
           ]
         : [];
     }),
   ]);
 
-  return { accepted, fullState: batch.fullState };
+  return { accepted, fullState: batch.fullState, cutoffs };
 }
 
 /**
@@ -432,8 +586,9 @@ export async function receiveBatch(
 
   let accepted: SyncOp[];
   let fullState: SyncBatch["fullState"];
+  let cutoffs: ReadonlyMap<string, number>;
   try {
-    ({ accepted, fullState } = await storage.transact(
+    ({ accepted, fullState, cutoffs } = await storage.transact(
       (tx) => verifyAndStore(tx, batch, now(), receivedAt),
       {
         // Nothing a repository subscriber can observe has changed yet: `records` is untouched
@@ -456,7 +611,7 @@ export async function receiveBatch(
   const projectable = accepted.filter(
     (op) => String(op.entityType) !== SYNC_CONTROL_ENTITY,
   );
-  const { ready, deferred } = projectableOps(projectable, now());
+  const { ready, deferred } = projectableOps(projectable, now(), cutoffs);
 
   let result = EMPTY_APPLY;
   let failure: unknown = null;
@@ -494,6 +649,12 @@ export async function receiveBatch(
             },
           ]);
         }
+        // The snapshot now stands in for the ops below these positions. Recorded only once the
+        // snapshot has projected, so a refused one is retried rather than acknowledged.
+        await writeStateHeads(
+          tx,
+          mergeHeads(await readStateHeads(tx), batch.heads),
+        );
       },
       { silent: true },
     );

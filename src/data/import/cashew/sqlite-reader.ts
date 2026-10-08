@@ -16,6 +16,14 @@ const PAGE_LEAF_TABLE = 0x0d;
 // A b-tree of even 2^64 rows is far shallower than this; the cap only stops a crafted
 // file from recursing forever.
 const MAX_TREE_DEPTH = 32;
+// A personal budget backup holds thousands of rows. This cap across all tables stops a crafted or
+// enormous file from exhausting memory before the mapper ever sees it.
+const MAX_TOTAL_ROWS = 500_000;
+const tooManyRows = () =>
+  new ImportError(
+    "unsupported",
+    "This backup has more than 500,000 rows and is too large to import.",
+  );
 
 const corrupt = (detail: string) =>
   new ImportError(
@@ -100,6 +108,13 @@ export function readSqliteUserVersion(bytes: Uint8Array): number {
 // Varints are 1-9 bytes, big-endian, 7 bits per byte with the high bit meaning "more".
 // The ninth byte contributes all 8 bits. Multiplying rather than shifting keeps values
 // above 2^31 exact until 2^53, past which the file is not something we can represent.
+// Every varint is checked, not only the nine-byte form: an eight-byte value can already exceed 2^53,
+// and a value that is not a safe integer cannot be used as a size, page number or row id.
+function checkedVarint(value: number, next: number): Varint {
+  if (!Number.isSafeInteger(value)) throw corrupt("a number is too large");
+  return { value, next };
+}
+
 function readVarint(bytes: Uint8Array, offset: number): Varint {
   let value = 0;
   for (let i = 0; i < 8; i += 1) {
@@ -107,7 +122,7 @@ function readVarint(bytes: Uint8Array, offset: number): Varint {
     if (byte === undefined)
       throw corrupt("a number runs past the end of the page");
     value = value * 128 + (byte & 0x7f);
-    if ((byte & 0x80) === 0) return { value, next: offset + i + 1 };
+    if ((byte & 0x80) === 0) return checkedVarint(value, offset + i + 1);
   }
   const last = bytes[offset + 8];
   if (last === undefined)
@@ -294,12 +309,15 @@ class SqliteFile {
     return this.bytes.subarray(start, start + this.header.pageSize);
   }
 
-  /** Every row of the table b-tree rooted at `rootPage`, in rowid order. */
-  readTable(rootPage: number): RawRecord[] {
+  /** Every row of the table b-tree rooted at `rootPage`, in rowid order, at most `maxRows` of them. */
+  readTable(rootPage: number, maxRows: number): RawRecord[] {
     const rows: RawRecord[] = [];
+    this.maxRows = maxRows;
     this.walk(rootPage, 0, new Set<number>(), rows);
     return rows;
   }
+
+  private maxRows = 0;
 
   private walk(
     pageNumber: number,
@@ -336,6 +354,7 @@ class SqliteFile {
         const cell = view.getUint16(pointerArray + i * 2, false);
         if (cell >= page.length)
           throw corrupt("a cell points outside its page");
+        if (out.length >= this.maxRows) throw tooManyRows();
         out.push(this.readLeafCell(page, cell));
       }
     } else {
@@ -523,9 +542,13 @@ function asText(value: RawValue): string {
 
 function readAllTables(bytes: Uint8Array): Record<string, RawRow[]> {
   const file = new SqliteFile(bytes);
-  const tables: Record<string, RawRow[]> = {};
+  // A null-prototype map: table names come from the file, and a table called "__proto__" must not
+  // rewrite the prototype of the object it is stored in.
+  const tables: Record<string, RawRow[]> = Object.create(null);
   // The schema table is always rooted at page 1: type, name, tbl_name, rootpage, sql.
-  for (const entry of file.readTable(1)) {
+  const schema = file.readTable(1, MAX_TOTAL_ROWS);
+  let remainingRows = MAX_TOTAL_ROWS - schema.length;
+  for (const entry of schema) {
     const [type, name, , rootpage, sql] = entry.values;
     if (
       type !== "table" ||
@@ -538,17 +561,19 @@ function readAllTables(bytes: Uint8Array): Record<string, RawRow[]> {
     const definition = asText(sql);
     if (/\bwithout\s+rowid\b/i.test(definition)) continue;
 
-    const schema = parseTableSchema(definition);
+    const tableSchema = parseTableSchema(definition);
     const rows: RawRow[] = [];
-    for (const record of file.readTable(rootpage)) {
-      const row: RawRow = {};
-      const width = Math.max(schema.columns.length, record.values.length);
+    const records = file.readTable(rootpage, remainingRows);
+    remainingRows -= records.length;
+    for (const record of records) {
+      const row: RawRow = Object.create(null);
+      const width = Math.max(tableSchema.columns.length, record.values.length);
       for (let i = 0; i < width; i += 1) {
         // Columns added later with ALTER TABLE are absent from older rows.
-        const key = schema.columns[i] ?? `column_${i}`;
+        const key = tableSchema.columns[i] ?? `column_${i}`;
         const value = record.values[i] ?? null;
         row[key] =
-          i === schema.rowidAlias && value === null ? record.rowid : value;
+          i === tableSchema.rowidAlias && value === null ? record.rowid : value;
       }
       rows.push(row);
     }

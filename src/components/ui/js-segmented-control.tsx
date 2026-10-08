@@ -13,6 +13,7 @@ import {
   motionCurves,
   MotionPressable,
   useMotionDurations,
+  useMotionPreference,
 } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
@@ -214,14 +215,18 @@ function ThumbSegmentedControl<T extends string>({
   const segment = width > 0 ? (width - 2 * inset) / options.length : 0;
   const height = size === "compact" ? 44 : 48; // 44px is the minimum touch target
 
+  // The thumb slides, which is travel: below the full level it jumps to the selected segment.
+  const { travel } = useMotionPreference();
   const thumbStyle = useAnimatedStyle(() => ({
     transform: [
       {
-        translateX: withTiming((rtl ? -1 : 1) * index * segment, {
-          duration: motionDuration.enter,
-          easing: motionCurves.standard,
-          reduceMotion: ReduceMotion.System,
-        }),
+        translateX: travel
+          ? withTiming((rtl ? -1 : 1) * index * segment, {
+              duration: motionDuration.enter,
+              easing: motionCurves.standard,
+              reduceMotion: ReduceMotion.System,
+            })
+          : (rtl ? -1 : 1) * index * segment,
       },
     ],
   }));

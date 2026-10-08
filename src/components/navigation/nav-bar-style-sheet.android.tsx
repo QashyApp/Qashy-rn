@@ -72,9 +72,15 @@ function NavBarStyleSheetContent({ onClose }: { onClose: () => void }) {
     }
     try {
       await sheetRef.current?.hide();
+    } catch {
+      // The sheet may already be gone; closing the content below is what matters.
     } finally {
       onClose();
     }
+  };
+  // Called from `onPress` handlers, which cannot await: a rejection there would be unhandled.
+  const chooseSafely = (next: NavBarStyle) => {
+    choose(next).catch(() => undefined);
   };
 
   return (
@@ -102,11 +108,12 @@ function NavBarStyleSheetContent({ onClose }: { onClose: () => void }) {
           >
             <View style={{ gap: space.xs }}>
               <AppText variant="headline" accessibilityRole="header">
-                Navigation bar style
+                {t("Navigation bar style")}
               </AppText>
               <AppText variant="caption" muted>
-                Choose how the bottom bar looks. Press and hold the bar any time
-                to change it.
+                {t(
+                  "Choose how the bottom bar looks. Press and hold the bar any time to change it.",
+                )}
               </AppText>
             </View>
             <View
@@ -119,14 +126,14 @@ function NavBarStyleSheetContent({ onClose }: { onClose: () => void }) {
                 label="Native"
                 caption="Docked to the bottom edge, drawn by Android."
                 selected={current === "native"}
-                onPress={() => void choose("native")}
+                onPress={() => chooseSafely("native")}
               />
               <NavBarStyleCard
                 style="floating"
                 label="Floating"
                 caption="A rounded bar that floats above your content."
                 selected={current === "floating"}
-                onPress={() => void choose("floating")}
+                onPress={() => chooseSafely("floating")}
               />
             </View>
           </View>

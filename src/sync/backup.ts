@@ -36,7 +36,11 @@ import {
   type StorageTx,
   type StoredEntity,
 } from "@/data/storage-adapter";
-import { SYNC_META, appendActivity } from "@/data/sync-store";
+import {
+  SYNC_META,
+  appendActivity,
+  readControlOps,
+} from "@/data/sync-store";
 import type {
   SyncMetaRow,
   SyncOpRow,
@@ -59,6 +63,13 @@ import {
   utf8Bytes,
 } from "@/sync/crypto";
 import { activityEntry } from "@/sync/engine";
+import { readRoster, writePeers, type Peer } from "@/sync/engine/roster";
+import {
+  RevocationError,
+  deriveRevocationState,
+  type RevocationMode,
+  type RevocationPolicy,
+} from "@/sync/revocation";
 import {
   KeystoreError,
   decodeVaultRecord,
@@ -484,24 +495,34 @@ export async function restoreVaultBackup(
   await deps.keystore.write(vault);
 
   const at = (deps.nowIso ?? defaultNowIso)();
-  await deps.storage.transact(async (tx) => {
-    await clearSyncTables(tx);
-    await tx.clearRecords();
+  try {
+    await deps.storage.transact(async (tx) => {
+      await clearSyncTables(tx);
+      await tx.clearRecords();
 
-    await put(tx, "syncMeta", archive.meta);
-    await put(tx, "syncPeers", archive.peers);
-    await put(tx, "syncOps", archive.ops);
-    await put(tx, "syncState", archive.state);
-    if (archive.records.length) await tx.putMany(archive.records);
+      await put(tx, "syncMeta", archive.meta);
+      await put(tx, "syncPeers", archive.peers);
+      await put(tx, "syncOps", archive.ops);
+      await put(tx, "syncState", archive.state);
+      if (archive.records.length) await tx.putMany(archive.records);
 
-    await appendActivity(tx, [
-      activityEntry({
-        kind: "recovered",
-        recordedAt: at,
-        count: archive.records.length,
-      }),
-    ]);
-  });
+      await reconcileRevocations(tx, archive, vault.identity.deviceId);
+
+      await appendActivity(tx, [
+        activityEntry({
+          kind: "recovered",
+          recordedAt: at,
+          count: archive.records.length,
+        }),
+      ]);
+    });
+  } catch (error) {
+    // The key went in first, so a failed data write would leave a vault key behind and
+    // `vaultPresent` would refuse every retry. The key was not there before this call (the
+    // precondition above), so putting the keystore back to empty is exact.
+    await rollbackKeystore(deps.keystore);
+    throw error;
+  }
 
   return {
     deviceId: vault.identity.deviceId,
@@ -509,6 +530,75 @@ export async function restoreVaultBackup(
     opCount: archive.ops.length,
     peerCount: archive.peers.length,
   };
+}
+
+/**
+ * Makes the restored peer rows agree with the membership controls the restored op log signs.
+ *
+ * `syncPeers` comes from the archive as a snapshot, so a restored device could otherwise show a
+ * device as active that a signed revoke already removed. The fold is the same one the engine
+ * runs, read-only here, and it runs inside the restore transaction: a control history that does
+ * not validate throws and aborts the whole restore rather than leaving a half-reconciled roster.
+ *
+ * Only ever adds revocations. A peer the archive marks revoked with no signed control stays
+ * revoked, because clearing it would reactivate a device on the strength of nothing.
+ */
+async function reconcileRevocations(
+  tx: StorageTx,
+  archive: VaultArchive,
+  deviceId: string,
+) {
+  const meta = (key: string) =>
+    archive.meta.find((row) => row.key === key)?.value;
+  const initial: RevocationPolicy = {
+    ownerDeviceId: meta(SYNC_META.ownerDeviceId) || deviceId,
+    mode: parseMode(meta(SYNC_META.revocationMode)),
+  };
+  const roster = await readRoster(tx);
+  const controls = await readControlOps(tx);
+  let state: ReturnType<typeof deriveRevocationState>;
+  try {
+    state = deriveRevocationState(controls, roster, initial, deviceId);
+  } catch (error) {
+    if (error instanceof RevocationError) {
+      throw new BackupError(
+        "That backup's membership history does not check out, so it was not restored.",
+      );
+    }
+    throw error;
+  }
+  const changed: Peer[] = [];
+  for (const decision of state.revocations) {
+    const peer = roster.get(decision.targetId);
+    if (!peer || peer.revokedAt) continue;
+    changed.push({
+      ...peer,
+      revokedAt: decision.at,
+      // The signed cutoff, and nothing else, as `receive.ts` and `setup.ts` record it. Raising it
+      // to whatever the archive holds above the target would make a restored device disagree
+      // with every device that never held those ops.
+      revokedSeq: decision.cutoff,
+    });
+  }
+  await writePeers(tx, changed);
+}
+
+const parseMode = (value: string | undefined): RevocationMode =>
+  value === "quorum" || value === "owner" ? value : "any";
+
+/**
+ * Returns the keystore to empty after a restore whose data write failed. Only called when the
+ * precondition showed no vault, so erasing is exactly undoing this call. If the erase itself
+ * fails the key is still present, and that has to be reported as such: retrying would be refused.
+ */
+async function rollbackKeystore(keystore: SyncKeystore) {
+  try {
+    await keystore.erase();
+  } catch {
+    throw new BackupError(
+      "The restore failed, and the vault key it wrote could not be removed. Erase this device's sync data from Sync → Danger zone before trying again.",
+    );
+  }
 }
 
 /**

@@ -69,17 +69,29 @@ function normalizeNumberInput(
   digits.forEach((ascii, localized) => {
     normalized = normalized.split(localized).join(ascii);
   });
+  // Currency symbols and direction marks carry no digits. Whitespace is kept until its grouping has
+  // been checked, because a space between digits is only valid as a thousands separator.
   normalized = normalized
-    .replace(/[\p{Sc}\s\u200E\u200F\u061C]/gu, "")
-    .replace(currency ? new RegExp(currency, "gi") : /$^/, "");
+    .replace(/[\p{Sc}\u200E\u200F\u061C]/gu, "")
+    .replace(currency ? new RegExp(currency, "gi") : /$^/, "")
+    .trim();
+  const body = normalized.replace(/^[+\-\u2212]\s*/, "");
+  const decimalAt = body.indexOf(decimalSymbol);
+  const integerText = decimalAt === -1 ? body : body.slice(0, decimalAt);
+  const fractionText =
+    decimalAt === -1 ? "" : body.slice(decimalAt + decimalSymbol.length);
+  if (/\s/.test(fractionText)) throw new Error("Enter a valid number.");
+  // Whitespace in the integer part is only accepted as a thousands separator: the first group has one to
+  // three digits and every later group exactly three. "12 50" and "1 2345,67" are rejected, not read as
+  // 1250 and 12345.67.
+  if (/\s/.test(integerText) && !/^\d{1,3}(?:\s\d{3})+$/.test(integerText)) {
+    throw new Error("Enter a valid number.");
+  }
   // A group symbol is only a thousands separator when it sits between digit
   // groups of three. Otherwise "12,50" in en-US would silently become 1250
   // instead of being rejected.
-  if (groupSymbol.trim() && normalized.includes(groupSymbol)) {
-    const integerPart = normalized
-      .split(decimalSymbol)[0]
-      .replace(/^[+\-\u2212]/, "");
-    const groups = integerPart.split(groupSymbol);
+  if (groupSymbol.trim() && integerText.includes(groupSymbol)) {
+    const groups = integerText.split(groupSymbol);
     const wellFormed = groups.every(
       (group, index) =>
         /^\d+$/.test(group) &&
@@ -91,6 +103,7 @@ function normalizeNumberInput(
     if (!wellFormed) throw new Error("Enter a valid number.");
   }
   normalized = normalized
+    .replace(/\s/g, "")
     .split(groupSymbol)
     .join("")
     .split(decimalSymbol)
@@ -225,7 +238,9 @@ export function normalizeDecimalString(value: string, locale = "en-US") {
   try {
     const decimal = new Decimal(normalizeNumberInput(value, locale));
     if (!decimal.isFinite()) throw new Error();
-    return decimal.toString();
+    // `toString` switches to exponent form for very small values ("8.9e-9"), which the decimal
+    // parsers downstream reject. `toFixed` with no argument is always plain fixed-point, unrounded.
+    return decimal.isZero() ? "0" : decimal.toFixed();
   } catch {
     throw new Error("Enter a valid number.");
   }

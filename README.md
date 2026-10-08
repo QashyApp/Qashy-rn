@@ -29,7 +29,8 @@ end-to-end encrypted with keys that never leave your devices.
 - Devices are paired in person by scanning a QR code and confirming a 6-word code shown on both screens.
 - Sealed and padded ciphertext is left in a blind drop-box for the other device to collect.
   The server sees an opaque identifier, ciphertext, and an IP address — never who you are, what changed, or
-  how much of it there is. The app ships pointed at the project's own relay; swap or blank it under
+  how much of it there is. Routing tags rotate every UTC day, so the server cannot link a device's traffic
+  across days. The app ships pointed at the project's own relay; swap or blank it under
   **More → Sync → Advanced**. With no relay, devices sync only through transfer files you carry
   between them yourself.
 - Conflicting edits merge automatically without losing either side; deletions and rejected updates are

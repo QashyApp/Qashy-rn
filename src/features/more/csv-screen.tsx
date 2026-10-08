@@ -2,7 +2,7 @@ import { Picker } from "@expo/ui";
 import * as DocumentPicker from "expo-document-picker";
 import { File as ExpoFile, Paths } from "expo-file-system";
 import * as Sharing from "expo-sharing";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -255,6 +255,18 @@ function CsvStepper({ current }: { current: number }) {
   );
 }
 
+/**
+ * The picker's MIME filter cannot be trusted for CSV: Android reports a `.csv` as
+ * `application/vnd.ms-excel` or `application/octet-stream`. So the file is picked unfiltered and
+ * its extension is checked instead. `.txt` stays accepted because it always was.
+ */
+const CSV_EXTENSIONS = ["csv", "txt"];
+
+function fileExtension(name: string) {
+  const dot = name.lastIndexOf(".");
+  return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
+}
+
 function inferMapping(headers: string[]) {
   return Object.fromEntries(
     CSV_FIELDS.map((field) => [
@@ -284,6 +296,23 @@ export function CsvScreen() {
   const [rows, setRows] = useState<CsvImportRow[]>([]);
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [busy, setBusy] = useState(false);
+  // The in-flight guard. State lags a render behind a double tap, so every check reads this ref;
+  // `busy` only drives what is shown and disabled.
+  const busyRef = useRef(false);
+  const setBusyFlag = (value: boolean) => {
+    busyRef.current = value;
+    setBusy(value);
+  };
+  // Bumped whenever the preview's inputs change (file, mapping, defaults). A preview still
+  // awaiting its rate lookup then belongs to inputs the user has already replaced, so it must
+  // not write its result back.
+  const previewRequest = useRef(0);
+  const invalidatePreview = () => {
+    previewRequest.current += 1;
+    setPreview(null);
+  };
+  const exportingRef = useRef(false);
+  const [exporting, setExporting] = useState(false);
   // Type and currency fall back to expense and the base currency, and a chosen default account
   // covers an unmapped account column, so none of those block the preview.
   const isOptionalField = (field: (typeof CSV_FIELDS)[number]) =>
@@ -293,21 +322,27 @@ export function CsvScreen() {
   );
 
   const pick = async () => {
+    if (busyRef.current) return;
+    setBusyFlag(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ["text/csv", "text/comma-separated-values", "text/plain"],
+        type: "*/*",
         copyToCacheDirectory: true,
         base64: false,
       });
       if (result.canceled) return;
       // A replacement attempt must never leave the last file armed. Otherwise a validation
       // error can make the next Import commit a different ledger than the user just reviewed.
+      invalidatePreview();
       setSourceRows([]);
       setHeaders([]);
       setMapping(inferMapping([]));
       setRows([]);
-      setPreview(null);
       const asset = result.assets[0];
+      if (!CSV_EXTENSIONS.includes(fileExtension(asset.name))) {
+        showError("Wrong file type", "Choose a .csv file.");
+        return;
+      }
       const nativeFile = asset.file ? null : new ExpoFile(asset.uri);
       assertFileSize(
         asset.size ?? asset.file?.size ?? nativeFile?.size,
@@ -345,12 +380,14 @@ export function CsvScreen() {
         "Couldn’t read CSV",
         errorMessage(reason, "Choose another UTF-8 CSV file."),
       );
+    } finally {
+      setBusyFlag(false);
     }
   };
 
   const previewImport = async () => {
-    if (busy || missingRequiredFields.length) return;
-    setBusy(true);
+    if (busyRef.current || missingRequiredFields.length) return;
+    setBusyFlag(true);
     try {
       await buildPreview();
     } catch (reason) {
@@ -361,7 +398,7 @@ export function CsvScreen() {
         errorMessage(reason, "Check the column mapping and try again."),
       );
     } finally {
-      setBusy(false);
+      setBusyFlag(false);
     }
   };
 
@@ -408,7 +445,9 @@ export function CsvScreen() {
         feeValue: value(record, "feeValue"),
       };
     });
-    setRows(parsed);
+    // The request this preview answers. Read before the awaits below; any change to the file,
+    // mapping, or defaults in the meantime bumps `previewRequest`, and this result is then dropped.
+    const request = previewRequest.current;
     // Best-effort: fills in whatever automatic rates it can before validation runs, so a row
     // whose currency and date already have a fetched rate stops needing a manual one. A no-op
     // when auto-fetch is off, and it never throws — a failure here falls through to the same
@@ -435,11 +474,17 @@ export function CsvScreen() {
       return true;
     });
     if (ratePairs.length) await exchangeRateService.ensureRatesFor(ratePairs);
-    setPreview(await repository.importCsv(parsed, false));
+    if (request !== previewRequest.current) return;
+    const result = await repository.importCsv(parsed, false);
+    if (request !== previewRequest.current) return;
+    // Rows and preview are written together, so the armed rows are always the ones previewed.
+    setRows(parsed);
+    setPreview(result);
   };
 
   const commit = async () => {
-    setBusy(true);
+    if (busyRef.current) return;
+    setBusyFlag(true);
     try {
       const result = await repository.importCsv(rows, true);
       hapticSuccess();
@@ -454,11 +499,16 @@ export function CsvScreen() {
         errorMessage(reason, "No rows were imported."),
       );
     } finally {
-      setBusy(false);
+      setBusyFlag(false);
     }
   };
 
   const exportData = async () => {
+    // Ref-guarded: a second tap while the share sheet or file write is still running must not
+    // start another export.
+    if (exportingRef.current) return;
+    exportingRef.current = true;
+    setExporting(true);
     try {
       const csv = repository.exportCsv();
       const filename = `qashy-transactions-${todayLocal()}.csv`;
@@ -489,6 +539,9 @@ export function CsvScreen() {
         });
     } catch (reason) {
       showError("Couldn’t export CSV", errorMessage(reason, "Try again."));
+    } finally {
+      exportingRef.current = false;
+      setExporting(false);
     }
   };
 
@@ -504,7 +557,13 @@ export function CsvScreen() {
           and destination accounts, categories, tags, notes, exchange-rate
           snapshots, and transfer linkage.
         </AppText>
-        <ActionButton title="Export CSV" icon="tray" onPress={exportData} />
+        <ActionButton
+          title="Export CSV"
+          icon="tray"
+          onPress={exportData}
+          busy={exporting}
+          disabled={exporting}
+        />
       </Card>
       <ExternalImportCard />
       <Card style={{ gap: 14 }}>
@@ -525,7 +584,12 @@ export function CsvScreen() {
           title, amount, currency, and account. Nothing is committed until after
           preview.
         </AppText>
-        <ActionButton title="Choose CSV" variant="secondary" onPress={pick} />
+        <ActionButton
+          title="Choose CSV"
+          variant="secondary"
+          onPress={pick}
+          disabled={busy}
+        />
         {sourceRows.length ? (
           <View style={{ gap: space.md, paddingTop: 6 }}>
             <AppText variant="headline">Column mapping</AppText>
@@ -577,8 +641,9 @@ export function CsvScreen() {
                         ...current,
                         [field.key]: String(value),
                       }));
-                      setPreview(null);
+                      invalidatePreview();
                     }}
+                    enabled={!busy}
                     testID={`mapping-${field.key}`}
                   >
                     <Picker.Item label={t("Not mapped")} value="" />
@@ -606,7 +671,7 @@ export function CsvScreen() {
                     selected={defaultAccountId === account.id}
                     onPress={() => {
                       setDefaultAccountId(account.id);
-                      setPreview(null);
+                      invalidatePreview();
                     }}
                   />
                 ))}
@@ -623,7 +688,7 @@ export function CsvScreen() {
                 selected={!defaultCategoryId}
                 onPress={() => {
                   setDefaultCategoryId("");
-                  setPreview(null);
+                  invalidatePreview();
                 }}
               />
               {state.categories
@@ -637,7 +702,7 @@ export function CsvScreen() {
                     selected={defaultCategoryId === category.id}
                     onPress={() => {
                       setDefaultCategoryId(category.id);
-                      setPreview(null);
+                      invalidatePreview();
                     }}
                   />
                 ))}

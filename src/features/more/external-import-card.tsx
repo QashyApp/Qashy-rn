@@ -1,7 +1,7 @@
 import * as DocumentPicker from "expo-document-picker";
 import { File as ExpoFile } from "expo-file-system";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View, type ColorValue } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -9,6 +9,7 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { MotionPressable } from "@/components/ui/motion";
+import type { RatePair } from "@/data/exchange-rates/rate-service";
 import { IMPORT_SOURCES } from "@/data/import/sources";
 import { parseExternalBackup } from "@/data/import/parse";
 import {
@@ -24,6 +25,7 @@ import {
   useFinanceRepository,
   useFinanceState,
 } from "@/providers/finance-provider";
+import { exchangeRateService } from "@/providers/exchange-rate-provider";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -634,6 +636,44 @@ function SourcePanel({
   );
 }
 
+/**
+ * The currency/date pairs an external bundle needs a rate for before its preview: each posted
+ * row converts from its account's currency, and a transfer also from its destination account's.
+ * Upcoming and skipped rows need no rate yet, and the base currency never does. Recurring
+ * catch-up is not included; its occurrence dates are not derivable from the bundle alone.
+ */
+function externalImportRatePairs(
+  bundle: ImportBundle,
+  baseCurrency: string,
+): RatePair[] {
+  const base = baseCurrency.trim().toUpperCase();
+  const currencyByAccount = new Map<string, string>(
+    bundle.accounts.map((account): [string, string] => [
+      account.externalId,
+      account.currency.trim().toUpperCase(),
+    ]),
+  );
+  const seen = new Set<string>();
+  const pairs: RatePair[] = [];
+  const add = (accountExternalId: string | null, localDate: string) => {
+    const currency =
+      accountExternalId === null
+        ? undefined
+        : currencyByAccount.get(accountExternalId);
+    if (!currency || currency === base) return;
+    const key = `${currency}|${localDate}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    pairs.push({ currency, localDate });
+  };
+  for (const transaction of bundle.transactions) {
+    if (transaction.status !== "posted") continue;
+    add(transaction.accountExternalId, transaction.localDate);
+    add(transaction.destinationAccountExternalId, transaction.localDate);
+  }
+  return pairs;
+}
+
 export function ExternalImportCard() {
   const { space } = useQashyTheme();
   const repository = useFinanceRepository();
@@ -644,6 +684,15 @@ export function ExternalImportCard() {
   const [mode, setMode] = useState<ImportMode>("merge");
   const [outcome, setOutcome] = useState<ExternalImportOutcome | null>(null);
   const [busy, setBusy] = useState(false);
+  // The in-flight guard. State lags a render behind a double tap, so each check reads this ref,
+  // and `busy` only drives what is shown and disabled.
+  const busyRef = useRef(false);
+  const setBusyFlag = (value: boolean) => {
+    busyRef.current = value;
+    setBusy(value);
+  };
+  // True while the replace confirmation is on screen, so the button can say what it is waiting on.
+  const [confirming, setConfirming] = useState(false);
   const source = IMPORT_SOURCES.find((item) => item.id === sourceId) ?? null;
 
   const clearArmed = () => {
@@ -654,8 +703,8 @@ export function ExternalImportCard() {
   };
 
   const chooseFile = async () => {
-    if (!source || busy) return;
-    setBusy(true);
+    if (!source || busyRef.current) return;
+    setBusyFlag(true);
     try {
       const result = await DocumentPicker.getDocumentAsync({
         type: "*/*",
@@ -697,14 +746,20 @@ export function ExternalImportCard() {
           : errorMessage(reason, "Choose another backup file."),
       );
     } finally {
-      setBusy(false);
+      setBusyFlag(false);
     }
   };
 
   const previewImport = async () => {
-    if (!bundle || busy) return;
-    setBusy(true);
+    if (!bundle || busyRef.current) return;
+    setBusyFlag(true);
     try {
+      // Best-effort, as in the CSV preview: fills in the automatic rates the posted rows need so
+      // they are not reported missing. A no-op when auto-fetch is off, and it never throws; a
+      // failed lookup falls through to the preview's own missing-rate report.
+      await exchangeRateService.ensureRatesFor(
+        externalImportRatePairs(bundle, state.settings.baseCurrency),
+      );
       setOutcome(
         await repository.importExternalBundle(bundle, { mode }, false),
       );
@@ -715,25 +770,28 @@ export function ExternalImportCard() {
         errorMessage(reason, "Try choosing the file again."),
       );
     } finally {
-      setBusy(false);
+      setBusyFlag(false);
     }
   };
 
   const commit = async () => {
-    if (!bundle || !outcome || busy || outcome.rejected.length) return;
-    if (mode === "replace") {
-      const deleted = describeCounts(outcome.replaced);
-      const confirmed = await confirmDestructive({
-        title: "Delete your current data?",
-        message: deleted
-          ? `This permanently deletes ${deleted} you have now, then imports the backup. You can’t undo this.`
-          : "This permanently deletes your current data, then imports the backup. You can’t undo this.",
-        confirmLabel: "Delete and import",
-      });
-      if (!confirmed) return;
-    }
-    setBusy(true);
+    if (!bundle || !outcome || busyRef.current || outcome.rejected.length) return;
+    // Busy from before the dialog opens until the commit settles. The button stays disabled
+    // while the confirmation is up, so a second tap cannot queue a second import behind it.
+    setBusyFlag(true);
     try {
+      if (mode === "replace") {
+        const deleted = describeCounts(outcome.replaced);
+        setConfirming(true);
+        const confirmed = await confirmDestructive({
+          title: "Delete your current data?",
+          message: deleted
+            ? `This permanently deletes ${deleted} you have now, then imports the backup. You can’t undo this.`
+            : "This permanently deletes your current data, then imports the backup. You can’t undo this.",
+          confirmLabel: "Delete and import",
+        }).finally(() => setConfirming(false));
+        if (!confirmed) return;
+      }
       const result = await repository.importExternalBundle(
         bundle,
         { mode },
@@ -760,7 +818,7 @@ export function ExternalImportCard() {
         errorMessage(reason, "Nothing was imported."),
       );
     } finally {
-      setBusy(false);
+      setBusyFlag(false);
     }
   };
 
@@ -832,11 +890,17 @@ export function ExternalImportCard() {
         <View style={{ gap: space.md, paddingTop: 6 }}>
           <PreviewSummary bundle={bundle} outcome={outcome} mode={mode} />
           <ActionButton
-            title={busy ? "Importing…" : "Import"}
+            title={
+              confirming
+                ? "Waiting for confirmation…"
+                : busy
+                  ? "Importing…"
+                  : "Import"
+            }
             icon="checkmark"
             size="large"
             onPress={commit}
-            disabled={busy || outcome.rejected.length > 0}
+            disabled={busy || confirming || outcome.rejected.length > 0}
           />
         </View>
       ) : null}

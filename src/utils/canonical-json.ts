@@ -93,9 +93,17 @@ const encodeValue = (
 
   if (Array.isArray(object)) {
     seen.add(object);
-    const parts = object.map((element, index) =>
-      encodeValue(element, `${path}[${index}]`, seen),
-    );
+    const parts: string[] = [];
+    for (let index = 0; index < object.length; index += 1) {
+      // `[,]` and `[]` would encode alike if holes were skipped, so a hole is refused like undefined.
+      if (!(index in object)) {
+        throw new CanonicalJsonError(
+          "a sparse array hole has no JSON representation",
+          `${path}[${index}]`,
+        );
+      }
+      parts.push(encodeValue(object[index], `${path}[${index}]`, seen));
+    }
     seen.delete(object);
     return `[${parts.join(",")}]`;
   }
@@ -105,6 +113,12 @@ const encodeValue = (
       `${describe(object)} cannot be encoded; convert it first`,
       path,
     );
+  }
+
+  // Symbol-keyed properties are invisible to JSON, so two objects differing only in them would
+  // encode identically. Refuse them rather than drop them.
+  if (Object.getOwnPropertySymbols(object).length > 0) {
+    throw new CanonicalJsonError("a symbol key cannot be encoded", path);
   }
 
   seen.add(object);

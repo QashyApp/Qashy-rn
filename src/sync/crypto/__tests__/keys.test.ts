@@ -8,10 +8,13 @@ import {
   deriveBucketToken,
   deriveContentKey,
   deriveDeviceId,
+  ROUTE_DAY_MS,
   derivePairingRendezvousId,
+  deriveRouteTag,
   deviceIdentityBytes,
   formatDeviceId,
   restoreDeviceIdentity,
+  routeDayOf,
 } from "@/sync/crypto/keys";
 import {
   fromHex,
@@ -170,6 +173,73 @@ describe("device identity", () => {
         ),
       ),
     );
+  });
+});
+
+describe("route tags", () => {
+  // Golden vectors. The root key is bytes 0x00..0x1f. Computed independently from the raw noble
+  // primitives (HKDF-SHA256, label "qashy/sync/route/v2/day", salt = u32be(epoch) ‖ u32be(day) ‖
+  // utf8(deviceId)) and then base32-encoded, so a refactor cannot silently change the wire tags.
+  const goldenKey = brand<VaultRootKey>(
+    Uint8Array.from({ length: 32 }, (_, index) => index),
+  );
+  const DEVICE = "CJ6MEFSHJRK2SNG44OYRYSEEX2";
+
+  it("pins the derivation to known answers", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).toBe(
+      "OPXBBTPCNTYI32YT",
+    );
+    expect(deriveRouteTag(goldenKey, 1, 20001, DEVICE)).toBe(
+      "74UBCYPAZE4ZEKCD",
+    );
+    expect(deriveRouteTag(goldenKey, 2, 20000, DEVICE)).toBe(
+      "6YGIEPY2STRV6CXS",
+    );
+    expect(
+      deriveRouteTag(goldenKey, 1, 20000, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+    ).toBe("3ZCHID4WJFIDQ524");
+  });
+
+  it("produces a 16-character opaque base32 tag", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).toMatch(
+      /^[A-Z2-7]{16}$/,
+    );
+  });
+
+  it("changes on the next UTC day, so the relay cannot link a device across days", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(goldenKey, 1, 20001, DEVICE),
+    );
+  });
+
+  it("changes on a new vault epoch, so a rotated vault shares nothing with the old one", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(goldenKey, 2, 20000, DEVICE),
+    );
+  });
+
+  it("is stable within a day and separates devices", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).toBe(
+      deriveRouteTag(goldenKey, 1, 20000, DEVICE),
+    );
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(goldenKey, 1, 20000, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+    );
+  });
+
+  it("separates vaults on the same day and epoch", () => {
+    expect(deriveRouteTag(vault, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(otherVault, 1, 20000, DEVICE),
+    );
+  });
+
+  it("numbers days in UTC, flooring so one day is one number", () => {
+    const midnight = Date.UTC(2026, 9, 8);
+    expect(ROUTE_DAY_MS).toBe(86_400_000);
+    expect(routeDayOf(midnight)).toBe(20734);
+    expect(routeDayOf(midnight + ROUTE_DAY_MS - 1)).toBe(20734);
+    expect(routeDayOf(midnight - 1)).toBe(20733);
+    expect(routeDayOf(midnight + ROUTE_DAY_MS)).toBe(20735);
   });
 });
 

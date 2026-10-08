@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ScrollView, View } from "react-native";
 
 import { StatTile } from "@/components/finance/stat-tile";
@@ -57,6 +57,7 @@ export function MoreScreen() {
   const recurring = state.recurringRules;
   const [restoringId, setRestoringId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
+  const resettingRef = useRef(false);
   const activeCategories = state.categories.filter((item) => !item.archived);
   const accountSelection = useBatchDelete({
     type: "accounts",
@@ -129,24 +130,31 @@ export function MoreScreen() {
   };
 
   const resetAllData = async () => {
-    if (resetting) return;
-    const confirmed = await confirmDestructive({
-      title: "Reset Qashy?",
-      message:
-        "This permanently deletes every account, transaction, budget, goal, recurring transaction, exchange rate, category, and setting stored by Qashy on this device. This cannot be undone.",
-      confirmLabel: "Reset everything",
-    });
-    if (!confirmed) return;
-    setResetting(true);
+    // Held for the whole flow, including the confirm dialog: a second tap while the dialog is
+    // open must not open another one. Checked against a ref because state is stale in that tap.
+    if (resettingRef.current) return;
+    resettingRef.current = true;
     try {
-      await repository.resetAllData();
-      router.replace("/");
-    } catch (reason) {
-      showError(
-        "Couldn’t finish resetting Qashy",
-        errorMessage(reason, "Restart the app and try again."),
-      );
-      setResetting(false);
+      const confirmed = await confirmDestructive({
+        title: "Reset Qashy?",
+        message:
+          "This permanently deletes every account, transaction, budget, goal, recurring transaction, exchange rate, category, and setting stored by Qashy on this device. This cannot be undone.",
+        confirmLabel: "Reset everything",
+      });
+      if (!confirmed) return;
+      setResetting(true);
+      try {
+        await repository.resetAllData();
+        router.replace("/");
+      } catch (reason) {
+        showError(
+          "Couldn’t finish resetting Qashy",
+          errorMessage(reason, "Restart the app and try again."),
+        );
+        setResetting(false);
+      }
+    } finally {
+      resettingRef.current = false;
     }
   };
 

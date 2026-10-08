@@ -41,7 +41,14 @@ export function occurrenceCountUntil(
   while (due <= endDate) {
     count += 1;
     if (count > MAX_OCCURRENCE_COUNT) return null;
-    due = addRecurrence(due, unit, interval, startDate);
+    try {
+      due = addRecurrence(due, unit, interval, startDate);
+    } catch (error) {
+      // The next occurrence falls past year 9999, which is after any valid end date, so the
+      // schedule has no further occurrences to count.
+      if (error instanceof RangeError) break;
+      throw error;
+    }
   }
   return count;
 }

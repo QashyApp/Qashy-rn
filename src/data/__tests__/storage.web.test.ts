@@ -339,3 +339,84 @@ describe("web storage adapter", () => {
     expect(await adapter.transact((tx) => hasSyncHistory(tx))).toBe(true);
   });
 });
+
+describe("web storage upgrades and teardown", () => {
+  afterEach(async () => {
+    await Promise.all(
+      openAdapters.splice(0).map((adapter) => adapter.dispose()),
+    );
+    await Dexie.delete("qashy");
+  });
+
+  it("backfills revokedSeq on peers arriving from version 3", async () => {
+    await Dexie.delete("qashy");
+    // The version 1–3 declarations, as the build that shipped them wrote them.
+    const legacy = new Dexie("qashy");
+    legacy
+      .version(1)
+      .stores({ records: "&key, type, entityId, updatedAt, deletedAt" });
+    legacy.version(2).stores({
+      records: "&key, type, entityId, updatedAt, deletedAt, [type+updatedAt]",
+      syncOps:
+        "&opId, [deviceId+seq], [entityType+entityId], hlc, [sealed+deviceId+seq]",
+      syncState: "&key, type, maxHlc",
+      syncPeers: "&peerId",
+      syncMeta: "&key",
+      syncQuarantine: "&key",
+    });
+    legacy.version(3).stores({ syncActivity: "&key" });
+    const peer = (peerId: string, revokedAt: string | null) => ({
+      peerId,
+      name: peerId,
+      platform: "ios",
+      signingKey: "signing",
+      agreementKey: "agreement",
+      epoch: 1,
+      addedAt: "2026-01-01T00:00:00.000Z",
+      revokedAt,
+      acked: "{}",
+      known: "{}",
+      lastSeenAt: null,
+    });
+    await legacy.open();
+    await legacy
+      .table("syncPeers")
+      .bulkAdd([
+        peer("revoked", "2026-02-01T00:00:00.000Z"),
+        peer("active", null),
+      ]);
+    legacy.close();
+
+    const adapter = newAdapter();
+    await adapter.initialize();
+    const rows = await adapter.transact((tx) => tx.table("syncPeers").all());
+    const seqs = Object.fromEntries(
+      rows.map((row) => [row.peerId, row.revokedSeq]),
+    );
+    // A revoked peer gets the fail-closed cutoff; an active one stays null.
+    expect(seqs).toEqual({ revoked: 0, active: null });
+  });
+
+  it("removes the storage listener it registered when disposed", async () => {
+    const globals = globalThis as unknown as Record<string, unknown>;
+    const original = {
+      add: globals.addEventListener,
+      remove: globals.removeEventListener,
+    };
+    const add = jest.fn();
+    const remove = jest.fn();
+    globals.addEventListener = add;
+    globals.removeEventListener = remove;
+    try {
+      const adapter = newAdapter();
+      const handler = add.mock.calls.find(([type]) => type === "storage")?.[1];
+      expect(handler).toEqual(expect.any(Function));
+
+      await adapter.dispose();
+      expect(remove).toHaveBeenCalledWith("storage", handler);
+    } finally {
+      globals.addEventListener = original.add;
+      globals.removeEventListener = original.remove;
+    }
+  });
+});

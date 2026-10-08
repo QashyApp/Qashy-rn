@@ -76,12 +76,16 @@ function CollapsingTile({
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const [fullHeight, setFullHeight] = useState<number | null>(null);
+  // The compact line grows with the font scale, so the well folds to its measured height rather
+  // than a fixed one (a fixed height clips the figure at large text sizes).
+  const [compactHeight, setCompactHeight] = useState<number | null>(null);
+  const foldedHeight = Math.max(COMPACT_HEIGHT, compactHeight ?? 0);
 
   const well = useAnimatedStyle(() => ({
     height:
       fullHeight === null
         ? undefined
-        : interpolate(collapse.get(), [0, 1], [fullHeight, COMPACT_HEIGHT]),
+        : interpolate(collapse.get(), [0, 1], [fullHeight, foldedHeight]),
   }));
   const full = useAnimatedStyle(() => ({
     opacity: interpolate(collapse.get(), [0, 0.5], [1, 0], "clamp"),
@@ -130,7 +134,7 @@ function CollapsingTile({
             left: 0,
             right: 0,
             top: 0,
-            height: COMPACT_HEIGHT,
+            minHeight: COMPACT_HEIGHT,
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
@@ -139,6 +143,7 @@ function CollapsingTile({
           },
           compact,
         ]}
+        onLayout={(event) => setCompactHeight(event.nativeEvent.layout.height)}
         // The full layer carries the label and figure for assistive tech.
         importantForAccessibility="no-hide-descendants"
         aria-hidden

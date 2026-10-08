@@ -68,7 +68,9 @@ const parseSeqMap = (value: string): Record<string, number> => {
     const parsed: unknown = JSON.parse(value);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
       return {};
-    const out: Record<string, number> = {};
+    // Collected as entries and built with `Object.fromEntries`, never assigned key by key: a
+    // device id of `__proto__` would otherwise rewrite the prototype of the result.
+    const entries: [string, number][] = [];
     for (const [deviceId, seq] of Object.entries(
       parsed as Record<string, unknown>,
     )) {
@@ -78,10 +80,10 @@ const parseSeqMap = (value: string): Record<string, number> => {
         Number.isSafeInteger(seq) &&
         seq >= 0
       ) {
-        out[deviceId] = seq;
+        entries.push([deviceId, seq]);
       }
     }
-    return out;
+    return Object.fromEntries(entries);
   } catch {
     return {};
   }
@@ -258,7 +260,6 @@ export function mergeAuthenticatedRoster(
   members: readonly RosterMember[],
   batchEpoch: number,
   sender: string,
-  heldHeads: ReadonlyMap<string, { readonly seq: number }>,
   localDeviceId: string,
   authorizedAddIds: ReadonlySet<string> = new Set(),
 ): { readonly roster: Roster; readonly changed: readonly Peer[] } {
@@ -313,65 +314,29 @@ export function mergeAuthenticatedRoster(
       badRoster("A known device arrived with different identity keys.", sender);
     }
     // A batch signature authenticates its sender, not a decision made by every device it
-    // mentions. Ignore revocation fields here: only signed control ops can change them. This
-    // also lets the control op that explains a newer roster snapshot arrive in the same batch.
-    const membership = {
-      ...incoming,
-      revokedAt: current.revokedAt,
-      revokedSeq: current.revokedSeq,
-    };
-
-    if (membership.epoch < current.epoch) continue;
-    const newerEpoch = membership.epoch > current.epoch;
-    if (newerEpoch && membership.epoch !== batchEpoch) {
+    // mentions. Revocation fields are therefore never taken from a snapshot: only a signed
+    // `revoke` or a quorum approval can change `revokedAt` or `revokedSeq`. The cutoff is the
+    // signed value and nothing derived from this device's own holdings, so every device that
+    // has seen the same controls agrees on it.
+    if (incoming.epoch < current.epoch) continue;
+    const newerEpoch = incoming.epoch > current.epoch;
+    if (newerEpoch && incoming.epoch !== batchEpoch) {
       badRoster(
         "A re-paired device does not match the current vault epoch.",
         sender,
       );
     }
 
-    const revokedAt = newerEpoch
-      ? membership.revokedAt
-      : current.revokedAt && membership.revokedAt
-        ? current.revokedAt < membership.revokedAt
-          ? current.revokedAt
-          : membership.revokedAt
-        : (current.revokedAt ?? membership.revokedAt);
-    const heldSeq = heldHeads.get(membership.deviceId)?.seq ?? 0;
-    const revokedSeq = newerEpoch
-      ? membership.revokedAt
-        ? Math.max(membership.revokedSeq ?? 0, heldSeq)
-        : null
-      : current.revokedAt
-        ? membership.revokedAt
-          ? Math.max(
-              current.revokedSeq ?? 0,
-              membership.revokedSeq ?? 0,
-              heldSeq,
-            )
-          : Math.max(current.revokedSeq ?? 0, heldSeq)
-        : membership.revokedAt
-          ? Math.max(membership.revokedSeq ?? 0, heldSeq)
-          : null;
     const next: Peer = {
       ...current,
-      epoch: membership.epoch,
+      epoch: incoming.epoch,
       addedAt:
-        current.addedAt < membership.addedAt
-          ? current.addedAt
-          : membership.addedAt,
-      revokedAt,
-      revokedSeq,
+        current.addedAt < incoming.addedAt ? current.addedAt : incoming.addedAt,
       acked: newerEpoch ? {} : current.acked,
       known: newerEpoch ? {} : current.known,
       lastSeenAt: newerEpoch ? null : current.lastSeenAt,
     };
-    if (
-      next.epoch !== current.epoch ||
-      next.addedAt !== current.addedAt ||
-      next.revokedAt !== current.revokedAt ||
-      next.revokedSeq !== current.revokedSeq
-    ) {
+    if (next.epoch !== current.epoch || next.addedAt !== current.addedAt) {
       merged.set(next.deviceId, next);
       changed.push(next);
     }
@@ -477,9 +442,11 @@ export function mergeHeads(
   current: Readonly<Record<string, number>>,
   incoming: Readonly<Record<string, number>>,
 ): Record<string, number> {
-  const merged: Record<string, number> = { ...current };
+  // A `Map` for the working set: a device id such as `constructor` or `__proto__` must index
+  // nothing on a plain object, or `Math.max` would read an inherited value and yield NaN.
+  const merged = new Map<string, number>(Object.entries(current));
   for (const [deviceId, seq] of Object.entries(incoming)) {
-    merged[deviceId] = Math.max(merged[deviceId] ?? -1, seq);
+    merged.set(deviceId, Math.max(merged.get(deviceId) ?? -1, seq));
   }
-  return merged;
+  return Object.fromEntries(merged);
 }

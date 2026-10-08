@@ -370,7 +370,10 @@ export const verify = (
   if (signature.length !== SIGNATURE_LENGTH || publicKey.length !== KEY_LENGTH)
     return false;
   try {
-    return ed25519.verify(signature, message, publicKey);
+    // ZIP-215 is off: noble accepts it by default, which would let a non-canonical encoding of a
+    // signature or key verify. Every signature this codebase makes is canonical, so rejecting
+    // the rest removes a malleability surface at no cost.
+    return ed25519.verify(signature, message, publicKey, { zip215: false });
   } catch {
     // A malformed point is a verification failure, not a crash.
     return false;

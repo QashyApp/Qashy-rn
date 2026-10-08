@@ -400,3 +400,48 @@ describe("platform socket", () => {
     expect(socket.sent).toEqual([]);
   });
 });
+
+describe("SignalingClient open timeout", () => {
+  it("closes the socket it opened when the server never answers", async () => {
+    const sockets: FakeSocket[] = [];
+    const signaling = new SignalingClient({
+      baseUrl: BASE,
+      rendezvousId: ID,
+      open: (url) => {
+        const socket = new FakeSocket(url);
+        sockets.push(socket);
+        return socket;
+      },
+      openTimeoutMs: 5,
+    });
+
+    await expect(signaling.open()).rejects.toThrow(
+      "The rendezvous server did not answer.",
+    );
+
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0].closed).not.toBeNull();
+    expect(sockets[0].onopen).toBeNull();
+    expect(sockets[0].onclose).toBeNull();
+  });
+
+  it("closes the socket when the open is cancelled", async () => {
+    const sockets: FakeSocket[] = [];
+    const controller = new AbortController();
+    const signaling = new SignalingClient({
+      baseUrl: BASE,
+      rendezvousId: ID,
+      open: (url) => {
+        const socket = new FakeSocket(url);
+        sockets.push(socket);
+        return socket;
+      },
+    });
+
+    const opening = signaling.open(controller.signal);
+    controller.abort();
+
+    await expect(opening).rejects.toThrow("Sync was cancelled.");
+    expect(sockets[0].closed).not.toBeNull();
+  });
+});

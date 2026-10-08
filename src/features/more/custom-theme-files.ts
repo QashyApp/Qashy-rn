@@ -10,15 +10,24 @@ import * as Sharing from "expo-sharing";
 
 import { MAX_THEME_FILE_BYTES } from "@/theme/custom/theme-import";
 
-/** Returns the picked file's text, or `null` when the picker was cancelled. Throws on an unreadable or oversized file. */
+/**
+ * Returns the picked file's text, or `null` when the picker was cancelled. Throws on an
+ * unreadable, oversized, or wrongly named file.
+ *
+ * The MIME filter is not used: Android reports a `.json` as `application/octet-stream` or other
+ * types, so an unfiltered pick with the extension checked afterwards is what actually works.
+ */
 export async function pickThemeFileText(): Promise<string | null> {
   const result = await DocumentPicker.getDocumentAsync({
-    type: ["application/json", "text/json", "text/plain"],
+    type: "*/*",
     copyToCacheDirectory: true,
     base64: false,
   });
   if (result.canceled) return null;
   const asset = result.assets[0];
+  if (!asset.name.toLowerCase().endsWith(".json")) {
+    throw new Error("Choose a .json theme file.");
+  }
   const nativeFile = asset.file ? null : new ExpoFile(asset.uri);
   const size = asset.size ?? asset.file?.size ?? nativeFile?.size;
   if (typeof size !== "number" || !Number.isSafeInteger(size) || size < 0) {

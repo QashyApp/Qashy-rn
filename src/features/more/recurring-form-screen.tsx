@@ -18,7 +18,10 @@ import type {
   TransactionFeeInput,
   ForeignAmountInput,
 } from "@/domain/models";
-import { takeRecurringDraft } from "@/features/more/recurring-draft";
+import {
+  peekRecurringDraft,
+  takeRecurringDraft,
+} from "@/features/more/recurring-draft";
 import { AmountHero } from "@/components/finance/amount-hero";
 import {
   ForeignFeeFields,
@@ -96,9 +99,16 @@ export function RecurringFormScreen() {
   const existing = params.id
     ? state.recurringRules.find((item) => item.id === params.id)
     : undefined;
+  // Peeked in the initializer, consumed in the effect below. Consuming during render would delete
+  // the draft on StrictMode's second invocation, which would then read nothing.
   const [draft] = useState(() =>
-    existing ? null : takeRecurringDraft(params.draftId),
+    existing ? null : peekRecurringDraft(params.draftId),
   );
+  useEffect(() => {
+    // Single use: the values are now in state, so the handoff is spent.
+    takeRecurringDraft(params.draftId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- consumes once, on mount
+  }, []);
   const [expectedRevision] = useState(existing?.revision);
   const initialAccount =
     state.accounts.find(
@@ -824,7 +834,7 @@ export function RecurringFormScreen() {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 14,
+            gap: space.md,
           }}
         >
           <View style={{ flex: 1, gap: space.xxs }}>

@@ -26,6 +26,7 @@ import {
   keyedMapsOf,
   readPath,
   registersOf,
+  withMissingMeansNull,
 } from "@/sync/oplog/registry";
 import { metaKey, type SyncOpBody } from "@/sync/oplog/types";
 
@@ -101,7 +102,12 @@ export function diffEntity(
     return {
       ops: [
         body(entityType, entityId, hlc, "create", {
-          entity: eraseEntity(entityType, next),
+          // Legacy-optional keys are written out as null: JSON drops `undefined`, and a create
+          // that lacks them would be read as sparse by every peer.
+          entity: withMissingMeansNull(
+            entityType,
+            eraseEntity(entityType, next),
+          ),
         }),
       ],
       warnings: [],

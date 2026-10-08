@@ -25,8 +25,8 @@
  */
 
 import { router } from "expo-router";
-import { useState } from "react";
-import { ScrollView, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import { AppState, ScrollView, View } from "react-native";
 
 import { SasDisplay } from "@/components/sync/sas-display";
 import { ActionButton } from "@/components/ui/action-button";
@@ -43,6 +43,7 @@ import { RECOVERY_WORD_COUNT, vaultKeyToRecoveryPhrase } from "@/sync/crypto";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import type { SpaceScale } from "@/theme/themes/types";
+import { usePreventScreenCaptureWhile } from "@/features/sync/use-screen-capture-guard";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 
 /** The same normalization `recoveryPhraseToVaultKey` applies, so the check matches what a restore would. */
@@ -56,10 +57,12 @@ export function RecoveryScreen() {
 
   const [phrase, setPhrase] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
   const [typed, setTyped] = useState("");
 
   const reveal = async () => {
-    if (busy) return;
+    // Checked against a ref: a second tap inside the same render sees a stale `busy`.
+    if (busyRef.current) return;
     const confirmed = await confirmDestructive({
       title: "Show the recovery phrase?",
       // Naming the two real-world leaks — a shoulder and a recording — because "keep it secret"
@@ -69,6 +72,7 @@ export function RecoveryScreen() {
       confirmLabel: "Show phrase",
     });
     if (!confirmed) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const vault = await setup.keystore.read();
@@ -86,6 +90,7 @@ export function RecoveryScreen() {
         errorMessage(reason, "Unlock this device and try again."),
       );
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
   };
@@ -94,6 +99,32 @@ export function RecoveryScreen() {
     setPhrase(null);
     setTyped("");
   };
+
+  const revealed = phrase !== null;
+
+  // While the phrase is on screen it stays out of screenshots, recordings, and the app-switcher
+  // snapshot. If that block cannot be applied the phrase is hidden rather than shown unprotected.
+  usePreventScreenCaptureWhile(revealed, "recovery-phrase", () => {
+    setPhrase(null);
+    setTyped("");
+    showError(
+      "Couldn’t protect the phrase",
+      "The phrase was hidden because screenshots could not be blocked. Try again.",
+    );
+  });
+
+  // Background or inactive (app switcher, a call, Control Center) hides the phrase, so the
+  // snapshot taken on the way out never shows it and returning to the app starts hidden.
+  useEffect(() => {
+    if (!revealed) return;
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next !== "active") {
+        setPhrase(null);
+        setTyped("");
+      }
+    });
+    return () => subscription.remove();
+  }, [revealed]);
 
   if (!status) {
     return (

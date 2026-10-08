@@ -41,6 +41,7 @@ import {
   constantTimeEqual,
   createPairingSecret,
   decodeHello,
+  deriveDeviceId,
   derivePairingRendezvousId,
   encodeHello,
   encodePairingCode,
@@ -299,6 +300,12 @@ const fromWirePeer = (value: unknown, index: number, nowIso: string): Peer => {
     bytes(value.signingKey, `Device ${index}'s signing key`),
     bytes(value.agreementKey, `Device ${index}'s agreement key`),
   );
+  const deviceId = text(value.deviceId, `Device ${index}'s id`);
+  // The id is a hash of the signing key. Without this check a host could attach a key to an id it
+  // does not own, and the joiner would then trust that key for every op signed under that id.
+  if (deriveDeviceId(keys.signingKey) !== deviceId) {
+    fail(`Device ${index} in that roster does not match its signing key.`);
+  }
   const epoch = value.epoch;
   if (typeof epoch !== "number" || !Number.isSafeInteger(epoch) || epoch < 1) {
     fail(`Device ${index} in that roster has no vault epoch.`);
@@ -320,7 +327,7 @@ const fromWirePeer = (value: unknown, index: number, nowIso: string): Peer => {
     fail(`Device ${index} in that roster has a malformed revocation cutoff.`);
   }
   return {
-    deviceId: text(value.deviceId, `Device ${index}'s id`),
+    deviceId,
     name: optionalText(value.name, `Device ${index}'s name`),
     platform: optionalText(value.platform, `Device ${index}'s platform`),
     signingKey: keys.signingKey,

@@ -152,8 +152,11 @@ export abstract class BaseKeystore implements SyncKeystore {
       }
       if (container[0] !== GUARD_PASSPHRASE) {
         // Already open. Idempotent rather than an error: a caller that unlocks
-        // unconditionally at startup is doing the right thing.
-        this.record = container.slice(1);
+        // unconditionally at startup is doing the right thing. Validated like the gated path,
+        // so an unguarded record that does not decode fails here rather than on the next read.
+        const record = container.slice(1);
+        decodeVaultRecord(record);
+        this.cache(record);
         return;
       }
       // Deliberately not wrapped in a try/catch. `openPassphraseBackup` throws a
@@ -173,7 +176,7 @@ export abstract class BaseKeystore implements SyncKeystore {
           "locked",
         );
       }
-      this.record = record;
+      this.cache(record);
       this.passphrase = passphrase;
     });
   }
@@ -210,10 +213,17 @@ export abstract class BaseKeystore implements SyncKeystore {
     await this.writeContainer(container);
     // Only adopt the new record once the write succeeded: a failed write that had already
     // updated the cache would leave this session using a vault no other session can see.
-    if (this.record !== record) {
-      zeroize(this.record ?? undefined);
-      this.record = record;
-    }
+    this.cache(record);
+  }
+
+  /**
+   * Replaces the cached record, wiping the one it displaces. Every path that changes the cache
+   * goes through here, so no superseded copy of the key material is left in memory.
+   */
+  private cache(record: Uint8Array): void {
+    if (this.record === record) return;
+    zeroize(this.record ?? undefined);
+    this.record = record;
   }
 
   private forget(): void {

@@ -54,6 +54,22 @@ describe("evaluateAmountExpression", () => {
     expect(result).toEqual({ kind: "value", minor: 375, text: "3,75" });
   });
 
+  it("applies the minor-unit decimal rule to every typed operand", () => {
+    // A plain "12.555" is refused by the money rules, so an expression must not round it away.
+    expect(evaluate("12.555 + 0").kind).toBe("invalid");
+    expect(evaluate("0 + 12.555").kind).toBe("invalid");
+    expect(evaluate("2 × 1.005").kind).toBe("invalid");
+    expect(evaluate("1000 + 1.5", "JPY").kind).toBe("invalid");
+    expect(evaluate("12.55 + 0")).toEqual({
+      kind: "value",
+      minor: 1255,
+      text: "12.55",
+    });
+    // Division is the one place a result may need rounding; its operands must still be exact.
+    expect(value(evaluate("10 ÷ 3"))).toBe(333);
+    expect(evaluate("10.555 ÷ 3").kind).toBe("invalid");
+  });
+
   it("reports incomplete or impossible expressions as invalid", () => {
     expect(evaluate("12 +").kind).toBe("invalid");
     expect(evaluate("5 ÷ 0").kind).toBe("invalid");

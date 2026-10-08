@@ -5,12 +5,12 @@ import Animated, {
   Easing,
   ReduceMotion,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
 
+import { useMotionPreference } from "@/components/ui/motion";
 import { useQashyTheme } from "@/theme/theme";
 
 const PULSE_DURATION = 900;
@@ -37,7 +37,8 @@ export function Skeleton({
 }) {
   const theme = useQashyTheme();
   const { radius } = theme;
-  const reduceMotion = useReducedMotion();
+  // The pulse is opacity only, so it survives `minimal`; it is skipped only when `instant`.
+  const { instant: reduceMotion } = useMotionPreference();
   const opacity = useSharedValue(
     reduceMotion ? REDUCED_MOTION_OPACITY : PULSE_MIN,
   );

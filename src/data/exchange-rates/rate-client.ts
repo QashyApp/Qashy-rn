@@ -17,7 +17,7 @@ import {
 import { addRecurrence, isLocalDate } from "@/utils/date";
 
 /** How long a single request is allowed to take before it counts as a timeout. */
-const DEFAULT_TIMEOUT_MS = 10_000;
+export const DEFAULT_TIMEOUT_MS = 10_000;
 
 /** The longest span Frankfurter accepts in one `from`/`to` request. */
 const MAX_RANGE_DAYS = 366;
@@ -90,10 +90,29 @@ async function requestJson(
   url: string,
 ): Promise<unknown> {
   const controller = new AbortController();
-  const timeout = setTimeout(
-    () => controller.abort(),
-    deps.timeoutMs ?? DEFAULT_TIMEOUT_MS,
-  );
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // The deadline is its own promise, raced against the exchange, so the timeout still settles
+  // the request when a platform fetch ignores the abort signal during the body read.
+  const deadline = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new RateFetchError("Timed out reaching Frankfurter.", "timeout"));
+    }, deps.timeoutMs ?? DEFAULT_TIMEOUT_MS);
+  });
+  try {
+    // The timeout stays armed through the body read (headers *and* body), so a server that sends
+    // headers and then stalls cannot hang the caller.
+    return await Promise.race([exchangeJson(deps, url, controller), deadline]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function exchangeJson(
+  deps: RateClientDeps,
+  url: string,
+  controller: AbortController,
+): Promise<unknown> {
   let response: Response;
   try {
     // A browser's native `window.fetch` is branded: calling it as `deps.fetch(...)` makes
@@ -111,7 +130,7 @@ async function requestJson(
     });
   } catch {
     // Every network-layer failure lands here indistinguishably. The only distinction worth
-    // making is whether *our own* timeout fired the abort, since nothing else here ever calls
+    // making is whether *our own* deadline fired the abort, since nothing else here ever calls
     // `controller.abort()`.
     if (controller.signal.aborted) {
       throw new RateFetchError("Timed out reaching Frankfurter.", "timeout");
@@ -122,8 +141,6 @@ async function requestJson(
         : "Could not reach Frankfurter.",
       "offline",
     );
-  } finally {
-    clearTimeout(timeout);
   }
   if (!response.ok) {
     throw new RateFetchError(
@@ -135,6 +152,10 @@ async function requestJson(
   try {
     return await response.json();
   } catch {
+    // An abort during the body read is the same timeout as one during the headers.
+    if (controller.signal.aborted) {
+      throw new RateFetchError("Timed out reaching Frankfurter.", "timeout");
+    }
     throw new RateFetchError(
       "Frankfurter sent something that was not JSON.",
       "malformed",

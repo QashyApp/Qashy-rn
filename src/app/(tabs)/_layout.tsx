@@ -43,6 +43,7 @@ function useRestoreSectionOnSwitch(floating: boolean) {
   // Set when the style flips while a screen outside the tabs (/appearance) is on top: the new navigator
   // mounts underneath on its default route, so the section is restored once the user comes back.
   const pendingSection = useRef<TabSection | null>(null);
+  const restoreTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     currentPathname.current = pathname;
@@ -70,13 +71,22 @@ function useRestoreSectionOnSwitch(floating: boolean) {
     }
     // Only if the new navigator did not already land on the same section.
     // Deliberately not cancelled by this effect's cleanup: the new navigator's own initial route changes
-    // `pathname` right away, which would re-run the effect and drop the restore.
-    setTimeout(() => {
+    // `pathname` right away, which would re-run the effect and drop the restore. The pending timer is
+    // instead cleared when a newer one replaces it and when the layout unmounts.
+    if (restoreTimer.current !== null) clearTimeout(restoreTimer.current);
+    restoreTimer.current = setTimeout(() => {
+      restoreTimer.current = null;
       if (sectionOfPathname(currentPathname.current) !== section) {
         router.replace(`/${section}` as Href);
       }
     }, 0);
   }, [floating, pathname, router]);
+  useEffect(
+    () => () => {
+      if (restoreTimer.current !== null) clearTimeout(restoreTimer.current);
+    },
+    [],
+  );
 }
 
 function FloatingTabsLayout() {

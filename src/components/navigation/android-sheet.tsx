@@ -107,17 +107,34 @@ export function AndroidSheet({
   const level = useAnimationLevel();
 
   const [area, setArea] = useState(0);
-  const [keyboard, setKeyboard] = useState(0);
-  useEffect(() => {
-    const show = Keyboard.addListener("keyboardDidShow", (event) =>
-      setKeyboard(event.endCoordinates.height),
+  // The keyboard is measured against the sheet's own window frame, not by its raw height. With
+  // adjustResize (or an edge-to-edge resize) the window has already shrunk to the keyboard's top
+  // edge, so the overlap is 0; when the window is not resized, the overlap is the part of the
+  // frame the keyboard covers. Subtracting the raw height would count that space twice in the
+  // resized case.
+  const frameRef = useRef<View>(null);
+  const [frameBottom, setFrameBottom] = useState(0);
+  const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
+  const measureFrame = useCallback(() => {
+    frameRef.current?.measureInWindow((_x, y, _width, height) =>
+      setFrameBottom(y + height),
     );
-    const hide = Keyboard.addListener("keyboardDidHide", () => setKeyboard(0));
+  }, []);
+  useEffect(() => {
+    const show = Keyboard.addListener("keyboardDidShow", (event) => {
+      setKeyboardTop(event.endCoordinates.screenY);
+      measureFrame();
+    });
+    const hide = Keyboard.addListener("keyboardDidHide", () =>
+      setKeyboardTop(null),
+    );
     return () => {
       show.remove();
       hide.remove();
     };
-  }, []);
+  }, [measureFrame]);
+  const keyboard =
+    keyboardTop === null ? 0 : Math.max(0, frameBottom - keyboardTop);
 
   const expandedHeight = Math.max(0, area - keyboard - insets.top);
   const collapsedHeight = Math.min(
@@ -311,8 +328,12 @@ export function AndroidSheet({
   return (
     <SheetShellContext value={shell}>
       <View
+        ref={frameRef}
         style={{ flex: 1 }}
-        onLayout={(event) => setArea(event.nativeEvent.layout.height)}
+        onLayout={(event) => {
+          setArea(event.nativeEvent.layout.height);
+          measureFrame();
+        }}
       >
         <Animated.View
           style={[
@@ -320,9 +341,12 @@ export function AndroidSheet({
             scrimStyle,
           ]}
         >
+          {/* A pointer-only target: the close button is the one labeled control for screen readers. */}
           <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Close"
+            testID="android-sheet-scrim"
+            accessible={false}
+            importantForAccessibility="no"
+            accessibilityElementsHidden
             onPress={requestClose}
             style={{ flex: 1 }}
           />
@@ -337,6 +361,8 @@ export function AndroidSheet({
           }}
         >
           <Animated.View
+            role="dialog"
+            accessibilityLabel={title || undefined}
             accessibilityViewIsModal
             importantForAccessibility="yes"
             style={[

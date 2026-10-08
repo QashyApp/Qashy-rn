@@ -314,7 +314,8 @@ export const transactionInputOf = (
       ? { kind: "fixed", amountMinor: fee.amountMinor }
       : { kind: "percent", percent: fee.percent! }
     : fee;
-  return { ...rest, fee: feeInput };
+  // The stored rate is nullable (null = no rate snapshot); the save input takes it as optional.
+  return { ...rest, exchangeRate: rest.exchangeRate ?? undefined, fee: feeInput };
 };
 
 // ---------------------------------------------------------------------------

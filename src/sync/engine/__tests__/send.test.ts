@@ -18,9 +18,11 @@ import {
   loadSendSnapshot,
 } from "@/sync/engine/send";
 import { hasUnsealed, sealPending } from "@/sync/engine/sealer";
+import { toPeerRow } from "@/sync/engine/roster";
 import {
   BASE_CURRENCY,
   EPOCH,
+  NOW_ISO,
   makeVault,
   opRows,
   type TestDevice,
@@ -170,6 +172,27 @@ describe("buildBatch", () => {
     expect(outgoing.batch.roster.map((member) => member.deviceId)).toEqual([
       carol.deviceId,
     ]);
+  });
+
+  it("withholds a revoked author's ops above its cutoff and forwards the ones at or below it", async () => {
+    const [alice, bob, carol] = await makeVault(3);
+    await alice.storage.transact((tx) =>
+      tx
+        .table("syncPeers")
+        .put([toPeerRow(carol.asPeer({ revokedAt: NOW_ISO, revokedSeq: 1 }))]),
+    );
+    await hold(alice, await carol.commit([carol.body("categories", "c1")]));
+    await hold(alice, await carol.commit([carol.body("categories", "c2")]));
+
+    const outgoing = await outbox(alice, bob);
+
+    // Seq 1 is at the cutoff and still forwarded, so a peer that already accepted it stays
+    // consistent. Seq 2 was authored after the revocation and must not travel.
+    expect(
+      outgoing.batch.ops
+        .filter((op) => op.deviceId === carol.deviceId)
+        .map((op) => op.seq),
+    ).toEqual([1]);
   });
 
   it("skips what the peer already has", async () => {

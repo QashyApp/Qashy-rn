@@ -59,6 +59,25 @@ export function motionDurationsFor(motion: MotionSpec): MotionDurations {
   };
 }
 
+/**
+ * The in-app animation level and the system reduce-motion setting, folded into the two answers
+ * every animation needs:
+ *
+ * - `instant`: nothing animates. True at the `off` level or under system reduce-motion. Pass
+ *   `reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System` to Reanimated.
+ * - `travel`: content may move or scale. False at `minimal` (quick fades only), at `off`, and
+ *   under system reduce-motion. Opacity fades may still run when `travel` is false.
+ *
+ * This is the one place the two sources are combined. Every animated component reads it, so a
+ * level change applies everywhere at once.
+ */
+export function useMotionPreference(): { instant: boolean; travel: boolean } {
+  const systemReduce = useReducedMotion();
+  const level = useAnimationLevel();
+  const instant = systemReduce || level === "off";
+  return { instant, travel: !instant && level === "all" };
+}
+
 /** The active theme's durations, shortened to quick fades at the `minimal` animation level. */
 export function useMotionDurations(): MotionDurations {
   const { motion } = useQashyTheme();
@@ -646,9 +665,9 @@ function MotionPressableBase({
   entranceStyle,
   ...props
 }: MotionPressableProps & { entranceStyle: ReturnType<typeof useEntrance> }) {
-  const level = useAnimationLevel();
   // Press feedback is movement, so only the full level keeps it.
-  const reduceMotion = useReducedMotion() || level !== "all";
+  const { travel } = useMotionPreference();
+  const reduceMotion = !travel;
   const { motion, materialControls, text: themeText } = useQashyTheme();
   const layerEnabled = materialControls && stateLayer && !disabled;
   const layer = useSharedValue(0);

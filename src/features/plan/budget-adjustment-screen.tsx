@@ -237,7 +237,7 @@ export function BudgetAdjustmentScreen() {
                     literal
                     variant="caption"
                     muted
-                  >{`${item.date}${item.note ? ` · ${item.note}` : ""}`}</AppText>
+                  >{`${mediumDate(item.date, locale)}${item.note ? ` · ${item.note}` : ""}`}</AppText>
                 </View>
                 <TextButton
                   title="Delete"

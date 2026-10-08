@@ -42,6 +42,10 @@ import { useScrollCollapse } from "@/components/ui/use-scroll-collapse";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import type { TransactionRecord } from "@/domain/models";
+import {
+  markUpcomingPaid,
+  upcomingCurrencies,
+} from "@/features/transactions/mark-upcoming-paid";
 import { CollapsingSummaryTiles } from "@/features/transactions/summary-tiles";
 import { BatchEditSheet } from "@/features/transactions/list/batch-edit-sheet";
 import type { LedgerSection } from "@/features/transactions/list/sections";
@@ -50,6 +54,7 @@ import {
   type KindFilter,
 } from "@/features/transactions/list/transaction-month-list";
 import { useLocalization } from "@/localization/localization";
+import { useExchangeRateService } from "@/providers/exchange-rate-provider";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -98,6 +103,7 @@ const KIND_OPTIONS = [
 export function TransactionsScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
+  const exchangeRateService = useExchangeRateService();
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { isRtl, locale, t } = useLocalization();
@@ -344,9 +350,15 @@ export function TransactionsScreen() {
     if (resolvingId) return;
     setResolvingId(id);
     try {
+      const transaction = state.transactions.find((item) => item.id === id);
       await (action === "skip"
         ? repository.skipUpcoming(id)
-        : repository.confirmUpcoming(id));
+        : markUpcomingPaid(
+            repository,
+            exchangeRateService,
+            id,
+            transaction ? upcomingCurrencies(transaction) : [],
+          ));
       if (action === "confirm") hapticSuccess();
       else hapticSelection();
     } catch (reason) {

@@ -346,6 +346,25 @@ describe("pairing", () => {
     ]);
   });
 
+  it("refuses a roster row whose device id does not derive from its signing key", async () => {
+    const target = rig({
+      roster: (ids) => [
+        asPeer(ids.third, { deviceId: "a-device-id-it-does-not-own" }),
+      ],
+    });
+    const [hostSide, joinerSide] = await meet(target);
+    const outcome = await settle(
+      Promise.all([hostSide.confirm(), joinerSide.confirm()]),
+    );
+
+    // A joiner that accepted the pairing would record this key under an id its owner never chose,
+    // and then trust every op it saw under that id.
+    expect(outcome).toBeInstanceOf(Error);
+    expect((outcome as Error).message).toMatch(
+      /does not match its signing key/,
+    );
+  });
+
   it("prefers the authenticated identity over a roster row claiming to be the same device", async () => {
     const target = rig({
       roster: (ids) => [

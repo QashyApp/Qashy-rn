@@ -145,11 +145,19 @@ export class SignalingClient {
         else resolve();
       };
 
+      // A socket that has been given up on must not stay open: the server would keep a
+      // half-finished rendezvous alive for a device that has already moved on, and a late
+      // `onopen` would otherwise resurrect a session nobody is waiting for.
+      const abandon = () => {
+        this.dropSocket(socket);
+      };
+
       const timer = setTimeout(() => {
         const error = new RelayError(
           "The rendezvous server did not answer.",
           "unreachable",
         );
+        abandon();
         this.fail(error);
         settle(error);
       }, this.deps.openTimeoutMs ?? SIGNAL_OPEN_TIMEOUT_MS);
@@ -157,6 +165,7 @@ export class SignalingClient {
 
       const onAbort = () => {
         const error = new RelayError("Sync was cancelled.", "unreachable");
+        abandon();
         this.fail(error);
         settle(error);
       };
@@ -303,15 +312,22 @@ export class SignalingClient {
     if (this.closed) return;
     this.closed = true;
     this.fail(new RelayError("The rendezvous was closed.", "unreachable"));
-    const socket = this.socket;
-    this.socket = null;
-    if (socket) {
-      socket.onopen = null;
-      socket.onmessage = null;
-      socket.onerror = null;
-      socket.onclose = null;
-      socket.close();
-    }
+    if (this.socket) this.dropSocket(this.socket);
+  }
+
+  /**
+   * Detaches every handler from a socket and closes it, if it is the one this client holds.
+   *
+   * Handlers go first so the close itself cannot re-enter `fail` or `settle` through
+   * `onclose`.
+   */
+  private dropSocket(socket: RawSocket): void {
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    if (this.socket === socket) this.socket = null;
+    socket.close();
   }
 
   /**

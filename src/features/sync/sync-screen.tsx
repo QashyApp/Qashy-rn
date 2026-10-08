@@ -22,7 +22,7 @@
  */
 
 import { router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { RefreshControl, ScrollView, View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -69,6 +69,7 @@ export function SyncScreen() {
    */
   const [probed, setProbed] = useState<RelayHealth | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
+  const busyRef = useRef(false);
 
   // Read once per render, and passed down. Every relative time on the screen then agrees with
   // every other one, which a per-component clock read cannot promise. Above the early return
@@ -104,14 +105,28 @@ export function SyncScreen() {
     work: () => Promise<unknown>,
     failure: string,
   ) => {
-    if (busy) return;
+    // A ref, not `busy`: a second tap inside the same render would still see the old state.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(kind);
+    let acted = false;
     try {
       await work();
+      acted = true;
       await refresh();
     } catch (reason) {
-      showError(failure, errorMessage(reason, "Nothing was changed."));
+      // Only the action can claim "nothing was changed". Once it has succeeded, a failed refresh
+      // leaves the change in place and the message has to say so.
+      if (acted) {
+        showError(
+          "This change was saved",
+          errorMessage(reason, "Reopen this screen to see the current state."),
+        );
+      } else {
+        showError(failure, errorMessage(reason, "Nothing was changed."));
+      }
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   };

@@ -24,12 +24,18 @@
 import type { StorageAdapter } from "@/data/storage-adapter";
 import type { FinanceRepository } from "@/data/repository";
 import { fetch as expoFetch } from "expo/fetch";
-import { SYNC_META, readMeta, writeMeta } from "@/data/sync-store";
+import {
+  SYNC_META,
+  appendActivity,
+  readMeta,
+  writeMeta,
+} from "@/data/sync-store";
 import {
   deriveBucketId,
   deriveBucketToken,
   deriveContentKey,
   deriveRouteTag,
+  routeDayOf,
   toBase64Url,
 } from "@/sync/crypto";
 import {
@@ -37,6 +43,12 @@ import {
   type StoredVault,
   type SyncKeystore,
 } from "@/sync/keystore";
+import {
+  activityCode,
+  activityEntry,
+  transportDetail,
+} from "@/sync/engine/activity";
+import { activePeers, readRoster } from "@/sync/engine/roster";
 import { SyncSession, type ReconcileOutcome } from "@/sync/engine/session";
 import type { SyncTransport } from "@/sync/engine/transport";
 import { readEndpoints, type SyncEndpoints } from "@/sync/transport/endpoints";
@@ -54,6 +66,32 @@ import {
   type RelayHealth,
 } from "@/sync/transport/relay-health";
 import { nowIso as defaultNowIso } from "@/utils/entity";
+
+/**
+ * UTC days a relay poll accepts, counting today: today's tag and yesterday's.
+ *
+ * Two, so that a sender whose clock has just crossed midnight is still heard by a receiver whose
+ * clock has not yet done so. A blob older than that is addressed to a tag nobody polls for any
+ * more, which is the point of rotating.
+ */
+const RELAY_ROUTE_DAYS = 2;
+
+/**
+ * UTC days a file import accepts, counting today: the last thirty.
+ *
+ * A file is carried by hand and may be opened weeks after it was written, so it is held to a
+ * longer window than a relay blob. The window adds reach, not trust: every frame is still
+ * authenticated against its own sender, recipient, epoch and sequence before it is applied.
+ */
+export const FILE_ROUTE_WINDOW_DAYS = 30;
+
+/** The UTC day numbers ending at `today`, most recent first. */
+const daysEndingAt = (today: number, count: number): number[] =>
+  Array.from({ length: count }, (_, back) => today - back);
+
+/** A device's route tag for one UTC day, under this vault's root key and epoch. */
+const tagOn = (vault: StoredVault, deviceId: string, day: number): string =>
+  deriveRouteTag(vault.vaultKey, vault.epoch, day, deviceId);
 
 /**
  * Why a pass did nothing.
@@ -93,7 +131,10 @@ export interface BundleExport {
 
 export interface BundleImport {
   readonly reason: SyncPassReason;
-  /** The device that wrote the file, as it claims. Shown, never trusted — see `importBundle`. */
+  /**
+   * The device that wrote the file, resolved against this vault's roster. Empty when the file
+   * was not written by a device this vault knows about.
+   */
   readonly from: string;
   /** Frames in the file addressed to this device. */
   readonly accepted: number;
@@ -156,6 +197,17 @@ export class SyncRuntime {
    */
   private lastUpload: "ok" | "failed" | null = null;
 
+  /**
+   * The pass currently using the wiring, if any.
+   *
+   * Only one pass may run at a time. Triggers arrive in bursts — `visibilitychange`, `focus`
+   * and `pageshow` fire together on web — and two passes at once would each wire, reuse, or
+   * close the same transports, so one would tear a connection out from under the other.
+   */
+  private inFlight: Promise<SyncPass> | null = null;
+  /** The one follow-up pass owed to triggers that arrived during `inFlight`. */
+  private queuedPass: Promise<SyncPass> | null = null;
+
   constructor(private readonly deps: SyncRuntimeDeps) {}
 
   /**
@@ -197,7 +249,31 @@ export class SyncRuntime {
    * pre-flight probe reports as fine. Checking afterwards folds this pass's uploads into the
    * verdict, so "relay errors" appears on the launch it happened rather than the next one.
    */
-  async reconcile(signal?: AbortSignal): Promise<SyncPass> {
+  reconcile(signal?: AbortSignal): Promise<SyncPass> {
+    if (this.inFlight) {
+      // Coalesced: however many triggers arrive during a pass, exactly one more pass runs after
+      // it, and every caller in the meantime shares that one promise.
+      if (!this.queuedPass) {
+        this.queuedPass = this.inFlight
+          .then(
+            () => undefined,
+            () => undefined,
+          )
+          .then(() => {
+            this.queuedPass = null;
+            return this.reconcile(signal);
+          });
+      }
+      return this.queuedPass;
+    }
+    const run = this.runPass(signal).finally(() => {
+      this.inFlight = null;
+    });
+    this.inFlight = run;
+    return run;
+  }
+
+  private async runPass(signal?: AbortSignal): Promise<SyncPass> {
     const { storage } = this.deps;
 
     const [enabled, endpoints] = await storage.transact(async (tx) => {
@@ -210,13 +286,13 @@ export class SyncRuntime {
 
     if (!enabled) {
       // Closed rather than left wired. "Off" that keeps a transport live is not off.
-      await this.close();
+      await this.dropWiring();
       return { reason: "disabled", outcome: null, health: await this.health() };
     }
 
     const vault = await this.readVault();
     if (typeof vault === "string") {
-      await this.close();
+      await this.dropWiring();
       return { reason: vault, outcome: null, health: await this.health() };
     }
 
@@ -234,8 +310,22 @@ export class SyncRuntime {
     return { reason: "ok", outcome, health };
   }
 
-  /** Tears down every connection. Called on sign-out, reset, and when sync is switched off. */
+  /**
+   * Tears down every connection. Called on sign-out, reset, and when sync is switched off.
+   *
+   * Waits for a pass in flight first, because that pass is using these transports and closing
+   * them under it would fail its exchange partway through. Pass errors are that pass's own.
+   */
   async close(): Promise<void> {
+    if (this.inFlight) await this.inFlight.catch(() => undefined);
+    await this.dropWiring();
+  }
+
+  /**
+   * Closes the cached transports without waiting. Used from inside a pass, which cannot wait
+   * on itself.
+   */
+  private async dropWiring(): Promise<void> {
     const held = this.wiring;
     this.wiring = null;
     this.lastUpload = null;
@@ -305,7 +395,7 @@ export class SyncRuntime {
     if (typeof wired === "string") {
       return {
         reason: wired,
-        from: bundle.from,
+        from: "",
         accepted: 0,
         skipped: bundle.frames.length,
         applied: 0,
@@ -314,8 +404,27 @@ export class SyncRuntime {
     }
 
     try {
+      // The file names its sender only by route tag, so the sender is found by recomputing
+      // each roster member's tag over the file window. A file from a device this vault does not
+      // know is refused whole, which is also what the receive path would do frame by frame.
+      const senderId = await this.resolveSender(bundle.from, wired.vault);
+      if (!senderId) {
+        // Nothing here can open these frames, so the ones addressed to this device are refused
+        // and the rest are, as always, simply for somebody else.
+        const addressed = bundle.frames.filter((held) =>
+          wired.recipients.has(held.to),
+        ).length;
+        return {
+          reason: "ok",
+          from: "",
+          accepted: 0,
+          skipped: bundle.frames.length - addressed,
+          applied: 0,
+          rejected: addressed,
+        };
+      }
       const channel = await wired.file.connect({
-        deviceId: bundle.from,
+        deviceId: senderId,
         name: "",
       });
       const collected: { frame: Uint8Array; seq: number }[] = [];
@@ -324,7 +433,7 @@ export class SyncRuntime {
       });
       // `ingest` drops frames addressed to another device by comparing route tags, so what is
       // collected is exactly this device's share of the file.
-      wired.file.ingest(bundle);
+      wired.file.ingest({ ...bundle, from: senderId });
       detach();
 
       let applied = 0;
@@ -341,7 +450,7 @@ export class SyncRuntime {
 
       return {
         reason: "ok",
-        from: bundle.from,
+        from: senderId,
         accepted: collected.length,
         skipped: bundle.frames.length - collected.length,
         applied,
@@ -368,6 +477,48 @@ export class SyncRuntime {
     const vault = await this.readVault();
     if (typeof vault === "string") return;
     await this.buildRelay(vault, endpoints)?.purge();
+  }
+
+  /** The UTC day number now, from the same clock the rest of the runtime uses. */
+  private today(): number {
+    return routeDayOf((this.deps.now ?? Date.now)());
+  }
+
+  /**
+   * The recipient tags a file import accepts for this device: its own tag on each day of the file
+   * window. Built per call, so a file opened on a later day is still matched.
+   */
+  private fileRecipientTags(vault: StoredVault): ReadonlySet<string> {
+    const self = vault.identity.deviceId;
+    return new Set(
+      daysEndingAt(this.today(), FILE_ROUTE_WINDOW_DAYS).map((day) =>
+        tagOn(vault, self, day),
+      ),
+    );
+  }
+
+  /**
+   * The roster device a bundle's `from` names, or `''` when none does.
+   *
+   * Compares route tags over the file window, which is how every other device addresses this one,
+   * so a file reveals nothing a relay blob would not. A bare device id is also accepted, because
+   * files exported before the sender was blinded carry one; the frames still have to open under
+   * that id, so accepting it adds no trust.
+   */
+  private async resolveSender(
+    claimed: string,
+    vault: StoredVault,
+  ): Promise<string> {
+    const roster = await this.deps.storage.transact((tx) => readRoster(tx));
+    const days = daysEndingAt(this.today(), FILE_ROUTE_WINDOW_DAYS);
+    for (const peer of roster.values()) {
+      if (peer.deviceId === vault.identity.deviceId) continue;
+      if (claimed === peer.deviceId) return peer.deviceId;
+      for (const day of days) {
+        if (tagOn(vault, peer.deviceId, day) === claimed) return peer.deviceId;
+      }
+    }
+    return "";
   }
 
   /** The vault, or the reason there isn't one. */
@@ -465,7 +616,13 @@ export class SyncRuntime {
    * transport with nothing to keep alive — there is no connection to preserve between passes.
    */
   private async fileWiring(): Promise<
-    | { readonly file: FileTransport; readonly session: SyncSession }
+    | {
+        readonly file: FileTransport;
+        readonly session: SyncSession;
+        readonly vault: StoredVault;
+        /** The tags this device accepts on import, over the file window. */
+        readonly recipients: ReadonlySet<string>;
+      }
     | Exclude<SyncPassReason, "ok">
   > {
     const enabled = await this.deps.storage.transact(async (tx) => {
@@ -480,12 +637,20 @@ export class SyncRuntime {
     const vault = await this.readVault();
     if (typeof vault === "string") return vault;
 
+    const today = this.today();
+    const recipients = this.fileRecipientTags(vault);
     const file = new FileTransport({
       deviceId: vault.identity.deviceId,
-      selfTag: deriveRouteTag(vault.vaultKey, vault.identity.deviceId),
-      tagFor: (peerId) => deriveRouteTag(vault.vaultKey, peerId),
+      selfTag: tagOn(vault, vault.identity.deviceId, today),
+      recipientTags: recipients,
+      tagFor: (peerId) => tagOn(vault, peerId, today),
     });
-    return { file, session: this.buildSession(vault, [file]) };
+    return {
+      file,
+      session: this.buildSession(vault, [file]),
+      vault,
+      recipients,
+    };
   }
 
   private buildRelay(
@@ -493,7 +658,11 @@ export class SyncRuntime {
     endpoints: SyncEndpoints,
   ): RelayTransport | null {
     if (!endpoints.relayUrl || !endpoints.relayEnabled) return null;
-    const { storage } = this.deps;
+    const { storage, onError } = this.deps;
+    const self = vault.identity.deviceId;
+    // Tags are derived on each call, against the day that is current then. A channel or a
+    // transport built before midnight therefore addresses and accepts the new day's tags after it.
+    const today = () => this.today();
 
     return new RelayTransport({
       fetch: this.deps.fetch ?? expoFetch,
@@ -501,8 +670,30 @@ export class SyncRuntime {
       baseUrl: endpoints.relayUrl,
       bucketId: deriveBucketId(vault.vaultKey),
       token: toBase64Url(deriveBucketToken(vault.vaultKey)),
-      selfTag: deriveRouteTag(vault.vaultKey, vault.identity.deviceId),
-      tagFor: (peerId) => deriveRouteTag(vault.vaultKey, peerId),
+      selfTag: () => tagOn(vault, self, today()),
+      recipientTags: () =>
+        new Set(
+          daysEndingAt(today(), RELAY_ROUTE_DAYS).map((day) =>
+            tagOn(vault, self, day),
+          ),
+        ),
+      tagFor: (peerId) => tagOn(vault, peerId, today()),
+      // Only active roster members may send to this device, each under today's and yesterday's
+      // tag. Read per poll, so a device revoked since the last one stops being held for at once.
+      senderTags: async () => {
+        const roster = await storage.transact((tx) => readRoster(tx));
+        const days = daysEndingAt(today(), RELAY_ROUTE_DAYS);
+        const senders = new Map<string, string>();
+        for (const peer of activePeers(roster)) {
+          if (peer.deviceId === self) continue;
+          for (const day of days) {
+            senders.set(tagOn(vault, peer.deviceId, day), peer.deviceId);
+          }
+        }
+        return senders;
+      },
+      onPollError: (error) => this.notePollFailure(error),
+      onDropped: (error) => onError?.(error),
       // The cursor is device-local and non-secret: it counts slots in the bucket, and a
       // reader who knew it would learn how far behind this device is and nothing else.
       readCursor: () =>
@@ -521,6 +712,39 @@ export class SyncRuntime {
       onUpload: (error) => this.noteUpload(error),
       jitterMs: this.deps.uploadJitterMs,
     });
+  }
+
+  /**
+   * A bucket that could not be read, recorded like any other relay failure.
+   *
+   * Counted toward the same degraded verdict as failed uploads, and logged so the user can see
+   * *why* the relay reads as broken. Written through the same serial chain as health so two
+   * failures cannot both read the same count.
+   */
+  private notePollFailure(error: unknown): void {
+    const { storage, nowIso = defaultNowIso, onError } = this.deps;
+    onError?.(error);
+    this.healthWrites = this.healthWrites
+      .then(async () => {
+        const at = nowIso();
+        await storage.transact(
+          async (tx) => {
+            await noteRelayFailure(tx, error, at);
+            await appendActivity(tx, [
+              activityEntry({
+                kind: "relay",
+                recordedAt: at,
+                code: activityCode(error),
+                detail: transportDetail(error),
+              }),
+            ]);
+          },
+          { silent: true },
+        );
+      })
+      .catch((failure: unknown) => {
+        onError?.(failure);
+      });
   }
 
   private noteUpload(error: unknown | null): void {

@@ -138,12 +138,15 @@ export function MergeScreen() {
 
   const commit = async () => {
     if (busy || !chosen.length || preview?.error) return;
+    const combines = chosen.some((group) => group.combinesOpeningBalances);
     const confirmed = await confirmDestructive({
       title: "Merge these records?",
       // The second sentence is the part people do not expect. Retargeting is what makes a merge
-      // safe — no transaction is orphaned — and it is also what makes it wide.
-      message:
-        "The copies are deleted and everything that referred to them is pointed at the record you kept. Your totals do not change, but this cannot be undone from here.",
+      // safe — no transaction is orphaned — and it is also what makes it wide. Opening balances
+      // are added on the kept account, which is what keeps the totals where they were.
+      message: combines
+        ? "The copies are deleted, everything that referred to them is pointed at the record you kept, and their opening balances are added to it. Your totals do not change, but this cannot be undone from here."
+        : "The copies are deleted and everything that referred to them is pointed at the record you kept. Your totals do not change, but this cannot be undone from here.",
       confirmLabel: "Merge",
     });
     if (!confirmed) return;
@@ -353,13 +356,18 @@ function GroupRow({
   // `group.label` is the user's own name for the record, so it is never translated. The count
   // beside it is fixed copy and is resolved here, then the whole line renders verbatim.
   const copies = group.mergeIds.length;
+  const removal = t(
+    copies === 1
+      ? "Keep this one, remove 1 copy"
+      : `Keep this one, remove ${copies} copies`,
+  );
+  // Said on the row, not only in the confirmation, so the person sees which balances move before
+  // they tick it. The balance shown afterwards is the sum either way.
   const detail = blocked
-    ? group.blocked!
-    : t(
-        copies === 1
-          ? "Keep this one, remove 1 copy"
-          : `Keep this one, remove ${copies} copies`,
-      );
+    ? t(group.blocked!)
+    : group.combinesOpeningBalances
+      ? `${removal}. ${t("Opening balances will be added together.")}`
+      : removal;
 
   return (
     <MotionPressable

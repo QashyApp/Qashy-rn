@@ -23,6 +23,20 @@ import type { ThemeScheme } from "@/theme/themes/types";
 export const TEXT_MIN_CONTRAST = 4.5;
 export const STATUS_MIN_CONTRAST = 3;
 
+type Key = keyof BaseTokens;
+
+/**
+ * Every surface a text-bearing color can sit on: the page and cards, plus the sunken form wells and
+ * muted choice-list wells that carry text too.
+ */
+export const TEXT_SURFACES: readonly Key[] = [
+  "surface",
+  "surfaceElevated",
+  "background",
+  "surfaceSunken",
+  "surfaceMuted",
+];
+
 export interface ContrastResult {
   palette: BaseTokens;
   /** One line per changed color, e.g. `palette.light.textMuted raised from #aaaaaa to #767676 to keep 4.5:1 against surface`. */
@@ -30,8 +44,6 @@ export interface ContrastResult {
   /** Requirements no single color can satisfy (e.g. one text color that must read on both a light and a dark surface). */
   unsatisfied: string[];
 }
-
-type Key = keyof BaseTokens;
 
 function sameColor(first: string, second: string) {
   return first.toUpperCase() === second.toUpperCase();
@@ -57,9 +69,10 @@ export function clampPaletteContrast(
     }
   };
 
-  // Text must read on every surface it can sit on. Moving it toward the readable extreme of one
-  // surface can in principle break another, so iterate until stable (a few passes at most).
-  const surfaces: readonly Key[] = ["surface", "surfaceElevated", "background"];
+  // Every surface that can carry text (form inputs and choice-list wells included). Moving text
+  // toward the readable extreme of one surface can in principle break another, so iterate until
+  // stable (a few passes at most).
+  const surfaces: readonly Key[] = TEXT_SURFACES;
   for (let pass = 0; pass < 3; pass += 1) {
     const snapshot = palette.text;
     for (const surface of surfaces)
@@ -72,9 +85,11 @@ export function clampPaletteContrast(
     if (sameColor(snapshot, palette.text)) break;
   }
 
-  clamp("textMuted", "surface", palette.text, TEXT_MIN_CONTRAST);
+  for (const surface of surfaces)
+    clamp("textMuted", surface, palette.text, TEXT_MIN_CONTRAST);
   for (const key of ["positive", "negative", "warning"] as const) {
-    clamp(key, "surface", palette.text, STATUS_MIN_CONTRAST);
+    for (const surface of surfaces)
+      clamp(key, surface, palette.text, STATUS_MIN_CONTRAST);
   }
   // Content colors of the tonal containers read on their own container, not on the page.
   clamp(
@@ -105,10 +120,12 @@ export function clampPaletteContrast(
       );
     }
   };
-  for (const surface of surfaces) check("text", surface, TEXT_MIN_CONTRAST);
-  check("textMuted", "surface", TEXT_MIN_CONTRAST);
-  for (const key of ["positive", "negative", "warning"] as const)
-    check(key, "surface", STATUS_MIN_CONTRAST);
+  for (const surface of surfaces) {
+    check("text", surface, TEXT_MIN_CONTRAST);
+    check("textMuted", surface, TEXT_MIN_CONTRAST);
+    for (const key of ["positive", "negative", "warning"] as const)
+      check(key, surface, STATUS_MIN_CONTRAST);
+  }
   check("onSecondaryContainer", "secondaryContainer", TEXT_MIN_CONTRAST);
   check("onTertiaryContainer", "tertiaryContainer", TEXT_MIN_CONTRAST);
 

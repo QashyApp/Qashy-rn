@@ -34,6 +34,7 @@ import {
 import { toPeerRow, toRosterMember } from "@/sync/engine/roster";
 import { MAX_CLOCK_SKEW_MS, emptyMeta, hashOp, sealOp } from "@/sync/oplog";
 import { receiveBatch } from "@/sync/engine/receive";
+import { decodeBatch } from "@/sync/engine/batch";
 import { SyncEngineError } from "@/sync/engine/types";
 import { SYNC_CONTROL_ENTITY } from "@/sync/revocation";
 import type { EntityType } from "@/domain/models";
@@ -169,19 +170,30 @@ describe("receiveBatch — trust", () => {
     ]);
   });
 
-  it("learns a third device from an authenticated roster before verifying its forwarded op", async () => {
+  it("learns a third device from a signed add control before verifying its forwarded op", async () => {
     const [alice, bob, carol] = await makeVault(3);
     await bob.storage.transact((tx) =>
       tx.table("syncPeers").delete([carol.deviceId]),
     );
 
-    const carolOps = carol.author([carol.body("accounts", "account-1")]);
-    const batch = alice.batch(carolOps, {
+    // The add is what authorizes carol; the roster snapshot alone never does.
+    const addControl = {
+      ...alice.body("accounts", "add-carol"),
+      entityType: SYNC_CONTROL_ENTITY as EntityType,
+      entityId: "revocation",
+      kind: "set" as const,
+      payload: { control: "add", deviceId: carol.deviceId },
+    };
+    const ops = [
+      ...alice.author([addControl]),
+      ...carol.author([carol.body("accounts", "account-1")]),
+    ];
+    const batch = alice.batch(ops, {
       roster: [toRosterMember(carol.asPeer())],
     });
     const outcome = await receiveBatch(bob.deps, batch);
 
-    expect(outcome.stored).toBe(1);
+    expect(outcome.stored).toBe(2);
     expect(await peerRow(bob, carol.deviceId)).toMatchObject({
       peerId: carol.deviceId,
       revokedAt: null,
@@ -248,10 +260,17 @@ describe("receiveBatch — trust", () => {
     };
     await receiveBatch(bob.deps, alice.batch(alice.author([control])));
 
+    // The cutoff is the signed value. It is not raised to the chain position bob happens to
+    // hold, because two devices holding different ops would then disagree about it.
     expect(await peerRow(bob, carol.deviceId)).toMatchObject({
       revokedAt: NOW_ISO,
-      revokedSeq: 2,
+      revokedSeq: 0,
     });
+    // Ops bob already stored stay stored; the cutoff only governs what is accepted from now.
+    const carolHeld = (await opRows(bob)).filter(
+      (row) => row.deviceId === carol.deviceId,
+    );
+    expect(carolHeld).toHaveLength(2);
   });
 
   it("does not let a roster cutoff reject a device’s history", async () => {
@@ -293,6 +312,45 @@ describe("receiveBatch — trust", () => {
     expect(await rejections(bob)).toMatchObject([
       { code: "unknownAuthor", peerId: alice.deviceId },
     ]);
+  });
+
+  it("refuses a roster snapshot that introduces a device with no authenticated add control", async () => {
+    const [alice, bob, ghost] = await makeVault(3);
+    await bob.storage.transact((tx) =>
+      tx.table("syncPeers").delete([ghost.deviceId]),
+    );
+
+    const ops = ghost.author([ghost.body("accounts", "account-1")]);
+    await expectRejected(
+      bob,
+      alice.batch(ops, { roster: [toRosterMember(ghost.asPeer())] }),
+    );
+
+    expect(await opRows(bob)).toHaveLength(0);
+    expect(await peerRow(bob, ghost.deviceId)).toBeFalsy();
+  });
+
+  it("does not authorize a device through an add control authored by an unknown device", async () => {
+    const [alice, bob, ghost, carol] = await makeVault(4);
+    await bob.storage.transact((tx) =>
+      tx.table("syncPeers").delete([ghost.deviceId, carol.deviceId]),
+    );
+
+    const forgedAdd = {
+      ...ghost.body("accounts", "add-carol"),
+      entityType: SYNC_CONTROL_ENTITY as EntityType,
+      entityId: "revocation",
+      kind: "set" as const,
+      payload: { control: "add", deviceId: carol.deviceId },
+    };
+    const ops = [
+      ...ghost.author([forgedAdd]),
+      ...carol.author([carol.body("accounts", "account-1")]),
+    ];
+    await expectRejected(bob, alice.batch(ops));
+
+    expect(await opRows(bob)).toHaveLength(0);
+    expect(await peerRow(bob, carol.deviceId)).toBeFalsy();
   });
 });
 
@@ -423,6 +481,25 @@ describe("receiveBatch — history", () => {
     expect(await rejections(bob)).toMatchObject([{ code: "chainBreak" }]);
   });
 
+  it("refuses a first op on a fresh device whose prevHash is not genesis", async () => {
+    const [alice, bob] = await makeVault();
+    const [first] = alice.author([alice.body("accounts", "account-1")]);
+
+    // Validly signed by Alice, but claims a predecessor that no chain Bob holds contains. Bob
+    // holds nothing from Alice, so the only honest seq-1 prevHash is the genesis hash. A fresh
+    // device must not anchor on whatever an incoming op claims.
+    const detached = { ...first, prevHash: "f".repeat(64) };
+    const forged = sealOp(
+      { ...detached, opHash: hashOp(detached.prevHash, detached) },
+      alice.identity.signing.secretKey,
+    );
+    await expectRejected(bob, alice.batch([forged]));
+
+    expect(await opRows(bob)).toHaveLength(0);
+    expect(bob.repository.applied).toHaveLength(0);
+    expect(await rejections(bob)).toMatchObject([{ code: "chainBreak" }]);
+  });
+
   it("accepts an overlapping range, keeping only what is new", async () => {
     const [alice, bob] = await makeVault();
     const ops = alice.author([
@@ -510,6 +587,26 @@ describe("receiveBatch — forward compatibility", () => {
     ).resolves.toHaveProperty("size", 1);
   });
 
+  it("refuses a full-state snapshot whose clock is far ahead, writing nothing", async () => {
+    const [alice, bob] = await makeVault();
+    const future = alice.body(
+      "accounts",
+      "account-1",
+      MAX_CLOCK_SKEW_MS + 60_000,
+    ).hlc;
+    const state = emptyMeta("accounts", "account-1", future);
+
+    await expectRejected(
+      bob,
+      alice.batch([], { fullState: [state], heads: { [alice.deviceId]: 9 } }),
+    );
+
+    await expect(
+      bob.storage.transact((tx) => readStates(tx, ["accounts:account-1"])),
+    ).resolves.toHaveProperty("size", 0);
+    expect(bob.repository.flat).toHaveLength(0);
+  });
+
   it("rejects a create whose payload identity disagrees with its authenticated entity key", async () => {
     const [alice, bob] = await makeVault();
     const ops = alice.author([
@@ -570,6 +667,60 @@ describe("receiveBatch — forward compatibility", () => {
     ).rejects.toMatchObject({ code: "badBatch" });
     expect(await opRows(bob)).toHaveLength(0);
   });
+
+  it("refuses a full-state snapshot whose ledger group is partial, writing nothing", async () => {
+    const [alice, bob] = await makeVault();
+    const hlc = alice.body("transactions", "txn-1").hlc;
+    // Only amountMinor of the ledger group arrives. A whole-state merge would keep that value
+    // and erase currency, date and rate, which no device ever held together.
+    const state = {
+      ...emptyMeta("transactions", "txn-1", hlc),
+      registers: { ledger: { hlc, value: { amountMinor: 999_999 } } },
+    };
+
+    await expectRejected(
+      bob,
+      alice.batch([], { fullState: [state], heads: { [alice.deviceId]: 9 } }),
+    );
+
+    await expect(
+      bob.storage.transact((tx) => readStates(tx, ["transactions:txn-1"])),
+    ).resolves.toHaveProperty("size", 0);
+    expect(await opRows(bob)).toHaveLength(0);
+    expect(bob.repository.flat).toHaveLength(0);
+  });
+});
+
+describe("decodeBatch — chain head names", () => {
+  // Decoding is the wire boundary, so these go through the bytes a peer would actually send.
+  const wireWithHeads = (
+    alice: TestDevice,
+    heads: Record<string, unknown>,
+  ): Uint8Array =>
+    new TextEncoder().encode(
+      JSON.stringify({ ...alice.batch([]), heads: heads }),
+    );
+
+  it("refuses a head naming a device id outside the shape every id is minted in", async () => {
+    const [alice] = await makeVault();
+
+    expect(() =>
+      decodeBatch(wireWithHeads(alice, { "not a device": 1 })),
+    ).toThrow(SyncEngineError);
+  });
+
+  it.each(["__proto__", "constructor"])(
+    "refuses a head named %s instead of letting it reach the object's prototype",
+    async (name) => {
+      const [alice] = await makeVault();
+      // JSON.parse keeps this as an own property; a literal would rewrite the prototype.
+      const heads = JSON.parse(`{"${name}": 1}`) as Record<string, unknown>;
+
+      expect(() => decodeBatch(wireWithHeads(alice, heads))).toThrow(
+        SyncEngineError,
+      );
+    },
+  );
 });
 
 describe("receiveBatch — quarantine", () => {

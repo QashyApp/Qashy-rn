@@ -19,11 +19,18 @@
  */
 
 import type {
+  Account,
   Budget,
   BudgetPeriodSnapshot,
   Category,
   FinanceEntity,
+  FinanceState,
 } from "@/domain/models";
+import {
+  account as accountFixture,
+  budget as budgetFixture,
+  category as categoryFixture,
+} from "@/sync/oplog/__tests__/helpers";
 import {
   BASE_CURRENCY,
   expectConverged,
@@ -561,5 +568,196 @@ describe("merging duplicates", () => {
       "no longer exists",
     );
     expect(live(devices[0].state.tags).map((row) => row.id)).toEqual(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Merge rules that do not need two devices: what a confirmed group does to the numbers and the
+// references, checked on hand-built state so each rule is the only thing that varies.
+// ---------------------------------------------------------------------------
+
+const stateWith = (over: Partial<FinanceState>): FinanceState =>
+  ({
+    ready: true,
+    settings: null,
+    accounts: [],
+    categories: [],
+    tags: [],
+    transactions: [],
+    budgets: [],
+    budgetPeriods: [],
+    budgetAdjustments: [],
+    goals: [],
+    contributions: [],
+    recurringRules: [],
+    exchangeRates: [],
+    ...over,
+  }) as unknown as FinanceState;
+
+const group = (
+  kind: DuplicateGroup["kind"],
+  keepId: string,
+  mergeIds: string[],
+): DuplicateGroup => ({ kind, keepId, mergeIds, label: keepId, blocked: null });
+
+const recordOf = (
+  records: ReturnType<typeof planMerge>["records"],
+  id: string,
+) => records.find((record) => record.entity.id === id);
+
+describe("merge rules on hand-built state", () => {
+  describe("opening balances", () => {
+    it("adds the copies' opening balances onto the account kept", () => {
+      const state = stateWith({
+        accounts: [
+          accountFixture({
+            id: "acc-keep",
+            name: "Cash",
+            openingBalanceMinor: 1_000,
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+          accountFixture({
+            id: "acc-copy",
+            name: "Cash",
+            openingBalanceMinor: 250,
+            createdAt: "2026-01-02T00:00:00.000Z",
+          }),
+        ],
+      });
+      const [suggested] = suggestDuplicates(state);
+      expect(suggested).toMatchObject({
+        keepId: "acc-keep",
+        mergeIds: ["acc-copy"],
+        blocked: null,
+        combinesOpeningBalances: true,
+      });
+
+      const plan = planMerge(state, [suggested]);
+      expect(
+        (recordOf(plan.records, "acc-keep")!.entity as Account)
+          .openingBalanceMinor,
+      ).toBe(1_250);
+      expect(recordOf(plan.records, "acc-copy")!.entity.deletedAt).toBeTruthy();
+    });
+
+    it("says nothing about balances when the copies all start at zero", () => {
+      const state = stateWith({
+        accounts: [
+          accountFixture({
+            id: "acc-keep",
+            name: "Cash",
+            openingBalanceMinor: 0,
+            createdAt: "2026-01-01T00:00:00.000Z",
+          }),
+          accountFixture({
+            id: "acc-copy",
+            name: "Cash",
+            openingBalanceMinor: 0,
+            createdAt: "2026-01-02T00:00:00.000Z",
+          }),
+        ],
+      });
+      const [suggested] = suggestDuplicates(state);
+      expect(suggested.combinesOpeningBalances).toBeFalsy();
+      // Nothing to add, so the kept account is not rewritten at all.
+      expect(
+        recordOf(planMerge(state, [suggested]).records, "acc-keep"),
+      ).toBeUndefined();
+    });
+
+    it("blocks the merge rather than overflowing the safe range", () => {
+      const huge = 9_000_000_000_000_000;
+      const state = stateWith({
+        accounts: [
+          accountFixture({
+            id: "acc-keep",
+            name: "Cash",
+            openingBalanceMinor: huge,
+          }),
+          accountFixture({
+            id: "acc-copy",
+            name: "Cash",
+            openingBalanceMinor: huge,
+          }),
+        ],
+      });
+      const [suggested] = suggestDuplicates(state);
+      expect(suggested.blocked).toMatch(/outside the supported range/);
+      expect(() => planMerge(state, [suggested])).toThrow(
+        /outside the supported range/,
+      );
+    });
+  });
+
+  describe("chained merges", () => {
+    const state = stateWith({
+      accounts: [
+        accountFixture({ id: "acc-a", name: "A" }),
+        accountFixture({ id: "acc-b", name: "B" }),
+        accountFixture({ id: "acc-c", name: "C" }),
+      ],
+    });
+    const keepA = group("accounts", "acc-a", ["acc-b"]);
+    const keepB = group("accounts", "acc-b", ["acc-c"]);
+
+    it("refuses a record that one group keeps and another merges away, in either order", () => {
+      expect(() => planMerge(state, [keepA, keepB])).toThrow(
+        "already being merged into another",
+      );
+      expect(() => planMerge(state, [keepB, keepA])).toThrow(
+        "already being merged into another",
+      );
+    });
+  });
+
+  describe("per-category budget limits", () => {
+    it("keeps the surviving category's own limit when two limits collapse", () => {
+      const state = stateWith({
+        categories: [
+          categoryFixture({ id: "cat-keep", name: "Food" }),
+          categoryFixture({ id: "cat-copy", name: "Food" }),
+        ],
+        budgets: [
+          budgetFixture({
+            id: "bud-1",
+            categoryLimits: [
+              { categoryId: "cat-copy", limitMinor: 500 },
+              { categoryId: "cat-keep", limitMinor: 900 },
+            ],
+          }),
+        ],
+      });
+      const plan = planMerge(state, [
+        group("categories", "cat-keep", ["cat-copy"]),
+      ]);
+      expect(
+        (recordOf(plan.records, "bud-1")!.entity as Budget).categoryLimits,
+      ).toEqual([{ categoryId: "cat-keep", limitMinor: 900 }]);
+    });
+
+    it("falls back to the loser whose id sorts first when the survivor has no limit", () => {
+      const state = stateWith({
+        categories: [
+          categoryFixture({ id: "cat-keep", name: "Food" }),
+          categoryFixture({ id: "cat-z", name: "Food old" }),
+          categoryFixture({ id: "cat-y", name: "Food older" }),
+        ],
+        budgets: [
+          budgetFixture({
+            id: "bud-1",
+            categoryLimits: [
+              { categoryId: "cat-z", limitMinor: 300 },
+              { categoryId: "cat-y", limitMinor: 200 },
+            ],
+          }),
+        ],
+      });
+      const plan = planMerge(state, [
+        group("categories", "cat-keep", ["cat-z", "cat-y"]),
+      ]);
+      expect(
+        (recordOf(plan.records, "bud-1")!.entity as Budget).categoryLimits,
+      ).toEqual([{ categoryId: "cat-keep", limitMinor: 200 }]);
+    });
   });
 });

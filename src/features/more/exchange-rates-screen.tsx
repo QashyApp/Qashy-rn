@@ -10,7 +10,7 @@ import { MotionPressable } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SettingsRow } from "@/components/ui/settings-row";
 import { StatusPill } from "@/components/ui/status-pill";
-import type { RateFetchErrorCode } from "@/data/exchange-rates/rate-client";
+import type { ExchangeRateErrorCode } from "@/data/exchange-rates/rate-service";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
@@ -30,12 +30,13 @@ import { insetHighlight } from "@/theme/highlight";
 // A settings row is a 38pt icon tile plus a 12pt gap; matches `more-screen.tsx`'s own rows so
 // the divider lines up with the text rather than the icon.
 
-const ERROR_MESSAGES: Record<RateFetchErrorCode, string> = {
+const ERROR_MESSAGES: Record<ExchangeRateErrorCode, string> = {
   offline:
     "This device looks offline. Automatic rates will try again the next time it is online.",
   timeout: "The request to frankfurter.dev timed out.",
   http: "frankfurter.dev returned an error.",
   malformed: "frankfurter.dev returned a response Qashy did not understand.",
+  storage: "Qashy couldn’t save the exchange rates on this device.",
 };
 
 interface NeedsManualRow {
