@@ -26,7 +26,7 @@ async function fillAmount(field: Locator, value: string) {
   const keypad = page.getByRole("group", { name: "Amount keypad" });
   // An autofocused field opens the keypad by itself, a little after the sheet settles.
   const opened = await keypad
-    .waitFor({ state: "visible", timeout: 3_000 })
+    .waitFor({ state: "visible", timeout: 1_000 })
     .then(() => true)
     .catch(() => false);
   if (!opened) await field.click();
