@@ -21,8 +21,8 @@
  *   replaced. The same preview-then-commit shape the CSV screen uses, for a stronger reason:
  *   this is the one genuinely irreversible button in the whole feature.
  *
- * The `.qashysync` half is the transport that involves nobody: no relay, no signaling, no STUN.
- * It is the answer when the relay is down, when two devices are never on the same network, and
+ * The `.qashysync` half is the transport that involves nobody: no relay and no signaling.
+ * It is the answer when the relay is down, when no relay is configured at all, and
  * for anyone who would simply rather no server existed.
  */
 
@@ -58,7 +58,9 @@ import {
 } from "@/sync/backup";
 import {
   MIN_PASSPHRASE_LENGTH,
+  PASSPHRASE_WEAKNESS_MESSAGES,
   RECOVERY_WORD_COUNT,
+  assessPassphrase,
   isValidRecoveryPhrase,
 } from "@/sync/crypto";
 import type {
@@ -153,8 +155,13 @@ export function TransferScreen() {
   // restore half of this screen applies.
   const firstRun = onboardingParam === "1";
   const readable = status.keystore === "unlocked";
-  const passphraseReady =
-    passphrase.length >= MIN_PASSPHRASE_LENGTH && passphrase === repeated;
+  const strength = assessPassphrase(passphrase);
+  // Length is already said by the hint, so only the reasons the hint does not cover are shown.
+  const strengthError =
+    !strength.ok && strength.reason !== "tooShort"
+      ? t(PASSPHRASE_WEAKNESS_MESSAGES[strength.reason])
+      : undefined;
+  const passphraseReady = strength.ok && passphrase === repeated;
   const secretReady =
     picked?.wants === "recoveryPhrase"
       ? isValidRecoveryPhrase(secret)
@@ -418,7 +425,10 @@ export function TransferScreen() {
                   autoCorrect={false}
                   autoComplete="new-password"
                   textContentType="newPassword"
-                  hint="At least 12 characters. Qashy cannot reset this — the file is unreadable without it."
+                  hint={t(
+                    `At least ${MIN_PASSPHRASE_LENGTH} characters. Qashy cannot reset this — the file is unreadable without it.`,
+                  )}
+                  error={strengthError}
                 />
                 <FormField
                   label="Passphrase again"

@@ -8,6 +8,8 @@ import {
   withTiming,
 } from "react-native-reanimated";
 
+import { useMotionPreference } from "@/components/ui/motion";
+
 const ALWAYS_SHOW_OFFSET = 32;
 const HIDE_AFTER_OFFSET = 80;
 const DIRECTION_THRESHOLD = 6;
@@ -22,14 +24,16 @@ export function useScrollHide() {
   const visibility = useSharedValue(1);
   const lastOffset = useRef(0);
   const shown = useRef(true);
+  const { instant } = useMotionPreference();
 
   const setShown = (next: boolean) => {
     if (shown.current === next) return;
     shown.current = next;
+    // A quick fade at every level but `off`, which changes instantly.
     const timing = {
       duration: 200,
       easing: Easing.out(Easing.cubic),
-      reduceMotion: ReduceMotion.System,
+      reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
     };
     visibility.set(withTiming(next ? 1 : 0, timing));
     // The Android floating tab bar tucks away with the FAB (a no-op for every other bar).

@@ -133,8 +133,15 @@ export interface TransactionRecord extends SyncEntity {
   destinationBaseAmountMinor: number | null;
   currency: CurrencyCode;
   destinationCurrency: CurrencyCode | null;
-  exchangeRate: string;
-  baseAmountMinor: number;
+  /**
+   * Snapshot of the account-to-base rate. `null` is allowed only while the row is not
+   * posted (`upcoming`, or `skipped` while it was still unpriced). An upcoming transaction
+   * on a foreign account is not priced until it is paid: `confirmUpcoming` snapshots the
+   * rate then. Posted rows always carry it.
+   */
+  exchangeRate: string | null;
+  /** Base-currency snapshot; same null invariant as `exchangeRate`. */
+  baseAmountMinor: number | null;
   transferGroupId: string | null;
   recurringRuleId: string | null;
   occurrenceKey: string | null;

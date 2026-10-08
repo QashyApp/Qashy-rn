@@ -69,4 +69,13 @@ describe("occurrenceCountUntil", () => {
       null,
     );
   });
+
+  it("still rejects an invalid interval instead of counting it", () => {
+    expect(() =>
+      occurrenceCountUntil("2026-01-01", "day", 0, "2026-02-01"),
+    ).toThrow(RangeError);
+    expect(() =>
+      occurrenceCountUntil("2026-01-01", "day", 1.5, "2026-02-01"),
+    ).toThrow(RangeError);
+  });
 });

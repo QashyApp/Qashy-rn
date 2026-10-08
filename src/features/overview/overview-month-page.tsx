@@ -298,7 +298,9 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                     variant="caption"
                     style={{ color: theme.warning }}
                   >
-                    {`Excludes ${missingCurrencies.join(", ")} until an effective exchange rate is added.`}
+                    {t(
+                      `Excludes ${missingCurrencies.join(", ")} until an effective exchange rate is added.`,
+                    )}
                   </AppText>
                   <View
                     style={{

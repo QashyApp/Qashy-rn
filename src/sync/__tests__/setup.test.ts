@@ -364,6 +364,27 @@ describe("joining a vault someone else holds", () => {
     expect((await readSyncStatus(target.deps)).baseCurrency).toBe("ILS");
   });
 
+  it("refuses to adopt a vault over one already on this device, and leaves that vault alone", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const before = await target.keystore.read();
+
+    await expect(
+      adoptVault(
+        target.deps,
+        joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+          peerNamed("Phone"),
+        ]),
+      ),
+    ).rejects.toThrow(/already part of a vault/);
+
+    // Overwriting here would orphan every peer of the existing vault and leave two chains
+    // claiming one device.
+    const after = await target.keystore.read();
+    expect(after?.identity.deviceId).toBe(before?.identity.deviceId);
+    expect(after?.vaultKey).toEqual(before?.vaultKey);
+  });
+
   it("records one pairing line per peer it was handed", async () => {
     const target = await rig();
     const peers = [peerNamed("Phone"), peerNamed("Tablet")];

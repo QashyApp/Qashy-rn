@@ -15,6 +15,13 @@ class MockDatabase {
   rows = new Map<string, Record<string, unknown>>();
   /** Survives `closeAsync`, the way a file on disk survives closing a connection. */
   userVersion = mockStartVersion;
+  /** Table name to column names, as `PRAGMA table_info` would report them. Also survives close. */
+  tables = new Map<string, string[]>(
+    Object.entries(mockStartTables).map(([name, columns]) => [
+      name,
+      [...columns],
+    ]),
+  );
 
   private pendingVersion: number | null = null;
   private inTransaction = false;
@@ -23,6 +30,28 @@ class MockDatabase {
     this.statements.push(sql);
     if (mockFailOnExec && sql.includes(mockFailOnExec))
       throw new Error("migration failed");
+
+    // `CREATE TABLE IF NOT EXISTS` creates a table with the columns it declares, and does
+    // nothing to a table that is already there, which is the behaviour the migration relies on.
+    for (const create of sql.matchAll(
+      /CREATE TABLE IF NOT EXISTS (\w+) \(([\s\S]*?)\n\s*\);/g,
+    )) {
+      if (this.tables.has(create[1])) continue;
+      const columns = create[2]
+        .split("\n")
+        .map((line) => line.trim().split(/\s+/)[0])
+        .filter((word) => word && !/^(PRIMARY|UNIQUE)$/.test(word))
+        .map((word) => word.replace(/,$/, ""));
+      this.tables.set(create[1], columns);
+    }
+    const alter = /ALTER TABLE (\w+) ADD COLUMN (\w+)/.exec(sql);
+    if (alter) {
+      const columns = this.tables.get(alter[1]);
+      if (!columns) throw new Error(`no such table: ${alter[1]}`);
+      if (columns.includes(alter[2]))
+        throw new Error(`duplicate column name: ${alter[2]}`);
+      columns.push(alter[2]);
+    }
 
     const trimmed = sql.trim();
     if (trimmed === "BEGIN IMMEDIATE") {
@@ -58,7 +87,10 @@ class MockDatabase {
     return null as T;
   }
 
-  async getAllAsync<T>() {
+  async getAllAsync<T>(sql: string) {
+    const info = /PRAGMA table_info\((\w+)\)/.exec(sql);
+    if (info)
+      return (this.tables.get(info[1]) ?? []).map((name) => ({ name })) as T[];
     return [...this.rows.values()] as T[];
   }
 
@@ -76,6 +108,7 @@ class MockDatabase {
 const mockOpened: MockDatabase[] = [];
 let mockFailOnExec: string | null = null;
 let mockStartVersion = 0;
+let mockStartTables: Record<string, string[]> = {};
 
 jest.mock("expo-sqlite", () => ({
   openDatabaseAsync: jest.fn(async () => {
@@ -87,9 +120,26 @@ jest.mock("expo-sqlite", () => ({
 
 // eslint-disable-next-line import/first -- must be required after `jest.mock` above.
 import {
+  ADDED_COLUMNS,
   DATABASE_VERSION,
+  missingAddedColumns,
   PlatformStorageAdapter,
 } from "@/data/storage.native";
+
+/** `sync_peers` as the version-3 ladder built it, before `revoked_seq` existed. */
+const LEGACY_SYNC_PEERS = [
+  "device_id",
+  "name",
+  "platform",
+  "ed25519_pub",
+  "x25519_pub",
+  "epoch",
+  "added_at",
+  "revoked_at",
+  "acked",
+  "known",
+  "last_seen_at",
+];
 
 const account = (id: string): Account => ({
   id,
@@ -116,6 +166,7 @@ describe("native storage adapter lifecycle", () => {
     mockOpened.length = 0;
     mockFailOnExec = null;
     mockStartVersion = 0;
+    mockStartTables = {};
   });
 
   it("opens the database exactly once across repeated and concurrent calls", async () => {
@@ -176,6 +227,7 @@ describe("native storage migrations", () => {
     mockOpened.length = 0;
     mockFailOnExec = null;
     mockStartVersion = 0;
+    mockStartTables = {};
   });
 
   const versionBumps = (database: MockDatabase) =>
@@ -184,52 +236,14 @@ describe("native storage migrations", () => {
       .filter((match): match is RegExpExecArray => match !== null)
       .map((match) => Number(match[1]));
 
-  /**
-   * `[1, 2, … DATABASE_VERSION]`, derived rather than written out.
-   *
-   * Every added step would otherwise fail these two tests for the wrong reason — a literal
-   * here asserts the ladder's *length*, which is not a property anyone cares about, and the
-   * fix is to bump a number, which teaches you nothing. What matters is that the steps run
-   * in order, none is skipped, and none repeats.
-   */
-  const ladder = Array.from(
-    { length: DATABASE_VERSION },
-    (_, index) => index + 1,
-  );
-
-  it("walks a fresh database up the whole ladder", async () => {
+  it("creates the whole schema on a fresh database in one step", async () => {
     await new PlatformStorageAdapter().initialize();
 
-    expect(versionBumps(mockOpened[0])).toEqual(ladder);
+    expect(versionBumps(mockOpened[0])).toEqual([DATABASE_VERSION]);
     expect(mockOpened[0].userVersion).toBe(DATABASE_VERSION);
-  });
-
-  it("runs only the steps a database has not already seen", async () => {
-    mockStartVersion = 1;
-    await new PlatformStorageAdapter().initialize();
-
-    // Re-running step 1 would be harmless (every statement is `IF NOT EXISTS`), but a ladder
-    // that cannot skip is a ladder that gets slower with every release.
-    expect(versionBumps(mockOpened[0])).toEqual(ladder.slice(1));
-    expect(
-      mockOpened[0].statements.some((sql) => sql.includes("sync_ops")),
-    ).toBe(true);
-  });
-
-  it("adds the revocation cutoff column and fails closed for existing revoked peers", async () => {
-    mockStartVersion = 3;
-    await new PlatformStorageAdapter().initialize();
-
-    const migration = mockOpened[0].statements.find((sql) =>
-      sql.includes("revoked_seq"),
-    );
-    expect(migration).toContain(
-      "ALTER TABLE sync_peers ADD COLUMN revoked_seq INTEGER",
-    );
-    expect(migration).toContain(
-      "UPDATE sync_peers SET revoked_seq = 0 WHERE revoked_at IS NOT NULL",
-    );
-    expect(mockOpened[0].userVersion).toBe(DATABASE_VERSION);
+    const schema = mockOpened[0].statements.join(" ");
+    expect(schema).toContain("CREATE TABLE IF NOT EXISTS sync_ops");
+    expect(schema).toContain("revoked_seq");
   });
 
   it("does nothing at all once the database is current", async () => {
@@ -242,8 +256,7 @@ describe("native storage migrations", () => {
     ).toBe(false);
   });
 
-  it("leaves the version where it was when a step fails, and retries cleanly", async () => {
-    mockStartVersion = 1;
+  it("leaves the version where it was when the schema fails, and retries cleanly", async () => {
     mockFailOnExec = "sync_ops";
 
     await expect(new PlatformStorageAdapter().initialize()).rejects.toThrow(
@@ -251,8 +264,8 @@ describe("native storage migrations", () => {
     );
     const failed = mockOpened[0];
     // The bump was issued inside the transaction that rolled back, so it never landed. A
-    // database that reported version 2 with no `sync_ops` table would never repair itself.
-    expect(failed.userVersion).toBe(1);
+    // database that reported itself current with no `sync_ops` table would never repair itself.
+    expect(failed.userVersion).toBe(0);
     expect(failed.statements.some((sql) => sql.trim() === "ROLLBACK")).toBe(
       true,
     );
@@ -261,6 +274,63 @@ describe("native storage migrations", () => {
     mockFailOnExec = null;
     await new PlatformStorageAdapter().initialize();
     expect(mockOpened[1].userVersion).toBe(DATABASE_VERSION);
+  });
+
+  it("adds revoked_seq to a version-3 database and backfills revoked peers, before the version bump", async () => {
+    mockStartVersion = 3;
+    mockStartTables = { sync_peers: LEGACY_SYNC_PEERS };
+    const adapter = new PlatformStorageAdapter();
+    await adapter.initialize();
+
+    const database = mockOpened[0];
+    expect(database.tables.get("sync_peers")).toContain("revoked_seq");
+    const alter = database.statements.findIndex((sql) =>
+      sql.includes("ALTER TABLE sync_peers ADD COLUMN revoked_seq INTEGER"),
+    );
+    const backfill = database.statements.findIndex((sql) =>
+      sql.includes("SET revoked_seq = 0 WHERE revoked_at IS NOT NULL"),
+    );
+    const bump = database.statements.findIndex((sql) =>
+      sql.includes("PRAGMA user_version = 4"),
+    );
+    expect(alter).toBeGreaterThan(-1);
+    expect(backfill).toBeGreaterThan(alter);
+    expect(bump).toBeGreaterThan(backfill);
+    expect(database.userVersion).toBe(DATABASE_VERSION);
+  });
+
+  it("does not add or backfill a column that is already present", async () => {
+    mockStartVersion = 3;
+    mockStartTables = {
+      sync_peers: [...LEGACY_SYNC_PEERS, "revoked_seq"],
+    };
+    await new PlatformStorageAdapter().initialize();
+
+    const statements = mockOpened[0].statements.join("\n");
+    expect(statements).not.toContain("ALTER TABLE");
+    expect(statements).not.toContain("SET revoked_seq");
+    expect(mockOpened[0].userVersion).toBe(DATABASE_VERSION);
+  });
+
+  it("creates revoked_seq from the schema on a fresh database without an ALTER", async () => {
+    await new PlatformStorageAdapter().initialize();
+
+    expect(
+      mockOpened[0].statements.some((sql) => sql.includes("ALTER TABLE")),
+    ).toBe(false);
+    expect(mockOpened[0].tables.get("sync_peers")).toContain("revoked_seq");
+  });
+
+  it("rolls the added column back with the rest of a failed upgrade", async () => {
+    mockStartVersion = 3;
+    mockStartTables = { sync_peers: LEGACY_SYNC_PEERS };
+    mockFailOnExec = "SET revoked_seq";
+
+    await expect(new PlatformStorageAdapter().initialize()).rejects.toThrow(
+      "migration failed",
+    );
+    expect(mockOpened[0].userVersion).toBe(3);
+    expect(mockOpened[0].closed).toBe(true);
   });
 
   it("sets the connection pragmas before touching the schema", async () => {
@@ -383,6 +453,7 @@ describe("native storage adapter batched writes", () => {
     mockOpened.length = 0;
     mockFailOnExec = null;
     mockStartVersion = 0;
+    mockStartTables = {};
   });
 
   it("writes a batch in a few multi-row statements instead of one per record", async () => {
@@ -425,5 +496,37 @@ describe("native storage adapter batched writes", () => {
     expect(params).toHaveLength(10);
     expect(JSON.parse(params[2] as string).name).toBe("same");
     expect(JSON.parse(params[7] as string).name).toBe("last");
+  });
+});
+
+describe("missingAddedColumns", () => {
+  it("reports the ladder's ALTER-added column when a table lacks it", () => {
+    expect(
+      missingAddedColumns({ sync_peers: LEGACY_SYNC_PEERS }).map(
+        ({ table, column }) => `${table}.${column}`,
+      ),
+    ).toEqual(["sync_peers.revoked_seq"]);
+  });
+
+  it("reports nothing when every added column is present", () => {
+    expect(
+      missingAddedColumns({
+        sync_peers: [...LEGACY_SYNC_PEERS, "revoked_seq"],
+      }),
+    ).toEqual([]);
+  });
+
+  it("skips a table that is not in the map, because the schema has just created it", () => {
+    expect(missingAddedColumns({})).toEqual([]);
+  });
+
+  it("returns the given entries rather than the built-in list when asked", () => {
+    const extra = [
+      { table: "sync_peers", column: "nickname", definition: "TEXT" },
+    ];
+    expect(
+      missingAddedColumns({ sync_peers: LEGACY_SYNC_PEERS }, extra),
+    ).toEqual(extra);
+    expect(ADDED_COLUMNS.length).toBeGreaterThan(0);
   });
 });

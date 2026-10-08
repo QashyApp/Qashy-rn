@@ -32,6 +32,7 @@ import {
   deriveOutbox,
   readAllStates,
   readMeta,
+  readStateHeads,
 } from "@/data/sync-store";
 import type { SyncOpRow } from "@/data/sync-tables";
 import type { SigningSecretKey } from "@/sync/crypto";
@@ -105,8 +106,23 @@ export interface SendSnapshot {
   readonly rows: readonly SyncOpRow[];
   readonly meta: ReadonlyMap<string, string>;
   readonly roster: Roster;
+  /** Chain positions a full-state snapshot covered; see `readStateHeads`. Absent means none. */
+  readonly covered?: Readonly<Record<string, number>>;
   states?: readonly CausalMeta[];
 }
+
+/**
+ * The signed cutoff of every revoked device, for the outbox to withhold ops above.
+ *
+ * Only a cutoff that was recorded is used. A revoked row without one is a legacy row, and the
+ * roster reads it as 0, so nothing it authored above that is forwarded either.
+ */
+const revokedCutoffs = (roster: Roster): Record<string, number> =>
+  Object.fromEntries(
+    [...roster.values()]
+      .filter((peer) => peer.revokedAt !== null)
+      .map((peer) => [peer.deviceId, peer.revokedSeq ?? 0]),
+  );
 
 export interface OutgoingBatch {
   readonly batch: SyncBatch;
@@ -173,7 +189,10 @@ export async function buildBatch(
 ): Promise<OutgoingBatch> {
   const { storage, deviceId, signingKey, limit = SEND_BATCH_OPS } = deps;
   const { meta, roster } = snapshot;
-  const outbox = deriveOutbox(snapshot.rows, peer.acked, limit);
+  const outbox = deriveOutbox(snapshot.rows, peer.acked, limit, {
+    covered: snapshot.covered ?? {},
+    cutoffs: revokedCutoffs(roster),
+  });
 
   // A peer that has never heard of a chain sits at 0, which is servable unless retention has
   // already cut into that chain's history — in which case the ops that would bridge the gap
@@ -232,11 +251,12 @@ export async function loadSendSnapshot(
   storage: StorageAdapter,
 ): Promise<SendSnapshot> {
   return storage.transact(async (tx: StorageTx) => {
-    const [rows, meta, roster] = await Promise.all([
+    const [rows, meta, roster, covered] = await Promise.all([
       tx.table("syncOps").all(),
       readMeta(tx, [SYNC_META.epoch, SYNC_META.baseCurrency]),
       readRoster(tx),
+      readStateHeads(tx),
     ]);
-    return { rows, meta, roster };
+    return { rows, meta, roster, covered };
   });
 }

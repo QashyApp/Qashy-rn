@@ -274,8 +274,8 @@ function NavigationItem({
         }
         accessibilityLabel={t(item.label)}
         accessibilityRole="link"
-        accessibilityState={{ selected: active }}
-        aria-selected={active}
+        /* `aria-current` (above) conveys the active page. `aria-selected` is not valid on a link,
+           and react-native-web also derives it from `accessibilityState.selected`, so neither is set. */
         onBlur={() => setShowTooltip(false)}
         onFocus={() => setShowTooltip(true)}
         onHoverIn={() => setShowTooltip(true)}

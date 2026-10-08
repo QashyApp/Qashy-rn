@@ -2,25 +2,20 @@
  * The one place that turns configuration into a running sync.
  *
  * Everything below this file is deliberately incapable of starting itself. `SyncSession` is
- * handed transports and a key; `RelayTransport` is handed a bucket id it could not derive;
- * `DirectTransport` is handed a rendezvous it did not compute. That is what makes each of
- * them testable without a keystore, a network, or a clock — and it leaves exactly one file
+ * handed transports and a key; `RelayTransport` is handed a bucket id it could not derive.
+ * That is what makes each of them testable without a keystore, a network, or a clock — and it leaves exactly one file
  * that has to know how the pieces fit, which is this one.
  *
  * Three things it owns, and they are the three that were nobody else's job:
  *
  * 1. **Deriving the vault's public-facing identifiers** — bucket id, write token, route tags,
- *    rendezvous — from the root key, so no transport ever holds one. A transport that cannot
- *    reach a key cannot leak one.
- * 2. **Deciding which transports exist at all.** Direct is offered only when this build can do
- *    WebRTC and the user has not switched it off; the drop-box only when an address is
+ *    from the root key, so no transport ever holds one. A transport that cannot reach a key
+ *    cannot leak one.
+ * 2. **Deciding which transports exist at all.** The drop-box exists only when an address is
  *    configured. A user who blanks the relay address gets a device that genuinely contacts
- *    nothing but its peers, and that has to be true of the object graph, not just the UI.
- * 3. **Keeping them alive between passes.** A WebRTC data channel takes seconds and two
- *    servers' worth of round trips to establish; rebuilding the transports on every foreground
- *    to refresh a rotating rendezvous id would throw away the connection each time. The
- *    transports are cached and only rebuilt when something they were built from actually
- *    changed — see `fingerprint`.
+ *    nothing, and that has to be true of the object graph, not just the UI.
+ * 3. **Keeping them alive between passes.** The transports are cached and only rebuilt when
+ *    something they were built from actually changed — see `fingerprint`.
  *
  * There are still no timers here. `reconcile()` is called from the same lifecycle seam the
  * repository's own reconcile hangs on, and the relay is contacted then and at no other moment.
@@ -29,14 +24,18 @@
 import type { StorageAdapter } from "@/data/storage-adapter";
 import type { FinanceRepository } from "@/data/repository";
 import { fetch as expoFetch } from "expo/fetch";
-import { SYNC_META, readMeta, writeMeta } from "@/data/sync-store";
+import {
+  SYNC_META,
+  appendActivity,
+  readMeta,
+  writeMeta,
+} from "@/data/sync-store";
 import {
   deriveBucketId,
   deriveBucketToken,
   deriveContentKey,
-  deriveRendezvousId,
   deriveRouteTag,
-  rendezvousWindow,
+  routeDayOf,
   toBase64Url,
 } from "@/sync/crypto";
 import {
@@ -44,9 +43,14 @@ import {
   type StoredVault,
   type SyncKeystore,
 } from "@/sync/keystore";
+import {
+  activityCode,
+  activityEntry,
+  transportDetail,
+} from "@/sync/engine/activity";
+import { activePeers, readRoster } from "@/sync/engine/roster";
 import { SyncSession, type ReconcileOutcome } from "@/sync/engine/session";
 import type { SyncTransport } from "@/sync/engine/transport";
-import { DirectTransport } from "@/sync/transport/direct";
 import { readEndpoints, type SyncEndpoints } from "@/sync/transport/endpoints";
 import {
   FileTransport,
@@ -61,10 +65,33 @@ import {
   readRelayHealth,
   type RelayHealth,
 } from "@/sync/transport/relay-health";
-import type { RawSocket } from "@/sync/transport/signaling";
-import { rtcFactory as platformRtcFactory } from "@/sync/transport/webrtc";
-import type { RtcFactory } from "@/sync/transport/webrtc-core";
 import { nowIso as defaultNowIso } from "@/utils/entity";
+
+/**
+ * UTC days a relay poll accepts, counting today: today's tag and yesterday's.
+ *
+ * Two, so that a sender whose clock has just crossed midnight is still heard by a receiver whose
+ * clock has not yet done so. A blob older than that is addressed to a tag nobody polls for any
+ * more, which is the point of rotating.
+ */
+const RELAY_ROUTE_DAYS = 2;
+
+/**
+ * UTC days a file import accepts, counting today: the last thirty.
+ *
+ * A file is carried by hand and may be opened weeks after it was written, so it is held to a
+ * longer window than a relay blob. The window adds reach, not trust: every frame is still
+ * authenticated against its own sender, recipient, epoch and sequence before it is applied.
+ */
+export const FILE_ROUTE_WINDOW_DAYS = 30;
+
+/** The UTC day numbers ending at `today`, most recent first. */
+const daysEndingAt = (today: number, count: number): number[] =>
+  Array.from({ length: count }, (_, back) => today - back);
+
+/** A device's route tag for one UTC day, under this vault's root key and epoch. */
+const tagOn = (vault: StoredVault, deviceId: string, day: number): string =>
+  deriveRouteTag(vault.vaultKey, vault.epoch, day, deviceId);
 
 /**
  * Why a pass did nothing.
@@ -104,7 +131,10 @@ export interface BundleExport {
 
 export interface BundleImport {
   readonly reason: SyncPassReason;
-  /** The device that wrote the file, as it claims. Shown, never trusted — see `importBundle`. */
+  /**
+   * The device that wrote the file, resolved against this vault's roster. Empty when the file
+   * was not written by a device this vault knows about.
+   */
   readonly from: string;
   /** Frames in the file addressed to this device. */
   readonly accepted: number;
@@ -125,9 +155,6 @@ export interface SyncRuntimeDeps {
   readonly fetch?: typeof globalThis.fetch;
   readonly now?: () => number;
   readonly nowIso?: () => string;
-  /** Overridden in tests; on device it is whatever WebRTC this build has, or none. */
-  readonly rtcFactory?: RtcFactory;
-  readonly openSocket?: (url: string) => RawSocket;
   readonly requestTimeoutMs?: number;
   /** Relay upload jitter. Set to zero in tests so a pass is instant. */
   readonly uploadJitterMs?: number;
@@ -170,14 +197,23 @@ export class SyncRuntime {
    */
   private lastUpload: "ok" | "failed" | null = null;
 
+  /**
+   * The pass currently using the wiring, if any.
+   *
+   * Only one pass may run at a time. Triggers arrive in bursts — `visibilitychange`, `focus`
+   * and `pageshow` fire together on web — and two passes at once would each wire, reuse, or
+   * close the same transports, so one would tear a connection out from under the other.
+   */
+  private inFlight: Promise<SyncPass> | null = null;
+  /** The one follow-up pass owed to triggers that arrived during `inFlight`. */
+  private queuedPass: Promise<SyncPass> | null = null;
+
   constructor(private readonly deps: SyncRuntimeDeps) {}
 
   /**
    * The transports in use right now, in the order the session tries them.
    *
-   * Empty until the first pass wires anything. The sync screen reads it to say whether this
-   * device can reach a peer directly or only through the drop-box, which is the difference
-   * between "your laptop will pick this up in a moment" and "when you next open it".
+   * Empty until the first pass wires anything.
    */
   get transports(): readonly SyncTransport[] {
     return this.wiring?.transports ?? [];
@@ -213,7 +249,31 @@ export class SyncRuntime {
    * pre-flight probe reports as fine. Checking afterwards folds this pass's uploads into the
    * verdict, so "relay errors" appears on the launch it happened rather than the next one.
    */
-  async reconcile(signal?: AbortSignal): Promise<SyncPass> {
+  reconcile(signal?: AbortSignal): Promise<SyncPass> {
+    if (this.inFlight) {
+      // Coalesced: however many triggers arrive during a pass, exactly one more pass runs after
+      // it, and every caller in the meantime shares that one promise.
+      if (!this.queuedPass) {
+        this.queuedPass = this.inFlight
+          .then(
+            () => undefined,
+            () => undefined,
+          )
+          .then(() => {
+            this.queuedPass = null;
+            return this.reconcile(signal);
+          });
+      }
+      return this.queuedPass;
+    }
+    const run = this.runPass(signal).finally(() => {
+      this.inFlight = null;
+    });
+    this.inFlight = run;
+    return run;
+  }
+
+  private async runPass(signal?: AbortSignal): Promise<SyncPass> {
     const { storage } = this.deps;
 
     const [enabled, endpoints] = await storage.transact(async (tx) => {
@@ -225,15 +285,14 @@ export class SyncRuntime {
     });
 
     if (!enabled) {
-      // Closed rather than left holding a data channel. "Off" that keeps a socket open to
-      // another device is not off, and the switch would be a lie.
-      await this.close();
+      // Closed rather than left wired. "Off" that keeps a transport live is not off.
+      await this.dropWiring();
       return { reason: "disabled", outcome: null, health: await this.health() };
     }
 
     const vault = await this.readVault();
     if (typeof vault === "string") {
-      await this.close();
+      await this.dropWiring();
       return { reason: vault, outcome: null, health: await this.health() };
     }
 
@@ -251,8 +310,22 @@ export class SyncRuntime {
     return { reason: "ok", outcome, health };
   }
 
-  /** Tears down every connection. Called on sign-out, reset, and when sync is switched off. */
+  /**
+   * Tears down every connection. Called on sign-out, reset, and when sync is switched off.
+   *
+   * Waits for a pass in flight first, because that pass is using these transports and closing
+   * them under it would fail its exchange partway through. Pass errors are that pass's own.
+   */
   async close(): Promise<void> {
+    if (this.inFlight) await this.inFlight.catch(() => undefined);
+    await this.dropWiring();
+  }
+
+  /**
+   * Closes the cached transports without waiting. Used from inside a pass, which cannot wait
+   * on itself.
+   */
+  private async dropWiring(): Promise<void> {
     const held = this.wiring;
     this.wiring = null;
     this.lastUpload = null;
@@ -263,8 +336,8 @@ export class SyncRuntime {
   /**
    * Seals everything the peers are missing into one file the user carries themselves.
    *
-   * The whole point of this path is that it involves nobody. No relay, no signaling, no STUN,
-   * no WebRTC — export here, move the file by whatever means you like, import it there. It is
+   * The whole point of this path is that it involves nobody. No relay, no signaling,
+   * export here, move the file by whatever means you like, import it there. It is
    * the answer when the relay is down, when two devices are never on the same network, and
    * when someone would simply rather no server existed at all.
    *
@@ -322,7 +395,7 @@ export class SyncRuntime {
     if (typeof wired === "string") {
       return {
         reason: wired,
-        from: bundle.from,
+        from: "",
         accepted: 0,
         skipped: bundle.frames.length,
         applied: 0,
@@ -331,8 +404,27 @@ export class SyncRuntime {
     }
 
     try {
+      // The file names its sender only by route tag, so the sender is found by recomputing
+      // each roster member's tag over the file window. A file from a device this vault does not
+      // know is refused whole, which is also what the receive path would do frame by frame.
+      const senderId = await this.resolveSender(bundle.from, wired.vault);
+      if (!senderId) {
+        // Nothing here can open these frames, so the ones addressed to this device are refused
+        // and the rest are, as always, simply for somebody else.
+        const addressed = bundle.frames.filter((held) =>
+          wired.recipients.has(held.to),
+        ).length;
+        return {
+          reason: "ok",
+          from: "",
+          accepted: 0,
+          skipped: bundle.frames.length - addressed,
+          applied: 0,
+          rejected: addressed,
+        };
+      }
       const channel = await wired.file.connect({
-        deviceId: bundle.from,
+        deviceId: senderId,
         name: "",
       });
       const collected: { frame: Uint8Array; seq: number }[] = [];
@@ -341,7 +433,7 @@ export class SyncRuntime {
       });
       // `ingest` drops frames addressed to another device by comparing route tags, so what is
       // collected is exactly this device's share of the file.
-      wired.file.ingest(bundle);
+      wired.file.ingest({ ...bundle, from: senderId });
       detach();
 
       let applied = 0;
@@ -358,7 +450,7 @@ export class SyncRuntime {
 
       return {
         reason: "ok",
-        from: bundle.from,
+        from: senderId,
         accepted: collected.length,
         skipped: bundle.frames.length - collected.length,
         applied,
@@ -387,6 +479,48 @@ export class SyncRuntime {
     await this.buildRelay(vault, endpoints)?.purge();
   }
 
+  /** The UTC day number now, from the same clock the rest of the runtime uses. */
+  private today(): number {
+    return routeDayOf((this.deps.now ?? Date.now)());
+  }
+
+  /**
+   * The recipient tags a file import accepts for this device: its own tag on each day of the file
+   * window. Built per call, so a file opened on a later day is still matched.
+   */
+  private fileRecipientTags(vault: StoredVault): ReadonlySet<string> {
+    const self = vault.identity.deviceId;
+    return new Set(
+      daysEndingAt(this.today(), FILE_ROUTE_WINDOW_DAYS).map((day) =>
+        tagOn(vault, self, day),
+      ),
+    );
+  }
+
+  /**
+   * The roster device a bundle's `from` names, or `''` when none does.
+   *
+   * Compares route tags over the file window, which is how every other device addresses this one,
+   * so a file reveals nothing a relay blob would not. A bare device id is also accepted, because
+   * files exported before the sender was blinded carry one; the frames still have to open under
+   * that id, so accepting it adds no trust.
+   */
+  private async resolveSender(
+    claimed: string,
+    vault: StoredVault,
+  ): Promise<string> {
+    const roster = await this.deps.storage.transact((tx) => readRoster(tx));
+    const days = daysEndingAt(this.today(), FILE_ROUTE_WINDOW_DAYS);
+    for (const peer of roster.values()) {
+      if (peer.deviceId === vault.identity.deviceId) continue;
+      if (claimed === peer.deviceId) return peer.deviceId;
+      for (const day of days) {
+        if (tagOn(vault, peer.deviceId, day) === claimed) return peer.deviceId;
+      }
+    }
+    return "";
+  }
+
   /** The vault, or the reason there isn't one. */
   private async readVault(): Promise<
     StoredVault | Exclude<SyncPassReason, "ok" | "disabled">
@@ -409,8 +543,7 @@ export class SyncRuntime {
    * The transports and session for this vault and configuration, reusing them when nothing
    * relevant has changed.
    *
-   * The fingerprint is what makes reuse safe. Rebuilding on every pass would drop live data
-   * channels; never rebuilding would leave a device uploading to a relay the user replaced
+   * The fingerprint is what makes reuse safe. Never rebuilding would leave a device uploading to a relay the user replaced
    * ten minutes ago, or sealing under a key that has since been rotated.
    */
   private wire(vault: StoredVault, endpoints: SyncEndpoints): Wiring {
@@ -419,16 +552,6 @@ export class SyncRuntime {
       vault.epoch,
       endpoints.relayUrl,
       endpoints.relayEnabled ? "1" : "0",
-      endpoints.directEnabled ? "1" : "0",
-      // Username and credential ride along with the URL: the transport hands them to the ICE
-      // agent at connection time, so a credential-only change must rebuild the wiring or the
-      // direct path would keep authenticating with the old one.
-      endpoints.iceServers
-        .map(
-          (server) =>
-            `${server.urls}|${server.username ?? ""}|${server.credential ?? ""}`,
-        )
-        .join(" "),
     ].join("\0");
 
     const held = this.wiring;
@@ -442,13 +565,7 @@ export class SyncRuntime {
     }
 
     const relay = this.buildRelay(vault, endpoints);
-    const direct = this.buildDirect(vault, endpoints);
-
-    // Direct first, always. It is the path that contacts no server once established, and the
-    // drop-box exists to cover the case where it cannot be made — not to be preferred to it.
-    const transports: SyncTransport[] = [];
-    if (direct) transports.push(direct);
-    if (relay) transports.push(relay);
+    const transports: SyncTransport[] = relay ? [relay] : [];
 
     const built: Wiring = {
       fingerprint,
@@ -499,7 +616,13 @@ export class SyncRuntime {
    * transport with nothing to keep alive — there is no connection to preserve between passes.
    */
   private async fileWiring(): Promise<
-    | { readonly file: FileTransport; readonly session: SyncSession }
+    | {
+        readonly file: FileTransport;
+        readonly session: SyncSession;
+        readonly vault: StoredVault;
+        /** The tags this device accepts on import, over the file window. */
+        readonly recipients: ReadonlySet<string>;
+      }
     | Exclude<SyncPassReason, "ok">
   > {
     const enabled = await this.deps.storage.transact(async (tx) => {
@@ -514,12 +637,20 @@ export class SyncRuntime {
     const vault = await this.readVault();
     if (typeof vault === "string") return vault;
 
+    const today = this.today();
+    const recipients = this.fileRecipientTags(vault);
     const file = new FileTransport({
       deviceId: vault.identity.deviceId,
-      selfTag: deriveRouteTag(vault.vaultKey, vault.identity.deviceId),
-      tagFor: (peerId) => deriveRouteTag(vault.vaultKey, peerId),
+      selfTag: tagOn(vault, vault.identity.deviceId, today),
+      recipientTags: recipients,
+      tagFor: (peerId) => tagOn(vault, peerId, today),
     });
-    return { file, session: this.buildSession(vault, [file]) };
+    return {
+      file,
+      session: this.buildSession(vault, [file]),
+      vault,
+      recipients,
+    };
   }
 
   private buildRelay(
@@ -527,7 +658,11 @@ export class SyncRuntime {
     endpoints: SyncEndpoints,
   ): RelayTransport | null {
     if (!endpoints.relayUrl || !endpoints.relayEnabled) return null;
-    const { storage } = this.deps;
+    const { storage, onError } = this.deps;
+    const self = vault.identity.deviceId;
+    // Tags are derived on each call, against the day that is current then. A channel or a
+    // transport built before midnight therefore addresses and accepts the new day's tags after it.
+    const today = () => this.today();
 
     return new RelayTransport({
       fetch: this.deps.fetch ?? expoFetch,
@@ -535,8 +670,30 @@ export class SyncRuntime {
       baseUrl: endpoints.relayUrl,
       bucketId: deriveBucketId(vault.vaultKey),
       token: toBase64Url(deriveBucketToken(vault.vaultKey)),
-      selfTag: deriveRouteTag(vault.vaultKey, vault.identity.deviceId),
-      tagFor: (peerId) => deriveRouteTag(vault.vaultKey, peerId),
+      selfTag: () => tagOn(vault, self, today()),
+      recipientTags: () =>
+        new Set(
+          daysEndingAt(today(), RELAY_ROUTE_DAYS).map((day) =>
+            tagOn(vault, self, day),
+          ),
+        ),
+      tagFor: (peerId) => tagOn(vault, peerId, today()),
+      // Only active roster members may send to this device, each under today's and yesterday's
+      // tag. Read per poll, so a device revoked since the last one stops being held for at once.
+      senderTags: async () => {
+        const roster = await storage.transact((tx) => readRoster(tx));
+        const days = daysEndingAt(today(), RELAY_ROUTE_DAYS);
+        const senders = new Map<string, string>();
+        for (const peer of activePeers(roster)) {
+          if (peer.deviceId === self) continue;
+          for (const day of days) {
+            senders.set(tagOn(vault, peer.deviceId, day), peer.deviceId);
+          }
+        }
+        return senders;
+      },
+      onPollError: (error) => this.notePollFailure(error),
+      onDropped: (error) => onError?.(error),
       // The cursor is device-local and non-secret: it counts slots in the bucket, and a
       // reader who knew it would learn how far behind this device is and nothing else.
       readCursor: () =>
@@ -557,33 +714,37 @@ export class SyncRuntime {
     });
   }
 
-  private buildDirect(
-    vault: StoredVault,
-    endpoints: SyncEndpoints,
-  ): DirectTransport | null {
-    // A rendezvous is the one thing the direct path cannot do without. Two devices have to
-    // agree on a meeting point before they can describe a connection to each other, and this
-    // build has nowhere else to meet — which is why blanking the relay address turns off
-    // automatic sync entirely and leaves the manual bundle as the only path.
-    if (!endpoints.directEnabled || !endpoints.relayUrl) return null;
-
-    const factory = this.deps.rtcFactory ?? platformRtcFactory;
-    if (!factory.available) return null;
-
-    const now = this.deps.now ?? Date.now;
-    return new DirectTransport({
-      identity: vault.identity,
-      psk: vault.vaultKey,
-      epoch: vault.epoch,
-      baseUrl: endpoints.relayUrl,
-      // A function, not a value: the id rotates every five minutes and this transport
-      // outlives several windows.
-      rendezvousId: () =>
-        deriveRendezvousId(vault.vaultKey, rendezvousWindow(now() / 1000)),
-      iceServers: endpoints.iceServers,
-      factory,
-      openSocket: this.deps.openSocket,
-    });
+  /**
+   * A bucket that could not be read, recorded like any other relay failure.
+   *
+   * Counted toward the same degraded verdict as failed uploads, and logged so the user can see
+   * *why* the relay reads as broken. Written through the same serial chain as health so two
+   * failures cannot both read the same count.
+   */
+  private notePollFailure(error: unknown): void {
+    const { storage, nowIso = defaultNowIso, onError } = this.deps;
+    onError?.(error);
+    this.healthWrites = this.healthWrites
+      .then(async () => {
+        const at = nowIso();
+        await storage.transact(
+          async (tx) => {
+            await noteRelayFailure(tx, error, at);
+            await appendActivity(tx, [
+              activityEntry({
+                kind: "relay",
+                recordedAt: at,
+                code: activityCode(error),
+                detail: transportDetail(error),
+              }),
+            ]);
+          },
+          { silent: true },
+        );
+      })
+      .catch((failure: unknown) => {
+        onError?.(failure);
+      });
   }
 
   private noteUpload(error: unknown | null): void {

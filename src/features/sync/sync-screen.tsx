@@ -9,9 +9,9 @@
  * - **One verdict, computed once.** The hero, the More row, and the relay pill all descend from
  *   `summarizeSync` and one `RelayHealth` value held here. Two components deriving "is this
  *   fine?" independently is how a screen ends up saying "Up to date" above "Unreachable".
- * - **Every state says what still works.** A relay outage is not a sync outage — two devices on
- *   the same network never needed the relay — and copy that blurs the two sends people to
- *   restart routers over nothing.
+ * - **Every state says what still works.** A relay outage is not a sync outage — a transfer
+ *   file never needed the relay — and copy that blurs the two sends people to restart routers
+ *   over nothing.
  * - **Nothing here contacts the network on a schedule.** The relay is measured on foreground,
  *   on pull-to-refresh, and on the two explicit buttons — never on a timer. A relay contacted on
  *   a schedule is itself a traffic pattern, which is the thing the design went to some trouble
@@ -22,7 +22,7 @@
  */
 
 import { router } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { RefreshControl, ScrollView, View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -69,6 +69,7 @@ export function SyncScreen() {
    */
   const [probed, setProbed] = useState<RelayHealth | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
+  const busyRef = useRef(false);
 
   // Read once per render, and passed down. Every relative time on the screen then agrees with
   // every other one, which a per-component clock read cannot promise. Above the early return
@@ -104,14 +105,28 @@ export function SyncScreen() {
     work: () => Promise<unknown>,
     failure: string,
   ) => {
-    if (busy) return;
+    // A ref, not `busy`: a second tap inside the same render would still see the old state.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(kind);
+    let acted = false;
     try {
       await work();
+      acted = true;
       await refresh();
     } catch (reason) {
-      showError(failure, errorMessage(reason, "Nothing was changed."));
+      // Only the action can claim "nothing was changed". Once it has succeeded, a failed refresh
+      // leaves the change in place and the message has to say so.
+      if (acted) {
+        showError(
+          "This change was saved",
+          errorMessage(reason, "Reopen this screen to see the current state."),
+        );
+      } else {
+        showError(failure, errorMessage(reason, "Nothing was changed."));
+      }
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   };
@@ -310,15 +325,8 @@ export function SyncScreen() {
           exists only on devices you paired in person. Nothing else can open it.
         </Explains>
         <Explains
-          icon="point.3.connected.trianglepath.dotted"
-          title="Directly when it can"
-        >
-          On the same network your devices talk to each other and contact no
-          server at all.
-        </Explains>
-        <Explains
           icon="antenna.radiowaves.left.and.right"
-          title="A blind drop-box when it can’t"
+          title="A blind drop-box in between"
         >
           When your other device is closed, sealed changes wait on a relay. It
           sees a random-looking address and padded ciphertext — never who you

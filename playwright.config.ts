@@ -6,6 +6,9 @@ const pwaUse = { serviceWorkers: "allow" as const };
 
 export default defineConfig({
   testDir: "./e2e",
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 1 : 0,
+  reporter: process.env.CI ? [["github"], ["list"]] : "list",
   webServer: {
     // Build before serving. `serve dist` on its own happily boots a stale export,
     // which silently validates whatever was last built instead of the working tree.

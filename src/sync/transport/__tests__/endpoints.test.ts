@@ -10,11 +10,8 @@ import { MemoryStorageAdapter } from "@/data/memory-storage";
 import { SYNC_META, readMeta, writeMeta } from "@/data/sync-store";
 import {
   DEFAULT_RELAY_URL,
-  DEFAULT_STUN_URLS,
   EndpointError,
   normalizeEndpointUrl,
-  normalizeTurnUrl,
-  parseStunUrls,
   readEndpoints,
   writeEndpoints,
 } from "@/sync/transport/endpoints";
@@ -74,38 +71,13 @@ describe("normalizeEndpointUrl", () => {
   });
 });
 
-describe("parseStunUrls and normalizeTurnUrl", () => {
-  it("splits a list and rejects anything that is not a STUN address", () => {
-    expect(parseStunUrls("stun:a.example:3478, stuns:b.example:5349")).toEqual([
-      "stun:a.example:3478",
-      "stuns:b.example:5349",
-    ]);
-    expect(parseStunUrls("")).toEqual([]);
-    expect(() => parseStunUrls("https://a.example")).toThrow(EndpointError);
-  });
-
-  it("accepts a TURN address with an optional transport hint and nothing else", () => {
-    expect(normalizeTurnUrl("turn:t.example:3478")).toBe("turn:t.example:3478");
-    expect(normalizeTurnUrl("turns:t.example:5349?transport=tcp")).toBe(
-      "turns:t.example:5349?transport=tcp",
-    );
-    expect(normalizeTurnUrl("")).toBe("");
-    expect(() =>
-      normalizeTurnUrl("turn:t.example:3478?transport=quic"),
-    ).toThrow(EndpointError);
-  });
-});
-
 describe("readEndpoints", () => {
-  it("ships pointed at the project relay, with everything else off by default", async () => {
+  it("ships pointed at the project relay, and the relay on", async () => {
     const adapter = await storage();
     const endpoints = await adapter.transact((tx) => readEndpoints(tx));
 
     expect(endpoints.relayUrl).toBe(DEFAULT_RELAY_URL);
     expect(endpoints.relayEnabled).toBe(true);
-    expect(endpoints.directEnabled).toBe(true);
-    expect(DEFAULT_STUN_URLS).toBe("");
-    expect(endpoints.iceServers).toEqual([]);
   });
 
   it("lets an explicitly blanked relay win over the shipped default", async () => {
@@ -121,29 +93,11 @@ describe("readEndpoints", () => {
     await adapter.transact((tx) =>
       writeMeta(tx, {
         [SYNC_META.relayUrl]: "http://not-loopback.example",
-        [SYNC_META.stunUrls]: "nonsense",
       }),
     );
 
     const endpoints = await adapter.transact((tx) => readEndpoints(tx));
     expect(endpoints.relayUrl).toBe("");
-    expect(endpoints.iceServers).toEqual([]);
-  });
-
-  it("appends a user-supplied TURN server with its credentials", async () => {
-    const adapter = await storage();
-    await adapter.transact((tx) =>
-      writeEndpoints(tx, {
-        turnUrl: "turn:t.example:3478",
-        turnUsername: "me",
-        turnCredential: "secret",
-      }),
-    );
-
-    const endpoints = await adapter.transact((tx) => readEndpoints(tx));
-    expect(endpoints.iceServers).toEqual([
-      { urls: "turn:t.example:3478", username: "me", credential: "secret" },
-    ]);
   });
 });
 
@@ -154,8 +108,8 @@ describe("writeEndpoints", () => {
     await expect(
       adapter.transact((tx) =>
         writeEndpoints(tx, {
-          relayUrl: "https://relay.example.com",
-          stunUrls: "nope",
+          relayUrl: "http://not-loopback.example",
+          relayEnabled: false,
         }),
       ),
     ).rejects.toThrow(EndpointError);
@@ -164,6 +118,7 @@ describe("writeEndpoints", () => {
     // "it worked yesterday", so the good half must not survive the bad half.
     const endpoints = await adapter.transact((tx) => readEndpoints(tx));
     expect(endpoints.relayUrl).toBe(DEFAULT_RELAY_URL);
+    expect(endpoints.relayEnabled).toBe(true);
   });
 
   it("clears the cached health and the cursor when the relay moves", async () => {

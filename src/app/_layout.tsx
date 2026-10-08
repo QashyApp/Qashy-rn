@@ -32,17 +32,14 @@ import { WebDialogHost } from "@/components/web-dialog-host";
 import { ReloadErrorBanner } from "@/components/reload-error-banner";
 import {
   LocalizationProvider,
+  translateCurrent,
   useLocalization,
 } from "@/localization/localization";
 import { QashyThemeProvider, useQashyTheme } from "@/theme/theme";
 import { QASHY_ACCENT } from "@/domain/defaults";
 import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
-import {
-  STARTUP_FONT_ASSETS,
-  useBackgroundFontLoading,
-  useThemeFonts,
-} from "@/theme/use-theme-fonts";
+import { STARTUP_FONT_ASSETS, useThemeFonts } from "@/theme/use-theme-fonts";
 
 // `index` redirects to onboarding or the tabs, so anchoring the root stack to it
 // gives every deep-linked route (a form sheet, /appearance, /csv, +not-found) a
@@ -123,10 +120,16 @@ function formSheetOptions(title: string, backTitle: string, fallback: Href) {
  * it sits above QashyThemeProvider and has to theme itself from the static token
  * sets exactly like the FinanceProvider error state does.
  */
-export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
+export function ErrorBoundary({ retry }: ErrorBoundaryProps) {
   const scheme = useColorScheme();
   // Settings are not loaded here, so the user's theme is unknown: classic is the only truthful choice.
   const tokens = classicTheme.palette[scheme === "dark" ? "dark" : "light"];
+  // The raw error message is never shown: it can carry record details from a render. The
+  // language is the last one the app applied, since no provider is mounted here.
+  const heading = translateCurrent("Something went wrong");
+  const detail = translateCurrent(
+    "Qashy hit an unexpected error while rendering this screen.",
+  );
 
   useEffect(hideSplashScreen, []);
 
@@ -145,11 +148,10 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         selectable
         style={{ fontSize: 20, fontWeight: "700", color: tokens.text }}
       >
-        Something went wrong
+        {heading}
       </Text>
       <Text selectable style={{ textAlign: "center", color: tokens.textMuted }}>
-        {error.message ||
-          "Qashy hit an unexpected error while rendering this screen."}
+        {detail}
       </Text>
       <Pressable
         accessibilityRole="button"
@@ -166,7 +168,7 @@ export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
         <Text
           style={{ color: readableTextColor(QASHY_ACCENT), fontWeight: "700" }}
         >
-          Try again
+          {translateCurrent("Try again")}
         </Text>
       </Pressable>
     </View>
@@ -180,7 +182,6 @@ function RootNavigator() {
 
   useWebDocumentTitle();
   useTrackLocationChanges();
-  useBackgroundFontLoading();
   // Native waits for the active theme's faces (instant for Classic, whose faces already loaded
   // behind the splash) rather than flashing the system face. Web renders at once and swaps via
   // the CSS fallback stack, as before.

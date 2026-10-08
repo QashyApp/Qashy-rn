@@ -24,6 +24,7 @@ import {
   type SystemPalettes,
 } from "@/theme/dynamic-palette";
 import { materialRoles } from "@/theme/material-scheme";
+import { useIconSets } from "@/theme/icon-sets";
 import { applyAppearanceOverrides } from "@/theme/overrides";
 import { NO_SHADOW, bevelAccentShadow, flatShadowSet } from "@/theme/shadow";
 import { useSystemPalettes } from "@/theme/use-system-palettes";
@@ -496,12 +497,19 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
   const seed =
     accentChoice.kind === "seed" ? accentChoice.seed : theme.accent.default;
   const palettes = useSystemPalettes(usesSystemAccent);
+  // A set fetched on demand draws as Ionicons until it lands; the new tokens object that follows
+  // is what re-renders every icon with it.
+  const iconsReady = useIconSets([
+    theme.icons.set,
+    theme.icons.categorySet ?? theme.icons.set,
+  ]);
   const tokens = useMemo(
     () =>
       usesSystemAccent
         ? systemTokens(mode === "dark", theme, palettes)
         : accentTokens(seed, mode === "dark", theme),
-    [mode, seed, theme, usesSystemAccent, palettes],
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- iconsReady only forces a fresh object
+    [mode, seed, theme, usesSystemAccent, palettes, iconsReady],
   );
 
   useEffect(() => {

@@ -46,8 +46,6 @@ export const WIRE_VECTORS = {
     bucketToken:
       "178e48ea2391afd1611278f5dcac51fc5b09df9ded55e1ca94c4018cd82bae09",
     bucketId: "UBNGZSOH5LPEPT3HXQJ3EGBMGT3KAZWPX2IZDXZ3DS4FSIRCZNPQ",
-    rendezvousWindow: 6_000_000,
-    rendezvousId: "CD4XMQXEVOXOXBCHM3WZSTMG2ISHJJNY76TGGROVWPCDNXTWKKZQ",
     recoveryPhrase:
       "palace girl mansion broom return road allow develop warfare harsh sure point thumb tonight banana tray glance process dry nominee else solid prosper coach",
   },

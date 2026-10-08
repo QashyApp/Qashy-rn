@@ -21,7 +21,8 @@ import {
   useFinanceSettings,
 } from "@/providers/finance-provider";
 import { FONT_REGISTRY, isFontId, stackFor } from "@/theme/fonts";
-import { ICON_SETS } from "@/theme/icon-sets";
+import { useAllFonts } from "@/theme/use-theme-fonts";
+import { ICON_SET_IDS, ICON_SETS, useIconSets } from "@/theme/icon-sets";
 import { useCustomThemes } from "@/theme/custom/use-custom-themes";
 import { useQashyTheme } from "@/theme/theme";
 import { materialStyle } from "@/theme/materials";
@@ -215,6 +216,9 @@ export function AppearanceOverridesCard() {
   };
 
   const openSpec = ROWS.find((spec) => spec.key === openKey) ?? null;
+  const fontPicker = openSpec?.kind === "text" || openSpec?.kind === "numeric";
+  useAllFonts(fontPicker);
+  useIconSets(openSpec && !fontPicker ? ICON_SET_IDS : []);
   const close = () => setOpenKey(null);
 
   return (

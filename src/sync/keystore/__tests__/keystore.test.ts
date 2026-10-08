@@ -22,7 +22,7 @@ import {
   type SyncKeystore,
 } from "@/sync/keystore/types";
 
-const PASSPHRASE = "correct horse battery";
+const PASSPHRASE = "marigold teapot lantern";
 
 const vault = (epoch = 1): StoredVault => ({
   vaultKey: createVaultRootKey(),
@@ -152,7 +152,7 @@ describe("the passphrase gate", () => {
     await first.setPassphrase(PASSPHRASE);
 
     const restarted = new MemoryKeystore(backing);
-    await expect(restarted.unlock("correct horse batteries")).rejects.toThrow(
+    await expect(restarted.unlock("marigold teapot lanterns")).rejects.toThrow(
       SyncCryptoError,
     );
     expect(await restarted.status()).toBe("locked");
@@ -237,6 +237,15 @@ describe("the passphrase gate", () => {
     keystore.lock();
     expect(await keystore.status()).toBe("unlocked");
     expect(await keystore.read()).not.toBeNull();
+  });
+
+  it("validates an unguarded record on unlock, the same as a gated one", async () => {
+    // Not a vault record at all. The gated path refuses this before caching it; the unguarded
+    // path must too, or the bad record is cached and only fails on the next read.
+    const backing: MemoryKeystoreCell = { bytes: new Uint8Array([0, 9, 9, 9]) };
+    const keystore = new MemoryKeystore(backing);
+    await expect(keystore.unlock(PASSPHRASE)).rejects.toThrow();
+    await expect(keystore.read()).rejects.toThrow();
   });
 });
 

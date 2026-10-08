@@ -1,0 +1,141 @@
+name: Build
+
+# Android builds only. Nothing here depends on the Test workflow.
+#   push to main      -> preview APK
+#   push of a v* tag  -> preview APK + production AAB
+#   manual dispatch   -> whichever buildType you pick
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore:
+      - "**.md"
+      - "LICENSE"
+      - "docs/**"
+      - "e2e/**"
+      - "scripts/**"
+      - ".github/dependabot.yml"
+      - ".github/workflows/test.yml"
+  workflow_dispatch:
+    inputs:
+      buildType:
+        type: choice
+        description: "Build type to run"
+        options:
+          - dev
+          - preview
+          - production
+          - all
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: 🗺 Plan builds
+        id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          BUILD_TYPE: ${{ github.event.inputs.buildType }}
+        run: |
+          dev='{"name":"dev","profile":"development","prefix":"qashy-dev","ext":"apk","node_env":"development"}'
+          preview='{"name":"preview","profile":"preview","prefix":"qashy-release","ext":"apk","node_env":"production"}'
+          production='{"name":"production","profile":"production","prefix":"qashy-release","ext":"aab","node_env":"production"}'
+
+          if [ "$EVENT" = "workflow_dispatch" ]; then
+            case "$BUILD_TYPE" in
+              dev) list="$dev" ;;
+              preview) list="$preview" ;;
+              production) list="$production" ;;
+              *) list="$dev,$preview,$production" ;;
+            esac
+          elif [[ "$REF" == refs/tags/* ]]; then
+            list="$preview,$production"
+          else
+            list="$preview"
+          fi
+
+          echo "matrix={\"include\":[$list]}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    name: build (${{ matrix.name }})
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - name: 🏗 Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history and tags: app.config.ts derives the version from `git describe`.
+          fetch-depth: 0
+
+      # No npm cache here: `npm ci` is quick and each matrix job would otherwise
+      # write its own copy.
+      - name: 🏗 Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+
+      - name: 🏗 Setup Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Only builds on main may write the Gradle cache (~1.7 GB per set); tag and
+      # manual runs read it but never add to it.
+      - name: 🏗 Setup Gradle cache
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: 🏗 Setup EAS CLI
+        uses: expo/expo-github-action@eab7a230208c952974db8c3245cfd78402c7b385 # v9
+        with:
+          eas-version: 24.x
+          packager: npm
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🏷 Name build output
+        id: out
+        env:
+          PREFIX: ${{ matrix.prefix }}
+          EXT: ${{ matrix.ext }}
+        run: |
+          version=$(npx expo config --json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          echo "name=${PREFIX}-${version}" >> "$GITHUB_OUTPUT"
+          echo "file=${PREFIX}-${version}.${EXT}" >> "$GITHUB_OUTPUT"
+
+      - name: 📱 Build ${{ matrix.name }}
+        env:
+          NODE_ENV: ${{ matrix.node_env }}
+          PROFILE: ${{ matrix.profile }}
+          OUTPUT_FILE: ${{ steps.out.outputs.file }}
+        run: |
+          export NODE_OPTIONS="--max_old_space_size=4096"
+          eas build --platform android --profile "$PROFILE" --local --non-interactive --output="./$OUTPUT_FILE"
+
+      - name: 📦 Upload build artifact to GitHub
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          path: ./${{ steps.out.outputs.file }}
+          archive: false
+          retention-days: 7

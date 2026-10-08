@@ -161,6 +161,25 @@ describe("Ed25519 — RFC 8032 §7.1 TEST 1", () => {
     expect(verify(fromHex(signature), utf8Bytes("x"), publicKey)).toBe(false);
   });
 
+  it("rejects a malleated signature whose scalar is not reduced below the group order", () => {
+    // S' = S + L is the same scalar modulo L, so a verifier that accepts it lets anyone rewrite
+    // a valid signature into a different byte string. The signature is 64 bytes, S in the top half.
+    const L = 2n ** 252n + 27742317777372353535851937790883648493n;
+    const original = fromHex(signature);
+    let scalar = 0n;
+    for (let i = 63; i >= 32; i -= 1)
+      scalar = (scalar << 8n) | BigInt(original[i]);
+    const malleated = scalar + L;
+    expect(malleated < 2n ** 256n).toBe(true);
+    const forged = new Uint8Array(original);
+    for (let i = 0; i < 32; i += 1) {
+      forged[32 + i] = Number((malleated >> BigInt(8 * i)) & 0xffn);
+    }
+    expect(verify(forged, new Uint8Array(0), publicKey)).toBe(false);
+    // The untouched signature still verifies: the rule removes the copy, not the signature.
+    expect(verify(original, new Uint8Array(0), publicKey)).toBe(true);
+  });
+
   it("returns false rather than throwing on malformed input", () => {
     expect(verify(new Uint8Array(63), new Uint8Array(0), publicKey)).toBe(
       false,

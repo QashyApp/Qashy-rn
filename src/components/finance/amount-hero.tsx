@@ -279,7 +279,7 @@ export function AmountHero({
             muted={!error}
             style={error ? { color: theme.negative } : undefined}
           >
-            {error ?? hint}
+            {error ? t(error) : t(hint)}
           </AppText>
         </MotionView>
       ) : error ? (

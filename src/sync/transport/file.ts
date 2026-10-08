@@ -50,6 +50,29 @@ export const BUNDLE_MIME = "application/octet-stream";
 export const MAX_BUNDLE_FRAMES = 512;
 /** Total decoded ciphertext accepted from one file, independent of its frame count. */
 export const MAX_BUNDLE_DECODED_BYTES = 64 * 1024 * 1024;
+/**
+ * The longest a route tag or a sender field may be. Route tags are 16 characters and device
+ * ids are UUIDs, so this is slack, not a constraint on anything real.
+ */
+export const MAX_BUNDLE_ID_LENGTH = 256;
+/**
+ * Overhead allowed per frame row beyond its ciphertext: two JSON-escaped ids, the seq, and the
+ * keys. Escaping can expand each id up to six times, which is why the id cap is multiplied.
+ */
+const BUNDLE_ROW_OVERHEAD = 2 * MAX_BUNDLE_ID_LENGTH * 6 + 128;
+/**
+ * The most text a bundle may be before it is parsed at all.
+ *
+ * Derived from the decoded-byte cap rather than from frame count times the frame cap: the
+ * aggregate limit is the one that actually bounds memory, and multiplying per-frame caps by
+ * the frame count would allow a file roughly eighty times larger than anything the importer
+ * will accept. Refusing by length first means `JSON.parse` never sees a string it could not
+ * have finished with.
+ */
+export const MAX_BUNDLE_TEXT_LENGTH =
+  Math.ceil((MAX_BUNDLE_DECODED_BYTES * 4) / 3) +
+  MAX_BUNDLE_FRAMES * (BUNDLE_ROW_OVERHEAD + 8) +
+  BUNDLE_ROW_OVERHEAD;
 
 export interface BundleFrame {
   /** Route-blinded recipient. Which device the frame was sealed for. */
@@ -60,7 +83,11 @@ export interface BundleFrame {
 
 export interface SyncBundle {
   readonly version: number;
-  /** The device that produced the file. Shown on the import screen; not trusted for anything. */
+  /**
+   * The sender, as the file carries it: this device's route tag for the UTC day the file was
+   * written. It is not a device id, so a file does not disclose which device wrote it. The
+   * importer resolves it against the roster over the file window; see `importBundle`.
+   */
   readonly from: string;
   readonly frames: readonly BundleFrame[];
 }
@@ -123,8 +150,15 @@ class FileChannel implements SyncChannel {
 
 export interface FileTransportDeps {
   readonly deviceId: string;
-  /** This device's route tag, so an imported bundle can be told it is for somebody else. */
+  /** This device's route tag for the day the file is written, carried as the bundle's `from`. */
   readonly selfTag: string;
+  /**
+   * The recipient tags this device accepts on import. The runtime builds them over a wider window
+   * than the relay uses (see `FILE_ROUTE_WINDOW_DAYS`), because a file is carried by hand and may
+   * be opened weeks after it was written.
+   */
+  readonly recipientTags: ReadonlySet<string>;
+  /** A peer's tag for the day the file is written. */
   readonly tagFor: (peerId: string) => string;
 }
 
@@ -153,7 +187,7 @@ export class FileTransport implements SyncTransport {
         "That export is too large for one sync file. Sync in smaller passes.",
       );
     }
-    return { version: BUNDLE_VERSION, from: this.deps.deviceId, frames };
+    return { version: BUNDLE_VERSION, from: this.deps.selfTag, frames };
   }
 
   /**
@@ -167,7 +201,7 @@ export class FileTransport implements SyncTransport {
   ingest(bundle: SyncBundle): number {
     let delivered = 0;
     for (const held of bundle.frames) {
-      if (held.to !== this.deps.selfTag) continue;
+      if (!this.deps.recipientTags.has(held.to)) continue;
       const channel = this.channels.get(bundle.from);
       if (channel?.deliver(held.frame, held.seq)) delivered += 1;
     }
@@ -214,6 +248,9 @@ export const encodeBundle = (bundle: SyncBundle): string =>
  * chose and is watching. Half-importing it would leave them with no way to know which half.
  */
 export function decodeBundle(text: string): SyncBundle {
+  if (typeof text !== "string" || text.length > MAX_BUNDLE_TEXT_LENGTH) {
+    throw new BundleError("That sync file is too large to import.");
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(text);
@@ -238,6 +275,9 @@ export function decodeBundle(text: string): SyncBundle {
   if (typeof body.from !== "string" || !Array.isArray(body.frames)) {
     throw new BundleError("That sync file is incomplete.");
   }
+  if (!body.from || body.from.length > MAX_BUNDLE_ID_LENGTH) {
+    throw new BundleError("That sync file is damaged.");
+  }
   if (body.frames.length > MAX_BUNDLE_FRAMES) {
     throw new BundleError("That sync file is too large to import.");
   }
@@ -249,6 +289,9 @@ export function decodeBundle(text: string): SyncBundle {
       throw new BundleError("That sync file is damaged.");
     const row = entry as Record<string, unknown>;
     if (typeof row.to !== "string" || typeof row.frame !== "string") {
+      throw new BundleError("That sync file is damaged.");
+    }
+    if (!row.to || row.to.length > MAX_BUNDLE_ID_LENGTH) {
       throw new BundleError("That sync file is damaged.");
     }
     if (

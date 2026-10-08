@@ -32,6 +32,7 @@ import {
   isEntityType,
   keyedMapsOf,
   readPath,
+  readRegisteredPath,
   registersOf,
   writePath,
   type RegisterSpec,
@@ -401,6 +402,11 @@ export function eraseDeletedState(meta: CausalMeta): CausalMeta {
     ),
   };
 
+  // Unknown ops are kept verbatim for an upgrade, but an op at or before the delete describes
+  // content the delete erased, so it goes too. Otherwise a `setAdd` this build cannot apply
+  // would keep the tag ids of a deleted transaction.
+  const unknown = meta.unknown.filter((op) => op.hlc > through);
+
   return {
     ...meta,
     erasedThrough: through,
@@ -408,6 +414,7 @@ export function eraseDeletedState(meta: CausalMeta): CausalMeta {
     registers,
     sets,
     maps,
+    unknown,
   };
 }
 
@@ -417,20 +424,24 @@ export function applyOp(meta: CausalMeta | null, op: SyncOpBody): CausalMeta {
   const advanced: CausalMeta = { ...base, maxHlc: maxHlc(base.maxHlc, op.hlc) };
 
   if (!isInterpretable(op)) {
-    // Deduplicated by hlc + kind so a re-delivered batch does not grow the list forever,
-    // and sorted rather than appended so that two devices which received the same unknown
-    // ops in different orders still hold byte-identical state. Arrival order is not
-    // something either of them can observe about the other.
-    const seen = advanced.unknown.some(
-      (each) => unknownKey(each) === unknownKey(op),
-    );
-    return seen
-      ? advanced
-      : { ...advanced, unknown: sortUnknown([...advanced.unknown, op]) };
+    return eraseDeletedState(withUnknown(advanced, op));
   }
 
   return eraseDeletedState(applyKnownOp(advanced, op));
 }
+
+/**
+ * Keeps an op this build cannot apply, so an upgrade can materialize it.
+ *
+ * Deduplicated by hlc + kind so a re-delivered batch does not grow the list forever, and sorted
+ * rather than appended so that two devices which received the same unknown ops in different
+ * orders still hold byte-identical state. Arrival order is not something either of them can
+ * observe about the other.
+ */
+const withUnknown = (meta: CausalMeta, op: SyncOpBody): CausalMeta => {
+  const seen = meta.unknown.some((each) => unknownKey(each) === unknownKey(op));
+  return seen ? meta : { ...meta, unknown: sortUnknown([...meta.unknown, op]) };
+};
 
 function applyKnownOp(advanced: CausalMeta, op: SyncOpBody): CausalMeta {
   switch (op.kind) {
@@ -441,7 +452,9 @@ function applyKnownOp(advanced: CausalMeta, op: SyncOpBody): CausalMeta {
     case "setAdd":
     case "setRemove": {
       const path = String(op.payload.field ?? "");
-      if (!elementSetsOf(op.entityType).includes(path)) return advanced;
+      // A set this build does not know is kept whole, exactly like an unknown register.
+      if (!elementSetsOf(op.entityType).includes(path))
+        return withUnknown(advanced, op);
       const state: ElementState =
         op.kind === "setAdd"
           ? { addHlc: op.hlc, removeHlc: null }
@@ -455,7 +468,7 @@ function applyKnownOp(advanced: CausalMeta, op: SyncOpBody): CausalMeta {
     case "mapRemove": {
       const path = String(op.payload.field ?? "");
       if (!keyedMapsOf(op.entityType).some((each) => each.path === path))
-        return advanced;
+        return withUnknown(advanced, op);
       const updates: Record<string, MapEntryState> =
         op.kind === "mapUpsert"
           ? Object.fromEntries(
@@ -518,8 +531,14 @@ function applyCreate(meta: CausalMeta, op: SyncOpBody): CausalMeta {
   let next: CausalMeta = { ...meta, created };
 
   for (const spec of registersOf(op.entityType)) {
-    // A malformed sparse create must not erase fields a complete create already supplied.
-    if (spec.fields.some((field) => readPath(entity, field) === undefined))
+    // A malformed sparse create must not erase fields a complete create already supplied. A
+    // legacy-optional key (see `missingMeansNullOf`) is not sparseness: its absence is `null`.
+    if (
+      spec.fields.some(
+        (field) =>
+          readRegisteredPath(op.entityType, entity, field) === undefined,
+      )
+    )
       continue;
     next = withRegister(next, spec, {
       hlc: op.hlc,

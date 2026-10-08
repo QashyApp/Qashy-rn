@@ -69,8 +69,6 @@ const status = (over: Partial<SyncStatus> = {}): SyncStatus => ({
   endpoints: {
     relayUrl: "https://relay.example.com",
     relayEnabled: true,
-    directEnabled: true,
-    iceServers: [],
   },
   relay: relay("reachable"),
   activity: [],
@@ -129,14 +127,14 @@ describe("summarizeSync", () => {
       "Relay errors",
     );
     expect(summarize({ relay: relay("disabled") }).subtitle).toBe(
-      "Direct only · 2 devices",
+      "Transfer files only · 2 devices",
     );
   });
 
-  it("says a relay outage still leaves direct sync working", () => {
+  it("says a relay outage still leaves transfer files working", () => {
     // The whole reason this row is worth building: "unreachable" must not read as "broken".
     expect(summarize({ relay: relay("unreachable") }).body).toContain(
-      "still sync directly",
+      "A transfer file still works",
     );
   });
 

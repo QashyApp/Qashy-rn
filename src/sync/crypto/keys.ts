@@ -13,7 +13,7 @@
  * from a roster would accomplish nothing.
  */
 
-import { LABELS, RENDEZVOUS_WINDOW_SECONDS } from "@/sync/crypto/labels";
+import { LABELS } from "@/sync/crypto/labels";
 import {
   KEY_LENGTH,
   assertLength,
@@ -22,7 +22,7 @@ import {
   randomBytes,
   sha256,
   toBase32,
-  u64be,
+  u32be,
   utf8Bytes,
   agreementKeygen,
   agreementPublicKeyFrom,
@@ -73,56 +73,47 @@ export const deriveBucketToken = (vrk: VaultRootKey) =>
 /** Route tags are this many base32 characters — 80 bits, far more than routing needs. */
 export const ROUTE_TAG_LENGTH = 16;
 
-/**
- * The tag a relay blob is addressed to.
- *
- * A drop-box holds blobs for every device in the vault, so a reader has to know which ones
- * are for it. Writing the recipient's device id on the outside would answer that — and would
- * hand the relay a stable identifier derived from a public key, which is the one piece of
- * metadata that could follow a device between vaults and relays.
- *
- * This is that identifier, blinded per vault: the same device in two vaults produces two
- * unrelated tags, and the relay can group blobs by recipient without learning who the
- * recipient is. Vault members compute it from the root key; nobody else can compute it at
- * all, so it is also not something a relay operator can look up after the fact.
- *
- * Deliberately *not* rotated. Unlike the rendezvous id — which is a live meeting point and
- * gains real unlinkability from rotating — a drop-box tag has to stay readable by a device
- * that has been switched off for a fortnight, and a rotating tag would either strand those
- * blobs or need the reader to scan every past window, which reveals more than it hides.
- */
-export const deriveRouteTag = (vrk: VaultRootKey, deviceId: string) =>
-  toBase32(hkdf(vrk, utf8Bytes(deviceId), LABELS.route)).slice(
-    0,
-    ROUTE_TAG_LENGTH,
-  );
+/** One UTC day in milliseconds. Route tags rotate on UTC day boundaries. */
+export const ROUTE_DAY_MS = 86_400_000;
 
 /**
- * The signaling rendezvous identifier for a given 5-minute window.
+ * The UTC day number a route tag is derived for: whole days since the Unix epoch.
  *
- * Both devices compute this independently and never tell the server who they are, and it
- * changes every window so an observer cannot link one session to the next.
+ * Floored, so every instant within one UTC day maps to the same number. Callers that tolerate a
+ * day of overlap read both today's and yesterday's number; see `runtime.ts`.
  */
-export const deriveRendezvousId = (vrk: VaultRootKey, windowIndex: number) =>
-  toBase32(hkdf(vrk, u64be(windowIndex), LABELS.rendezvous)).slice(0, 52);
-
-export const rendezvousWindow = (unixSeconds: number) =>
-  Math.floor(unixSeconds / RENDEZVOUS_WINDOW_SECONDS);
+export const routeDayOf = (nowMs: number) => Math.floor(nowMs / ROUTE_DAY_MS);
 
 /**
- * The ids worth listening on right now: the current window plus its neighbours.
+ * The tag a relay blob is addressed to: one device, on one UTC day, within one vault epoch.
  *
- * Two devices whose clocks differ by seconds will land either side of a window boundary
- * and compute different ids, so a single-window implementation fails intermittently and
- * unreproducibly — the worst possible failure mode. Listening on three windows costs
- * nothing and removes the class.
+ * A drop-box holds blobs for every device in the vault, so a reader has to know which ones are
+ * for it. Writing the recipient's device id on the outside would answer that — and would hand the
+ * relay a stable identifier derived from a public key, which could follow a device across days,
+ * vaults and relays. This blinds it: only vault members can compute the tag, and the relay sees
+ * only an unlinkable-looking value.
+ *
+ * It rotates twice. Per UTC day, so the relay cannot link one device's traffic across days (it
+ * can within a day, and across midnight both today's and yesterday's tags are live). Per epoch,
+ * because a key rotation changes the root key the tag is derived from.
+ *
+ * Input layout, unambiguous by construction: `salt = u32be(epoch) ‖ u32be(day) ‖ utf8(deviceId)`.
+ * The first eight bytes are always the two fixed-width integers, so no two (epoch, day, deviceId)
+ * triples can share a salt, whatever the device id's length. The label is `LABELS.routeDay`.
  */
-export const rendezvousIds = (vrk: VaultRootKey, unixSeconds: number) => {
-  const current = rendezvousWindow(unixSeconds);
-  return [current - 1, current, current + 1].map((index) =>
-    deriveRendezvousId(vrk, index),
-  );
-};
+export const deriveRouteTag = (
+  vrk: VaultRootKey,
+  epoch: number,
+  day: number,
+  deviceId: string,
+) =>
+  toBase32(
+    hkdf(
+      vrk,
+      concatBytes(u32be(epoch), u32be(day), utf8Bytes(deviceId)),
+      LABELS.routeDay,
+    ),
+  ).slice(0, ROUTE_TAG_LENGTH);
 
 /** A fresh single-use pairing secret. Crosses the optical channel, never the network. */
 export const createPairingSecret = () =>
@@ -131,16 +122,14 @@ export const createPairingSecret = () =>
 /**
  * The rendezvous a pairing pair meets at.
  *
- * Separate from `deriveRendezvousId` for a structural reason rather than a stylistic one: that
- * one is keyed on the vault root key, and the entire point of pairing is that the joining
- * device does not have it yet. The pairing secret is the only thing both devices hold at this
+ * Not keyed on the vault root key: the entire point of pairing is that the joining device does
+ * not have it yet. The pairing secret is the only thing both devices hold at this
  * moment, and it reached the second device optically, so an id derived from it is one a network
  * observer cannot compute.
  *
  * Deliberately **not** windowed. A rotating id exists to stop a server linking one session to
  * the next, which needs the id to outlive a session; this one lives ninety seconds and is used
- * once, so rotation would buy nothing and would reintroduce the clock-straddling failure that
- * `rendezvousIds` has to spend three lookups working around.
+ * once, so rotation would buy nothing and would introduce a clock-straddling failure.
  */
 export const derivePairingRendezvousId = (pairingSecret: PairingSecret) =>
   toBase32(hkdf(pairingSecret, EMPTY_SALT, LABELS.pairingRendezvous)).slice(

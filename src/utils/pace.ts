@@ -71,8 +71,18 @@ export function budgetPace({
     limitMinor > 0 ? spentMinor / limitMinor : spentMinor > 0 ? 1 : 0;
   // With no elapsed time to divide by, there is no pace to extrapolate — the
   // best available "projection" is simply what has been spent so far.
+  // Extrapolating a small spend over a short elapsed fraction can exceed the safe-integer range, so the
+  // projection is clamped there rather than returned as an unsafe number.
   const projectedMinor =
-    elapsedRatio > 0 ? Math.round(spentMinor / elapsedRatio) : spentMinor;
+    elapsedRatio > 0
+      ? Math.max(
+          -Number.MAX_SAFE_INTEGER,
+          Math.min(
+            Number.MAX_SAFE_INTEGER,
+            Math.round(spentMinor / elapsedRatio),
+          ),
+        )
+      : spentMinor;
 
   const projectionReliable =
     elapsedDays >=

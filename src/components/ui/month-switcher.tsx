@@ -1,8 +1,7 @@
-import { useState, type ComponentProps } from "react";
+import { useRef, useState } from "react";
 import { Modal, Pressable, View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   useAnimatedStyle,
-  useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -124,14 +123,42 @@ export function MonthSwitcher({
   );
 }
 
-/**
- * The month name. With a `dragProgress` the previous and next names wait just outside the
- * pill and travel with the pages, so the title is part of the swipe instead of a label that
- * changes after it.
- */
 /** Clears the pill's padding, so a waiting month name is never seen at the edge. */
 const TITLE_GAP = 64;
+/** Names drawn on each side of the current one: enough for two quick swipes ahead of a render. */
+const TITLE_REACH = 2;
+/** Wide enough for any month name in any locale, so the sizer never truncates one. */
+const SIZER_WIDTH = 1000;
 
+const monthAt = (index: number) =>
+  `${Math.floor((index - 1) / 12)}-${String(((index - 1) % 12) + 1).padStart(2, "0")}-01`;
+
+function TitleText({ children }: { children: string }) {
+  return (
+    <AppText
+      literal
+      variant="label"
+      numeric
+      numberOfLines={1}
+      style={{ textAlign: "center" }}
+    >
+      {children}
+    </AppText>
+  );
+}
+
+/**
+ * The month name. With a `dragProgress` the neighbouring names sit beside it in one strip that
+ * travels with the pages, so the title is part of the swipe.
+ *
+ * The current name is laid out in normal flow and gives the title its height. Nothing here is
+ * sized by a measurement: Yoga measures a child no taller than a parent with a fixed height, so a
+ * name sized by an `onLayout` result that started at zero stayed zero on native, and Android drew
+ * nothing (web lays out with CSS and never showed it).
+ *
+ * The pill is as wide as the longest month name, measured off-screen, so it keeps one size from
+ * month to month.
+ */
 function MonthTitle({
   value,
   dragProgress,
@@ -140,86 +167,141 @@ function MonthTitle({
   dragProgress?: SharedValue<number>;
 }) {
   const { locale, isRtl } = useLocalization();
-  const titleWidth = useSharedValue(0);
-  const sign = isRtl ? -1 : 1;
-  const current = (
-    <AppText
-      literal
-      variant="label"
-      numeric
-      numberOfLines={1}
-      style={{ textAlign: "center" }}
-    >
-      {monthLabel(value, locale)}
-    </AppText>
-  );
-  const currentStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX: (dragProgress?.get() ?? 0) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  const previousStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          ((dragProgress?.get() ?? 0) - sign) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  const nextStyle = useAnimatedStyle(() => ({
-    transform: [
-      {
-        translateX:
-          ((dragProgress?.get() ?? 0) + sign) * (titleWidth.get() + TITLE_GAP),
-      },
-    ],
-  }));
-  if (!dragProgress) return current;
-  const neighbour = (
-    delta: number,
-    style: ComponentProps<typeof Animated.View>["style"],
-  ) => (
-    <Animated.View
+  const [titleWidth, setTitleWidth] = useState(0);
+  // Each name's own width, measured one by one. The widest sets a floor under the title.
+  const widths = useRef<number[]>([]);
+  const [nameWidth, setNameWidth] = useState(0);
+  const centre = Number(value.slice(0, 4)) * 12 + Number(value.slice(5, 7));
+  // Every month name of the year, laid out invisibly. Absolutely positioned and given a width but
+  // no height, so each name is measured at its natural size and the sizer never affects the title.
+  const sizer = (
+    <View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       pointerEvents="none"
-      style={[
-        {
-          position: "absolute",
-          // Wider than the title, so a longer month name never wraps to fit it.
-          left: -TITLE_GAP,
-          right: -TITLE_GAP,
-          top: 0,
-          bottom: 0,
-          alignItems: "center",
-          justifyContent: "center",
-        },
-        style,
-      ]}
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: SIZER_WIDTH,
+        opacity: 0,
+      }}
     >
-      <AppText
-        literal
-        variant="label"
-        numeric
-        numberOfLines={1}
-        style={{ textAlign: "center" }}
-      >
-        {monthLabel(moveMonth(value, delta), locale)}
-      </AppText>
-    </Animated.View>
+      {Array.from({ length: 12 }, (_, month) => (
+        <View
+          key={month}
+          style={{ alignSelf: "flex-start" }}
+          onLayout={(event: LayoutChangeEvent) => {
+            widths.current[month] = event.nativeEvent.layout.width;
+            const widest = Math.ceil(
+              Math.max(...widths.current.filter(Boolean)),
+            );
+            setNameWidth((current) => (current === widest ? current : widest));
+          }}
+        >
+          <TitleText>
+            {monthLabel(
+              `${value.slice(0, 4)}-${String(month + 1).padStart(2, "0")}-01`,
+              locale,
+            )}
+          </TitleText>
+        </View>
+      ))}
+    </View>
   );
+  if (!dragProgress) {
+    return (
+      <View style={{ minWidth: nameWidth }}>
+        {sizer}
+        <TitleText>{monthLabel(value, locale)}</TitleText>
+      </View>
+    );
+  }
   return (
     <View
-      onLayout={(event: LayoutChangeEvent) =>
-        titleWidth.set(event.nativeEvent.layout.width)
-      }
+      style={{ minWidth: nameWidth }}
+      onLayout={(event: LayoutChangeEvent) => {
+        const next = Math.round(event.nativeEvent.layout.width);
+        setTitleWidth((current) => (current === next ? current : next));
+      }}
     >
-      <Animated.View style={currentStyle}>{current}</Animated.View>
-      {neighbour(-1, previousStyle)}
-      {neighbour(1, nextStyle)}
+      {sizer}
+      <TitleStrip
+        key={value}
+        centre={centre}
+        sign={isRtl ? -1 : 1}
+        position={dragProgress}
+        step={titleWidth > 0 ? titleWidth + TITLE_GAP : 0}
+        label={monthLabel(value, locale)}
+        neighbours={Array.from({ length: TITLE_REACH * 2 }, (_, slot) => {
+          const delta =
+            slot < TITLE_REACH ? slot - TITLE_REACH : slot - TITLE_REACH + 1;
+          return {
+            delta,
+            label: monthLabel(monthAt(centre + delta), locale),
+          };
+        })}
+      />
     </View>
+  );
+}
+
+/**
+ * The current name with its neighbours one `step` apart on each side, moved as one by the pager's
+ * position. Keyed by month: a new strip arrives with its own month at the centre, so the labels and
+ * their offset can never come from different months. It rests at zero for every month.
+ */
+function TitleStrip({
+  centre,
+  sign,
+  position,
+  step,
+  label,
+  neighbours,
+}: {
+  centre: number;
+  sign: 1 | -1;
+  position: SharedValue<number>;
+  step: number;
+  label: string;
+  neighbours: readonly { delta: number; label: string }[];
+}) {
+  const style = useAnimatedStyle(() => {
+    // The pager's position measured from this strip's month, in page widths.
+    const offset = centre * sign + position.get();
+    // Beyond the drawn names is only ever a jump the pager has not reached yet (the month picker):
+    // the new name waits at the centre for it.
+    const shown =
+      Number.isFinite(offset) && Math.abs(offset) <= TITLE_REACH ? offset : 0;
+    return { transform: [{ translateX: shown * step }] };
+  });
+  return (
+    <Animated.View pointerEvents="none" style={style}>
+      <TitleText>{label}</TitleText>
+      {/* The neighbours wait for the title's width, so they are never drawn inside the pill. */}
+      {step > 0
+        ? neighbours.map((neighbour) => (
+            <View
+              key={neighbour.delta}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+              style={{
+                position: "absolute",
+                // Wider than the title, so a longer month name never wraps or truncates.
+                left: -TITLE_GAP,
+                right: -TITLE_GAP,
+                top: 0,
+                bottom: 0,
+                alignItems: "center",
+                justifyContent: "center",
+                transform: [{ translateX: neighbour.delta * sign * step }],
+              }}
+            >
+              <TitleText>{neighbour.label}</TitleText>
+            </View>
+          ))
+        : null}
+    </Animated.View>
   );
 }
 

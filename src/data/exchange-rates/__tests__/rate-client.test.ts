@@ -138,6 +138,48 @@ describe("fetchEurRates", () => {
     ).rejects.toMatchObject<Partial<RateFetchError>>({ code: "timeout" });
   });
 
+  it('keeps the timeout armed through a stalled body read and maps it to "timeout"', async () => {
+    // Headers arrive, then the body never does, and the platform ignores the abort signal.
+    const deps: RateClientDeps = {
+      fetch: fakeFetch(
+        () =>
+          ({
+            ok: true,
+            status: 200,
+            json: () => new Promise(() => undefined),
+          }) as unknown as Response,
+      ),
+      timeoutMs: 5,
+    };
+    await expect(
+      fetchEurRates(deps, { quotes: ["USD"] }),
+    ).rejects.toMatchObject<Partial<RateFetchError>>({ code: "timeout" });
+  });
+
+  it('maps an abort during the body read to "timeout" too', async () => {
+    const deps: RateClientDeps = {
+      fetch: fakeFetch(
+        (_url, init) =>
+          ({
+            ok: true,
+            status: 200,
+            json: () =>
+              new Promise((_resolve, reject) => {
+                init.signal?.addEventListener("abort", () => {
+                  const error = new Error("The operation was aborted.");
+                  error.name = "AbortError";
+                  reject(error);
+                });
+              }),
+          }) as unknown as Response,
+      ),
+      timeoutMs: 5,
+    };
+    await expect(
+      fetchEurRates(deps, { quotes: ["USD"] }),
+    ).rejects.toMatchObject<Partial<RateFetchError>>({ code: "timeout" });
+  });
+
   it('maps a connection failure to a RateFetchError with code "offline"', async () => {
     const fetch = (async () => {
       throw new TypeError("Failed to fetch");

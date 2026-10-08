@@ -1,6 +1,5 @@
 import { isLoaded, loadAsync } from "expo-font";
 import { useEffect, useMemo, useState } from "react";
-import { InteractionManager } from "react-native";
 
 import { FONT_REGISTRY, fontAssetsFor, fontIdsForTheme } from "@/theme/fonts";
 import { classicTheme } from "@/theme/themes/classic";
@@ -12,9 +11,6 @@ export const STARTUP_FONT_ASSETS = fontAssetsFor(
 );
 
 const ALL_FONT_ASSETS = fontAssetsFor(Object.keys(FONT_REGISTRY));
-
-/** Delay past first paint before the remaining faces are fetched in the background. */
-const BACKGROUND_FONT_DELAY_MS = 1500;
 
 const allLoaded = (assets: Record<string, number>) =>
   Object.keys(assets).every((family) => isLoaded(family));
@@ -44,21 +40,21 @@ export function useThemeFonts(type: TypeSpec) {
 }
 
 /**
- * Registers every other bundled face once the first screen has settled, so opening Appearance or
- * switching theme finds its fonts ready without making every cold start wait for them.
+ * Registers every bundled face while `enabled`, for a picker that previews each font in its own
+ * type. Nothing else needs them, so a cold start loads only what the active theme uses. Re-renders
+ * once they land so the previews swap from the system face.
  */
-export function useBackgroundFontLoading() {
+export function useAllFonts(enabled: boolean) {
+  const [, setLoaded] = useState(false);
   useEffect(() => {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const task = InteractionManager.runAfterInteractions(() => {
-      timer = setTimeout(() => {
-        if (!allLoaded(ALL_FONT_ASSETS))
-          loadAsync(ALL_FONT_ASSETS).catch(() => undefined);
-      }, BACKGROUND_FONT_DELAY_MS);
-    });
-    return () => {
-      task.cancel();
-      clearTimeout(timer);
+    if (!enabled || allLoaded(ALL_FONT_ASSETS)) return;
+    let live = true;
+    const done = () => {
+      if (live) setLoaded(true);
     };
-  }, []);
+    loadAsync(ALL_FONT_ASSETS).then(done, done);
+    return () => {
+      live = false;
+    };
+  }, [enabled]);
 }

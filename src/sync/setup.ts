@@ -446,6 +446,13 @@ export async function adoptVault(
     readonly profile: DeviceProfile;
   },
 ): Promise<EnableResult> {
+  // Same precondition as `enableSync`: adopting over an existing vault would orphan its peers and
+  // leave two chains claiming one device. A locked vault counts as present, because its key is
+  // there even though this device cannot read it.
+  const status = await deps.keystore.status();
+  if (status === "locked" || status === "unlocked") {
+    throw new Error("This device is already part of a vault.");
+  }
   await deps.keystore.write({
     vaultKey: input.vaultKey,
     identity: input.identity,
@@ -646,13 +653,13 @@ async function appendMembershipControl(
     for (const decision of after.revocations) {
       const peer = roster.get(decision.targetId);
       if (peer && !peer.revokedAt) {
+        // Exactly the signed cutoff. Every device derives the same value from the same signed
+        // decision; folding in this device's held head would make two devices disagree about the
+        // cutoff whenever one of them holds more of the revoked author's history.
         changed.push({
           ...peer,
           revokedAt: decision.at,
-          revokedSeq: Math.max(
-            decision.cutoff,
-            held.heads.get(decision.targetId)?.seq ?? 0,
-          ),
+          revokedSeq: decision.cutoff,
         });
       }
     }

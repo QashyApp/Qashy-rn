@@ -21,6 +21,9 @@ const FRANKFURTER_BASE_URL = "https://api.frankfurter.dev/v2/rates";
 /** Every request pivots through EUR; see the file header for why. */
 const PIVOT = "EUR";
 
+/** An ISO-style three-letter currency code, the only shape ever placed in a request URL. */
+const CURRENCY_CODE = /^[A-Z]{3}$/;
+
 /**
  * ISO codes Qashy accepts as an account currency that Frankfurter never returns.
  *
@@ -57,16 +60,32 @@ export type RatesUrlParams =
  * codes and dates, nothing else.
  */
 export function buildRatesUrl(params: RatesUrlParams): string {
+  // Defence in depth: the values are interpolated, not encoded, so anything that is not a
+  // three-letter code or a calendar date is refused rather than placed in the URL.
   const quotes = [
-    ...new Set(params.quotes.map((code) => code.trim().toUpperCase())),
+    ...new Set(
+      params.quotes.map((code) => {
+        const normalised = code.trim().toUpperCase();
+        if (!CURRENCY_CODE.test(normalised)) {
+          throw new RangeError("Currency codes must be three letters A-Z.");
+        }
+        return normalised;
+      }),
+    ),
   ]
     .filter((code) => code !== PIVOT)
     .sort();
   const query = [`base=${PIVOT}`];
   if (quotes.length) query.push(`quotes=${quotes.join(",")}`);
   if ("from" in params) {
+    if (!isLocalDate(params.from) || !isLocalDate(params.to)) {
+      throw new RangeError("Rate range bounds must be calendar dates.");
+    }
     query.push(`from=${params.from}`, `to=${params.to}`);
   } else if (params.date) {
+    if (!isLocalDate(params.date)) {
+      throw new RangeError("Rate date must be a calendar date.");
+    }
     query.push(`date=${params.date}`);
   }
   return `${FRANKFURTER_BASE_URL}?${query.join("&")}`;

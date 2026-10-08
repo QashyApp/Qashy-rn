@@ -16,6 +16,8 @@ import { SYNC_META, writeMeta } from "@/data/sync-store";
 import { MAX_CLOCK_SKEW_MS, RETENTION_MS } from "@/sync/oplog";
 import { utf8Bytes } from "@/sync/crypto";
 import { sealPending } from "@/sync/engine/sealer";
+import { MAX_ABSORB_QUEUE } from "@/sync/engine/session";
+import { SyncEngineError } from "@/sync/engine/types";
 import type { SyncChannel } from "@/sync/engine/transport";
 import {
   NOW,
@@ -458,6 +460,91 @@ describe("SyncSession — reprojection", () => {
     expect(await quarantineRowsOf(bob)).toEqual([]);
     expect((await activityRows(bob)).map((row) => row.kind)).toContain(
       "recovered",
+    );
+  });
+});
+
+/** A channel whose frames the test pushes in by hand, the way a transport would. */
+function handChannel(peerId: string) {
+  let handler: ((frame: Uint8Array, seq: number) => void) | null = null;
+  const channel: SyncChannel = {
+    peerId,
+    send: () => Promise.resolve(),
+    onFrame: (next) => {
+      handler = next;
+      return () => {
+        handler = null;
+      };
+    },
+    close: () => undefined,
+  };
+  return {
+    channel,
+    emit: (frame: Uint8Array, seq: number) => handler?.(frame, seq),
+  };
+}
+
+/** Lets every queued continuation run; the storage double is promise-based, not timer-based. */
+const drain = async () => {
+  for (let turn = 0; turn < 5; turn += 1) {
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+  }
+};
+
+describe("SyncSession — receive queue and transport failures", () => {
+  it("bounds a channel's receive queue and reports each frame it drops", async () => {
+    const [alice, bob] = await makeVault();
+    const { channel, emit } = handChannel(bob.deviceId);
+    alice.session.attach(channel);
+
+    const overflow = 10;
+    for (let index = 0; index < MAX_ABSORB_QUEUE + overflow; index += 1) {
+      emit(new Uint8Array([index % 256]), index);
+    }
+    await drain();
+
+    const dropped = alice.errors.filter(
+      (entry) =>
+        entry.error instanceof SyncEngineError &&
+        entry.error.message.startsWith("Dropped a frame"),
+    );
+    expect(dropped).toHaveLength(overflow);
+    expect(dropped[0].peerId).toBe(bob.deviceId);
+  });
+
+  it("reports a failing activity write instead of letting it reject", async () => {
+    const [alice, bob] = await makeVault();
+    const { channel } = handChannel(bob.deviceId);
+    jest
+      .spyOn(alice.storage, "transact")
+      .mockRejectedValueOnce(new Error("disk full"));
+
+    // A frame that cannot open, so the refusal path — and its activity write — runs.
+    await expect(
+      alice.session.absorb(channel, new Uint8Array([9]), 0),
+    ).resolves.toBeNull();
+
+    const messages = alice.errors.map(
+      (entry) => (entry.error as Error).message,
+    );
+    expect(messages).toContain("disk full");
+  });
+
+  it("records a transport that cannot reach a peer, rather than skipping it silently", async () => {
+    const [alice, bob] = await makeVault();
+    // No link: the loopback transport has no channel for Bob, so every connect fails.
+
+    const outcome = await alice.session.reconcile();
+
+    expect(outcome.failures).toBe(1);
+    expect(alice.errors).toEqual([
+      expect.objectContaining({ peerId: bob.deviceId }),
+    ]);
+    const rows = await activityRows(alice);
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "relay", peerId: bob.deviceId }),
+      ]),
     );
   });
 });

@@ -71,6 +71,7 @@ function inMemoryRelay() {
 function relayFor(
   selfTag: string,
   peerTag: string,
+  peerId: string,
   fetch: typeof globalThis.fetch,
 ) {
   let cursor = 0;
@@ -79,8 +80,11 @@ function relayFor(
     baseUrl: BASE,
     bucketId: "bucket",
     token: "token",
-    selfTag,
+    selfTag: () => selfTag,
+    recipientTags: () => new Set([selfTag]),
     tagFor: () => peerTag,
+    // Sender tags map back to the peer's real device id, which is how the session finds its channel.
+    senderTags: () => Promise.resolve(new Map([[peerTag, peerId]])),
     readCursor: () => Promise.resolve(cursor),
     writeCursor: (next) => {
       cursor = next;
@@ -110,11 +114,11 @@ describe("relay sync", () => {
     const fetch = inMemoryRelay();
     const sourceSession = sessionFor(
       source,
-      relayFor(SOURCE_TAG, TARGET_TAG, fetch),
+      relayFor(SOURCE_TAG, TARGET_TAG, target.deviceId, fetch),
     );
     const targetSession = sessionFor(
       target,
-      relayFor(TARGET_TAG, SOURCE_TAG, fetch),
+      relayFor(TARGET_TAG, SOURCE_TAG, source.deviceId, fetch),
     );
 
     const account = await source.repository.saveAccount({
@@ -133,13 +137,23 @@ describe("relay sync", () => {
       accountId: account.id,
       amountMinor: 1250,
     });
+    // The app keeps at least one live account, so the account being archived needs a successor.
+    await source.repository.saveAccount({
+      name: "Everyday account",
+      type: "checking",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "wallet",
+      color: "#5966E9",
+      archived: false,
+    });
     await source.repository.saveAccount(
       { ...account, archived: true },
       account.id,
     );
 
     const sent = await sourceSession.reconcile();
-    expect(sent.pushed).toMatchObject([{ ops: 3 }]);
+    expect(sent.pushed).toMatchObject([{ ops: 4 }]);
 
     await targetSession.reconcile();
     await settle(6);

@@ -699,7 +699,7 @@ const HEBREW: Record<string, string> = {
   "Up to date": "מעודכן",
   "Syncing…": "מסנכרן…",
   "No other devices yet": "אין עדיין מכשירים אחרים",
-  "Direct connections only": "חיבורים ישירים בלבד",
+  "Transfer files only": "קובצי העברה בלבד",
   "Relay unreachable": "הממסר אינו נגיש",
   "Relay rejected this device": "הממסר דחה את המכשיר הזה",
   "Relay errors": "שגיאות ממסר",
@@ -735,20 +735,20 @@ const HEBREW: Record<string, string> = {
     "Qashy לא הצליח להגיע לאחסון המאובטח, ולכן אין לו מקום לשמור את מפתח הכספת. הנתונים הפיננסיים שלכם לא נפגעו.",
   "They are kept, passed on to your other devices, and retried on every sync — so a correction from any device fixes them on its own.":
     "הם נשמרים, מועברים למכשירים האחרים שלכם ומנוסים שוב בכל סנכרון — כך שתיקון מכל מכשיר פותר אותם מעצמו.",
-  "No relay is set, so your devices sync when both are open at the same time and on a network that lets them reach each other.":
-    "לא הוגדר ממסר, ולכן המכשירים שלכם מסתנכרנים כששניהם פתוחים בו־זמנית וברשת שמאפשרת להם להגיע זה לזה.",
+  "No relay is set, so your devices sync only through transfer files you carry between them.":
+    "לא הוגדר ממסר, ולכן המכשירים שלכם מסתנכרנים רק דרך קובצי העברה שאתם מעבירים ביניהם.",
   "Pair a second device to start. You compare a six-word code on both screens, and nothing is sent until you confirm it matches.":
     "חברו מכשיר שני כדי להתחיל. תשוו קוד של שש מילים בשני המסכים, ושום דבר אינו נשלח עד שתאשרו שהוא זהה.",
   "This is the only device in the vault. Add another and Qashy keeps them in step.":
     "זהו המכשיר היחיד בכספת. הוסיפו עוד אחד ו־Qashy ישמור עליהם מסונכרנים.",
   "Paired and ready. Nothing has needed to move between your devices yet.":
     "מחובר ומוכן. עדיין לא היה צורך להעביר דבר בין המכשירים שלכם.",
-  "Devices on the same network still sync directly. Only catching up while your other device is closed needs the relay.":
-    "מכשירים באותה רשת ממשיכים להסתנכרן ישירות. רק השלמת פערים כשהמכשיר האחר סגור זקוקה לממסר.",
+  "Your changes are kept here and go out once it answers. A transfer file still works in the meantime.":
+    "השינויים שלכם שמורים כאן ויישלחו ברגע שהוא יענה. בינתיים קובץ העברה עדיין עובד.",
   "It answered but refused this vault. Check the relay address in Sync settings — a relay that was replaced or redeployed is the usual cause.":
     "הוא ענה אך דחה את הכספת הזו. בדקו את כתובת הממסר בהגדרות הסנכרון — ממסר שהוחלף או נפרס מחדש הוא הסיבה הרגילה.",
-  "It answers, but uploads are failing. Devices on the same network still sync directly.":
-    "הוא עונה, אך ההעלאות נכשלות. מכשירים באותה רשת ממשיכים להסתנכרן ישירות.",
+  "It answers, but uploads are failing. A transfer file still works in the meantime.":
+    "הוא עונה, אך ההעלאות נכשלות. בינתיים קובץ העברה עדיין עובד.",
   "Nothing is wrong with sync. Your changes are saved here and will catch up when this device is back on a network.":
     "אין תקלה בסנכרון. השינויים שלכם שמורים כאן וישלימו פערים כשהמכשיר הזה יחזור לרשת.",
 
@@ -767,8 +767,7 @@ const HEBREW: Record<string, string> = {
   Activity: "פעילות",
   Recovery: "שחזור",
   "Danger zone": "אזור מסוכן",
-  "Directly when it can": "ישירות כשאפשר",
-  "A blind drop-box when it can’t": "תיבת הפקדה עיוורת כשלא",
+  "A blind drop-box in between": "תיבת הפקדה עיוורת באמצע",
   "No account, ever": "ללא חשבון, אף פעם",
   "Only your devices can read it": "רק המכשירים שלכם יכולים לקרוא אותו",
   // The bodies under "How this works" are the app's privacy claim stated in prose. Leaving
@@ -776,8 +775,6 @@ const HEBREW: Record<string, string> = {
   // which is exactly the wrong place to fall back.
   "Every change is sealed on the device that made it, with a key that exists only on devices you paired in person. Nothing else can open it.":
     "כל שינוי נאטם במכשיר שיצר אותו, במפתח שקיים רק במכשירים שחיברתם פנים אל פנים. שום דבר אחר אינו יכול לפתוח אותו.",
-  "On the same network your devices talk to each other and contact no server at all.":
-    "באותה רשת המכשירים שלכם מדברים זה עם זה ואינם פונים לשום שרת.",
   "When your other device is closed, sealed changes wait on a relay. It sees a random-looking address and padded ciphertext — never who you are, what changed, or how much you have.":
     "כשהמכשיר האחר שלכם סגור, שינויים אטומים ממתינים בממסר. הוא רואה כתובת שנראית אקראית וטקסט מוצפן מרופד — לעולם לא מי אתם, מה השתנה או כמה יש לכם.",
   "There is no sign-in, no server-side identity, and nothing to recover through us. The recovery phrase is the only key.":
@@ -817,10 +814,7 @@ const HEBREW: Record<string, string> = {
 
   // /sync → Connections
   Connections: "חיבורים",
-  "Direct connections": "חיבורים ישירים",
   "Relay server": "שרת ממסר",
-  "Devices talk to each other, encrypted end to end. On the same network this contacts no server at all.":
-    "המכשירים מדברים זה עם זה בהצפנה מקצה לקצה. באותה רשת אין פנייה לשום שרת.",
   "Holds sealed changes for a device that is closed. It can never read them.":
     "שומר שינויים חתומים עבור מכשיר שסגור. הוא לעולם אינו יכול לקרוא אותם.",
   "Check now": "בדיקה עכשיו",
@@ -829,19 +823,11 @@ const HEBREW: Record<string, string> = {
   "Hide addresses": "הסתרת הכתובות",
   "Relay address": "כתובת הממסר",
   "Save addresses": "שמירת הכתובות",
-  "Leave this blank to contact nothing but devices on your own network.":
-    "השאירו ריק כדי לפנות רק למכשירים ברשת שלכם.",
-  "STUN servers": "שרתי STUN",
-  "Used only when a direct connection fails. A STUN server learns an IP address and never sees your data.":
-    "בשימוש רק כשחיבור ישיר נכשל. שרת STUN לומד כתובת IP ולעולם אינו רואה את הנתונים שלכם.",
-  "TURN server": "שרת TURN",
-  "TURN username": "שם משתמש ל־TURN",
-  "TURN password": "סיסמה ל־TURN",
-  "Only add one you run yourself. A TURN server sees both devices’ addresses and how much data moves between them.":
-    "הוסיפו רק שרת שאתם עצמכם מפעילים. שרת TURN רואה את הכתובות של שני המכשירים וכמה נתונים עוברים ביניהם.",
+  "Leave this blank to contact nothing and sync only through transfer files.":
+    "השאירו ריק כדי לא לפנות לשום דבר ולסנכרן רק דרך קובצי העברה.",
   "What the server said": "מה השרת אמר",
-  "No relay address is set, so this device only syncs when another one is open at the same time.":
-    "לא הוגדרה כתובת ממסר, ולכן המכשיר הזה מסתנכרן רק כשמכשיר אחר פתוח בו־זמנית.",
+  "No relay address is set, so this device only syncs through transfer files you carry yourself.":
+    "לא הוגדרה כתובת ממסר, ולכן המכשיר הזה מסתנכרן רק דרך קובצי העברה שאתם מעבירים בעצמכם.",
   "Couldn’t save these addresses": "לא ניתן לשמור את הכתובות",
   "Couldn’t save that": "לא ניתן לשמור את זה",
   "Couldn’t reach the relay": "לא ניתן להגיע לממסר",
@@ -981,6 +967,11 @@ const HEBREW: Record<string, string> = {
     "העותקים נמחקים וכל מה שהפנה אליהם מכוון לרשומה שהשארתם. הסכומים שלכם אינם משתנים, אך לא ניתן לבטל זאת מכאן.",
   "These merges conflict.": "המיזוגים האלה מתנגשים.",
   "Keep this one, remove 1 copy": "להשאיר את זו ולהסיר עותק אחד",
+  "Opening balances will be added together.": "יתרות הפתיחה ייצברו יחד.",
+  "The copies are deleted, everything that referred to them is pointed at the record you kept, and their opening balances are added to it. Your totals do not change, but this cannot be undone from here.":
+    "העותקים נמחקים, כל מה שהפנה אליהם מכוון לרשומה שהשארתם, ויתרות הפתיחה שלהם מתווספות אליה. הסכומים שלכם אינם משתנים, אך לא ניתן לבטל זאת מכאן.",
+  "The combined opening balance of these accounts is outside the supported range.":
+    "יתרת הפתיחה המשולבת של החשבונות האלה מחוץ לטווח הנתמך.",
   "Merging accounts and categories can reveal duplicate transactions that could not be matched before. Check the list again below.":
     "מיזוג חשבונות וקטגוריות עשוי לחשוף תנועות כפולות שלא ניתן היה להתאים קודם. בדקו את הרשימה שוב למטה.",
   "Skipping this is fine. Renamed duplicates are a valid resting state, and this screen stays available from Sync whenever you want to come back to it.":
@@ -1055,6 +1046,19 @@ const HEBREW: Record<string, string> = {
   "At least 12 characters. Qashy cannot reset this — the file is unreadable without it.":
     "לפחות 12 תווים. Qashy אינו יכול לאפס אותו — הקובץ אינו קריא בלעדיו.",
   "These two do not match.": "השניים אינם תואמים.",
+  // Passphrase strength reasons (src/sync/crypto/recovery.ts, PASSPHRASE_WEAKNESS_MESSAGES)
+  "Use a passphrase of at least 12 characters.":
+    "השתמשו במשפט סיסמה של לפחות 12 תווים.",
+  "Mix letters with digits or symbols, or make it at least 16 characters long.":
+    "שלבו אותיות עם ספרות או סימנים, או הפכו אותו לארוך של לפחות 16 תווים.",
+  "Avoid repeating the same character or pattern.":
+    "הימנעו מחזרה על אותו תו או על אותה תבנית.",
+  "Avoid counting or keyboard sequences such as 1234 or qwer.":
+    "הימנעו מרצפים כמו 1234 או qwer מהמקלדת.",
+  "That passphrase is too common. Choose words only you would use.":
+    "משפט הסיסמה נפוץ מדי. בחרו מילים שרק אתם הייתם משתמשים בהן.",
+  "That passphrase is too easy to guess. Use more words or a wider mix.":
+    "משפט הסיסמה קל מדי לניחוש. השתמשו ביותר מילים או בתערובת רחבה יותר.",
   "Nothing to type. The file is sealed with the key this device already holds, so the phrase that opens it is this vault’s own — which also means a file written this way cannot be opened by a phrase you mistyped into a box.":
     "אין מה להקליד. הקובץ נחתם עם המפתח שכבר נמצא במכשיר הזה, ולכן המשפט שפותח אותו הוא זה של הכספת עצמה — מה שגם אומר שקובץ שנכתב כך לא ייפתח עם משפט שהוקלד בשגיאה.",
   "Create backup": "יצירת גיבוי",
@@ -1148,6 +1152,10 @@ const HEBREW: Record<string, string> = {
   "A rounded bar that floats above your content.": "סרגל מעוגל שצף מעל התוכן.",
   "Choose how the bottom bar looks. Press and hold the bar any time to change it.":
     "בחרו איך סרגל הניווט התחתון נראה. אפשר לשנות זאת בכל עת בלחיצה ארוכה על הסרגל.",
+  // Root error screen: shown outside the provider, so it uses translateCurrent.
+  "Something went wrong": "משהו השתבש",
+  "Qashy hit an unexpected error while rendering this screen.":
+    "ב־Qashy אירעה שגיאה בלתי צפויה בעת הצגת המסך הזה.",
   "Previous year": "השנה הקודמת",
   "Next year": "השנה הבאה",
   Close: "סגירה",
@@ -1337,6 +1345,8 @@ const HEBREW: Record<string, string> = {
   "frankfurter.dev returned an error.": "frankfurter.dev החזיר שגיאה.",
   "frankfurter.dev returned a response Qashy did not understand.":
     "frankfurter.dev החזיר תגובה ש־Qashy לא הצליח להבין.",
+  "Qashy couldn’t save the exchange rates on this device.":
+    "ל־Qashy לא הצליח לשמור את השערים במכשיר הזה.",
   "Couldn’t update automatic rates": "לא ניתן היה לעדכן את השערים האוטומטיים",
   "Couldn’t turn on automatic rates": "לא ניתן היה להפעיל שערים אוטומטיים",
   "Extra fee": "עמלה נוספת",
@@ -1432,6 +1442,120 @@ const HEBREW: Record<string, string> = {
   "Edit 1 transaction": "עריכת תנועה אחת",
   "Move 1 transaction": "העברת תנועה אחת",
   "Couldn’t change the date": "לא ניתן היה לשנות את התאריך",
+  // Transaction form account picker.
+  "(archived)": "(בארכיון)",
+  // Sync: removal policy, recovery and pairing screen protection, device list.
+  "Change who can remove devices?": "לשנות מי יכול להסיר מכשירים?",
+  "This applies to every paired device straight away. Removing a device is forward-only, so this only decides who may stop one from writing to this vault.":
+    "השינוי חל על כל המכשירים המשויכים מיד. הסרת מכשיר פועלת רק קדימה, ולכן השינוי קובע רק מי רשאי לעצור מכשיר מלכתוב לכספת הזו.",
+  "Change rule": "שינוי כלל",
+  "Couldn’t change removal policy": "לא ניתן לשנות את מדיניות ההסרה",
+  "Only the vault owner can change it.": "רק בעל הכספת יכול לשנות אותה.",
+  "That device will be the only one able to change the removal policy or transfer ownership again.":
+    "המכשיר הזה יהיה היחיד שיכול שוב לשנות את מדיניות ההסרה או להעביר בעלות.",
+  "Transfer ownership": "העברת בעלות",
+  "Couldn’t transfer ownership": "לא ניתן להעביר את הבעלות",
+  "The current vault owner must make this change.":
+    "בעל הכספת הנוכחי חייב לבצע את השינוי הזה.",
+  "Device removal": "הסרת מכשיר",
+  "Who can remove a device": "מי יכול להסיר מכשיר",
+  "Any device": "כל מכשיר",
+  "Majority vote": "הצבעת רוב",
+  "Vault owner": "בעל הכספת",
+  "Any paired device can remove another device immediately.":
+    "כל מכשיר משויך יכול להסיר מכשיר אחר מיד.",
+  "A removal needs approval from at least half of the devices, including the proposer. With two devices, one approval is enough.":
+    "הסרה דורשת אישור של לפחות מחצית מהמכשירים, כולל המציע. עם שני מכשירים, אישור אחד מספיק.",
+  "Only the vault owner can remove a device.": "רק בעל הכספת יכול להסיר מכשיר.",
+  "Only the vault owner can change this policy.":
+    "רק בעל הכספת יכול לשנות את המדיניות הזו.",
+  "Transfer vault ownership": "העברת בעלות על הכספת",
+  "A removal proposal is waiting for more device approvals. Tap that device in the list to add this device’s approval.":
+    "הצעה להסרה ממתינה לאישורים נוספים מהמכשירים. הקישו על המכשיר ברשימה כדי להוסיף את אישור המכשיר הזה.",
+  "Couldn’t protect the phrase": "לא ניתן להגן על הביטוי",
+  "The phrase was hidden because screenshots could not be blocked. Try again.":
+    "הביטוי הוסתר כי לא ניתן היה לחסום צילומי מסך. נסו שוב.",
+  "My iPhone": "ה־iPhone שלי",
+  "My Android": "ה־Android שלי",
+  "My browser": "הדפדפן שלי",
+  "Pairing was stopped because screenshots could not be blocked on this device. Nothing was sent.":
+    "ההתאמה הופסקה כי לא ניתן היה לחסום צילומי מסך במכשיר הזה. לא נשלח דבר.",
+  "This pairing attempt has ended. Its code cannot be used again, even before the countdown ends.":
+    "ניסיון ההתאמה הסתיים. לא ניתן להשתמש שוב בקוד הזה, גם לפני שהספירה לאחור מסתיימת.",
+  "This change was saved": "השינוי נשמר",
+  "Reopen this screen to see the current state.":
+    "פתחו את המסך הזה מחדש כדי לראות את המצב הנוכחי.",
+  // More: account and category deletion, CSV and import screens.
+  "Delete 1 account?": "למחוק חשבון אחד?",
+  "Deleted accounts leave your net worth. Their past transactions stay in your history, and their schedules stop.":
+    "חשבונות שנמחקו יוצאים משווי הנקי. התנועות הקודמות שלהם נשארות בהיסטוריה, והתזמונים שלהם נעצרים.",
+  "Couldn’t delete accounts": "לא ניתן למחוק חשבונות",
+  "Delete 1 category?": "למחוק קטגוריה אחת?",
+  "Couldn’t delete categories": "לא ניתן למחוק קטגוריות",
+  "They will stop generating transactions, and upcoming unconfirmed ones are removed. Transactions already posted are kept.":
+    "הם יפסיקו ליצור תנועות, ותנועות עתידיות שלא אושרו יוסרו. תנועות שכבר נרשמו יישמרו.",
+  "Keep at least one account. Deselect one to continue.":
+    "יש להשאיר לפחות חשבון אחד. בטלו בחירה של אחד כדי להמשיך.",
+  "Foreign amount": "סכום במטבע חוץ",
+  "Foreign exchange rate": "שער חליפין למטבע חוץ",
+  "Fee kind (percent or fixed)": "סוג עמלה (אחוז או קבוע)",
+  "Fee value": "ערך עמלה",
+  "Wrong file type": "סוג קובץ שגוי",
+  "Choose a .csv file.": "בחרו קובץ .csv.",
+  "Choose a .json theme file.": "בחרו קובץ ערכת עיצוב בפורמט .json.",
+  "Map required fields:": "יש למפות שדות חובה:",
+  "Waiting for confirmation…": "ממתין לאישור…",
+  "Recurring schedules": "תזמונים חוזרים",
+  "recurring schedule": "תזמון חוזר",
+  "recurring schedules": "תזמונים חוזרים",
+  "Add to my current data": "הוספה לנתונים הקיימים שלי",
+  "Keeps everything you have. Matching accounts, categories and tags are reused.":
+    "שומר על כל מה שיש לכם. חשבונות, קטגוריות ותגיות תואמים ייעשה בהם שימוש חוזר.",
+  "Delete my current data and import this backup":
+    "מחיקת הנתונים הנוכחיים שלי וייבוא הגיבוי הזה",
+  "Permanently deletes your current accounts, transactions, budgets and goals first, then adds the backup. Not available on a device that syncs.":
+    "קודם נמחקים לצמיתות החשבונות, התנועות, התקציבים והיעדים הנוכחיים שלכם, ואז מתווסף הגיבוי. לא זמין במכשיר שמסנכרן.",
+  "To add": "להוספה",
+  "Already in Qashy": "כבר ב־Qashy",
+  Blocked: "חסום",
+  "Will be added": "יתווספו",
+  "Your current data will be permanently deleted":
+    "הנתונים הנוכחיים שלכם יימחקו לצמיתות",
+  "Will be deleted": "יימחקו",
+  "Balances checked": "היתרות נבדקו",
+  "Notes about this backup": "הערות על הגיבוי הזה",
+  "Renamed to avoid duplicates:": "שונה שם כדי למנוע כפילויות:",
+  "Can’t import yet": "עדיין לא ניתן לייבא",
+  "Nothing can be imported until these are fixed. For missing exchange rates, turn on automatic rates or add manual rates in More → Exchange rates, then preview again.":
+    "לא ניתן לייבא עד שאלה יתוקנו. לשערי חליפין חסרים, הפעילו שערים אוטומטיים או הוסיפו שערים ידניים ב״עוד ← שערי חליפין״, ואז הציגו שוב תצוגה מקדימה.",
+  "Open exchange rates": "פתיחת שערי חליפין",
+  "Will be imported": "ייובאו",
+  "Will not be imported": "לא ייובאו",
+  "Good to know": "דברים לדעת",
+  "The file is read on this device and never uploaded.":
+    "הקובץ נקרא במכשיר הזה ולא מועלה לשום מקום.",
+  "Couldn’t read backup": "לא ניתן לקרוא את הגיבוי",
+  "Choose another backup file.": "בחרו קובץ גיבוי אחר.",
+  "Couldn’t preview import": "לא ניתן להציג תצוגה מקדימה של הייבוא",
+  "Try choosing the file again.": "נסו לבחור את הקובץ שוב.",
+  "Delete your current data?": "למחוק את הנתונים הנוכחיים?",
+  "This permanently deletes your current data, then imports the backup. You can’t undo this.":
+    "הפעולה תמחק לצמיתות את הנתונים הנוכחיים, ואז תייבא את הגיבוי. אי אפשר לבטל את זה.",
+  "Delete and import": "מחיקה וייבוא",
+  "Couldn’t import backup": "לא ניתן לייבא את הגיבוי",
+  "Nothing was imported. Fix the blocked items and preview again.":
+    "שום דבר לא יובא. תקנו את הפריטים החסומים והציגו שוב תצוגה מקדימה.",
+  "nothing new": "שום דבר חדש",
+  "Nothing was imported.": "שום דבר לא יובא.",
+  "How should it be imported?": "איך לייבא את זה?",
+  "Dates use": "תאריכים משתמשים ב־",
+  "from the backup": "מהגיבוי",
+  "this device’s timezone": "אזור הזמן של המכשיר הזה",
+  "Foreign currency must differ from the account currency.":
+    "מטבע החוץ חייב להיות שונה ממטבע החשבון.",
+  Fee: "עמלה",
+  "Fee must be greater than 0% and at most 100%.":
+    "העמלה חייבת להיות גדולה מ־0% ועד 100%.",
 };
 
 const translateField = (field: string) =>
@@ -1680,8 +1804,11 @@ const DYNAMIC_PATTERNS: [RegExp, (...parts: string[]) => string][] = [
     /^(\d+) devices · (.+)$/,
     (count, when) => `${count} מכשירים · ${translateMessage(when, "he")}`,
   ],
-  [/^Direct only · 1 device$/, () => "ישיר בלבד · מכשיר אחד"],
-  [/^Direct only · (\d+) devices$/, (count) => `ישיר בלבד · ${count} מכשירים`],
+  [/^Transfer files only · 1 device$/, () => "קובצי העברה בלבד · מכשיר אחד"],
+  [
+    /^Transfer files only · (\d+) devices$/,
+    (count) => `קובצי העברה בלבד · ${count} מכשירים`,
+  ],
   [
     /^Last exchanged changes (.+)\.$/,
     (when) => `שינויים הוחלפו לאחרונה ${translateMessage(when, "he")}.`,
@@ -1752,6 +1879,15 @@ const DYNAMIC_PATTERNS: [RegExp, (...parts: string[]) => string][] = [
   [
     /^(.+): (\d+)% of this month's spending$/,
     (name, percent) => `${name}: ${percent}% מהוצאות החודש`,
+  ],
+  [
+    /^Excludes (.+) until an effective exchange rate is added\.$/,
+    (codes) => `מוחרגים ${codes} עד שיתווסף שער חליפין אפקטיבי.`,
+  ],
+  // Overview edit-mode announcement after a card moves; the title is already translated.
+  [
+    /^(.+), position (\d+) of (\d+)$/,
+    (name, position, total) => `${name}, מיקום ${position} מתוך ${total}`,
   ],
 ];
 

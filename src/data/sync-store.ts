@@ -120,20 +120,6 @@ export const SYNC_META = {
   relayUrl: "relayUrl",
   /** `'0'` disables the drop-box. Absent means on, because a configured relay is meant to be used. */
   relayEnabled: "relayEnabled",
-  /** `'0'` disables direct connections, leaving the drop-box. Absent means on. */
-  directEnabled: "directEnabled",
-  /** Comma-separated STUN URLs. `''` means none, which still leaves LAN sync working. */
-  stunUrls: "stunUrls",
-  /**
-   * A user-supplied TURN server, and the credentials it issued them.
-   *
-   * Never defaulted and never shipped. A TURN relay sees both endpoints' addresses and every
-   * byte's worth of traffic volume, which is strictly more than the drop-box sees, so it is
-   * only ever something the user deliberately opts into for their own infrastructure.
-   */
-  turnUrl: "turnUrl",
-  turnUsername: "turnUsername",
-  turnCredential: "turnCredential",
 
   // -- Relay health cache. Advisory, never consulted before syncing.
 
@@ -147,7 +133,28 @@ export const SYNC_META = {
   relayFailures: "relayFailures",
   /** The highest drop-box slot this device has consumed. Blobs at or below it are never re-read. */
   relayCursor: "relayCursor",
+
+  // -- Full-state coverage. Device-local bookkeeping; see `readStateHeads`.
+
+  /**
+   * `{ [deviceId]: seq }` a full-state snapshot this device accepted says it covers.
+   *
+   * A snapshot carries each entity's merged state, not the ops that produced it, so after one
+   * the device may hold a chain's position without holding its ops. Recording the position here
+   * lets the device acknowledge it, which stops a peer resending the snapshot on every pass.
+   */
+  stateHeads: "stateHeads",
 } as const;
+
+/**
+ * The hash a chain position carries when only a snapshot established it.
+ *
+ * A batch header says `seq` but not `opHash`, so the snapshot cannot supply the hash of the op
+ * at its position. The first op a peer sends after the snapshot is therefore its anchor. The
+ * author's signature still covers that op's hash, so the only thing this gives up is the ability
+ * to notice a fork exactly at the snapshot boundary.
+ */
+export const STATE_COVERED_HASH = "";
 
 export type SyncMetaKey = (typeof SYNC_META)[keyof typeof SYNC_META];
 
@@ -185,6 +192,43 @@ export async function hasSyncHistory(tx: StorageTx): Promise<boolean> {
   }
   return false;
 }
+
+/**
+ * `{ [deviceId]: seq }` a full-state snapshot covered, read as the chains it names.
+ *
+ * Tolerant, like every other stored sequence map: a malformed value reads as "covers nothing",
+ * which costs one redundant snapshot and never a wrong acknowledgement. Built from entries
+ * rather than assigned key by key, so a device id of `__proto__` stays an ordinary key.
+ */
+export async function readStateHeads(
+  tx: StorageTx,
+): Promise<Record<string, number>> {
+  const raw = (await readMeta(tx, [SYNC_META.stateHeads])).get(
+    SYNC_META.stateHeads,
+  );
+  if (!raw) return {};
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
+      return {};
+    const entries: [string, number][] = [];
+    for (const [deviceId, seq] of Object.entries(parsed)) {
+      if (
+        deviceId &&
+        typeof seq === "number" &&
+        Number.isSafeInteger(seq) &&
+        seq > 0
+      )
+        entries.push([deviceId, seq]);
+    }
+    return Object.fromEntries(entries);
+  } catch {
+    return {};
+  }
+}
+
+export const writeStateHeads = (tx: StorageTx, heads: Record<string, number>) =>
+  writeMeta(tx, { [SYNC_META.stateHeads]: JSON.stringify(heads) });
 
 export async function writeMeta(
   tx: StorageTx,
@@ -445,6 +489,15 @@ export async function readHeldChains(
     }
     if (opIds.has(row.opId)) hashes.set(row.opId, row.opHash);
   }
+  // A snapshot can establish a position this device holds no op for. It counts as held, so the
+  // device acknowledges it and a peer stops resending the snapshot; the hash is unknown, which
+  // is what `STATE_COVERED_HASH` records.
+  for (const [deviceId, seq] of Object.entries(await readStateHeads(tx))) {
+    const current = heads.get(deviceId);
+    if (!current || seq > current.seq) {
+      heads.set(deviceId, { seq, headHash: STATE_COVERED_HASH });
+    }
+  }
   return { heads, hashes };
 }
 
@@ -482,24 +535,68 @@ export interface Outbox {
  * and because chains resume exactly where they left off there is nothing special about where
  * the boundary falls.
  */
+export interface OutboxOptions {
+  /**
+   * `{ [deviceId]: seq }` a full-state snapshot this device accepted covers. Those positions are
+   * heads to acknowledge, and the chain below them is compacted: the ops are not held here.
+   */
+  readonly covered?: Readonly<Record<string, number>>;
+  /**
+   * `{ [deviceId]: revokedSeq }` for every revoked author. An op above its author's signed cutoff
+   * is never forwarded: a receiver that has the revocation refuses it, and one batch containing
+   * it is rejected whole, every pass, for as long as the forwarder keeps trying.
+   */
+  readonly cutoffs?: Readonly<Record<string, number>>;
+}
+
 export function deriveOutbox(
   rows: readonly SyncOpRow[],
   acked: Readonly<Record<string, number>>,
   limit: number,
+  options: OutboxOptions = {},
 ): Outbox {
+  const covered = options.covered ?? {};
+  const cutoffs = options.cutoffs ?? {};
   const heads = new Map<string, ChainHead>();
-  const compactedBelow: Record<string, number> = {};
+  const lowest = new Map<string, number>();
+  const highest = new Map<string, number>();
   const pending: SyncOpRow[] = [];
 
   for (const row of rows) {
     const head = heads.get(row.deviceId);
     if (!head || row.seq > head.seq)
       heads.set(row.deviceId, { seq: row.seq, headHash: row.opHash });
-    const lowest = compactedBelow[row.deviceId];
-    if (lowest === undefined || row.seq < lowest)
-      compactedBelow[row.deviceId] = row.seq;
-    if (row.sealed === 1 && row.seq > (acked[row.deviceId] ?? 0))
+    const low = lowest.get(row.deviceId);
+    if (low === undefined || row.seq < low) lowest.set(row.deviceId, row.seq);
+    const high = highest.get(row.deviceId);
+    if (high === undefined || row.seq > high)
+      highest.set(row.deviceId, row.seq);
+    const cutoff = cutoffs[row.deviceId];
+    if (
+      row.sealed === 1 &&
+      row.seq > (acked[row.deviceId] ?? 0) &&
+      (cutoff === undefined || row.seq <= cutoff)
+    )
       pending.push(row);
+  }
+
+  for (const [deviceId, seq] of Object.entries(covered)) {
+    if (seq <= 0) continue;
+    const head = heads.get(deviceId);
+    if (!head || seq > head.seq)
+      heads.set(deviceId, { seq, headHash: STATE_COVERED_HASH });
+  }
+
+  // The lowest position a delta can start from. Rows that run up to the covered position are
+  // contiguous with it, so the rows' own floor is the answer. Otherwise everything at or below
+  // the covered position is only in the snapshot, and a peer behind it needs state.
+  const compactedBelow: Record<string, number> = {};
+  for (const deviceId of heads.keys()) {
+    const coveredSeq = covered[deviceId] ?? 0;
+    const low = lowest.get(deviceId);
+    const high = highest.get(deviceId) ?? 0;
+    compactedBelow[deviceId] =
+      low !== undefined && high >= coveredSeq ? low : coveredSeq + 1;
   }
 
   pending.sort((first, second) =>
@@ -521,8 +618,13 @@ export async function readOutbox(
   tx: StorageTx,
   acked: Readonly<Record<string, number>>,
   limit: number,
+  options: OutboxOptions = {},
 ): Promise<Outbox> {
-  return deriveOutbox(await tx.table("syncOps").all(), acked, limit);
+  const covered = options.covered ?? (await readStateHeads(tx));
+  return deriveOutbox(await tx.table("syncOps").all(), acked, limit, {
+    ...options,
+    covered,
+  });
 }
 
 /**

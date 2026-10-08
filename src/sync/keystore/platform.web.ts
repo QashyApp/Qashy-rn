@@ -52,6 +52,12 @@ interface WrapRow {
  */
 const bufferSource = (bytes: Uint8Array) => Uint8Array.from(bytes);
 
+const corruptVault = () =>
+  new KeystoreError(
+    "The vault stored on this device is damaged and cannot be opened. Erase sync data on this device and pair it again.",
+    "corrupt",
+  );
+
 const request = <T>(source: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
     source.onsuccess = () => resolve(source.result);
@@ -123,13 +129,23 @@ class BrowserKeystore extends BaseKeystore {
       request<ContainerRow | undefined>(store.get(CONTAINER_ID)),
     );
     if (!row) return null;
-    const key = await this.wrappingKey();
-    const plain = await crypto.subtle.decrypt(
-      { name: "AES-GCM", iv: bufferSource(row.iv) },
-      key,
-      bufferSource(row.data),
-    );
-    return new Uint8Array(plain);
+    // A read must never mint a wrapping key. A container with no key beside it is damage, not
+    // a fresh start: minting one here would make the damage look like a clean vault that simply
+    // fails to decrypt, and would never tell the user what happened.
+    const key = await this.existingWrappingKey();
+    if (!key) throw corruptVault();
+    try {
+      const plain = await crypto.subtle.decrypt(
+        { name: "AES-GCM", iv: bufferSource(row.iv) },
+        key,
+        bufferSource(row.data),
+      );
+      return new Uint8Array(plain);
+    } catch {
+      // WebCrypto reports a failed AEAD as a bare DOMException, which is not something to show
+      // a user or to branch on. Translated to the module's taxonomy; the ciphertext is untouched.
+      throw corruptVault();
+    }
   }
 
   protected async writeContainer(bytes: Uint8Array) {
@@ -166,11 +182,16 @@ class BrowserKeystore extends BaseKeystore {
    * loser that overwrote the winner's key would leave the stored ciphertext permanently
    * undecryptable, which is data loss, not a race to shrug at.
    */
-  private async wrappingKey(): Promise<CryptoKey> {
+  private async existingWrappingKey(): Promise<CryptoKey | null> {
     const existing = await withStore("readonly", (store) =>
       request<WrapRow | undefined>(store.get(WRAP_ID)),
     );
-    if (existing) return existing.key;
+    return existing?.key ?? null;
+  }
+
+  private async wrappingKey(): Promise<CryptoKey> {
+    const existing = await this.existingWrappingKey();
+    if (existing) return existing;
 
     const generated = await crypto.subtle.generateKey(WRAP_ALGORITHM, false, [
       "encrypt",

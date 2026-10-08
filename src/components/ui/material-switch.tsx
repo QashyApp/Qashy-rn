@@ -10,7 +10,11 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { AppIcon } from "@/components/ui/app-icon";
-import { motionCurves, useMotionDurations } from "@/components/ui/motion";
+import {
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { contrastRatio } from "@/theme/tokens";
@@ -47,17 +51,30 @@ export function MaterialSwitch({
   const motionDuration = useMotionDurations();
   const { isRtl } = useLocalization();
 
+  // `progress` moves the thumb (travel and scale), `fade` drives the colors. Below the full
+  // animation level the thumb jumps to its new place while the colors still fade quickly.
+  const { instant, travel } = useMotionPreference();
   const progress = useSharedValue(value ? 1 : 0);
+  const fade = useSharedValue(value ? 1 : 0);
   const hover = useSharedValue(0);
   const press = useSharedValue(0);
   const duration = motionDuration.enter;
+  const stateReduce = instant ? ReduceMotion.Always : ReduceMotion.System;
   useEffect(() => {
-    progress.value = withTiming(value ? 1 : 0, {
+    const target = value ? 1 : 0;
+    progress.value = travel
+      ? withTiming(target, {
+          duration,
+          easing: motionCurves.standard,
+          reduceMotion: ReduceMotion.System,
+        })
+      : target;
+    fade.value = withTiming(target, {
       duration,
       easing: motionCurves.standard,
-      reduceMotion: ReduceMotion.System,
+      reduceMotion: stateReduce,
     });
-  }, [value, duration, progress]);
+  }, [value, duration, travel, stateReduce, progress, fade]);
 
   // `onAccent` is picked for text contrast, so a bright accent gets a black thumb. A
   // thumb only needs 3:1 against the track, so prefer white whenever that holds.
@@ -72,17 +89,13 @@ export function MaterialSwitch({
   const direction = isRtl ? -1 : 1;
 
   const trackStyle = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      progress.value,
-      [0, 1],
-      [offTrack, accent],
-    ),
-    borderColor: interpolateColor(progress.value, [0, 1], [offOutline, accent]),
+    backgroundColor: interpolateColor(fade.value, [0, 1], [offTrack, accent]),
+    borderColor: interpolateColor(fade.value, [0, 1], [offOutline, accent]),
   }));
 
   const thumbStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
-      progress.value,
+      fade.value,
       [0, 1],
       [offOutline, onThumb],
     ),
@@ -91,8 +104,8 @@ export function MaterialSwitch({
       {
         scale:
           interpolate(progress.value, [0, 1], [THUMB_OFF_SCALE, 1]) *
-          // The handle grows to 28px while pressed.
-          (1 + (28 / THUMB - 1) * press.value),
+          // The handle grows to 28px while pressed. Growing is scale, so only at the full level.
+          (1 + (28 / THUMB - 1) * (travel ? press.value : 0)),
       },
     ],
   }));
@@ -114,10 +127,18 @@ export function MaterialSwitch({
       aria-checked={value}
       disabled={disabled}
       hitSlop={{ top: 6, bottom: 6, left: 4, right: 4 }}
-      onHoverIn={() => hover.set(withTiming(1, { duration: 120 }))}
-      onHoverOut={() => hover.set(withTiming(0, { duration: 120 }))}
-      onPressIn={() => press.set(withTiming(1, { duration: 100 }))}
-      onPressOut={() => press.set(withTiming(0, { duration: 150 }))}
+      onHoverIn={() =>
+        hover.set(withTiming(1, { duration: 120, reduceMotion: stateReduce }))
+      }
+      onHoverOut={() =>
+        hover.set(withTiming(0, { duration: 120, reduceMotion: stateReduce }))
+      }
+      onPressIn={() =>
+        press.set(withTiming(1, { duration: 100, reduceMotion: stateReduce }))
+      }
+      onPressOut={() =>
+        press.set(withTiming(0, { duration: 150, reduceMotion: stateReduce }))
+      }
       onPress={() => {
         hapticSelection();
         onValueChange?.(!value);

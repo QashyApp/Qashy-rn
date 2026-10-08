@@ -79,8 +79,6 @@ const status = (over: Partial<SyncStatus> = {}): SyncStatus => ({
   endpoints: {
     relayUrl: "https://relay.example.com",
     relayEnabled: true,
-    directEnabled: true,
-    iceServers: [],
   },
   relay: relay("reachable"),
   activity: [],

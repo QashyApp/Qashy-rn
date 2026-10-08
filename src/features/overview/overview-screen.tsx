@@ -1,3 +1,4 @@
+import { CountUpSubject } from "@/components/finance/animated-money";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { ScrollView, View, type LayoutChangeEvent } from "react-native";
@@ -8,8 +9,10 @@ import { FloatingActionButton } from "@/components/ui/floating-action-button";
 import {
   MonthPager,
   navigateMonth,
+  restingPosition,
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
+import { useLocalization } from "@/localization/localization";
 import { floatingActionMetrics } from "@/components/ui/screen-container";
 import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
@@ -46,11 +49,12 @@ export function OverviewScreen() {
   const { space } = theme;
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
+  const { isRtl } = useLocalization();
   const [month, setMonth] = useState(startOfMonth());
   const { visibility: fabVisibility, onScroll } = useScrollHide();
   const scrollRef = useSectionScrollToTop<ScrollView>();
   const pagerRef = useRef<MonthPagerHandle>(null);
-  const dragProgress = useSharedValue(0);
+  const dragProgress = useSharedValue(restingPosition(month, isRtl));
 
   const { layout, status, dispatch } = useOverviewLayout();
   const cards =
@@ -64,14 +68,17 @@ export function OverviewScreen() {
 
   const changeMonth = (next: string) => setMonth(next);
 
+  // Resolves to whether the change was persisted, so callers never act on a failed change.
   const dispatchGuarded = async (
     action: OverviewLayoutAction,
     failureTitle: string,
-  ) => {
+  ): Promise<boolean> => {
     try {
       await dispatch(action);
+      return true;
     } catch (reason) {
       showError(failureTitle, errorMessage(reason, "Try again."));
+      return false;
     }
   };
 
@@ -101,8 +108,9 @@ export function OverviewScreen() {
     void dispatchGuarded(
       { type: "remove", id: card.id },
       "Couldn’t update your overview",
-    ).then(() => {
-      setUndo({ card, index });
+    ).then((removed) => {
+      // Offer undo only once the removal has actually been saved.
+      if (removed) setUndo({ card, index });
     });
   };
 
@@ -164,73 +172,76 @@ export function OverviewScreen() {
     setConfigOpenId((current) => (current === id ? null : id));
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* A swipe does not move the window: it drives `dragProgress`, which slides the month
+    // Amounts snap to a new month instead of counting up on the JS thread mid-swipe.
+    <CountUpSubject subject={month}>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        {/* A swipe does not move the window: it drives `dragProgress`, which slides the month
           title and the figures that differ, and the rest fades when the month commits. */}
-      <MonthPager
-        ref={pagerRef}
-        slide={false}
-        dragProgress={dragProgress}
-        month={month}
-        disabled={editing}
-        onChange={changeMonth}
-        style={{ flex: 1 }}
-        renderPage={(pageMonth, { isCurrent }) => (
-          <OverviewMonthPage
-            month={pageMonth}
-            isCurrent={isCurrent}
-            dragProgress={dragProgress}
-            editing={editing}
-            cards={cards}
-            configOpenId={configOpenId}
-            onToggleConfig={toggleConfig}
-            onEnterEdit={enterEditMode}
-            onExitEdit={exitEditMode}
-            onMonthSwitch={(next, direction) =>
-              navigateMonth(
-                pagerRef.current,
-                month,
-                next,
-                direction,
-                changeMonth,
-              )
-            }
-            onScroll={onScroll}
-            scrollRef={scrollRef}
-            onMoveCard={moveCard}
-            onResizeCard={resizeCard}
-            onConfigureCard={configureCard}
-            onRemoveCard={removeCard}
-            onDragEnd={handleDragEnd}
-            onCardLayout={handleCardLayout}
-          />
-        )}
-      />
-      {undo ? (
-        <UndoBar
-          message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
-          onAction={undoRemove}
-          onDismiss={() => setUndo(null)}
-          style={{
-            position: "absolute",
-            left: space.lg,
-            right: space.lg,
-            bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
-              .stackedOverlayBottom,
-          }}
+        <MonthPager
+          ref={pagerRef}
+          slide={false}
+          dragProgress={dragProgress}
+          month={month}
+          disabled={editing}
+          onChange={changeMonth}
+          style={{ flex: 1 }}
+          renderPage={(pageMonth, { isCurrent }) => (
+            <OverviewMonthPage
+              month={pageMonth}
+              isCurrent={isCurrent}
+              dragProgress={dragProgress}
+              editing={editing}
+              cards={cards}
+              configOpenId={configOpenId}
+              onToggleConfig={toggleConfig}
+              onEnterEdit={enterEditMode}
+              onExitEdit={exitEditMode}
+              onMonthSwitch={(next, direction) =>
+                navigateMonth(
+                  pagerRef.current,
+                  month,
+                  next,
+                  direction,
+                  changeMonth,
+                )
+              }
+              onScroll={onScroll}
+              scrollRef={scrollRef}
+              onMoveCard={moveCard}
+              onResizeCard={resizeCard}
+              onConfigureCard={configureCard}
+              onRemoveCard={removeCard}
+              onDragEnd={handleDragEnd}
+              onCardLayout={handleCardLayout}
+            />
+          )}
         />
-      ) : null}
-      <FloatingActionButton
-        label="Add transaction"
-        visibility={fabVisibility}
-        onPress={() =>
-          router.push({
-            pathname: "/transaction",
-            params: { returnTo: "/overview" },
-          })
-        }
-        style={floatingActionMetrics(metrics, insets, space)}
-      />
-    </View>
+        {undo ? (
+          <UndoBar
+            message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
+            onAction={undoRemove}
+            onDismiss={() => setUndo(null)}
+            style={{
+              position: "absolute",
+              left: space.lg,
+              right: space.lg,
+              bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
+                .stackedOverlayBottom,
+            }}
+          />
+        ) : null}
+        <FloatingActionButton
+          label="Add transaction"
+          visibility={fabVisibility}
+          onPress={() =>
+            router.push({
+              pathname: "/transaction",
+              params: { returnTo: "/overview" },
+            })
+          }
+          style={floatingActionMetrics(metrics, insets, space)}
+        />
+      </View>
+    </CountUpSubject>
   );
 }

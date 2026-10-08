@@ -76,7 +76,8 @@ export type RepairCode =
   | "contributionOrphaned"
   | "schedulePaused"
   | "scheduleClamped"
-  | "nameDisambiguated";
+  | "nameDisambiguated"
+  | "unpricedPosted";
 
 export interface RepairNote {
   readonly code: RepairCode;
@@ -199,6 +200,7 @@ export function repairMergedState(input: RepairInput): RepairOutput {
   resurrectReferencedAccounts(draft);
   pinAccountCurrencies(draft);
   clearDanglingReferences(draft);
+  unpriceUnsnapshottedPosted(draft);
   repairBudgets(draft);
   repairSchedules(draft);
   disambiguate(draft);
@@ -427,6 +429,38 @@ function pinAccountCurrencies(draft: Draft) {
 }
 
 /**
+ * A posted transaction with no rate snapshot has no base value to total. A concurrent edit can
+ * merge a posted status with a snapshot another device left unpriced, so such a row reverts to
+ * upcoming, the only state that can hold it. It is priced again when it is paid. Pure: it reads no
+ * clock and no rates.
+ */
+function unpriceUnsnapshottedPosted(draft: Draft) {
+  for (const transaction of draft
+    .live<TransactionRecord>("transactions")
+    .sort(byCreationThenId)) {
+    if (transaction.status !== "posted") continue;
+    const unsnapshotted =
+      transaction.exchangeRate === null ||
+      transaction.baseAmountMinor === null ||
+      (transaction.kind === "transfer" &&
+        transaction.destinationBaseAmountMinor === null);
+    if (!unsnapshotted) continue;
+    draft.patch<TransactionRecord>(
+      "transactions",
+      transaction,
+      { status: "upcoming" },
+      {
+        code: "unpricedPosted",
+        entityType: "transactions",
+        entityId: transaction.id,
+        detail:
+          "Posted without an exchange rate snapshot; returned to upcoming.",
+      },
+    );
+  }
+}
+
+/**
  * Nulls every reference whose target is gone, mismatched, or otherwise unusable.
  *
  * Each rule mirrors one the repository already enforces on save — the merged set has to
@@ -445,18 +479,47 @@ function clearDanglingReferences(draft: Draft) {
 
   // Categories are one level deep: a parent may not itself have a parent, must share the
   // child's kind, and must not be the child. Anything else is a hierarchy the UI cannot render.
-  for (const category of draft
-    .live<Category>("categories")
-    .sort(byCreationThenId)) {
-    if (!category.parentId) continue;
-    const parent = liveCategories.get(category.parentId);
+  //
+  // Whether a parent link survives depends on whether the parent's own link survives, and that
+  // is decided here rather than read off the snapshot: grandparent G is deleted, so P (parent G)
+  // is cleared, and then C (parent P) is valid again. Reading P's parent from the snapshot would
+  // still see G and wrongly clear C — and the answer would then depend on which child was
+  // visited first. Decisions are memoised over the draft's state before this pass patches
+  // anything, so the result is the same in any visiting order.
+  const keepsParent = new Map<string, boolean>();
+  const parentSurvives = (
+    category: Category,
+    visiting: Set<string>,
+  ): boolean => {
+    const known = keepsParent.get(category.id);
+    if (known !== undefined) return known;
+    if (!category.parentId || visiting.has(category.id)) return false;
+    const parent = draft.get<Category>("categories", category.parentId);
+    let survives = false;
     if (
       parent &&
+      isLive(parent) &&
       parent.kind === category.kind &&
-      !parent.parentId &&
       parent.id !== category.id
-    )
-      continue;
+    ) {
+      // The parent is valid only when it ends up top-level itself. A cycle is cut here, so it
+      // resolves the same way from every entry point.
+      visiting.add(category.id);
+      survives = !parentSurvives(parent, visiting);
+      visiting.delete(category.id);
+    }
+    keepsParent.set(category.id, survives);
+    return survives;
+  };
+  const orphaned = draft
+    .live<Category>("categories")
+    .sort(byCreationThenId)
+    .filter(
+      (category) =>
+        Boolean(category.parentId) &&
+        !parentSurvives(category, new Set<string>()),
+    );
+  for (const category of orphaned) {
     draft.patch<Category>(
       "categories",
       category,

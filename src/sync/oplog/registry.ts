@@ -385,6 +385,65 @@ export const deviceLocalFieldsOf = (
     .filter((path) => specFor(entityType)[path].kind === "deviceLocal")
     .sort();
 
+/**
+ * Registered fields a record may lack entirely, because it was saved before the field existed.
+ *
+ * The domain model reads a missing value as `null` ("none recorded"), never as unknown. A
+ * `create` built from such a row used to omit the key, and `applyCreate` then refused the whole
+ * register it belonged to — every ledger field of the transaction went missing on the peer.
+ * Both ends agree on the reading: the diff writes `null` for the key, and the merge reads an
+ * absent key as `null` when it meets an old create op already sitting in a peer's log.
+ *
+ * Every entry must be a registered field with a group strategy; the registry test asserts it.
+ */
+const MISSING_MEANS_NULL: Readonly<
+  Partial<Record<EntityType, readonly string[]>>
+> = {
+  transactions: ["foreign", "fee"],
+};
+
+export const missingMeansNullOf = (entityType: EntityType): readonly string[] =>
+  MISSING_MEANS_NULL[entityType] ?? [];
+
+/** Every legacy-optional path, across all entity types. For the coverage test. */
+export const allMissingMeansNull = (): readonly {
+  readonly entityType: EntityType;
+  readonly path: string;
+}[] =>
+  Object.entries(MISSING_MEANS_NULL).flatMap(([entityType, paths]) =>
+    (paths ?? []).map((path) => ({
+      entityType: entityType as EntityType,
+      path,
+    })),
+  );
+
+/**
+ * Reads a registered field, reading an absent legacy key as `null`. Anything else absent stays
+ * `undefined`, so a genuinely sparse create is still refused.
+ */
+export function readRegisteredPath(
+  entityType: EntityType,
+  source: unknown,
+  path: string,
+): unknown {
+  const value = readPath(source, path);
+  if (value === undefined && missingMeansNullOf(entityType).includes(path))
+    return null;
+  return value;
+}
+
+/** A copy of `entity` with every legacy-optional key written out as `null`, so it survives JSON. */
+export function withMissingMeansNull<T extends object>(
+  entityType: EntityType,
+  entity: T,
+): T {
+  let next: T = entity;
+  for (const path of missingMeansNullOf(entityType)) {
+    if (readPath(next, path) === undefined) next = writePath(next, path, null);
+  }
+  return next;
+}
+
 // ---------------------------------------------------------------------------
 // Dotted-path access
 // ---------------------------------------------------------------------------

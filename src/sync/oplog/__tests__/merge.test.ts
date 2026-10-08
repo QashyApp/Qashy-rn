@@ -7,7 +7,12 @@
  * are asserted directly, exhaustively where the op set is small enough to enumerate.
  */
 
-import type { EntityType, FinanceEntity, Tag } from "@/domain/models";
+import type {
+  EntityType,
+  FinanceEntity,
+  Tag,
+  TransactionRecord,
+} from "@/domain/models";
 import { OP_SCHEMA_VERSION } from "@/sync/crypto";
 import { canonicalJson } from "@/utils/canonical-json";
 import { diffEntity } from "@/sync/oplog/diff";
@@ -934,5 +939,138 @@ describe("changedTypes", () => {
         op({ kind: "set", hlc: at(1), entityType: "future" as EntityType }),
       ]),
     ).toEqual([]);
+  });
+});
+
+describe("legacy create ops and sets this build does not know", () => {
+  // A transaction saved before `foreign` and `fee` existed has no such keys at all, and a create
+  // op built from it carries none either. The domain reads that as "none recorded".
+  const legacyTransaction = (
+    over: Partial<TransactionRecord> = {},
+  ): TransactionRecord => {
+    const legacy: Partial<TransactionRecord> = transaction({
+      id: "txn-1",
+      ...over,
+    });
+    delete legacy.foreign;
+    delete legacy.fee;
+    return legacy as TransactionRecord;
+  };
+
+  const createOp = (entity: object, hlc = at(1, DEVICE_A)): SyncOpBody =>
+    op({
+      entityType: "transactions",
+      entityId: "txn-1",
+      kind: "create",
+      hlc,
+      payload: { entity },
+    });
+
+  it("recovers the whole ledger from a legacy create that lacks foreign and fee", () => {
+    const merged = project(
+      fold([
+        createOp(
+          legacyTransaction({
+            amountMinor: 2_500,
+            baseAmountMinor: 2_500,
+            exchangeRate: "1",
+            localDate: "2026-03-04",
+          }),
+        ),
+      ]),
+      "transactions",
+      "txn-1",
+    );
+    expect(merged).toMatchObject({
+      kind: "expense",
+      localDate: "2026-03-04",
+      accountId: "acc-1",
+      amountMinor: 2_500,
+      currency: "USD",
+      exchangeRate: "1",
+      baseAmountMinor: 2_500,
+      foreign: null,
+      fee: null,
+    });
+  });
+
+  it("still refuses a create that is genuinely missing a required ledger field", () => {
+    const sparse: Partial<TransactionRecord> = legacyTransaction();
+    delete sparse.amountMinor;
+    const merged = project(fold([createOp(sparse)]), "transactions", "txn-1");
+    // The whole group is skipped rather than half-written, so no ledger field is projected.
+    expect(merged).not.toHaveProperty("kind");
+    expect(merged).not.toHaveProperty("amountMinor");
+    expect(merged).toMatchObject({ title: "Coffee" });
+  });
+
+  it("keeps a set this build does not know, rather than discarding it", () => {
+    const create = write(
+      "transactions",
+      null,
+      transaction({ id: "txn-1" }),
+      at(1),
+    );
+    const unknownSet = op({
+      entityType: "transactions",
+      entityId: "txn-1",
+      kind: "setAdd",
+      hlc: at(5, DEVICE_B),
+      payload: { field: "futureSet", elements: ["x"] },
+    });
+    const metas = fold([...create, unknownSet]);
+    const meta = only(metas, "transactions", "txn-1");
+    expect(meta.unknown).toEqual([unknownSet]);
+    expect(meta.sets).not.toHaveProperty("futureSet");
+  });
+
+  it("keeps a map this build does not know, rather than discarding it", () => {
+    const create = write("budgets", null, budget({ id: "bud-1" }), at(1));
+    const unknownMap = op({
+      entityType: "budgets",
+      entityId: "bud-1",
+      kind: "mapUpsert",
+      hlc: at(5, DEVICE_B),
+      payload: { field: "futureMap", entries: { key: { amountMinor: 1 } } },
+    });
+    const meta = only(fold([...create, unknownMap]), "budgets", "bud-1");
+    expect(meta.unknown).toEqual([unknownMap]);
+    expect(meta.maps).not.toHaveProperty("futureMap");
+  });
+
+  it("erases an unknown set that a later delete covers, in either arrival order", () => {
+    const create = write(
+      "transactions",
+      null,
+      transaction({ id: "txn-1" }),
+      at(1),
+    );
+    const earlier = op({
+      entityType: "transactions",
+      entityId: "txn-1",
+      kind: "setAdd",
+      hlc: at(5, DEVICE_B),
+      payload: { field: "futureSet", elements: ["covered"] },
+    });
+    const later = op({
+      entityType: "transactions",
+      entityId: "txn-1",
+      kind: "setAdd",
+      hlc: at(20, DEVICE_C),
+      payload: { field: "futureSet", elements: ["after"] },
+    });
+    const removed = op({
+      entityType: "transactions",
+      entityId: "txn-1",
+      kind: "delete",
+      hlc: at(10, DEVICE_A),
+      payload: { at: "2026-02-01T00:00:00.000Z" },
+    });
+    const ops = [...create, earlier, later, removed];
+    const forward = fold(ops);
+    const backward = fold([...ops].reverse());
+    // The op at or before the delete held content the delete erased, so it does not survive.
+    expect(only(forward, "transactions", "txn-1").unknown).toEqual([later]);
+    expect(snapshot(forward)).toBe(snapshot(backward));
   });
 });

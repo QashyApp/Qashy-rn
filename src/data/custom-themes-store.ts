@@ -1,5 +1,5 @@
 /**
- * The device-local store of user-authored themes (Phase 11 of docs/theming-plan.md).
+ * The device-local store of user-authored themes.
  *
  * Modeled directly on `overview-layout-store.ts`: a tolerant reader over the one `sync_meta` key
  * this feature owns (`SYNC_META.customThemes`) and explicit writers that take a `tx`. Writing

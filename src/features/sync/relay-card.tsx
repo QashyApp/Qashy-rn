@@ -9,8 +9,8 @@
  *    a button to measure it again now. A status with no timestamp is a status nobody can
  *    trust; a status with no way to re-check is one that makes people reload the app.
  * 2. **Does it matter?** — every failing state says what still works. A relay outage does not
- *    stop two devices on the same Wi-Fi, and a screen that implies otherwise sends the user
- *    to fix infrastructure when nothing is broken for them.
+ *    stop a transfer file, and a screen that implies otherwise sends the user to fix
+ *    infrastructure when there is another way through.
  * 3. **What do I fix?** — the raw transport error, verbatim and selectable. This is the one
  *    place in the app where an unpolished string is the right answer: whoever runs the relay
  *    needs to know whether it was DNS, TLS, a 502, or a refused write token, and a friendly
@@ -21,7 +21,7 @@
  * combined message under the button.
  */
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
@@ -39,8 +39,6 @@ import { setEndpoints, type SyncStatus } from "@/sync/setup";
 import {
   EndpointError,
   normalizeEndpointUrl,
-  normalizeTurnUrl,
-  parseStunUrls,
   type EndpointPatch,
 } from "@/sync/transport/endpoints";
 import type { RelayHealth } from "@/sync/transport/relay-health";
@@ -81,25 +79,16 @@ export function RelayCard({
   const [advanced, setAdvanced] = useState(false);
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Refs for the in-flight checks: state is stale inside a double tap.
+  const checkingRef = useRef(false);
+  const savingRef = useRef(false);
 
   const { endpoints } = status;
-  const [relayUrl, setRelayUrl] = useState(endpoints.relayUrl);
-  // Rebuilt from the parsed list rather than kept as the raw string, so what the field shows
-  // is what was actually stored — an entry that failed to parse is silently dropped on read,
-  // and echoing it back would make the user think it took.
-  const [stunUrls, setStunUrls] = useState(() =>
-    endpoints.iceServers
-      .filter((server) => server.urls.startsWith("stun"))
-      .map((server) => server.urls)
-      .join(", "),
-  );
-  const turn = endpoints.iceServers.find((server) =>
-    server.urls.startsWith("turn"),
-  );
-  const [turnUrl, setTurnUrl] = useState(turn?.urls ?? "");
-  const [turnUsername, setTurnUsername] = useState(turn?.username ?? "");
-  const [turnCredential, setTurnCredential] = useState(turn?.credential ?? "");
-  const [errors, setErrors] = useState<Record<string, string | undefined>>({});
+  // `null` means the user is not editing, so the field follows the saved address (a change from
+  // elsewhere, or the save that just landed). A string is an unsaved draft that wins until saved.
+  const [draftRelay, setDraftRelay] = useState<string | null>(null);
+  const relayUrl = draftRelay ?? endpoints.relayUrl;
+  const [error, setError] = useState<string | undefined>();
 
   const relay = describeRelay(health);
   const checked = relativeTime(health.checkedAt, now);
@@ -117,7 +106,8 @@ export function RelayCard({
   };
 
   const check = async () => {
-    if (checking) return;
+    if (checkingRef.current) return;
+    checkingRef.current = true;
     setChecking(true);
     try {
       await onCheck();
@@ -130,45 +120,31 @@ export function RelayCard({
         errorMessage(reason, "Try again in a moment."),
       );
     } finally {
+      checkingRef.current = false;
       setChecking(false);
     }
   };
 
-  /**
-   * Validates each field on its own, then saves all of them together.
-   *
-   * Per field because `writeEndpoints` validates the whole patch and throws once, which would
-   * put "that is not a STUN address" under a relay URL box. Together because a half-applied
-   * endpoint change is the state that produces "it worked yesterday".
-   */
+  /** Validated before saving, so the error lands under the box rather than in a dialog. */
   const save = async () => {
-    if (saving) return;
-    const next: Record<string, string | undefined> = {};
-    const guard = (field: string, read: () => void) => {
-      try {
-        read();
-      } catch (reason) {
-        next[field] =
-          reason instanceof EndpointError
-            ? reason.message
-            : "That address is not valid.";
-      }
-    };
-    guard("relayUrl", () => normalizeEndpointUrl(relayUrl));
-    guard("stunUrls", () => parseStunUrls(stunUrls));
-    guard("turnUrl", () => normalizeTurnUrl(turnUrl));
-    setErrors(next);
-    if (Object.keys(next).length) return;
+    if (savingRef.current) return;
+    try {
+      normalizeEndpointUrl(relayUrl);
+      setError(undefined);
+    } catch (reason) {
+      setError(
+        reason instanceof EndpointError
+          ? reason.message
+          : "That address is not valid.",
+      );
+      return;
+    }
 
+    savingRef.current = true;
     setSaving(true);
     try {
-      await setEndpoints(setup, {
-        relayUrl,
-        stunUrls,
-        turnUrl,
-        turnUsername,
-        turnCredential,
-      });
+      await setEndpoints(setup, { relayUrl });
+      setDraftRelay(null);
       await onChanged();
     } catch (reason) {
       showError(
@@ -176,6 +152,7 @@ export function RelayCard({
         errorMessage(reason, "Check them and try again."),
       );
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -190,15 +167,6 @@ export function RelayCard({
             on.
           </AppText>
         ) : null}
-        <ToggleRow
-          title="Direct connections"
-          body="Devices talk to each other, encrypted end to end. On the same network this contacts no server at all."
-          value={endpoints.directEnabled}
-          onValueChange={(value) => void patch({ directEnabled: value })}
-        />
-
-        <View style={{ height: 1, backgroundColor: theme.border }} />
-
         <ToggleRow
           title="Relay server"
           body="Holds sealed changes for a device that is closed. It can never read them."
@@ -234,8 +202,8 @@ export function RelayCard({
 
         {!endpoints.relayUrl ? (
           <AppText variant="caption" muted>
-            No relay address is set, so this device only syncs when another one
-            is open at the same time.
+            No relay address is set, so this device only syncs through transfer
+            files you carry yourself.
           </AppText>
         ) : null}
 
@@ -277,54 +245,14 @@ export function RelayCard({
             <FormField
               label="Relay address"
               value={relayUrl}
-              onChangeText={setRelayUrl}
+              onChangeText={(value) => setDraftRelay(value)}
               autoCapitalize="none"
               autoCorrect={false}
               inputMode="url"
               placeholder="https://sync.example.com"
-              error={errors.relayUrl}
-              hint="Leave this blank to contact nothing but devices on your own network."
+              error={error}
+              hint="Leave this blank to contact nothing and sync only through transfer files."
             />
-            <FormField
-              label="STUN servers"
-              value={stunUrls}
-              onChangeText={setStunUrls}
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={errors.stunUrls}
-              hint="Used only when a direct connection fails. A STUN server learns an IP address and never sees your data."
-            />
-            <FormField
-              label="TURN server"
-              value={turnUrl}
-              onChangeText={setTurnUrl}
-              autoCapitalize="none"
-              autoCorrect={false}
-              error={errors.turnUrl}
-              // The strongest warning on this screen, and it is not optional. TURN relays the
-              // media path itself, so it sees both devices' addresses and every byte's timing.
-              // Qashy ships none by design; one you add is one you must already trust.
-              hint="Only add one you run yourself. A TURN server sees both devices’ addresses and how much data moves between them."
-            />
-            {turnUrl ? (
-              <>
-                <FormField
-                  label="TURN username"
-                  value={turnUsername}
-                  onChangeText={setTurnUsername}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                />
-                <FormField
-                  label="TURN password"
-                  value={turnCredential}
-                  onChangeText={setTurnCredential}
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  secureTextEntry
-                />
-              </>
-            ) : null}
             <TextButton
               title={saving ? "Saving…" : "Save addresses"}
               icon="checkmark"
@@ -339,7 +267,7 @@ export function RelayCard({
   );
 }
 
-/** A switch with its own explanation, because neither of these two is self-evident. */
+/** A switch with its own explanation, because it is not self-evident. */
 function ToggleRow({
   title,
   body,

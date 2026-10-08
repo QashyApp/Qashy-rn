@@ -390,7 +390,8 @@ describe("merge scenarios — co-dependent fields", () => {
         merged.amountMinor,
         "EUR",
         BASE_CURRENCY,
-        merged.exchangeRate,
+        // Asserted to be "1.25" above; the stored type is nullable, so narrow it here.
+        merged.exchangeRate ?? "",
       ),
     );
     // Independently derived from the merged ledger rather than replicated, so agreement here

@@ -5,7 +5,6 @@ import Animated, {
   Easing,
   ReduceMotion,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
@@ -18,6 +17,7 @@ import {
 } from "@/components/navigation/tab-sections";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
+import { useMotionPreference } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { FLOATING_BAR_HEIGHT } from "@/theme/layout";
 import { materialStyle } from "@/theme/materials";
@@ -46,10 +46,16 @@ function PressScale({
   children: ReactNode;
 }) {
   const { space } = useQashyTheme();
+  const { travel } = useMotionPreference();
   const scale = useSharedValue(1);
   useEffect(() => {
+    // Press feedback is a scale, so only the full animation level keeps it.
+    if (!travel) {
+      scale.set(1);
+      return;
+    }
     scale.set(withSpring(pressed ? 0.95 : 1, pressSpring));
-  }, [pressed, scale]);
+  }, [pressed, scale, travel]);
   const style = useAnimatedStyle(() => ({
     transform: [{ scale: scale.value }],
   }));
@@ -88,7 +94,7 @@ export function FloatingTabBar({
   const theme = useQashyTheme();
   const { radius, space, motion } = theme;
   const { isRtl, t } = useLocalization();
-  const reduceMotion = useReducedMotion();
+  const { instant, travel } = useMotionPreference();
   const count = state.routes.length;
   const [barWidth, setBarWidth] = useState(0);
   const itemWidth = count > 0 ? barWidth / count : 0;
@@ -101,7 +107,8 @@ export function FloatingTabBar({
   useEffect(() => {
     if (itemWidth <= 0) return;
     const target = slot * itemWidth;
-    if (measured.get() === 0 || reduceMotion) {
+    // The indicator travels between tabs, so anything below the full level jumps to its slot.
+    if (measured.get() === 0 || !travel) {
       indicatorX.set(target);
       measured.set(1);
       return;
@@ -113,30 +120,26 @@ export function FloatingTabBar({
         reduceMotion: ReduceMotion.System,
       }),
     );
-  }, [
-    indicatorX,
-    itemWidth,
-    measured,
-    motion.duration.base,
-    reduceMotion,
-    slot,
-  ]);
+  }, [indicatorX, itemWidth, measured, motion.duration.base, travel, slot]);
 
   // A new section always shows the bar again, whatever the previous list left it at.
   useEffect(() => {
     visibility.set(
       withTiming(1, {
         duration: motion.duration.fast,
-        reduceMotion: ReduceMotion.System,
+        reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
       }),
     );
-  }, [motion.duration.fast, state.index, visibility]);
+  }, [instant, motion.duration.fast, state.index, visibility]);
 
   const hideDistance =
     FLOATING_BAR_HEIGHT + insets.bottom + space.md + space.lg;
+  // Below the full level the bar only fades in and out; it does not slide.
   const containerStyle = useAnimatedStyle(() => ({
     opacity: visibility.value,
-    transform: [{ translateY: (1 - visibility.value) * hideDistance }],
+    transform: [
+      { translateY: travel ? (1 - visibility.value) * hideDistance : 0 },
+    ],
     pointerEvents:
       visibility.value < 0.5 ? ("none" as const) : ("auto" as const),
   }));

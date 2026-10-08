@@ -36,11 +36,20 @@ const HEADER_ALIASES: Record<string, string> = {
   feevalue: "feeValue",
 };
 
+/**
+ * The formula guard's trigger: an apostrophe followed by whitespace, a BOM, another apostrophe, or a
+ * formula character. `escapeCsv` and `unescapeCsvFormula` both use it, so they cannot drift apart.
+ */
+const FORMULA_GUARD_LEAD = /^'(?=[\s\uFEFF'=+\-@])/;
+
+/**
+ * Removes the one apostrophe `escapeCsv` may have prefixed. Round trip: `escapeCsv` prefixes a value
+ * exactly when `FORMULA_GUARD_LEAD` would strip it back off, so for every value
+ * `unescapeCsvFormula(escapeCsv(v)) === v`. For example "'@home" is exported as "''@home" and comes
+ * back as "'@home", while a foreign "'Twas" has no trigger after the apostrophe and is kept as is.
+ */
 export function unescapeCsvFormula(value: string) {
-  // Strip the single guard apostrophe `escapeCsv` adds. The `'` in the lookahead
-  // covers a value that already began with one: it is exported doubled, and only
-  // the guard may come back off.
-  return value.replace(/^'(?=['=+@\t\r-])/, "");
+  return FORMULA_GUARD_LEAD.test(value) ? value.slice(1) : value;
 }
 
 export function parseCsvText(input: string) {
@@ -104,6 +113,13 @@ type ScannedRow = {
   error?: string;
 };
 
+/**
+ * A quoted field that stays open for this many physical lines is treated as unclosed, even before
+ * the end of the file. Real multi-line notes run a handful of lines; anything longer is a stray quote
+ * that would otherwise swallow the rest of the file.
+ */
+const MAX_QUOTED_FIELD_LINES = 200;
+
 // Quote errors are scoped to the row that contains them. Aborting the whole
 // file meant one stray quote threw away every valid row alongside it, with no
 // way for the user to see which line was at fault.
@@ -115,6 +131,8 @@ function scanRows(input: string, delimiter: string) {
   let fieldQuoted = false;
   let quoted = false;
   let quoteClosed = false;
+  let quoteOpenIndex = -1;
+  let quoteOpenLine = 1;
   let line = 1;
   let rowLine = 1;
   let rowError: string | undefined;
@@ -137,55 +155,115 @@ function scanRows(input: string, delimiter: string) {
     quoteClosed = false;
     rowError = undefined;
   };
+  // An unclosed quote is reported at the line where it opened. The scan then resumes on the line
+  // after that one, so the rows the open quote swallowed are read again as ordinary rows.
+  // Returns the index to resume from.
+  const recoverFromUnclosedQuote = () => {
+    rows.push({
+      cells: [],
+      quotedCells: [],
+      lineNumber: quoteOpenLine,
+      error: `Unclosed quoted CSV field starting on line ${quoteOpenLine}.`,
+    });
+    let breakAt = quoteOpenIndex;
+    while (
+      breakAt < input.length &&
+      input[breakAt] !== "\n" &&
+      input[breakAt] !== "\r"
+    ) {
+      breakAt += 1;
+    }
+    if (breakAt < input.length) {
+      breakAt += input[breakAt] === "\r" && input[breakAt + 1] === "\n" ? 2 : 1;
+    }
+    cells = [];
+    quotedCells = [];
+    field = "";
+    fieldQuoted = false;
+    quoted = false;
+    quoteClosed = false;
+    rowError = undefined;
+    line = quoteOpenLine + 1;
+    rowLine = line;
+    return breakAt;
+  };
 
-  for (let index = 0; index < input.length; index += 1) {
+  let index = 0;
+  while (index < input.length || quoted) {
+    if (index >= input.length) {
+      index = recoverFromUnclosedQuote();
+      continue;
+    }
     const character = input[index];
+    if (quoted && line - quoteOpenLine >= MAX_QUOTED_FIELD_LINES) {
+      index = recoverFromUnclosedQuote();
+      continue;
+    }
     if (rowError) {
       // Discard the remainder of a broken row and resynchronise at the next
       // line break, so the rows after it still parse.
       if (character === "\n" || character === "\r") {
-        if (character === "\r" && input[index + 1] === "\n") index += 1;
+        index += character === "\r" && input[index + 1] === "\n" ? 2 : 1;
         endRow();
         line += 1;
         rowLine = line;
+      } else {
+        index += 1;
       }
       continue;
     }
     if (character === '"' && quoted && input[index + 1] === '"') {
       field += '"';
-      index += 1;
+      index += 2;
     } else if (character === '"' && quoted) {
       quoted = false;
       quoteClosed = true;
       fieldQuoted = true;
-    } else if (character === '"' && !quoted && !field.length && !quoteClosed) {
+      index += 1;
+    } else if (
+      character === '"' &&
+      !quoted &&
+      !quoteClosed &&
+      /^[ \t]*$/.test(field)
+    ) {
+      // An opening quote may follow spaces or tabs. Those are discarded, since the quoted value is
+      // taken literally.
+      field = "";
       quoted = true;
       fieldQuoted = true;
+      quoteOpenIndex = index;
+      quoteOpenLine = line;
+      index += 1;
     } else if (character === '"') {
       rowError = `Malformed CSV quote on line ${line}.`;
+      index += 1;
     } else if (character === delimiter && !quoted) {
       endField();
+      index += 1;
     } else if ((character === "\n" || character === "\r") && !quoted) {
-      if (character === "\r" && input[index + 1] === "\n") index += 1;
+      index += character === "\r" && input[index + 1] === "\n" ? 2 : 1;
       endRow();
       line += 1;
       rowLine = line;
     } else {
       if (quoteClosed && !/\s/.test(character)) {
         rowError = `Malformed CSV quote on line ${line}.`;
+        index += 1;
         continue;
       }
       if (character === "\n") line += 1;
       if (!quoteClosed) field += character;
+      index += 1;
     }
   }
-  if (quoted)
-    rowError = `Unclosed quoted CSV field starting on line ${rowLine}.`;
   endRow();
   return rows;
 }
 
-export function parseCsvTable(input: string) {
+export function parseCsvTable(source: string) {
+  // Excel and some exporters prefix a byte-order mark. It is not data, and a quoted first header
+  // would otherwise start with it and fail.
+  const input = source.replace(/^\uFEFF/, "");
   const scanned = scanRows(input, detectDelimiter(input));
   const empty = {
     headers: [] as string[],
@@ -222,6 +300,7 @@ export function parseCsvTable(input: string) {
       };
       headers.forEach((header, column) => {
         const raw = source.cells[column] ?? "";
+        // Quoted cells are taken literally; only unquoted padding is trimmed.
         record[header] = unescapeCsvFormula(
           source.quotedCells[column] ? raw : raw.trim(),
         );
@@ -273,18 +352,26 @@ export function extractCsvRatePairs(
   return pairs;
 }
 
+/**
+ * Whether a value begins, after whitespace and a BOM, with a character a spreadsheet reads as a
+ * formula. Plain numbers such as `-12.50` are exempt, so exported amounts stay numeric.
+ */
+const isFormulaLike = (text: string) =>
+  /^[\s\uFEFF]*[=+\-@]/.test(text) && !/^-?\d+(\.\d+)?$/.test(text);
+
+/**
+ * Encodes one CSV cell. The formula guard and `unescapeCsvFormula` are a matched pair:
+ *  - a formula-like value, or a value that already starts with an apostrophe the importer would
+ *    strip (`FORMULA_GUARD_LEAD`), gets one apostrophe prefixed;
+ *  - any other value is written unchanged.
+ * A value with leading or trailing whitespace is quoted, and the importer does not trim quoted
+ * cells, so " note " round-trips.
+ */
 export function escapeCsv(value: unknown) {
   let text = String(value ?? "");
-  // Neutralize spreadsheet formula injection; plain numbers stay untouched.
-  // A value that already starts with an apostrophe followed by a dangerous
-  // character has to be escaped too: the importer strips one leading
-  // apostrophe, so exporting a literal `'=SUM(A1)` unchanged would re-import it
-  // as the live formula `=SUM(A1)`.
-  // This class must stay identical to the lookahead in `unescapeCsvFormula`: any
-  // value the importer would strip an apostrophe from has to be doubled here, and
-  // that includes a value already starting with two apostrophes.
-  const dangerous = /^[=+@\t\r-]/.test(text) && !/^-?\d+(\.\d+)?$/.test(text);
-  if (dangerous || /^'['=+@\t\r-]/.test(text)) text = `'${text}`;
-  if (!/[",\r\n]/.test(text)) return text;
+  if (isFormulaLike(text) || FORMULA_GUARD_LEAD.test(text)) {
+    text = `'${text}`;
+  }
+  if (!/[",\r\n]/.test(text) && !/^\s|\s$/.test(text)) return text;
   return `"${text.replace(/"/g, '""')}"`;
 }

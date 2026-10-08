@@ -61,7 +61,11 @@ describe("AndroidSheet", () => {
   it("closes once however many ways ask for it", async () => {
     const nav = navigation();
     await renderSheet(nav);
-    const [scrim, button] = screen.getAllByLabelText("Close");
+    // The scrim is pointer-only (hidden from screen readers), so it is reached by test id.
+    const scrim = screen.getByTestId("android-sheet-scrim", {
+      includeHiddenElements: true,
+    });
+    const button = screen.getByLabelText("Close");
     await fireEvent.press(scrim);
     await fireEvent.press(button);
     await act(async () => undefined);

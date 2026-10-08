@@ -96,7 +96,9 @@ export function addRecurrence(
     const maxDay = new Date(date.getFullYear(), anchorMonth + 1, 0).getDate();
     date.setDate(anchorWasMonthEnd ? maxDay : Math.min(anchorDay, maxDay));
   }
-  if (!Number.isFinite(date.getTime())) {
+  // Years past 9999 would format as five digits ("10000-01-01"), which sorts before "9999-12-31"
+  // as a string and breaks every comparison in the app, so they are refused here.
+  if (!Number.isFinite(date.getTime()) || date.getFullYear() > 9999) {
     throw new RangeError(
       "Recurrence interval is outside the supported calendar range.",
     );

@@ -21,6 +21,8 @@ export function dayNetMinor(
 ): number {
   let net = 0;
   for (const transaction of transactions) {
+    // An unpriced upcoming transaction (no rate yet) has no base value to total; it counts once paid.
+    if (transaction.baseAmountMinor === null) continue;
     if (transaction.kind === "income") {
       net = addMinor(net, transaction.baseAmountMinor, "Daily net");
     } else if (transaction.kind === "expense") {

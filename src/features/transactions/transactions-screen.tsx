@@ -1,3 +1,4 @@
+import { CountUpSubject } from "@/components/finance/animated-money";
 import { router, useLocalSearchParams } from "expo-router";
 import {
   useDeferredValue,
@@ -29,6 +30,7 @@ import { MonthSwitcher } from "@/components/ui/month-switcher";
 import {
   MonthPager,
   navigateMonth,
+  restingPosition,
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
 import { MotionView, ScreenTransition } from "@/components/ui/motion";
@@ -41,6 +43,10 @@ import { useScrollCollapse } from "@/components/ui/use-scroll-collapse";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import type { TransactionRecord } from "@/domain/models";
+import {
+  markUpcomingPaid,
+  upcomingCurrencies,
+} from "@/features/transactions/mark-upcoming-paid";
 import { CollapsingSummaryTiles } from "@/features/transactions/summary-tiles";
 import { BatchEditSheet } from "@/features/transactions/list/batch-edit-sheet";
 import type { LedgerSection } from "@/features/transactions/list/sections";
@@ -49,6 +55,7 @@ import {
   type KindFilter,
 } from "@/features/transactions/list/transaction-month-list";
 import { useLocalization } from "@/localization/localization";
+import { useExchangeRateService } from "@/providers/exchange-rate-provider";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -68,6 +75,9 @@ import {
 } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
 import { hapticSelection, hapticSuccess } from "@/utils/haptics";
+
+/** How long the month has to hold still before the URL is updated to it. */
+const PARAM_DELAY = 400;
 
 const KIND_OPTIONS = [
   { value: "all", label: "All", icon: "list.bullet.rectangle" },
@@ -94,6 +104,7 @@ const KIND_OPTIONS = [
 export function TransactionsScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
+  const exchangeRateService = useExchangeRateService();
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { isRtl, locale, t } = useLocalization();
@@ -120,7 +131,7 @@ export function TransactionsScreen() {
   const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
   const pagerRef = useRef<MonthPagerHandle>(null);
-  const dragProgress = useSharedValue(0);
+  const dragProgress = useSharedValue(restingPosition(month, isRtl));
   const listRef =
     useSectionScrollToTop<
       SectionList<TransactionRecord, LedgerSection<TransactionRecord>>
@@ -149,19 +160,43 @@ export function TransactionsScreen() {
   // one frame of the previous month first.
   const paramMonth = parseMonthKey(params.month);
   const [followedParam, setFollowedParam] = useState(paramMonth);
+  // Params this screen wrote itself and has not seen come back yet. The router echoes them late, so
+  // a quick second swipe would otherwise be yanked back to the first one's month when it lands.
+  const [ownParams, setOwnParams] = useState<string[]>([]);
+  // This screen's own month change, not yet written to the URL.
+  const [paramDue, setParamDue] = useState(false);
   if (paramMonth !== followedParam) {
     setFollowedParam(paramMonth);
-    if (paramMonth && paramMonth !== month) {
-      setMonth(paramMonth);
-      setSelectedIds([]);
+    const echo = paramMonth ? ownParams.indexOf(monthKey(paramMonth)) : -1;
+    if (echo >= 0) {
+      setOwnParams(ownParams.slice(echo + 1));
+    } else {
+      // Something else navigated here: its month wins over one this screen had yet to write.
+      setParamDue(false);
+      if (paramMonth && paramMonth !== month) {
+        setMonth(paramMonth);
+        setSelectedIds([]);
+      }
     }
   }
 
   const changeMonth = (next: string) => {
     setMonth(next);
-    setSelectedIds([]);
-    router.setParams({ month: monthKey(next) });
+    // Kept as is when already empty: a new array re-rendered every mounted month page.
+    setSelectedIds((current) => (current.length ? [] : current));
+    setParamDue(true);
   };
+  // The URL follows once the month stops changing. Writing it on every swipe re-rendered the
+  // screen twice more per month (the write, then the router's echo), right as the next swipe began.
+  useEffect(() => {
+    if (!paramDue) return;
+    const timer = setTimeout(() => {
+      setParamDue(false);
+      setOwnParams((own) => [...own, monthKey(month)]);
+      router.setParams({ month: monthKey(month) });
+    }, PARAM_DELAY);
+    return () => clearTimeout(timer);
+  }, [paramDue, month]);
 
   const allMonths = searchAllMonths && search.trim().length > 0;
   const fromDate = startOfMonth(month);
@@ -316,9 +351,15 @@ export function TransactionsScreen() {
     if (resolvingId) return;
     setResolvingId(id);
     try {
+      const transaction = state.transactions.find((item) => item.id === id);
       await (action === "skip"
         ? repository.skipUpcoming(id)
-        : repository.confirmUpcoming(id));
+        : markUpcomingPaid(
+            repository,
+            exchangeRateService,
+            id,
+            transaction ? upcomingCurrencies(transaction) : [],
+          ));
       if (action === "confirm") hapticSuccess();
       else hapticSelection();
     } catch (reason) {
@@ -372,305 +413,310 @@ export function TransactionsScreen() {
   );
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      <ScreenTransition style={{ flex: 1 }}>
-        {/* Month, search and filters sit outside the list, not inside its header.
+    // Amounts snap to a new month instead of counting up on the JS thread mid-swipe.
+    <CountUpSubject subject={month}>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        <ScreenTransition style={{ flex: 1 }}>
+          {/* Month, search and filters sit outside the list, not inside its header.
           Scrolled away, they made the ledger's most-used controls unreachable
           exactly when a long list made them necessary. Pinned, the list becomes
           a result set that responds under a control surface that stays put. */}
-        <View
-          style={{
-            borderBottomWidth: StyleSheet.hairlineWidth,
-            borderBottomColor: theme.border,
-            backgroundColor: theme.background,
-            zIndex: 2,
-          }}
-        >
-          <View style={toolbarStyle}>
-            <PageHeading title="Transactions" />
-            <View style={{ gap: space.md }}>
-              <View style={{ alignSelf: "flex-start" }}>
-                <MonthSwitcher
-                  value={month}
-                  onChange={(next, direction) =>
-                    navigateMonth(
-                      pagerRef.current,
-                      month,
-                      next,
-                      direction,
-                      changeMonth,
-                    )
-                  }
-                  disabled={allMonths}
-                  dragProgress={dragProgress}
-                />
-              </View>
-              <View
-                accessibilityLabel={
-                  allMonths
-                    ? undefined
-                    : `${monthLabel(month, locale)} ${t("summary")}`
-                }
-                style={{ opacity: allMonths ? 0.45 : 1 }}
-              >
-                <CollapsingSummaryTiles
-                  currency={currency}
-                  locale={locale}
-                  compactFigures={compactFigures}
-                  collapse={collapse}
-                  tiles={[
-                    {
-                      label: "Income",
-                      amountMinor: summary.incomeMinor,
-                      color: theme.positive,
-                    },
-                    {
-                      label: "Spent",
-                      amountMinor: summary.expenseMinor,
-                      color: theme.text,
-                    },
-                    {
-                      label: "Net",
-                      amountMinor: summary.netFlowMinor,
-                      color:
-                        summary.netFlowMinor > 0
-                          ? theme.positive
-                          : summary.netFlowMinor < 0
-                            ? theme.negative
-                            : theme.text,
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-            <Collapsible
-              collapse={collapse}
-              gapBefore={toolbarGap}
-              style={{ gap: toolbarGap }}
-            >
-              <View
-                style={{
-                  minHeight: 44,
-                  borderRadius: radius.pill,
-                  borderCurve: "continuous",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  paddingHorizontal: space.lg,
-                  gap: space.sm,
-                  ...materialStyle(theme, "sunken"),
-                  ...(searchFocused
-                    ? { boxShadow: `inset 0 0 0 2px ${String(theme.accent)}` }
-                    : null),
-                }}
-              >
-                <AppIcon
-                  name="magnifyingglass"
-                  color={theme.textMuted}
-                  size={18}
-                />
-                <TextInput
-                  accessibilityLabel={t("Search transactions")}
-                  placeholder={t(
-                    searchAllMonths ? "Search all months" : "Search this month",
-                  )}
-                  placeholderTextColor={theme.textMuted}
-                  value={search}
-                  onFocus={() => setSearchFocused(true)}
-                  onBlur={() => setSearchFocused(false)}
-                  onChangeText={(value) => {
-                    setSearch(value);
-                    clearSelection();
-                  }}
-                  style={{
-                    flex: 1,
-                    minHeight: 44,
-                    color: theme.text,
-                    fontSize: 16,
-                    ...fontStyle("regular", theme.type),
-                    writingDirection: isRtl ? "rtl" : "ltr",
-                    textAlign: isRtl ? "right" : "left",
-                  }}
-                />
-                {search ? (
-                  <IconButton
-                    label="Clear search"
-                    icon="xmark"
-                    iconSize={17}
-                    enteringVariant="zoom"
-                    onPress={() => {
-                      setSearch("");
-                      clearSelection();
-                    }}
-                    style={{ marginEnd: -space.sm }}
-                  />
-                ) : null}
-              </View>
-              {search ? (
-                <MotionView
-                  variant="down"
-                  exit
-                  animateLayout
-                  style={{ flexDirection: "row" }}
-                >
-                  <ChoiceChip
-                    mode="checkbox"
-                    icon="calendar"
-                    label="Search all months"
-                    selected={searchAllMonths}
-                    onPress={() => {
-                      setSearchAllMonths((current) => !current);
-                      clearSelection();
-                    }}
-                  />
-                </MotionView>
-              ) : null}
-              {/* Five options do not fit a segmented control on a phone without
-              truncating, so they scroll sideways as one row instead of wrapping. */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                accessibilityRole="radiogroup"
-                accessibilityLabel={t("Transaction type filter")}
-                // Bleeds to the screen edge so chips scroll out from under the gutter.
-                style={{ marginHorizontal: -gutter }}
-                contentContainerStyle={{
-                  gap: space.sm,
-                  paddingHorizontal: gutter,
-                }}
-              >
-                {KIND_OPTIONS.map((option) => (
-                  <ChoiceChip
-                    key={option.value}
-                    label={option.label}
-                    icon={option.icon}
-                    selected={kind === option.value}
-                    onPress={() => {
-                      setKind(option.value);
-                      clearSelection();
-                    }}
-                  />
-                ))}
-              </ScrollView>
-            </Collapsible>
-          </View>
-        </View>
-        <MonthPager
-          ref={pagerRef}
-          dragProgress={dragProgress}
-          month={month}
-          disabled={allMonths || selectionMode}
-          onChange={changeMonth}
-          style={{ flex: 1 }}
-          renderPage={(pageMonth, { isCurrent }) => (
-            <TransactionMonthList
-              month={pageMonth}
-              isCurrent={isCurrent}
-              search={deferredSearch}
-              kind={kind}
-              allMonths={searchAllMonths && deferredSearch.trim().length > 0}
-              selectionMode={selectionMode}
-              selectedIds={selectedIds}
-              resolvingId={resolvingId}
-              latestMonth={latestMonth}
-              content={content}
-              onScroll={onScroll}
-              listRef={listRef}
-              upcomingCollapsed={upcomingCollapsed}
-              onToggleUpcoming={() => setUpcomingCollapsed((value) => !value)}
-              onToggleSelectionMode={toggleSelectionMode}
-              onToggleItem={toggleSelected}
-              onSetSelection={setSelectedIds}
-              onLongPressItem={enterSelection}
-              onDragActiveChange={setDragActive}
-              onResolveUpcoming={resolveUpcoming}
-              onClearFilters={clearFilters}
-              onGoToMonth={changeMonth}
-            />
-          )}
-        />
-      </ScreenTransition>
-      {selectionMode ? (
-        <MotionView
-          variant="up"
-          exit
-          animateLayout
-          style={{
-            position: "absolute",
-            left: gutter,
-            right: gutter,
-            bottom: batchBarBottom,
-            maxWidth: content.maxWidth,
-            alignSelf: "center",
-          }}
-        >
-          {/* One compact row: what to do with the selection on one side, deleting it on the
-            other. The choices behind "Edit" live in a sheet, so the bar never grows into the
-            list it is acting on. The count and "Done selecting" sit at the top of the list. */}
           <View
             style={{
-              flexDirection: "row",
-              gap: space.sm,
-              padding: space.sm,
-              borderRadius: radius.sheet,
-              borderCurve: "continuous",
-              ...materialStyle(theme, "overlay"),
+              borderBottomWidth: StyleSheet.hairlineWidth,
+              borderBottomColor: theme.border,
+              backgroundColor: theme.background,
+              zIndex: 2,
             }}
           >
-            <ActionButton
-              title={`Edit (${selectedIds.length})`}
-              icon="ion:create-outline"
-              variant="secondary"
-              disabled={busy || !selectedIds.length}
-              onPress={() => setEditOpen(true)}
-              style={{ flex: 1 }}
-            />
-            <ActionButton
-              title="Delete"
-              icon="trash"
-              variant="danger"
-              disabled={busy || !selectedIds.length}
-              onPress={deleteSelected}
-              style={{ flex: 1 }}
-            />
+            <View style={toolbarStyle}>
+              <PageHeading title="Transactions" />
+              <View style={{ gap: space.md }}>
+                <View style={{ alignSelf: "flex-start" }}>
+                  <MonthSwitcher
+                    value={month}
+                    onChange={(next, direction) =>
+                      navigateMonth(
+                        pagerRef.current,
+                        month,
+                        next,
+                        direction,
+                        changeMonth,
+                      )
+                    }
+                    disabled={allMonths}
+                    dragProgress={dragProgress}
+                  />
+                </View>
+                <View
+                  accessibilityLabel={
+                    allMonths
+                      ? undefined
+                      : `${monthLabel(month, locale)} ${t("summary")}`
+                  }
+                  style={{ opacity: allMonths ? 0.45 : 1 }}
+                >
+                  <CollapsingSummaryTiles
+                    currency={currency}
+                    locale={locale}
+                    compactFigures={compactFigures}
+                    collapse={collapse}
+                    tiles={[
+                      {
+                        label: "Income",
+                        amountMinor: summary.incomeMinor,
+                        color: theme.positive,
+                      },
+                      {
+                        label: "Spent",
+                        amountMinor: summary.expenseMinor,
+                        color: theme.text,
+                      },
+                      {
+                        label: "Net",
+                        amountMinor: summary.netFlowMinor,
+                        color:
+                          summary.netFlowMinor > 0
+                            ? theme.positive
+                            : summary.netFlowMinor < 0
+                              ? theme.negative
+                              : theme.text,
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+              <Collapsible
+                collapse={collapse}
+                gapBefore={toolbarGap}
+                style={{ gap: toolbarGap }}
+              >
+                <View
+                  style={{
+                    minHeight: 44,
+                    borderRadius: radius.pill,
+                    borderCurve: "continuous",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: space.lg,
+                    gap: space.sm,
+                    ...materialStyle(theme, "sunken"),
+                    ...(searchFocused
+                      ? { boxShadow: `inset 0 0 0 2px ${String(theme.accent)}` }
+                      : null),
+                  }}
+                >
+                  <AppIcon
+                    name="magnifyingglass"
+                    color={theme.textMuted}
+                    size={18}
+                  />
+                  <TextInput
+                    accessibilityLabel={t("Search transactions")}
+                    placeholder={t(
+                      searchAllMonths
+                        ? "Search all months"
+                        : "Search this month",
+                    )}
+                    placeholderTextColor={theme.textMuted}
+                    value={search}
+                    onFocus={() => setSearchFocused(true)}
+                    onBlur={() => setSearchFocused(false)}
+                    onChangeText={(value) => {
+                      setSearch(value);
+                      clearSelection();
+                    }}
+                    style={{
+                      flex: 1,
+                      minHeight: 44,
+                      color: theme.text,
+                      fontSize: 16,
+                      ...fontStyle("regular", theme.type),
+                      writingDirection: isRtl ? "rtl" : "ltr",
+                      textAlign: isRtl ? "right" : "left",
+                    }}
+                  />
+                  {search ? (
+                    <IconButton
+                      label="Clear search"
+                      icon="xmark"
+                      iconSize={17}
+                      enteringVariant="zoom"
+                      onPress={() => {
+                        setSearch("");
+                        clearSelection();
+                      }}
+                      style={{ marginEnd: -space.sm }}
+                    />
+                  ) : null}
+                </View>
+                {search ? (
+                  <MotionView
+                    variant="down"
+                    exit
+                    animateLayout
+                    style={{ flexDirection: "row" }}
+                  >
+                    <ChoiceChip
+                      mode="checkbox"
+                      icon="calendar"
+                      label="Search all months"
+                      selected={searchAllMonths}
+                      onPress={() => {
+                        setSearchAllMonths((current) => !current);
+                        clearSelection();
+                      }}
+                    />
+                  </MotionView>
+                ) : null}
+                {/* Five options do not fit a segmented control on a phone without
+              truncating, so they scroll sideways as one row instead of wrapping. */}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  accessibilityRole="radiogroup"
+                  accessibilityLabel={t("Transaction type filter")}
+                  // Bleeds to the screen edge so chips scroll out from under the gutter.
+                  style={{ marginHorizontal: -gutter }}
+                  contentContainerStyle={{
+                    gap: space.sm,
+                    paddingHorizontal: gutter,
+                  }}
+                >
+                  {KIND_OPTIONS.map((option) => (
+                    <ChoiceChip
+                      key={option.value}
+                      label={option.label}
+                      icon={option.icon}
+                      selected={kind === option.value}
+                      onPress={() => {
+                        setKind(option.value);
+                        clearSelection();
+                      }}
+                    />
+                  ))}
+                </ScrollView>
+              </Collapsible>
+            </View>
           </View>
-        </MotionView>
-      ) : (
-        <FloatingActionButton
-          label="Add transaction"
-          visibility={fabVisibility}
-          onPress={() =>
-            router.push({
-              pathname: "/transaction",
-              params: { returnTo: "/transactions" },
-            })
+          <MonthPager
+            ref={pagerRef}
+            dragProgress={dragProgress}
+            month={month}
+            disabled={allMonths || selectionMode}
+            onChange={changeMonth}
+            style={{ flex: 1 }}
+            renderPage={(pageMonth, { isCurrent }) => (
+              <TransactionMonthList
+                month={pageMonth}
+                isCurrent={isCurrent}
+                search={deferredSearch}
+                kind={kind}
+                allMonths={searchAllMonths && deferredSearch.trim().length > 0}
+                selectionMode={selectionMode}
+                selectedIds={selectedIds}
+                resolvingId={resolvingId}
+                latestMonth={latestMonth}
+                content={content}
+                onScroll={onScroll}
+                listRef={listRef}
+                upcomingCollapsed={upcomingCollapsed}
+                onToggleUpcoming={() => setUpcomingCollapsed((value) => !value)}
+                onToggleSelectionMode={toggleSelectionMode}
+                onToggleItem={toggleSelected}
+                onSetSelection={setSelectedIds}
+                onLongPressItem={enterSelection}
+                onDragActiveChange={setDragActive}
+                onResolveUpcoming={resolveUpcoming}
+                onClearFilters={clearFilters}
+                onGoToMonth={changeMonth}
+              />
+            )}
+          />
+        </ScreenTransition>
+        {selectionMode ? (
+          <MotionView
+            variant="up"
+            exit
+            animateLayout
+            style={{
+              position: "absolute",
+              left: gutter,
+              right: gutter,
+              bottom: batchBarBottom,
+              maxWidth: content.maxWidth,
+              alignSelf: "center",
+            }}
+          >
+            {/* One compact row: what to do with the selection on one side, deleting it on the
+            other. The choices behind "Edit" live in a sheet, so the bar never grows into the
+            list it is acting on. The count and "Done selecting" sit at the top of the list. */}
+            <View
+              style={{
+                flexDirection: "row",
+                gap: space.sm,
+                padding: space.sm,
+                borderRadius: radius.sheet,
+                borderCurve: "continuous",
+                ...materialStyle(theme, "overlay"),
+              }}
+            >
+              <ActionButton
+                title={`Edit (${selectedIds.length})`}
+                icon="ion:create-outline"
+                variant="secondary"
+                disabled={busy || !selectedIds.length}
+                onPress={() => setEditOpen(true)}
+                style={{ flex: 1 }}
+              />
+              <ActionButton
+                title="Delete"
+                icon="trash"
+                variant="danger"
+                disabled={busy || !selectedIds.length}
+                onPress={deleteSelected}
+                style={{ flex: 1 }}
+              />
+            </View>
+          </MotionView>
+        ) : (
+          <FloatingActionButton
+            label="Add transaction"
+            visibility={fabVisibility}
+            onPress={() =>
+              router.push({
+                pathname: "/transaction",
+                params: { returnTo: "/transactions" },
+              })
+            }
+            style={floatingActionMetrics(metrics, insets, space)}
+          />
+        )}
+        <BatchEditSheet
+          visible={selectionMode && editOpen}
+          count={selectedIds.length}
+          categories={
+            compatibleCategoryKind && !hasSelectedTransfers
+              ? state.categories.filter(
+                  (item) =>
+                    item.kind === compatibleCategoryKind && !item.archived,
+                )
+              : []
           }
-          style={floatingActionMetrics(metrics, insets, space)}
+          categoryBlockedReason={
+            hasSelectedTransfers
+              ? "Transfers do not have categories."
+              : selectedKinds.length > 1
+                ? "Select only income or only expense transactions to assign a category."
+                : null
+          }
+          initialDate={batchInitialDate}
+          busy={busy}
+          onChangeCategory={changeCategory}
+          onChangeDate={changeDate}
+          onClose={() => setEditOpen(false)}
         />
-      )}
-      <BatchEditSheet
-        visible={selectionMode && editOpen}
-        count={selectedIds.length}
-        categories={
-          compatibleCategoryKind && !hasSelectedTransfers
-            ? state.categories.filter(
-                (item) =>
-                  item.kind === compatibleCategoryKind && !item.archived,
-              )
-            : []
-        }
-        categoryBlockedReason={
-          hasSelectedTransfers
-            ? "Transfers do not have categories."
-            : selectedKinds.length > 1
-              ? "Select only income or only expense transactions to assign a category."
-              : null
-        }
-        initialDate={batchInitialDate}
-        busy={busy}
-        onChangeCategory={changeCategory}
-        onChangeDate={changeDate}
-        onClose={() => setEditOpen(false)}
-      />
-    </View>
+      </View>
+    </CountUpSubject>
   );
 }

@@ -6,7 +6,6 @@ import Animated, {
   interpolateColor,
   useAnimatedProps,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withSequence,
   withSpring,
@@ -17,6 +16,7 @@ import Svg, { Circle } from "react-native-svg";
 import {
   motionCurves,
   usePageMotionRef,
+  useMotionPreference,
   useRevealAllowedAtMount,
 } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
@@ -62,9 +62,11 @@ export function ProgressBar({
   // withSpring() and accessibilityValue.
   const safeValue = Number.isFinite(value) ? value : 0;
   const clamped = Math.max(0, Math.min(1, safeValue));
-  const reduceMotion = useReducedMotion();
+  // The fill sweep and the milestone pulse travel, so they only run at the full level. The color
+  // crossfade is a fade and keeps running at `minimal`.
+  const { instant, travel } = useMotionPreference();
   const revealAllowed = useRevealAllowedAtMount();
-  const drawnAtMount = reduceMotion || !revealAllowed;
+  const drawnAtMount = !travel || !revealAllowed;
   const progress = useSharedValue(drawnAtMount ? clamped : 0);
   const pulse = useSharedValue(1);
   const colorMix = useSharedValue(1);
@@ -112,10 +114,10 @@ export function ProgressBar({
       withTiming(1, {
         duration: 260,
         easing: motionCurves.standard,
-        reduceMotion: ReduceMotion.System,
+        reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
       }),
     );
-  }, [colorMix, colorPair, pageMotion]);
+  }, [colorMix, colorPair, pageMotion, instant]);
 
   useEffect(() => {
     const previous = previousValueRef.current;
@@ -123,7 +125,7 @@ export function ProgressBar({
     if (!mountedRef.current) {
       mountedRef.current = true;
       // A neighbouring month arrives already filled.
-      if (!pageMotion.current) {
+      if (!pageMotion.current || !travel) {
         progress.set(clamped);
         return;
       }
@@ -136,20 +138,20 @@ export function ProgressBar({
       );
       return;
     }
-    progress.set(withSpring(clamped, fillSpring));
+    progress.set(travel ? withSpring(clamped, fillSpring) : clamped);
     const crossed = milestoneRef.current.milestones.filter(
       (milestone) => previous < milestone && safeValue >= milestone,
     );
     if (!crossed.length) return;
     milestoneRef.current.onMilestone?.(Math.max(...crossed));
-    if (reduceMotion) return;
+    if (!travel) return;
     pulse.set(
       withSequence(
         withTiming(1.45, { duration: 150, easing: motionCurves.standard }),
         withTiming(1, { duration: 240, easing: motionCurves.inOut }),
       ),
     );
-  }, [clamped, progress, pulse, reduceMotion, safeValue, pageMotion]);
+  }, [clamped, progress, pulse, travel, safeValue, pageMotion]);
 
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ scaleY: pulse.value }],
@@ -275,9 +277,9 @@ export function ProgressRing({
   const theme = useQashyTheme();
   const safeValue = Number.isFinite(value) ? value : 0;
   const clamped = Math.max(0, Math.min(1, safeValue));
-  const reduceMotion = useReducedMotion();
+  const { travel } = useMotionPreference();
   const revealAllowed = useRevealAllowedAtMount();
-  const drawnAtMount = reduceMotion || !revealAllowed;
+  const drawnAtMount = !travel || !revealAllowed;
   const progress = useSharedValue(drawnAtMount ? clamped : 0);
 
   const staticFallback =
@@ -299,7 +301,7 @@ export function ProgressRing({
   const pageMotion = usePageMotionRef();
   useEffect(() => {
     progress.set(
-      reduceMotion || !pageMotion.current
+      !travel || !pageMotion.current
         ? clamped
         : withTiming(clamped, {
             duration: 420,
@@ -307,7 +309,7 @@ export function ProgressRing({
             reduceMotion: ReduceMotion.System,
           }),
     );
-  }, [clamped, progress, reduceMotion, pageMotion]);
+  }, [clamped, progress, travel, pageMotion]);
 
   const radiusPx = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radiusPx;

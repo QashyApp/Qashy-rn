@@ -209,14 +209,15 @@ interface MinorConversion {
 
 /**
  * |amount| in minor units, half away from zero, computed from the number's shortest decimal
- * string. Never multiplies floats: 8.1 * 100 is 809.9999999999999 in IEEE arithmetic.
+ * string. Never multiplies floats: 8.1 * 100 is 809.9999999999999 in IEEE arithmetic. A `Decimal`
+ * is taken as is, so a value computed with decimal math is never converted through a float.
  */
-function toMinor(amount: number, exponent: number): MinorConversion {
+function toMinor(amount: number | Decimal, exponent: number): MinorConversion {
   let scaled: Decimal;
   try {
-    scaled = new Decimal(String(amount))
-      .abs()
-      .mul(new Decimal(10).pow(exponent));
+    const decimal =
+      amount instanceof Decimal ? amount : new Decimal(String(amount));
+    scaled = decimal.abs().mul(new Decimal(10).pow(exponent));
   } catch {
     return { minor: null, rounded: false };
   }
@@ -378,10 +379,17 @@ function parseTransactionRow(
   };
 }
 
+/** The longest interval a schedule or budget may have here; the app's own validation caps it at the same value. */
+const MAX_IMPORT_INTERVAL = 999;
+
+/**
+ * The recurrence a Cashew row describes. `null` means a custom period (not a schedule),
+ * and `"unsupported"` means a standard period whose interval is outside what the app accepts.
+ */
 function periodOf(
   reoccurrence: number | null,
   periodLength: number | null,
-): { unit: RecurrenceUnit; interval: number } | null {
+): { unit: RecurrenceUnit; interval: number } | "unsupported" | null {
   const unit: RecurrenceUnit | null =
     reoccurrence === 1
       ? "day"
@@ -393,11 +401,37 @@ function periodOf(
             ? "year"
             : null;
   if (unit === null) return null;
+  if (periodLength !== null && Math.floor(periodLength) > MAX_IMPORT_INTERVAL) {
+    return "unsupported";
+  }
   const interval =
     periodLength !== null && Number.isFinite(periodLength)
       ? Math.max(1, Math.floor(periodLength))
       : 1;
   return { unit, interval };
+}
+
+/**
+ * One recurrence step with the row's context attached. A step past year 9999 is reported as an
+ * import error naming the schedule, instead of escaping as a raw RangeError.
+ */
+function stepDate(
+  value: string,
+  period: { unit: RecurrenceUnit; interval: number },
+  anchor: string,
+  title: string,
+): string {
+  try {
+    return addRecurrence(value, period.unit, period.interval, anchor);
+  } catch (error) {
+    if (error instanceof RangeError) {
+      throw new ImportError(
+        "unsupported",
+        `The schedule "${title}" runs past the supported calendar range.`,
+      );
+    }
+    throw error;
+  }
 }
 
 const compareByDate = (first: SourceTransaction, second: SourceTransaction) =>
@@ -864,6 +898,29 @@ export function mapCashewBackup(
     if (members) members.push(row);
     else groups.set(key, [row]);
   }
+  // Two unrelated subscriptions can share a title, category and wallet, and an
+  // amount-agnostic key would merge them. A group whose posted rows carry more than one amount is
+  // split into one series per amount. An unpaid entry joins the amount of the latest posted payment.
+  for (const [key, members] of [...groups]) {
+    if (key.startsWith("pk:")) continue;
+    const posted = members.filter((row) => row.paid);
+    const amounts = new Set(posted.map((row) => row.amountMinor));
+    if (amounts.size <= 1) continue;
+    const latestPosted = [...posted]
+      .sort(compareByDate)
+      .pop() as SourceTransaction;
+    groups.delete(key);
+    for (const row of members) {
+      const amount = amounts.has(row.amountMinor)
+        ? row.amountMinor
+        : latestPosted.amountMinor;
+      const subKey = `${key}|amount:${amount}`;
+      groupOf.set(row.pk, subKey);
+      const bucket = groups.get(subKey);
+      if (bucket) bucket.push(row);
+      else groups.set(subKey, [row]);
+    }
+  }
 
   const recurringRules: BundleRecurringRule[] = [];
   const plans = new Map<string, GroupPlan>();
@@ -881,7 +938,7 @@ export function mapCashewBackup(
     const ordered = [...members].sort(compareByDate);
     const latest = ordered[ordered.length - 1];
     const period = periodOf(latest.reoccurrence, latest.periodLength);
-    if (!period) {
+    if (!period || period === "unsupported") {
       customPeriodGroups += 1;
       plans.set(groupKey, { mode: "custom", ruleExternalId: null });
       continue;
@@ -914,7 +971,11 @@ export function mapCashewBackup(
     // catch up on every missed payment. Such a series is live. It is only taken to be stopped
     // when Cashew would not pay it (auto-pay off, or the user un-paid this entry) or it has been
     // overdue for a very long time.
-    if (addRecurrence(nextDueDate, period.unit, period.interval) < today) {
+    // Steps are anchored to the series' first entry, so a schedule that starts on the 30th keeps the 30th
+    // (or the month end) instead of drifting to the 28th after a February.
+    const seriesAnchor = ordered[0].localDate;
+    const scheduleTitle = latest.title ?? "Recurring transaction";
+    if (stepDate(nextDueDate, period, seriesAnchor, scheduleTitle) < today) {
       const autoPays =
         (latest.type === 1
           ? raw.autoPay?.subscriptions
@@ -923,7 +984,7 @@ export function mapCashewBackup(
       for (
         let cursor = nextDueDate;
         cursor <= today && missed <= MAX_CATCH_UP_PERIODS;
-        cursor = addRecurrence(cursor, period.unit, period.interval)
+        cursor = stepDate(cursor, period, seriesAnchor, scheduleTitle)
       )
         missed += 1;
       if (
@@ -1110,6 +1171,10 @@ export function mapCashewBackup(
       num(row, "reoccurrence"),
       num(row, "period_length"),
     );
+    if (recurrence === "unsupported") {
+      budgetCounters.invalid += 1;
+      continue;
+    }
     let period: PeriodDefinition;
     if (recurrence) {
       period = {
@@ -1174,12 +1239,16 @@ export function mapCashewBackup(
     for (const [categoryPk, limitAmount] of rawLimits) {
       const categoryExternalId = `category:${categoryPk}`;
       if (!expenseCategorySet.has(categoryExternalId)) continue;
-      let amountMajor = limitAmount;
+      let amountMajor: number | Decimal = limitAmount;
       if (percentLimits) {
         const parentPk = categoryInfos.get(categoryPk)?.parentPk ?? null;
         const parentPercent =
           parentPk === null ? 100 : (rawLimits.get(parentPk) ?? 100);
-        amountMajor = (limitAmount / 100) * (parentPercent / 100) * amount;
+        // Decimal end to end: a float chain such as 1.15 * 0.1 can land just below a half-minor boundary.
+        amountMajor = new Decimal(String(limitAmount))
+          .div(100)
+          .mul(new Decimal(String(parentPercent)).div(100))
+          .mul(new Decimal(String(amount)));
       }
       const converted = toMinor(amountMajor, budgetLimitExponent);
       if (converted.minor === null || converted.minor <= 0) continue;

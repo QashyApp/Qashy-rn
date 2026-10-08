@@ -1,8 +1,9 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
 import type MaterialIcons from "@expo/vector-icons/MaterialIcons";
+import { useEffect, useState } from "react";
 
-import { FLUENT_EMOJI, FLUENT_EMOJI_BY_ION } from "@/theme/fluent-emoji-glyphs";
 import type { FluentShape } from "@/theme/fluent-emoji-glyphs";
+import { loadFluentEmoji } from "@/theme/fluent-emoji-loader";
 import { MATERIAL_BY_ION } from "@/theme/material-glyphs";
 import { parseIconId, type ParsedIconId } from "@/utils/icon-id";
 
@@ -783,14 +784,22 @@ export const material: IconSet = {
   },
 };
 
-/** A colorful subset of Microsoft's Fluent Emoji Flat (MIT), for entity icons. Unmapped ids fall back to Ionicons. */
+/** The Fluent drawings, fetched on first use: at ~185 KB they are most of this file's weight. */
+let fluent: typeof import("@/theme/fluent-emoji-glyphs") | null = null;
+let fluentPending: Promise<void> | undefined;
+
+/**
+ * A colorful subset of Microsoft's Fluent Emoji Flat (MIT), for entity icons. Unmapped ids, and
+ * every id until `loadIconSet` has fetched the drawings, fall back to Ionicons.
+ */
 export const fluentEmojiFlat: IconSet = {
   id: "fluent-emoji-flat",
   label: "Fluent Emoji",
   resolve: (ionGlyph) => {
+    if (!fluent) return null;
     const base = baseGlyphName(ionGlyph);
-    if (!hasOwn(FLUENT_EMOJI_BY_ION, base)) return null;
-    const shapes = FLUENT_EMOJI[FLUENT_EMOJI_BY_ION[base]];
+    if (!hasOwn(fluent.FLUENT_EMOJI_BY_ION, base)) return null;
+    const shapes = fluent.FLUENT_EMOJI[fluent.FLUENT_EMOJI_BY_ION[base]];
     return shapes ? { kind: "color-svg", viewBox: "0 0 32 32", shapes } : null;
   },
 };
@@ -880,4 +889,45 @@ export function resolveIconRenderById(
     RENDER_CACHE.set(key, render);
   }
   return render;
+}
+
+/** Whether a set can draw right now. Only Fluent Emoji is fetched on demand; every other set is bundled. */
+export const isIconSetReady = (id: string) =>
+  id !== fluentEmojiFlat.id || fluent !== null;
+
+/** Fetches a set's drawings. Until it resolves, the set falls back to Ionicons like any other gap. */
+export function loadIconSet(id: string): Promise<void> {
+  if (isIconSetReady(id)) return Promise.resolve();
+  fluentPending ??= loadFluentEmoji().then(
+    (data) => {
+      fluent = data;
+      RENDER_CACHE.clear();
+    },
+    (reason: unknown) => {
+      fluentPending = undefined;
+      throw reason;
+    },
+  );
+  return fluentPending;
+}
+
+/** Loads the given sets and re-renders the caller once they land. Returns whether all are ready. */
+export function useIconSets(ids: readonly string[]): boolean {
+  const key = ids.join("|");
+  const [, setLoaded] = useState(0);
+  useEffect(() => {
+    const pending = key.split("|").filter((id) => id && !isIconSetReady(id));
+    if (!pending.length) return;
+    let live = true;
+    Promise.all(pending.map(loadIconSet)).then(
+      () => {
+        if (live) setLoaded((count) => count + 1);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, [key]);
+  return ids.every(isIconSetReady);
 }

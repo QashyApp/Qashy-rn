@@ -16,7 +16,6 @@ export {
   OP_SCHEMA_VERSION,
   PAIRING_TTL_SECONDS,
   PROTOCOL_VERSION,
-  RENDEZVOUS_WINDOW_SECONDS,
 } from "@/sync/crypto/labels";
 
 export {
@@ -32,6 +31,7 @@ export {
 
 export {
   DEVICE_ID_LENGTH,
+  ROUTE_DAY_MS,
   ROUTE_TAG_LENGTH,
   createDeviceIdentity,
   createPairingSecret,
@@ -42,13 +42,11 @@ export {
   deriveContentKey,
   deriveDeviceId,
   derivePairingRendezvousId,
-  deriveRendezvousId,
   deriveRouteTag,
   deviceIdentityBytes,
   formatDeviceId,
-  rendezvousIds,
-  rendezvousWindow,
   restoreDeviceIdentity,
+  routeDayOf,
   restorePeerKeys,
   restoreVaultRootKey,
   type DeviceIdentity,
@@ -80,7 +78,9 @@ export { signBatchPayload, verifyBatchPayload } from "@/sync/crypto/batch-auth";
 
 export {
   MIN_PASSPHRASE_LENGTH,
+  PASSPHRASE_WEAKNESS_MESSAGES,
   RECOVERY_WORD_COUNT,
+  assessPassphrase,
   createPassphraseBackup,
   createVaultBundle,
   createVaultKeyBackup,

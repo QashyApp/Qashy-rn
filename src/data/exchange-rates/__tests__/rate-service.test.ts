@@ -203,6 +203,7 @@ async function harness(
     fetch?: jest.Mock;
     clockMs?: number;
     today?: string;
+    timeoutMs?: number;
   } = {},
 ): Promise<Harness> {
   const storage = new MemoryStorageAdapter();
@@ -231,6 +232,7 @@ async function harness(
     repository: { saveFetchedRates },
     getState: () => box.state,
     fetch: fetch as unknown as typeof globalThis.fetch,
+    timeoutMs: options.timeoutMs,
     now: () => new Date(box.clockMs),
     todayLocal: () => box.today,
   });
@@ -667,13 +669,14 @@ describe("ensureRatesFor", () => {
 });
 
 describe("weekend and holiday dates", () => {
-  // 2026-09-26 is a Saturday, 2026-09-25 the Friday before it.
-  it("answers a Saturday with Friday's rate, saved under Saturday", async () => {
+  // 2026-09-26 is a Saturday, 2026-09-25 the Friday before it. "Today" is the Monday after, so the
+  // Saturday is a past date and keeps the weekend fallback.
+  it("answers a past Saturday with Friday's rate, saved under Saturday", async () => {
     const fetch = fakeFetch({
       "2026-09-24": { USD: 1.0, EUR: 1 },
       "2026-09-25": { USD: 1.25 },
     });
-    const rig = await harness({ fetch, today: "2026-09-26" });
+    const rig = await harness({ fetch, today: "2026-09-28" });
     const result = await rig.service.ensureRatesFor([
       { currency: "USD", localDate: "2026-09-26" },
     ]);
@@ -728,5 +731,149 @@ describe("weekend and holiday dates", () => {
       { currency: "USD", localDate: "2026-09-26" },
     ]);
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("today before ECB publishes", () => {
+  it("stores yesterday's rate under its own date, not today's, and asks for today again on a later pass", async () => {
+    const fetch = fakeFetch({ "2026-09-24": { USD: 1.25 } });
+    const rig = await harness({
+      fetch,
+      today: "2026-09-25",
+      state: makeState({ accounts: [account({ currency: "USD" })] }),
+    });
+
+    await rig.service.ensureRatesForPending();
+    expect(rig.saveFetchedRates).toHaveBeenCalledTimes(1);
+    const [rates] = rig.saveFetchedRates.mock.calls[0]!;
+    expect(rates).toEqual([
+      expect.objectContaining({
+        fromCurrency: "USD",
+        effectiveDate: "2026-09-24",
+        rate: "0.8",
+      }),
+    ]);
+    expect(rates.map((rate) => rate.effectiveDate)).not.toContain("2026-09-25");
+
+    // Not frozen as today's rate, and not negative-cached: a later pass asks again.
+    await rig.service.ensureRatesForPending();
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(rig.service.getStatus().lastError).toBeNull();
+  });
+
+  it("stores today under today once Frankfurter publishes today's rate", async () => {
+    const fetch = fakeFetch({
+      "2026-09-24": { USD: 1.25 },
+      "2026-09-25": { USD: 1.6 },
+    });
+    const rig = await harness({ fetch, today: "2026-09-25" });
+    await rig.service.ensureRatesFor([
+      { currency: "USD", localDate: "2026-09-25" },
+    ]);
+    const [rates] = rig.saveFetchedRates.mock.calls[0]!;
+    expect(rates).toEqual([
+      expect.objectContaining({ effectiveDate: "2026-09-25", rate: "0.625" }),
+    ]);
+  });
+});
+
+describe("storage failures are not network failures", () => {
+  it("reports a save failure as storage, does not negative-cache the pair, and never throws", async () => {
+    const fetch = fakeFetch({ "2026-09-20": { USD: 1.1 } });
+    const rig = await harness({ enabled: true, fetch });
+    rig.saveFetchedRates.mockRejectedValueOnce(new Error("disk full"));
+    const pair = [{ currency: "USD", localDate: "2026-09-20" }];
+
+    await expect(rig.service.ensureRatesFor(pair)).resolves.toEqual({
+      ok: false,
+      conflicts: [],
+    });
+    expect(rig.service.getStatus().lastError).toBe("storage");
+    expect(rig.service.getStatus().fetching).toBe(false);
+
+    await expect(rig.service.ensureRatesFor(pair)).resolves.toEqual({
+      ok: true,
+      conflicts: [],
+    });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(rig.service.getStatus().lastError).toBeNull();
+  });
+
+  it("reports an unreadable flag as storage and resolves instead of throwing", async () => {
+    const fetch = fakeFetch({});
+    const rig = await harness({ enabled: true, fetch });
+    jest
+      .spyOn(rig.storage, "transact")
+      .mockRejectedValueOnce(new Error("locked"));
+
+    await expect(
+      rig.service.ensureRatesFor([
+        { currency: "USD", localDate: "2026-09-20" },
+      ]),
+    ).resolves.toEqual({ ok: false, conflicts: [] });
+    expect(rig.service.getStatus().lastError).toBe("storage");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("setEnabled resolves when the flag cannot be written and leaves the reported state unchanged", async () => {
+    const fetch = fakeFetch({});
+    const rig = await harness({ enabled: false, fetch });
+    // Reading the stored flag once makes the reported state match it (off).
+    await rig.service.ensureRatesFor([]);
+    expect(rig.service.getStatus().enabled).toBe(false);
+    jest
+      .spyOn(rig.storage, "transact")
+      .mockRejectedValueOnce(new Error("locked"));
+
+    await expect(rig.service.setEnabled(true)).resolves.toBeUndefined();
+    expect(rig.service.getStatus().enabled).toBe(false);
+    expect(rig.service.getStatus().lastError).toBe("storage");
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+describe("stalled responses and cache keys", () => {
+  it("settles a stalled body as a timeout, clears fetching, and lets a retry through", async () => {
+    const good = fakeFetch({ "2026-09-20": { USD: 1.1 } });
+    let stall = true;
+    const fetch = jest.fn(async (url: string, init: RequestInit) => {
+      if (stall) {
+        stall = false;
+        return {
+          ok: true,
+          status: 200,
+          json: () => new Promise(() => undefined),
+        } as unknown as Response;
+      }
+      return good(url, init);
+    });
+    const rig = await harness({ enabled: true, fetch, timeoutMs: 5 });
+    const pair = [{ currency: "USD", localDate: "2026-09-20" }];
+
+    await expect(rig.service.ensureRatesFor(pair)).resolves.toEqual({
+      ok: false,
+      conflicts: [],
+    });
+    expect(rig.service.getStatus().lastError).toBe("timeout");
+    expect(rig.service.getStatus().fetching).toBe(false);
+
+    await expect(
+      rig.service.ensureRatesFor(pair, { retry: true }),
+    ).resolves.toEqual({ ok: true, conflicts: [] });
+    expect(fetch).toHaveBeenCalledTimes(2);
+    expect(rig.service.getStatus().lastError).toBeNull();
+  });
+
+  it("does not carry a failure under one base currency over to another", async () => {
+    const fetch = failingFetch();
+    const rig = await harness({ enabled: true, fetch });
+    const pair = [{ currency: "USD", localDate: "2026-09-20" }];
+
+    await rig.service.ensureRatesFor(pair);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    rig.state = makeState({ settings: settings({ baseCurrency: "GBP" }) });
+    await rig.service.ensureRatesFor(pair);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 });

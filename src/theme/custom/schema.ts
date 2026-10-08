@@ -44,7 +44,7 @@ import {
  *   strings are never accepted.
  * - Never throws. `parseCustomTheme` returns `{ ok: false, errors }` instead.
  *
- * See docs/theming-plan.md, Phase 11.
+ * See CUSTOM_THEME_GUIDE.md.
  */
 
 /**

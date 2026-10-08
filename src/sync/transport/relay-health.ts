@@ -19,9 +19,9 @@
  *    this IP" — which is precisely the metadata §1.8 spends the rest of its effort not
  *    producing. The check rides the same seam sync does.
  *
- * 3. **Advisory, never a gate.** Sync is never blocked on this and never waits for it. Two
- *    devices on the same Wi-Fi sync directly and do not care whether the relay exists, and
- *    the status text says so in as many words instead of implying everything is broken.
+ * 3. **Advisory, never a gate.** Sync is never blocked on this and never waits for it. A
+ *    transfer file does not care whether the relay exists, and the status text says so in as
+ *    many words instead of implying everything is broken.
  */
 
 import type { StorageTx } from "@/data/storage-adapter";
@@ -39,7 +39,7 @@ import {
 export type RelayStatus =
   /** Never checked on this device, or checked against an endpoint that has since changed. */
   | "unknown"
-  /** Switched off, or never configured. Direct connections still work. */
+  /** Switched off, or never configured. Transfer files still work. */
   | "disabled"
   /** This device has no network. Not the relay's fault, and said differently for that reason. */
   | "offline"

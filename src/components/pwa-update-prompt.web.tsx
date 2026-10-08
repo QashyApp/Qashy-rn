@@ -8,15 +8,12 @@ import { MotionView } from "@/components/ui/motion";
 import { TextButton } from "@/components/ui/text-button";
 import { useQashyTheme } from "@/theme/theme";
 
-declare global {
-  interface Window {
-    __qashyWaitingWorker?: ServiceWorker;
-  }
-}
+/** How long Reload waits for the new worker to take control before reloading anyway. */
+const SKIP_WAITING_FALLBACK_MS = 3000;
 
 export function PwaUpdatePrompt() {
   const [visible, setVisible] = useState(false);
-  const controllerChanged = useRef(false);
+  const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const theme = useQashyTheme();
@@ -29,45 +26,42 @@ export function PwaUpdatePrompt() {
         location.hostname === "localhost" ||
         location.hostname === "127.0.0.1");
     if (!canRegister) return;
-    // `clientsClaim` means the worker another tab activates claims this one too, and
-    // that `controllerchange` fires exactly once. Listening only from inside the
-    // Reload handler missed it, so the second tab's Reload then waited forever on a
-    // transition that had already happened and stayed on the old bundle. Watch from
-    // mount and just record it; reloading uninvited would discard whatever the user
-    // is in the middle of typing.
-    const onControllerChange = () => {
-      controllerChanged.current = true;
+    // Nothing reloads uninvited: reloading would discard whatever the user is in the
+    // middle of typing. The prompt only announces a worker that is waiting, and the
+    // Reload button decides, at press time, whether that worker must be promoted first.
+    let disposed = false;
+    let registration: ServiceWorkerRegistration | undefined;
+    let watched: ServiceWorker | undefined;
+    const announce = () => {
+      if (!disposed) setVisible(true);
     };
-    navigator.serviceWorker.addEventListener(
-      "controllerchange",
-      onControllerChange,
-    );
+    const onStateChange = () => {
+      if (watched?.state === "installed" && navigator.serviceWorker.controller)
+        announce();
+    };
+    const onUpdateFound = () => {
+      const worker = registration?.installing;
+      if (!worker) return;
+      watched?.removeEventListener("statechange", onStateChange);
+      watched = worker;
+      worker.addEventListener("statechange", onStateChange);
+    };
     navigator.serviceWorker
       .register("/sw.js")
-      .then((registration) => {
-        const announce = (worker: ServiceWorker) => {
-          window.__qashyWaitingWorker = worker;
-          setVisible(true);
-        };
-        if (registration.waiting) announce(registration.waiting);
-        registration.addEventListener("updatefound", () => {
-          const worker = registration.installing;
-          if (!worker) return;
-          worker.addEventListener("statechange", () => {
-            if (
-              worker.state === "installed" &&
-              navigator.serviceWorker.controller
-            )
-              announce(worker);
-          });
-        });
+      .then((next) => {
+        if (disposed) return;
+        registration = next;
+        registrationRef.current = next;
+        if (next.waiting) announce();
+        next.addEventListener("updatefound", onUpdateFound);
       })
       .catch(() => undefined);
-    return () =>
-      navigator.serviceWorker.removeEventListener(
-        "controllerchange",
-        onControllerChange,
-      );
+    return () => {
+      disposed = true;
+      registration?.removeEventListener("updatefound", onUpdateFound);
+      watched?.removeEventListener("statechange", onStateChange);
+      registrationRef.current = null;
+    };
   }, []);
   if (!visible) return null;
   return (
@@ -124,24 +118,32 @@ export function PwaUpdatePrompt() {
             <TextButton
               title="Reload"
               onPress={() => {
-                const worker = window.__qashyWaitingWorker;
-                // Nothing waiting, or another tab already promoted it: the new worker
-                // is live, so a plain reload picks it up. Waiting on `controllerchange`
-                // here would hang, because that event has already been and gone.
-                if (
-                  !worker ||
-                  controllerChanged.current ||
-                  worker.state === "activated"
-                ) {
+                // Read the registration at press time. If a worker is still waiting, it
+                // must be promoted before a reload can pick it up. If none is waiting (it
+                // was already promoted, by this tab or another), the page is on the live
+                // worker and a plain reload is enough.
+                const waiting = registrationRef.current?.waiting;
+                if (!waiting) {
                   window.location.reload();
                   return;
                 }
+                let reloaded = false;
+                let fallback: ReturnType<typeof setTimeout> | undefined;
+                const reloadOnce = () => {
+                  if (reloaded) return;
+                  reloaded = true;
+                  if (fallback !== undefined) clearTimeout(fallback);
+                  window.location.reload();
+                };
                 navigator.serviceWorker.addEventListener(
                   "controllerchange",
-                  () => window.location.reload(),
+                  reloadOnce,
                   { once: true },
                 );
-                worker.postMessage({ type: "SKIP_WAITING" });
+                // If control never moves (e.g. the worker was superseded), reload anyway
+                // rather than leaving the prompt stuck.
+                fallback = setTimeout(reloadOnce, SKIP_WAITING_FALLBACK_MS);
+                waiting.postMessage({ type: "SKIP_WAITING" });
               }}
             />
           </View>

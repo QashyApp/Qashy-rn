@@ -56,9 +56,15 @@ export function evaluateAmountExpression(
   if (tokens.numbers.length !== tokens.operators.length + 1)
     return { kind: "invalid" };
   try {
+    const digits = currencyDigits(currency, locale);
     const numbers = tokens.numbers.map(
       (token) => new Decimal(normalizeDecimalString(token, locale)),
     );
+    // Every typed operand obeys the same decimal-place rule as a plain amount, so "12.555 + 0"
+    // cannot round away what "12.555" is refused for. Only a division result is rounded, once,
+    // at the end.
+    if (numbers.some((number) => number.decimalPlaces() > digits))
+      return { kind: "invalid" };
     // First pass folds × and ÷ into the running term; second folds + and −.
     const terms: Decimal[] = [numbers[0]];
     const signs: AmountOperator[] = [];
@@ -81,7 +87,6 @@ export function evaluateAmountExpression(
           ? total.add(terms[index + 1])
           : total.sub(terms[index + 1]);
     });
-    const digits = currencyDigits(currency, locale);
     const minor = total
       .mul(new Decimal(10).pow(digits))
       .toDecimalPlaces(0, Decimal.ROUND_HALF_UP)

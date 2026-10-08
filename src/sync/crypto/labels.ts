@@ -28,12 +28,14 @@ export const LABELS = {
   bucket: "qashy/sync/v1/bucket",
   /** HKDF info → the relay write-capability token. */
   bucketAuth: "qashy/sync/v1/bucket-auth",
-  /** HKDF info → the rotating signaling rendezvous id. Salted with the 5-minute window. */
-  rendezvous: "qashy/sync/v1/rendezvous",
   /** HKDF info → the one-shot rendezvous a pairing pair meets at, derived from the pairing secret. */
   pairingRendezvous: "qashy/sync/v1/pairing-rendezvous",
-  /** HKDF info → the per-vault tag a relay blob is addressed to. Salted with the device id. */
-  route: "qashy/sync/v1/route",
+  /**
+   * HKDF info → the tag a relay blob is addressed to, for one device on one UTC day within one vault
+   * epoch. Salted with the epoch, the day, and the device id. Versioned on its own, like `batchAuth`:
+   * the handshake's PROTOCOL_VERSION is unaffected, but older builds cannot derive these tags.
+   */
+  routeDay: "qashy/sync/route/v2/day",
   /** HKDF info → the passphrase-independent half of the backup key. */
   backup: "qashy/sync/v1/backup",
   /** HKDF info → the two directional session keys. */
@@ -53,9 +55,6 @@ export const LABELS = {
 } as const;
 
 export type LabelName = keyof typeof LABELS;
-
-/** The rendezvous id rotates on this cadence, so sessions cannot be linked across time. */
-export const RENDEZVOUS_WINDOW_SECONDS = 300;
 
 /** A pairing QR is single-use and expires this long after it is rendered. */
 export const PAIRING_TTL_SECONDS = 90;

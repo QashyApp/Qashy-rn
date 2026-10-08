@@ -324,3 +324,39 @@ describe("genesis migration", () => {
     expect(last.hlc > ops[ops.length - 2].hlc).toBe(true);
   });
 });
+
+describe("genesis of rows saved before foreign and fee existed", () => {
+  it("round-trips a transaction without the keys, with its ledger intact", async () => {
+    const legacy: Partial<TransactionRecord> = transaction({
+      id: "txn-legacy",
+      amountMinor: 4_200,
+      baseAmountMinor: 4_200,
+      localDate: "2026-02-03",
+    });
+    delete legacy.foreign;
+    delete legacy.fee;
+    const records = [
+      stored("accounts", account({ id: "acc-1" })),
+      stored("transactions", legacy as TransactionRecord),
+    ];
+    const adapter = await seeded(records);
+    await runGenesis(adapter);
+
+    const settled = projectAndRepair(
+      applyOps(new Map(), await readOps(adapter)),
+      records,
+    );
+    // Before the fix the create op omitted the ledger group entirely, so none of these arrived.
+    expect(settled.get(metaKey("transactions", "txn-legacy"))).toMatchObject({
+      kind: "expense",
+      localDate: "2026-02-03",
+      accountId: "acc-1",
+      amountMinor: 4_200,
+      currency: "USD",
+      exchangeRate: "1",
+      baseAmountMinor: 4_200,
+      foreign: null,
+      fee: null,
+    });
+  });
+});

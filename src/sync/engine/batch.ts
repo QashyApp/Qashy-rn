@@ -21,6 +21,7 @@
  */
 
 import {
+  DEVICE_ID_LENGTH,
   bytesToUtf8,
   signBatchPayload,
   utf8Bytes,
@@ -69,6 +70,14 @@ const fail = (message: string): never => {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+/**
+ * The shape `deriveDeviceId` mints: base32 of a digest, exactly `DEVICE_ID_LENGTH` characters.
+ * The same alphabet an HLC's device segment must match, so an id that passes here is one the
+ * clock and the chain code can also represent.
+ */
+const isDeviceId = (value: string): boolean =>
+  value.length === DEVICE_ID_LENGTH && /^[0-9A-Z]+$/.test(value);
 
 const text = (value: unknown, what: string): string => {
   if (typeof value !== "string" || !value) fail(`${what} is missing.`);
@@ -345,17 +354,20 @@ export function decodeBatch(bytes: Uint8Array): SyncBatch {
       "tooLarge",
     );
   }
-  const heads: Record<string, number> = {};
+  const headEntries: [string, number][] = [];
   for (const [deviceId, seq] of Object.entries(parsed.heads)) {
     // Rebuilt entry by entry rather than passed through, so nothing a peer chose the name of
-    // survives into an object this device will later index into.
-    if (!deviceId) fail("That batch names a device with no id.");
-    heads[deviceId] = count(
-      seq,
-      `The sender's position on chain ${deviceId}`,
-      0,
-    );
+    // survives into an object this device will later index into. The id must be exactly the
+    // shape every device id is minted in, and the object is built with `fromEntries`, so a
+    // name such as `__proto__` becomes an ordinary key rather than a prototype rewrite.
+    if (!isDeviceId(deviceId))
+      fail("That batch names a device with a malformed id.");
+    headEntries.push([
+      deviceId,
+      count(seq, `The sender's position on chain ${deviceId}`, 0),
+    ]);
   }
+  const heads: Record<string, number> = Object.fromEntries(headEntries);
 
   if (!Array.isArray(parsed.roster))
     return fail("That batch has no signed device roster.");

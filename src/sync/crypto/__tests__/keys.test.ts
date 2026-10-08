@@ -8,15 +8,14 @@ import {
   deriveBucketToken,
   deriveContentKey,
   deriveDeviceId,
+  ROUTE_DAY_MS,
   derivePairingRendezvousId,
-  deriveRendezvousId,
+  deriveRouteTag,
   deviceIdentityBytes,
   formatDeviceId,
-  rendezvousIds,
-  rendezvousWindow,
   restoreDeviceIdentity,
+  routeDayOf,
 } from "@/sync/crypto/keys";
-import { RENDEZVOUS_WINDOW_SECONDS } from "@/sync/crypto/labels";
 import {
   fromHex,
   signingPublicKeyFrom,
@@ -24,11 +23,7 @@ import {
   toHex,
   utf8Bytes,
 } from "@/sync/crypto/primitives";
-import {
-  brand,
-  type PairingSecret,
-  type VaultRootKey,
-} from "@/sync/crypto/types";
+import { brand, type VaultRootKey } from "@/sync/crypto/types";
 
 const vault = createVaultRootKey();
 const otherVault = createVaultRootKey();
@@ -78,39 +73,6 @@ describe("key hierarchy", () => {
   });
 });
 
-describe("rendezvous rotation", () => {
-  it("changes every five minutes, so sessions cannot be linked across time", () => {
-    expect(RENDEZVOUS_WINDOW_SECONDS).toBe(300);
-    const at = 1_800_000_000;
-    expect(rendezvousWindow(at + 299)).toBe(rendezvousWindow(at));
-    expect(deriveRendezvousId(vault, rendezvousWindow(at))).not.toBe(
-      deriveRendezvousId(vault, rendezvousWindow(at) + 1),
-    );
-  });
-
-  it("offers the neighbouring windows too, so a clock a second off still meets", () => {
-    // Two devices either side of a boundary compute different current windows. Without the
-    // neighbours this fails intermittently and unreproducibly, which is the worst kind of
-    // failure to debug.
-    const boundary =
-      1_800_000_000 - (1_800_000_000 % RENDEZVOUS_WINDOW_SECONDS);
-    const justBefore = rendezvousIds(vault, boundary - 1);
-    const justAfter = rendezvousIds(vault, boundary + 1);
-    expect(justBefore).toHaveLength(3);
-    expect(justBefore.some((id) => justAfter.includes(id))).toBe(true);
-  });
-
-  it("lists the previous, current, and next window in order", () => {
-    const at = 1_800_000_123;
-    const current = rendezvousWindow(at);
-    expect(rendezvousIds(vault, at)).toEqual([
-      deriveRendezvousId(vault, current - 1),
-      deriveRendezvousId(vault, current),
-      deriveRendezvousId(vault, current + 1),
-    ]);
-  });
-});
-
 describe("the pairing rendezvous", () => {
   it("is a function of the pairing secret alone, so both devices compute it without talking", () => {
     const secret = createPairingSecret();
@@ -123,15 +85,6 @@ describe("the pairing rendezvous", () => {
   it("gives every pairing attempt its own meeting point", () => {
     expect(derivePairingRendezvousId(createPairingSecret())).not.toBe(
       derivePairingRendezvousId(createPairingSecret()),
-    );
-  });
-
-  it("is domain-separated from the vault rendezvous derived from the same bytes", () => {
-    // Both take 32 secret bytes and both produce a 52-character base32 id, so a shared label
-    // would be invisible until a pairing and a live session collided on one meeting point.
-    const shared = fromHex("4a".repeat(32));
-    expect(derivePairingRendezvousId(brand<PairingSecret>(shared))).not.toBe(
-      deriveRendezvousId(brand<VaultRootKey>(shared), 0),
     );
   });
 
@@ -220,6 +173,73 @@ describe("device identity", () => {
         ),
       ),
     );
+  });
+});
+
+describe("route tags", () => {
+  // Golden vectors. The root key is bytes 0x00..0x1f. Computed independently from the raw noble
+  // primitives (HKDF-SHA256, label "qashy/sync/route/v2/day", salt = u32be(epoch) ‖ u32be(day) ‖
+  // utf8(deviceId)) and then base32-encoded, so a refactor cannot silently change the wire tags.
+  const goldenKey = brand<VaultRootKey>(
+    Uint8Array.from({ length: 32 }, (_, index) => index),
+  );
+  const DEVICE = "CJ6MEFSHJRK2SNG44OYRYSEEX2";
+
+  it("pins the derivation to known answers", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).toBe(
+      "OPXBBTPCNTYI32YT",
+    );
+    expect(deriveRouteTag(goldenKey, 1, 20001, DEVICE)).toBe(
+      "74UBCYPAZE4ZEKCD",
+    );
+    expect(deriveRouteTag(goldenKey, 2, 20000, DEVICE)).toBe(
+      "6YGIEPY2STRV6CXS",
+    );
+    expect(
+      deriveRouteTag(goldenKey, 1, 20000, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+    ).toBe("3ZCHID4WJFIDQ524");
+  });
+
+  it("produces a 16-character opaque base32 tag", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).toMatch(
+      /^[A-Z2-7]{16}$/,
+    );
+  });
+
+  it("changes on the next UTC day, so the relay cannot link a device across days", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(goldenKey, 1, 20001, DEVICE),
+    );
+  });
+
+  it("changes on a new vault epoch, so a rotated vault shares nothing with the old one", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(goldenKey, 2, 20000, DEVICE),
+    );
+  });
+
+  it("is stable within a day and separates devices", () => {
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).toBe(
+      deriveRouteTag(goldenKey, 1, 20000, DEVICE),
+    );
+    expect(deriveRouteTag(goldenKey, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(goldenKey, 1, 20000, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"),
+    );
+  });
+
+  it("separates vaults on the same day and epoch", () => {
+    expect(deriveRouteTag(vault, 1, 20000, DEVICE)).not.toBe(
+      deriveRouteTag(otherVault, 1, 20000, DEVICE),
+    );
+  });
+
+  it("numbers days in UTC, flooring so one day is one number", () => {
+    const midnight = Date.UTC(2026, 9, 8);
+    expect(ROUTE_DAY_MS).toBe(86_400_000);
+    expect(routeDayOf(midnight)).toBe(20734);
+    expect(routeDayOf(midnight + ROUTE_DAY_MS - 1)).toBe(20734);
+    expect(routeDayOf(midnight - 1)).toBe(20733);
+    expect(routeDayOf(midnight + ROUTE_DAY_MS)).toBe(20735);
   });
 });
 

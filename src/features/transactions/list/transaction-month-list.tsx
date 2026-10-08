@@ -1,4 +1,4 @@
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { GestureDetector } from "react-native-gesture-handler";
 import {
   memo,
@@ -222,10 +222,40 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   const savedId = savedSignal?.id ?? null;
   const savedToken = savedSignal?.token ?? null;
   const savedFlashes = savedSignal?.flashes ?? 0;
+  // The retry timer for a scroll that landed off-screen. Kept in a ref so unmounting cancels it.
+  const scrollRetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (scrollRetryTimer.current !== null)
+        clearTimeout(scrollRetryTimer.current);
+    },
+    [],
+  );
+  // The pending signal's token, read when the screen loses focus.
+  const savedTokenRef = useRef<number | null>(null);
+  useEffect(() => {
+    savedTokenRef.current = savedToken;
+  }, [savedToken]);
+  // A save's signal only means something on the screen it was announced to. When this screen
+  // loses focus (a tab change, or a page left behind) any unspent signal is cleared, so it cannot
+  // flash a row on a later visit within its lifetime.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        const token = savedTokenRef.current;
+        if (token !== null) consumeSavedTransactionSignal(token);
+      },
+      [],
+    ),
+  );
   useEffect(() => {
     if (!isCurrent || !savedMonthMatches || savedId === null) return;
     const target = transactions.find((item) => item.id === savedId);
-    if (!target) return;
+    if (!target) {
+      // The row is not in this month's list (a filter hides it), so the signal is spent here.
+      if (savedToken !== null) consumeSavedTransactionSignal(savedToken);
+      return;
+    }
     if (target.status === "upcoming" && upcomingCollapsed) onToggleUpcoming();
     // Wait a beat so the sheet has closed and the list has laid out the new row. The signal is
     // consumed only when the timer fires, because consuming it changes this effect's inputs.
@@ -331,7 +361,14 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               animated: false,
             });
             const target = flash?.id;
-            if (target) setTimeout(() => scrollToSaved(target), 120);
+            if (target) {
+              if (scrollRetryTimer.current !== null)
+                clearTimeout(scrollRetryTimer.current);
+              scrollRetryTimer.current = setTimeout(() => {
+                scrollRetryTimer.current = null;
+                scrollToSaved(target);
+              }, 120);
+            }
           }}
           keyExtractor={(item) => item.id}
           // The day a row belongs to stays on screen for as long as that day's

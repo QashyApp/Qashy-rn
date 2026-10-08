@@ -13,7 +13,7 @@ import { IDBFactory } from "fake-indexeddb";
 
 import { createDeviceIdentity, createVaultRootKey, toHex } from "@/sync/crypto";
 import { createPlatformKeystore } from "@/sync/keystore/platform.web";
-import type { StoredVault } from "@/sync/keystore/types";
+import { KeystoreError, type StoredVault } from "@/sync/keystore/types";
 
 // `fake-indexeddb` clones stored values with the environment's `structuredClone`, and
 // jsdom's implementation does not know what a `CryptoKey` is — it returns a plain object
@@ -71,6 +71,37 @@ const readRaw = (id: string) =>
       open.onerror = () => reject(open.error);
     },
   );
+
+/** Rewrites one stored row in place, for the damage the tests below need to inflict. */
+const editRaw = (
+  id: string,
+  edit: (row: { iv: Uint8Array; data: Uint8Array } | undefined) => void,
+) =>
+  new Promise<void>((resolve, reject) => {
+    const open = indexedDB.open("qashy-keystore");
+    open.onsuccess = () => {
+      const database = open.result;
+      const transaction = database.transaction("vault", "readwrite");
+      const store = transaction.objectStore("vault");
+      const get = store.get(id);
+      get.onsuccess = () => {
+        const row = get.result as
+          { iv: Uint8Array; data: Uint8Array; key?: unknown } | undefined;
+        if (row === undefined) {
+          edit(undefined);
+          return;
+        }
+        edit(row);
+        store.put(row);
+      };
+      transaction.oncomplete = () => {
+        database.close();
+        resolve();
+      };
+      transaction.onerror = () => reject(transaction.error);
+    };
+    open.onerror = () => reject(open.error);
+  });
 
 beforeEach(() => {
   // A fresh origin per test. Otherwise a vault written by one test unlocks the next.
@@ -145,6 +176,43 @@ describe("the browser keystore", () => {
     expect((await createPlatformKeystore().read())?.identity.deviceId).toBe(
       original.identity.deviceId,
     );
+  });
+
+  it("reports a container whose wrapping key has gone as corrupt, and does not mint a replacement", async () => {
+    await createPlatformKeystore().write(vault());
+    // Deleting the wrap row is what "the key is gone" looks like on disk.
+    await new Promise<void>((resolve, reject) => {
+      const open = indexedDB.open("qashy-keystore");
+      open.onsuccess = () => {
+        const transaction = open.result.transaction("vault", "readwrite");
+        transaction.objectStore("vault").delete("wrap");
+        transaction.oncomplete = () => {
+          open.result.close();
+          resolve();
+        };
+        transaction.onerror = () => reject(transaction.error);
+      };
+      open.onerror = () => reject(open.error);
+    });
+
+    const reader = createPlatformKeystore();
+    await expect(reader.read()).rejects.toMatchObject({ code: "corrupt" });
+    // A read that minted a key here would make the damage look like a clean store that fails to
+    // decrypt, and would leave a fresh key beside ciphertext it can never open.
+    expect(await readRaw("wrap")).toBeUndefined();
+  });
+
+  it("reports a container that fails to decrypt as corrupt, not as a raw WebCrypto error", async () => {
+    await createPlatformKeystore().write(vault());
+    await editRaw("container", (row) => {
+      if (row) row.data[0] ^= 0x01;
+    });
+
+    const error = await createPlatformKeystore()
+      .read()
+      .catch((reason: unknown) => reason);
+    expect(error).toBeInstanceOf(KeystoreError);
+    expect((error as KeystoreError).code).toBe("corrupt");
   });
 
   it("takes the wrapping key with it when the vault is erased", async () => {

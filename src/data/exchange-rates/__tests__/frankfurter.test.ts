@@ -41,6 +41,21 @@ describe("buildRatesUrl", () => {
     );
   });
 
+  it("refuses a quote code that is not three letters, never placing it in the URL", () => {
+    expect(() => buildRatesUrl({ quotes: ["USD&x=1"] })).toThrow(RangeError);
+    expect(() => buildRatesUrl({ quotes: ["US"] })).toThrow(RangeError);
+    expect(() => buildRatesUrl({ quotes: ["US1"] })).toThrow(RangeError);
+  });
+
+  it("refuses a date that is not a calendar date", () => {
+    expect(() =>
+      buildRatesUrl({ quotes: ["USD"], date: "2026-02-30" }),
+    ).toThrow(RangeError);
+    expect(() =>
+      buildRatesUrl({ quotes: ["USD"], from: "2026-09-01", to: "x&y=1" }),
+    ).toThrow(RangeError);
+  });
+
   it("produces the same URL regardless of the caller-supplied quote order", () => {
     expect(buildRatesUrl({ quotes: ["GBP", "USD"] })).toBe(
       buildRatesUrl({ quotes: ["USD", "GBP"] }),

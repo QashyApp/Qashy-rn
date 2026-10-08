@@ -30,6 +30,7 @@ import Animated, {
 
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
+import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { hapticSelection } from "@/utils/haptics";
@@ -96,6 +97,7 @@ export function EditableCardFrame({
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
+  const { t } = useLocalization();
   const reduceMotion = useReducedMotion();
   const [dragging, setDragging] = useState(false);
   const translateY = useSharedValue(0);
@@ -103,7 +105,7 @@ export function EditableCardFrame({
 
   const announceMove = (direction: "up" | "down") => {
     const nextPosition = direction === "up" ? index : index + 2;
-    const message = `${title}, position ${nextPosition} of ${total}`;
+    const message = t(`${title}, position ${nextPosition} of ${total}`);
     if (Platform.OS === "web") {
       if (typeof AccessibilityInfo?.announceForAccessibility === "function") {
         AccessibilityInfo.announceForAccessibility(message);
@@ -187,7 +189,7 @@ export function EditableCardFrame({
       >
         <GestureDetector gesture={pan}>
           <View
-            accessibilityLabel={`Drag to reorder ${title}`}
+            accessibilityLabel={t(`Drag to reorder ${title}`)}
             style={{ padding: space.sm }}
           >
             <DragGripGlyph color={theme.textMuted as string} />

@@ -5,9 +5,35 @@ import {
   isLiquidGlassAvailable,
 } from "expo-glass-effect";
 import { useEffect, useState, type ReactNode } from "react";
-import { AccessibilityInfo, View, type ViewStyle } from "react-native";
+import {
+  AccessibilityInfo,
+  Platform,
+  View,
+  type ViewStyle,
+} from "react-native";
 
 import { useQashyTheme } from "@/theme/theme";
+
+/**
+ * Whether a blurred backdrop will actually render here. When it will not, the surface falls back to
+ * the theme's opaque surface instead of drawing a view with no backdrop behind it.
+ *
+ * - Web: `backdrop-filter` must be supported (`-webkit-` form included for older Safari). Browsers
+ *   without `CSS.supports` are treated as unsupported.
+ * - Android: the blur relies on RenderEffect, which needs Android 12 (API 31).
+ */
+function blurIsReliable(): boolean {
+  if (process.env.EXPO_OS === "web") {
+    if (typeof CSS === "undefined" || typeof CSS.supports !== "function")
+      return false;
+    return (
+      CSS.supports("backdrop-filter", "blur(1px)") ||
+      CSS.supports("-webkit-backdrop-filter", "blur(1px)")
+    );
+  }
+  if (process.env.EXPO_OS === "android") return Number(Platform.Version) >= 31;
+  return true;
+}
 
 export function GlassSurface({
   children,
@@ -63,7 +89,7 @@ export function GlassSurface({
       </GlassView>
     );
   }
-  if (!reduceTransparency) {
+  if (!reduceTransparency && blurIsReliable()) {
     return (
       <BlurView
         tint={theme.glassTint}

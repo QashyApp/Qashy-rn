@@ -193,9 +193,9 @@ function assertCharts(theme: ThemeDefinition) {
   }
   for (const scheme of SCHEMES) {
     const mix = tone.containerMix[scheme];
-    if (mix < 0.5 || mix > 0.95) {
+    if (mix < 0.4 || mix > 0.95) {
       throw new Error(
-        `Theme "${theme.id}" charts.tone.containerMix.${scheme} must be between 0.5 and 0.95.`,
+        `Theme "${theme.id}" charts.tone.containerMix.${scheme} must be between 0.4 and 0.95.`,
       );
     }
   }

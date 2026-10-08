@@ -55,8 +55,8 @@ export interface RelayDescription {
  * Separate from the summary because the sync screen shows both at once, and they are answering
  * different questions: the hero says whether the user's devices agree, and this says whether
  * one specific piece of infrastructure is answering. Conflating them is what produces a screen
- * that shouts about a relay outage at someone whose two devices are on the same Wi-Fi and have
- * never needed it.
+ * that shouts about a relay outage at someone who syncs with transfer files and has never
+ * needed it.
  */
 export function describeRelay(health: RelayHealth): RelayDescription {
   switch (health.status) {
@@ -179,10 +179,10 @@ export function summarizeSync(
   if (relay.status === "disabled") {
     return {
       tone: "neutral",
-      icon: "point.3.connected.trianglepath.dotted",
-      subtitle: `Direct only · ${devices}`,
-      headline: "Direct connections only",
-      body: "No relay is set, so your devices sync when both are open at the same time and on a network that lets them reach each other.",
+      icon: "doc.on.doc",
+      subtitle: `Transfer files only · ${devices}`,
+      headline: "Transfer files only",
+      body: "No relay is set, so your devices sync only through transfer files you carry between them.",
     };
   }
 
@@ -381,7 +381,7 @@ function describeRelayProblem(relay: RelayHealth): SyncSummary | null {
         icon: "xmark.circle",
         subtitle: "Relay unreachable",
         headline: "Can’t reach the relay server",
-        body: "Devices on the same network still sync directly. Only catching up while your other device is closed needs the relay.",
+        body: "Your changes are kept here and go out once it answers. A transfer file still works in the meantime.",
       };
     case "degraded":
       return {
@@ -389,7 +389,7 @@ function describeRelayProblem(relay: RelayHealth): SyncSummary | null {
         icon: "exclamationmark.triangle",
         subtitle: "Relay errors",
         headline: "The relay is having problems",
-        body: "It answers, but uploads are failing. Devices on the same network still sync directly.",
+        body: "It answers, but uploads are failing. A transfer file still works in the meantime.",
       };
     default:
       return null;

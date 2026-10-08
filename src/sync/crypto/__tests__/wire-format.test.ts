@@ -15,7 +15,6 @@ import {
   deriveBucketId,
   deriveBucketToken,
   deriveContentKey,
-  deriveRendezvousId,
   restoreDeviceIdentity,
   type DeviceIdentity,
 } from "@/sync/crypto/keys";
@@ -101,9 +100,6 @@ describe("the key hierarchy", () => {
     expect(toHex(deriveBackupKey(vault))).toBe(derived.backupKey);
     expect(toHex(deriveBucketToken(vault))).toBe(derived.bucketToken);
     expect(deriveBucketId(vault)).toBe(derived.bucketId);
-    expect(deriveRendezvousId(vault, derived.rendezvousWindow)).toBe(
-      derived.rendezvousId,
-    );
   });
 
   it("still encodes the vault key as the committed recovery phrase", () => {

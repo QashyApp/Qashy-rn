@@ -1,18 +1,12 @@
 /**
- * The rendezvous — how two devices find each other without telling anyone who they are.
+ * The rendezvous — how two pairing devices find each other without telling anyone who they are.
  *
- * WebRTC cannot start without an out-of-band exchange of connection descriptions, so
- * something in the middle has to pass a few kilobytes between two parties before they can
- * talk directly. That something is this: a WebSocket to `/rendezvous/<id>`, where the id is
- * `HKDF(vaultRootKey, "…/rendezvous" ‖ floor(unixSeconds / 300))`.
- *
- * Three properties follow from that derivation, and they are the whole reason it is a derived
- * id rather than an account:
+ * Pairing has to pass a few small messages between two devices before they share a key. They
+ * meet over a WebSocket to `/rendezvous/<id>`, where the id is derived from the single-use
+ * pairing secret (`derivePairingRendezvousId`):
  *
  * - **Both devices compute it independently.** Nothing is registered, nothing is looked up,
  *   and the server is never told which vault is asking — it sees an opaque string appear.
- * - **It rotates every five minutes.** A server logging every rendezvous it ever brokered
- *   cannot link Monday's session to Tuesday's, because the ids share no structure.
  * - **Holding it proves nothing.** It is a meeting point, not a credential. Everything that
  *   crosses it is either a public key or sealed, and §1.5's signed transcript is what
  *   actually authenticates the peer.
@@ -29,8 +23,8 @@ import { RelayError } from "@/sync/transport/http";
 /**
  * The largest signaling message accepted.
  *
- * An SDP offer with a handful of ICE candidates is a few kilobytes; this is generous by two
- * orders of magnitude and still refuses a server trying to make a phone allocate megabytes on
+ * A pairing message is well under a kilobyte; this is generous by orders of magnitude and still
+ * refuses a server trying to make a phone allocate megabytes on
  * behalf of a peer that may not exist.
  */
 export const MAX_SIGNAL_BYTES = 64 * 1024;
@@ -72,7 +66,7 @@ export interface RawSocket {
 export interface SignalingDeps {
   /** The relay origin, already validated by `normalizeEndpointUrl`. */
   readonly baseUrl: string;
-  /** The current rendezvous id. Rotates; see `rendezvousIds`. */
+  /** The rendezvous id: see `derivePairingRendezvousId`. */
   readonly rendezvousId: string;
   /** Injected so tests never open a socket, and so React Native's global is not imported. */
   readonly open: (url: string) => RawSocket;
@@ -151,11 +145,19 @@ export class SignalingClient {
         else resolve();
       };
 
+      // A socket that has been given up on must not stay open: the server would keep a
+      // half-finished rendezvous alive for a device that has already moved on, and a late
+      // `onopen` would otherwise resurrect a session nobody is waiting for.
+      const abandon = () => {
+        this.dropSocket(socket);
+      };
+
       const timer = setTimeout(() => {
         const error = new RelayError(
           "The rendezvous server did not answer.",
           "unreachable",
         );
+        abandon();
         this.fail(error);
         settle(error);
       }, this.deps.openTimeoutMs ?? SIGNAL_OPEN_TIMEOUT_MS);
@@ -163,6 +165,7 @@ export class SignalingClient {
 
       const onAbort = () => {
         const error = new RelayError("Sync was cancelled.", "unreachable");
+        abandon();
         this.fail(error);
         settle(error);
       };
@@ -309,15 +312,22 @@ export class SignalingClient {
     if (this.closed) return;
     this.closed = true;
     this.fail(new RelayError("The rendezvous was closed.", "unreachable"));
-    const socket = this.socket;
-    this.socket = null;
-    if (socket) {
-      socket.onopen = null;
-      socket.onmessage = null;
-      socket.onerror = null;
-      socket.onclose = null;
-      socket.close();
-    }
+    if (this.socket) this.dropSocket(this.socket);
+  }
+
+  /**
+   * Detaches every handler from a socket and closes it, if it is the one this client holds.
+   *
+   * Handlers go first so the close itself cannot re-enter `fail` or `settle` through
+   * `onclose`.
+   */
+  private dropSocket(socket: RawSocket): void {
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onerror = null;
+    socket.onclose = null;
+    if (this.socket === socket) this.socket = null;
+    socket.close();
   }
 
   /**

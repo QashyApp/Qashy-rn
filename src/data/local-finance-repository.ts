@@ -112,7 +112,7 @@ import {
 } from "@/utils/deterministic-id";
 import { createEntity, makeId, nowIso, updateEntity } from "@/utils/entity";
 import { isValidIconId } from "@/utils/icon-id";
-import { disambiguateNames, normalizeName } from "@/utils/naming";
+import { normalizeName } from "@/utils/naming";
 import { escapeCsv } from "@/utils/csv";
 import { validateLocale } from "@/utils/form-validation";
 import {
@@ -158,6 +158,37 @@ const RECIPROCAL_RATE_TOLERANCE = 0.02;
 // rate-derived amount before it reads as a typo rather than spread (one order
 // of magnitude either way).
 const MANUAL_TRANSFER_AMOUNT_TOLERANCE = 10;
+
+/**
+ * Thrown when no rate for a pair and date can be resolved. Callers that treat a missing rate as
+ * transient (recurring generation, the dashboard, `hasRate`) match on this class, not the message.
+ */
+export class MissingExchangeRateError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MissingExchangeRateError";
+  }
+}
+
+/**
+ * Renders a Decimal as a plain decimal string. `toString` switches to exponent form below 1e-7
+ * (`8.9e-9`), which is not a decimal string the rate fields or the form input accept.
+ */
+function plainDecimal(value: Decimal) {
+  return value.toSignificantDigits(20).toFixed();
+}
+
+/**
+ * Engine-raised bugs (a wrong type, an undefined reference, malformed code) as opposed to the
+ * domain errors the repository and money helpers throw deliberately.
+ */
+function isProgrammingError(reason: Error) {
+  return (
+    reason instanceof TypeError ||
+    reason instanceof ReferenceError ||
+    reason instanceof SyntaxError
+  );
+}
 
 /** Case- and accent-insensitive form for search, so "cafe" finds "Café". Uses no locale-sensitive collation. */
 function foldForSearch(value: string) {
@@ -401,7 +432,6 @@ export class LocalFinanceRepository implements FinanceRepository {
     await this.storage.initialize();
     await this.eraseStoredTombstones();
     await this.hydrateFromStorage();
-    await this.migrateLoadedState();
     // No placeholder settings row is written here, and that is load-bearing for sync.
     //
     // `baseCurrency` is `createOnly` in the merge registry — deliberately, because rebasing
@@ -864,6 +894,18 @@ export class LocalFinanceRepository implements FinanceRepository {
           color: input.color.toUpperCase(),
         }) as Account);
     const accounts = this.withEntity(this.state.accounts, account);
+    // Archiving is the one way to take the last live account out of use without a delete, which
+    // `deleteEntitiesNow` already refuses. Refuse it here too, so the vault keeps a usable account.
+    const becomesArchived = input.archived && (!existing || !existing.archived);
+    if (
+      becomesArchived &&
+      !this.state.accounts.some(
+        (item) => !item.archived && item.id !== existing?.id,
+      )
+    )
+      throw new Error(
+        "Keep at least one account. Add another account before archiving this one.",
+      );
     this.assertTransactionSetSafe(this.state.transactions, accounts);
     const rules = input.archived
       ? this.state.recurringRules
@@ -897,7 +939,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     rules.forEach((rule) => this.replaceInList("recurringRules", rule));
     this.emit();
     if (rules.some((rule) => rule.active)) {
-      await this.generateRecurringNow(todayLocal());
+      await this.generateAfterCommit();
     }
     return account;
   }
@@ -1008,7 +1050,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     rules.forEach((rule) => this.replaceInList("recurringRules", rule));
     this.emit();
     if (rules.some((rule) => rule.active)) {
-      await this.generateRecurringNow(todayLocal());
+      await this.generateAfterCommit();
     }
     return category;
   }
@@ -1170,12 +1212,25 @@ export class LocalFinanceRepository implements FinanceRepository {
       (item) => item.id === budgetId,
     );
     if (!budget || budget.archived) throw new Error("Choose a valid budget.");
-    const snapshot = this.state.budgetPeriods.find(
-      (item) =>
-        item.budgetId === budget.id &&
-        item.periodStart === resolvePeriod(budget.period, todayLocal()).start,
+    // The same lookup adjustments use: a period that rolled over while the app stayed open has
+    // no stored row yet, and resetting it must still count rather than be silently dropped.
+    const snapshot = this.currentSnapshot(budget, todayLocal());
+    if (!snapshot)
+      throw new Error("This budget has no active period to reset.");
+    if (snapshot.rolloverMinor === 0) return;
+    // Zeroing the rollover must not cut the limit below zero, exactly like removing an adjustment.
+    const before = this.effectiveLimitFor(budget, snapshot);
+    const after = addMinor(
+      snapshot.limitMinor,
+      this.budgetAdjustmentTotal(
+        budget.id,
+        snapshot.periodStart,
+        snapshot.periodEnd,
+      ),
+      `${budget.name} effective limit`,
     );
-    if (!snapshot || snapshot.rolloverMinor === 0) return;
+    this.assertLimitNotLowered(before, after, "Resetting the rollover");
+    // Updating a transient snapshot persists it, which is what the next generation pass would do.
     const reset = updateEntity(snapshot, { rolloverMinor: 0 });
     await this.persist("budgetPeriods", [reset]);
     this.replaceInList("budgetPeriods", reset);
@@ -1526,8 +1581,24 @@ export class LocalFinanceRepository implements FinanceRepository {
             [validated.startDate, todayLocal()].sort().at(-1)!,
           ),
         };
+    // The flag means "off because a dependency is archived", and it is what lets unarchiving bring
+    // the rule back. The form reopens a paused rule with `active: false`, so the input cannot say
+    // whether the user switched it off: keep the flag while its account or category is still
+    // archived, and clear it once nothing archived blocks the rule.
+    const dependencyArchived =
+      Boolean(
+        this.state.accounts.find(
+          (item) => item.id === normalized.template.accountId,
+        )?.archived,
+      ) ||
+      Boolean(
+        normalized.template.categoryId &&
+        this.state.categories.find(
+          (item) => item.id === normalized.template.categoryId,
+        )?.archived,
+      );
     const pausedByDependency = Boolean(
-      existing?.pausedByDependency && input.active && !normalized.active,
+      existing?.pausedByDependency && dependencyArchived,
     );
     const rule = existing
       ? updateEntity(existing, { ...normalized, pausedByDependency })
@@ -1552,7 +1623,7 @@ export class LocalFinanceRepository implements FinanceRepository {
                 status: transaction.status,
                 exchangeRate:
                   transaction.accountId === normalized.template.accountId
-                    ? transaction.exchangeRate
+                    ? (transaction.exchangeRate ?? undefined)
                     : undefined,
                 recurringRuleId: rule.id,
                 occurrenceKey: transaction.occurrenceKey,
@@ -1606,7 +1677,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         .map((transaction) => replacements.get(transaction.id) ?? transaction),
     };
     this.emit();
-    if (rule.active) await this.generateRecurringNow(todayLocal());
+    if (rule.active) await this.generateAfterCommit();
     return rule;
   }
 
@@ -1735,7 +1806,22 @@ export class LocalFinanceRepository implements FinanceRepository {
     const conflicts: FetchedRateConflict[] = [];
     let skippedManual = 0;
 
+    // One fetched row per pair and date. Two rows for the same key would otherwise both be
+    // counted, and the second would write a conflicting duplicate of the first. The later row
+    // wins, so the outcome does not depend on anything but the batch itself.
+    const latestByKey = new Map<string, (typeof normalized)[number]>();
     for (const input of normalized) {
+      latestByKey.set(
+        fetchedRateId(
+          input.fromCurrency,
+          input.toCurrency,
+          input.effectiveDate,
+        ),
+        input,
+      );
+    }
+
+    for (const input of latestByKey.values()) {
       const id = fetchedRateId(
         input.fromCurrency,
         input.toCurrency,
@@ -1857,14 +1943,18 @@ export class LocalFinanceRepository implements FinanceRepository {
       if (query.fromDate && transaction.localDate < query.fromDate)
         return false;
       if (query.toDate && transaction.localDate > query.toDate) return false;
+      // An unpriced (upcoming, no rate yet) transaction has no base amount to compare, so an amount
+      // bound excludes it rather than matching on a value that does not exist.
       if (
         query.minMinor !== undefined &&
-        transaction.baseAmountMinor < query.minMinor
+        (transaction.baseAmountMinor === null ||
+          transaction.baseAmountMinor < query.minMinor)
       )
         return false;
       if (
         query.maxMinor !== undefined &&
-        transaction.baseAmountMinor > query.maxMinor
+        (transaction.baseAmountMinor === null ||
+          transaction.baseAmountMinor > query.maxMinor)
       )
         return false;
       return true;
@@ -1876,8 +1966,15 @@ export class LocalFinanceRepository implements FinanceRepository {
             a.localDate.localeCompare(b.localDate) ||
             a.createdAt.localeCompare(b.createdAt)
           );
-        if (query.sort === "amount-desc")
+        if (query.sort === "amount-desc") {
+          // Unpriced rows sort after priced ones, then by id so the order is deterministic.
+          if (a.baseAmountMinor === null || b.baseAmountMinor === null)
+            return (
+              Number(a.baseAmountMinor === null) -
+                Number(b.baseAmountMinor === null) || a.id.localeCompare(b.id)
+            );
           return b.baseAmountMinor - a.baseAmountMinor;
+        }
         return (
           b.localDate.localeCompare(a.localDate) ||
           b.createdAt.localeCompare(a.createdAt)
@@ -1965,20 +2062,20 @@ export class LocalFinanceRepository implements FinanceRepository {
       if (item.kind === "income") {
         incomeMinor = addMinor(
           incomeMinor,
-          item.baseAmountMinor,
+          this.postedBaseMinor(item),
           "Income total",
         );
       } else if (item.kind === "expense") {
         expenseMinor = addMinor(
           expenseMinor,
-          item.baseAmountMinor,
+          this.postedBaseMinor(item),
           "Expense total",
         );
         dayTotals.set(
           item.localDate,
           addMinor(
             dayTotals.get(item.localDate) ?? 0,
-            item.baseAmountMinor,
+            this.postedBaseMinor(item),
             "Daily spending",
           ),
         );
@@ -1987,14 +2084,14 @@ export class LocalFinanceRepository implements FinanceRepository {
             item.categoryId,
             addMinor(
               categoryTotals.get(item.categoryId) ?? 0,
-              item.baseAmountMinor,
+              this.postedBaseMinor(item),
               "Category spending",
             ),
           );
         } else {
           uncategorizedMinor = addMinor(
             uncategorizedMinor,
-            item.baseAmountMinor,
+            this.postedBaseMinor(item),
             "Uncategorized spending",
           );
         }
@@ -2061,7 +2158,8 @@ export class LocalFinanceRepository implements FinanceRepository {
           this.state.settings.baseCurrency,
           balanceDate,
         );
-      } catch {
+      } catch (reason) {
+        if (!(reason instanceof MissingExchangeRateError)) throw reason;
         if (
           !missingExchangeRates.some(
             (rate) => rate.fromCurrency === item.account.currency,
@@ -2208,7 +2306,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   // snapshots the source leg, which diverges from the destination whenever the
   // manual destination amount disagrees with the source-leg conversion.
   private transferInflowBaseMinor(item: TransactionRecord) {
-    return item.destinationBaseAmountMinor ?? item.baseAmountMinor;
+    return item.destinationBaseAmountMinor ?? this.postedBaseMinor(item);
   }
 
   generateRecurring(horizonDate = todayLocal()) {
@@ -2236,7 +2334,10 @@ export class LocalFinanceRepository implements FinanceRepository {
               transaction.status === "upcoming" &&
               transaction.localDate <= today
             ) {
-              const updated = updateEntity(transaction, { status: "posted" });
+              // Auto-posting an unpriced occurrence snapshots today's rate, as confirming it would.
+              // With no rate yet it stays upcoming and is retried on the next pass.
+              const updated = this.postedWithSnapshot(transaction, today);
+              if (!updated) return;
               transactions[index] = updated;
               transactionChanges.push(updated);
             }
@@ -2289,12 +2390,12 @@ export class LocalFinanceRepository implements FinanceRepository {
         // A missing exchange rate is transient: rates may simply not have
         // loaded yet, and nothing would ever resume a rule paused for it. Leave
         // the rule active and untouched so the next generation pass retries.
-        if (
-          reason instanceof Error &&
-          reason.message.startsWith("Missing exchange rate")
-        )
-          continue;
-        // Any other failure (dangling reference, invalid schedule) will not fix
+        if (reason instanceof MissingExchangeRateError) continue;
+        // A programming error is not a property of the rule. Rethrow it so it surfaces
+        // rather than silently pausing every rule that happens to reach the same line.
+        if (!(reason instanceof Error) || isProgrammingError(reason))
+          throw reason;
+        // Any other domain failure (dangling reference, invalid schedule) will not fix
         // itself. Pause the rule so it surfaces as "Paused" in the Recurring
         // list and the user can fix the cause and re-enable it.
         if (rule.active)
@@ -2306,47 +2407,71 @@ export class LocalFinanceRepository implements FinanceRepository {
     }
     const recurringChanged =
       transactionChanges.length > 0 || ruleChanges.length > 0;
-    if (recurringChanged) {
-      this.assertTransactionSetSafe(transactions);
-      await this.storage.putMany(
-        [
-          ...transactionChanges.map((entity) => ({
-            type: "transactions" as const,
-            entity,
-          })),
-          ...ruleChanges.map((entity) => ({
-            type: "recurringRules" as const,
-            entity,
-          })),
-        ],
-        this,
-      );
-      // Merge into the current state rather than replacing it with the
-      // pre-await snapshot, so transactions saved while putMany was in
-      // flight are not dropped.
-      const changedTransactions = new Map(
-        transactionChanges.map((item) => [item.id, item]),
-      );
-      const changedRules = new Map(ruleChanges.map((rule) => [rule.id, rule]));
-      const currentIds = new Set(
-        this.state.transactions.map((item) => item.id),
-      );
-      this.state = {
-        ...this.state,
-        transactions: [
-          ...this.state.transactions.map(
-            (item) => changedTransactions.get(item.id) ?? item,
-          ),
-          ...transactionChanges.filter((item) => !currentIds.has(item.id)),
-        ],
-        recurringRules: this.state.recurringRules.map(
-          (rule) => changedRules.get(rule.id) ?? rule,
-        ),
-      };
-    }
-    const budgetChanges = await this.ensureBudgetSnapshots();
-    if (recurringChanged || budgetChanges) this.emit();
+    // Merged into the current state rather than replacing it with the pre-await snapshot, so
+    // transactions saved while putMany was in flight are not dropped.
+    const changedTransactions = new Map(
+      transactionChanges.map((item) => [item.id, item]),
+    );
+    const changedRules = new Map(ruleChanges.map((rule) => [rule.id, rule]));
+    const currentIds = new Set(this.state.transactions.map((item) => item.id));
+    const nextTransactions = [
+      ...this.state.transactions.map(
+        (item) => changedTransactions.get(item.id) ?? item,
+      ),
+      ...transactionChanges.filter((item) => !currentIds.has(item.id)),
+    ];
+    const nextRules = this.state.recurringRules.map(
+      (rule) => changedRules.get(rule.id) ?? rule,
+    );
+    // A budget period that has just opened is priced against the transactions this run is
+    // writing, so it is built from the prospective state. It is committed in the same putMany
+    // as those transactions: a crash can then never leave one without the other.
+    const budgetPeriods = this.withProspectiveState(
+      { transactions: nextTransactions },
+      () => this.dueBudgetSnapshots(),
+    );
+    if (!recurringChanged && !budgetPeriods.length) return generated;
+    if (recurringChanged) this.assertTransactionSetSafe(transactions);
+    await this.storage.putMany(
+      [
+        ...transactionChanges.map((entity) => ({
+          type: "transactions" as const,
+          entity,
+        })),
+        ...ruleChanges.map((entity) => ({
+          type: "recurringRules" as const,
+          entity,
+        })),
+        ...budgetPeriods.map((entity) => ({
+          type: "budgetPeriods" as const,
+          entity,
+        })),
+      ],
+      this,
+    );
+    this.state = {
+      ...this.state,
+      transactions: nextTransactions,
+      recurringRules: nextRules,
+    };
+    budgetPeriods.forEach((period) =>
+      this.replaceInList("budgetPeriods", period),
+    );
+    this.emit();
     return generated;
+  }
+
+  /**
+   * Runs the catch-up generation that follows a write which has already committed. The write is
+   * durable, so a failure here must not be reported as the write failing. The recurring
+   * catch-up re-runs on the next load, the same way `importExternalBundleNow` treats it.
+   */
+  private async generateAfterCommit() {
+    try {
+      await this.generateRecurringNow(todayLocal());
+    } catch {
+      // Intentionally swallowed; see above.
+    }
   }
 
   confirmUpcoming(id: string) {
@@ -2356,7 +2481,10 @@ export class LocalFinanceRepository implements FinanceRepository {
   private async confirmUpcomingNow(id: string) {
     const transaction = this.state.transactions.find((item) => item.id === id);
     if (!transaction || transaction.status !== "upcoming") return;
-    const updated = updateEntity(transaction, { status: "posted" });
+    // Paying an unpriced upcoming transaction snapshots the latest rate on or before today. With no
+    // rate stored, MissingExchangeRateError propagates before any write and the row stays upcoming.
+    const updated = this.postedWithSnapshot(transaction, todayLocal(), true);
+    if (!updated) return;
     this.assertTransactionSetSafe(
       this.withEntity(this.state.transactions, updated),
     );
@@ -2723,6 +2851,10 @@ export class LocalFinanceRepository implements FinanceRepository {
             )
             .map((item) => updateEntity(item, { parentId: null }))
         : [];
+    // The current period's snapshot holds its own copy of the filters spend is measured with, and
+    // `computeBudgetStatuses` reads that copy. It must follow the budget, or the deleted
+    // category or tag keeps filtering the live total. Historical periods keep what they measured.
+    const budgetPeriodChanges: BudgetPeriodSnapshot[] = [];
     const budgetChanges =
       type === "categories" || type === "tags"
         ? this.state.budgets.flatMap((budget) => {
@@ -2760,6 +2892,19 @@ export class LocalFinanceRepository implements FinanceRepository {
               !filters.accountIds.length &&
               !filters.categoryIds.length &&
               !filters.tagIds.length;
+            const currentStart = resolvePeriod(
+              budget.period,
+              todayLocal(),
+            ).start;
+            const currentPeriod = this.state.budgetPeriods.find(
+              (item) =>
+                item.budgetId === budget.id &&
+                item.periodStart === currentStart,
+            );
+            if (currentPeriod)
+              budgetPeriodChanges.push(
+                updateEntity(currentPeriod, { filters, categoryLimits }),
+              );
             return [
               updateEntity(budget, {
                 filters,
@@ -2834,6 +2979,10 @@ export class LocalFinanceRepository implements FinanceRepository {
         })),
         ...budgetChanges.map((entity) => ({
           type: "budgets" as const,
+          entity,
+        })),
+        ...budgetPeriodChanges.map((entity) => ({
+          type: "budgetPeriods" as const,
           entity,
         })),
         ...goalChanges.map((entity) => ({ type: "goals" as const, entity })),
@@ -2914,6 +3063,14 @@ export class LocalFinanceRepository implements FinanceRepository {
         budgetChanges.map((item) => [item.id, item]),
       );
       nextState.budgets = nextState.budgets.map(
+        (item) => replacements.get(item.id) ?? item,
+      );
+    }
+    if (budgetPeriodChanges.length) {
+      const replacements = new Map(
+        budgetPeriodChanges.map((item) => [item.id, item]),
+      );
+      nextState.budgetPeriods = nextState.budgetPeriods.map(
         (item) => replacements.get(item.id) ?? item,
       );
     }
@@ -3169,7 +3326,8 @@ export class LocalFinanceRepository implements FinanceRepository {
         const tagIds = tagNames.map((name) => {
           const existing = tags.find(
             (item) =>
-              !item.deletedAt && item.name.toLowerCase() === name.toLowerCase(),
+              !item.deletedAt &&
+              normalizeName(item.name) === normalizeName(name),
           );
           if (existing) return existing.id;
           const tag = createEntity({
@@ -4061,16 +4219,23 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Rehydrate rather than splice: an import touches up to nine entity types, revives
     // tombstones, and (in `replace`) retires occurrence keys, all of which `hydrateFromStorage`
     // already derives from the stored rows.
-    await this.hydrateFromStorage();
-    this.emit();
+    // The import is durable from here on, so its outcome is settled before anything below can fail.
     outcome.committed = true;
-    // Same catch-up `saveAccountNow` does, so imported schedules show their upcoming
-    // occurrences and imported budgets get their current period straight away.
+    let refreshed = true;
     try {
-      await this.generateRecurringNow(todayLocal());
+      await this.hydrateFromStorage();
+      this.emit();
     } catch {
-      // The import is already durable; reporting a failure now would misreport a successful
-      // import. The recurring catch-up re-runs on the next load anyway.
+      // A failed reload leaves the snapshot stale, not the import unsaved. Retry the reload once
+      // the queue settles, and skip the catch-up below, which would otherwise run against stale
+      // state. The next load runs it anyway.
+      refreshed = false;
+      this.pendingExternalRefresh = true;
+    }
+    if (refreshed) {
+      // Same catch-up `saveAccountNow` does, so imported schedules show their upcoming
+      // occurrences and imported budgets get their current period straight away.
+      await this.generateAfterCommit();
     }
     return outcome;
   }
@@ -4169,8 +4334,8 @@ export class LocalFinanceRepository implements FinanceRepository {
           category,
           tags,
           transaction.note,
-          transaction.exchangeRate,
-          transaction.baseAmountMinor,
+          transaction.exchangeRate ?? "",
+          transaction.baseAmountMinor ?? "",
           transaction.transferGroupId ?? "",
           transaction.foreign
             ? minorToDecimalString(
@@ -4252,11 +4417,21 @@ export class LocalFinanceRepository implements FinanceRepository {
   };
 
   private async hydrateFromStorage() {
-    const settingsRecords = await this.storage.readAll("settings");
+    // One read transaction, so the settings and every entity type come from the same committed
+    // state. Separate reads could straddle a write from another tab and pair settings with
+    // entities that were never stored together. `silent`: a read notifies no one, and the
+    // external-change subscriber would otherwise re-trigger this very refresh.
+    const { settingsRecords, loaded } = await this.storage.transact(
+      async (tx) => ({
+        settingsRecords: await tx.readAll("settings"),
+        loaded: await Promise.all(ENTITY_TYPES.map((type) => tx.readAll(type))),
+      }),
+      { silent: true },
+    );
     const storedSettings = (settingsRecords.find(
       (item) => item.id === "settings" && !item.deletedAt,
     ) ?? initialSettings()) as AppSettings;
-    // Saves from before themes existed have no id; the default theme is what they were already showing.
+    // A row missing a device-local field reads as its default.
     const settings: AppSettings = {
       ...storedSettings,
       themeId: storedSettings.themeId ?? DEFAULT_THEME_ID,
@@ -4268,9 +4443,6 @@ export class LocalFinanceRepository implements FinanceRepository {
       uiIconSetOverride: storedSettings.uiIconSetOverride ?? null,
       categoryIconSetOverride: storedSettings.categoryIconSetOverride ?? null,
     };
-    const loaded = await Promise.all(
-      ENTITY_TYPES.map((type) => this.storage.readAll(type)),
-    );
     const loadedTransactions = loaded[
       ENTITY_TYPES.indexOf("transactions")
     ] as TransactionRecord[];
@@ -4282,7 +4454,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         .map((transaction) => transaction.occurrenceKey!),
     );
     // Carry the current readiness rather than asserting it. Hydration is only the
-    // first step of `initializeNow`; migrations, the settings seed, and recurring
+    // first step of `initializeNow`; the settings seed and recurring
     // generation still follow. Flipping `ready` here published a half-initialized
     // snapshot to any render that polled `getSnapshot` before `emit()` ran.
     // Reuse the current settings object when nothing in it changed. A reload builds a fresh one
@@ -4480,10 +4652,12 @@ export class LocalFinanceRepository implements FinanceRepository {
     // record that already carries its own rate — renaming a transaction failed
     // with "Missing exchange rate". Reuse the stored rate unless the caller
     // supplies one or the currency pair or date actually moved.
+    // An unpriced row keeps no snapshot to reuse, so an edit re-resolves it.
     const preservesRateSnapshot =
       existing?.accountId === account.id &&
       existing.localDate === input.localDate &&
-      existing.currency === account.currency;
+      existing.currency === account.currency &&
+      existing.exchangeRate !== null;
     // A cross-currency transfer into the base currency with a typed destination amount is priced
     // by that amount itself: the base value of the source leg *is* what arrived. Requiring a
     // separate stored rate for it made the "Destination amount" alternative unusable.
@@ -4495,40 +4669,52 @@ export class LocalFinanceRepository implements FinanceRepository {
       input.destinationAmountMinor !== null
         ? input.destinationAmountMinor
         : null;
-    const rate =
-      account.currency === this.state.settings.baseCurrency
-        ? "1"
-        : input.exchangeRate
-          ? this.normalizeRate(input.exchangeRate)
-          : preservesRateSnapshot
-            ? existing.exchangeRate
-            : this.resolveTransferAwareRate(
-                account.currency,
-                input.localDate,
-                amountMinor,
-                baseDestinationAmountMinor,
-              );
+    // `null` means the rate is not known yet. Only an upcoming transaction may be left unpriced;
+    // a posted one still needs its rate, so its MissingExchangeRateError propagates.
+    let rate: string | null;
+    try {
+      rate =
+        account.currency === this.state.settings.baseCurrency
+          ? "1"
+          : input.exchangeRate
+            ? this.normalizeRate(input.exchangeRate)
+            : preservesRateSnapshot
+              ? existing!.exchangeRate
+              : this.resolveTransferAwareRate(
+                  account.currency,
+                  input.localDate,
+                  amountMinor,
+                  baseDestinationAmountMinor,
+                );
+    } catch (reason) {
+      if (status === "upcoming" && reason instanceof MissingExchangeRateError)
+        rate = null;
+      else throw reason;
+    }
     const baseAmountMinor =
-      baseDestinationAmountMinor !== null &&
-      !input.exchangeRate &&
-      !preservesRateSnapshot &&
-      !this.hasRate(
-        account.currency,
-        this.state.settings.baseCurrency,
-        input.localDate,
-      )
-        ? baseDestinationAmountMinor
-        : convertMinor(
-            amountMinor,
-            account.currency,
-            this.state.settings.baseCurrency,
-            rate,
-            this.state.settings.locale,
-          );
+      rate === null
+        ? null
+        : baseDestinationAmountMinor !== null &&
+            !input.exchangeRate &&
+            !preservesRateSnapshot &&
+            !this.hasRate(
+              account.currency,
+              this.state.settings.baseCurrency,
+              input.localDate,
+            )
+          ? baseDestinationAmountMinor
+          : convertMinor(
+              amountMinor,
+              account.currency,
+              this.state.settings.baseCurrency,
+              rate,
+              this.state.settings.locale,
+            );
     // A positive amount that rounds to nothing in the base currency would be a free transaction
     // that still moves an account balance. An unchanged historical record is left alone.
     if (
       amountMinor > 0 &&
+      baseAmountMinor !== null &&
       baseAmountMinor <= 0 &&
       existing?.baseAmountMinor !== baseAmountMinor
     ) {
@@ -4586,7 +4772,12 @@ export class LocalFinanceRepository implements FinanceRepository {
         existing.destinationBaseAmountMinor !== null;
       if (
         input.destinationBaseAmountMinor !== undefined &&
-        input.destinationBaseAmountMinor !== null
+        input.destinationBaseAmountMinor !== null &&
+        // An unpriced source leg cannot verify a same-currency destination base, so that value is
+        // derived when the transaction is paid instead of being trusted from the input.
+        !(
+          baseAmountMinor === null && destination!.currency === account.currency
+        )
       ) {
         this.assertPositiveMinor(
           input.destinationBaseAmountMinor,
@@ -4642,17 +4833,24 @@ export class LocalFinanceRepository implements FinanceRepository {
         // is the value that arrived, so no stored destination-to-base rate is needed.
         destinationBaseAmountMinor = baseAmountMinor;
       } else {
-        destinationBaseAmountMinor = convertMinor(
-          destinationAmountMinor,
-          destination!.currency,
-          this.state.settings.baseCurrency,
+        // An upcoming leg whose destination-to-base rate is not known yet stays unpriced.
+        const destinationRate = this.rateOrNullWhileUpcoming(status, () =>
           this.resolveRate(
             destination!.currency,
             this.state.settings.baseCurrency,
             input.localDate,
           ),
-          this.state.settings.locale,
         );
+        destinationBaseAmountMinor =
+          destinationRate === null
+            ? null
+            : convertMinor(
+                destinationAmountMinor,
+                destination!.currency,
+                this.state.settings.baseCurrency,
+                destinationRate,
+                this.state.settings.locale,
+              );
       }
     }
     const value = {
@@ -4672,7 +4870,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       destinationBaseAmountMinor,
       currency: account.currency,
       destinationCurrency: destination?.currency ?? null,
-      exchangeRate: rate,
+      exchangeRate: rate === null ? null : this.normalizeRate(rate),
       baseAmountMinor,
       transferGroupId:
         input.kind === "transfer"
@@ -4729,9 +4927,128 @@ export class LocalFinanceRepository implements FinanceRepository {
     try {
       this.resolveRate(fromValue, toValue, localDate);
       return true;
-    } catch {
-      return false;
+    } catch (reason) {
+      // Only a genuinely missing rate reads as "no rate"; anything else is a real failure.
+      if (reason instanceof MissingExchangeRateError) return false;
+      throw reason;
     }
+  }
+
+  /**
+   * Runs a rate lookup that may leave an upcoming transaction unpriced. Only a missing rate on
+   * an upcoming row is swallowed (returning `null`); a posted row still needs its rate.
+   */
+  private rateOrNullWhileUpcoming(
+    status: TransactionStatus,
+    lookup: () => string,
+  ): string | null {
+    try {
+      return lookup();
+    } catch (reason) {
+      if (status === "upcoming" && reason instanceof MissingExchangeRateError)
+        return null;
+      throw reason;
+    }
+  }
+
+  /**
+   * The snapshot an unpriced row (`exchangeRate` or `baseAmountMinor` is null, or a transfer's
+   * destination base is null) gets when it is paid. The rate is the latest stored one on or before
+   * `pricingDate`; `localDate` never changes. Returns `null` when nothing needs pricing. Throws
+   * `MissingExchangeRateError`, with nothing written, when a needed rate is not stored yet.
+   */
+  private snapshotForPricing(
+    transaction: TransactionRecord,
+    pricingDate: string,
+  ): {
+    exchangeRate: string;
+    baseAmountMinor: number;
+    destinationBaseAmountMinor: number | null;
+  } | null {
+    const base = this.state.settings.baseCurrency;
+    const locale = this.state.settings.locale;
+    const accountPriced =
+      transaction.exchangeRate !== null && transaction.baseAmountMinor !== null;
+    const destinationNeedsPricing =
+      transaction.kind === "transfer" &&
+      transaction.destinationCurrency !== null &&
+      transaction.destinationAmountMinor !== null &&
+      transaction.destinationBaseAmountMinor === null;
+    if (accountPriced && !destinationNeedsPricing) return null;
+    let exchangeRate = transaction.exchangeRate;
+    let baseAmountMinor = transaction.baseAmountMinor;
+    if (!accountPriced) {
+      const rate =
+        transaction.currency === base
+          ? "1"
+          : this.resolveRate(transaction.currency, base, pricingDate);
+      exchangeRate = this.normalizeRate(rate);
+      baseAmountMinor = convertMinor(
+        transaction.amountMinor,
+        transaction.currency,
+        base,
+        rate,
+        locale,
+      );
+      if (transaction.amountMinor > 0 && baseAmountMinor <= 0) {
+        throw new Error(
+          `This amount converts to less than the smallest unit of ${base}. Enter a larger amount or check the exchange rate.`,
+        );
+      }
+    }
+    let destinationBaseAmountMinor = transaction.destinationBaseAmountMinor;
+    if (destinationNeedsPricing) {
+      const destinationCurrency = transaction.destinationCurrency!;
+      const destinationAmountMinor = transaction.destinationAmountMinor!;
+      if (destinationCurrency === base) {
+        destinationBaseAmountMinor = destinationAmountMinor;
+      } else if (destinationCurrency === transaction.currency) {
+        destinationBaseAmountMinor = baseAmountMinor!;
+      } else {
+        destinationBaseAmountMinor = convertMinor(
+          destinationAmountMinor,
+          destinationCurrency,
+          base,
+          this.resolveRate(destinationCurrency, base, pricingDate),
+          locale,
+        );
+      }
+    }
+    return {
+      exchangeRate: exchangeRate!,
+      baseAmountMinor: baseAmountMinor!,
+      destinationBaseAmountMinor,
+    };
+  }
+
+  /**
+   * The base-currency amount of a posted transaction. A posted row always carries its snapshot, so
+   * a null here means corrupt state, and it fails closed rather than summing as zero.
+   */
+  private postedBaseMinor(transaction: TransactionRecord): number {
+    if (transaction.baseAmountMinor === null)
+      throw new Error("Posted transactions need an exchange rate.");
+    return transaction.baseAmountMinor;
+  }
+
+  /**
+   * The row as a posted transaction, with its snapshot filled in when it was unpriced. Returns
+   * `null` when a needed rate is not stored yet, leaving the row upcoming, unless `rethrowMissing`.
+   */
+  private postedWithSnapshot(
+    transaction: TransactionRecord,
+    pricingDate: string,
+    rethrowMissing = false,
+  ): TransactionRecord | null {
+    let snapshot: ReturnType<LocalFinanceRepository["snapshotForPricing"]>;
+    try {
+      snapshot = this.snapshotForPricing(transaction, pricingDate);
+    } catch (reason) {
+      if (!rethrowMissing && reason instanceof MissingExchangeRateError)
+        return null;
+      throw reason;
+    }
+    return updateEntity(transaction, { status: "posted", ...(snapshot ?? {}) });
   }
 
   /**
@@ -4802,10 +5119,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         exchangeRates,
       );
       if (fromBase && toBase)
-        return new Decimal(fromBase)
-          .div(toBase)
-          .toSignificantDigits(20)
-          .toString();
+        return plainDecimal(new Decimal(fromBase).div(toBase));
     }
     if (fromCurrency === baseCurrency) {
       const toBase = this.directOrInverseRate(
@@ -4814,10 +5128,9 @@ export class LocalFinanceRepository implements FinanceRepository {
         localDate,
         exchangeRates,
       );
-      if (toBase)
-        return new Decimal(1).div(toBase).toSignificantDigits(20).toString();
+      if (toBase) return plainDecimal(new Decimal(1).div(toBase));
     }
-    throw new Error(
+    throw new MissingExchangeRateError(
       `Missing exchange rate for ${fromCurrency} → ${toCurrency} on ${localDate}.`,
     );
   }
@@ -4926,10 +5239,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       exchangeRates,
     );
     if (!inverse) return null;
-    return new Decimal(1)
-      .div(this.normalizeRate(inverse.rate))
-      .toSignificantDigits(20)
-      .toString();
+    return plainDecimal(new Decimal(1).div(this.normalizeRate(inverse.rate)));
   }
 
   private latestRate(
@@ -5084,19 +5394,16 @@ export class LocalFinanceRepository implements FinanceRepository {
             !filters.tagIds.length ||
             filters.tagIds.some((id) => item.tagIds.includes(id)),
         )
-        .map((item) => item.baseAmountMinor),
+        .map((item) => this.postedBaseMinor(item)),
       "Budget spending",
     );
   }
 
-  private async ensureBudgetSnapshots() {
-    const periods = this.active(this.state.budgets)
+  /** Periods that have opened and are not yet stored. Pure: the caller persists them. */
+  private dueBudgetSnapshots() {
+    return this.active(this.state.budgets)
       .filter((item) => !item.archived)
       .flatMap((budget) => this.buildBudgetSnapshots(budget, false));
-    if (!periods.length) return 0;
-    await this.persist("budgetPeriods", periods);
-    periods.forEach((period) => this.replaceInList("budgetPeriods", period));
-    return periods.length;
   }
 
   // A snapshot belongs to the budget's current period definition only if resolving
@@ -5390,13 +5697,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (this.normalizeCurrency(input.template.currency) !== account.currency) {
       throw new Error("Recurring currency must match its account.");
     }
-    if (account.currency !== this.state.settings.baseCurrency) {
-      this.resolveRate(
-        account.currency,
-        this.state.settings.baseCurrency,
-        input.nextDueDate,
-      );
-    }
+    // No rate is required to save a rule: an occurrence without one stays upcoming until it is paid.
     if (input.template.categoryId) {
       const category = this.state.categories.find(
         (item) => item.id === input.template.categoryId,
@@ -5490,152 +5791,6 @@ export class LocalFinanceRepository implements FinanceRepository {
     };
   }
 
-  private async migrateLoadedState() {
-    const transactionUpdates = this.state.transactions.flatMap(
-      (transaction) => {
-        const destinationBaseAmountMinor = (
-          transaction as TransactionRecord & {
-            destinationBaseAmountMinor?: number | null;
-          }
-        ).destinationBaseAmountMinor;
-        if (transaction.kind !== "transfer") {
-          if (
-            transaction.destinationAccountId === null &&
-            transaction.destinationAmountMinor === null &&
-            destinationBaseAmountMinor === null &&
-            transaction.destinationCurrency === null &&
-            transaction.transferGroupId === null
-          )
-            return [];
-          return [
-            updateEntity(transaction, {
-              destinationAccountId: null,
-              destinationAmountMinor: null,
-              destinationBaseAmountMinor: null,
-              destinationCurrency: null,
-              transferGroupId: null,
-            }),
-          ];
-        }
-        if (
-          typeof destinationBaseAmountMinor === "number" &&
-          isSafeMinor(destinationBaseAmountMinor) &&
-          destinationBaseAmountMinor > 0
-        )
-          return [];
-        return [
-          updateEntity(transaction, {
-            destinationBaseAmountMinor:
-              this.legacyTransferInflowBaseMinor(transaction),
-          }),
-        ];
-      },
-    );
-    const accountMigration = this.disambiguateNames(this.state.accounts);
-    const categoryMigration = this.disambiguateNames(this.state.categories);
-    const tagMigration = this.disambiguateNames(this.state.tags);
-    const recurringRuleUpdates = this.state.recurringRules.flatMap((rule) =>
-      typeof (rule as RecurringRule & { pausedByDependency?: boolean })
-        .pausedByDependency === "boolean"
-        ? []
-        : [updateEntity(rule, { pausedByDependency: false })],
-    );
-    const records: StoredEntity[] = [
-      ...transactionUpdates.map((entity) => ({
-        type: "transactions" as const,
-        entity,
-      })),
-      ...accountMigration.changed.map((entity) => ({
-        type: "accounts" as const,
-        entity,
-      })),
-      ...categoryMigration.changed.map((entity) => ({
-        type: "categories" as const,
-        entity,
-      })),
-      ...tagMigration.changed.map((entity) => ({
-        type: "tags" as const,
-        entity,
-      })),
-      ...recurringRuleUpdates.map((entity) => ({
-        type: "recurringRules" as const,
-        entity,
-      })),
-    ];
-    if (!records.length) return;
-    await this.storage.putMany(records, this);
-    const transactionReplacements = new Map(
-      transactionUpdates.map((entity) => [entity.id, entity]),
-    );
-    const recurringRuleReplacements = new Map(
-      recurringRuleUpdates.map((entity) => [entity.id, entity]),
-    );
-    this.state = {
-      ...this.state,
-      accounts: accountMigration.entities,
-      categories: categoryMigration.entities,
-      tags: tagMigration.entities,
-      transactions: this.state.transactions.map(
-        (entity) => transactionReplacements.get(entity.id) ?? entity,
-      ),
-      recurringRules: this.state.recurringRules.map(
-        (entity) => recurringRuleReplacements.get(entity.id) ?? entity,
-      ),
-    };
-  }
-
-  private legacyTransferInflowBaseMinor(transaction: TransactionRecord) {
-    const destinationAmount = transaction.destinationAmountMinor;
-    const destinationCurrency = transaction.destinationCurrency;
-    if (destinationAmount === null || !destinationCurrency)
-      return transaction.baseAmountMinor;
-    if (destinationCurrency === this.state.settings.baseCurrency)
-      return destinationAmount;
-    if (destinationCurrency === transaction.currency)
-      return transaction.baseAmountMinor;
-    try {
-      return convertMinor(
-        destinationAmount,
-        destinationCurrency,
-        this.state.settings.baseCurrency,
-        this.resolveRate(
-          destinationCurrency,
-          this.state.settings.baseCurrency,
-          transaction.localDate,
-        ),
-        this.state.settings.locale,
-      );
-    } catch {
-      return transaction.baseAmountMinor;
-    }
-  }
-
-  /**
-   * Resolve name collisions on load, using the same pure function the merge's repair pass
-   * calls.
-   *
-   * The naming itself lives in `@/utils/naming` rather than here because the two have to
-   * agree exactly: the repair emits no ops, so convergence depends on every device deriving
-   * the same names from the same merged set — and a second copy of this logic is a copy
-   * that drifts. All that is left here is turning renames into entity updates.
-   */
-  private disambiguateNames<T extends Account | Category | Tag>(entities: T[]) {
-    const replacements = new Map<string, T>();
-    const byId = new Map(entities.map((entity) => [entity.id, entity]));
-    for (const rename of disambiguateNames(entities)) {
-      const entity = byId.get(rename.id);
-      if (entity)
-        replacements.set(
-          rename.id,
-          updateEntity(entity, { name: rename.name } as Partial<T>),
-        );
-    }
-    return {
-      entities: entities.map((entity) => replacements.get(entity.id) ?? entity),
-      changed: [...replacements.values()],
-    };
-  }
-
   private withEntity<T extends FinanceEntity>(entities: T[], entity: T) {
     return entities.some((item) => item.id === entity.id)
       ? entities.map((item) => (item.id === entity.id ? entity : item))
@@ -5649,13 +5804,16 @@ export class LocalFinanceRepository implements FinanceRepository {
   ) {
     if (!rule.active) return;
     const today = todayLocal();
-    const transactions = currentTransactions.map((transaction) =>
-      rule.autoPost &&
-      transaction.recurringRuleId === rule.id &&
-      transaction.status === "upcoming" &&
-      transaction.localDate <= today
-        ? updateEntity(transaction, { status: "posted" })
-        : transaction,
+    // Simulates generation's auto-post: an occurrence is priced as it would be when posted, and one
+    // with no rate yet stays upcoming exactly as `generateRecurringNow` leaves it.
+    const transactions = currentTransactions.map(
+      (transaction) =>
+        (rule.autoPost &&
+          transaction.recurringRuleId === rule.id &&
+          transaction.status === "upcoming" &&
+          transaction.localDate <= today &&
+          this.postedWithSnapshot(transaction, today)) ||
+        transaction,
     );
     let due = rule.nextDueDate;
     let guard = 0;
@@ -5740,7 +5898,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           continue;
         linked = addMinor(
           linked,
-          item.baseAmountMinor,
+          this.postedBaseMinor(item),
           `${goal.name} progress`,
         );
         continue;
@@ -5751,7 +5909,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           continue;
         linked = addMinor(
           linked,
-          item.baseAmountMinor,
+          this.postedBaseMinor(item),
           `${goal.name} progress`,
         );
         continue;
@@ -5760,7 +5918,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       if (item.kind === "income" && item.accountId === goal.linkedAccountId) {
         linked = addMinor(
           linked,
-          item.baseAmountMinor,
+          this.postedBaseMinor(item),
           `${goal.name} progress`,
         );
       } else if (
@@ -5769,7 +5927,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       ) {
         linked = subtractMinor(
           linked,
-          item.baseAmountMinor,
+          this.postedBaseMinor(item),
           `${goal.name} progress`,
         );
       } else if (
@@ -5875,13 +6033,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     sumMinor(
       posted
         .filter((item) => item.kind === "income")
-        .map((item) => item.baseAmountMinor),
+        .map((item) => this.postedBaseMinor(item)),
       "Income total",
     );
     sumMinor(
       posted
         .filter((item) => item.kind === "expense")
-        .map((item) => item.baseAmountMinor),
+        .map((item) => this.postedBaseMinor(item)),
       "Expense total",
     );
   }
@@ -5979,9 +6137,30 @@ export class LocalFinanceRepository implements FinanceRepository {
       );
       assertDate(transaction.localDate, "Transaction date");
       assertMinor(transaction.amountMinor, "Transaction amount", true);
-      assertMinor(transaction.baseAmountMinor, "Transaction base amount", true);
       assertCurrency(transaction.currency, "Transaction currency");
-      assertRate(transaction.exchangeRate, "Transaction exchange rate");
+      // The rate snapshot is null only while the row is unpriced (never posted). Both fields are
+      // null together; a posted row always carries its snapshot.
+      if (
+        transaction.exchangeRate === null ||
+        transaction.baseAmountMinor === null
+      ) {
+        if (
+          transaction.exchangeRate !== null ||
+          transaction.baseAmountMinor !== null
+        )
+          throw new Error(
+            "Transaction exchange rate and base amount must be set together.",
+          );
+        if (transaction.status === "posted")
+          throw new Error("Posted transactions need an exchange rate.");
+      } else {
+        assertMinor(
+          transaction.baseAmountMinor,
+          "Transaction base amount",
+          true,
+        );
+        assertRate(transaction.exchangeRate, "Transaction exchange rate");
+      }
       const source = accounts.find(
         (account) => account.id === transaction.accountId,
       );
@@ -5994,7 +6173,8 @@ export class LocalFinanceRepository implements FinanceRepository {
         if (
           !destination ||
           transaction.destinationAmountMinor === null ||
-          transaction.destinationBaseAmountMinor === null ||
+          (transaction.destinationBaseAmountMinor === null &&
+            transaction.status === "posted") ||
           transaction.destinationCurrency !== destination.currency
         ) {
           throw new Error("Transfer destination does not match its account.");
@@ -6004,11 +6184,13 @@ export class LocalFinanceRepository implements FinanceRepository {
           "Transfer destination amount",
           true,
         );
-        assertMinor(
-          transaction.destinationBaseAmountMinor,
-          "Transfer destination base amount",
-          true,
-        );
+        // Unpriced (not yet paid) legs carry no destination base amount until they are paid.
+        if (transaction.destinationBaseAmountMinor !== null)
+          assertMinor(
+            transaction.destinationBaseAmountMinor,
+            "Transfer destination base amount",
+            true,
+          );
       } else if (
         transaction.destinationAccountId !== null ||
         transaction.destinationAmountMinor !== null ||
@@ -6233,13 +6415,13 @@ export class LocalFinanceRepository implements FinanceRepository {
       if (transaction.kind === "income") {
         incomeTotal = addMinor(
           incomeTotal,
-          transaction.baseAmountMinor,
+          this.postedBaseMinor(transaction),
           "Income total",
         );
       } else if (transaction.kind === "expense") {
         expenseTotal = addMinor(
           expenseTotal,
-          transaction.baseAmountMinor,
+          this.postedBaseMinor(transaction),
           "Expense total",
         );
       }
@@ -6329,7 +6511,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     destinationAmountMinor: number,
     destinationCurrency: string,
     sourceCurrency: string,
-    sourceBaseAmountMinor: number,
+    sourceBaseAmountMinor: number | null,
     localDate: string,
   ): number | null {
     if (destinationCurrency === this.state.settings.baseCurrency)
@@ -6400,7 +6582,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       [
         ...new Set(tagNames.map((name) => name.trim().toLocaleLowerCase())),
       ].sort(),
-      transaction.exchangeRate,
+      transaction.exchangeRate ?? "",
     ]);
   }
 
