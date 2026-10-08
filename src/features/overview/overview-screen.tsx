@@ -1,3 +1,4 @@
+import { CountUpSubject } from "@/components/finance/animated-money";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
 import { ScrollView, View, type LayoutChangeEvent } from "react-native";
@@ -171,73 +172,76 @@ export function OverviewScreen() {
     setConfigOpenId((current) => (current === id ? null : id));
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* A swipe does not move the window: it drives `dragProgress`, which slides the month
+    // Amounts snap to a new month instead of counting up on the JS thread mid-swipe.
+    <CountUpSubject subject={month}>
+      <View style={{ flex: 1, backgroundColor: theme.background }}>
+        {/* A swipe does not move the window: it drives `dragProgress`, which slides the month
           title and the figures that differ, and the rest fades when the month commits. */}
-      <MonthPager
-        ref={pagerRef}
-        slide={false}
-        dragProgress={dragProgress}
-        month={month}
-        disabled={editing}
-        onChange={changeMonth}
-        style={{ flex: 1 }}
-        renderPage={(pageMonth, { isCurrent }) => (
-          <OverviewMonthPage
-            month={pageMonth}
-            isCurrent={isCurrent}
-            dragProgress={dragProgress}
-            editing={editing}
-            cards={cards}
-            configOpenId={configOpenId}
-            onToggleConfig={toggleConfig}
-            onEnterEdit={enterEditMode}
-            onExitEdit={exitEditMode}
-            onMonthSwitch={(next, direction) =>
-              navigateMonth(
-                pagerRef.current,
-                month,
-                next,
-                direction,
-                changeMonth,
-              )
-            }
-            onScroll={onScroll}
-            scrollRef={scrollRef}
-            onMoveCard={moveCard}
-            onResizeCard={resizeCard}
-            onConfigureCard={configureCard}
-            onRemoveCard={removeCard}
-            onDragEnd={handleDragEnd}
-            onCardLayout={handleCardLayout}
-          />
-        )}
-      />
-      {undo ? (
-        <UndoBar
-          message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
-          onAction={undoRemove}
-          onDismiss={() => setUndo(null)}
-          style={{
-            position: "absolute",
-            left: space.lg,
-            right: space.lg,
-            bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
-              .stackedOverlayBottom,
-          }}
+        <MonthPager
+          ref={pagerRef}
+          slide={false}
+          dragProgress={dragProgress}
+          month={month}
+          disabled={editing}
+          onChange={changeMonth}
+          style={{ flex: 1 }}
+          renderPage={(pageMonth, { isCurrent }) => (
+            <OverviewMonthPage
+              month={pageMonth}
+              isCurrent={isCurrent}
+              dragProgress={dragProgress}
+              editing={editing}
+              cards={cards}
+              configOpenId={configOpenId}
+              onToggleConfig={toggleConfig}
+              onEnterEdit={enterEditMode}
+              onExitEdit={exitEditMode}
+              onMonthSwitch={(next, direction) =>
+                navigateMonth(
+                  pagerRef.current,
+                  month,
+                  next,
+                  direction,
+                  changeMonth,
+                )
+              }
+              onScroll={onScroll}
+              scrollRef={scrollRef}
+              onMoveCard={moveCard}
+              onResizeCard={resizeCard}
+              onConfigureCard={configureCard}
+              onRemoveCard={removeCard}
+              onDragEnd={handleDragEnd}
+              onCardLayout={handleCardLayout}
+            />
+          )}
         />
-      ) : null}
-      <FloatingActionButton
-        label="Add transaction"
-        visibility={fabVisibility}
-        onPress={() =>
-          router.push({
-            pathname: "/transaction",
-            params: { returnTo: "/overview" },
-          })
-        }
-        style={floatingActionMetrics(metrics, insets, space)}
-      />
-    </View>
+        {undo ? (
+          <UndoBar
+            message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
+            onAction={undoRemove}
+            onDismiss={() => setUndo(null)}
+            style={{
+              position: "absolute",
+              left: space.lg,
+              right: space.lg,
+              bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
+                .stackedOverlayBottom,
+            }}
+          />
+        ) : null}
+        <FloatingActionButton
+          label="Add transaction"
+          visibility={fabVisibility}
+          onPress={() =>
+            router.push({
+              pathname: "/transaction",
+              params: { returnTo: "/overview" },
+            })
+          }
+          style={floatingActionMetrics(metrics, insets, space)}
+        />
+      </View>
+    </CountUpSubject>
   );
 }

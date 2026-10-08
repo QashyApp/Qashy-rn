@@ -1,4 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { StyleSheet, Text, type TextProps, type TextStyle } from "react-native";
 import { useReducedMotion } from "react-native-reanimated";
 
@@ -15,6 +22,28 @@ function easeOutCubic(t: number) {
 }
 
 /**
+ * What the amounts beneath belong to, such as the month a screen shows. When it changes the
+ * amounts snap to their new values: they describe something else now, not a change to watch.
+ * A count-up re-renders on the JS thread every frame, and on a month swipe that is exactly when
+ * the next swipe waits on that thread.
+ */
+const CountUpSubjectContext = createContext<string | null>(null);
+
+export function CountUpSubject({
+  subject,
+  children,
+}: {
+  subject: string;
+  children: ReactNode;
+}) {
+  return (
+    <CountUpSubjectContext.Provider value={subject}>
+      {children}
+    </CountUpSubjectContext.Provider>
+  );
+}
+
+/**
  * Rolls a minor-unit amount toward its target so value changes read as motion
  * instead of a snap. The first render shows the target immediately; only
  * subsequent changes animate. Reduced motion always snaps.
@@ -24,7 +53,15 @@ export function useAnimatedMinorAmount(target: number) {
   const systemReduced = useReducedMotion();
   const level = useAnimationLevel();
   const reduceMotion = systemReduced || level !== "all";
+  const subject = useContext(CountUpSubjectContext);
+  const subjectRef = useRef(subject);
   const [display, setDisplay] = useState(target);
+  // A new subject shows its own amounts in the same render, never the old ones for a frame.
+  const [shownSubject, setShownSubject] = useState(subject);
+  if (shownSubject !== subject) {
+    setShownSubject(subject);
+    setDisplay(target);
+  }
   const displayRef = useRef(target);
   const frameRef = useRef<number | null>(null);
   const mountedRef = useRef(false);
@@ -35,7 +72,14 @@ export function useAnimatedMinorAmount(target: number) {
       frameRef.current = null;
     }
     const from = displayRef.current;
-    if (!mountedRef.current || reduceMotion || from === target) {
+    const sameSubject = subjectRef.current === subject;
+    subjectRef.current = subject;
+    if (
+      !mountedRef.current ||
+      reduceMotion ||
+      !sameSubject ||
+      from === target
+    ) {
       mountedRef.current = true;
       displayRef.current = target;
       setDisplay(target);
@@ -60,7 +104,7 @@ export function useAnimatedMinorAmount(target: number) {
         frameRef.current = null;
       }
     };
-  }, [reduceMotion, target]);
+  }, [reduceMotion, target, subject]);
 
   return display;
 }

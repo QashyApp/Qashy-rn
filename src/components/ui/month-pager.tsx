@@ -51,8 +51,11 @@ const EDGE_GUARD = 24;
 const BLOCKED_FOLLOW = 0.12;
 const CROSSFADE_OUT = 90;
 const CROSSFADE_IN = 140;
-/** If the parent ignores `onChange`, put the pages back after this long. */
-const COMMIT_TIMEOUT = 400;
+/**
+ * If the parent has not shown a requested month after this long, it declined: put the pages back
+ * on the month it shows. Generous, so a slow render is never mistaken for a refusal.
+ */
+const COMMIT_TIMEOUT = 1500;
 /** How long a page that just became current waits before its own layout transitions resume. */
 const SETTLE_DELAY = 300;
 
@@ -78,6 +81,13 @@ export function restingPosition(month: string, isRtl: boolean) {
 /** A month's position on a continuous axis, so neighbouring months are exactly one apart. */
 function monthIndex(month: string) {
   return Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7));
+}
+
+/** The first day of the month at `index` on that axis (`YYYY-MM-01`). */
+function monthAtIndex(index: number) {
+  const year = Math.floor((index - 1) / 12);
+  const month = index - year * 12;
+  return `${year}-${String(month).padStart(2, "0")}-01`;
 }
 
 export interface MonthPagerHandle {
@@ -211,23 +221,21 @@ function PagerImpl({
 
   const translateX = useSharedValue(0);
   // The month index sitting at the centre. Pages place themselves from their own (fixed) index
-  // against this, so the commit swaps the centre and zeroes the drag in one UI-thread step instead
-  // of re-slotting every page in a separate update that could land a frame apart.
+  // against this. It is the UI thread's own truth: a landed slide moves it at once, and React's
+  // month catches up afterwards, so the next swipe never waits on a render.
   const baseIndex = useSharedValue(monthIndex(month));
+  // The month React last rendered, and the newest month a slide asked React for (0 when React has
+  // caught up). Together they tell a render this pager asked for from a jump made elsewhere.
+  const renderedIndex = useSharedValue(monthIndex(month));
+  const requestedIndex = useSharedValue(0);
+  const maxIndex = useSharedValue(max != null ? monthIndex(max) : Infinity);
   const fade = useSharedValue(1);
   const startX = useSharedValue(0);
+  // A commit slide (or crossfade) is in flight.
   const busy = useSharedValue(false);
-  // This gesture moves the pages. A touch that lands while a commit is in flight never does, even
-  // if the commit finishes mid-touch: it would otherwise start following the finger from a stale
-  // offset with no neighbour beside it.
+  // This gesture moves the pages.
   const tracking = useSharedValue(false);
-  // A touch is down. With `lastDx` (its latest translation) and `awaiting` it lets a touch that
-  // lands during a commit take over the pages the moment the new month arrives, instead of being
-  // ignored for the rest of the slide.
-  const touching = useSharedValue(false);
-  const lastDx = useSharedValue(0);
-  const awaiting = useSharedValue(false);
-  // The direction of the commit spring in flight; 0 once it has landed or been cut short.
+  // The direction of the commit slide in flight; 0 once it has landed or been cut short.
   const pendingDir = useSharedValue<-1 | 0 | 1>(0);
   // Native: only the very first touch needs to reach JS (to mount the neighbours early).
   const warmed = useSharedValue(false);
@@ -237,9 +245,7 @@ function PagerImpl({
   const touchOk = useSharedValue(false);
 
   // `dragProgress` is an absolute position, not just the drag: the drag in page widths minus the
-  // centre month's index (flipped for right-to-left). A control that places each month name by its
-  // own index against it needs no separate swap, so the new name can land a frame before or after
-  // the reset without ever showing the wrong month.
+  // centre month's index (flipped for right-to-left), continuous across a landing.
   useAnimatedReaction(
     () => (width > 0 ? translateX.get() / width : 0) - baseIndex.get() * sign,
     (position) => {
@@ -290,44 +296,64 @@ function PagerImpl({
   }, [month]);
   const clearReady = useCallback(() => setReadyFor(null), []);
 
-  // The swap and the reset land in the same commit: the pages have just been re-keyed
-  // for the new month, so the slide offset goes back to zero before the next frame.
+  useLayoutEffect(() => {
+    const limit = max != null ? monthIndex(max) : Infinity;
+    runOnUI(() => {
+      "worklet";
+      maxIndex.set(limit);
+    })();
+  }, [max, maxIndex]);
+
+  // React has rendered `month`. A render this pager asked for needs nothing: the pages are already
+  // there. Anything else (the month picker, a deep link, a parent that declined) puts the pages on
+  // the new month at once.
   useLayoutEffect(() => {
     const index = monthIndex(month);
     runOnUI(() => {
       "worklet";
-      baseIndex.set(index);
-      translateX.set(0);
-      // The title follows `translateX` a frame late; reset it with the pages.
-      dragProgress?.set(-index * sign);
-      busy.set(false);
+      const previous = renderedIndex.get();
+      renderedIndex.set(index);
+      const requested = requestedIndex.get();
+      if (requested !== 0) {
+        if (index === requested) {
+          requestedIndex.set(0);
+          busy.set(false);
+        } else if (
+          Math.min(previous, requested) < index &&
+          index < Math.max(previous, requested)
+        ) {
+          // An earlier slide of a run that is still landing: the newest one follows.
+          return;
+        } else {
+          requestedIndex.set(0);
+        }
+      }
       if (reduced)
         fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
       else fade.set(1);
-      // A finger that went down during the slide carries on from here, relative to where it was.
-      if (awaiting.get()) {
-        awaiting.set(false);
-        if (touching.get()) {
-          tracking.set(true);
-          startX.set(-lastDx.get());
-        }
-      }
+      if (requested === index || baseIndex.get() === index) return;
+      cancelAnimation(translateX);
+      tracking.set(false);
+      pendingDir.set(0);
+      busy.set(false);
+      baseIndex.set(index);
+      translateX.set(0);
+      dragProgress?.set(-index * sign);
     })();
   }, [
     month,
     reduced,
     fadeScale,
     baseIndex,
+    renderedIndex,
+    requestedIndex,
     translateX,
     dragProgress,
     sign,
     busy,
     fade,
-    awaiting,
-    touching,
     tracking,
-    startX,
-    lastDx,
+    pendingDir,
   ]);
 
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
@@ -335,26 +361,49 @@ function PagerImpl({
   );
   useEffect(() => () => clearTimeout(commitTimer.current), []);
   const commit = useCallback(
-    (direction: 1 | -1, haptic: boolean) => {
+    (index: number, direction: 1 | -1, haptic: boolean) => {
       if (haptic) hapticSelection();
-      const from = monthRef.current;
       onChangeRef.current(
-        moveMonth(from, direction),
+        monthAtIndex(index),
         direction > 0 ? "right" : "left",
       );
-      // A parent that declines the change must not leave the pages stranded off-screen.
+      // A parent that declines the change must not leave the pages on a month it never shows.
       clearTimeout(commitTimer.current);
       commitTimer.current = setTimeout(() => {
-        if (monthRef.current !== from) return;
-        translateX.set(0);
-        fade.set(1);
-        busy.set(false);
-        awaiting.set(false);
+        if (monthRef.current === monthAtIndex(index)) return;
+        const rendered = monthIndex(monthRef.current);
+        runOnUI(() => {
+          "worklet";
+          if (requestedIndex.get() !== index) return;
+          requestedIndex.set(0);
+          cancelAnimation(translateX);
+          tracking.set(false);
+          pendingDir.set(0);
+          busy.set(false);
+          baseIndex.set(rendered);
+          translateX.set(0);
+          fade.set(1);
+        })();
         setPaging(false);
       }, COMMIT_TIMEOUT);
     },
-    [translateX, fade, busy, awaiting],
+    [requestedIndex, translateX, tracking, pendingDir, busy, baseIndex, fade],
   );
+
+  /**
+   * The slide toward `direction` is over: the next month becomes the centre right here, on the UI
+   * thread, with the pages and the title exactly where they were. React is told the absolute month
+   * and renders it in its own time; the pages already in place cover it meanwhile.
+   */
+  const land = (direction: 1 | -1, haptic: boolean) => {
+    "worklet";
+    pendingDir.set(0);
+    const next = baseIndex.get() + direction;
+    baseIndex.set(next);
+    translateX.set(translateX.get() + direction * sign * width);
+    requestedIndex.set(next);
+    runOnJS(commit)(next, direction, haptic);
+  };
 
   const settle = (direction: -1 | 0 | 1, velocity: number, haptic: boolean) => {
     "worklet";
@@ -376,9 +425,13 @@ function PagerImpl({
     if (reduced) {
       fade.set(
         withTiming(0, { duration: CROSSFADE_OUT * fadeScale }, (finished) => {
-          pendingDir.set(0);
-          if (finished) runOnJS(commit)(direction, haptic);
-          else busy.set(false);
+          if (finished && pendingDir.get() === direction) {
+            translateX.set(-direction * sign * width);
+            land(direction, haptic);
+          } else {
+            pendingDir.set(0);
+            busy.set(false);
+          }
         }),
       );
       return;
@@ -391,16 +444,14 @@ function PagerImpl({
           velocity,
           overshootClamping: true,
           // Done once within about half a pixel. The default keeps running for ~250ms of motion
-          // too small to see, and the month (and the next swipe) waits for it.
+          // too small to see.
           energyThreshold:
             width > 0 ? Math.max(1e-7, (0.5 / width) ** 2) : 1e-6,
         },
         (finished) => {
-          // A touch that grabbed the slide has already committed it; the cut-off spring says nothing.
-          if (finished && pendingDir.get() === direction) {
-            pendingDir.set(0);
-            runOnJS(commit)(direction, haptic);
-          } else if (!awaiting.get()) busy.set(false);
+          // A touch that grabbed the slide has already landed it; the cut-off spring says nothing.
+          if (finished && pendingDir.get() === direction)
+            land(direction, haptic);
         },
       ),
     );
@@ -461,41 +512,32 @@ function PagerImpl({
     const pan = activating
       // The refs behind `commit` are only read when a touch grabs a slide, never in render.
       // eslint-disable-next-line react-hooks/refs
-      .onStart((event) => {
+      .onStart(() => {
         "worklet";
-        touching.set(true);
-        lastDx.set(event.translationX);
-        // A swipe already committing owns the pages. A new touch does not restart the drag from a
-        // half-way offset (that read as a second swipe): it lands the slide at once and carries on
-        // from the new month, so there is no dead moment between swipes.
         if (busy.get()) {
-          tracking.set(false);
-          if (!reduced) {
-            awaiting.set(true);
-            const pending = pendingDir.get();
-            if (pending !== 0) {
-              pendingDir.set(0);
-              translateX.set(-pending * sign * width);
-              runOnJS(commit)(pending, false);
-            }
+          // A crossfade owns the page until it is done.
+          if (reduced || pendingDir.get() === 0) {
+            tracking.set(false);
+            return;
           }
-          return;
+          // A slide in flight lands where it is, and this touch carries on from the new month:
+          // there is no dead moment between swipes.
+          cancelAnimation(translateX);
+          land(pendingDir.get() as 1 | -1, false);
         }
         tracking.set(true);
-        // No JS round trip here: on native the page swiped away stays mounted as a neighbour, so
-        // `paging` (web sets it on activation) has nothing to guard, and setting it re-rendered
-        // every row of the page at the start of each swipe, delaying the commit behind it.
         cancelAnimation(translateX);
         startX.set(translateX.get());
       })
       .onUpdate((event) => {
         "worklet";
-        lastDx.set(event.translationX);
         if (!tracking.get() || reduced) return;
         const raw = startX.get() + event.translationX;
         const towardForward = raw * sign < 0;
         const followed =
-          towardForward && !canForward ? raw * BLOCKED_FOLLOW : raw;
+          towardForward && baseIndex.get() + 1 > maxIndex.get()
+            ? raw * BLOCKED_FOLLOW
+            : raw;
         translateX.set(Math.max(-width, Math.min(width, followed)));
       })
       // The refs behind `commit` are only read when an animation finishes, never in render.
@@ -509,7 +551,7 @@ function PagerImpl({
           startX.get() + event.translationX,
           event.velocityX,
           width,
-          canForward,
+          baseIndex.get() + 1 <= maxIndex.get(),
           isRtl,
         );
         settle(direction, direction === 0 ? 0 : event.velocityX, true);
@@ -517,18 +559,16 @@ function PagerImpl({
       // A touch that never became a committed swipe (a tap, a scroll, a spring-back).
       .onFinalize(() => {
         "worklet";
-        touching.set(false);
         if (!busy.get()) runOnJS(endPaging)();
       });
     return blockedBy?.length
       ? pan.requireExternalGestureToFail(...blockedBy)
       : pan;
-    // `settle` closes over exactly the values listed here.
+    // `settle` and `land` close over exactly the values listed here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     swipeEnabled,
     width,
-    canForward,
     isRtl,
     sign,
     reduced,
@@ -545,13 +585,13 @@ function PagerImpl({
     touchY,
     touchOk,
     translateX,
+    baseIndex,
+    maxIndex,
+    requestedIndex,
     startX,
     busy,
     tracking,
     fade,
-    touching,
-    lastDx,
-    awaiting,
     pendingDir,
   ]);
 
@@ -559,11 +599,18 @@ function PagerImpl({
     ref,
     () => ({
       goTo: (direction) => {
-        if (direction > 0 && !canForward) return;
         if (busy.get()) return;
+        if (direction > 0 && baseIndex.get() + 1 > maxIndex.get()) return;
         setPaging(true);
-        if (!neighbours || disabled) {
-          commit(direction, false);
+        // Without pages beside it there is nothing to slide; the title still follows a slide
+        // when the pager only drives `dragProgress`.
+        if (disabled || (slide && !neighbours)) {
+          runOnUI((to: 1 | -1) => {
+            "worklet";
+            // As if a slide had just reached the next month, so landing swaps in place.
+            translateX.set(-to * sign * width);
+            land(to, false);
+          })(direction);
           return;
         }
         settle(direction, 0, false);
@@ -571,8 +618,8 @@ function PagerImpl({
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      canForward,
       neighbours,
+      slide,
       disabled,
       reduced,
       fadeScale,
@@ -582,6 +629,9 @@ function PagerImpl({
       committing,
       commit,
       busy,
+      baseIndex,
+      maxIndex,
+      translateX,
     ],
   );
 
