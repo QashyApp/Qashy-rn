@@ -61,20 +61,21 @@ export function RecoveryScreen() {
   const [typed, setTyped] = useState("");
 
   const reveal = async () => {
-    // Checked against a ref: a second tap inside the same render sees a stale `busy`.
+    // Checked against a ref: a second tap inside the same render sees a stale `busy`. Held from
+    // here through the confirmation dialog, or two quick taps open two dialogs.
     if (busyRef.current) return;
-    const confirmed = await confirmDestructive({
-      title: "Show the recovery phrase?",
-      // Naming the two real-world leaks — a shoulder and a recording — because "keep it secret"
-      // is advice nobody acts on and "nobody is standing behind you" is.
-      message:
-        "These words are your entire vault. Anyone who reads them can open every account, transaction, and balance you have. Check that nobody can see your screen and that you are not sharing or recording it.",
-      confirmLabel: "Show phrase",
-    });
-    if (!confirmed) return;
     busyRef.current = true;
-    setBusy(true);
     try {
+      const confirmed = await confirmDestructive({
+        title: "Show the recovery phrase?",
+        // Naming the two real-world leaks — a shoulder and a recording — because "keep it secret"
+        // is advice nobody acts on and "nobody is standing behind you" is.
+        message:
+          "These words are your entire vault. Anyone who reads them can open every account, transaction, and balance you have. Check that nobody can see your screen and that you are not sharing or recording it.",
+        confirmLabel: "Show phrase",
+      });
+      if (!confirmed) return;
+      setBusy(true);
       const vault = await setup.keystore.read();
       if (!vault) {
         showError(
@@ -104,14 +105,18 @@ export function RecoveryScreen() {
 
   // While the phrase is on screen it stays out of screenshots, recordings, and the app-switcher
   // snapshot. If that block cannot be applied the phrase is hidden rather than shown unprotected.
-  usePreventScreenCaptureWhile(revealed, "recovery-phrase", () => {
-    setPhrase(null);
-    setTyped("");
-    showError(
-      "Couldn’t protect the phrase",
-      "The phrase was hidden because screenshots could not be blocked. Try again.",
-    );
-  });
+  const protectedNow = usePreventScreenCaptureWhile(
+    revealed,
+    "recovery-phrase",
+    () => {
+      setPhrase(null);
+      setTyped("");
+      showError(
+        "Couldn’t protect the phrase",
+        "The phrase was hidden because screenshots could not be blocked. Try again.",
+      );
+    },
+  );
 
   // Background or inactive (app switcher, a call, Control Center) hides the phrase, so the
   // snapshot taken on the way out never shows it and returning to the app starts hidden.
@@ -142,6 +147,8 @@ export function RecoveryScreen() {
   const missing =
     status.keystore === "empty" || status.keystore === "unavailable";
   const matches = phrase !== null && normalize(typed) === phrase;
+  // The words render only once the capture block is confirmed in place, never before.
+  const visiblePhrase = protectedNow ? phrase : null;
 
   return (
     <ScrollView
@@ -215,7 +222,7 @@ export function RecoveryScreen() {
             )}
           </View>
 
-          {phrase ? (
+          {visiblePhrase ? (
             <MotionView
               variant="up"
               exit
@@ -235,7 +242,7 @@ export function RecoveryScreen() {
                   materialStyle(theme, "sunken"),
                 ]}
               >
-                <SasDisplay words={phrase.split(" ")} />
+                <SasDisplay words={visiblePhrase.split(" ")} />
               </View>
 
               <SectionHeader title="Check what you wrote down" />

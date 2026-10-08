@@ -15,6 +15,12 @@ describe("canonicalJson refuses ambiguous shapes", () => {
     expect(canonicalJson({ visible: 1 })).toBe('{"visible":1}');
   });
 
+  it("throws on own symbol keys on arrays too", () => {
+    const withSymbol = Object.assign([1, 2], { [Symbol("hidden")]: 3 });
+    expect(() => canonicalJson(withSymbol)).toThrow(CanonicalJsonError);
+    expect(canonicalJson([1, 2])).toBe("[1,2]");
+  });
+
   it("still encodes dense arrays and sorted keys", () => {
     expect(canonicalJson({ b: [1, 2], a: "x" })).toBe('{"a":"x","b":[1,2]}');
   });

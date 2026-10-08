@@ -7,4 +7,6 @@ export function usePreventScreenCaptureWhile(
   _active: boolean,
   _key: string,
   _onFailure?: () => void,
-) {}
+) {
+  return true;
+}

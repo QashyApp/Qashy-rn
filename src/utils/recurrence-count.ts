@@ -36,6 +36,13 @@ export function occurrenceCountUntil(
 ) {
   if (!isLocalDate(startDate) || !isLocalDate(endDate) || endDate < startDate)
     return null;
+  // Checked up front so the catch below only ever sees the past-year-9999 overflow, never an
+  // invalid interval that `addRecurrence` would otherwise reject with the same error type.
+  if (!Number.isSafeInteger(interval) || interval < 1) {
+    throw new RangeError(
+      "Recurrence interval must be a positive safe integer.",
+    );
+  }
   let count = 0;
   let due = startDate;
   while (due <= endDate) {

@@ -9,14 +9,19 @@
  */
 
 import * as ScreenCapture from "expo-screen-capture";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
+/**
+ * Returns `true` only once the block is actually in place, so the caller can hold secret text back
+ * until then instead of showing it during the async window in which a screenshot would still work.
+ */
 export function usePreventScreenCaptureWhile(
   active: boolean,
   key: string,
   onFailure?: () => void,
 ) {
+  const [guarded, setGuarded] = useState(false);
   // The effect below only re-runs when `active` or `key` change, so the latest failure handler
   // is read through a ref instead of being a dependency that would re-arm the block every render.
   const failureRef = useRef(onFailure);
@@ -35,6 +40,7 @@ export function usePreventScreenCaptureWhile(
       if (Platform.OS === "ios") {
         await ScreenCapture.enableAppSwitcherProtectionAsync();
       }
+      if (!cancelled) setGuarded(true);
     };
     protect().catch(() => {
       // Secret text must not stay on screen unprotected, so the owner decides what to hide.
@@ -42,6 +48,7 @@ export function usePreventScreenCaptureWhile(
     });
     return () => {
       cancelled = true;
+      setGuarded(false);
       void ScreenCapture.allowScreenCaptureAsync(key).catch(() => undefined);
       if (Platform.OS === "ios") {
         void ScreenCapture.disableAppSwitcherProtectionAsync().catch(
@@ -50,4 +57,6 @@ export function usePreventScreenCaptureWhile(
       }
     };
   }, [active, key]);
+
+  return active && guarded;
 }

@@ -91,6 +91,12 @@ const encodeValue = (
       path,
     );
 
+  // Symbol-keyed properties are invisible to JSON, so two values differing only in them would
+  // encode identically. Refuse them rather than drop them, on arrays as well as objects.
+  if (Object.getOwnPropertySymbols(object).length > 0) {
+    throw new CanonicalJsonError("a symbol key cannot be encoded", path);
+  }
+
   if (Array.isArray(object)) {
     seen.add(object);
     const parts: string[] = [];
@@ -113,12 +119,6 @@ const encodeValue = (
       `${describe(object)} cannot be encoded; convert it first`,
       path,
     );
-  }
-
-  // Symbol-keyed properties are invisible to JSON, so two objects differing only in them would
-  // encode identically. Refuse them rather than drop them.
-  if (Object.getOwnPropertySymbols(object).length > 0) {
-    throw new CanonicalJsonError("a symbol key cannot be encoded", path);
   }
 
   seen.add(object);

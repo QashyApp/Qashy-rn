@@ -10,15 +10,41 @@ async function confirmDialog(page: Page) {
 
 /**
  * Types into an amount field. On a touch screen the field opens the calculator keypad over the whole
- * screen, so the keypad is closed afterwards the way a person closes it: with "Set amount".
+ * screen and gives up focus at once, so the amount is entered the way a person does, key by key,
+ * and the keypad is closed afterwards with "Set amount". (`fill` types into a focused field, and
+ * WebKit drops the text because the keypad has already taken the focus away.)
  */
 async function fillAmount(field: Locator, value: string) {
-  await field.fill(value);
   const page = field.page();
   const touch = await page.evaluate(
     () => window.matchMedia("(pointer: coarse)").matches,
   );
-  if (!touch) return;
+  if (!touch) {
+    await field.fill(value);
+    return;
+  }
+  const keypad = page.getByRole("group", { name: "Amount keypad" });
+  // An autofocused field opens the keypad by itself, a little after the sheet settles.
+  const opened = await keypad
+    .waitFor({ state: "visible", timeout: 3_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!opened) await field.click();
+  await expect(keypad).toBeVisible();
+  // The amount shown in the field may already hold text (an autofocused or prefilled field).
+  const backspace = keypad.getByRole("button", {
+    name: "Delete last character",
+  });
+  for (let left = (await field.inputValue()).length; left > 0; left -= 1) {
+    await backspace.click();
+  }
+  for (const character of value) {
+    const key =
+      character === "."
+        ? keypad.getByRole("button", { name: "Decimal separator" })
+        : keypad.getByRole("button", { name: character, exact: true });
+    await key.click();
+  }
   const setAmount = page.getByRole("button", {
     name: /(Set amount|קביעת סכום)$/,
   });
