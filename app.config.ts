@@ -3,15 +3,20 @@ import type { ExpoConfig } from "expo/config";
 
 /**
  * Version is `<major>.<minor>.<commits since that tag>`, derived from the nearest
- * `[v]MAJOR.MINOR[-suffix]` tag (e.g. tag `2.0` + 12 commits = `2.0.12`). Build
- * numbers are not set here: EAS owns them (`appVersionSource: remote`). Needs full
- * history and tags (`fetch-depth: 0` in CI); without them it falls back to 0.0.0.
+ * baseline tag `[v]MAJOR.MINOR.0[-suffix]` (e.g. tag `2.0.0` + 12 commits = `2.0.12`).
+ * Tags with a non-zero last number (`2.0.12`) are GitHub release tags, not baselines,
+ * and are ignored here. Build numbers are not set here: EAS owns them
+ * (`appVersionSource: remote`). Needs full history and tags (`fetch-depth: 0` in CI);
+ * without them it falls back to 0.0.0.
  */
 function gitVersion(): string {
   try {
-    const described = execSync('git describe --tags --long --match "[v0-9]*"', {
-      stdio: ["ignore", "pipe", "ignore"],
-    })
+    const described = execSync(
+      'git describe --tags --long --match "[v0-9]*.[0-9]*.0" --match "[v0-9]*.[0-9]*.0-*"',
+      {
+        stdio: ["ignore", "pipe", "ignore"],
+      },
+    )
       .toString()
       .trim();
     const match = /^v?(\d+\.\d+).*-(\d+)-g[0-9a-f]+$/.exec(described);
