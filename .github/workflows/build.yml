@@ -80,6 +80,9 @@ jobs:
     steps:
       - name: 🏗 Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          # Full history and tags: app.config.ts derives the version from `git describe`.
+          fetch-depth: 0
 
       # No npm cache here: `npm ci` is quick and each matrix job would otherwise
       # write its own copy.
@@ -117,7 +120,7 @@ jobs:
           PREFIX: ${{ matrix.prefix }}
           EXT: ${{ matrix.ext }}
         run: |
-          version=$(node -p "require('./app.json').expo.version")
+          version=$(npx expo config --json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
           echo "name=${PREFIX}-${version}" >> "$GITHUB_OUTPUT"
           echo "file=${PREFIX}-${version}.${EXT}" >> "$GITHUB_OUTPUT"
 
