@@ -39,10 +39,7 @@ import { QashyThemeProvider, useQashyTheme } from "@/theme/theme";
 import { QASHY_ACCENT } from "@/domain/defaults";
 import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
-import {
-  STARTUP_FONT_ASSETS,
-  useThemeFonts,
-} from "@/theme/use-theme-fonts";
+import { STARTUP_FONT_ASSETS, useThemeFonts } from "@/theme/use-theme-fonts";
 
 // `index` redirects to onboarding or the tabs, so anchoring the root stack to it
 // gives every deep-linked route (a form sheet, /appearance, /csv, +not-found) a

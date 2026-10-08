@@ -167,7 +167,10 @@ describe("unpriced upcoming transactions", () => {
         accountId: eur.id,
         amountMinor: 2500,
       });
-      expect(upcoming).toMatchObject({ exchangeRate: null, baseAmountMinor: null });
+      expect(upcoming).toMatchObject({
+        exchangeRate: null,
+        baseAmountMinor: null,
+      });
 
       // Dated before today: the one that applies.
       await repository.saveExchangeRate({
@@ -192,7 +195,9 @@ describe("unpriced upcoming transactions", () => {
 
       await repository.confirmUpcoming(upcoming.id);
       expect(
-        repository.getSnapshot().transactions.find((item) => item.id === upcoming.id),
+        repository
+          .getSnapshot()
+          .transactions.find((item) => item.id === upcoming.id),
       ).toMatchObject({
         status: "posted",
         localDate: "2026-08-05",
@@ -219,7 +224,9 @@ describe("unpriced upcoming transactions", () => {
         "Missing exchange rate for EUR → USD",
       );
       expect(
-        repository.getSnapshot().transactions.find((item) => item.id === upcoming.id),
+        repository
+          .getSnapshot()
+          .transactions.find((item) => item.id === upcoming.id),
       ).toMatchObject({
         status: "upcoming",
         exchangeRate: null,
@@ -265,11 +272,16 @@ describe("unpriced upcoming transactions", () => {
       const first = repository
         .getSnapshot()
         .transactions.find((item) => item.localDate === "2026-07-20")!;
-      expect(first).toMatchObject({ exchangeRate: "1.9", baseAmountMinor: 4750 });
+      expect(first).toMatchObject({
+        exchangeRate: "1.9",
+        baseAmountMinor: 4750,
+      });
 
       await repository.confirmUpcoming(first.id);
       expect(
-        repository.getSnapshot().transactions.find((item) => item.id === first.id),
+        repository
+          .getSnapshot()
+          .transactions.find((item) => item.id === first.id),
       ).toMatchObject({
         status: "posted",
         exchangeRate: "1.9",

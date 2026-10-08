@@ -276,11 +276,11 @@ Extra details:
 
 Text that is too faint to read would make money unreadable, so Qashy does not trust a theme to get contrast right. Colors are checked after your values are merged on top of the base theme, separately for light and for dark:
 
-| Color                             | Must reach | Against                                       |
-| --------------------------------- | ---------- | --------------------------------------------- |
+| Color                             | Must reach | Against                                                                        |
+| --------------------------------- | ---------- | ------------------------------------------------------------------------------ |
 | `text`                            | 4.5:1      | `surface`, `surfaceElevated`, `background`, `surfaceSunken` and `surfaceMuted` |
-| `textMuted`                       | 4.5:1      | the same five surfaces                        |
-| `positive`, `negative`, `warning` | 3:1        | the same five surfaces                        |
+| `textMuted`                       | 4.5:1      | the same five surfaces                                                         |
+| `positive`, `negative`, `warning` | 3:1        | the same five surfaces                                                         |
 
 If a color is too faint, it is not rejected. It is moved toward a readable shade (lighter or darker, whichever helps) just far enough, and a warning is shown after import. Your file is stored exactly as you wrote it; the correction is applied when the theme is drawn.
 

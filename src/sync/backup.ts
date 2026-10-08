@@ -36,11 +36,7 @@ import {
   type StorageTx,
   type StoredEntity,
 } from "@/data/storage-adapter";
-import {
-  SYNC_META,
-  appendActivity,
-  readControlOps,
-} from "@/data/sync-store";
+import { SYNC_META, appendActivity, readControlOps } from "@/data/sync-store";
 import type {
   SyncMetaRow,
   SyncOpRow,

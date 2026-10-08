@@ -1466,8 +1466,7 @@ const HEBREW: Record<string, string> = {
     "כל מכשיר משויך יכול להסיר מכשיר אחר מיד.",
   "A removal needs approval from at least half of the devices, including the proposer. With two devices, one approval is enough.":
     "הסרה דורשת אישור של לפחות מחצית מהמכשירים, כולל המציע. עם שני מכשירים, אישור אחד מספיק.",
-  "Only the vault owner can remove a device.":
-    "רק בעל הכספת יכול להסיר מכשיר.",
+  "Only the vault owner can remove a device.": "רק בעל הכספת יכול להסיר מכשיר.",
   "Only the vault owner can change this policy.":
     "רק בעל הכספת יכול לשנות את המדיניות הזו.",
   "Transfer vault ownership": "העברת בעלות על הכספת",
@@ -1888,8 +1887,7 @@ const DYNAMIC_PATTERNS: [RegExp, (...parts: string[]) => string][] = [
   // Overview edit-mode announcement after a card moves; the title is already translated.
   [
     /^(.+), position (\d+) of (\d+)$/,
-    (name, position, total) =>
-      `${name}, מיקום ${position} מתוך ${total}`,
+    (name, position, total) => `${name}, מיקום ${position} מתוך ${total}`,
   ],
 ];
 

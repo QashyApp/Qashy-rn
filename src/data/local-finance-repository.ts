@@ -1971,8 +1971,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           if (a.baseAmountMinor === null || b.baseAmountMinor === null)
             return (
               Number(a.baseAmountMinor === null) -
-                Number(b.baseAmountMinor === null) ||
-              a.id.localeCompare(b.id)
+                Number(b.baseAmountMinor === null) || a.id.localeCompare(b.id)
             );
           return b.baseAmountMinor - a.baseAmountMinor;
         }
@@ -4776,7 +4775,9 @@ export class LocalFinanceRepository implements FinanceRepository {
         input.destinationBaseAmountMinor !== null &&
         // An unpriced source leg cannot verify a same-currency destination base, so that value is
         // derived when the transaction is paid instead of being trusted from the input.
-        !(baseAmountMinor === null && destination!.currency === account.currency)
+        !(
+          baseAmountMinor === null && destination!.currency === account.currency
+        )
       ) {
         this.assertPositiveMinor(
           input.destinationBaseAmountMinor,
@@ -4833,14 +4834,12 @@ export class LocalFinanceRepository implements FinanceRepository {
         destinationBaseAmountMinor = baseAmountMinor;
       } else {
         // An upcoming leg whose destination-to-base rate is not known yet stays unpriced.
-        const destinationRate = this.rateOrNullWhileUpcoming(
-          status,
-          () =>
-            this.resolveRate(
-              destination!.currency,
-              this.state.settings.baseCurrency,
-              input.localDate,
-            ),
+        const destinationRate = this.rateOrNullWhileUpcoming(status, () =>
+          this.resolveRate(
+            destination!.currency,
+            this.state.settings.baseCurrency,
+            input.localDate,
+          ),
         );
         destinationBaseAmountMinor =
           destinationRate === null

@@ -775,7 +775,8 @@ export function ExternalImportCard() {
   };
 
   const commit = async () => {
-    if (!bundle || !outcome || busyRef.current || outcome.rejected.length) return;
+    if (!bundle || !outcome || busyRef.current || outcome.rejected.length)
+      return;
     // Busy from before the dialog opens until the commit settles. The button stays disabled
     // while the confirmation is up, so a second tap cannot queue a second import behind it.
     setBusyFlag(true);

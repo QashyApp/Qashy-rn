@@ -213,7 +213,12 @@ export async function readStateHeads(
       return {};
     const entries: [string, number][] = [];
     for (const [deviceId, seq] of Object.entries(parsed)) {
-      if (deviceId && typeof seq === "number" && Number.isSafeInteger(seq) && seq > 0)
+      if (
+        deviceId &&
+        typeof seq === "number" &&
+        Number.isSafeInteger(seq) &&
+        seq > 0
+      )
         entries.push([deviceId, seq]);
     }
     return Object.fromEntries(entries);
@@ -564,7 +569,8 @@ export function deriveOutbox(
     const low = lowest.get(row.deviceId);
     if (low === undefined || row.seq < low) lowest.set(row.deviceId, row.seq);
     const high = highest.get(row.deviceId);
-    if (high === undefined || row.seq > high) highest.set(row.deviceId, row.seq);
+    if (high === undefined || row.seq > high)
+      highest.set(row.deviceId, row.seq);
     const cutoff = cutoffs[row.deviceId];
     if (
       row.sealed === 1 &&
