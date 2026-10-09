@@ -38,6 +38,9 @@ export default defineConfig({
     {
       name: "mobile-safari",
       grepInvert: pwaTest,
+      // Touch amount entry goes key by key through the calculator keypad, roughly 4s per amount
+      // on WebKit, so amount-heavy flows legitimately run past the default 30s.
+      timeout: 60_000,
       use: { ...devices["iPhone 14"], ...functionalUse },
     },
     // Service workers persist beyond a page and WebKit can retain them between
