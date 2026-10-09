@@ -1,15 +1,7 @@
 name: Test
 
 on:
-  # Pull requests are the gate, so pushes only cover main. Running on dev pushes
-  # as well would test every commit twice once a dev -> main PR is open.
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**.md"
-      - "LICENSE"
-      - "docs/**"
-  # No paths-ignore here: a skipped workflow leaves required checks pending
+  # Pull requests are the gate; nothing runs on push. No paths-ignore: a skipped workflow leaves required checks pending
   # forever, which would block docs-only pull requests from merging.
   pull_request:
     branches: [main]
