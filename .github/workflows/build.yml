@@ -114,6 +114,9 @@ jobs:
       - name: 📦 Install dependencies
         run: npm ci
 
+      # Computed here, where the checkout has full history and tags, then exported as
+      # QASHY_VERSION so the `eas build --local` subprocess (which works from a copy of
+      # the project without git history) uses the same version instead of 0.0.0.
       - name: 🏷 Name build output
         id: out
         env:
@@ -121,6 +124,11 @@ jobs:
           EXT: ${{ matrix.ext }}
         run: |
           version=$(npx expo config --json | node -p "JSON.parse(require('fs').readFileSync(0, 'utf8')).version")
+          if ! [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Computed app version '$version' is not <major>.<minor>.<patch>"
+            exit 1
+          fi
+          echo "QASHY_VERSION=${version}" >> "$GITHUB_ENV"
           echo "name=${PREFIX}-${version}" >> "$GITHUB_OUTPUT"
           echo "file=${PREFIX}-${version}.${EXT}" >> "$GITHUB_OUTPUT"
 
