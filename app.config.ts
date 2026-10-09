@@ -86,7 +86,10 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => {
   if (!plugins.some(isBuildProperties)) {
     return {
       ...versioned,
-      plugins: [...plugins, ["expo-build-properties", { android: { buildArchs: archs } }]],
+      plugins: [
+        ...plugins,
+        ["expo-build-properties", { android: { buildArchs: archs } }],
+      ],
     };
   }
 
@@ -94,7 +97,9 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => {
     ...versioned,
     plugins: plugins.map((plugin) => {
       if (!isBuildProperties(plugin) || !Array.isArray(plugin)) return plugin;
-      const options = (plugin[1] ?? {}) as { android?: Record<string, unknown> };
+      const options = (plugin[1] ?? {}) as {
+        android?: Record<string, unknown>;
+      };
       return [
         "expo-build-properties",
         { ...options, android: { ...options.android, buildArchs: archs } },
