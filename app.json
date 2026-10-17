@@ -2,7 +2,7 @@
   "expo": {
     "name": "Qashy",
     "slug": "qashy",
-    "version": "2.1",
+    "version": "3.0.0",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
     "backgroundColor": "#E8E7F8",
