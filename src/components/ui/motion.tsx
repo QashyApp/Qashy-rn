@@ -201,11 +201,9 @@ const wrapperStyleKeySet: ReadonlySet<string> = new Set<string>(
  * so a plain style no longer satisfies it even though it is exactly what the runtime wants.
  */
 export function flattenViewStyle(style: ViewProps["style"]): ViewStyle {
-  return (
-    StyleSheet.flatten(
-      style as unknown as Parameters<typeof StyleSheet.flatten>[0],
-    ) ?? {}
-  ) as ViewStyle;
+  return (StyleSheet.flatten(
+    style as unknown as Parameters<typeof StyleSheet.flatten>[0],
+  ) ?? {}) as ViewStyle;
 }
 
 function splitWrapperStyle(style: ViewProps["style"]) {
@@ -574,10 +572,7 @@ function renderMotionView(
       layout={animateLayout ? parts.layout : undefined}
       style={wrapperStyle}
     >
-      <Animated.View
-        {...viewProps}
-        style={[contentStyle, entranceStyle]}
-      />
+      <Animated.View {...viewProps} style={[contentStyle, entranceStyle]} />
     </Animated.View>
   );
 }
@@ -904,14 +899,9 @@ function MotionPressableBase({
               );
             if (usesJsState) setJsHovered(true);
             if (!pressedRef.current && !disabled) {
-              scale.set(
-                withTiming(interactive ? hoverScale : 1, timingConfig),
-              );
+              scale.set(withTiming(interactive ? hoverScale : 1, timingConfig));
               translateY.set(
-                withTiming(
-                  interactive && liftOnHover ? -1 : 0,
-                  timingConfig,
-                ),
+                withTiming(interactive && liftOnHover ? -1 : 0, timingConfig),
               );
             }
             onHoverIn?.(event);
@@ -935,9 +925,7 @@ function MotionPressableBase({
               layer.set(withTiming(STATE_LAYER_PRESS, layerTiming));
             if (usesJsState) setJsPressed(true);
             if (!disabled) {
-              scale.set(
-                withSpring(interactive ? pressDepth : 1, springConfig),
-              );
+              scale.set(withSpring(interactive ? pressDepth : 1, springConfig));
               translateY.set(
                 withTiming(
                   interactive && translatePress ? motion.pressTranslate : 0,
@@ -986,7 +974,7 @@ function MotionPressableBase({
                   right: bleed ? outward(bleed.x) : 0,
                   bottom: bleed ? outward(bleed.bottom) : 0,
                   left: bleed ? outward(bleed.x) : 0,
-                  borderRadius: bleed ? 0 : restStyle.borderRadius ?? 0,
+                  borderRadius: bleed ? 0 : (restStyle.borderRadius ?? 0),
                   backgroundColor: layerColor,
                 },
                 layerStyle,

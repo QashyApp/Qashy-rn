@@ -1,11 +1,7 @@
 import { materialStyle, type Material } from "@/theme/materials";
 import { accentTokens } from "@/theme/theme";
 import { classicTheme } from "@/theme/themes/classic";
-import {
-  NO_SHADOW,
-  bevelShadowSet,
-  shadowBlurs,
-} from "@/theme/shadow";
+import { NO_SHADOW, bevelShadowSet, shadowBlurs } from "@/theme/shadow";
 import type { ThemeDefinition } from "@/theme/themes/types";
 import { assertThemeDefinition } from "@/theme/themes/validate";
 
@@ -93,9 +89,9 @@ describe("bevel theme", () => {
     }
     // Cards keep their soft, blurred elevation; only controls and wells are flat.
     const card = flat("card");
-    expect(
-      shadowBlurs(card.boxShadow as string).some((blur) => blur > 0),
-    ).toBe(true);
+    expect(shadowBlurs(card.boxShadow as string).some((blur) => blur > 0)).toBe(
+      true,
+    );
     expect(flat("control").boxShadow).toBe(NO_SHADOW);
     expect(flat("controlPressed").boxShadow).toBe(NO_SHADOW);
     expect(flat("sunken").boxShadow).toBe(NO_SHADOW);

@@ -9,11 +9,7 @@ import {
   type ReactNode,
   type Ref,
 } from "react";
-import {
-  View,
-  type LayoutChangeEvent,
-  type ViewStyle,
-} from "react-native";
+import { View, type LayoutChangeEvent, type ViewStyle } from "react-native";
 import {
   Gesture,
   GestureDetector,

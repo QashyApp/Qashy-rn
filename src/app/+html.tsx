@@ -1,4 +1,7 @@
-import { ScrollViewStyleReset, useServerDocumentContext } from "expo-router/html";
+import {
+  ScrollViewStyleReset,
+  useServerDocumentContext,
+} from "expo-router/html";
 import type { PropsWithChildren } from "react";
 
 import { classicTheme } from "@/theme/themes/classic";

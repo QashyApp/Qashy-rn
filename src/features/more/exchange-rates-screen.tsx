@@ -253,8 +253,7 @@ export function ExchangeRatesScreen() {
                     gap: space.md,
                     borderRadius: radius.control,
                     borderCurve: "continuous",
-                    opacity:
-                      pressed && !theme.stateLayers ? 0.62 : 1,
+                    opacity: pressed && !theme.stateLayers ? 0.62 : 1,
                   })}
                 >
                   <View

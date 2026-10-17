@@ -84,8 +84,7 @@ export function SettingsRow({
         borderCurve: "continuous",
         // A theme that answers with a state layer answers with the layer alone: a press dim would
         // fade the wash below its own hover strength. Themes without one keep the dim.
-        opacity:
-          disabled ? 0.5 : pressed && !theme.stateLayers ? 0.62 : 1,
+        opacity: disabled ? 0.5 : pressed && !theme.stateLayers ? 0.62 : 1,
       })}
       stateLayer
     >

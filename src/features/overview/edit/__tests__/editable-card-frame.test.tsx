@@ -9,7 +9,9 @@ import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame"
 // runtime; the app root provides one, so the drag-handle tests mount inside the same shell.
 const renderFrame = (frame: ReactElement) =>
   render(
-    <GestureHandlerRootView style={{ flex: 1 }}>{frame}</GestureHandlerRootView>,
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {frame}
+    </GestureHandlerRootView>,
   );
 
 // A minimal stand-in theme: only the tokens `materialStyle`/`AppText`/`IconButton` actually

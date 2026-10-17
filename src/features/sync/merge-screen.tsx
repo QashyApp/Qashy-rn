@@ -387,8 +387,7 @@ function GroupRow({
         gap: space.md,
         borderRadius: radius.control,
         borderCurve: "continuous",
-        opacity:
-          blocked ? 0.55 : pressed && !theme.stateLayers ? 0.62 : 1,
+        opacity: blocked ? 0.55 : pressed && !theme.stateLayers ? 0.62 : 1,
       })}
     >
       {blocked ? (

@@ -7,7 +7,13 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { BackHandler, Keyboard, Pressable, View, type HostInstance } from "react-native";
+import {
+  BackHandler,
+  Keyboard,
+  Pressable,
+  View,
+  type HostInstance,
+} from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
