@@ -45,6 +45,7 @@ function buildTheme(dark: boolean, androidPlatform: boolean): ThemeTokens {
     iconBadge: { style: "tinted", shape: "squircle" },
     cardStyle: "elevated",
     materialControls: false,
+    stateLayers: false,
     type: classicTheme.type,
     charts: classicTheme.charts,
     gradients: true,

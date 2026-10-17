@@ -1,5 +1,10 @@
 import { useEffect, useState, type Ref } from "react";
-import { TextInput, View, type TextInputProps } from "react-native";
+import {
+  TextInput,
+  View,
+  type TextInputInstance,
+  type TextInputProps,
+} from "react-native";
 import Animated, {
   ReduceMotion,
   useAnimatedStyle,
@@ -19,9 +24,9 @@ import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { withAppFont } from "@/theme/typography";
 
-type FormFieldProps = TextInputProps & {
+type FormFieldProps = Omit<TextInputProps, "ref"> & {
   /** Forwarded to the input, so a form can move focus field to field. */
-  ref?: Ref<TextInput>;
+  ref?: Ref<TextInputInstance>;
   label: string;
   hint?: string;
   error?: string;

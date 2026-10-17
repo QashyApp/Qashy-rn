@@ -50,8 +50,8 @@ function buildVariants(scale: TypeScaleSpec): Record<TextVariant, TextStyle> {
               : weight === "semibold"
                 ? "600"
                 : "700",
+        ...(NUMERIC_VARIANTS.has(name) ? { fontVariant: TABULAR } : null),
       };
-      if (NUMERIC_VARIANTS.has(name)) style.fontVariant = TABULAR;
       return [name, style];
     }),
   ) as Record<TextVariant, TextStyle>;

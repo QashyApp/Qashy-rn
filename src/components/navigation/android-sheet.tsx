@@ -7,7 +7,13 @@ import {
   type ReactElement,
   type ReactNode,
 } from "react";
-import { BackHandler, Keyboard, Pressable, View } from "react-native";
+import {
+  BackHandler,
+  Keyboard,
+  Pressable,
+  View,
+  type HostInstance,
+} from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
@@ -112,7 +118,7 @@ export function AndroidSheet({
   // edge, so the overlap is 0; when the window is not resized, the overlap is the part of the
   // frame the keyboard covers. Subtracting the raw height would count that space twice in the
   // resized case.
-  const frameRef = useRef<View>(null);
+  const frameRef = useRef<HostInstance>(null);
   const [frameBottom, setFrameBottom] = useState(0);
   const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
   const measureFrame = useCallback(() => {

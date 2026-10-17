@@ -16,32 +16,34 @@ import {
 // Jest runs with EXPO_OS === 'ios' by default (see jest-expo's babel caller
 // platform), so these assert the native branch: a bare family, no fontWeight.
 describe("numericFontStyle", () => {
-  it("resolves each weight to its Space Grotesk family on native", () => {
-    expect(numericFontStyle("medium").fontFamily).toBe(
-      numericFontFamilies.medium,
-    );
-    expect(numericFontStyle("semibold").fontFamily).toBe(
-      numericFontFamilies.semibold,
-    );
-    expect(numericFontStyle("bold").fontFamily).toBe(numericFontFamilies.bold);
+  it("resolves each weight to its Figtree family on native for the default theme", () => {
+    expect(numericFontStyle("medium").fontFamily).toBe("Figtree_500Medium");
+    expect(numericFontStyle("semibold").fontFamily).toBe("Figtree_600SemiBold");
+    expect(numericFontStyle("bold").fontFamily).toBe("Figtree_700Bold");
+    expect(numericFontStyle("regular").fontFamily).toBe("Figtree_400Regular");
   });
 
-  it("falls back regular to medium: there is no bundled 400-weight file", () => {
-    expect(numericFontStyle("regular").fontFamily).toBe(
+  it("falls back a missing weight file to the nearest bundled one", () => {
+    const grotesk: TypeSpec = {
+      text: { family: "rubik", fallbacks: [] },
+      numeric: { family: "space-grotesk", fallbacks: [] },
+      scale: classicTheme.type.scale,
+    };
+    expect(numericFontStyle("regular", grotesk).fontFamily).toBe(
       numericFontFamilies.medium,
     );
   });
 });
 
 describe("withAppFont numeric face", () => {
-  it("maps fontWeight 700 to SpaceGrotesk_700Bold", () => {
+  it("maps fontWeight 700 to Figtree_700Bold", () => {
     const resolved = withAppFont({ fontWeight: "700" }, "regular", "numeric");
-    expect(resolved.fontFamily).toBe(numericFontFamilies.bold);
+    expect(resolved.fontFamily).toBe("Figtree_700Bold");
   });
 
-  it("still resolves the text face (Rubik) when face is omitted", () => {
-    const resolved = withAppFont({ fontWeight: "700" });
-    expect(resolved.fontFamily).toBe("Rubik_700Bold");
+  it("still resolves the text face (Figtree) when face is omitted", () => {
+    const resolved = withAppFont({}, "bold");
+    expect(resolved.fontFamily).toBe("Figtree_700Bold");
   });
 
   it('treats an existing SpaceGrotesk family as "ours" and still overrides it', () => {
@@ -50,7 +52,7 @@ describe("withAppFont numeric face", () => {
       "regular",
       "numeric",
     );
-    expect(resolved.fontFamily).toBe(numericFontFamilies.semibold);
+    expect(resolved.fontFamily).toBe("Figtree_600SemiBold");
   });
 });
 
@@ -60,17 +62,17 @@ describe("theme-aware typography", () => {
     text: { family: "space-grotesk", fallbacks: ["rubik"] },
   };
 
-  it("classic native output is unchanged", () => {
+  it("classic native output uses the theme faces (Figtree text and numbers)", () => {
     expect(fontStyle("regular")).toEqual({
-      fontFamily: fontFamilies.regular,
+      fontFamily: "Figtree_400Regular",
       fontWeight: undefined,
     });
     expect(fontStyle("bold")).toEqual({
-      fontFamily: fontFamilies.bold,
+      fontFamily: "Figtree_700Bold",
       fontWeight: undefined,
     });
     expect(numericFontStyle("regular")).toEqual({
-      fontFamily: numericFontFamilies.medium,
+      fontFamily: "Figtree_400Regular",
       fontWeight: undefined,
     });
   });
@@ -120,10 +122,7 @@ describe("theme-aware typography", () => {
   });
 
   it("derives font ids and script coverage from the type spec", () => {
-    expect(fontIdsForTheme(classicTheme.type)).toEqual([
-      "rubik",
-      "space-grotesk",
-    ]);
+    expect(fontIdsForTheme(classicTheme.type)).toEqual(["figtree", "rubik"]);
     expect([...scriptsCovered(classicTheme.type)].sort()).toEqual([
       "hebrew",
       "latin",

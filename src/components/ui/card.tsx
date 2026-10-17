@@ -8,6 +8,7 @@ import {
 } from "react-native";
 
 import { MotionPressable } from "@/components/ui/motion";
+import { StateLayerBoundsContext } from "@/components/ui/state-layer-bounds";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 
@@ -18,7 +19,9 @@ export interface CardProps extends ViewProps {
    * `default` — a section of the page. Raised material: gradient, top
    *   highlight, layered shadow.
    * `list` — a container for rows. Flush padding, hairlines between children,
-   *   same raised material as `default`.
+   *   same raised material as `default`. Rows rely on the fixed padding below to
+   *   bleed their state layers to its edges, so they are published to them with
+   *   the same values; a custom padding here would leave the wash short.
    * `inset` — a recessed well *inside* a section (a summary, a preview, a
    *   callout). Sunken material, so it reads as carved into the card around
    *   it rather than floating above the page.
@@ -81,19 +84,33 @@ export function Card({
             boxShadow: materialStyle(theme, "card").boxShadow,
           }
         : materialStyle(theme, "card")),
+    ...(variant === "list"
+      ? {
+          paddingVertical: space.xs,
+          paddingHorizontal: space.lg,
+          overflow: "hidden" as const,
+        }
+      : { padding: variant === "inset" ? space.md : space.lg }),
   };
-
-  if (variant === "list") {
-    base.paddingVertical = space.xs;
-    base.paddingHorizontal = space.lg;
-    base.overflow = "hidden";
-  } else {
-    base.padding = variant === "inset" ? space.md : space.lg;
-  }
 
   const content =
     variant === "list"
-      ? withDividers(children, theme.border, dividerInset)
+      ? withDividers(
+          children,
+          theme.border,
+          dividerInset,
+          (child, index, count) => (
+            <StateLayerBoundsContext.Provider
+              value={{
+                x: space.lg,
+                top: index === 0 ? space.xs : 0,
+                bottom: index === count - 1 ? space.xs : 0,
+              }}
+            >
+              {child}
+            </StateLayerBoundsContext.Provider>
+          ),
+        )
       : children;
   const pressable = Boolean(onPress);
 
@@ -121,9 +138,17 @@ export function Card({
   );
 }
 
-function withDividers(children: ReactNode, color: ColorValue, inset: number) {
+function withDividers(
+  children: ReactNode,
+  color: ColorValue,
+  inset: number,
+  wrap?: (child: ReactNode, index: number, count: number) => ReactNode,
+) {
   const items = Children.toArray(children);
-  if (items.length < 2) return children;
+  if (items.length === 0) return children;
+  if (items.length === 1) {
+    return wrap ? wrap(items[0], 0, 1) : children;
+  }
   return items.map((child, index) => (
     <Fragment key={index}>
       {index > 0 ? (
@@ -135,7 +160,7 @@ function withDividers(children: ReactNode, color: ColorValue, inset: number) {
           }}
         />
       ) : null}
-      {child}
+      {wrap ? wrap(child, index, items.length) : child}
     </Fragment>
   ));
 }

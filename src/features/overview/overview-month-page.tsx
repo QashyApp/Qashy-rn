@@ -9,6 +9,7 @@ import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type ScrollViewInstance,
 } from "react-native";
 
 import { AnimatedMoney } from "@/components/finance/animated-money";
@@ -71,7 +72,7 @@ export interface OverviewMonthPageProps {
   onMonthSwitch: (month: string, direction: MonthDirection) => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   /** Attached on the current page only, so a tab re-press scrolls the page in view. */
-  scrollRef?: Ref<ScrollView>;
+  scrollRef?: Ref<ScrollViewInstance>;
   onMoveCard: (id: string, delta: 1 | -1) => void;
   onResizeCard: (card: OverviewCard) => void;
   onConfigureCard: (id: string, config: Record<string, unknown>) => void;

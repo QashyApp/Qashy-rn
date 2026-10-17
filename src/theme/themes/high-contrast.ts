@@ -1,21 +1,24 @@
 import { serializeShadow } from "@/theme/shadow";
-import {
-  iconSize,
-  motion,
-  tile,
-  typeScale,
-  type BaseTokens,
-} from "@/theme/tokens";
+import type { BaseTokens } from "@/theme/tokens";
 import type {
+  IconSizeScale,
+  MotionSpec,
   RadiusScale,
   ShadowSet,
   SpaceScale,
   ThemeDefinition,
+  TileScale,
   TypeScaleSpec,
 } from "@/theme/themes/types";
 
 // Accessibility theme: 7:1 text, strongly visible borders, flat hard outlines instead of soft light.
 // Every shadow is a zero-blur ring, so a surface is defined by its edge, not by its glow.
+//
+// ── Frozen scales ───────────────────────────────────────────────────────────
+// High contrast is deliberately kept out of the shared scale evolution: its rhythm, motion and
+// type sizes are tuned around its own 7:1 accessibility look, so they are copies rather than
+// imports. A change to `@/theme/tokens` (the Dew look, or anything later) can never move them,
+// and `high-contrast-frozen.test.ts` pins each one.
 
 const lightPalette: BaseTokens = {
   background: "#F0F0F0",
@@ -97,8 +100,94 @@ const radius: RadiusScale = {
   pill: 999,
 };
 
+const frozenTile: TileScale = {
+  size: 40,
+  icon: 20,
+  compactSize: 32,
+  compactIcon: 16,
+};
+
+const frozenIconSize: IconSizeScale = { sm: 16, md: 20, lg: 24, xl: 32 };
+
+const frozenMotion: MotionSpec = {
+  duration: { fast: 120, base: 200, slow: 320 },
+  spring: {
+    snappy: { damping: 22, stiffness: 320, mass: 0.8 },
+    gentle: { damping: 20, stiffness: 180, mass: 1 },
+    emphasized: { damping: 16, stiffness: 220, mass: 1 },
+  },
+  pressScale: 0.97,
+  press: "scale",
+  pressTranslate: 0,
+};
+
+/** The base scale High contrast builds its variants on, copied so it stays still. */
+const frozenTypeScale: TypeScaleSpec = {
+  hero: {
+    fontSize: 48,
+    lineHeight: 54,
+    weight: "semibold",
+    letterSpacing: -1.6,
+  },
+  display: {
+    fontSize: 40,
+    lineHeight: 46,
+    weight: "semibold",
+    letterSpacing: -1.2,
+  },
+  title: {
+    fontSize: 28,
+    lineHeight: 34,
+    weight: "semibold",
+    letterSpacing: -0.6,
+  },
+  money: {
+    fontSize: 22,
+    lineHeight: 28,
+    weight: "semibold",
+    letterSpacing: -0.4,
+  },
+  headline: {
+    fontSize: 18,
+    lineHeight: 24,
+    weight: "semibold",
+    letterSpacing: -0.2,
+  },
+  body: { fontSize: 16, lineHeight: 22, weight: "regular", letterSpacing: 0 },
+  label: {
+    fontSize: 15,
+    lineHeight: 20,
+    weight: "medium",
+    letterSpacing: -0.1,
+  },
+  figure: {
+    fontSize: 18,
+    lineHeight: 24,
+    weight: "semibold",
+    letterSpacing: -0.3,
+  },
+  caption: {
+    fontSize: 13,
+    lineHeight: 18,
+    weight: "regular",
+    letterSpacing: 0,
+  },
+  overline: {
+    fontSize: 13,
+    lineHeight: 18,
+    weight: "medium",
+    letterSpacing: 0,
+  },
+  eyebrow: {
+    fontSize: 11,
+    lineHeight: 14,
+    weight: "semibold",
+    letterSpacing: 0.6,
+  },
+};
+
 const scale: TypeScaleSpec = {
-  ...typeScale,
+  ...frozenTypeScale,
   body: { fontSize: 17, lineHeight: 24, weight: "regular", letterSpacing: 0 },
   label: { fontSize: 16, lineHeight: 22, weight: "medium", letterSpacing: 0 },
   caption: {
@@ -131,9 +220,9 @@ export const highContrastTheme: ThemeDefinition = {
   },
   space,
   radius,
-  tile,
-  iconSize,
-  motion: { ...motion, press: "scale" },
+  tile: frozenTile,
+  iconSize: frozenIconSize,
+  motion: { ...frozenMotion, press: "scale" },
   material: {
     engine: "soft",
     card: "elevated",

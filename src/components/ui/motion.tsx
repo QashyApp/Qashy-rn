@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import {
+  Platform,
   Pressable,
   StyleSheet,
   type ColorValue,
@@ -32,6 +33,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
+import { useStateLayerBounds } from "@/components/ui/state-layer-bounds";
+import { withAlpha } from "@/theme/tokens";
 import { useQashyTheme } from "@/theme/theme";
 import type { MotionSpec } from "@/theme/themes/types";
 
@@ -117,10 +120,13 @@ export const motionCurves = {
   inOut: EASE_IN_OUT,
 } as const;
 
+// Dew's press spring: a touch more energy than the old soft language — higher stiffness and a
+// little less mass — so a tap lands its sink quickly. Overshoot stays clamped: a control the
+// user did not drag must never visibly bounce past its resting shape.
 const springConfig = {
-  damping: 20,
-  stiffness: 380,
-  mass: 0.7,
+  damping: 18,
+  stiffness: 430,
+  mass: 0.66,
   overshootClamping: true,
   reduceMotion: ReduceMotion.System,
 } as const;
@@ -174,18 +180,34 @@ const wrapperStyleKeys = [
 
 // Mirrored onto the wrapper but kept on the pressable, so the wrapper cannot
 // shrink below an explicitly sized control and a percentage size still resolves
-// against the real parent.
+// against the real parent. The min/max pair matters the same way: a capped node
+// centred by `alignSelf` would otherwise left-align inside a full-width wrapper.
 const mirroredStyleKeys = [
   "width",
   "height",
+  "minWidth",
+  "maxWidth",
+  "minHeight",
+  "maxHeight",
 ] as const satisfies readonly (keyof ViewStyle)[];
 
 const wrapperStyleKeySet: ReadonlySet<string> = new Set<string>(
   wrapperStyleKeys,
 );
 
+/**
+ * `StyleSheet.flatten` for plain styles. RN 0.88 types the parameter with its imprecise
+ * *animated* style union, which lags `ViewStyle` (`transitionDuration` gained `string[]`),
+ * so a plain style no longer satisfies it even though it is exactly what the runtime wants.
+ */
+export function flattenViewStyle(style: ViewProps["style"]): ViewStyle {
+  return (StyleSheet.flatten(
+    style as unknown as Parameters<typeof StyleSheet.flatten>[0],
+  ) ?? {}) as ViewStyle;
+}
+
 function splitWrapperStyle(style: ViewProps["style"]) {
-  const flattenedStyle = (StyleSheet.flatten(style) ?? {}) as ViewStyle;
+  const flattenedStyle = flattenViewStyle(style);
   const wrapperStyle: ViewStyle = {};
   const contentStyle: ViewStyle = { ...flattenedStyle };
   wrapperStyleKeys.forEach((key) => {
@@ -522,7 +544,15 @@ function renderMotionView(
   },
   entranceStyle: ReturnType<typeof useEntrance>,
 ) {
-  if (!animateLayout) {
+  // Reanimated plays entering, exiting and layout transitions through one layout-animation
+  // system, and a node that carries one of those while its own style animates `opacity`
+  // makes the two fight: Reanimated warns and one quietly overwrites the other. So the
+  // wrapper owns layout participation and the exit; the inner view owns the entrance's
+  // opacity and transform. `collapsable={false}` also keeps the wrapper alive for its
+  // child's exit.
+  const wrapForExit =
+    !animateLayout && parts.exiting !== undefined && entranceStyle !== null;
+  if (!animateLayout && !wrapForExit) {
     const { style: plainStyle, ...plainProps } = props;
     return (
       <Animated.View
@@ -533,23 +563,16 @@ function renderMotionView(
     );
   }
 
-  // Reanimated layout transitions and the entrance both write `transform`.
-  // Keeping them on one node makes one overwrite the other. The outer view owns
-  // layout participation; the inner view owns visual motion. `collapsable={false}`
-  // also keeps the wrapper alive for its child's exit.
   const { style, ...viewProps } = props;
   const { wrapperStyle, contentStyle } = splitWrapperStyle(style);
   return (
     <Animated.View
       collapsable={false}
-      layout={parts.layout}
+      exiting={parts.exiting}
+      layout={animateLayout ? parts.layout : undefined}
       style={wrapperStyle}
     >
-      <Animated.View
-        {...viewProps}
-        exiting={parts.exiting}
-        style={[contentStyle, entranceStyle]}
-      />
+      <Animated.View {...viewProps} style={[contentStyle, entranceStyle]} />
     </Animated.View>
   );
 }
@@ -609,15 +632,31 @@ type MotionPressableProps = Omit<PressableProps, "children" | "style"> & {
   enteringDelay?: number;
   /**
    * Material 3 state layer: a translucent wash of the control's content color that fades in on
-   * hover (8%) and press (10%). Only drawn by themes with Material controls; `false` opts out.
+   * hover (8%) and press (10%). Drawn by themes whose controls answer with state layers (the flat
+   * engine, and the soft Dew look, which opts in via `material.stateLayers`); `false` opts out.
    */
   stateLayer?: boolean;
   /** The wash color. Defaults to the theme's text color; pass the control's own `on…` color. */
   stateLayerColor?: ColorValue;
+  /**
+   * Where the layer takes its shape from. `own` (default): the control's own `borderRadius`.
+   * `container`: this is a full-width row inside a clipping list container — the layer bleeds
+   * into the container's padding and lets the container's clip round it, so a first or last row
+   * follows the card's corners instead of floating as a rectangle inside them. Set the row's own
+   * `borderRadius` anyway: the browser's focus ring follows it, and it is the layer's shape
+   * wherever no container publishes bounds. A bleeding row does not scale or lift on hover or
+   * press — the wash alone answers, or it would pull away from the edges it was drawn to meet.
+   */
+  stateLayerShape?: "own" | "container";
 };
 
 const STATE_LAYER_HOVER = 0.08;
 const STATE_LAYER_PRESS = 0.1;
+
+/** A layer inset that reaches `value` px outward. Zero stays `0`, not `-0`. */
+function outward(value: number) {
+  return value === 0 ? 0 : -value;
+}
 
 export function MotionPressable(props: MotionPressableProps) {
   // `enteringVariant` is fixed per call site, so choosing the component here never remounts a
@@ -654,7 +693,7 @@ function MotionPressableBase({
   onHoverIn,
   onHoverOut,
   disabled = false,
-  pressedScale = 0.975,
+  pressedScale,
   hoverScale = 1.008,
   liftOnHover = true,
   active = false,
@@ -662,28 +701,51 @@ function MotionPressableBase({
   enteringDelay: _enteringDelay,
   stateLayer = true,
   stateLayerColor,
+  stateLayerShape = "own",
   entranceStyle,
   ...props
 }: MotionPressableProps & { entranceStyle: ReturnType<typeof useEntrance> }) {
   // Press feedback is movement, so only the full level keeps it.
   const { travel } = useMotionPreference();
   const reduceMotion = !travel;
-  const { motion, materialControls, text: themeText } = useQashyTheme();
-  const layerEnabled = materialControls && stateLayer && !disabled;
+  const { motion, stateLayers, text: themeText } = useQashyTheme();
+  const layerEnabled = stateLayers && stateLayer && !disabled;
+  const layerColor = stateLayerColor ?? themeText;
+  const containerBounds = useStateLayerBounds();
+  const bleed = stateLayerShape === "container" ? containerBounds : null;
+  // Android answers with a ripple in the same wash color — the platform's own press feedback,
+  // drawn over the content. It replaces the JS wash there; when the color is not a plain hex
+  // string (Material You hands out opaque platform colors) the wash stays the carrier.
+  const ripple = props.android_ripple;
+  const rippleColor =
+    !ripple &&
+    layerEnabled &&
+    Platform.OS === "android" &&
+    typeof layerColor === "string" &&
+    /^#[0-9a-fA-F]{6}$/.test(layerColor)
+      ? withAlpha(layerColor, 0.14)
+      : undefined;
+  const showStateLayer = layerEnabled && rippleColor === undefined;
+  // The theme's own press depth, unless the call site knows better.
+  const pressDepth = pressedScale ?? motion.pressScale;
   const layer = useSharedValue(0);
   const layerStyle = useAnimatedStyle(() => ({ opacity: layer.value }));
+  const durations = useMotionDurations();
+  // The wash fades on the theme's quickest duration: feedback the finger can still catch.
   const layerTiming = {
-    duration: 120,
+    duration: durations.exit,
     easing: EASE_STANDARD,
     reduceMotion: ReduceMotion.System,
   } as const;
-  const durations = useMotionDurations();
   // A translate theme sinks a control by shifting it down instead of shrinking it, and
   // never scales on hover or on the 'active' pop either.
   // An overlay theme (flat material) neither shrinks nor shifts: the pressed material's tonal
   // fill is the whole feedback.
   const translatePress = motion.press === "translate";
   const staticPress = motion.press !== "scale";
+  // A row whose layer bleeds to its container's edges must not move at all: a scale or a lift
+  // would pull the wash off the edges it was drawn to meet. The wash alone answers there.
+  const interactive = !staticPress && bleed === null;
   const timingConfig = {
     duration: durations.exit,
     easing: EASE_STANDARD,
@@ -707,23 +769,23 @@ function MotionPressableBase({
   useEffect(() => {
     const became = active && !wasActive.current;
     wasActive.current = active;
-    if (!became || reduceMotion || staticPress) return;
+    if (!became || reduceMotion || !interactive) return;
     scale.set(1.035);
     scale.set(withSpring(1, springConfig));
-  }, [active, reduceMotion, staticPress, scale]);
+  }, [active, interactive, reduceMotion, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }, { scale: scale.value }],
   }));
 
   const resolveStyle = (pressableState: ExtendedPressableState): ViewStyle =>
-    (StyleSheet.flatten(
+    flattenViewStyle(
       typeof style === "function"
         ? (style as unknown as (s: ExtendedPressableState) => ViewStyle)(
             pressableState,
           )
         : style,
-    ) ?? {}) as ViewStyle;
+    );
 
   // Evaluate the caller's style callback once per state up front. Everything a
   // press changes then becomes data the UI thread can pick between, instead of
@@ -818,6 +880,12 @@ function MotionPressableBase({
         <AnimatedPressable
           {...props}
           {...spaceKeyProps}
+          android_ripple={
+            ripple ??
+            (rippleColor !== undefined
+              ? { color: rippleColor, foreground: true }
+              : undefined)
+          }
           disabled={disabled}
           onHoverIn={(event) => {
             hoveredRef.current = true;
@@ -831,9 +899,9 @@ function MotionPressableBase({
               );
             if (usesJsState) setJsHovered(true);
             if (!pressedRef.current && !disabled) {
-              scale.set(withTiming(staticPress ? 1 : hoverScale, timingConfig));
+              scale.set(withTiming(interactive ? hoverScale : 1, timingConfig));
               translateY.set(
-                withTiming(liftOnHover && !staticPress ? -1 : 0, timingConfig),
+                withTiming(interactive && liftOnHover ? -1 : 0, timingConfig),
               );
             }
             onHoverIn?.(event);
@@ -857,12 +925,10 @@ function MotionPressableBase({
               layer.set(withTiming(STATE_LAYER_PRESS, layerTiming));
             if (usesJsState) setJsPressed(true);
             if (!disabled) {
-              scale.set(
-                withSpring(staticPress ? 1 : pressedScale, springConfig),
-              );
+              scale.set(withSpring(interactive ? pressDepth : 1, springConfig));
               translateY.set(
                 withTiming(
-                  translatePress ? motion.pressTranslate : 0,
+                  interactive && translatePress ? motion.pressTranslate : 0,
                   timingConfig,
                 ),
               );
@@ -882,13 +948,13 @@ function MotionPressableBase({
             if (usesJsState) setJsPressed(false);
             scale.set(
               withSpring(
-                hoveredRef.current && !staticPress ? hoverScale : 1,
+                hoveredRef.current && interactive ? hoverScale : 1,
                 springConfig,
               ),
             );
             translateY.set(
               withTiming(
-                hoveredRef.current && liftOnHover && !staticPress ? -1 : 0,
+                hoveredRef.current && interactive && liftOnHover ? -1 : 0,
                 timingConfig,
               ),
             );
@@ -896,18 +962,20 @@ function MotionPressableBase({
           }}
           style={[pressableStyle, overrideStyle]}
         >
-          {layerEnabled ? (
+          {showStateLayer ? (
             <Animated.View
               pointerEvents="none"
               style={[
                 {
                   position: "absolute",
-                  top: 0,
-                  right: 0,
-                  bottom: 0,
-                  left: 0,
-                  borderRadius: restStyle.borderRadius ?? 0,
-                  backgroundColor: stateLayerColor ?? themeText,
+                  // Bleeding reaches the container's edges; the container's own clip rounds the
+                  // first and last rows, so the layer itself stays square there.
+                  top: bleed ? outward(bleed.top) : 0,
+                  right: bleed ? outward(bleed.x) : 0,
+                  bottom: bleed ? outward(bleed.bottom) : 0,
+                  left: bleed ? outward(bleed.x) : 0,
+                  borderRadius: bleed ? 0 : (restStyle.borderRadius ?? 0),
+                  backgroundColor: layerColor,
                 },
                 layerStyle,
               ]}

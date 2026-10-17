@@ -81,8 +81,12 @@ function useWebDocumentTitle() {
         : DOCUMENT_TITLE;
     };
     apply(navigationRef.getCurrentOptions() as { title?: string } | undefined);
-    return navigationRef.addListener("options", (event) => {
-      apply(event.data.options as { title?: string });
+    // The core no longer emits a dedicated `options` event, so re-read the focused
+    // route's options whenever the navigation state changes.
+    return navigationRef.addListener("state", () => {
+      apply(
+        navigationRef.getCurrentOptions() as { title?: string } | undefined,
+      );
     });
   }, [navigationRef]);
 }
@@ -90,7 +94,12 @@ function useWebDocumentTitle() {
 // Every creation/editing flow gets identical sheet behaviour. Previously only
 // `transaction` carried the detents and transparent content style, so the other
 // six sheets opened at a different height with an opaque backdrop.
-function formSheetOptions(title: string, backTitle: string, fallback: Href) {
+function formSheetOptions(
+  title: string,
+  backTitle: string,
+  fallback: Href,
+  sheetCornerRadius: number,
+) {
   // Android draws and animates its own sheet (`AndroidSheet`, mounted by `sheetScreenLayout`) rather
   // than use the native one, which cannot be restyled or re-timed without patching a library. The
   // sheet carries the title and the close control, so there is no native header.
@@ -111,6 +120,9 @@ function formSheetOptions(title: string, backTitle: string, fallback: Href) {
     presentation: "formSheet" as const,
     sheetGrabberVisible: true,
     sheetAllowedDetents: [0.72, 1],
+    // The sheet's own corner follows the theme's shape language (iOS form sheets; web ignores it
+    // and Android draws its own sheet, which reads `radius.sheet` itself).
+    sheetCornerRadius,
     contentStyle: { backgroundColor: "transparent" },
   };
 }
@@ -229,31 +241,62 @@ function RootNavigator() {
               t("Transaction"),
               backTitle,
               "/transactions",
+              theme.radius.sheet,
             )}
           />
           <Stack.Screen
             name="budget"
-            options={formSheetOptions(t("Budget"), backTitle, "/plan")}
+            options={formSheetOptions(
+              t("Budget"),
+              backTitle,
+              "/plan",
+              theme.radius.sheet,
+            )}
           />
           <Stack.Screen
             name="budget-adjustment"
-            options={formSheetOptions(t("Adjust budget"), backTitle, "/plan")}
+            options={formSheetOptions(
+              t("Adjust budget"),
+              backTitle,
+              "/plan",
+              theme.radius.sheet,
+            )}
           />
           <Stack.Screen
             name="goal"
-            options={formSheetOptions(t("Goal"), backTitle, "/plan")}
+            options={formSheetOptions(
+              t("Goal"),
+              backTitle,
+              "/plan",
+              theme.radius.sheet,
+            )}
           />
           <Stack.Screen
             name="overview-cards"
-            options={formSheetOptions(t("Add cards"), backTitle, "/overview")}
+            options={formSheetOptions(
+              t("Add cards"),
+              backTitle,
+              "/overview",
+              theme.radius.sheet,
+            )}
           />
           <Stack.Screen
             name="account"
-            options={formSheetOptions(t("Account"), backTitle, "/more")}
+            options={formSheetOptions(
+              t("Account"),
+              backTitle,
+              "/more",
+              theme.radius.sheet,
+            )}
           />
           <Stack.Screen
             name="category"
-            options={formSheetOptions(t("Category"), backTitle, "/more")}
+            options={formSheetOptions(
+              t("Category"),
+              backTitle,
+              "/more",
+              theme.radius.sheet,
+            )}
           />
           <Stack.Screen
             name="recurring"
@@ -261,11 +304,17 @@ function RootNavigator() {
               t("Recurring transaction"),
               backTitle,
               "/more",
+              theme.radius.sheet,
             )}
           />
           <Stack.Screen
             name="exchange-rate"
-            options={formSheetOptions(t("Exchange rate"), backTitle, "/more")}
+            options={formSheetOptions(
+              t("Exchange rate"),
+              backTitle,
+              "/more",
+              theme.radius.sheet,
+            )}
           />
           <Stack.Screen
             name="exchange-rates"

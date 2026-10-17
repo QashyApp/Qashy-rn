@@ -16,11 +16,13 @@ const transformIgnorePatterns = expoPreset.transformIgnorePatterns.map(
 
 module.exports = {
   preset: "jest-expo",
-  // Reanimated 4 splits its native worklets runtime into `react-native-worklets`. Its own
-  // resolver strips `.native.ts` resolution inside that package so requiring it under Jest
-  // (transitively, via `react-native-reanimated/mock`) resolves to its JS-safe fallback
-  // instead of a module that reaches for the native `NativeWorklets` binding.
-  resolver: "react-native-worklets/jest/resolver.js",
+  // Reanimated's Jest resolver maps Reanimated's own `.native` modules that cannot run under
+  // Jest — starting with `initializers.native`, which calls `runOnUISync` at import time and
+  // throws on the web shim — to their JS-safe counterparts, and delegates to the
+  // `react-native-worklets` resolver. That one strips `.native.ts` resolution inside its
+  // package so requiring it under Jest (transitively, via `react-native-reanimated/mock`)
+  // resolves to its JS-safe fallback instead of the native `NativeWorklets` binding.
+  resolver: "react-native-reanimated/jest/resolver.js",
   transformIgnorePatterns,
   // `.tsx` added alongside `.ts` for the first `@testing-library/react-native` component
   // suite (`editable-card-frame.test.tsx`) — every other suite in the project is still `.ts`.

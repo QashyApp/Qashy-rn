@@ -1,4 +1,7 @@
-import { ScrollViewStyleReset } from "expo-router/html";
+import {
+  ScrollViewStyleReset,
+  useServerDocumentContext,
+} from "expo-router/html";
 import type { PropsWithChildren } from "react";
 
 import { classicTheme } from "@/theme/themes/classic";
@@ -77,8 +80,16 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, [contentedita
 `;
 
 export default function Root({ children }: PropsWithChildren) {
+  // SDK 58 moved the generated metadata, styles and bundle scripts from a post-render string
+  // pass into this context. `headNodes` carries the RNW stylesheet and asset preloads;
+  // `bodyNodes` carries the font resources and the `<script>` tags that boot the app. A custom
+  // root that skips them exports HTML that never hydrates: the page stays on the static
+  // loading shell forever, with no error anywhere. See the SDK 58 static-rendering guide.
+  const { headNodes, bodyNodes, htmlAttributes, bodyAttributes } =
+    useServerDocumentContext();
+
   return (
-    <html lang="en-US" dir="ltr">
+    <html lang="en-US" dir="ltr" {...htmlAttributes}>
       <head>
         <meta charSet="utf-8" />
         {/* Production only. The dev server rewrites the bundle on every save and talks to
@@ -126,8 +137,12 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" href="/qashy-apple-touch-icon.png" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
+        {headNodes}
       </head>
-      <body>{children}</body>
+      <body {...bodyAttributes}>
+        {children}
+        {bodyNodes}
+      </body>
     </html>
   );
 }

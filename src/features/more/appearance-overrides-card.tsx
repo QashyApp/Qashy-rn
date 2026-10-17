@@ -239,12 +239,17 @@ export function AppearanceOverridesCard() {
             accessibilityLabel={`${t(spec.title)}, ${current}`}
             accessibilityHint={t("Opens a list of choices")}
             onPress={() => setOpenKey(spec.key)}
+            stateLayerShape="container"
             style={{
               minHeight: 48,
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
               gap: space.md,
+              // This card is not a clipping list, so the row answers with its own rounded tile;
+              // the radius also shapes the browser's focus ring.
+              borderRadius: radius.control,
+              borderCurve: "continuous",
             }}
           >
             <View

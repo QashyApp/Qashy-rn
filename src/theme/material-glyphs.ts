@@ -2,6 +2,7 @@
 // `material` icon set. Every value is checked against the bundled glyph map by a test.
 export const MATERIAL_BY_ION: Readonly<Record<string, string>> = {
   add: "add",
+  "add-circle": "add-circle",
   remove: "remove",
   checkmark: "check",
   close: "close",
@@ -49,10 +50,13 @@ export const MATERIAL_BY_ION: Readonly<Record<string, string>> = {
   basket: "shopping-basket",
   storefront: "storefront",
   flame: "local-fire-department",
+  bonfire: "whatshot",
   water: "water-drop",
   leaf: "eco",
   flask: "science",
   beaker: "science",
+  prism: "change-history",
+  "trail-sign": "signpost",
   bed: "bed",
   key: "vpn-key",
   hammer: "hardware",

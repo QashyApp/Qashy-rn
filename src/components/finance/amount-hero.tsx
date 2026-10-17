@@ -1,5 +1,11 @@
 import { useImperativeHandle, useState, type Ref } from "react";
-import { Pressable, TextInput, View, type TextInputProps } from "react-native";
+import {
+  Pressable,
+  TextInput,
+  View,
+  type TextInputInstance,
+  type TextInputProps,
+} from "react-native";
 
 import { useCalculatorInput } from "@/components/finance/use-calculator-input";
 import { AppText } from "@/components/ui/app-text";
@@ -122,12 +128,12 @@ export function AmountHero({
    * it a plain amount, `expression` gives it the text typed so far, for a form that evaluates it.
    */
   calculator?: "evaluate" | "expression";
-  ref?: Ref<TextInput>;
+  ref?: Ref<TextInputInstance>;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { isRtl, t } = useLocalization();
-  const [node, setNode] = useState<TextInput | null>(null);
+  const [node, setNode] = useState<TextInputInstance | null>(null);
   const input = useCalculatorInput({
     node,
     value,
@@ -135,7 +141,7 @@ export function AmountHero({
     currency,
     mode: calculator,
   });
-  useImperativeHandle(ref, () => node as TextInput, [node]);
+  useImperativeHandle(ref, () => node as TextInputInstance, [node]);
   const [focused, setFocused] = useState(false);
   const [pillWidth, setPillWidth] = useState(0);
   const sunken = materialStyle(theme, "sunken");

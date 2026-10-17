@@ -1,7 +1,7 @@
 import { materialStyle, type Material } from "@/theme/materials";
 import { accentTokens } from "@/theme/theme";
 import { classicTheme } from "@/theme/themes/classic";
-import { bevelShadowSet, shadowBlurs } from "@/theme/shadow";
+import { NO_SHADOW, bevelShadowSet, shadowBlurs } from "@/theme/shadow";
 import type { ThemeDefinition } from "@/theme/themes/types";
 import { assertThemeDefinition } from "@/theme/themes/validate";
 
@@ -77,14 +77,24 @@ describe("bevel theme", () => {
     expect(() => assertThemeDefinition(blurry)).toThrow(/no blur/);
   });
 
-  it("keeps gradients for classic", () => {
-    const style = materialStyle(
-      accentTokens("#5966E9", false, classicTheme),
-      "card",
-    ) as Record<string, unknown>;
-    expect(
-      style.experimental_backgroundImage ?? style.backgroundImage,
-    ).toBeDefined();
+  it("keeps classics materials gradient-free, with soft card shadows and flat controls", () => {
+    const tokens = accentTokens("#5966E9", false, classicTheme);
+    const flat = (material: Material): Record<string, unknown> =>
+      materialStyle(tokens, material) as Record<string, unknown>;
+    for (const material of MATERIALS) {
+      expect(
+        flat(material).experimental_backgroundImage ??
+          flat(material).backgroundImage,
+      ).toBeUndefined();
+    }
+    // Cards keep their soft, blurred elevation; only controls and wells are flat.
+    const card = flat("card");
+    expect(shadowBlurs(card.boxShadow as string).some((blur) => blur > 0)).toBe(
+      true,
+    );
+    expect(flat("control").boxShadow).toBe(NO_SHADOW);
+    expect(flat("controlPressed").boxShadow).toBe(NO_SHADOW);
+    expect(flat("sunken").boxShadow).toBe(NO_SHADOW);
   });
 
   it("rejects a bad press mode", () => {

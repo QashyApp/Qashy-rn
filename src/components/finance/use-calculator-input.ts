@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useState } from "react";
-import type { TextInput, TextInputProps } from "react-native";
+import type { TextInputInstance, TextInputProps } from "react-native";
 
 import { prefersAmountKeypad } from "@/components/finance/amount-keypad";
 import { useCalculatorHost } from "@/components/finance/calculator-host";
@@ -27,7 +27,7 @@ export function useCalculatorInput({
   mode = "evaluate",
 }: {
   /** The field's input, once mounted (kept in state by the caller: `ref={setNode}`). */
-  node: TextInput | null;
+  node: TextInputInstance | null;
   value: string;
   onChangeText: (next: string) => void;
   currency: CurrencyCode;
@@ -80,7 +80,7 @@ export function useCalculatorInput({
     // A field that focuses itself as it mounts (`autoFocus`) does so before `node` reaches state, so
     // the focus event's own target is what can give the focus up.
     const target = (node ?? event?.currentTarget) as
-      Pick<TextInput, "blur"> | null | undefined;
+      Pick<TextInputInstance, "blur"> | null | undefined;
     host.open(id, {
       value: shown,
       onChange: change,

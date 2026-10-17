@@ -70,6 +70,19 @@ export interface MaterialSpec {
   gradients: boolean;
   /** Bevel thickness in px, used by the accent material when `engine` is `bevel`. */
   bevelDepth: number;
+  /**
+   * Draw hover/press state layers on controls even when the engine is not `flat`. The flat engine
+   * turns them on by itself; a soft theme opts in (the Dew look does). A full-width row bleeds
+   * its layer to its list container's edges and takes the container's corners from its clip, so
+   * a list still reads as one surface. Internal: a custom theme file cannot set it, and it is
+   * inherited from the base theme.
+   */
+  stateLayers?: boolean;
+  /**
+   * Keep accent fills solid and shadowless on a soft engine: no top gradient and no coloured drop
+   * shadow. Internal: a custom theme file cannot set it, and it is inherited from the base theme.
+   */
+  flatAccent?: boolean;
 }
 
 /**

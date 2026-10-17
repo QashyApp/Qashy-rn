@@ -7,7 +7,7 @@ import {
   useState,
   type RefObject,
 } from "react";
-import type { View } from "react-native";
+import type { HostInstance } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 
 import { hapticSelection } from "@/utils/haptics";
@@ -51,10 +51,10 @@ export function useDragSelect({
   selectedIds: readonly string[];
   onSelect: (ids: string[]) => void;
   /** The list's own box, for the scroll edges. */
-  containerRef: RefObject<View | null>;
+  containerRef: RefObject<HostInstance | null>;
   scrollBy: (delta: number) => void;
 }) {
-  const rows = useRef(new Map<string, View>());
+  const rows = useRef(new Map<string, HostInstance>());
   const armed = useRef<{ anchor: string; base: string[]; last: string } | null>(
     null,
   );
@@ -231,7 +231,7 @@ export function useDragSelect({
     [enabled, containerRef],
   );
 
-  const registerRow = useCallback((id: string, node: View | null) => {
+  const registerRow = useCallback((id: string, node: HostInstance | null) => {
     if (node) rows.current.set(id, node);
     else rows.current.delete(id);
   }, []);

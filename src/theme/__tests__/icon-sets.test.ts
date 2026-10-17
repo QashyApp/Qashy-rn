@@ -1,6 +1,8 @@
 import Ionicons from "@expo/vector-icons/Ionicons";
+import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 
 import { ICON_CATALOG } from "@/theme/icon-catalog";
+import { MATERIAL_BY_ION } from "@/theme/material-glyphs";
 import {
   ICON_SETS,
   ICON_SET_IDS,
@@ -131,6 +133,22 @@ describe("icon sets", () => {
       expect(resolveIconRender({ kind: "ion", glyph }, "pixel").kind).toBe(
         "svg",
       );
+    }
+  });
+
+  it("maps only glyphs MaterialIcons actually ships", () => {
+    expect(
+      Object.values(MATERIAL_BY_ION).filter(
+        (name) => !(name in MaterialIcons.glyphMap),
+      ),
+    ).toEqual([]);
+  });
+
+  it("material draws the catalog gaps that used to fall back (bonfire, trail-sign, prism, add-circle)", () => {
+    for (const glyph of ["bonfire", "trail-sign", "prism", "add-circle"]) {
+      expect(
+        resolveIconRender(parseIconId(`ion:${glyph}-outline`), "material"),
+      ).toEqual({ kind: "material", name: MATERIAL_BY_ION[glyph] });
     }
   });
 });

@@ -379,12 +379,15 @@ function GroupRow({
       onPress={onToggle}
       active={checked}
       pressedScale={0.985}
+      stateLayerShape="container"
       style={({ pressed }) => ({
         minHeight: 58,
         flexDirection: "row",
         alignItems: "center",
         gap: space.md,
-        opacity: blocked ? 0.55 : pressed ? 0.62 : 1,
+        borderRadius: radius.control,
+        borderCurve: "continuous",
+        opacity: blocked ? 0.55 : pressed && !theme.stateLayers ? 0.62 : 1,
       })}
     >
       {blocked ? (

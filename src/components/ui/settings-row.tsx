@@ -71,12 +71,20 @@ export function SettingsRow({
       onPress={onPress}
       disabled={!onPress || disabled}
       pressedScale={0.985}
+      stateLayerShape="container"
       style={({ pressed }) => ({
         minHeight: 58,
         flexDirection: "row",
         alignItems: "center",
         gap: space.md,
-        opacity: disabled ? 0.5 : pressed && !theme.materialControls ? 0.62 : 1,
+        // The row is full-width and borderless; the radius is still stated so the browser's
+        // focus ring follows the row's shape, and so a row outside a clipping list card (a sheet,
+        // a default card) answers with a rounded tile instead of a bare rectangle.
+        borderRadius: theme.radius.control,
+        borderCurve: "continuous",
+        // A theme that answers with a state layer answers with the layer alone: a press dim would
+        // fade the wash below its own hover strength. Themes without one keep the dim.
+        opacity: disabled ? 0.5 : pressed && !theme.stateLayers ? 0.62 : 1,
       })}
       stateLayer
     >

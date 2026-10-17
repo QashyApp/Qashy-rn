@@ -19,7 +19,7 @@ import { hapticSelection } from "@/utils/haptics";
  * Keep these free of the words "light"/"dark" so a theme is never confused with the mode radios.
  */
 const THEME_DESCRIPTIONS: Record<string, string> = {
-  classic: "Soft, tactile surfaces with a calm indigo accent.",
+  classic: "Lilac-tinted surfaces, soft depth and lively controls.",
   "material-you":
     "Rounded Material surfaces that follow your Android system colors.",
   "high-contrast": "Maximum contrast and bold edges for easy reading.",

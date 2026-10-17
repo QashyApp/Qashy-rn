@@ -14,6 +14,7 @@ import {
 import { FONT_REGISTRY, scriptsCovered } from "@/theme/fonts";
 import { shadowBlurs } from "@/theme/shadow";
 import { accentTokens } from "@/theme/theme";
+import { classicTheme } from "@/theme/themes/classic";
 import { BUILT_IN_THEMES } from "@/theme/themes/registry";
 import { assertThemeDefinition } from "@/theme/themes/validate";
 import { contrastRatio, lightTokens, readableTextColor } from "@/theme/tokens";
@@ -56,7 +57,9 @@ describe("parseCustomTheme: valid files", () => {
     expect(theme.charts.patterns).toBe(true);
     expect(theme.charts.categoryPalette).toHaveLength(8);
     expect(theme.motion.press).toBe("translate");
-    expect(theme.motion.duration.base).toBe(Math.round(200 * 0.8));
+    expect(theme.motion.duration.base).toBe(
+      Math.round(classicTheme.motion.duration.base * 0.8),
+    );
     for (const scheme of ["light", "dark"] as const) {
       for (const [key, value] of Object.entries(theme.shadows[scheme])) {
         if (key !== "scrim")

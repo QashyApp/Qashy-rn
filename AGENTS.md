@@ -1,8 +1,8 @@
 # Qashy Agent Guide
 
-Qashy is a private, local-first personal budget app built with Expo SDK 57, React Native, React 19, and Expo Router. It targets iOS, Android, and an installable responsive PWA for desktop and mobile browsers.
+Qashy is a private, local-first personal budget app built with Expo SDK 58, React Native, React 19, and Expo Router. It targets iOS, Android, and an installable responsive PWA for desktop and mobile browsers.
 
-Before changing Expo APIs, read the exact SDK 57 documentation at <https://docs.expo.dev/versions/v57.0.0/>. Do not assume examples for older Expo SDKs still apply.
+Before changing Expo APIs, read the exact SDK 58 documentation at <https://docs.expo.dev/versions/v58.0.0/>. Do not assume examples for older Expo SDKs still apply.
 
 ## Product scope
 

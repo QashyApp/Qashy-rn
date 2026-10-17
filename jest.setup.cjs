@@ -5,6 +5,15 @@ const nodeCrypto = require("node:crypto");
 // setup, mocking the native gesture-handler module out entirely.
 require("react-native-gesture-handler/jestSetup");
 
+// Gesture handler reaches into `react-native-worklets` at import time (to install its UI
+// runtime bindings), and Reanimated's module graph does too. Under Jest the resolver strips
+// the package's `.native` files, leaving its web shims, whose `getUIRuntimeHolder` and
+// `runOnUISync` throw by design. The package ships its own Jest mock — safe synchronous
+// stand-ins — for exactly this case, so it takes the real module's place.
+jest.mock("react-native-worklets", () =>
+  require("react-native-worklets/src/mock"),
+);
+
 // Reanimated's official mock: swaps every worklet-driven API for a synchronous JS
 // equivalent so a component using `useSharedValue`/`useAnimatedStyle`/`Gesture.Pan()` can
 // render under Jest without the Babel worklet plugin or a real UI thread.

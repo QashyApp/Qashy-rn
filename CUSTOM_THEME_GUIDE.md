@@ -126,13 +126,13 @@ All numbers are in density-independent pixels. Any key you leave out inherits fr
 
 | Key       | Used for                                          | Range    | Classic default |
 | --------- | ------------------------------------------------- | -------- | --------------- |
-| `sm`      | small elements                                    | 0 to 64  | 10              |
-| `control` | buttons and inputs                                | 0 to 64  | 14              |
-| `tile`    | icon tiles and swatches                           | 0 to 64  | 14              |
-| `card`    | cards                                             | 0 to 64  | 22              |
-| `sheet`   | floating panels                                   | 0 to 64  | 28              |
-| `nav`     | navigation items                                  | 0 to 64  | 16              |
-| `fab`     | **(v2)** the floating add button and icon buttons | 0 to 64  | 999 (round)     |
+| `sm`      | small elements                                    | 0 to 64  | 12              |
+| `control` | buttons and inputs                                | 0 to 64  | 18              |
+| `tile`    | icon tiles and swatches                           | 0 to 64  | 18              |
+| `card`    | cards                                             | 0 to 64  | 28              |
+| `sheet`   | floating panels                                   | 0 to 64  | 34              |
+| `nav`     | navigation items                                  | 0 to 64  | 20              |
+| `fab`     | **(v2)** the floating add button and icon buttons | 0 to 64  | 22              |
 | `pill`    | fully round shapes                                | 0 to 999 | 999             |
 
 `shape.space` (the spacing ladder; each step 0 to 48):
@@ -165,7 +165,7 @@ Controls how surfaces are built. See [Shadows and materials](#shadows-and-materi
 | --------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- |
 | `material.engine`     | text          | `"soft"`, `"bevel"` or `"flat"` **(v2)**                                                                                                         | the base theme's engine (`soft` for Classic)            |
 | `material.card`       | text          | **(v2)** `"elevated"` (a shadow lifts the card), `"outlined"` (a thin outline, no shadow) or `"tonal"` (a tinted fill, no outline and no shadow) | the base theme's card style (`elevated` for Classic)    |
-| `material.gradients`  | true or false | `true` or `false`                                                                                                                                | the base theme's setting (`true` for Classic)           |
+| `material.gradients`  | true or false | `true` or `false`                                                                                                                                | the base theme's setting (`false` for Classic)          |
 | `material.bevelDepth` | whole number  | 1 to 4. Only used when the engine is `bevel`                                                                                                     | the base theme's depth if it is also bevel, otherwise 2 |
 
 ### `motion`
@@ -303,8 +303,8 @@ The warnings look like this, one per changed color:
 <!-- warnings -->
 
 ```text
-palette.light.textMuted changed from #AAAAAA to #69696D to keep 4.5:1 contrast against surfaceSunken
-palette.light.positive changed from #9FE0B0 to #698F75 to keep 3:1 contrast against surfaceSunken
+palette.light.textMuted changed from #AAAAAA to #606164 to keep 4.5:1 contrast against surfaceSunken
+palette.light.positive changed from #9FE0B0 to #62856F to keep 3:1 contrast against surfaceSunken
 ```
 
 The exact replacement shades depend on your other colors. If your colors make it impossible to reach the minimum at all (for example one `text` color that has to read on a very light `surface` and a very dark `background` at once), the theme is rejected with a message starting `palette.<scheme>.<color>: cannot reach` and you need to change the colors yourself.
@@ -344,10 +344,10 @@ A theme chooses a typeface by its id from the fonts bundled with Qashy. These ar
 
 | Id                      | Typeface              | Covers             | Notes                                                                                            |
 | ----------------------- | --------------------- | ------------------ | ------------------------------------------------------------------------------------------------ |
-| `rubik`                 | Rubik                 | English and Hebrew | Classic's text font                                                                              |
-| `space-grotesk`         | Space Grotesk         | English only       | Classic's font for digits and money                                                              |
+| `rubik`                 | Rubik                 | English and Hebrew | Hebrew fallback for every theme                                                                  |
+| `space-grotesk`         | Space Grotesk         | English only       | A technical face for figures                                                                     |
 | `pixelify-sans`         | Pixelify Sans         | English only       | Pixel look                                                                                       |
-| `figtree`               | Figtree               | English only       | Friendly geometric sans                                                                          |
+| `figtree`               | Figtree               | English only       | Classic's text and numbers font                                                                  |
 | `inter`                 | Inter                 | English only       | Neutral, highly legible UI face                                                                  |
 | `nunito`                | Nunito                | English only       | Rounded sans                                                                                     |
 | `atkinson-hyperlegible` | Atkinson Hyperlegible | English only       | Designed for low-vision readers. Regular and bold only: medium and semibold use regular and bold |
@@ -373,7 +373,7 @@ The icon you chose for an account or category is part of your data and is the sa
 
 You never write shadows yourself. You pick a material engine, and Qashy derives all shadows from your colors.
 
-- **`soft`** (the Classic look): surfaces have blurred, gentle shadows and a faint highlight on the top edge, so cards look softly raised and inputs look slightly pressed in. With `"gradients": true` a subtle gradient is layered on surfaces and accent buttons.
+- **`soft`** (the Classic look): cards get blurred, gentle shadows and a faint highlight on the top edge, so they look softly raised. Controls and wells are flat fills that sink slightly when pressed. With `"gradients": true` a subtle gradient is layered on surfaces and accent buttons (Classic itself sets it to `false`).
 - **`bevel`** (the hard-edged pixel look): there is no blur anywhere. Every surface gets a crisp light edge on the top left, a dark edge on the bottom right and a solid drop edge below it, like a chunky pixel block. `bevelDepth` is the thickness of those edges in pixels (1 to 4; 2 is a good start). Pressing a bevel control flips the light and dark edges so it looks pushed in. Bevel looks best with `"gradients": false`, square corners (`shape.radius` all 0) and `"press": "translate"`.
 - **`flat`** (v2, the Material look): no gradients and no card shadows. Depth comes from the steps between surface colors and from thin outlines. Pressing a control fades a tint over it instead of moving it, and only the floating add button and overlays keep a small shadow so they stay readable over content. Use `material.card` to choose an outlined or a tonal card.
 

@@ -71,6 +71,12 @@ export interface ThemeTokens {
   cardStyle: MaterialSpec["card"];
   /** Draw switches and segmented controls the Material 3 way (the flat engine's look). */
   materialControls: boolean;
+  /**
+   * Draw hover/press state layers on controls (the Material wash, and the Android ripple under
+   * it). On by itself for the flat engine and for a soft theme that opts in
+   * (`material.stateLayers`, which the Dew look sets).
+   */
+  stateLayers: boolean;
   /** Font stacks and the type scale; resolve faces with `fontStyle(weight, type)` and friends from `@/theme/typography`. */
   type: TypeSpec;
   /** Line/donut/grid geometry, slice patterns and category tone for charts. */
@@ -177,8 +183,12 @@ const ThemeContext = createContext<ThemeTokens | null>(null);
 
 /** Builds the accent-dependent shadow/gradient pair that no static const can hold. */
 function accentMaterial(accent: string, dark: boolean, material: MaterialSpec) {
-  if (material.engine === "flat") {
-    // A solid fill: no gradient, no drop shadow. Press feedback is the pressed material's tonal fill.
+  // A solid, shadowless fill: the flat engine always, and a soft theme that opted into the flat
+  // accent look (Dew). Press feedback is then the state layer and the press sink, not a shadow.
+  if (
+    material.engine === "flat" ||
+    (material.engine === "soft" && material.flatAccent)
+  ) {
     return {
       accentGradient: `linear-gradient(180deg, ${accent}, ${accent})`,
       shadowAccent: NO_SHADOW,
@@ -280,6 +290,8 @@ export function accentTokens(
     iconBadge: { style: theme.icons.badge, shape: theme.icons.badgeShape },
     cardStyle: theme.material.card,
     materialControls: theme.material.engine === "flat",
+    stateLayers:
+      theme.material.engine === "flat" || theme.material.stateLayers === true,
     type: theme.type,
     charts: theme.charts,
     gradients: theme.material.gradients,

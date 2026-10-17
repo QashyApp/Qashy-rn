@@ -1,7 +1,11 @@
 import { CountUpSubject } from "@/components/finance/animated-money";
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import { ScrollView, View, type LayoutChangeEvent } from "react-native";
+import {
+  View,
+  type LayoutChangeEvent,
+  type ScrollViewInstance,
+} from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -52,7 +56,7 @@ export function OverviewScreen() {
   const { isRtl } = useLocalization();
   const [month, setMonth] = useState(startOfMonth());
   const { visibility: fabVisibility, onScroll } = useScrollHide();
-  const scrollRef = useSectionScrollToTop<ScrollView>();
+  const scrollRef = useSectionScrollToTop<ScrollViewInstance>();
   const pagerRef = useRef<MonthPagerHandle>(null);
   const dragProgress = useSharedValue(restingPosition(month, isRtl));
 

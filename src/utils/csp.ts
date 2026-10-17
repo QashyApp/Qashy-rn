@@ -12,7 +12,7 @@
  * Three directives do the actual work:
  *
  * - **`script-src 'self'` plus one hash, and no `'unsafe-inline'`.** An injected `<script>` or a
- *   `javascript:` URL does not execute. The hash covers exactly one 39-byte line that Expo
+ *   `javascript:` URL does not execute. The hash covers exactly one 40-byte line that Expo
  *   Router puts in every exported page; see `EXPO_HYDRATE_SCRIPT_HASH`.
  * - **`default-src 'none'`.** Anything this file forgot is denied rather than allowed, so a
  *   future fetch type has to be added deliberately.
@@ -41,7 +41,7 @@
  * `globalThis.__EXPO_ROUTER_HYDRATE__=true;` — the one inline script in the export.
  *
  * Pinned as a hash rather than waved through with `'unsafe-inline'`, because `'unsafe-inline'`
- * on `script-src` would give up the single most valuable directive here to accommodate 39 bytes.
+ * on `script-src` would give up the single most valuable directive here to accommodate 40 bytes.
  *
  * If Expo Router ever changes that line, hydration stops and the app renders a blank page —
  * loud, but at build time rather than in front of a user, which is why `e2e/qashy.spec.ts`

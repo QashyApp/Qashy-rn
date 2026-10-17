@@ -65,40 +65,43 @@ export const space = {
 } as const;
 
 /**
- * Corner radii. The "soft & tactile" redesign widens every step so surfaces
- * read as continuous, materially rounded shapes rather than sharp-cornered
- * panels — a raised card or sheet should look poured, not cut. Key names are
- * unchanged so every call site keeps working; only the values grew.
+ * Corner radii — the Dew shape language. Corners are wide and continuous so a
+ * card, sheet or control reads as one poured solid rather than a panel with
+ * rounding applied to it. Key names are unchanged so every call site keeps
+ * working; the floating action button is now a rounded square (`fab`) rather
+ * than the old full pill, and `pill` still marks the shapes that stay fully
+ * round.
  */
 export const radius = {
-  sm: 10,
-  control: 14,
+  sm: 12,
+  control: 18,
   /** Icon tiles, swatches, and other small filled squares. */
-  tile: 14,
-  card: 22,
+  tile: 18,
+  card: 28,
   /** Floating overlays: the update prompt, the reload banner. */
-  sheet: 28,
+  sheet: 34,
   /** Navigation items: rail buttons, sidebar rows, the bottom-bar indicator. */
-  nav: 16,
-  /** The floating action button. Classic keeps the full pill; other themes may use a rounded square. */
-  fab: 999,
+  nav: 20,
+  /** The floating action button: a rounded square. */
+  fab: 22,
   pill: 999,
 } as const;
 
 /**
- * Shared timing and spring presets for the soft/tactile motion language:
- * raised controls settle with a snappy spring, larger surfaces (sheets,
- * cards reflowing) use a gentler one, and emphasis moments (a completed
- * goal, a saved form) get a touch more energy. `pressScale` is how far a
- * raised control visibly sinks — scale, not just a shadow swap — when
- * pressed, to sell the "it's physically depressing" feel.
+ * Shared timing and spring presets for the Dew motion language: raised
+ * controls settle with a snappy spring, larger surfaces (sheets, cards
+ * reflowing) use a gentler one, and emphasis moments (a completed goal, a
+ * saved form) get a touch more energy. Durations run quicker than the old
+ * soft language — Dew answers a touch almost immediately — and `pressScale`
+ * is how far a raised control visibly sinks when pressed, to sell the
+ * "it's physically depressing" feel.
  */
 export const motion = {
-  duration: { fast: 120, base: 200, slow: 320 },
+  duration: { fast: 100, base: 160, slow: 280 },
   spring: {
-    snappy: { damping: 22, stiffness: 320, mass: 0.8 },
-    gentle: { damping: 20, stiffness: 180, mass: 1 },
-    emphasized: { damping: 16, stiffness: 220, mass: 1 },
+    snappy: { damping: 20, stiffness: 420, mass: 0.72 },
+    gentle: { damping: 19, stiffness: 200, mass: 1 },
+    emphasized: { damping: 15, stiffness: 250, mass: 1 },
   },
   /** How far a raised control sinks when pressed. */
   pressScale: 0.97,
@@ -248,7 +251,7 @@ export const typeScale = {
   }
 >;
 
-/** Variants that always render in the numeric display face (Space Grotesk). */
+/** Variants that always render in the theme's numeric display face. */
 export const NUMERIC_FACE_VARIANTS = [
   "hero",
   "display",
@@ -293,67 +296,65 @@ export const ROLE_TOKEN_KEYS = [
 ] as const;
 
 /**
- * Light surfaces.
+ * Light surfaces — the Dew palette.
  *
- * Cards are borderless and shadowless at rest, so the page/surface step is
- * the only thing separating a section from the page. `#F6F7F9` against white
- * was too faint to carry that on its own; `#F1F2F5` is the lightest page tone
- * that still reads as a distinct plane on a typical laptop panel.
- *
- * `surfaceElevated` stays white — it is the top of the light ramp — and
- * floating layers (sheets, menus) add `shadowOverlay` instead.
+ * A violet-leaning neutral cage: the page is a soft lilac, cards carry a hint
+ * of the same hue, and wells sit a step below the page. Each tier is a
+ * visible tonal step, which is what lets cards keep only a whisper of
+ * elevation (see `classic.ts`). `surfaceElevated` stays white — it is the top
+ * of the light ramp — and floating layers add `shadowOverlay` instead.
  *
  * `background` is asserted by the web e2e suite as the address-bar theme color.
  */
 export const lightTokens: BaseTokens = {
-  background: "#F1F2F5",
-  surface: "#FFFFFF",
+  background: "#E8E7F8",
+  surface: "#FBFBFF",
   surfaceElevated: "#FFFFFF",
-  surfaceMuted: "#E9EBEF",
-  surfaceSunken: "#E8EAEE",
+  surfaceMuted: "#E0DFF4",
+  surfaceSunken: "#DBDBF2",
   text: "#191B20",
-  textMuted: "#5F6570",
-  border: "#E3E5EA",
+  textMuted: "#575D67",
+  border: "#D7D8EF",
   positive: "#208653",
   negative: "#C43D4A",
   warning: "#9A6700",
   transfer: "#3F6FD8",
-  secondaryContainer: "#E9EBEF",
+  secondaryContainer: "#E0DFF4",
   onSecondaryContainer: "#191B20",
-  tertiaryContainer: "#DDE6F8",
-  onTertiaryContainer: "#2B58B8",
-  headerBackground: "#F1F2F5",
-  navBackground: "#FFFFFF",
+  tertiaryContainer: "#E1E1FA",
+  onTertiaryContainer: "#4340B8",
+  headerBackground: "#E8E7F8",
+  navBackground: "#FBFBFF",
 };
 
 /**
- * Dark surfaces.
+ * Dark surfaces — the Dew palette.
  *
- * The ramp used to span `#0E0F13 → #16171C → #1D1F26 → #23252C`, which put only
- * a few luminance steps between a card and an "elevated" card. Shadows are
- * effectively invisible against a dark page, so with the ramp that tight nothing
- * conveyed depth at all and every surface read as one flat plane. Widening it
- * gives each tier a visible step, which is how elevation has to work here.
+ * A violet-leaning ramp: the page is a deep indigo-black and every raised
+ * tier steps up from it (`#151524 → #1C1C2E → #242537`). Shadows are
+ * effectively invisible against a dark page, so with a tight ramp nothing
+ * would convey depth at all and every surface would read as one flat plane;
+ * a visible luminance step per tier is how elevation has to work here.
  */
 export const darkTokens: BaseTokens = {
-  background: "#0C0D11",
-  surface: "#15161B",
-  surfaceElevated: "#1E2027",
-  surfaceMuted: "#262931",
-  surfaceSunken: "#0F1014",
+  background: "#121221",
+  surface: "#1C1C2E",
+  surfaceElevated: "#242537",
+  surfaceMuted: "#2C2D44",
+  surfaceSunken: "#151524",
   text: "#F2F3F5",
   textMuted: "#9BA1AC",
-  border: "#2E323B",
+  border: "#33354E",
   positive: "#65D99A",
   negative: "#FF8F96",
   warning: "#F0C36A",
   transfer: "#8FB0FF",
-  secondaryContainer: "#262931",
+  secondaryContainer: "#2C2D44",
   onSecondaryContainer: "#F2F3F5",
-  tertiaryContainer: "#252E45",
-  onTertiaryContainer: "#8FB0FF",
-  headerBackground: "#0C0D11",
-  navBackground: "#1E2027",
+  tertiaryContainer: "#2A2B4A",
+  onTertiaryContainer: "#A9B6FF",
+  headerBackground: "#121221",
+  navBackground: "#242537",
 };
 
 function channels(hex: string): [number, number, number] {
