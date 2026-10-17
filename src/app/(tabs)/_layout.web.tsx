@@ -165,10 +165,10 @@ interface TabPressBridge {
   press: (section: string) => void;
 }
 
-/** Renders nothing. Exists only to expose the navigator's `emit` to the layout. */
+/** Renders nothing. Exists only to expose the navigator's `emitter` to the layout. */
 function TabPressPublisher({
   state,
-  navigation,
+  emitter,
   bridgeRef,
 }: BottomTabBarProps & {
   bridgeRef: { current: TabPressBridge | null };
@@ -180,7 +180,7 @@ function TabPressPublisher({
           (candidate) => candidate.name === section,
         );
         if (!route) return;
-        navigation.emit({
+        emitter.emit({
           type: "tabPress",
           target: route.key,
           canPreventDefault: true,
@@ -190,7 +190,7 @@ function TabPressPublisher({
     return () => {
       bridgeRef.current = null;
     };
-  }, [bridgeRef, navigation, state.routes]);
+  }, [bridgeRef, emitter, state.routes]);
   return null;
 }
 

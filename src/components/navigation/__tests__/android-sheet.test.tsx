@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { Text } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import {
   AndroidSheet,
@@ -35,12 +36,16 @@ const navigation = () => ({ goBack: jest.fn(), isFocused: () => true });
 
 const renderSheet = async (nav: ReturnType<typeof navigation>) =>
   render(
-    // Motion off: the exit finishes at once, so no UI-thread timing is involved.
-    <AnimationLevelContext value="off">
-      <AndroidSheet title="Transaction" navigation={nav}>
-        <Text>Form body</Text>
-      </AndroidSheet>
-    </AnimationLevelContext>,
+    // Gesture handler v3's `GestureDetector` requires a `GestureHandlerRootView` ancestor
+    // (the app root supplies one in production).
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      {/* Motion off: the exit finishes at once, so no UI-thread timing is involved. */}
+      <AnimationLevelContext value="off">
+        <AndroidSheet title="Transaction" navigation={nav}>
+          <Text>Form body</Text>
+        </AndroidSheet>
+      </AnimationLevelContext>
+    </GestureHandlerRootView>,
   );
 
 describe("AndroidSheet", () => {
@@ -80,11 +85,13 @@ describe("AndroidSheet", () => {
       return null;
     };
     await render(
-      <AnimationLevelContext value="off">
-        <AndroidSheet title="Transaction" navigation={nav}>
-          <Probe />
-        </AndroidSheet>
-      </AnimationLevelContext>,
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AnimationLevelContext value="off">
+          <AndroidSheet title="Transaction" navigation={nav}>
+            <Probe />
+          </AndroidSheet>
+        </AnimationLevelContext>
+      </GestureHandlerRootView>,
     );
     await act(async () => guard?.(true));
     await fireEvent.press(screen.getAllByLabelText("Close").at(-1)!);

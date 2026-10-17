@@ -81,15 +81,14 @@ export function Card({
             boxShadow: materialStyle(theme, "card").boxShadow,
           }
         : materialStyle(theme, "card")),
+    ...(variant === "list"
+      ? {
+          paddingVertical: space.xs,
+          paddingHorizontal: space.lg,
+          overflow: "hidden" as const,
+        }
+      : { padding: variant === "inset" ? space.md : space.lg }),
   };
-
-  if (variant === "list") {
-    base.paddingVertical = space.xs;
-    base.paddingHorizontal = space.lg;
-    base.overflow = "hidden";
-  } else {
-    base.padding = variant === "inset" ? space.md : space.lg;
-  }
 
   const content =
     variant === "list"

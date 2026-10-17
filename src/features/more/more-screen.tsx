@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useRef, useState } from "react";
-import { ScrollView, View } from "react-native";
+import { ScrollView, View, type ScrollViewInstance } from "react-native";
 
 import { StatTile } from "@/components/finance/stat-tile";
 import { AppText } from "@/components/ui/app-text";
@@ -42,7 +42,7 @@ import { useNow } from "@/utils/use-now";
 // and made one list look like several stacked ones.
 
 export function MoreScreen() {
-  const scrollRef = useSectionScrollToTop<ScrollView>();
+  const scrollRef = useSectionScrollToTop<ScrollViewInstance>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();

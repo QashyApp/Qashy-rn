@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { TextInput, View } from "react-native";
+import { View, type TextInputInstance } from "react-native";
 
 import { AmountHero } from "@/components/finance/amount-hero";
 import { AppIcon } from "@/components/ui/app-icon";
@@ -38,7 +38,7 @@ export function AccountStep({
   const theme = useQashyTheme();
   const { radius, space, tile } = theme;
   const { t } = useLocalization();
-  const balanceRef = useRef<TextInput>(null);
+  const balanceRef = useRef<TextInputInstance>(null);
 
   return (
     <View style={{ gap: space.xxl }}>

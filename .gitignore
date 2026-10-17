@@ -46,3 +46,4 @@ example
 
 # Local Expo module native build output
 modules/*/android/build/
+modules/*/android/.gradle/

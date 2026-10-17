@@ -10,7 +10,6 @@ import {
   type Ref,
 } from "react";
 import {
-  InteractionManager,
   View,
   type LayoutChangeEvent,
   type ViewStyle,
@@ -19,7 +18,6 @@ import {
   Gesture,
   GestureDetector,
   PointerType,
-  type PanGesture,
 } from "react-native-gesture-handler";
 import Animated, {
   cancelAnimation,
@@ -101,7 +99,7 @@ export interface MonthPageInfo {
 }
 
 type ExternalGesture = Parameters<
-  PanGesture["requireExternalGestureToFail"]
+  ReturnType<typeof Gesture.Pan>["requireExternalGestureToFail"]
 >[number];
 
 export interface MonthPagerProps {
@@ -269,13 +267,18 @@ function PagerImpl({
     onChangeRef.current = onChange;
   });
 
-  // Mount the neighbours once interactions settle, or on the first touch if that is sooner.
+  // Mount the neighbours once the month swap's frames have run, or on the first touch if that is
+  // sooner. (RN 0.88 removed `InteractionManager`, which used to defer this.)
   useEffect(() => {
     if (WEB || width <= 0) return;
-    const handle = InteractionManager.runAfterInteractions(() => {
-      setWarm(true);
+    let inner = 0;
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => setWarm(true));
     });
-    return () => handle.cancel();
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
   }, [month, width]);
   const markReady = useCallback(() => {
     setPaging(true);

@@ -1,0 +1,14 @@
+# Security headers for static hosts that read a `_headers` file (Cloudflare
+# Pages, Netlify, and similar). The exported HTML carries a meta CSP, but a meta
+# policy cannot express `frame-ancestors`, and response headers like nosniff or
+# a referrer policy are not something the app itself can set. Hosts that do not
+# understand this file simply serve it as a static asset, so nothing depends on
+# a particular host.
+/*
+  Content-Security-Policy: frame-ancestors 'none'
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(self), microphone=(), geolocation=()
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Resource-Policy: same-origin

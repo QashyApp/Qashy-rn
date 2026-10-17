@@ -1,5 +1,4 @@
 import {
-  StyleSheet,
   type PressableProps,
   type StyleProp,
   type ViewStyle,
@@ -10,6 +9,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { IconButton } from "@/components/ui/icon-button";
+import { flattenViewStyle } from "@/components/ui/motion";
 import { useQashyTheme } from "@/theme/theme";
 import { hapticImpactLight } from "@/utils/haptics";
 
@@ -47,7 +47,7 @@ export function FloatingActionButton({
   });
 
   return (
-    <Animated.View style={[StyleSheet.flatten(style), visibilityStyle]}>
+    <Animated.View style={[flattenViewStyle(style), visibilityStyle]}>
       <IconButton
         {...props}
         disabled={isDisabled}

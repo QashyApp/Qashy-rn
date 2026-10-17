@@ -1,7 +1,16 @@
 import { fireEvent, render, screen } from "@testing-library/react-native";
+import { type ReactElement } from "react";
 import { Text } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame";
+
+// Gesture handler v3's `GestureDetector` insists on a `GestureHandlerRootView` ancestor at
+// runtime; the app root provides one, so the drag-handle tests mount inside the same shell.
+const renderFrame = (frame: ReactElement) =>
+  render(
+    <GestureHandlerRootView style={{ flex: 1 }}>{frame}</GestureHandlerRootView>,
+  );
 
 // A minimal stand-in theme: only the tokens `materialStyle`/`AppText`/`IconButton` actually
 // read for the materials this frame uses (`raised`, `sunken` is not used here).
@@ -59,7 +68,7 @@ describe("EditableCardFrame", () => {
   };
 
   it("renders the toolbar with accessible labels for each action", async () => {
-    await render(
+    await renderFrame(
       <EditableCardFrame {...baseProps} index={1}>
         <Text>Card content</Text>
       </EditableCardFrame>,
@@ -72,7 +81,7 @@ describe("EditableCardFrame", () => {
   });
 
   it('disables "move up" at the first position', async () => {
-    await render(
+    await renderFrame(
       <EditableCardFrame {...baseProps} index={0}>
         <Text>Card content</Text>
       </EditableCardFrame>,
@@ -83,7 +92,7 @@ describe("EditableCardFrame", () => {
   });
 
   it('disables "move down" at the last position', async () => {
-    await render(
+    await renderFrame(
       <EditableCardFrame {...baseProps} index={2}>
         <Text>Card content</Text>
       </EditableCardFrame>,
@@ -95,7 +104,7 @@ describe("EditableCardFrame", () => {
 
   it("calls onRemove when the remove button is pressed", async () => {
     const onRemove = jest.fn();
-    await render(
+    await renderFrame(
       <EditableCardFrame {...baseProps} index={1} onRemove={onRemove}>
         <Text>Card content</Text>
       </EditableCardFrame>,
@@ -106,7 +115,7 @@ describe("EditableCardFrame", () => {
   });
 
   it("does not show a size control when the widget only has one size", async () => {
-    await render(
+    await renderFrame(
       <EditableCardFrame
         {...baseProps}
         index={1}

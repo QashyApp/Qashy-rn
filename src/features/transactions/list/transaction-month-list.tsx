@@ -16,6 +16,7 @@ import {
   SectionList,
   StyleSheet,
   View,
+  type HostInstance,
   type ViewStyle,
 } from "react-native";
 
@@ -290,7 +291,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
 
   // Press, hold and drag across rows to select them all (see `useDragSelect`).
-  const containerRef = useRef<View>(null);
+  const containerRef = useRef<HostInstance>(null);
   const scrollOffset = useRef(0);
   const orderedIds = useMemo(
     () => sections.flatMap((section) => section.data.map((item) => item.id)),
@@ -552,7 +553,7 @@ interface DayRowProps {
   onToggleItem: (id: string) => void;
   onLongPressItem: (id: string) => void;
   /** Lets the screen find this row's view while a drag-select passes over it. */
-  registerRow: (id: string, node: View | null) => void;
+  registerRow: (id: string, node: HostInstance | null) => void;
   /** A long-press just selected this row: a drag from here extends the selection. */
   onArmDrag: (id: string) => void;
   onResolveUpcoming: (id: string, action: "skip" | "confirm") => void;
@@ -641,7 +642,7 @@ const DayRow = memo(function DayRow({
     if (!selected) onArmDrag(id);
   }, [selectionMode, selected, onLongPressItem, onArmDrag, id]);
   const rowRef = useCallback(
-    (node: View | null) => {
+    (node: HostInstance | null) => {
       registerRow(id, node);
     },
     [registerRow, id],

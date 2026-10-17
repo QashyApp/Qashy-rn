@@ -174,18 +174,36 @@ const wrapperStyleKeys = [
 
 // Mirrored onto the wrapper but kept on the pressable, so the wrapper cannot
 // shrink below an explicitly sized control and a percentage size still resolves
-// against the real parent.
+// against the real parent. The min/max pair matters the same way: a capped node
+// centred by `alignSelf` would otherwise left-align inside a full-width wrapper.
 const mirroredStyleKeys = [
   "width",
   "height",
+  "minWidth",
+  "maxWidth",
+  "minHeight",
+  "maxHeight",
 ] as const satisfies readonly (keyof ViewStyle)[];
 
 const wrapperStyleKeySet: ReadonlySet<string> = new Set<string>(
   wrapperStyleKeys,
 );
 
+/**
+ * `StyleSheet.flatten` for plain styles. RN 0.88 types the parameter with its imprecise
+ * *animated* style union, which lags `ViewStyle` (`transitionDuration` gained `string[]`),
+ * so a plain style no longer satisfies it even though it is exactly what the runtime wants.
+ */
+export function flattenViewStyle(style: ViewProps["style"]): ViewStyle {
+  return (
+    StyleSheet.flatten(
+      style as unknown as Parameters<typeof StyleSheet.flatten>[0],
+    ) ?? {}
+  ) as ViewStyle;
+}
+
 function splitWrapperStyle(style: ViewProps["style"]) {
-  const flattenedStyle = (StyleSheet.flatten(style) ?? {}) as ViewStyle;
+  const flattenedStyle = flattenViewStyle(style);
   const wrapperStyle: ViewStyle = {};
   const contentStyle: ViewStyle = { ...flattenedStyle };
   wrapperStyleKeys.forEach((key) => {
@@ -522,7 +540,15 @@ function renderMotionView(
   },
   entranceStyle: ReturnType<typeof useEntrance>,
 ) {
-  if (!animateLayout) {
+  // Reanimated plays entering, exiting and layout transitions through one layout-animation
+  // system, and a node that carries one of those while its own style animates `opacity`
+  // makes the two fight: Reanimated warns and one quietly overwrites the other. So the
+  // wrapper owns layout participation and the exit; the inner view owns the entrance's
+  // opacity and transform. `collapsable={false}` also keeps the wrapper alive for its
+  // child's exit.
+  const wrapForExit =
+    !animateLayout && parts.exiting !== undefined && entranceStyle !== null;
+  if (!animateLayout && !wrapForExit) {
     const { style: plainStyle, ...plainProps } = props;
     return (
       <Animated.View
@@ -533,21 +559,17 @@ function renderMotionView(
     );
   }
 
-  // Reanimated layout transitions and the entrance both write `transform`.
-  // Keeping them on one node makes one overwrite the other. The outer view owns
-  // layout participation; the inner view owns visual motion. `collapsable={false}`
-  // also keeps the wrapper alive for its child's exit.
   const { style, ...viewProps } = props;
   const { wrapperStyle, contentStyle } = splitWrapperStyle(style);
   return (
     <Animated.View
       collapsable={false}
-      layout={parts.layout}
+      exiting={parts.exiting}
+      layout={animateLayout ? parts.layout : undefined}
       style={wrapperStyle}
     >
       <Animated.View
         {...viewProps}
-        exiting={parts.exiting}
         style={[contentStyle, entranceStyle]}
       />
     </Animated.View>
@@ -717,13 +739,13 @@ function MotionPressableBase({
   }));
 
   const resolveStyle = (pressableState: ExtendedPressableState): ViewStyle =>
-    (StyleSheet.flatten(
+    flattenViewStyle(
       typeof style === "function"
         ? (style as unknown as (s: ExtendedPressableState) => ViewStyle)(
             pressableState,
           )
         : style,
-    ) ?? {}) as ViewStyle;
+    );
 
   // Evaluate the caller's style callback once per state up front. Everything a
   // press changes then becomes data the UI thread can pick between, instead of

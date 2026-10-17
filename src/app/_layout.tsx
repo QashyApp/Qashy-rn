@@ -81,8 +81,10 @@ function useWebDocumentTitle() {
         : DOCUMENT_TITLE;
     };
     apply(navigationRef.getCurrentOptions() as { title?: string } | undefined);
-    return navigationRef.addListener("options", (event) => {
-      apply(event.data.options as { title?: string });
+    // The core no longer emits a dedicated `options` event, so re-read the focused
+    // route's options whenever the navigation state changes.
+    return navigationRef.addListener("state", () => {
+      apply(navigationRef.getCurrentOptions() as { title?: string } | undefined);
     });
   }, [navigationRef]);
 }

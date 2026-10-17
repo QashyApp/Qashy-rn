@@ -87,7 +87,8 @@ function PressScale({
 export function FloatingTabBar({
   state,
   descriptors,
-  navigation,
+  emitter,
+  navigateToTab,
   insets,
   onLongPress,
 }: BottomTabBarProps & { onLongPress: () => void }) {
@@ -219,17 +220,17 @@ export function FloatingTabBar({
                 testID={options?.tabBarButtonTestID}
                 onLongPress={() => {
                   hapticImpactLight();
-                  navigation.emit({ type: "tabLongPress", target: route.key });
+                  emitter.emit({ type: "tabLongPress", target: route.key });
                   onLongPress();
                 }}
                 onPress={() => {
-                  const event = navigation.emit({
+                  const event = emitter.emit({
                     type: "tabPress",
                     target: route.key,
                     canPreventDefault: true,
                   });
                   if (!focused && !event.defaultPrevented) {
-                    navigation.navigate(route.name, route.params);
+                    navigateToTab(route.key);
                   }
                 }}
                 style={{

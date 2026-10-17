@@ -1,6 +1,12 @@
 import { router } from "expo-router";
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Pressable, ScrollView, View, type DimensionValue } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  View,
+  type ScrollViewInstance,
+  type ViewStyle,
+} from "react-native";
 
 import { AnimatedMoney } from "@/components/finance/animated-money";
 import { ActionButton } from "@/components/ui/action-button";
@@ -86,7 +92,7 @@ function useMilestoneHaptics(
 }
 
 export function PlanScreen() {
-  const scrollRef = useSectionScrollToTop<ScrollView>();
+  const scrollRef = useSectionScrollToTop<ScrollViewInstance>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
@@ -143,9 +149,7 @@ export function PlanScreen() {
     errorTitle: "Couldn’t delete goals",
   });
 
-  const cardBasis:
-    | { flexBasis: DimensionValue; flexGrow: number; minWidth: number }
-    | { width: DimensionValue } = wide
+  const cardBasis: ViewStyle = wide
     ? { flexBasis: "48%", flexGrow: 1, minWidth: 320 }
     : { width: "100%" };
 

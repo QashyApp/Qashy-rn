@@ -158,9 +158,9 @@ export function AppIcon({
           })}
         </Svg>
       ) : render.kind === "material" ? (
-        <MaterialIcons name={render.name} size={size} color={color} />
+        <MaterialIcons name={render.name} size={size} color={color as string} />
       ) : (
-        <Ionicons name={render.name} size={size} color={color} />
+        <Ionicons name={render.name} size={size} color={color as string} />
       )}
     </View>
   );

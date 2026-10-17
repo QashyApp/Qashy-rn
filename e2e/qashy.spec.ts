@@ -306,7 +306,12 @@ test("preserves a selected transaction type and lets an edit clear its category"
 
   await page.getByRole("link", { name: /Transactions/ }).click();
   await page.getByRole("button", { name: /Category edit/ }).click();
-  await page.getByRole("radio", { name: "Expense" }).click();
+  // The form sheet mounts a parked placeholder copy of itself in the screen stack before the
+  // presented sheet paints. That copy's kind pills are momentarily the first role match, and a
+  // click captured there waits forever on an element that is never shown again. It freezes
+  // before the transaction loads, so its pills stay unchecked; requiring the checked pill can
+  // only ever resolve to the presented sheet, which loads the transaction's own kind.
+  await page.getByRole("radio", { name: "Expense", checked: true }).click();
   await expect(page.getByRole("radio", { name: "Dining" })).toBeChecked();
   const uncategorized = page.getByRole("radio", { name: "Uncategorized" });
   await uncategorized.click();
