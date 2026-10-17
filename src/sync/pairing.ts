@@ -168,7 +168,7 @@ export interface JoinPairingResult {
  * the moment this is handed back, and nothing will until `confirm` is called. `peerDeviceId`
  * is all that is known about the other device at this point — its human-readable name has not
  * been sent yet, and deliberately so, because a name is attacker-chosen and a screen showing
- * "Pair with Ziv's iPhone?" invites a confirmation the fingerprint would not have earned.
+ * "Pair with Ziv's phone?" invites a confirmation the fingerprint would not have earned.
  */
 export interface PairingConfirmation<T> {
   /** The six words. Identical on both devices unless something is in the middle. */

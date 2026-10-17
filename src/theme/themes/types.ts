@@ -186,7 +186,7 @@ export interface ThemeDefinition {
   icons: IconSpec;
   charts: ChartSpec;
   /** Platforms the theme is offered on; omitted = everywhere. `getTheme` falls back to classic elsewhere. */
-  availableOn?: readonly ("ios" | "android" | "web")[];
+  availableOn?: readonly ("android" | "web")[];
   accent: {
     /**
      * `user`: the Appearance accent controls apply. `fixed`: the theme owns its accent and the

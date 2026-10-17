@@ -1,5 +1,5 @@
 import { packOverviewRows } from "@/features/overview/widgets/grid";
-import type { OverviewCard } from "@/features/overview/layout/overview-layout";
+import type { OverviewCard } from "@/domain/overview-layout";
 
 const card = (id: string, size: OverviewCard["size"]): OverviewCard => ({
   id,

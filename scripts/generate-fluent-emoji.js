@@ -1,4 +1,3 @@
-/* eslint-disable */
 // Regenerates src/theme/fluent-emoji-glyphs.ts, the bundled subset of Microsoft's Fluent Emoji
 // Flat (MIT). Developer tool, not part of the build:
 //

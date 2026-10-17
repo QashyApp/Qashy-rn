@@ -98,7 +98,6 @@ function formSheetOptions(
   title: string,
   backTitle: string,
   fallback: Href,
-  sheetCornerRadius: number,
 ) {
   // Android draws and animates its own sheet (`AndroidSheet`, mounted by `sheetScreenLayout`) rather
   // than use the native one, which cannot be restyled or re-timed without patching a library. The
@@ -113,16 +112,9 @@ function formSheetOptions(
     // Web: a back control that falls back to the owning section on a reload or deep link,
     // instead of the stock link that renders nothing (or points at the wrong section).
     ...backFallbackOptions(fallback),
-    // The long-press back-button menu can jump back multiple screens at
-    // once, natively removing this one without ever running `usePreventRemove`'s
-    // confirmation (see `useFormSheet`).
-    headerBackButtonMenuEnabled: false,
     presentation: "formSheet" as const,
     sheetGrabberVisible: true,
     sheetAllowedDetents: [0.72, 1],
-    // The sheet's own corner follows the theme's shape language (iOS form sheets; web ignores it
-    // and Android draws its own sheet, which reads `radius.sheet` itself).
-    sheetCornerRadius,
     contentStyle: { backgroundColor: "transparent" },
   };
 }
@@ -204,7 +196,7 @@ function RootNavigator() {
   const backTitle = t("Back");
 
   // app.json can only carry a single static root background colour, so the
-  // Android/iOS root view is repainted here whenever the resolved theme changes.
+  // Android root view is repainted here whenever the resolved theme changes.
   useEffect(() => {
     SystemUI.setBackgroundColorAsync(theme.background).catch(() => undefined);
   }, [theme.background]);
@@ -241,7 +233,6 @@ function RootNavigator() {
               t("Transaction"),
               backTitle,
               "/transactions",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -250,7 +241,6 @@ function RootNavigator() {
               t("Budget"),
               backTitle,
               "/plan",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -259,7 +249,6 @@ function RootNavigator() {
               t("Adjust budget"),
               backTitle,
               "/plan",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -268,7 +257,6 @@ function RootNavigator() {
               t("Goal"),
               backTitle,
               "/plan",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -277,7 +265,6 @@ function RootNavigator() {
               t("Add cards"),
               backTitle,
               "/overview",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -286,7 +273,6 @@ function RootNavigator() {
               t("Account"),
               backTitle,
               "/more",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -295,7 +281,6 @@ function RootNavigator() {
               t("Category"),
               backTitle,
               "/more",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -304,7 +289,6 @@ function RootNavigator() {
               t("Recurring transaction"),
               backTitle,
               "/more",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen
@@ -313,7 +297,6 @@ function RootNavigator() {
               t("Exchange rate"),
               backTitle,
               "/more",
-              theme.radius.sheet,
             )}
           />
           <Stack.Screen

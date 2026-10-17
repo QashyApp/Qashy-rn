@@ -388,7 +388,7 @@ export class SyncRuntime {
    */
   async importBundle(text: string): Promise<BundleImport> {
     // Decoded before anything reaches for a key, so a file that is not a bundle at all is
-    // refused instantly rather than after a Keychain or passphrase prompt.
+    // refused instantly rather than after a keystore or passphrase prompt.
     const bundle = decodeBundle(text);
 
     const wired = await this.fileWiring();

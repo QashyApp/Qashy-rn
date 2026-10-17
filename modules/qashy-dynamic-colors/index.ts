@@ -10,7 +10,7 @@ export type {
 } from "./src/QashyDynamicColorsModule";
 
 /**
- * The Android 12+ system tonal palettes as `#RRGGBB` strings, or null on web, iOS, below Android
+ * The Android 12+ system tonal palettes as `#RRGGBB` strings, or null on web, below Android
  * 12, or when the native module is not part of the build. Never throws.
  */
 export function readSystemPalettes(): SystemPalettes | null {

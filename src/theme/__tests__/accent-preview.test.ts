@@ -37,7 +37,7 @@ describe("appearance accent preview", () => {
   });
 
   it("falls back to the Qashy accent for a system source off Android", () => {
-    withPlatform("ios", () => {
+    withPlatform("web", () => {
       expect(previewAccentTokens("system", "#FF0000", false).accent).toBe(
         accessibleAccentColor(
           QASHY_ACCENT,

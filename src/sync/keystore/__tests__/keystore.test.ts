@@ -3,7 +3,7 @@
  *
  * `BaseKeystore` holds all of the behaviour that could plausibly lose a vault or leave one
  * stored in the clear, and it is identical on every platform — so it is worth testing hard
- * here, where no Keychain and no browser are needed, rather than thinly in three places.
+ * here, where no Keychain and no browser are needed, rather than thinly in each place.
  */
 
 import {
@@ -32,7 +32,7 @@ const vault = (epoch = 1): StoredVault => ({
 
 const cell = (): MemoryKeystoreCell => ({ bytes: null });
 
-/** Stands in for iOS and Android, where the OS unlock is the gate and there is no second one. */
+/** Stands in for Android, where the OS unlock is the gate and there is no second one. */
 class KeychainLikeKeystore extends MemoryKeystore {
   override readonly kind: SyncKeystore["kind"] = "secure-store";
   override readonly supportsPassphrase = false;

@@ -17,5 +17,5 @@ interface NativeModule {
 }
 
 // Optional: the module only exists in an Android dev-client / release build that includes it.
-// Web, iOS, Expo Go and Jest resolve to null and a long press simply does nothing there.
+// Web, Expo Go and Jest resolve to null and a long press simply does nothing there.
 export default requireOptionalNativeModule<NativeModule>("QashyTabGestures");

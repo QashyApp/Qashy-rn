@@ -1,7 +1,4 @@
 import { Picker } from "@expo/ui";
-import * as DocumentPicker from "expo-document-picker";
-import { File as ExpoFile, Paths } from "expo-file-system";
-import * as Sharing from "expo-sharing";
 import { useRef, useState } from "react";
 import { View } from "react-native";
 
@@ -22,6 +19,8 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { FormScreen } from "@/components/ui/form-screen";
+import { fileExtension, pickAsset, readAssetText } from "@/features/pick-file";
+import { saveFile } from "@/features/save-file";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
@@ -32,7 +31,7 @@ import {
 } from "@/utils/csv";
 import { todayLocal } from "@/utils/date";
 import { hapticSuccess } from "@/utils/haptics";
-import { MAX_CSV_IMPORT_BYTES, assertFileSize } from "@/utils/file-size";
+import { MAX_CSV_IMPORT_BYTES } from "@/utils/file-size";
 import { exchangeRateService } from "@/providers/exchange-rate-provider";
 import { ExternalImportCard } from "@/features/more/external-import-card";
 import { insetHighlight } from "@/theme/highlight";
@@ -262,11 +261,6 @@ function CsvStepper({ current }: { current: number }) {
  */
 const CSV_EXTENSIONS = ["csv", "txt"];
 
-function fileExtension(name: string) {
-  const dot = name.lastIndexOf(".");
-  return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
-}
-
 function inferMapping(headers: string[]) {
   return Object.fromEntries(
     CSV_FIELDS.map((field) => [
@@ -276,11 +270,55 @@ function inferMapping(headers: string[]) {
   ) as Record<CsvField, string>;
 }
 
+/** One count in the preview summary: ready rows read as accent, rejected ones as negative when any. */
+function PreviewTile({
+  value,
+  label,
+  tone = "plain",
+}: {
+  value: number;
+  label: string;
+  tone?: "accent" | "negative" | "plain";
+}) {
+  const theme = useQashyTheme();
+  return (
+    <View
+      style={{
+        flex: 1,
+        minWidth: 120,
+        padding: 14,
+        borderRadius: theme.radius.card,
+        backgroundColor:
+          tone === "accent" ? theme.accentContainer : theme.surfaceMuted,
+      }}
+    >
+      <AppText
+        literal
+        figure
+        variant="headline"
+        style={{
+          color:
+            tone === "accent"
+              ? theme.accentText
+              : tone === "negative"
+                ? theme.negative
+                : theme.text,
+        }}
+      >
+        {String(value)}
+      </AppText>
+      <AppText variant="caption" muted>
+        {label}
+      </AppText>
+    </View>
+  );
+}
+
 export function CsvScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   const { t } = useLocalization();
   const [sourceRows, setSourceRows] = useState<
     Record<string, string | number>[]
@@ -325,12 +363,8 @@ export function CsvScreen() {
     if (busyRef.current) return;
     setBusyFlag(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
-        copyToCacheDirectory: true,
-        base64: false,
-      });
-      if (result.canceled) return;
+      const asset = await pickAsset();
+      if (!asset) return;
       // A replacement attempt must never leave the last file armed. Otherwise a validation
       // error can make the next Import commit a different ledger than the user just reviewed.
       invalidatePreview();
@@ -338,25 +372,13 @@ export function CsvScreen() {
       setHeaders([]);
       setMapping(inferMapping([]));
       setRows([]);
-      const asset = result.assets[0];
       if (!CSV_EXTENSIONS.includes(fileExtension(asset.name))) {
         showError("Wrong file type", "Choose a .csv file.");
         return;
       }
-      const nativeFile = asset.file ? null : new ExpoFile(asset.uri);
-      assertFileSize(
-        asset.size ?? asset.file?.size ?? nativeFile?.size,
-        MAX_CSV_IMPORT_BYTES,
-        "CSV file",
-      );
-      const text = asset.file
-        ? await asset.file.text()
-        : await nativeFile!.text();
+      const text = await readAssetText(asset, MAX_CSV_IMPORT_BYTES, "CSV file");
       const table = parseCsvTable(text);
       if (!table.rows.length) {
-        setSourceRows([]);
-        setHeaders([]);
-        setMapping(inferMapping([]));
         showError(
           "No transactions found",
           "Choose a CSV with a header row and at least one data row.",
@@ -512,31 +534,12 @@ export function CsvScreen() {
     try {
       const csv = repository.exportCsv();
       const filename = `qashy-transactions-${todayLocal()}.csv`;
-      if (process.env.EXPO_OS === "web") {
-        const url = URL.createObjectURL(
-          new Blob([csv], { type: "text/csv;charset=utf-8" }),
-        );
-        const anchor = document.createElement("a");
-        anchor.href = url;
-        anchor.download = filename;
-        anchor.style.display = "none";
-        document.body.appendChild(anchor);
-        anchor.click();
-        window.setTimeout(() => {
-          anchor.remove();
-          URL.revokeObjectURL(url);
-        }, 1000);
-        return;
-      }
-      const file = new ExpoFile(Paths.cache, filename);
-      if (file.exists) file.delete();
-      file.create();
-      file.write(csv);
-      if (await Sharing.isAvailableAsync())
-        await Sharing.shareAsync(file.uri, {
-          mimeType: "text/csv",
-          dialogTitle: t("Export Qashy transactions"),
-        });
+      await saveFile(
+        filename,
+        "text/csv;charset=utf-8",
+        csv,
+        t("Export Qashy transactions"),
+      );
     } catch (reason) {
       showError("Couldn’t export CSV", errorMessage(reason, "Try again."));
     } finally {
@@ -732,68 +735,20 @@ export function CsvScreen() {
         {preview ? (
           <View style={{ gap: 10, paddingTop: 6 }}>
             <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
-              <View
-                style={{
-                  flex: 1,
-                  minWidth: 120,
-                  padding: 14,
-                  borderRadius: radius.card,
-                  backgroundColor: theme.accentContainer,
-                }}
-              >
-                <AppText
-                  literal
-                  figure
-                  variant="headline"
-                  style={{ color: theme.accentText }}
-                >
-                  {String(preview.validRows.length)}
-                </AppText>
-                <AppText variant="caption" muted>
-                  Ready
-                </AppText>
-              </View>
-              <View
-                style={{
-                  flex: 1,
-                  minWidth: 120,
-                  padding: 14,
-                  borderRadius: radius.card,
-                  backgroundColor: theme.surfaceMuted,
-                }}
-              >
-                <AppText literal figure variant="headline">
-                  {String(preview.duplicateRows.length)}
-                </AppText>
-                <AppText variant="caption" muted>
-                  Duplicates
-                </AppText>
-              </View>
-              <View
-                style={{
-                  flex: 1,
-                  minWidth: 120,
-                  padding: 14,
-                  borderRadius: radius.card,
-                  backgroundColor: theme.surfaceMuted,
-                }}
-              >
-                <AppText
-                  literal
-                  figure
-                  variant="headline"
-                  style={{
-                    color: preview.rejectedRows.length
-                      ? theme.negative
-                      : theme.text,
-                  }}
-                >
-                  {String(preview.rejectedRows.length)}
-                </AppText>
-                <AppText variant="caption" muted>
-                  Rejected
-                </AppText>
-              </View>
+              <PreviewTile
+                value={preview.validRows.length}
+                label="Ready"
+                tone="accent"
+              />
+              <PreviewTile
+                value={preview.duplicateRows.length}
+                label="Duplicates"
+              />
+              <PreviewTile
+                value={preview.rejectedRows.length}
+                label="Rejected"
+                tone={preview.rejectedRows.length ? "negative" : "plain"}
+              />
             </View>
             {preview.rejectedRows.length ? (
               <Card variant="list" dividerInset={0}>

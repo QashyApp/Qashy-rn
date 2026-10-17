@@ -86,4 +86,17 @@ module.exports = defineConfig([
       "no-console": "error",
     },
   },
+  {
+    // Developer scripts are CommonJS run by Node (package.json has no "type": "module"), so
+    // `__dirname` and `require` are real there even though the Expo config targets the app.
+    files: ["scripts/**/*.js"],
+    languageOptions: {
+      sourceType: "commonjs",
+      globals: {
+        __dirname: "readonly",
+        require: "readonly",
+        module: "readonly",
+      },
+    },
+  },
 ]);

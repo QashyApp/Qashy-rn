@@ -61,9 +61,8 @@ export function useCalculatorHost() {
 
 /**
  * A field that focuses while its screen is still being presented (an autofocused amount in a sheet
- * that is sliding up) waits this long after the host mounts before the keypad opens. iOS refuses to
- * present a modal while another presentation is in flight, and dimming a sheet mid-slide reads as a
- * glitch anywhere. A field focused later opens the keypad on the same frame.
+ * that is sliding up) waits this long after the host mounts before the keypad opens. Dimming a sheet
+ * mid-slide reads as a glitch. A field focused later opens the keypad on the same frame.
  */
 const PRESENTATION_SETTLE_MS = 550;
 

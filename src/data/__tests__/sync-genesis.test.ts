@@ -15,7 +15,10 @@
 
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import type { StorageAdapter, StoredEntity } from "@/data/storage-adapter";
-import { runGenesisMigration } from "@/data/sync-genesis";
+import {
+  createGenesisAllocator,
+  runGenesisMigration,
+} from "@/data/sync-genesis";
 import { SYNC_META, fromOpRow } from "@/data/sync-store";
 import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";
 import type {
@@ -40,6 +43,7 @@ import {
   finalize,
   materialize,
   metaKey,
+  formatHlc,
   parseHlc,
   repairMergedState,
   verifyChain,
@@ -236,6 +240,45 @@ describe("genesis migration", () => {
 
     const ops = await readOps(adapter);
     expect(new Set(ops.map((op) => op.hlc)).size).toBe(ops.length);
+  });
+
+  it("keeps readings unique and monotonic past a 16-bit counter in one millisecond", () => {
+    const allocate = createGenesisAllocator(DEVICE_A);
+    const created = "2026-01-02T03:04:05.006Z";
+    const seen = new Set<string>();
+    let previous = "";
+    // Each entity reserves two counters; 40,000 of them is well past the 65,536 in a ms.
+    for (let index = 0; index < 40_000; index += 1) {
+      const reading = allocate(created);
+      const hlc = formatHlc({ ...reading, deviceId: DEVICE_A });
+      const deleted = formatHlc({
+        wall: reading.wall,
+        counter: reading.counter + 1,
+        deviceId: DEVICE_A,
+      });
+      expect(seen.has(hlc) || seen.has(deleted)).toBe(false);
+      seen.add(hlc);
+      seen.add(deleted);
+      expect(hlc > previous).toBe(true);
+      previous = deleted;
+    }
+    expect(seen.size).toBe(80_000);
+  });
+
+  it("does not reissue a reading when an overflow borrows a millisecond another row owns", () => {
+    const allocate = createGenesisAllocator(DEVICE_A);
+    const seen = new Set<string>();
+    for (const created of [
+      "2026-01-02T03:04:05.006Z",
+      "2026-01-02T03:04:05.007Z",
+    ]) {
+      for (let index = 0; index < 33_000; index += 1) {
+        const { wall, counter } = allocate(created);
+        const key = `${wall}:${counter}`;
+        expect(seen.has(key)).toBe(false);
+        seen.add(key);
+      }
+    }
   });
 
   it("converts a tombstone to create-then-delete", async () => {

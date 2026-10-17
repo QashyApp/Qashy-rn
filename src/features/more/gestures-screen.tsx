@@ -32,7 +32,6 @@ export function GesturesScreen() {
 
   return (
     <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{
         padding: 18,

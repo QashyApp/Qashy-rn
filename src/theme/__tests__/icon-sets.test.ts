@@ -160,10 +160,6 @@ describe("resolveIconRender", () => {
         kind: "emoji",
         emoji: "🍕",
       });
-      expect(resolveIconRender(parseIconId("emoji:🍕"), set, true)).toEqual({
-        kind: "emoji",
-        emoji: "🍕",
-      });
     }
   });
 
@@ -188,13 +184,6 @@ describe("resolveIconRender", () => {
       kind: "ionicon",
       name: "help-circle-outline",
     });
-    expect(resolveIconRender(parseIconId("cart"), "ionicons", true)).toEqual({
-      kind: "sf",
-      name: "cart",
-    });
-    expect(resolveIconRender(parseIconId("mystery"), "ionicons", true)).toEqual(
-      { kind: "sf", name: "mystery" },
-    );
   });
 
   it("draws covered glyphs with the set and falls back for the rest", () => {
@@ -202,16 +191,9 @@ describe("resolveIconRender", () => {
       resolveIconRender(parseIconId("ion:cart-outline"), "pixel").kind,
     ).toBe("svg");
     expect(resolveIconRender(parseIconId("cart"), "pixel").kind).toBe("svg");
-    expect(resolveIconRender(parseIconId("cart"), "pixel", true).kind).toBe(
-      "svg",
-    );
     expect(resolveIconRender(parseIconId("bag"), "pixel")).toEqual({
       kind: "ionicon",
       name: "bag-outline",
-    });
-    expect(resolveIconRender(parseIconId("bag"), "pixel", true)).toEqual({
-      kind: "sf",
-      name: "bag",
     });
     expect(resolveIconRender(parseIconId("mystery"), "pixel")).toEqual({
       kind: "ionicon",

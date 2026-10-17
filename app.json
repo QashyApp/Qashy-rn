@@ -8,13 +8,6 @@
     "backgroundColor": "#E8E7F8",
     "scheme": "qashy",
     "userInterfaceStyle": "automatic",
-    "ios": {
-      "icon": "./assets/images/icon.png",
-      "bundleIdentifier": "com.venusddev.qashy",
-      "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
-      }
-    },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#5070FF",

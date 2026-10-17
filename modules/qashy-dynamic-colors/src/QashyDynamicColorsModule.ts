@@ -15,5 +15,5 @@ interface NativeModule {
 }
 
 // Optional: the module only exists in an Android dev-client / release build that includes it.
-// Web, iOS, Expo Go and Jest resolve to null and the caller falls back to the theme's accent.
+// Web, Expo Go and Jest resolve to null and the caller falls back to the theme's accent.
 export default requireOptionalNativeModule<NativeModule>("QashyDynamicColors");

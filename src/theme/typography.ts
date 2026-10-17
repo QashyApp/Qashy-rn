@@ -99,7 +99,7 @@ function resolveStackUncached(
  *
  * Native gets the weight's own family and *no* `fontWeight`: with a static
  * font file, a `fontWeight` on Android synthesises a fake bold on top of the
- * real one, and iOS may ignore the family entirely. Web keeps the numeric
+ * real one. Web keeps the numeric
  * weight so the system fallback renders at the intended weight too.
  */
 export function fontStyle(

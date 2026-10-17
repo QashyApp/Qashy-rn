@@ -27,6 +27,14 @@ jest.mock("react-native-reanimated", () => {
   return Reanimated;
 });
 
+// On Android, loading a bundled font goes through expo-asset, whose registry is empty under Jest,
+// so any vector-icon mount rejects with "Module is missing from the asset registry". No test
+// needs a real font file; resolving the load is enough.
+jest.mock("expo-font", () => ({
+  ...jest.requireActual("expo-font"),
+  loadAsync: jest.fn(() => Promise.resolve()),
+}));
+
 let uuid = 0;
 
 jest.mock("expo-localization", () => ({

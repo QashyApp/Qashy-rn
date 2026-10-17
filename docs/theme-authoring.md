@@ -126,7 +126,7 @@ Other capabilities read through `useQashyTheme()`:
 
 ### Dynamic colors
 
-`modules/qashy-dynamic-colors` is a local Expo module (Android 12+) that returns the system tonal palettes as hex. `src/theme/dynamic-palette.ts` is the pure resolver that derives the tokens; `useSystemPalettes` re-reads them when the app becomes active. Below Android 12, on iOS and web, and in Jest the module is absent and the theme uses `accent.default`. Changing the module needs a native rebuild (a development build, not Expo Go).
+`modules/qashy-dynamic-colors` is a local Expo module (Android 12+) that returns the system tonal palettes as hex. `src/theme/dynamic-palette.ts` is the pure resolver that derives the tokens; `useSystemPalettes` re-reads them when the app becomes active. Below Android 12, on web, and in Jest the module is absent and the theme uses `accent.default`. Changing the module needs a native rebuild (a development build, not Expo Go).
 
 ### Per-device overrides
 

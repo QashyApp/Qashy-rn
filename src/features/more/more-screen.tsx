@@ -161,7 +161,6 @@ export function MoreScreen() {
   return (
     <ScrollView
       ref={scrollRef}
-      contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
       <ScreenContainer>

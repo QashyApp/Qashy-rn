@@ -25,7 +25,7 @@ import {
   overviewLayoutReducer,
   type OverviewLayout,
   type OverviewLayoutAction,
-} from "@/features/overview/layout/overview-layout";
+} from "@/domain/overview-layout";
 
 export interface OverviewLayoutSnapshot {
   readonly status: "loading" | "ready";

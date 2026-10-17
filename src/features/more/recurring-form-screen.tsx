@@ -15,7 +15,6 @@ import { FormScreen } from "@/components/ui/form-screen";
 import type {
   CategoryKind,
   RecurrenceUnit,
-  TransactionFeeInput,
   ForeignAmountInput,
 } from "@/domain/models";
 import {
@@ -24,13 +23,20 @@ import {
 } from "@/features/more/recurring-draft";
 import { AmountHero } from "@/components/finance/amount-hero";
 import {
+  useRateLookup,
+  useTurnOnAutomaticRates,
+} from "@/features/use-automatic-rates";
+import type { RatePair } from "@/data/exchange-rates/rate-service";
+import {
+  feeInputFor,
+  useFeeBreakdown,
+  useForeignLegErrors,
+} from "@/features/transactions/form/fee-model";
+import {
   ForeignFeeFields,
   type ForeignFeeKind,
 } from "@/features/transactions/form/foreign-fee-fields";
-import {
-  useExchangeRateService,
-  useExchangeRateStatus,
-} from "@/providers/exchange-rate-provider";
+import { useExchangeRateStatus } from "@/providers/exchange-rate-provider";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -40,15 +46,12 @@ import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { isLocalDate, mediumDate, todayLocal } from "@/utils/date";
 import {
-  validateCurrencyCode,
   validateDateInput,
   validateMoneyInput,
-  validatePositiveDecimal,
   validatePositiveInteger,
 } from "@/utils/form-validation";
 import { hapticSuccess } from "@/utils/haptics";
 import {
-  convertMinor,
   localizeDecimalString,
   minorToLocalizedDecimalString,
   normalizeDecimalString,
@@ -60,16 +63,8 @@ import {
   nthOccurrenceDate,
   occurrenceCountUntil,
 } from "@/utils/recurrence-count";
-import {
-  feeMinorFor,
-  normalizeFeePercent,
-  totalWithFee,
-} from "@/utils/transaction-amounts";
 
 const MAX_REPEAT_INTERVAL = 999;
-
-/** How long the account, currency and start date must sit still before a rate lookup fires. */
-const RATE_LOOKUP_DEBOUNCE_MS = 400;
 
 /** "Every month." / "Every 2 months." — plain English singular/plural; Hermes (Android) has no `Intl.PluralRules`. */
 function intervalHint(interval: string, unit: RecurrenceUnit) {
@@ -189,10 +184,7 @@ export function RecurringFormScreen() {
     return draft?.feeValue ?? "";
   });
   const [busy, setBusy] = useState(false);
-  const exchangeRateService = useExchangeRateService();
   const rateStatus = useExchangeRateStatus();
-  const [fetchingRate, setFetchingRate] = useState(false);
-  const [togglingRates, setTogglingRates] = useState(false);
   const [amountTouched, setAmountTouched] = useState(false);
   const account =
     state.accounts.find((item) => item.id === accountId) ?? initialAccount;
@@ -206,21 +198,17 @@ export function RecurringFormScreen() {
     account?.archived ||
     categories.find((item) => item.id === categoryId)?.archived,
   );
+  const accountCurrency = account?.currency;
   const trimmedForeignCurrency = foreignCurrency.trim().toUpperCase();
-  const foreignCurrencyError = foreignEnabled
-    ? (validateCurrencyCode(foreignCurrency) ??
-      (account && trimmedForeignCurrency === account.currency
-        ? "Foreign currency must differ from the account currency."
-        : undefined))
-    : undefined;
-  const foreignRateError = foreignEnabled
-    ? validatePositiveDecimal(
-        foreignRate,
-        "Exchange rate",
-        true,
-        state.settings.locale,
-      )
-    : undefined;
+  const foreignErrors = useForeignLegErrors({
+    enabled: foreignEnabled,
+    currencyText: foreignCurrency,
+    rateText: foreignRate,
+    accountCurrency,
+    locale: state.settings.locale,
+  });
+  const foreignCurrencyError = foreignErrors.currency;
+  const foreignRateError = foreignErrors.rate;
   const foreignAppliedRate = useMemo(
     () =>
       foreignEnabled && account && !foreignCurrencyError
@@ -243,9 +231,9 @@ export function RecurringFormScreen() {
   // Debounced and fire-and-forget, like the transaction form: once the account, foreign currency
   // and start date settle, look up the rates they need so the applied rate below fills in on the
   // spot. A failure only ever shows up as "No rate for this date.", never as a save error.
-  useEffect(() => {
-    if (!account || !isLocalDate(startDate)) return;
-    const pairs: { currency: string; localDate: string }[] = [];
+  const ratePairs = useMemo(() => {
+    if (!account || !isLocalDate(startDate)) return [];
+    const pairs: RatePair[] = [];
     if (account.currency !== state.settings.baseCurrency) {
       pairs.push({ currency: account.currency, localDate: startDate });
     }
@@ -256,140 +244,30 @@ export function RecurringFormScreen() {
     ) {
       pairs.push({ currency: trimmedForeignCurrency, localDate: startDate });
     }
-    if (!pairs.length) return;
-    const timer = setTimeout(() => {
-      setFetchingRate(true);
-      exchangeRateService
-        .ensureRatesFor(pairs)
-        .catch(() => undefined)
-        .finally(() => setFetchingRate(false));
-    }, RATE_LOOKUP_DEBOUNCE_MS);
-    return () => clearTimeout(timer);
+    return pairs;
   }, [
     account,
     startDate,
     foreignEnabled,
     foreignCurrencyError,
     trimmedForeignCurrency,
-    exchangeRateService,
     state.settings.baseCurrency,
   ]);
-  const turnOnRates = async () => {
-    if (togglingRates) return;
-    setTogglingRates(true);
-    try {
-      await exchangeRateService.setEnabled(true);
-      // Idempotent via occurrence keys: retries whatever rule generation skipped for lack of a
-      // rate, now that this may have just supplied one.
-      await repository.generateRecurring();
-    } catch (reason) {
-      showError(
-        "Couldn’t turn on automatic rates",
-        errorMessage(reason, "Try again."),
-      );
-    } finally {
-      setTogglingRates(false);
-    }
-  };
-  let feeError: string | undefined;
-  if (feeKind === "percent") {
-    feeError = validatePositiveDecimal(
-      feeValue,
-      "Fee",
-      false,
-      state.settings.locale,
-    );
-    if (!feeError) {
-      try {
-        normalizeFeePercent(
-          normalizeDecimalString(feeValue, state.settings.locale),
-        );
-      } catch {
-        feeError = "Fee must be greater than 0% and at most 100%.";
-      }
-    }
-  } else if (feeKind === "fixed") {
-    feeError = account
-      ? validateMoneyInput(feeValue, account.currency, state.settings.locale, {
-          label: "Fee",
-          positive: true,
-        })
-      : undefined;
-  }
-  const foreignFeePreview = useMemo(() => {
-    const previewKind: "expense" | "income" =
-      kind === "income" ? "income" : "expense";
-    const empty = {
-      principalMinor: null,
-      feeMinor: null,
-      totalMinor: null,
-      kind: previewKind,
-    } as const;
-    if (!account) return empty;
-    try {
-      let principalMinor: number;
-      if (foreignEnabled) {
-        if (foreignCurrencyError) return empty;
-        const foreignMinor = parseMoney(
-          amount,
-          trimmedForeignCurrency,
-          state.settings.locale,
-        );
-        const rate = foreignRate.trim()
-          ? normalizeDecimalString(foreignRate, state.settings.locale)
-          : foreignAppliedRate?.rate;
-        if (!rate) return empty;
-        principalMinor = convertMinor(
-          foreignMinor,
-          trimmedForeignCurrency,
-          account.currency,
-          rate,
-          state.settings.locale,
-        );
-      } else {
-        principalMinor = parseMoney(
-          amount,
-          account.currency,
-          state.settings.locale,
-        );
-      }
-      let feeInput: TransactionFeeInput | null = null;
-      if (feeKind === "percent" && feeValue.trim()) {
-        feeInput = {
-          kind: "percent",
-          percent: normalizeFeePercent(
-            normalizeDecimalString(feeValue, state.settings.locale),
-          ),
-        };
-      } else if (feeKind === "fixed" && feeValue.trim()) {
-        feeInput = {
-          kind: "fixed",
-          amountMinor: parseMoney(
-            feeValue,
-            account.currency,
-            state.settings.locale,
-          ),
-        };
-      }
-      const feeMinor = feeInput ? feeMinorFor(principalMinor, feeInput) : 0;
-      const totalMinor = totalWithFee(previewKind, principalMinor, feeMinor);
-      return { principalMinor, feeMinor, totalMinor, kind: previewKind };
-    } catch {
-      return empty;
-    }
-  }, [
+  const fetchingRate = useRateLookup(ratePairs);
+  const { turningOn: togglingRates, turnOn: turnOnRates } =
+    useTurnOnAutomaticRates();
+  const { feeError, preview: foreignFeePreview } = useFeeBreakdown({
     kind,
-    account,
-    foreignEnabled,
-    foreignCurrencyError,
+    accountCurrency,
+    foreignCurrency: foreignEnabled ? trimmedForeignCurrency : null,
+    foreignCurrencyInvalid: Boolean(foreignCurrencyError),
+    foreignRateText: foreignRate,
+    foreignAppliedRate: foreignAppliedRate?.rate,
     amount,
-    trimmedForeignCurrency,
-    foreignRate,
-    foreignAppliedRate,
     feeKind,
     feeValue,
-    state.settings.locale,
-  ]);
+    locale: state.settings.locale,
+  });
   const { closeToOwner } = useFormSheet({
     ownerRoute:
       params.returnTo === "/overview" || params.returnTo === "/transactions"
@@ -526,22 +404,12 @@ export function RecurringFormScreen() {
               : undefined,
           }
         : null;
-      const feePayload: TransactionFeeInput | null =
-        feeKind === "percent" && feeValue.trim()
-          ? {
-              kind: "percent",
-              percent: normalizeDecimalString(feeValue, state.settings.locale),
-            }
-          : feeKind === "fixed" && feeValue.trim()
-            ? {
-                kind: "fixed",
-                amountMinor: parseMoney(
-                  feeValue,
-                  account.currency,
-                  state.settings.locale,
-                ),
-              }
-            : null;
+      const feePayload = feeInputFor(
+        feeKind,
+        feeValue,
+        account.currency,
+        state.settings.locale,
+      );
       const templateAmountMinor = foreignEnabled
         ? (foreignFeePreview.principalMinor ?? foreignPayload!.amountMinor)
         : parseMoney(amount, account.currency, state.settings.locale);
@@ -627,13 +495,7 @@ export function RecurringFormScreen() {
           {(["expense", "income"] as CategoryKind[]).map((item) => (
             <View key={item} style={{ flex: 1 }}>
               <ChoiceChip
-                icon={
-                  item === "income"
-                    ? "arrow.down"
-                    : item === "expense"
-                      ? "arrow.up"
-                      : "arrow.left.arrow.right"
-                }
+                icon={item === "income" ? "arrow.down" : "arrow.up"}
                 label={item[0].toUpperCase() + item.slice(1)}
                 selected={kind === item}
                 onPress={() => {

@@ -87,7 +87,6 @@ describe("effectiveAccentMode", () => {
       ...classicTheme,
       accent: { ...classicTheme.accent, mode: "system" },
     };
-    expect(effectiveAccentMode(system, "ios")).toBe("fixed");
     expect(effectiveAccentMode(system, "web")).toBe("fixed");
     expect(effectiveAccentMode(system, "android")).toBe("system");
     expect(effectiveAccentMode(fixedTheme, "android")).toBe("fixed");

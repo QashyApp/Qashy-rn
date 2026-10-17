@@ -34,7 +34,7 @@ import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { hapticSelection } from "@/utils/haptics";
-import type { WidgetSize } from "@/features/overview/layout/overview-layout";
+import type { WidgetSize } from "@/domain/overview-layout";
 
 /** A plain three-bar grip, drawn directly rather than through a not-yet-mapped icon name. */
 function DragGripGlyph({ color }: { color: string }) {

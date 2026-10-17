@@ -22,6 +22,12 @@ describe("money utilities", () => {
     expect(convertMinor(1000, "EUR", "USD", "1.125")).toBe(1125);
   });
 
+  it("never yields a negative zero", () => {
+    expect(Object.is(parseMoney("-0", "USD"), 0)).toBe(true);
+    expect(Object.is(parseInvariantMoney("-0.00", "USD"), 0)).toBe(true);
+    expect(Object.is(convertMinor(-1, "USD", "EUR", "0.001"), 0)).toBe(true);
+  });
+
   it("formats signed currency values", () => {
     expect(formatMoney(1250, "USD", "en-US", { sign: true })).toContain("+");
   });

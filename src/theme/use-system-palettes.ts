@@ -19,7 +19,7 @@ const sameTones = (
 ) => first === second || JSON.stringify(first) === JSON.stringify(second);
 
 /**
- * The Android 12+ wallpaper palettes, or null on web, iOS, older Android, Expo Go and Jest (any
+ * The Android 12+ wallpaper palettes, or null on web, older Android, Expo Go and Jest (any
  * build without the local `qashy-dynamic-colors` module). Re-read whenever the app returns to the
  * foreground, since the wallpaper may have changed meanwhile; the state only changes when the
  * colors really did, so nothing re-renders for no reason.

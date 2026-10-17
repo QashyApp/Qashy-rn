@@ -32,7 +32,7 @@ import {
   useRevealAllowedAtMount,
 } from "@/components/ui/motion";
 import type { DashboardSummary } from "@/domain/models";
-import { translateCurrent, useLocalization } from "@/localization/localization";
+import { useLocalization } from "@/localization/localization";
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { fontStyle, numericFontStyle } from "@/theme/typography";
@@ -79,6 +79,7 @@ export function SpendLineChart({
   const theme = useQashyTheme();
   const { space, charts } = theme;
   const areaGradientId = useId();
+  const { t } = useLocalization();
   const { contentWidth } = useScreenMetrics();
   const reduceMotion = useReducedMotion();
   // The SVG is laid out at 100% width, so the viewBox has to match the real
@@ -172,7 +173,7 @@ export function SpendLineChart({
     // owns the motion, and the line reveal below carries the data change.
     <View
       accessibilityRole="image"
-      accessibilityLabel={translateCurrent(label)}
+      accessibilityLabel={t(label)}
       onLayout={onLayout}
       style={{ minHeight: height }}
     >

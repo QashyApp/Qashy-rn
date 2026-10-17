@@ -413,7 +413,7 @@ export function TransactionsScreen() {
   );
 
   return (
-    // Amounts snap to a new month instead of counting up on the JS thread mid-swipe.
+    // Amounts hold their values through a swipe, then count to the new month once it settles.
     <CountUpSubject subject={month}>
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         <ScreenTransition style={{ flex: 1 }}>

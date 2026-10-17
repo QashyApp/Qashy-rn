@@ -41,7 +41,7 @@ import { canonicalJson } from "@/utils/canonical-json";
  *
  * Device-local and **non-secret** by construction. Key material lives in the keystore and
  * never here — a relay URL is read on every screen paint, and a table that mixed the two
- * would mean touching the Keychain to render a settings row.
+ * would mean touching the keystore to render a settings row.
  */
 export const SYNC_META = {
   /** This device's identity, derived from its Ed25519 public key. */

@@ -9,7 +9,7 @@ export type { TabGesturesSubscription, TabLongPressEvent };
 
 /**
  * Calls `listener` when an item of Android's native bottom navigation bar is long-pressed. Returns
- * a subscription to remove, or null on web, iOS, or when the native module is not part of the build.
+ * a subscription to remove, or null on web, or when the native module is not part of the build.
  * Never throws.
  */
 export function addTabLongPressListener(

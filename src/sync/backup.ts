@@ -232,7 +232,7 @@ export async function exportVaultBackup(
   deps: SyncSetupDeps,
   lock: BackupLock,
 ): Promise<Uint8Array> {
-  // Outside the transaction: the keystore is the Keychain or a WebCrypto unwrap, and awaiting
+  // Outside the transaction: the keystore is the Android Keystore or a WebCrypto unwrap, and awaiting
   // either inside `work` would leave Dexie's promise zone mid-transaction.
   const vault = await deps.keystore.read();
   if (!vault) {

@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import type { ReactElement } from "react";
 import { Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -109,15 +110,20 @@ describe("sheetScreenLayout", () => {
     expect(hasAndroidSheetOptions({})).toBe(false);
   });
 
-  it("returns the screen untouched off Android, even with the sheet's options", () => {
-    // Jest runs as iOS.
+  it("wraps the screen in the sheet on Android", () => {
+    // Jest runs as Android (see jest.config.cjs).
     const child = <Text>screen</Text>;
+    const wrapped: ReactElement = sheetScreenLayout({
+      options: ANDROID_SHEET_OPTIONS,
+      navigation: navigation(),
+      children: child,
+    });
+    expect(wrapped).not.toBe(child);
     expect(
-      sheetScreenLayout({
-        options: ANDROID_SHEET_OPTIONS,
-        navigation: navigation(),
-        children: child,
-      }),
+      (wrapped as ReactElement<{ children: unknown }>).props.children,
     ).toBe(child);
   });
+
+  // The off-Android branch is not testable here: `process.env.EXPO_OS` is inlined by Babel at
+  // build time, and Jest is built for Android. Web never mounts the sheet (it uses the form sheet).
 });

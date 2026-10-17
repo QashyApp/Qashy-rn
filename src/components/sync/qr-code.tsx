@@ -11,7 +11,7 @@ import { useQashyTheme } from "@/theme/theme";
  *
  * `qrcode` is used only for the matrix — `create()` is the pure encoder, with none of the
  * renderers attached — and `react-native-svg`, already a dependency for the charts, draws
- * it. Nothing rasterises, so this is one component across iOS, Android, and the browser
+ * it. Nothing rasterises, so this is one component across Android and the browser
  * rather than a canvas path and a native path that could disagree about what they encoded.
  *
  * **The whole matrix is one `<Path>`, not a grid of rects.** A pairing payload needs a

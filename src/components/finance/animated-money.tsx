@@ -16,6 +16,16 @@ import type { CurrencyCode } from "@/domain/models";
 import { formatMoney, formatMoneyParts } from "@/utils/money";
 
 const COUNT_DURATION = 420;
+/** A month change counts up more briefly, so it stays out of the way of the next swipe. */
+const MONTH_COUNT_DURATION = 250;
+/**
+ * How long a new subject must hold still before its amounts start to count. The pager commits a
+ * month only once the swipe has landed, so this only has to coalesce a run of quick swipes: each
+ * new subject restarts it, and the run pays for one count instead of renders between swipes.
+ */
+const SUBJECT_SETTLE_DELAY = 60;
+/** The month count re-renders the figure at most this often (about 30 per second). */
+const MONTH_FRAME_INTERVAL = 33;
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
@@ -23,9 +33,8 @@ function easeOutCubic(t: number) {
 
 /**
  * What the amounts beneath belong to, such as the month a screen shows. When it changes the
- * amounts snap to their new values: they describe something else now, not a change to watch.
- * A count-up re-renders on the JS thread every frame, and on a month swipe that is exactly when
- * the next swipe waits on that thread.
+ * amounts keep showing what they showed, wait for the swipe to settle, then count briefly to the
+ * new values. Changes within one subject count up at once.
  */
 const CountUpSubjectContext = createContext<string | null>(null);
 
@@ -56,57 +65,79 @@ export function useAnimatedMinorAmount(target: number) {
   const subject = useContext(CountUpSubjectContext);
   const subjectRef = useRef(subject);
   const [display, setDisplay] = useState(target);
-  // A new subject shows its own amounts in the same render, never the old ones for a frame.
-  const [shownSubject, setShownSubject] = useState(subject);
-  if (shownSubject !== subject) {
-    setShownSubject(subject);
-    setDisplay(target);
-  }
   const displayRef = useRef(target);
   const frameRef = useRef<number | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(false);
+  // Set when the subject changes; cleared once the month count has started.
+  const subjectChangedRef = useRef(false);
+  const settleAtRef = useRef(0);
 
   useEffect(() => {
-    if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
-      frameRef.current = null;
-    }
-    const from = displayRef.current;
-    const sameSubject = subjectRef.current === subject;
-    subjectRef.current = subject;
-    if (
-      !mountedRef.current ||
-      reduceMotion ||
-      !sameSubject ||
-      from === target
-    ) {
-      mountedRef.current = true;
-      displayRef.current = target;
-      setDisplay(target);
-      return;
-    }
-    const start = Date.now();
-    const step = () => {
-      const progress = Math.min(1, (Date.now() - start) / COUNT_DURATION);
-      const value =
-        progress >= 1
-          ? target
-          : Math.round(from + (target - from) * easeOutCubic(progress));
-      displayRef.current = value;
-      setDisplay(value);
-      if (progress < 1) frameRef.current = requestAnimationFrame(step);
-      else frameRef.current = null;
-    };
-    frameRef.current = requestAnimationFrame(step);
-    return () => {
+    const cancel = () => {
       if (frameRef.current !== null) {
         cancelAnimationFrame(frameRef.current);
         frameRef.current = null;
       }
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
     };
+    cancel();
+    if (subjectRef.current !== subject) {
+      subjectRef.current = subject;
+      subjectChangedRef.current = true;
+      settleAtRef.current = Date.now() + SUBJECT_SETTLE_DELAY;
+    }
+    const from = displayRef.current;
+    if (!mountedRef.current || reduceMotion || from === target) {
+      mountedRef.current = true;
+      subjectChangedRef.current = false;
+      displayRef.current = target;
+      setDisplay(target);
+      return;
+    }
+    const run = () => {
+      timerRef.current = null;
+      const monthChange = subjectChangedRef.current;
+      subjectChangedRef.current = false;
+      const duration = monthChange ? MONTH_COUNT_DURATION : COUNT_DURATION;
+      const start = Date.now();
+      let lastPaint = start;
+      const step = () => {
+        const now = Date.now();
+        const progress = Math.min(1, (now - start) / duration);
+        if (
+          progress < 1 &&
+          monthChange &&
+          now - lastPaint < MONTH_FRAME_INTERVAL
+        ) {
+          frameRef.current = requestAnimationFrame(step);
+          return;
+        }
+        lastPaint = now;
+        const value =
+          progress >= 1
+            ? target
+            : Math.round(from + (target - from) * easeOutCubic(progress));
+        displayRef.current = value;
+        setDisplay(value);
+        if (progress < 1) frameRef.current = requestAnimationFrame(step);
+        else frameRef.current = null;
+      };
+      frameRef.current = requestAnimationFrame(step);
+    };
+    const wait = subjectChangedRef.current
+      ? Math.max(0, settleAtRef.current - Date.now())
+      : 0;
+    if (wait > 0) timerRef.current = setTimeout(run, wait);
+    else run();
+    return cancel;
   }, [reduceMotion, target, subject]);
 
-  return display;
+  // Reduced motion never shows an in-between value, not even for the frame before the effect.
+  return reduceMotion ? target : display;
 }
 
 /** Variants that split into a full-size integer/sign plus a visually subordinate currency+fraction run by default. */

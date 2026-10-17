@@ -26,7 +26,7 @@ import {
   WIDGET_RULES,
   type OverviewCard,
   type OverviewLayoutAction,
-} from "@/features/overview/layout/overview-layout";
+} from "@/domain/overview-layout";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
 import { OverviewMonthPage } from "@/features/overview/overview-month-page";
 import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
@@ -176,7 +176,7 @@ export function OverviewScreen() {
     setConfigOpenId((current) => (current === id ? null : id));
 
   return (
-    // Amounts snap to a new month instead of counting up on the JS thread mid-swipe.
+    // Amounts hold their values through a swipe, then count to the new month once it settles.
     <CountUpSubject subject={month}>
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         {/* A swipe does not move the window: it drives `dragProgress`, which slides the month

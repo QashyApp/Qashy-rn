@@ -1,11 +1,11 @@
 /**
  * Maps every `OverviewWidgetType` to the component (and optional inline config sheet) that
  * renders it, plus the copy shown in the "Add card" gallery. Structural rules (allowed sizes,
- * whether more than one instance can exist) stay in `layout/overview-layout.ts`; this is the
+ * whether more than one instance can exist) stay in `src/domain/overview-layout.ts`; this is the
  * UI-facing half of the same catalog.
  */
 
-import type { OverviewWidgetType } from "@/features/overview/layout/overview-layout";
+import type { OverviewWidgetType } from "@/domain/overview-layout";
 import { AccountsWidget } from "@/features/overview/widgets/accounts-widget";
 import {
   BudgetPulseConfigSheet,

@@ -26,10 +26,7 @@
  * for anyone who would simply rather no server existed.
  */
 
-import * as DocumentPicker from "expo-document-picker";
-import { File as ExpoFile, Paths } from "expo-file-system";
 import { router, useLocalSearchParams } from "expo-router";
-import * as Sharing from "expo-sharing";
 import { useState } from "react";
 import { View } from "react-native";
 
@@ -42,6 +39,8 @@ import { FormScreen } from "@/components/ui/form-screen";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { StatusPill } from "@/components/ui/status-pill";
+import { pickAsset, readAssetBytes, readAssetText } from "@/features/pick-file";
+import { saveFile } from "@/features/save-file";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceRepository } from "@/providers/finance-provider";
 import { useSync } from "@/providers/sync-provider";
@@ -76,7 +75,6 @@ import { hapticSuccess } from "@/utils/haptics";
 import {
   MAX_SYNC_IMPORT_BYTES,
   MAX_VAULT_IMPORT_BYTES,
-  assertFileSize,
 } from "@/utils/file-size";
 
 /**
@@ -198,7 +196,7 @@ export function TransferScreen() {
             ? { kind: "passphrase", passphrase }
             : { kind: "recoveryPhrase" },
         );
-        await save(
+        await saveFile(
           backupFileName(todayLocal()),
           BACKUP_MIME,
           file,
@@ -315,7 +313,7 @@ export function TransferScreen() {
         }
         setSent(bundle);
         if (!bundle.frames) return;
-        await save(
+        await saveFile(
           bundleFileName(todayLocal()),
           BUNDLE_MIME,
           bundle.text,
@@ -424,7 +422,6 @@ export function TransferScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="new-password"
-                  textContentType="newPassword"
                   hint={t(
                     `At least ${MIN_PASSPHRASE_LENGTH} characters. Qashy cannot reset this — the file is unreadable without it.`,
                   )}
@@ -438,7 +435,6 @@ export function TransferScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="new-password"
-                  textContentType="newPassword"
                   error={
                     repeated && passphrase !== repeated
                       ? "These two do not match."
@@ -838,93 +834,22 @@ function Tally({
 // Files
 // ---------------------------------------------------------------------------
 
-/**
- * Writes a file out, by whichever mechanism the platform has.
- *
- * The same branch [csv-screen.tsx](src/features/more/csv-screen.tsx) already uses, kept
- * identical rather than abstracted: two call sites is not enough to justify a shared helper
- * whose whole body is a platform check, and the CSV one is the version that has been through
- * real devices.
- *
- * The native copy is left in the cache directory afterwards. Both file kinds are ciphertext —
- * one sealed to a passphrase or the vault key, the other a set of frames sealed per device —
- * so what is left behind is not readable by whatever else can see the cache.
- */
-async function save(
-  name: string,
-  mime: string,
-  data: string | Uint8Array,
-  dialogTitle: string,
-) {
-  if (process.env.EXPO_OS === "web") {
-    // `Blob` rejects a view that might be backed by a SharedArrayBuffer, which is what a bare
-    // `Uint8Array` widens to. Copying into a fresh view is the type-safe way to say it is not —
-    // one extra copy of a file that is about to be written to disk anyway.
-    const part: BlobPart =
-      typeof data === "string" ? data : new Uint8Array(data);
-    const url = URL.createObjectURL(new Blob([part], { type: mime }));
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = name;
-    anchor.style.display = "none";
-    document.body.appendChild(anchor);
-    anchor.click();
-    window.setTimeout(() => {
-      anchor.remove();
-      URL.revokeObjectURL(url);
-    }, 1000);
-    return;
-  }
-  const file = new ExpoFile(Paths.cache, name);
-  if (file.exists) file.delete();
-  file.create();
-  file.write(data);
-  if (await Sharing.isAvailableAsync())
-    await Sharing.shareAsync(file.uri, { mimeType: mime, dialogTitle });
-}
-
-/**
- * Any file at all, because the extensions are Qashy's own.
- *
- * A MIME filter would hide `.qashyvault` behind "no compatible files" on both platforms —
- * iOS resolves a UTI it has never heard of to nothing, and Android's picker filters on the
- * type the provider reports, which for an unknown extension is frequently blank. The file's
- * own magic bytes are what decides whether it is one of ours, one step later.
- */
-const PICKER = {
-  type: "*/*",
-  copyToCacheDirectory: true,
-  base64: false,
-} as const;
-
 async function pickBytes(): Promise<{
   name: string;
   bytes: Uint8Array;
 } | null> {
-  const result = await DocumentPicker.getDocumentAsync(PICKER);
-  if (result.canceled) return null;
-  const asset = result.assets[0];
-  const nativeFile = asset.file ? null : new ExpoFile(asset.uri);
-  assertFileSize(
-    asset.size ?? asset.file?.size ?? nativeFile?.size,
+  const asset = await pickAsset();
+  if (!asset) return null;
+  const bytes = await readAssetBytes(
+    asset,
     MAX_VAULT_IMPORT_BYTES,
     "Vault backup",
   );
-  const bytes = asset.file
-    ? new Uint8Array(await asset.file.arrayBuffer())
-    : await nativeFile!.bytes();
   return { name: asset.name, bytes };
 }
 
 async function pickText(): Promise<string | null> {
-  const result = await DocumentPicker.getDocumentAsync(PICKER);
-  if (result.canceled) return null;
-  const asset = result.assets[0];
-  const nativeFile = asset.file ? null : new ExpoFile(asset.uri);
-  assertFileSize(
-    asset.size ?? asset.file?.size ?? nativeFile?.size,
-    MAX_SYNC_IMPORT_BYTES,
-    "Sync file",
-  );
-  return asset.file ? await asset.file.text() : await nativeFile!.text();
+  const asset = await pickAsset();
+  if (!asset) return null;
+  return readAssetText(asset, MAX_SYNC_IMPORT_BYTES, "Sync file");
 }

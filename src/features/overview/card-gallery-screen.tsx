@@ -10,7 +10,7 @@ import { MotionPressable } from "@/components/ui/motion";
 import { PageHeading } from "@/components/ui/page-heading";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { TextButton } from "@/components/ui/text-button";
-import { availableToAdd } from "@/features/overview/layout/overview-layout";
+import { availableToAdd } from "@/domain/overview-layout";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
 import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
 import { useLocalization } from "@/localization/localization";
@@ -62,10 +62,7 @@ export function CardGalleryScreen() {
   };
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={{ flex: 1, backgroundColor: theme.background }}
-    >
+    <ScrollView style={{ flex: 1, backgroundColor: theme.background }}>
       <ScreenContainer>
         <PageHeading
           title="Add cards"

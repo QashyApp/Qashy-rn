@@ -10,7 +10,7 @@
  * Nothing else belongs in here. In particular, sync *configuration* — endpoint URLs, the
  * device roster, watermarks — lives in the device-local `sync_meta` table, because it is
  * queried constantly and is not secret. Mixing the two would mean every read of a relay
- * URL touches the Keychain.
+ * URL touches the keystore.
  */
 
 import type { DeviceIdentity, VaultRootKey } from "@/sync/crypto";
@@ -33,7 +33,7 @@ export interface StoredVault {
  * - `empty` — this device has never been paired. The ordinary state before setup.
  * - `unlocked` — the vault is readable right now.
  * - `locked` — a vault is stored but a passphrase gate is armed and has not been opened.
- * - `unavailable` — this platform cannot store secrets safely (no Keychain, no WebCrypto,
+ * - `unavailable` — this platform cannot store secrets safely (no Android Keystore, no WebCrypto,
  *   no IndexedDB). Sync must refuse to start rather than fall back to something weaker.
  */
 export type KeystoreStatus = "empty" | "unlocked" | "locked" | "unavailable";
@@ -41,7 +41,7 @@ export type KeystoreStatus = "empty" | "unlocked" | "locked" | "unavailable";
 export type KeystoreErrorCode =
   /** A passphrase gate is armed. Call `unlock` first. */
   | "locked"
-  /** The operation is meaningless on this platform (a passphrase gate on iOS, say). */
+  /** The operation is meaningless on this platform (a passphrase gate on Android, say). */
   | "unsupported"
   /** Secure storage is missing or refused. */
   | "unavailable"
@@ -67,8 +67,8 @@ export interface SyncKeystore {
   /**
    * Whether `setPassphrase` does anything here.
    *
-   * False on iOS and Android, and that is not a gap: the Keychain and the Android Keystore
-   * are already gated on the device unlock, so a second passphrase would add friction
+   * False on Android, and that is not a gap: the Android Keystore
+   * is already gated on the device unlock, so a second passphrase would add friction
    * without adding a boundary. A browser profile has no equivalent, which is the whole
    * reason the gate exists at all.
    */

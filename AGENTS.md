@@ -1,6 +1,8 @@
 # Qashy Agent Guide
 
-Qashy is a private, local-first personal budget app built with Expo SDK 58, React Native, React 19, and Expo Router. It targets iOS, Android, and an installable responsive PWA for desktop and mobile browsers.
+Qashy is a private, local-first personal budget app built with Expo SDK 58, React Native, React 19, and Expo Router. It targets Android and an installable responsive PWA for desktop and mobile browsers.
+
+> Native iOS is not currently supported. Do not add iOS-specific code paths, `Platform.OS === "ios"` branches, or iOS-only APIs. The web PWA still supports iOS Safari (home-screen install, safe-area insets, WebKit quirks); that is web code, not native iOS.
 
 Before changing Expo APIs, read the exact SDK 58 documentation at <https://docs.expo.dev/versions/v58.0.0/>. Do not assume examples for older Expo SDKs still apply.
 
@@ -84,7 +86,7 @@ Use Expo Router and preserve real public web paths such as `/overview`, `/transa
 
 - Mobile uses four native tabs with nested stacks.
 - Web uses bottom navigation below 768px, a compact rail from 768–1199px, and a full sidebar at 1200px and above.
-- Creation and editing flows use form-sheet presentation where supported. iOS and web use the native form sheet; Android uses `AndroidSheet` (`src/components/navigation/android-sheet.tsx`), a transparent-modal route animated with Reanimated, because the native one cannot be restyled without modifying a library.
+- Creation and editing flows use form-sheet presentation where supported. Web uses the native form sheet; Android uses `AndroidSheet` (`src/components/navigation/android-sheet.tsx`), a transparent-modal route animated with Reanimated, because the native one cannot be restyled without modifying a library.
 - Never modify a third-party package: no `patch-package`, no edits under `node_modules`, no vendored forks. Reach for a public API, a local Expo module in `modules/`, or an upstream contribution instead.
 - After a sheet mutation, return to or replace with its owning section so repository projections render fresh data on web.
 - Route files should generally import and export a feature screen rather than contain business logic.
@@ -95,13 +97,12 @@ Use Expo Router and preserve real public web paths such as `/overview`, `/transa
 - Keep native controls inside the shared `@expo/ui` `Host`.
 - A theme is a `ThemeDefinition` in `src/theme/themes/` (registered in `BUILT_IN_THEMES`). Read it only through `useQashyTheme()`, for colors AND scales: `space`, `radius`, `tile`, `iconSize` and `motion` are per theme and must not be imported from `@/theme/tokens` outside `src/theme/` (ESLint enforces this). Never hard-code colors or scale values in features. See `docs/theme-authoring.md`.
 - Every theme defines both light and dark; there are no single-scheme themes.
-- Classic's surfaces are the hand-tuned neutral tokens in `src/theme/tokens.ts`; other themes may use different surfaces, shapes, materials, type and icon sets. The accent drives the accent color family only when the theme's `accent.mode` is `user`; Android system accent (Material You theme) optionally uses dynamic Material colors, while iOS and web use the theme's default accent.
+- Classic's surfaces are the hand-tuned neutral tokens in `src/theme/tokens.ts`; other themes may use different surfaces, shapes, materials, type and icon sets. The accent drives the accent color family only when the theme's `accent.mode` is `user`; Android system accent (Material You theme) optionally uses dynamic Material colors, while web uses the theme's default accent.
 - Custom (user-authored) themes are JSON files validated fail-closed and contrast-clamped by `src/theme/custom/schema.ts`. They are stored device-locally in `sync_meta` (`SYNC_META.customThemes`, via `src/data/custom-themes-store.ts`), never in `AppSettings`, and never synced. A broken or missing custom theme falls back to Classic. Changing the schema means updating `CUSTOM_THEME_GUIDE.md` and its tests (`src/theme/custom/__tests__/guide.test.ts`).
 - `themeId`, `themeMode`, `accentSource` and `accentHex` are `deviceLocal` in the sync registry. Do not move theme settings into a synced field group.
 - Icon ids stored on entities stay theme-independent; a theme's icon set only changes how an id is drawn, and any gap falls back to Ionicons.
 - Fonts come from the registry in `src/theme/fonts.ts`, must be open-license and bundled, and any face without Hebrew needs a Rubik fallback. No remote theme assets: no fonts, images or URLs fetched for a theme.
-- Liquid Glass is selective: navigation, sheets, and floating actions on supported iOS versions only.
-- Always provide blur and opaque reduced-transparency fallbacks.
+- Blur is selective: navigation, sheets, and floating actions only. Always provide blur and opaque reduced-transparency fallbacks.
 - Prefer continuous corners, restrained shadows, tabular financial figures, and subtle motion.
 - Use `react-native-svg` for shared lightweight charts.
 - Maintain 44–48px minimum touch targets and meaningful accessibility roles, labels, and selected states.
@@ -112,7 +113,7 @@ Use Expo Router and preserve real public web paths such as `/overview`, `/transa
 
 Use platform files when behavior genuinely differs:
 
-- `.native.ts` or `.native.tsx` for iOS and Android.
+- `.native.ts` or `.native.tsx` for Android (iOS is not currently supported).
 - `.web.ts` or `.web.tsx` for browsers.
 - A non-suffixed file may act as a TypeScript or Metro fallback.
 
@@ -141,7 +142,6 @@ npm run test:web
 Also verify native bundling when touching shared application, routing, storage, or theme code:
 
 ```bash
-npx expo export -p ios --output-dir /tmp/qashy-ios-export
 npx expo export -p android --output-dir /tmp/qashy-android-export
 ```
 

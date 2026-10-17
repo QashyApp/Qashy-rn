@@ -12,7 +12,7 @@ export const BUILT_IN_THEMES: readonly ThemeDefinition[] = [
   highContrastTheme,
 ];
 
-export type ThemePlatform = "ios" | "android" | "web";
+export type ThemePlatform = "android" | "web";
 
 /** Whether a theme is offered on a platform; `availableOn` omitted means everywhere. */
 export function isThemeAvailable(
@@ -23,9 +23,7 @@ export function isThemeAvailable(
 }
 
 function currentPlatform(): ThemePlatform {
-  return Platform.OS === "ios" || Platform.OS === "android"
-    ? Platform.OS
-    : "web";
+  return Platform.OS === "android" ? "android" : "web";
 }
 
 /** Built-in themes followed by custom ones (built-in ids win), limited to those the platform offers. */

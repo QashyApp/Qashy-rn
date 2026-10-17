@@ -1,9 +1,4 @@
 import { BlurView } from "expo-blur";
-import {
-  GlassView,
-  isGlassEffectAPIAvailable,
-  isLiquidGlassAvailable,
-} from "expo-glass-effect";
 import { useEffect, useState, type ReactNode } from "react";
 import {
   AccessibilityInfo,
@@ -38,11 +33,9 @@ function blurIsReliable(): boolean {
 export function GlassSurface({
   children,
   style,
-  interactive = false,
 }: {
   children: ReactNode;
   style?: ViewStyle | ViewStyle[];
-  interactive?: boolean;
 }) {
   const theme = useQashyTheme();
   const [reduceTransparency, setReduceTransparency] = useState(() =>
@@ -72,23 +65,6 @@ export function GlassSurface({
     return undefined;
   }, []);
 
-  if (
-    process.env.EXPO_OS === "ios" &&
-    !reduceTransparency &&
-    isGlassEffectAPIAvailable() &&
-    isLiquidGlassAvailable()
-  ) {
-    return (
-      <GlassView
-        isInteractive={interactive}
-        tintColor={theme.staticAccent}
-        colorScheme={theme.mode}
-        style={style}
-      >
-        {children}
-      </GlassView>
-    );
-  }
   if (!reduceTransparency && blurIsReliable()) {
     return (
       <BlurView

@@ -1,4 +1,4 @@
-import type { ImportSourceId, ImportSourceInfo } from "./types";
+import type { ImportSourceInfo } from "./types";
 
 export const IMPORT_SOURCES: readonly ImportSourceInfo[] = [
   {
@@ -37,9 +37,3 @@ export const IMPORT_SOURCES: readonly ImportSourceInfo[] = [
     ],
   },
 ];
-
-export function getImportSource(id: ImportSourceId): ImportSourceInfo {
-  const source = IMPORT_SOURCES.find((candidate) => candidate.id === id);
-  if (!source) throw new Error(`Unknown import source: ${String(id)}`);
-  return source;
-}

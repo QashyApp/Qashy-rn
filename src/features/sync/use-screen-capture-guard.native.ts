@@ -1,16 +1,14 @@
 /**
  * Keeps a screen out of screenshots and screen recordings while secret text is on it.
  *
- * `preventScreenCaptureAsync` covers screenshots and recordings on both platforms (Android uses
- * FLAG_SECURE, which also blanks the app-switcher snapshot). iOS additionally needs the
- * app-switcher blur, because iOS snapshots the window when the app leaves the foreground.
+ * `preventScreenCaptureAsync` covers screenshots and recordings (Android uses
+ * FLAG_SECURE, which also blanks the app-switcher snapshot).
  *
  * Native only. Each caller passes its own `key` so two screens cannot release each other's block.
  */
 
 import * as ScreenCapture from "expo-screen-capture";
 import { useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
 
 /**
  * Returns `true` only once the block is actually in place, so the caller can hold secret text back
@@ -34,12 +32,7 @@ export function usePreventScreenCaptureWhile(
     let cancelled = false;
     const protect = async () => {
       await ScreenCapture.preventScreenCaptureAsync(key);
-      // The cleanup may have run while the block was being set. Enabling app-switcher protection
-      // now would leave it on after the screen that asked for it has gone.
-      if (cancelled) return;
-      if (Platform.OS === "ios") {
-        await ScreenCapture.enableAppSwitcherProtectionAsync();
-      }
+      // The cleanup may have run while the block was being set; it has already released it.
       if (!cancelled) setGuarded(true);
     };
     protect().catch(() => {
@@ -50,11 +43,6 @@ export function usePreventScreenCaptureWhile(
       cancelled = true;
       setGuarded(false);
       void ScreenCapture.allowScreenCaptureAsync(key).catch(() => undefined);
-      if (Platform.OS === "ios") {
-        void ScreenCapture.disableAppSwitcherProtectionAsync().catch(
-          () => undefined,
-        );
-      }
     };
   }, [active, key]);
 

@@ -181,10 +181,7 @@ export function KitchenSinkScreen() {
   };
 
   return (
-    <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
-      style={{ flex: 1, backgroundColor: theme.background }}
-    >
+    <ScrollView style={{ flex: 1, backgroundColor: theme.background }}>
       <ScreenContainer>
         <PageHeading
           title="Kitchen sink"

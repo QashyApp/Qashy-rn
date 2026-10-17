@@ -831,17 +831,14 @@ export function iconSetCoverage(
   return { covered, missing };
 }
 
-export type IconRender =
-  { kind: "emoji"; emoji: string } | { kind: "sf"; name: string } | IconGlyph;
+export type IconRender = { kind: "emoji"; emoji: string } | IconGlyph;
 
 /**
- * Decides how an icon id is drawn. Pure: `ios` says whether legacy names may use the native
- * `sf:` image. Order: emoji (set ignored) -> `ion:` / legacy -> the set's glyph, else Ionicons.
+ * Decides how an icon id is drawn. Pure. Order: emoji (set ignored) -> `ion:` / legacy -> the set's glyph, else Ionicons.
  */
 export function resolveIconRender(
   parsed: ParsedIconId,
   setId: string,
-  ios = false,
 ): IconRender {
   if (parsed.kind === "emoji") return { kind: "emoji", emoji: parsed.emoji };
   const set = getIconSet(setId);
@@ -858,13 +855,6 @@ export function resolveIconRender(
   )
     ? IONICON_BY_SF_NAME[parsed.name]
     : undefined;
-  if (ios) {
-    if (set.id !== DEFAULT_ICON_SET_ID && mapped) {
-      const own = set.resolve(mapped);
-      if (own && own.kind !== "ionicon") return own;
-    }
-    return { kind: "sf", name: parsed.name };
-  }
   const name = mapped ?? FALLBACK_GLYPH;
   return set.resolve(name) ?? { kind: "ionicon", name };
 }
@@ -873,18 +863,14 @@ const RENDER_CACHE = new Map<string, IconRender>();
 const RENDER_CACHE_LIMIT = 1000;
 
 /**
- * `resolveIconRender` for a stored icon id, cached by `(id, set, ios)`. Rows and badges resolve the
+ * `resolveIconRender` for a stored icon id, cached by `(id, set)`. Rows and badges resolve the
  * same few ids on every render; the result depends on nothing else, and callers only read it.
  */
-export function resolveIconRenderById(
-  name: string,
-  setId: string,
-  ios = false,
-): IconRender {
-  const key = `${setId}|${ios ? 1 : 0}|${name}`;
+export function resolveIconRenderById(name: string, setId: string): IconRender {
+  const key = `${setId}|${name}`;
   let render = RENDER_CACHE.get(key);
   if (!render) {
-    render = resolveIconRender(parseIconId(name), setId, ios);
+    render = resolveIconRender(parseIconId(name), setId);
     if (RENDER_CACHE.size >= RENDER_CACHE_LIMIT) RENDER_CACHE.clear();
     RENDER_CACHE.set(key, render);
   }

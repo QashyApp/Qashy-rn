@@ -6,7 +6,7 @@ import { useQashyTheme } from "@/theme/theme";
 
 /**
  * The app's one toggle. Themes on the flat (Material 3) engine get a hand-drawn Material 3
- * switch here (web and iOS have no native one); Android draws the real Compose switch, see
+ * switch here (the web has no native one); Android draws the real Compose switch, see
  * `qashy-switch.android.tsx`. Every other theme uses the platform switch.
  */
 export function QashySwitch(props: SwitchProps) {

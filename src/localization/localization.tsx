@@ -402,8 +402,6 @@ const HEBREW: Record<string, string> = {
   "Only the accent changes. Qashy gently adjusts unsafe colors to preserve contrast.":
     "רק צבע ההדגשה משתנה. Qashy מתאים בעדינות צבעים בעייתיים כדי לשמור על ניגודיות.",
   "Color, contrast, and clarity": "צבע, ניגודיות ובהירות",
-  "Qashy adapts the same hierarchy across iOS, Android, and desktop.":
-    "Qashy מתאים את אותה היררכיה ל־iOS, ל־Android ולמחשב.",
   "Save appearance": "שמירת מראה",
   Saved: "נשמר",
   "Export transactions": "ייצוא תנועות",
@@ -1475,7 +1473,6 @@ const HEBREW: Record<string, string> = {
   "Couldn’t protect the phrase": "לא ניתן להגן על הביטוי",
   "The phrase was hidden because screenshots could not be blocked. Try again.":
     "הביטוי הוסתר כי לא ניתן היה לחסום צילומי מסך. נסו שוב.",
-  "My iPhone": "ה־iPhone שלי",
   "My Android": "ה־Android שלי",
   "My browser": "הדפדפן שלי",
   "Pairing was stopped because screenshots could not be blocked on this device. Nothing was sent.":

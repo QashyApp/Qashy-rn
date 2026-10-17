@@ -60,17 +60,3 @@ export function resolvePeriod(period: PeriodDefinition, onDate: string) {
 
   return { start: toLocalDate(start), end: toLocalDate(end) };
 }
-
-export function previousPeriod(period: PeriodDefinition, currentStart: string) {
-  const previous = parseLocalDate(currentStart);
-  if (period.unit === "day")
-    previous.setDate(previous.getDate() - period.interval);
-  if (period.unit === "week")
-    previous.setDate(previous.getDate() - period.interval * 7);
-  if (period.unit === "month")
-    previous.setMonth(previous.getMonth() - period.interval);
-  if (period.unit === "year")
-    previous.setFullYear(previous.getFullYear() - period.interval);
-  if (period.unit === "custom") return null;
-  return resolvePeriod(period, toLocalDate(previous));
-}

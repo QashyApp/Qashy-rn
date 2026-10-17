@@ -1,6 +1,5 @@
 /**
- * iOS and Android key storage: the Keychain and the Android Keystore, through
- * `expo-secure-store`.
+ * Android key storage: the Android Keystore, through `expo-secure-store`.
  *
  * `WHEN_UNLOCKED_THIS_DEVICE_ONLY` is doing two distinct things and both matter:
  *
@@ -8,15 +7,15 @@
  *   foreground only (see the plan's §3.6), so there is no background task that would need
  *   the key at a moment the user is not present, and nothing is given up by the stricter
  *   setting.
- * - *THIS_DEVICE_ONLY* — the entry is excluded from iCloud Keychain and from encrypted
+ * - *THIS_DEVICE_ONLY* — the entry is excluded from cloud and device-transfer
  *   backups. That is the point of the whole design: a device key that syncs itself to
- *   Apple is a device key Apple can be compelled to produce. Restoring a backup onto a new
+ *   a cloud is a device key a provider can be compelled to produce. Restoring a backup onto a new
  *   phone gives you the app without the vault, and the recovery phrase is how you get the
  *   vault back. That is the intended, honest path.
  *
- * `requireAuthentication` (Face ID / fingerprint on every read) is deliberately *not* set.
- * On Android it prompts for **every** operation including writes, which would put a
- * biometric prompt in front of an ordinary background sync, and on iOS the key is
+ * `requireAuthentication` (a fingerprint on every read) is deliberately *not* set.
+ * It prompts for **every** operation including writes, which would put a
+ * biometric prompt in front of an ordinary background sync, and the key is
  * invalidated whenever the enrolled biometrics change — which would silently destroy the
  * vault when a user adds a fingerprint. It belongs behind an explicit opt-in with that
  * consequence spelled out, not on by default.
@@ -35,6 +34,8 @@ import type { SyncKeystore } from "@/sync/keystore/types";
  */
 const STORE_KEY = "qashy.sync.vault.v1";
 
+// The `keychain*` option names are expo-secure-store's; they are kept exactly as first written so
+// existing vaults keep resolving.
 const OPTIONS: SecureStore.SecureStoreOptions = {
   keychainService: "app.qashy.sync",
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,

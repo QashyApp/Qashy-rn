@@ -1,7 +1,7 @@
 /**
  * The keystore state machine, shared by every platform.
  *
- * Each platform differs only in *where* an opaque byte string lives — the Keychain, the
+ * Each platform differs only in *where* an opaque byte string lives — the
  * Android Keystore, IndexedDB behind a non-extractable `CryptoKey`, or a field in a test
  * double. Everything above that — the record framing, the optional passphrase gate, the
  * locked/unlocked lifecycle, and the serialization that keeps a rotation from interleaving

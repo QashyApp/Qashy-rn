@@ -104,7 +104,9 @@ describe("AppearanceScreen custom themes", () => {
     mockPick.mockResolvedValue(exportCustomThemeJson(MINIMAL_EXAMPLE));
     await render(<AppearanceScreen />);
 
-    await fireEvent.press(screen.getByRole("button", { name: "Import theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Import theme$/ }),
+    );
 
     await waitFor(() =>
       expect(mockUpdateSettings).toHaveBeenCalledWith({
@@ -131,7 +133,9 @@ describe("AppearanceScreen custom themes", () => {
     mockPick.mockResolvedValue(JSON.stringify(bad));
     await render(<AppearanceScreen />);
 
-    await fireEvent.press(screen.getByRole("button", { name: "Import theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Import theme$/ }),
+    );
 
     await waitFor(() => expect(mockShowError).toHaveBeenCalled());
     const [title, message] = mockShowError.mock.calls[0] as [string, string];
@@ -146,10 +150,14 @@ describe("AppearanceScreen custom themes", () => {
   it("changes nothing for text that is not JSON, and for a cancelled picker", async () => {
     await render(<AppearanceScreen />);
     mockPick.mockResolvedValueOnce("{nope");
-    await fireEvent.press(screen.getByRole("button", { name: "Import theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Import theme$/ }),
+    );
     await waitFor(() => expect(mockShowError).toHaveBeenCalledTimes(1));
     mockPick.mockResolvedValueOnce(null);
-    await fireEvent.press(screen.getByRole("button", { name: "Import theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Import theme$/ }),
+    );
     await waitFor(() => expect(mockPick).toHaveBeenCalledTimes(2));
     expect(mockSave).not.toHaveBeenCalled();
     expect(mockUpdateSettings).not.toHaveBeenCalled();
@@ -162,7 +170,9 @@ describe("AppearanceScreen custom themes", () => {
     );
     await render(<AppearanceScreen />);
 
-    await fireEvent.press(screen.getByRole("button", { name: "Import theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Import theme$/ }),
+    );
 
     await waitFor(() =>
       expect(mockShowError).toHaveBeenCalledWith(
@@ -181,12 +191,16 @@ describe("AppearanceScreen custom themes", () => {
     mockConfirm.mockResolvedValueOnce(false);
     await render(<AppearanceScreen />);
 
-    await fireEvent.press(screen.getByRole("button", { name: "Import theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Import theme$/ }),
+    );
     await waitFor(() => expect(mockConfirm).toHaveBeenCalledTimes(1));
     expect(mockSave).not.toHaveBeenCalled();
 
     mockConfirm.mockResolvedValueOnce(true);
-    await fireEvent.press(screen.getByRole("button", { name: "Import theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Import theme$/ }),
+    );
     await waitFor(() =>
       expect(mockSave).toHaveBeenCalledWith(
         expect.objectContaining({ id: MINIMAL_EXAMPLE.id, name: "Changed" }),
@@ -204,7 +218,9 @@ describe("AppearanceScreen custom themes", () => {
         name: new RegExp(`^${FULL_EXAMPLE.name}\\. Custom`),
       }),
     ).toBeTruthy();
-    await fireEvent.press(screen.getByRole("button", { name: "Export theme" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Export theme$/ }),
+    );
     await waitFor(() =>
       expect(mockSaveFile).toHaveBeenCalledWith(
         `qashy-theme-${FULL_EXAMPLE.id}.json`,
@@ -218,7 +234,7 @@ describe("AppearanceScreen custom themes", () => {
     mockFiles = [FULL_EXAMPLE];
     await render(<AppearanceScreen />);
     expect(
-      screen.getByRole("button", { name: "Export theme" }).props
+      screen.getByRole("button", { name: /Export theme$/ }).props
         .accessibilityState,
     ).toMatchObject({ disabled: true });
   });

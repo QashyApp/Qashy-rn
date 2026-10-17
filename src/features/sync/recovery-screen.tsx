@@ -134,7 +134,6 @@ export function RecoveryScreen() {
   if (!status) {
     return (
       <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={containerStyle(space)}
       >
@@ -152,7 +151,6 @@ export function RecoveryScreen() {
 
   return (
     <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={containerStyle(space)}
     >

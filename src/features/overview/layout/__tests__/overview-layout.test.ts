@@ -6,7 +6,7 @@ import {
   serializeOverviewLayout,
   WIDGET_RULES,
   type OverviewLayout,
-} from "@/features/overview/layout/overview-layout";
+} from "@/domain/overview-layout";
 
 const layoutWith = (cards: OverviewLayout["cards"]): OverviewLayout => ({
   version: 1,

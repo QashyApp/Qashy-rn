@@ -13,8 +13,7 @@ import {
   withAppFont,
 } from "@/theme/typography";
 
-// Jest runs with EXPO_OS === 'ios' by default (see jest-expo's babel caller
-// platform), so these assert the native branch: a bare family, no fontWeight.
+// Jest runs with EXPO_OS === 'android' (see jest.config.cjs), so these assert the native branch: a bare family, no fontWeight.
 describe("numericFontStyle", () => {
   it("resolves each weight to its Figtree family on native for the default theme", () => {
     expect(numericFontStyle("medium").fontFamily).toBe("Figtree_500Medium");

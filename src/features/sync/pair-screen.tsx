@@ -17,7 +17,7 @@
  *   don't match" are equally weighted, side by side. A primary-styled "Continue" would be
  *   pressed reflexively, which is precisely the failure mode.
  * - **The peer's name is never shown before confirmation.** A name is attacker-chosen; a
- *   screen reading "Pair with Ziv's iPhone?" earns a yes the fingerprint has not.
+ *   screen reading "Pair with Ziv's phone?" earns a yes the fingerprint has not.
  * - **A failed or cancelled handshake is not resumable.** The pairing secret is single use,
  *   and `PairingHost` closes itself on failure. Going back mints a brand-new code, which is
  *   the correct behaviour rather than an inconvenience to work around.
@@ -39,7 +39,7 @@
  */
 
 import { router, useLocalSearchParams } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Platform, ScrollView, View } from "react-native";
 
 import { QrCode } from "@/components/sync/qr-code";
@@ -103,8 +103,6 @@ const unixSeconds = () => Math.floor(Date.now() / 1000);
 /** A first guess at a device name, so nobody has to invent one to get past the first screen. */
 function defaultDeviceName() {
   switch (Platform.OS) {
-    case "ios":
-      return "My iPhone";
     case "android":
       return "My Android";
     default:
@@ -532,7 +530,6 @@ export function PairScreen() {
   if (!status) {
     return (
       <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={containerStyle(space)}
       >
@@ -545,7 +542,6 @@ export function PairScreen() {
 
   return (
     <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
       keyboardShouldPersistTaps="handled"
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={containerStyle(space)}
@@ -870,6 +866,44 @@ function RoleOption({
   );
 }
 
+/** A recessed panel for text that is compared or copied by eye rather than tapped. */
+function SunkenWell({ children }: { readonly children: ReactNode }) {
+  const theme = useQashyTheme();
+  return (
+    <View
+      style={[
+        {
+          padding: theme.space.lg,
+          borderRadius: theme.radius.card,
+          borderCurve: "continuous",
+        },
+        materialStyle(theme, "sunken"),
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+function IconBadge({ icon }: { readonly icon: string }) {
+  const theme = useQashyTheme();
+  return (
+    <View
+      style={{
+        width: 56,
+        height: 56,
+        borderRadius: theme.radius.card,
+        borderCurve: "continuous",
+        backgroundColor: theme.accentContainer,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <AppIcon name={icon} color={theme.onAccentContainer} size={24} />
+    </View>
+  );
+}
+
 function HostCodeStep({
   code,
   remaining,
@@ -880,7 +914,7 @@ function HostCodeStep({
   readonly onRestart: () => void;
 }) {
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   const { t } = useLocalization();
   const [showTyped, setShowTyped] = useState(false);
   const expired = remaining <= 0;
@@ -954,16 +988,7 @@ function HostCodeStep({
               {/* A sunken well, like the six-word confirmation below: this string is looked at
                   and copied by eye, not tapped, so it reads better carved into the page than
                   floating above it. */}
-              <View
-                style={[
-                  {
-                    padding: space.lg,
-                    borderRadius: radius.card,
-                    borderCurve: "continuous",
-                  },
-                  materialStyle(theme, "sunken"),
-                ]}
-              >
+              <SunkenWell>
                 {/* Selectable, and that is the only concession made here. The code carries the
                     pairing secret, so there is no copy button and it is never persisted or
                     logged — a selection the user makes and pastes once is the shortest life
@@ -973,14 +998,14 @@ function HostCodeStep({
                   selectable
                   variant="label"
                   style={{
-                    fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+                    fontFamily: "monospace",
                     letterSpacing: 1,
                     lineHeight: 26,
                   }}
                 >
                   {formatPairingCodeForTyping(code.value)}
                 </AppText>
-              </View>
+              </SunkenWell>
               <AppText variant="caption" muted>
                 Type or paste this into the other device instead of scanning.
                 Treat it like the code itself — it works once, and only for the
@@ -1013,7 +1038,7 @@ function ConfirmStep({
   readonly onReject: () => void;
 }) {
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   return (
     <>
       <AppText variant="title">Do these words match?</AppText>
@@ -1025,18 +1050,9 @@ function ConfirmStep({
       {/* A larger, better-spaced sunken well around the six words — the single most important
           comparison in the app deserves more room than the cramped tiles the words render as
           on their own. */}
-      <View
-        style={[
-          {
-            padding: space.lg,
-            borderRadius: radius.card,
-            borderCurve: "continuous",
-          },
-          materialStyle(theme, "sunken"),
-        ]}
-      >
+      <SunkenWell>
         <SasDisplay words={sas} />
-      </View>
+      </SunkenWell>
 
       {/* Equal weight, deliberately. The dangerous answer is "yes" given reflexively, so "yes"
           gets no visual advantage over "no" and neither is the default focus target. */}
@@ -1077,7 +1093,7 @@ function DoneStep({
   readonly firstRun?: boolean;
 }) {
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { space } = theme;
   if (firstRun) {
     return (
       <View
@@ -1088,23 +1104,7 @@ function DoneStep({
           paddingVertical: space.xxl,
         }}
       >
-        <View
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: radius.card,
-            borderCurve: "continuous",
-            backgroundColor: theme.accentContainer,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <AppIcon
-            name="arrow.triangle.2.circlepath"
-            color={theme.onAccentContainer}
-            size={24}
-          />
-        </View>
+        <IconBadge icon="arrow.triangle.2.circlepath" />
         <AppText variant="title" style={{ textAlign: "center" }}>
           Receiving your data…
         </AppText>
@@ -1124,19 +1124,7 @@ function DoneStep({
           paddingVertical: space.lg,
         }}
       >
-        <View
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: radius.card,
-            borderCurve: "continuous",
-            backgroundColor: theme.accentContainer,
-            alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <AppIcon name="checkmark" color={theme.onAccentContainer} size={24} />
-        </View>
+        <IconBadge icon="checkmark" />
         <AppText variant="title" style={{ textAlign: "center" }}>
           {outcome?.headline ?? "Paired"}
         </AppText>

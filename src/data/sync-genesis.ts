@@ -43,6 +43,7 @@ import {
   buildOp,
   compareHlc,
   diffEntity,
+  formatHlc,
   hlcFromTimestamp,
   parseHlc,
   type SyncOpBody,
@@ -67,6 +68,35 @@ export interface GenesisResult {
 
 const SKIPPED: GenesisResult = { ran: false, opCount: 0, entityCount: 0 };
 
+interface GenesisReading {
+  readonly wall: number;
+  readonly counter: number;
+}
+
+/**
+ * Hands out one unique `(wall, counter)` pair per entity, two counter values wide so a
+ * tombstone's delete never collides with the next entity.
+ *
+ * Counters are tracked per wall reading. When a millisecond's 16-bit counter is exhausted the
+ * allocation borrows the next millisecond — the same rule `tick` uses — rather than
+ * wrapping to zero, which would hand out a reading already issued. Every reading is issued
+ * at most once, so uniqueness holds however many rows share a `createdAt`.
+ */
+export function createGenesisAllocator(deviceId: string) {
+  const next = new Map<number, number>();
+  return (createdAt: string): GenesisReading => {
+    let wall = parseHlc(hlcFromTimestamp(createdAt, 0, deviceId)).wall;
+    for (;;) {
+      const counter = next.get(wall) ?? 0;
+      if (counter + 1 <= MAX_COUNTER) {
+        next.set(wall, counter + 2);
+        return { wall, counter };
+      }
+      wall += 1;
+    }
+  };
+}
+
 /**
  * The ops one existing row implies.
  *
@@ -83,9 +113,9 @@ function genesisOps(
   type: EntityType,
   entity: FinanceEntity,
   deviceId: string,
-  counter: number,
+  reading: GenesisReading,
 ) {
-  const created = hlcFromTimestamp(entity.createdAt, counter, deviceId);
+  const created = formatHlc({ ...reading, deviceId });
   // A tombstone is described from its erased form, even if an older build stored it whole.
   const live: FinanceEntity = entity.deletedAt
     ? { ...eraseEntity(type, entity), deletedAt: null }
@@ -95,7 +125,11 @@ function genesisOps(
     // The deletion is a later event than the creation, and the counter is what says so —
     // `deletedAt` is often the same millisecond as `createdAt` for a row created and removed
     // in one session.
-    const deleted = hlcFromTimestamp(entity.createdAt, counter + 1, deviceId);
+    const deleted = formatHlc({
+      wall: reading.wall,
+      counter: reading.counter + 1,
+      deviceId,
+    });
     ops.push(...diffEntity(type, live, entity, deleted).ops);
   }
   return ops;
@@ -132,25 +166,20 @@ export async function runGenesisMigration(
 
   const bodies: SyncOpBody[] = [];
   let entityCount = 0;
-  // One counter across the whole vault rather than per type. Entities from different types
+  // One allocator across the whole vault rather than per type. Entities from different types
   // can share a `createdAt` just as easily as two of the same type, and a per-type counter
   // would hand them identical HLCs.
-  let counter = 0;
+  const allocate = createGenesisAllocator(deviceId);
 
   for (const { type, entities } of loaded) {
     for (const entity of [...entities].sort(compareStoredEntities)) {
-      const ops = genesisOps(type, entity, deviceId, counter);
+      // Two readings per entity, whether or not the second is used, so a tombstone never
+      // collides with the entity that follows it.
+      const reading = allocate(entity.createdAt);
+      const ops = genesisOps(type, entity, deviceId, reading);
       if (!ops.length) continue;
       bodies.push(...ops);
       entityCount += 1;
-      // Two readings per entity, whether or not the second was used, so a tombstone never
-      // collides with the entity that follows it.
-      counter += 2;
-      if (counter > MAX_COUNTER - 2) {
-        // The counter is 16 bits. A vault large enough to exhaust it within one millisecond
-        // bucket rolls into the next; ordering is preserved because the wall reading rises.
-        counter = 0;
-      }
     }
   }
 

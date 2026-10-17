@@ -10,10 +10,7 @@
  * remaining on the current one.
  */
 
-import type {
-  OverviewCard,
-  WidgetSize,
-} from "@/features/overview/layout/overview-layout";
+import type { OverviewCard, WidgetSize } from "@/domain/overview-layout";
 
 export const GRID_BREAKPOINT = 900;
 const TOTAL_COLUMNS = 6;

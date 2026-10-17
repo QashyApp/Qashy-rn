@@ -68,17 +68,10 @@ export function useFormSheet({
     setLeaving(true);
   }, []);
 
-  // A plain `beforeRemove` listener can only call `event.preventDefault()`
-  // after native-stack's interactive swipe-to-dismiss has already torn the
-  // screen down natively, which desyncs JS navigation state and logs "was
-  // removed natively but didn't get removed from JS state." While the sheet is
-  // dirty, `usePreventRemove` sets `preventNativeDismiss` on iOS: the sheet
-  // springs back and native-stack dispatches a POP instead, so a swipe-down
-  // reaches the confirmation below rather than bypassing it (it is not
-  // disabled — a clean sheet still swipes closed directly). On Android the
-  // sheet is `AndroidSheet`: a swipe, the scrim, the close button and hardware
-  // back all ask to close it, and while this sheet is dirty it tells the shell
-  // not to animate away first, so they reach the confirmation below too.
+  // While the sheet is dirty, `usePreventRemove` stops it being removed without asking. On Android
+  // the sheet is `AndroidSheet`: a swipe, the scrim, the close button and hardware back all ask to
+  // close it, and while this sheet is dirty it tells the shell not to animate away first, so they
+  // reach the confirmation below. On web the same guard intercepts navigation away from the sheet.
   usePreventRemove(dirty && !leaving, (event) => {
     void confirmDestructive({
       title: "Discard changes?",

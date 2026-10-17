@@ -2,8 +2,7 @@ import * as Haptics from "expo-haptics";
 
 // Haptics are native-only; on web every helper is a silent no-op so call
 // sites never need to branch per platform.
-const supportsHaptics =
-  process.env.EXPO_OS === "ios" || process.env.EXPO_OS === "android";
+const supportsHaptics = process.env.EXPO_OS === "android";
 
 function trigger(effect: () => Promise<void>) {
   if (!supportsHaptics) return;

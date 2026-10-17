@@ -31,6 +31,7 @@ import {
 import { useQashyTheme } from "@/theme/theme";
 import { ACCENT_PRESETS } from "@/theme/tokens";
 import { accountTypeLabel } from "@/utils/labels";
+import { useTurnOnAutomaticRates } from "@/features/use-automatic-rates";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import {
   validateCurrencyCode,
@@ -85,7 +86,6 @@ export function AccountFormScreen() {
   const [busy, setBusy] = useState(false);
   const exchangeRateService = useExchangeRateService();
   const rateStatus = useExchangeRateStatus();
-  const [togglingRates, setTogglingRates] = useState(false);
   const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute: "/more",
     values: { name, type, currency, opening, color },
@@ -126,23 +126,8 @@ export function AccountFormScreen() {
   const currencyUnsupported =
     showRatesCard && FRANKFURTER_UNSUPPORTED.has(currencyCode);
 
-  const turnOnAutomaticRates = async () => {
-    if (togglingRates) return;
-    setTogglingRates(true);
-    try {
-      await exchangeRateService.setEnabled(true);
-      // Idempotent via occurrence keys: retries whatever rule generation skipped for lack of a
-      // rate, now that this account's currency may have just gotten one.
-      await repository.generateRecurring();
-    } catch (reason) {
-      showError(
-        "Couldn’t turn on automatic rates",
-        errorMessage(reason, "Try again."),
-      );
-    } finally {
-      setTogglingRates(false);
-    }
-  };
+  const { turningOn: togglingRates, turnOn: turnOnAutomaticRates } =
+    useTurnOnAutomaticRates();
 
   const changeCurrency = (value: string) => {
     setCurrency(value);

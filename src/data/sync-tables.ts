@@ -8,7 +8,7 @@
  * so a paired-device list stored there would be circular and this device's private state
  * would be broadcast to every peer.
  *
- * No key material lives here. Keys live in the keystore — Keychain, Android Keystore, or a
+ * No key material lives here. Keys live in the keystore — the Android Keystore or a
  * non-extractable `CryptoKey` — never in a table a backup, a debugger, or an export can read.
  *
  * Byte-valued columns are base64url strings rather than blobs. SQLite and IndexedDB disagree

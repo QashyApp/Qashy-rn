@@ -54,6 +54,9 @@ export function PwaUpdatePrompt() {
         registrationRef.current = next;
         if (next.waiting) announce();
         next.addEventListener("updatefound", onUpdateFound);
+        // A worker that began installing before this listener existed fires no `updatefound`,
+        // so it would reach `waiting` without ever being announced.
+        if (next.installing) onUpdateFound();
       })
       .catch(() => undefined);
     return () => {

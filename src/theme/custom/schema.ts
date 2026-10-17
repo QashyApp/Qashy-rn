@@ -1332,9 +1332,6 @@ function finishCanonical(
   return out;
 }
 
-/** The author's file as a plain object with stable key order. This is what the store persists. */
-export const serializeCustomTheme = canonicalizeCustomThemeFile;
-
 /** Pretty-printed (2 spaces), stable key order. Round-trips through `parseCustomTheme`. */
 export function exportCustomThemeJson(file: CustomThemeFile): string {
   return `${JSON.stringify(canonicalizeCustomThemeFile(file), null, 2)}\n`;

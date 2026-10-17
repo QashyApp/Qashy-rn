@@ -23,7 +23,7 @@ import { withAlpha } from "@/theme/tokens";
 const IS_ANDROID = process.env.EXPO_OS === "android";
 
 /**
- * iOS and web always use the native/web navigation. Android chooses between the platform
+ * Web always uses the web navigation. Android chooses between the platform
  * `BottomNavigationView` ("native") and a JS floating pill ("floating") from the device-local
  * `navBarStyle` setting. Swapping navigators remounts the tab stacks, so the user's section is restored.
  */
@@ -141,39 +141,22 @@ function NativeTabsLayout() {
       // here painted a solid gray disc over the icon on tap instead of a subtle
       // press overlay — a translucent tint of the real accent hex reads correctly.
       rippleColor={withAlpha(theme.staticAccent, 0.12)}
-      // iOS-only: the hairline the system draws above the bar when content
-      // scrolls under it. The theme's own border tone keeps it as restrained
-      // as every other divider, instead of the system default.
-      shadowColor={theme.border}
-      minimizeBehavior="onScrollDown"
     >
       <NativeTabs.Trigger name="overview">
         <NativeTabs.Trigger.Label>{t("Overview")}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: "house", selected: "house.fill" }}
-          md="home"
-        />
+        <NativeTabs.Trigger.Icon md="home" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="transactions">
         <NativeTabs.Trigger.Label>{t("Transactions")}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{
-            default: "list.bullet.rectangle",
-            selected: "list.bullet.rectangle.fill",
-          }}
-          md="receipt_long"
-        />
+        <NativeTabs.Trigger.Icon md="receipt_long" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="plan">
         <NativeTabs.Trigger.Label>{t("Plan")}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon
-          sf={{ default: "chart.pie", selected: "chart.pie.fill" }}
-          md="donut_large"
-        />
+        <NativeTabs.Trigger.Icon md="donut_large" />
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="more" role="more">
         <NativeTabs.Trigger.Label>{t("More")}</NativeTabs.Trigger.Label>
-        <NativeTabs.Trigger.Icon sf="ellipsis.circle" md="more_horiz" />
+        <NativeTabs.Trigger.Icon md="more_horiz" />
       </NativeTabs.Trigger>
     </NativeTabs>
   );

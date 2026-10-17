@@ -156,7 +156,6 @@ export function PlanScreen() {
   return (
     <ScrollView
       ref={scrollRef}
-      contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
     >
       <ScreenContainer>
@@ -165,133 +164,139 @@ export function PlanScreen() {
           subtitle="Set flexible limits and track progress toward meaningful goals."
         />
 
-        <View style={{ gap: 10 }}>
-          <SectionHeader
-            title="Budgets"
-            action={
-              budgets.length && !budgetSelection.selecting
-                ? "Add budget"
-                : undefined
-            }
-            actionIcon="plus"
-            onAction={() => router.push("/budget")}
-            secondaryAction={
-              budgets.length
-                ? budgetSelection.selecting
-                  ? "Done selecting"
-                  : "Select"
-                : undefined
-            }
-            onSecondaryAction={budgetSelection.toggleMode}
-          />
-          {budgets.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
-              {budgets.map((status) => (
-                <View key={status.budget.id} style={cardBasis}>
-                  <SelectableCard
-                    selecting={budgetSelection.selecting}
-                    fill={wide}
-                    selected={budgetSelection.selectedIds.includes(
-                      status.budget.id,
-                    )}
-                    disabled={budgetSelection.deleting}
-                    label={status.budget.name}
-                    onToggle={() => budgetSelection.toggle(status.budget.id)}
-                  >
-                    <BudgetCard status={status} today={today} fill={wide} />
-                  </SelectableCard>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <Card>
-              <EmptyState
-                compact
-                icon="chart"
-                title="Give spending a gentle boundary"
-                body="Create a monthly, weekly, yearly, or one-off budget. Nothing is forced into envelopes."
+        <PlanSection
+          title="Budgets"
+          addLabel="Add budget"
+          createRoute="/budget"
+          selection={budgetSelection}
+          hasItems={budgets.length > 0}
+          empty={
+            <EmptyState
+              compact
+              icon="chart"
+              title="Give spending a gentle boundary"
+              body="Create a monthly, weekly, yearly, or one-off budget. Nothing is forced into envelopes."
+            >
+              <ActionButton
+                title="Create a budget"
+                icon="plus"
+                onPress={() => router.push("/budget")}
+              />
+            </EmptyState>
+          }
+        >
+          {budgets.map((status) => (
+            <View key={status.budget.id} style={cardBasis}>
+              <SelectableCard
+                selecting={budgetSelection.selecting}
+                fill={wide}
+                selected={budgetSelection.selectedIds.includes(
+                  status.budget.id,
+                )}
+                disabled={budgetSelection.deleting}
+                label={status.budget.name}
+                onToggle={() => budgetSelection.toggle(status.budget.id)}
               >
-                <ActionButton
-                  title="Create a budget"
-                  icon="plus"
-                  onPress={() => router.push("/budget")}
-                />
-              </EmptyState>
-            </Card>
-          )}
-          {budgetSelection.selecting ? (
-            <BatchDeleteBar
-              count={budgetSelection.liveSelectedCount}
-              busy={budgetSelection.deleting}
-              onDelete={budgetSelection.deleteSelected}
-            />
-          ) : null}
-        </View>
+                <BudgetCard status={status} today={today} fill={wide} />
+              </SelectableCard>
+            </View>
+          ))}
+        </PlanSection>
 
-        <View style={{ gap: 10 }}>
-          <SectionHeader
-            title="Goals"
-            action={
-              goals.length && !goalSelection.selecting ? "Add goal" : undefined
-            }
-            actionIcon="plus"
-            onAction={() => router.push("/goal")}
-            secondaryAction={
-              goals.length
-                ? goalSelection.selecting
-                  ? "Done selecting"
-                  : "Select"
-                : undefined
-            }
-            onSecondaryAction={goalSelection.toggleMode}
-          />
-          {goals.length ? (
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
-              {goals.map((goal) => (
-                <View key={goal.id} style={cardBasis}>
-                  <SelectableCard
-                    selecting={goalSelection.selecting}
-                    fill={wide}
-                    selected={goalSelection.selectedIds.includes(goal.id)}
-                    disabled={goalSelection.deleting}
-                    label={goal.name}
-                    onToggle={() => goalSelection.toggle(goal.id)}
-                  >
-                    <GoalCard
-                      goal={goal}
-                      progress={goalProgress.get(goal.id) ?? 0}
-                      fill={wide}
-                    />
-                  </SelectableCard>
-                </View>
-              ))}
-            </View>
-          ) : (
-            <Card>
-              <EmptyState
-                compact
-                icon="target"
-                title="Save toward something real"
-                body="Track a savings target or a planned purchase with manual or linked progress."
+        <PlanSection
+          title="Goals"
+          addLabel="Add goal"
+          createRoute="/goal"
+          selection={goalSelection}
+          hasItems={goals.length > 0}
+          empty={
+            <EmptyState
+              compact
+              icon="target"
+              title="Save toward something real"
+              body="Track a savings target or a planned purchase with manual or linked progress."
+            >
+              <ActionButton
+                title="Create a goal"
+                icon="plus"
+                onPress={() => router.push("/goal")}
+              />
+            </EmptyState>
+          }
+        >
+          {goals.map((goal) => (
+            <View key={goal.id} style={cardBasis}>
+              <SelectableCard
+                selecting={goalSelection.selecting}
+                fill={wide}
+                selected={goalSelection.selectedIds.includes(goal.id)}
+                disabled={goalSelection.deleting}
+                label={goal.name}
+                onToggle={() => goalSelection.toggle(goal.id)}
               >
-                <ActionButton
-                  title="Create a goal"
-                  icon="plus"
-                  onPress={() => router.push("/goal")}
+                <GoalCard
+                  goal={goal}
+                  progress={goalProgress.get(goal.id) ?? 0}
+                  fill={wide}
                 />
-              </EmptyState>
-            </Card>
-          )}
-          {goalSelection.selecting ? (
-            <BatchDeleteBar
-              count={goalSelection.liveSelectedCount}
-              busy={goalSelection.deleting}
-              onDelete={goalSelection.deleteSelected}
-            />
-          ) : null}
-        </View>
+              </SelectableCard>
+            </View>
+          ))}
+        </PlanSection>
       </ScreenContainer>
     </ScrollView>
+  );
+}
+
+/** A titled card grid (budgets or goals) with add and multi-select controls and an empty state. */
+function PlanSection({
+  title,
+  addLabel,
+  createRoute,
+  selection,
+  hasItems,
+  empty,
+  children,
+}: {
+  title: string;
+  addLabel: string;
+  createRoute: "/budget" | "/goal";
+  selection: ReturnType<typeof useBatchDelete>;
+  hasItems: boolean;
+  empty: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    <View style={{ gap: 10 }}>
+      <SectionHeader
+        title={title}
+        action={hasItems && !selection.selecting ? addLabel : undefined}
+        actionIcon="plus"
+        onAction={() => router.push(createRoute)}
+        secondaryAction={
+          hasItems
+            ? selection.selecting
+              ? "Done selecting"
+              : "Select"
+            : undefined
+        }
+        onSecondaryAction={selection.toggleMode}
+      />
+      {hasItems ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+          {children}
+        </View>
+      ) : (
+        <Card>{empty}</Card>
+      )}
+      {selection.selecting ? (
+        <BatchDeleteBar
+          count={selection.liveSelectedCount}
+          busy={selection.deleting}
+          onDelete={selection.deleteSelected}
+        />
+      ) : null}
+    </View>
   );
 }
 
@@ -398,10 +403,14 @@ function BudgetCard({
       : "";
   // Dates and the rollover amount are data, so the caption is assembled with
   // its translatable words already resolved and then rendered verbatim.
-  const signed = (minor: number) =>
-    formatMoney(minor, state.settings.baseCurrency, state.settings.locale, {
-      sign: true,
-    });
+  const money = (minor: number, options?: { sign: boolean }) =>
+    formatMoney(
+      minor,
+      state.settings.baseCurrency,
+      state.settings.locale,
+      options,
+    );
+  const signed = (minor: number) => money(minor, { sign: true });
   const periodSummary = `${customState}${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, state.settings.locale)} ${t("to")} ${mediumDate(snapshot.periodEnd, state.settings.locale)}${budget.rollover ? ` · ${t("rollover")} ${signed(snapshot.rolloverMinor)}` : ""}${adjustmentMinor ? ` · ${t("adjusted")} ${signed(adjustmentMinor)}` : ""}`;
   // A custom budget outside its window has no current period to adjust.
   const canAdjust = !customState;
@@ -441,7 +450,7 @@ function BudgetCard({
           <AppText
             variant="caption"
             muted
-          >{`${t("of")} ${formatMoney(effectiveLimitMinor, state.settings.baseCurrency, state.settings.locale)}`}</AppText>
+          >{`${t("of")} ${money(effectiveLimitMinor)}`}</AppText>
         </View>
 
         <PaceBar
@@ -467,7 +476,7 @@ function BudgetCard({
           />
           {pace.projectionReliable ? (
             <AppText literal variant="caption" muted numeric>
-              {`${t("Projected")}: ${formatMoney(pace.projectedMinor, state.settings.baseCurrency, state.settings.locale)} ${t("by")} ${mediumDate(snapshot.periodEnd, state.settings.locale)}`}
+              {`${t("Projected")}: ${money(pace.projectedMinor)} ${t("by")} ${mediumDate(snapshot.periodEnd, state.settings.locale)}`}
             </AppText>
           ) : null}
         </View>
@@ -498,7 +507,7 @@ function BudgetCard({
                       variant="caption"
                       muted
                       numeric
-                    >{`${formatMoney(limit.amountMinor, state.settings.baseCurrency, state.settings.locale)} / ${formatMoney(limit.limitMinor, state.settings.baseCurrency, state.settings.locale)}`}</AppText>
+                    >{`${money(limit.amountMinor)} / ${money(limit.limitMinor)}`}</AppText>
                   </View>
                   <ProgressBar
                     size="thin"
@@ -569,6 +578,11 @@ function GoalCard({
   const percent = Math.max(0, Math.min(100, Math.round(ratio * 100)));
   const remainingMinor = Math.max(0, goal.targetMinor - displayProgress);
   useMilestoneHaptics(ratio, GOAL_MILESTONES, hapticSuccess);
+  const money = (minor: number) =>
+    formatMoney(minor, state.settings.baseCurrency, state.settings.locale);
+  const byDate = goal.targetDate
+    ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}`
+    : "";
 
   return (
     <MotionView
@@ -595,7 +609,7 @@ function GoalCard({
               literal
               variant="caption"
               muted
-            >{`${t(goal.kind === "saving" ? "Savings goal" : "Planned purchase")}${goal.targetDate ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}` : ""}`}</AppText>
+            >{`${t(goal.kind === "saving" ? "Savings goal" : "Planned purchase")}${byDate}`}</AppText>
           </View>
         </View>
 
@@ -618,15 +632,15 @@ function GoalCard({
             literal
             variant="caption"
             muted
-          >{`${t("of")} ${formatMoney(goal.targetMinor, state.settings.baseCurrency, state.settings.locale)}`}</AppText>
+          >{`${t("of")} ${money(goal.targetMinor)}`}</AppText>
         </View>
         <AppText literal variant="caption" muted numeric>
           {/* Hebrew puts the "remaining" verb before the amount ("נותרו $X"), the reverse
               of the English "$X remaining" order, so the fragments are composed per
               direction rather than concatenated in a single fixed order. */}
           {isRtl
-            ? `${t("remaining")} ${formatMoney(remainingMinor, state.settings.baseCurrency, state.settings.locale)}${goal.targetDate ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}` : ""}`
-            : `${formatMoney(remainingMinor, state.settings.baseCurrency, state.settings.locale)} ${t("remaining")}${goal.targetDate ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}` : ""}`}
+            ? `${t("remaining")} ${money(remainingMinor)}${byDate}`
+            : `${money(remainingMinor)} ${t("remaining")}${byDate}`}
         </AppText>
 
         <ActionButton

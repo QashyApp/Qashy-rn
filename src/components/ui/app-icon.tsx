@@ -3,7 +3,6 @@
 // and on web all of that lands in the offline precache too.
 import Ionicons from "@expo/vector-icons/Ionicons";
 import MaterialIcons from "@expo/vector-icons/MaterialIcons";
-import { Image } from "expo-image";
 import { Text, View, type ColorValue } from "react-native";
 import Svg, { Circle, Ellipse, Path, Rect } from "react-native-svg";
 
@@ -40,7 +39,6 @@ export function AppIcon({
   const render = resolveIconRenderById(
     name,
     iconSetId ? iconSetId : role === "category" ? categoryIconSet : iconSet,
-    process.env.EXPO_OS === "ios",
   );
   if (render.kind === "emoji") {
     // Emoji carry their own colors, so the tint is deliberately ignored.
@@ -66,18 +64,6 @@ export function AppIcon({
           {render.emoji}
         </Text>
       </View>
-    );
-  }
-  if (render.kind === "sf") {
-    return (
-      <Image
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-        source={`sf:${render.name}`}
-        tintColor={color as string}
-        style={{ width: size, height: size }}
-        contentFit="contain"
-      />
     );
   }
   return (

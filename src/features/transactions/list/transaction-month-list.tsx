@@ -325,7 +325,6 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       <View ref={containerRef} collapsable={false} style={{ flex: 1 }}>
         <SectionList
           ref={isCurrent ? listRef : undefined}
-          contentInsetAdjustmentBehavior="automatic"
           onScroll={
             isCurrent
               ? (event) => {

@@ -83,8 +83,7 @@ const scale: TypeScaleSpec = {
 /**
  * Flat, tonal Material 3 look: no gradients or drop shadows, depth from surface steps, outlined
  * or tonal cards, filled circular category badges over colorful category art, a rounded-square
- * FAB and a bolder type scale in Figtree. Offered on Android and web; iOS has Classic and High
- * Contrast. The accent defaults to the wallpaper's on Android 12+ (the theme's default elsewhere), and can be
+ * FAB and a bolder type scale in Figtree. Offered on Android and web. The accent defaults to the wallpaper's on Android 12+ (the theme's default elsewhere), and can be
  * switched to a curated or custom color on the Appearance screen.
  */
 export const materialYouTheme: ThemeDefinition = {

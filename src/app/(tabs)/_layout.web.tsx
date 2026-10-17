@@ -39,8 +39,8 @@ import {
 } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 
-// Icon names mirror the SF Symbols used by the native tabs in `_layout.tsx` so
-// the same section reads the same on every platform.
+// Icon names are the SF-style ids resolved through `AppIcon`, so the same section
+// reads the same on every platform.
 const NAV_ITEMS = [
   {
     href: "/overview" as const,

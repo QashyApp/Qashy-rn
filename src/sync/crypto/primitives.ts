@@ -16,7 +16,7 @@
  *   chain hash has to be computed inside a database transaction, and awaiting a foreign
  *   promise there commits the transaction underneath you (see `StorageAdapter.transact`).
  * - **`expo-crypto.getRandomBytes` as the single entropy source.** It is native-backed on
- *   iOS and Android and `crypto.getRandomValues` on web, so there is one path to audit
+ *   Android and `crypto.getRandomValues` on web, so there is one path to audit
  *   rather than three that can diverge — and it does not depend on `globalThis.crypto`
  *   existing on Hermes.
  */

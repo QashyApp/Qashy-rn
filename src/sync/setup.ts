@@ -214,7 +214,7 @@ async function clearForgottenVaultState(tx: StorageTx): Promise<void> {
  * discarded here before it can be paired with a newly generated identity.
  */
 export async function readSyncStatus(deps: SyncSetupDeps): Promise<SyncStatus> {
-  // Outside the transaction on purpose. The keystore is the Keychain or a WebCrypto unwrap,
+  // Outside the transaction on purpose. The keystore is the Android Keystore or a WebCrypto unwrap,
   // and awaiting either inside `work` would leave Dexie's promise zone mid-transaction.
   const keystore = await readKeystoreStatus(deps.keystore);
   // An unlocked key is the authority for this device's membership. An empty keystore paired

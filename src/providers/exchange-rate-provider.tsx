@@ -9,7 +9,7 @@
  * `fetch` is the one thing that differs by platform: on web this is `globalThis.fetch`, the
  * platform's own implementation; everywhere else it is `expo/fetch`, the same choice
  * `src/sync/runtime.ts` makes for the relay, for the same reason (a fetch implementation that
- * behaves consistently across iOS, Android, and Expo Go). Nothing here reads `window` or any
+ * behaves consistently across Android and Expo Go). Nothing here reads `window` or any
  * other browser-only global directly — only `Platform.OS`, which is safe on every platform.
  */
 

@@ -83,7 +83,6 @@ export function SyncScreen() {
   if (!status) {
     return (
       <ScrollView
-        contentInsetAdjustmentBehavior="automatic"
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={containerStyle(space)}
       >
@@ -165,7 +164,6 @@ export function SyncScreen() {
 
   return (
     <ScrollView
-      contentInsetAdjustmentBehavior="automatic"
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={containerStyle(space)}
       refreshControl={

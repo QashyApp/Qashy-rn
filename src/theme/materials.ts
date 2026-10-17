@@ -8,8 +8,7 @@ import { useQashyTheme, type ThemeTokens } from "@/theme/theme";
  *
  * RN 0.86 exposes a real gradient style prop, `experimental_backgroundImage`
  * (see `node_modules/react-native/Libraries/StyleSheet/StyleSheetTypes.d.ts`,
- * `ViewStyle`), which accepts a CSS `linear-gradient(...)` string on iOS and
- * Android.
+ * `ViewStyle`), which accepts a CSS `linear-gradient(...)` string on Android.
  *
  * react-native-web 0.21 does **not** special-case that prop name anywhere in
  * `dist/cjs/exports/StyleSheet/compiler/createReactDOMStyle.js` — the prop

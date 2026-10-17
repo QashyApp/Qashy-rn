@@ -8,7 +8,7 @@ import {
   DEFAULT_OVERVIEW_LAYOUT,
   overviewLayoutReducer,
   type OverviewLayout,
-} from "@/features/overview/layout/overview-layout";
+} from "@/domain/overview-layout";
 import { createOverviewLayoutStore } from "@/features/overview/layout/use-overview-layout";
 import type { StorageAdapter } from "@/data/storage-adapter";
 

@@ -127,7 +127,8 @@ function minorFromDecimal(
   if (decimal.decimalPlaces() > digits) {
     throw new Error(`Amount can have at most ${digits} decimal places.`);
   }
-  const minor = decimal.mul(new Decimal(10).pow(digits)).toNumber();
+  // `+ 0` turns a negative zero ("-0", "-0.00") into a plain 0 before it is stored.
+  const minor = decimal.mul(new Decimal(10).pow(digits)).toNumber() + 0;
   if (!isSafeMinor(minor))
     throw new Error("Amount is outside the supported range.");
   return minor;
@@ -147,7 +148,7 @@ export function isSupportedCurrencyCode(value: string) {
 /**
  * Minor-unit digits for every supported currency, pinned.
  *
- * `Intl.NumberFormat` reads these from the runtime's ICU data, and Hermes on iOS, Hermes on
+ * `Intl.NumberFormat` reads these from the runtime's ICU data, and Hermes on
  * Android and each browser ship different CLDR versions. They disagree for a number of
  * codes (COP, HUF, IDR, IQD, PKR … moved between 0, 2 and 3 digits across releases), and
  * `amountMinor` is only meaningful relative to this number: two synced devices that disagree
@@ -274,12 +275,13 @@ export function convertMinor(
   }
   const fromScale = new Decimal(10).pow(currencyDigits(fromCurrency, locale));
   const toScale = new Decimal(10).pow(currencyDigits(toCurrency, locale));
-  const converted = new Decimal(amountMinor)
-    .div(fromScale)
-    .mul(decimalRate)
-    .mul(toScale)
-    .toDecimalPlaces(0)
-    .toNumber();
+  const converted =
+    new Decimal(amountMinor)
+      .div(fromScale)
+      .mul(decimalRate)
+      .mul(toScale)
+      .toDecimalPlaces(0)
+      .toNumber() + 0;
   if (!isSafeMinor(converted))
     throw new Error("Converted amount is outside the supported range.");
   return converted;

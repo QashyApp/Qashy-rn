@@ -1,4 +1,4 @@
-const expoPreset = require("jest-expo/jest-preset.js");
+const expoPreset = require("jest-expo/android/jest-preset.js");
 
 // The `@noble` and `@scure` crypto packages ship ESM only — no `require` condition — so
 // Jest has to transform them or it hits "Cannot use import statement outside a module"
@@ -15,7 +15,9 @@ const transformIgnorePatterns = expoPreset.transformIgnorePatterns.map(
 );
 
 module.exports = {
-  preset: "jest-expo",
+  // Android is the one native platform Qashy ships, so Jest resolves `.native` / `.android` files and
+  // runs with `EXPO_OS === "android"`. Web-only behaviour is covered by Playwright and the `.web` suites.
+  preset: "jest-expo/android",
   // Reanimated's Jest resolver maps Reanimated's own `.native` modules that cannot run under
   // Jest — starting with `initializers.native`, which calls `runOnUISync` at import time and
   // throws on the web shim — to their JS-safe counterparts, and delegates to the

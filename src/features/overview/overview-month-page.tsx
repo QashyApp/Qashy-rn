@@ -31,10 +31,7 @@ import { TextButton } from "@/components/ui/text-button";
 import { FRANKFURTER_UNSUPPORTED } from "@/data/exchange-rates/frankfurter";
 import { AddCardWell } from "@/features/overview/card-gallery-screen";
 import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame";
-import {
-  WIDGET_RULES,
-  type OverviewCard,
-} from "@/features/overview/layout/overview-layout";
+import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
 import {
   GRID_BREAKPOINT,
   packOverviewRows,
@@ -46,13 +43,10 @@ import {
   useExchangeRateService,
   useExchangeRateStatus,
 } from "@/providers/exchange-rate-provider";
-import {
-  useFinanceRepository,
-  useFinanceState,
-} from "@/providers/finance-provider";
+import { useFinanceState } from "@/providers/finance-provider";
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
-import { errorMessage, showError } from "@/utils/confirm";
+import { useTurnOnAutomaticRates } from "@/features/use-automatic-rates";
 import { amountTone } from "@/utils/labels";
 import { formatMoney } from "@/utils/money";
 
@@ -105,7 +99,6 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   onDragEnd,
   onCardLayout,
 }: OverviewMonthPageProps) {
-  const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
@@ -128,25 +121,9 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   };
   const exchangeRateService = useExchangeRateService();
   const rateStatus = useExchangeRateStatus();
-  const [togglingRates, setTogglingRates] = useState(false);
 
-  const turnOnAutomaticRates = async () => {
-    if (togglingRates) return;
-    setTogglingRates(true);
-    try {
-      await exchangeRateService.setEnabled(true);
-      // Idempotent via occurrence keys: retries whatever rule generation skipped for lack of a
-      // rate, now that this may have just supplied one.
-      await repository.generateRecurring();
-    } catch (reason) {
-      showError(
-        "Couldn’t turn on automatic rates",
-        errorMessage(reason, "Try again."),
-      );
-    } finally {
-      setTogglingRates(false);
-    }
-  };
+  const { turningOn: togglingRates, turnOn: turnOnAutomaticRates } =
+    useTurnOnAutomaticRates();
 
   const summary = useDashboard(month);
 
@@ -226,7 +203,6 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   return (
     <ScrollView
       ref={isCurrent ? scrollRef : undefined}
-      contentInsetAdjustmentBehavior="automatic"
       onScroll={isCurrent ? onScroll : undefined}
       scrollEventThrottle={16}
       scrollEnabled={isCurrent}

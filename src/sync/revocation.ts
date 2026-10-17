@@ -6,7 +6,7 @@
  * invent another device's vote or lose an approval while forwarding it.
  */
 
-import type { Peer, Roster } from "@/sync/engine/roster";
+import type { Roster } from "@/sync/engine/roster";
 import { compareHlc, SYNC_CONTROL_ENTITY, type SyncOp } from "@/sync/oplog";
 
 export { SYNC_CONTROL_ENTITY };
@@ -342,9 +342,3 @@ export function deriveRevocationState(
     revocations: [...revocations.values()],
   };
 }
-
-export const memberIds = (roster: Roster, localDeviceId: string) =>
-  activeIdsAt(roster, localDeviceId, "9999-12-31T23:59:59.999Z");
-
-export const peerFor = (roster: Roster, id: string): Peer | undefined =>
-  roster.get(id);

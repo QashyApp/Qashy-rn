@@ -2,10 +2,10 @@
  * Icon ids are plain strings stored on entities and replicated to peers, so every format has to
  * stay parseable forever.
  *
- * - `ion:<glyph>`  — an Ionicons glyph, drawn identically on every platform (iOS included).
+ * - `ion:<glyph>`  — an Ionicons glyph, drawn identically on every platform.
  * - `emoji:<char>` — a single user-chosen emoji.
- * - anything else  — a legacy SF-Symbol-style name (`cart`, `fork.knife`); iOS draws the real
- *   symbol and other platforms map it to an Ionicons glyph.
+ * - anything else  — a legacy SF-Symbol-style name (`cart`, `fork.knife`), mapped to an
+ *   Ionicons glyph.
  */
 export const ION_PREFIX = "ion:";
 export const EMOJI_PREFIX = "emoji:";

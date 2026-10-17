@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
-import {
-  KeyboardAvoidingView,
-  ScrollView,
-  type ScrollViewProps,
-} from "react-native";
+import { ScrollView, View, type ScrollViewProps } from "react-native";
 
 import { CalculatorHost } from "@/components/finance/calculator-host";
 import { ScreenTransition } from "@/components/ui/motion";
 import { useQashyTheme } from "@/theme/theme";
 
 // Shared scroll container for form screens: taps on chips and buttons land on
-// the first touch while the keyboard is open, and iOS keeps the focused field
-// above the keyboard. Amount fields inside it use the calculator keypad, which
+// the first touch while the keyboard is open. Amount fields inside it use the calculator keypad, which
 // rises over the whole screen (see `CalculatorHost`).
 export function FormScreen({
   children,
@@ -21,7 +16,7 @@ export function FormScreen({
   ...props
 }: ScrollViewProps & { maxWidth?: number }) {
   const theme = useQashyTheme();
-  // A native sheet starts sliding in only once everything in it has mounted, so a long form held
+  // A sheet starts sliding in only once everything in it has mounted, so a long form held
   // the slide back by however long the whole form took to build (Android's own sheet starts at
   // once, but a form that builds mid-spring drops frames from it). The form now mounts a frame
   // after its sheet: the slide starts on the tap, and the form is in place well before the sheet
@@ -38,7 +33,6 @@ export function FormScreen({
       <ScrollView
         onScroll={onScroll}
         scrollEventThrottle={16}
-        contentInsetAdjustmentBehavior="automatic"
         keyboardShouldPersistTaps="handled"
         style={{ flex: 1, backgroundColor: theme.background }}
         contentContainerStyle={[
@@ -60,12 +54,5 @@ export function FormScreen({
   );
   const hosted = <CalculatorHost>{scroll}</CalculatorHost>;
   if (process.env.EXPO_OS === "web") return hosted;
-  return (
-    <KeyboardAvoidingView
-      behavior={process.env.EXPO_OS === "ios" ? "padding" : undefined}
-      style={{ flex: 1 }}
-    >
-      {hosted}
-    </KeyboardAvoidingView>
-  );
+  return <View style={{ flex: 1 }}>{hosted}</View>;
 }

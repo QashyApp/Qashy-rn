@@ -16,6 +16,7 @@ import { SYNC_META, writeMeta } from "@/data/sync-store";
 import { MAX_CLOCK_SKEW_MS, RETENTION_MS } from "@/sync/oplog";
 import { utf8Bytes } from "@/sync/crypto";
 import { sealPending } from "@/sync/engine/sealer";
+import { FULL_STATE_ENTRY_CAP } from "@/sync/engine/send";
 import { MAX_ABSORB_QUEUE } from "@/sync/engine/session";
 import { SyncEngineError } from "@/sync/engine/types";
 import type { SyncChannel } from "@/sync/engine/transport";
@@ -186,9 +187,10 @@ describe("SyncSession — convergence", () => {
   it("resyncs a peer whose history was compacted away, in chunks under the frame cap", async () => {
     const [alice, bob] = await makeVault();
     link(alice, bob);
-    // A vault big enough that its state spans several full-state chunks.
-    const bodies = Array.from({ length: 4 * 1_000 }, (_unused, index) =>
-      alice.body("accounts", `a${index}`),
+    // One entry past the per-chunk cap, so the state spans two full-state chunks.
+    const bodies = Array.from(
+      { length: FULL_STATE_ENTRY_CAP + 1 },
+      (_unused, index) => alice.body("accounts", `a${index}`),
     );
     const ops = await alice.commit(bodies);
     // Compaction, modelled exactly as it happens: only the chain head survives.
@@ -223,7 +225,7 @@ describe("SyncSession — convergence", () => {
     expect(JSON.parse(again!.acked)).toEqual({
       [alice.deviceId]: bodies.length,
     });
-  });
+  }, 60_000); // thousands of real signatures: seconds alone, far more on a loaded CI box
 
   it("stops pushing mid-pass when the caller aborts", async () => {
     const [alice, bob] = await makeVault();

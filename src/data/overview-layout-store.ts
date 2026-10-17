@@ -17,7 +17,7 @@ import {
   normalizeOverviewLayout,
   serializeOverviewLayout,
   type OverviewLayout,
-} from "@/features/overview/layout/overview-layout";
+} from "@/domain/overview-layout";
 
 /**
  * Reads the layout. Never throws: an absent key means first launch (the default layout), and

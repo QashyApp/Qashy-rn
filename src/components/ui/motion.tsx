@@ -14,6 +14,7 @@ import {
   StyleSheet,
   type ColorValue,
   View,
+  type PointerEvent,
   type PressableProps,
   type PressableStateCallbackType,
   type ViewProps,
@@ -33,8 +34,10 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
-import { useStateLayerBounds } from "@/components/ui/state-layer-bounds";
-import { withAlpha } from "@/theme/tokens";
+import {
+  useStateLayerBounds,
+  type StateLayerBounds,
+} from "@/components/ui/state-layer-bounds";
 import { useQashyTheme } from "@/theme/theme";
 import type { MotionSpec } from "@/theme/themes/types";
 
@@ -138,6 +141,7 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 // extend the type locally rather than pretending RN provides it.
 type ExtendedPressableState = PressableStateCallbackType & { hovered: boolean };
 
+type HoverEvent = Parameters<NonNullable<PressableProps["onHoverIn"]>>[0];
 const REST_STATE: ExtendedPressableState = { pressed: false, hovered: false };
 const PRESSED_STATE: ExtendedPressableState = { pressed: true, hovered: false };
 const HOVERED_STATE: ExtendedPressableState = { pressed: false, hovered: true };
@@ -658,6 +662,101 @@ function outward(value: number) {
   return value === 0 ? 0 : -value;
 }
 
+const SIZE_KEYS = [
+  "minHeight",
+  "height",
+  "maxHeight",
+  "minWidth",
+  "width",
+  "maxWidth",
+] as const satisfies readonly (keyof ViewStyle)[];
+
+/**
+ * Whether the style paints a shadow outside the control's box. The clipping view the native
+ * ripple needs would cut it off; inset shadows stay inside and are fine.
+ */
+function hasOuterShadow(style: ViewStyle): boolean {
+  const { boxShadow, elevation, shadowOpacity } = style as ViewStyle & {
+    shadowOpacity?: number;
+  };
+  if (typeof elevation === "number" && elevation > 0) return true;
+  if (typeof shadowOpacity === "number" && shadowOpacity > 0) return true;
+  if (boxShadow == null || boxShadow === "none") return false;
+  if (typeof boxShadow === "string") {
+    // Split on top-level commas only; rgba(...) carries commas of its own.
+    const layers = boxShadow.replace(/\([^)]*\)/g, "()").split(",");
+    return layers.some((layer) => !/\binset\b/.test(layer));
+  }
+  return boxShadow.some((layer) => !(layer as { inset?: boolean }).inset);
+}
+
+/**
+ * Grows a full-width row by its container's padding so a native ripple, which can only fill its
+ * own view, reaches the container's edges: negative margins pull the row out, equal padding keeps
+ * the content where it was, and every size constraint grows by the same amount so the row's
+ * layout footprint is unchanged. `null` when the style uses a value this cannot adjust exactly
+ * (physical left/right padding or margin, a percentage size); the caller then draws the JS wash.
+ */
+function bleedRowStyle(
+  style: ViewStyle,
+  bounds: StateLayerBounds,
+): ViewStyle | null {
+  const loose = style as Record<string, unknown>;
+  if (
+    ["paddingLeft", "paddingRight", "marginLeft", "marginRight"].some(
+      (key) => loose[key] !== undefined,
+    )
+  )
+    return null;
+  const pick = (keys: string[]): number | null => {
+    for (const key of keys) {
+      const value = loose[key];
+      if (value === undefined) continue;
+      return typeof value === "number" ? value : null;
+    }
+    return 0;
+  };
+  const padTop = pick(["paddingTop", "paddingVertical", "padding"]);
+  const padBottom = pick(["paddingBottom", "paddingVertical", "padding"]);
+  const padStart = pick(["paddingStart", "paddingHorizontal", "padding"]);
+  const padEnd = pick(["paddingEnd", "paddingHorizontal", "padding"]);
+  const marTop = pick(["marginTop", "marginVertical", "margin"]);
+  const marBottom = pick(["marginBottom", "marginVertical", "margin"]);
+  const marStart = pick(["marginStart", "marginHorizontal", "margin"]);
+  const marEnd = pick(["marginEnd", "marginHorizontal", "margin"]);
+  if (
+    padTop === null ||
+    padBottom === null ||
+    padStart === null ||
+    padEnd === null ||
+    marTop === null ||
+    marBottom === null ||
+    marStart === null ||
+    marEnd === null
+  )
+    return null;
+  const next: ViewStyle = {
+    ...style,
+    paddingTop: padTop + bounds.top,
+    paddingBottom: padBottom + bounds.bottom,
+    paddingStart: padStart + bounds.x,
+    paddingEnd: padEnd + bounds.x,
+    marginTop: marTop - bounds.top,
+    marginBottom: marBottom - bounds.bottom,
+    marginStart: marStart - bounds.x,
+    marginEnd: marEnd - bounds.x,
+  };
+  for (const key of SIZE_KEYS) {
+    const value = style[key];
+    if (value === undefined) continue;
+    if (typeof value !== "number") return null;
+    (next as Record<string, unknown>)[key] =
+      value +
+      (key.endsWith("eight") ? bounds.top + bounds.bottom : bounds.x * 2);
+  }
+  return next;
+}
+
 export function MotionPressable(props: MotionPressableProps) {
   // `enteringVariant` is fixed per call site, so choosing the component here never remounts a
   // live control. Most pressables have no entrance; they skip the shared value and animated
@@ -713,19 +812,6 @@ function MotionPressableBase({
   const layerColor = stateLayerColor ?? themeText;
   const containerBounds = useStateLayerBounds();
   const bleed = stateLayerShape === "container" ? containerBounds : null;
-  // Android answers with a ripple in the same wash color — the platform's own press feedback,
-  // drawn over the content. It replaces the JS wash there; when the color is not a plain hex
-  // string (Material You hands out opaque platform colors) the wash stays the carrier.
-  const ripple = props.android_ripple;
-  const rippleColor =
-    !ripple &&
-    layerEnabled &&
-    Platform.OS === "android" &&
-    typeof layerColor === "string" &&
-    /^#[0-9a-fA-F]{6}$/.test(layerColor)
-      ? withAlpha(layerColor, 0.14)
-      : undefined;
-  const showStateLayer = layerEnabled && rippleColor === undefined;
   // The theme's own press depth, unless the call site knows better.
   const pressDepth = pressedScale ?? motion.pressScale;
   const layer = useSharedValue(0);
@@ -821,10 +907,49 @@ function MotionPressableBase({
     typeof children === "function" ||
     (stateKeys.length > 0 && !canDriveFromUiThread);
 
+  // Android answers a press with the native Material ripple instead of the JS wash, covering the
+  // wash's area and shape (`bleedRowStyle` and the clip below). Whatever cannot be matched
+  // exactly keeps the wash: reduced motion (a ripple's animation cannot be controlled), a control
+  // with an outer shadow (the clip would cut it), per-state padding/size, or a style
+  // `bleedRowStyle` cannot adjust. A call site's own `android_ripple` always wins.
+  const ownRadius = restStyle.borderRadius;
+  const bleedStyle =
+    bleed === null || Platform.OS !== "android"
+      ? null
+      : bleedRowStyle(restStyle, bleed);
+  const nativeRipple =
+    Platform.OS === "android" &&
+    layerEnabled &&
+    !reduceMotion &&
+    !usesJsState &&
+    !props.android_ripple &&
+    (bleed === null
+      ? ownRadius === undefined || typeof ownRadius === "number"
+      : bleedStyle !== null &&
+        !stateKeys.some((key) =>
+          /^(padding|margin|min|max|height|width)/.test(key),
+        )) &&
+    ![restStyle, pressedStyle, hoveredStyle].some(hasOuterShadow);
+  const showStateLayer = layerEnabled && !props.android_ripple && !nativeRipple;
+  // A standalone control clips its own ripple. A ripple fills its view's rectangle whatever the
+  // radius, and RN's overflow clip only covers a view's children, so the rounded clip sits on the
+  // view that wraps the Pressable. A bleeding row needs none: the clipping card rounds it.
+  const rippleClip: ViewStyle | null =
+    nativeRipple &&
+    bleed === null &&
+    typeof ownRadius === "number" &&
+    ownRadius > 0
+      ? { overflow: "hidden", borderRadius: ownRadius }
+      : null;
+
   const state: ExtendedPressableState = usesJsState
     ? { pressed: jsPressed, hovered: jsHovered }
     : REST_STATE;
-  const flattenedStyle = usesJsState ? resolveStyle(state) : restStyle;
+  const flattenedStyle = usesJsState
+    ? resolveStyle(state)
+    : nativeRipple && bleedStyle
+      ? bleedStyle
+      : restStyle;
   const overrideKeys = usesJsState ? [] : (stateKeys as string[]);
   const restValues = overrideKeys.map(
     (key) => restStyle[key as keyof ViewStyle],
@@ -869,55 +994,85 @@ function MotionPressableBase({
         },
       }
     : null;
+  const handleHoverIn = (event: HoverEvent) => {
+    hoveredRef.current = true;
+    isHovered.set(1);
+    if (layerEnabled)
+      layer.set(
+        withTiming(
+          pressedRef.current ? STATE_LAYER_PRESS : STATE_LAYER_HOVER,
+          layerTiming,
+        ),
+      );
+    if (usesJsState) setJsHovered(true);
+    if (!pressedRef.current && !disabled) {
+      scale.set(withTiming(interactive ? hoverScale : 1, timingConfig));
+      translateY.set(
+        withTiming(interactive && liftOnHover ? -1 : 0, timingConfig),
+      );
+    }
+    onHoverIn?.(event);
+  };
+  const handleHoverOut = (event: HoverEvent) => {
+    hoveredRef.current = false;
+    isHovered.set(0);
+    if (layerEnabled && !pressedRef.current)
+      layer.set(withTiming(0, layerTiming));
+    if (usesJsState) setJsHovered(false);
+    if (!pressedRef.current) {
+      scale.set(withTiming(1, timingConfig));
+      translateY.set(withTiming(0, timingConfig));
+    }
+    onHoverOut?.(event);
+  };
+
+  // On web, hover comes from the stable outer wrapper rather than the Pressable's onHoverIn:
+  // react-native-web swaps the Pressable's host element when its role changes (a button becomes
+  // a div), but binds its hover listeners only to the first element, so hover went dead after a
+  // selection-mode toggle. React's delegated pointer props survive the swap, and the element is
+  // never remounted, so a touch held across the toggle (drag-select) keeps its target.
+  const hoverFromWrapper = process.env.EXPO_OS === "web";
+  const webHover = hoverFromWrapper
+    ? {
+        onPointerEnter: (event: PointerEvent) => {
+          if (!disabled && event.nativeEvent.pointerType !== "touch")
+            handleHoverIn(event as never);
+        },
+        onPointerLeave: (event: PointerEvent) => {
+          if (hoveredRef.current && event.nativeEvent.pointerType !== "touch")
+            handleHoverOut(event as never);
+        },
+      }
+    : null;
   const { wrapperStyle, contentStyle: pressableStyle } =
     splitWrapperStyle(flattenedStyle);
   const resolvedChildren =
     typeof children === "function" ? children(state) : children;
 
   return (
-    <Animated.View collapsable={false} style={[wrapperStyle, entranceStyle]}>
-      <Animated.View style={animatedStyle}>
+    <Animated.View
+      collapsable={false}
+      style={[wrapperStyle, entranceStyle]}
+      {...webHover}
+    >
+      <Animated.View style={[animatedStyle, rippleClip]}>
         <AnimatedPressable
           {...props}
           {...spaceKeyProps}
           android_ripple={
-            ripple ??
-            (rippleColor !== undefined
-              ? { color: rippleColor, foreground: true }
+            props.android_ripple ??
+            (nativeRipple
+              ? {
+                  color: layerColor,
+                  alpha: STATE_LAYER_PRESS,
+                  borderless: false,
+                  foreground: true,
+                }
               : undefined)
           }
           disabled={disabled}
-          onHoverIn={(event) => {
-            hoveredRef.current = true;
-            isHovered.set(1);
-            if (layerEnabled)
-              layer.set(
-                withTiming(
-                  pressedRef.current ? STATE_LAYER_PRESS : STATE_LAYER_HOVER,
-                  layerTiming,
-                ),
-              );
-            if (usesJsState) setJsHovered(true);
-            if (!pressedRef.current && !disabled) {
-              scale.set(withTiming(interactive ? hoverScale : 1, timingConfig));
-              translateY.set(
-                withTiming(interactive && liftOnHover ? -1 : 0, timingConfig),
-              );
-            }
-            onHoverIn?.(event);
-          }}
-          onHoverOut={(event) => {
-            hoveredRef.current = false;
-            isHovered.set(0);
-            if (layerEnabled && !pressedRef.current)
-              layer.set(withTiming(0, layerTiming));
-            if (usesJsState) setJsHovered(false);
-            if (!pressedRef.current) {
-              scale.set(withTiming(1, timingConfig));
-              translateY.set(withTiming(0, timingConfig));
-            }
-            onHoverOut?.(event);
-          }}
+          onHoverIn={hoverFromWrapper ? undefined : handleHoverIn}
+          onHoverOut={hoverFromWrapper ? undefined : handleHoverOut}
           onPressIn={(event) => {
             pressedRef.current = true;
             isPressed.set(1);

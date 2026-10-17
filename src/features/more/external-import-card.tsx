@@ -1,5 +1,3 @@
-import * as DocumentPicker from "expo-document-picker";
-import { File as ExpoFile } from "expo-file-system";
 import { useRouter } from "expo-router";
 import { useRef, useState } from "react";
 import { View, type ColorValue } from "react-native";
@@ -21,6 +19,7 @@ import {
   type ImportSourceId,
   type ImportSourceInfo,
 } from "@/data/import/types";
+import { fileExtension, pickAsset, readAssetBytes } from "@/features/pick-file";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -30,7 +29,7 @@ import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { MAX_BACKUP_IMPORT_BYTES, assertFileSize } from "@/utils/file-size";
+import { MAX_BACKUP_IMPORT_BYTES } from "@/utils/file-size";
 import { hapticSelection, hapticSuccess } from "@/utils/haptics";
 import { formatMoney } from "@/utils/money";
 
@@ -114,11 +113,6 @@ function totalOf(counts: ImportCounts) {
     counts.recurringRules +
     counts.budgets
   );
-}
-
-function fileExtension(name: string) {
-  const dot = name.lastIndexOf(".");
-  return dot < 0 ? "" : name.slice(dot + 1).toLowerCase();
 }
 
 /**
@@ -706,13 +700,9 @@ export function ExternalImportCard() {
     if (!source || busyRef.current) return;
     setBusyFlag(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: "*/*",
-        copyToCacheDirectory: true,
-      });
-      if (result.canceled) return;
+      const asset = await pickAsset();
+      if (!asset) return;
       clearArmed();
-      const asset = result.assets[0];
       if (!source.fileExtensions.includes(fileExtension(asset.name))) {
         showError(
           "Wrong file type",
@@ -720,15 +710,11 @@ export function ExternalImportCard() {
         );
         return;
       }
-      const nativeFile = asset.file ? null : new ExpoFile(asset.uri);
-      assertFileSize(
-        asset.size ?? asset.file?.size ?? nativeFile?.size,
+      const bytes = await readAssetBytes(
+        asset,
         MAX_BACKUP_IMPORT_BYTES,
         "Backup file",
       );
-      const bytes = asset.file
-        ? new Uint8Array(await asset.file.arrayBuffer())
-        : await nativeFile!.bytes();
       // Let the "reading" state paint before the synchronous parse blocks the thread.
       await new Promise((resolve) => setTimeout(resolve, 0));
       const parsed = parseExternalBackup(source.id, bytes, {

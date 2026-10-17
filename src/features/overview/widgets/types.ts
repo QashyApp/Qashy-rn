@@ -14,7 +14,7 @@ import type {
   OverviewCard,
   OverviewWidgetType,
   WidgetSize,
-} from "@/features/overview/layout/overview-layout";
+} from "@/domain/overview-layout";
 
 export interface WidgetProps {
   readonly card: OverviewCard;

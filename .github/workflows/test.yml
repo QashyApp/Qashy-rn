@@ -47,7 +47,7 @@ jobs:
         run: npm test
 
   native-bundle:
-    name: native bundling (iOS + Android)
+    name: native bundling (Android)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -61,9 +61,6 @@ jobs:
 
       - name: 📦 Install dependencies
         run: npm ci
-
-      - name: 📱 Export iOS bundle
-        run: npx expo export -p ios --output-dir "$RUNNER_TEMP/qashy-ios-export"
 
       - name: 📱 Export Android bundle
         run: npx expo export -p android --output-dir "$RUNNER_TEMP/qashy-android-export"

@@ -11,17 +11,28 @@ import { assertThemeDefinition } from "@/theme/themes/validate";
 const user = { accentSource: "custom" as const, accentHex: "#00A58E" };
 const system = { accentSource: "system" as const, accentHex: "#00A58E" };
 
+// Every built-in theme is offered on both remaining platforms, so the fallback is exercised with a
+// custom theme that restricts itself.
+const ANDROID_ONLY = {
+  ...classicTheme,
+  id: "android-only",
+  availableOn: ["android"],
+} as typeof classicTheme;
+
 describe("platform availability", () => {
   it("falls back to classic where the theme is not offered", () => {
-    expect(getTheme("material-you", [], "ios")).toBe(classicTheme);
+    expect(getTheme(ANDROID_ONLY.id, [ANDROID_ONLY], "web")).toBe(classicTheme);
+    expect(getTheme(ANDROID_ONLY.id, [ANDROID_ONLY], "android")).toBe(
+      ANDROID_ONLY,
+    );
     expect(getTheme("material-you", [], "web")).toBe(materialYouTheme);
     expect(getTheme("material-you", [], "android")).toBe(materialYouTheme);
   });
 
   it("lists only available themes", () => {
-    expect(listAvailableThemes([], "ios").map((t) => t.id)).not.toContain(
-      "material-you",
-    );
+    expect(
+      listAvailableThemes([ANDROID_ONLY], "web").map((t) => t.id),
+    ).not.toContain(ANDROID_ONLY.id);
     expect(listAvailableThemes([], "android").map((t) => t.id)).toContain(
       "material-you",
     );
@@ -29,10 +40,10 @@ describe("platform availability", () => {
       "material-you",
     );
     expect(
-      listAvailableThemes([], "ios")
+      listAvailableThemes([], "web")
         .map((t) => t.id)
         .sort(),
-    ).toEqual(["classic", "high-contrast"]);
+    ).toEqual(["classic", "high-contrast", "material-you"]);
     expect(isThemeAvailable(classicTheme, "web")).toBe(true);
   });
 
