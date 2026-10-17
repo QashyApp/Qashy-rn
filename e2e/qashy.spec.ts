@@ -720,7 +720,7 @@ test("gives keyboard focus a visible ring and themes browser chrome", async ({
   expect(chrome.ring).not.toBe("rgba(0, 0, 0, 0)");
   // The accent is not a surface the app ever paints, so it must not tint the
   // address bar behind a near-white page.
-  expect(chrome.themeColor).toBe("#F1F2F5");
+  expect(chrome.themeColor).toBe("#E8E7F8");
 });
 
 test("lays content out against the space the rail leaves, not the window", async ({

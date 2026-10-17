@@ -202,12 +202,18 @@ const TransactionRowView = memo(function TransactionRowView({
       onLongPress={onLongPress}
       active={selected}
       pressedScale={0.985}
+      stateLayerShape="container"
       style={({ pressed }) => ({
         flexDirection: "row",
         alignItems: "center",
         gap: space.md,
         minHeight: compact ? 54 : 64,
-        opacity: pressed ? 0.65 : 1,
+        // Stated for the focus ring and for containers that don't publish bounds; the ledger's
+        // day slabs and widget cards square the wash off and clip it themselves.
+        borderRadius: radius.control,
+        borderCurve: "continuous",
+        // As on SettingsRow: the state layer is the press feedback where a theme draws one.
+        opacity: pressed && !theme.stateLayers ? 0.65 : 1,
       })}
     >
       {selectionMode ? (

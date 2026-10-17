@@ -1001,6 +1001,15 @@ function buildTheme(
       file.material?.gradients ??
       (engine === "flat" ? false : baseMaterial.gradients),
     bevelDepth,
+    // Internal flags a custom theme file cannot set, so — like every other unpinned value — they
+    // follow the base look. Only when the engine itself is kept, though: a theme that switches
+    // engines gets that engine's canonical behavior instead of a mix of both.
+    ...(engine === baseMaterial.engine && baseMaterial.stateLayers !== undefined
+      ? { stateLayers: baseMaterial.stateLayers }
+      : {}),
+    ...(engine === baseMaterial.engine && baseMaterial.flatAccent !== undefined
+      ? { flatAccent: baseMaterial.flatAccent }
+      : {}),
   };
   if (engine === "flat" && material.gradients)
     errors.push(

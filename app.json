@@ -5,7 +5,7 @@
     "version": "2.1",
     "orientation": "default",
     "icon": "./assets/images/icon.png",
-    "backgroundColor": "#F1F2F5",
+    "backgroundColor": "#E8E7F8",
     "scheme": "qashy",
     "userInterfaceStyle": "automatic",
     "ios": {
@@ -30,7 +30,7 @@
       "name": "Qashy — Calm Budgeting",
       "shortName": "Qashy",
       "themeColor": "#5070FF",
-      "backgroundColor": "#F1F2F5"
+      "backgroundColor": "#E8E7F8"
     },
     "plugins": [
       [
@@ -44,11 +44,11 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F1F2F5",
+          "backgroundColor": "#E8E7F8",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 108,
           "dark": {
-            "backgroundColor": "#0C0D11",
+            "backgroundColor": "#121221",
             "image": "./assets/images/splash-icon.png"
           }
         }

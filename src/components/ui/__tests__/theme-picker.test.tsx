@@ -42,7 +42,7 @@ describe("ThemePicker", () => {
       "radiogroup",
     );
     const classic = screen.getByRole("radio", {
-      name: /^Classic\. Soft, tactile surfaces/,
+      name: /^Classic\. Lilac-tinted surfaces/,
     });
     const contrast = screen.getByRole("radio", {
       name: /^High contrast\. Maximum contrast/,

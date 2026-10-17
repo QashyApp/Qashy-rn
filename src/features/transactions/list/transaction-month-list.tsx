@@ -29,6 +29,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import type { MonthDirection } from "@/components/ui/month-switcher";
 import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
 import { MotionView } from "@/components/ui/motion";
+import { StateLayerBoundsContext } from "@/components/ui/state-layer-bounds";
 import { TextButton } from "@/components/ui/text-button";
 import { useDragSelect } from "@/features/transactions/list/use-drag-select";
 import { RowFlash } from "@/features/transactions/list/row-flash";
@@ -669,8 +670,9 @@ const DayRow = memo(function DayRow({
           borderBottomLeftRadius: last ? radius.card : 0,
           borderBottomRightRadius: last ? radius.card : 0,
           borderCurve: "continuous",
-          // Only while flashing, so the highlight keeps the day slab's rounded corners.
-          overflow: flashes > 0 ? "hidden" : undefined,
+          // Always clipped: a row's state layer bleeds into this padding and takes the slab's
+          // corners from the clip, and the flash overlay needs the same shape.
+          overflow: "hidden",
         }}
       >
         {flashes > 0 ? (
@@ -685,14 +687,20 @@ const DayRow = memo(function DayRow({
             }}
           />
         )}
-        <TransactionRow
-          transaction={item}
-          showDate={false}
-          selectionMode={selectionMode}
-          selected={selected}
-          onLongPress={handleLongPress}
-          onPress={handlePress}
-        />
+        {/* The slab's own padding is what a row's wash bleeds into, so it is published around
+            the row alone: the divider and the action row below are not rows. */}
+        <StateLayerBoundsContext.Provider
+          value={{ x: space.md, top: 0, bottom: 0 }}
+        >
+          <TransactionRow
+            transaction={item}
+            showDate={false}
+            selectionMode={selectionMode}
+            selected={selected}
+            onLongPress={handleLongPress}
+            onPress={handlePress}
+          />
+        </StateLayerBoundsContext.Provider>
         {item.status === "upcoming" && !selectionMode ? (
           <View
             style={{

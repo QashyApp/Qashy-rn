@@ -245,12 +245,16 @@ export function ExchangeRatesScreen() {
                     })
                   }
                   pressedScale={0.985}
+                  stateLayerShape="container"
                   style={({ pressed }) => ({
                     minHeight: 58,
                     flexDirection: "row",
                     alignItems: "center",
                     gap: space.md,
-                    opacity: pressed ? 0.62 : 1,
+                    borderRadius: radius.control,
+                    borderCurve: "continuous",
+                    opacity:
+                      pressed && !theme.stateLayers ? 0.62 : 1,
                   })}
                 >
                   <View

@@ -27,7 +27,7 @@ import { hapticSelection } from "@/utils/haptics";
  */
 export function CardGalleryScreen() {
   const theme = useQashyTheme();
-  const { space } = theme;
+  const { radius, space } = theme;
   const { t } = useLocalization();
   const { layout, dispatch } = useOverviewLayout();
   const available = availableToAdd(layout);
@@ -81,12 +81,15 @@ export function CardGalleryScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Add ${t(definition.title)} card`}
                   onPress={() => addCard(type)}
+                  stateLayerShape="container"
                   style={{
                     flexDirection: "row",
                     alignItems: "center",
                     gap: space.md,
                     minHeight: 64,
                     paddingVertical: space.sm,
+                    borderRadius: radius.control,
+                    borderCurve: "continuous",
                   }}
                 >
                   <IconBadge

@@ -71,7 +71,7 @@ describe("localization", () => {
       "This theme sets its own accent color.",
       "Classic",
       "High contrast",
-      "Soft, tactile surfaces with a calm indigo accent.",
+      "Lilac-tinted surfaces, soft depth and lively controls.",
       "Rounded Material surfaces that follow your Android system colors.",
       "Maximum contrast and bold edges for easy reading.",
     ]) {

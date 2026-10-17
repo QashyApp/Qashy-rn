@@ -25,7 +25,7 @@ export function MoreDetails({
   children: ReactNode;
 }) {
   const theme = useQashyTheme();
-  const { space } = theme;
+  const { radius, space } = theme;
   const { t } = useLocalization();
   return (
     <View style={{ gap: space.md }}>
@@ -34,11 +34,14 @@ export function MoreDetails({
         accessibilityLabel={t("More details")}
         accessibilityState={{ expanded }}
         onPress={onToggle}
+        stateLayerShape="container"
         style={{
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
           minHeight: 44,
+          borderRadius: radius.control,
+          borderCurve: "continuous",
         }}
       >
         <AppText variant="label">More details</AppText>

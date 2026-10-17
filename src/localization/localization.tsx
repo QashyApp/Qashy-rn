@@ -1372,8 +1372,8 @@ const HEBREW: Record<string, string> = {
   Classic: "קלאסי",
   "Material You": "Material You",
   "High contrast": "ניגודיות גבוהה",
-  "Soft, tactile surfaces with a calm indigo accent.":
-    "משטחים רכים וממשיים עם צבע הדגשה אינדיגו רגוע.",
+  "Lilac-tinted surfaces, soft depth and lively controls.":
+    "משטחים בגוון לילך, עומק רך ובקרות חיות.",
   "Rounded Material surfaces that follow your Android system colors.":
     "משטחי Material מעוגלים שמתאימים לצבעי המערכת של Android.",
   "Maximum contrast and bold edges for easy reading.":
