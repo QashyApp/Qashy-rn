@@ -38,3 +38,22 @@ export function getSystemLocales(): string[] {
     return [];
   }
 }
+
+/**
+ * Reads Android string resources by name in the given locale (BCP-47 tag), independent of the
+ * app's current locale. Each entry is null when the resource does not exist. Locales without
+ * translations fall back to the default (English) text, as Android resource lookup does.
+ * Resolves to all nulls on web or in a build without the native module. When the native module
+ * is available, a failure rejects, so the caller can retry or fall back deliberately.
+ */
+export async function getStrings(
+  names: readonly string[],
+  localeTag: string,
+): Promise<(string | null)[]> {
+  const none = (): null[] => names.map(() => null);
+  if (Platform.OS !== "android" || !NativeModule || names.length === 0) {
+    return none();
+  }
+  const result = await NativeModule.getStrings([...names], localeTag);
+  return names.map((_, i) => result?.[i] ?? null);
+}

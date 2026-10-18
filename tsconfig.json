@@ -2,6 +2,9 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true,
+    // The Android string catalog generator runs under Node's native type stripping,
+    // which needs explicit `.ts` import extensions (scripts/generate-android-strings.ts).
+    "allowImportingTsExtensions": true,
     "types": ["jest"],
     "paths": {
       "@/*": ["./src/*"],
