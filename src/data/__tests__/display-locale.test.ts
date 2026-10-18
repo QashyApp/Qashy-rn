@@ -1,5 +1,6 @@
 import { LocalFinanceRepository } from "@/data/local-finance-repository";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
+import { createDefaultCategories, defaultAccountName } from "@/domain/defaults";
 import * as money from "@/utils/money";
 
 async function createRepository(storage = new MemoryStorageAdapter()) {
@@ -150,5 +151,47 @@ describe("FinanceRepository.setDisplayLocale", () => {
     expect(state.categories.map((category) => category.name)).toContain(
       "Groceries",
     );
+  });
+});
+
+describe("FinanceRepository.completeOnboarding locale", () => {
+  it("uses input.locale only for starter names and leaves settings.locale alone", async () => {
+    const repository = new LocalFinanceRepository(new MemoryStorageAdapter());
+    await repository.initialize();
+    const before = repository.getSnapshot().settings.locale;
+    await repository.completeOnboarding({
+      locale: "he-IL",
+      baseCurrency: "USD",
+      accountName: "",
+      accountType: "checking",
+      openingBalanceMinor: 0,
+      themeMode: "system",
+      accentSource: "system",
+      accentHex: "#5966E9",
+    });
+    const state = repository.getSnapshot();
+    expect(state.settings.locale).toBe(before);
+    expect(state.settings.onboardingComplete).toBe(true);
+    expect(state.accounts[0].name).toBe(defaultAccountName("he-IL"));
+    expect(state.categories.map((item) => item.name)).toEqual(
+      createDefaultCategories("he-IL").map((item) => item.name),
+    );
+  });
+
+  it("still rejects an invalid locale", async () => {
+    const repository = new LocalFinanceRepository(new MemoryStorageAdapter());
+    await repository.initialize();
+    await expect(
+      repository.completeOnboarding({
+        locale: "not a locale!",
+        baseCurrency: "USD",
+        accountName: "Everyday",
+        accountType: "checking",
+        openingBalanceMinor: 0,
+        themeMode: "system",
+        accentSource: "system",
+        accentHex: "#5966E9",
+      }),
+    ).rejects.toThrow();
   });
 });

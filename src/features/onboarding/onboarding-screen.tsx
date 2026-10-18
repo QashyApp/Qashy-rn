@@ -102,9 +102,7 @@ export function OnboardingScreen() {
       onBack={canGoBack ? flow.back : undefined}
       footer={footer}
     >
-      {step === "welcome" ? (
-        <WelcomeStep locale={draft.locale} onLocale={flow.setLocale} />
-      ) : null}
+      {step === "welcome" ? <WelcomeStep onLocale={flow.setLocale} /> : null}
       {step === "existing" ? <ExistingUserStep /> : null}
       {step === "currency" ? (
         <CurrencyStep

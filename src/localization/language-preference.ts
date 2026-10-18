@@ -129,6 +129,21 @@ export function normalizePreference(
   return matchSupportedLanguage(first, android)?.tag ?? SYSTEM_PREFERENCE;
 }
 
+/**
+ * Whether a raw stored or native value is already exactly the form `normalized` is persisted in.
+ *
+ * An unsupported tag reads as `"system"` but is not that, so choosing "System default" must
+ * still write the reset: `""` or `"system"` for the system preference, the tag itself otherwise.
+ */
+export function isCanonicalPreference(
+  raw: string,
+  normalized: LanguagePreference,
+): boolean {
+  return normalized === SYSTEM_PREFERENCE
+    ? raw === "" || raw === SYSTEM_PREFERENCE
+    : raw === normalized;
+}
+
 /** The language's own name for a supported tag, or the tag itself when it is not listed. */
 export function languageLabel(tag: string, android: boolean): string {
   return matchSupportedLanguage(tag, android)?.label ?? tag;
@@ -139,6 +154,11 @@ export interface LanguageMigrationInput {
   readonly migrated: boolean;
   /** The preference currently in effect on this device. */
   readonly currentPreference: LanguagePreference;
+  /**
+   * Whether finance setup is complete. A fresh install has no legacy language to preserve:
+   * `settings.locale` there is only a guess from the device, so nothing is pinned.
+   */
+  readonly onboardingComplete: boolean;
   /** `settings.locale`, the language this app used to display before it followed the device. */
   readonly legacyLocale: string;
   readonly deviceLocales: readonly string[];
@@ -149,13 +169,17 @@ export interface LanguageMigrationInput {
  * The preference to write so that nobody's language flips when the app starts following the
  * device, or `null` to leave it alone.
  *
- * Only when the legacy language differs from what `"system"` now resolves to is an explicit
+ * Only for an onboarded user, and only when the legacy language differs from what `"system"` now resolves to is an explicit
  * preference needed. An explicit choice already made on this device is never overwritten.
  */
 export function decideLanguageMigration(
   input: LanguageMigrationInput,
 ): "he-IL" | "en-US" | null {
-  if (input.migrated || input.currentPreference !== SYSTEM_PREFERENCE)
+  if (
+    input.migrated ||
+    !input.onboardingComplete ||
+    input.currentPreference !== SYSTEM_PREFERENCE
+  )
     return null;
   const legacy = languageFromLocale(input.legacyLocale);
   const system = languageFromLocale(

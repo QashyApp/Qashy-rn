@@ -60,26 +60,19 @@ export function readDeviceLocales(): string[] {
   return [];
 }
 
-/** The native preference, read synchronously; `null` when the store is `sync_meta` instead. */
-export function readNativePreference(): LanguagePreference | null {
-  if (!usesNativeLocale()) return null;
-  return normalizePreference(QashyLocale.getApplicationLocales(), true);
+/**
+ * The raw native per-app locale list ("" = system), read synchronously; `null` when the store
+ * is `sync_meta` instead. Raw, so an unsupported tag can still be told apart from "system".
+ */
+export function readNativeRawPreference(): string | null {
+  return usesNativeLocale() ? QashyLocale.getApplicationLocales() : null;
 }
 
-/** The `sync_meta` preference. Absent or odd values degrade to `"system"`. */
-export async function loadStoredPreference(): Promise<LanguagePreference> {
-  const raw = await syncingStorage.transact(
-    (tx) => readLanguagePreference(tx),
-    {
-      silent: true,
-    },
-  );
-  return normalizePreference(raw, isAndroid());
-}
-
-/** The preference in effect right now, from wherever this device keeps it. */
-export async function readCurrentPreference(): Promise<LanguagePreference> {
-  return readNativePreference() ?? (await loadStoredPreference());
+/** The raw `sync_meta` value (`"system"` when absent). Never throws on odd values. */
+export async function loadStoredRawPreference(): Promise<string> {
+  return syncingStorage.transact((tx) => readLanguagePreference(tx), {
+    silent: true,
+  });
 }
 
 /** Persists a preference to wherever this device keeps it. Rejects when the write fails. */
@@ -102,32 +95,56 @@ export async function persistPreference(
 
 /**
  * Runs the one-time migration off the legacy `settings.locale`, and returns the preference it
- * wrote, if any. `languageMigrated` is written only after the preference landed, so a failed
- * write is retried on the next launch instead of being forgotten.
+ * wrote, if any. It reads the current preference itself, when it runs, and writes only if that
+ * is still "system" and setup is complete. On web that read-check-write is one transaction, so
+ * nothing can land between the check and the write. `languageMigrated` is recorded only after
+ * the preference landed, so a failed write is retried on the next launch.
  */
 export async function migrateLegacyLanguage(input: {
-  currentPreference: LanguagePreference;
+  onboardingComplete: boolean;
   legacyLocale: string;
   deviceLocales: readonly string[];
 }): Promise<LanguagePreference | null> {
+  const android = isAndroid();
+  const decide = (migrated: boolean, raw: string) =>
+    decideLanguageMigration({
+      ...input,
+      migrated,
+      currentPreference: normalizePreference(raw, android),
+      android,
+    });
+  if (!usesNativeLocale()) {
+    // No foreign await inside `work`: the transaction is all that is awaited.
+    return syncingStorage.transact(
+      async (tx) => {
+        const migrated = await readLanguageMigrated(tx);
+        const decided = decide(migrated, await readLanguagePreference(tx));
+        if (migrated) return null;
+        if (decided) await writeLanguagePreference(tx, decided);
+        await writeLanguageMigrated(tx);
+        return decided;
+      },
+      { silent: true },
+    );
+  }
+  // The native per-app locale is not part of a storage transaction, but it is read synchronously
+  // right before the write, and the provider's queue keeps its own writes out of the gap.
   const migrated = await syncingStorage.transact(
     (tx) => readLanguageMigrated(tx),
     { silent: true },
   );
-  const decided = decideLanguageMigration({
-    ...input,
-    migrated,
-    android: isAndroid(),
-  });
   if (migrated) return null;
-  // A choice made during the awaits above wins: write only if still on "system".
-  let written: LanguagePreference | null = null;
-  if (decided && (await readCurrentPreference()) === SYSTEM_PREFERENCE) {
-    await persistPreference(decided);
-    written = decided;
+  const decided = decide(false, readNativeRawPreference() ?? "");
+  if (decided) await persistPreference(decided);
+  try {
+    await syncingStorage.transact((tx) => writeLanguageMigrated(tx), {
+      silent: true,
+    });
+  } catch (reason) {
+    // The preference landed, so report it. Without the flag the next launch runs this again,
+    // harmlessly: native is no longer "system", so nothing is decided. With nothing written, a
+    // failed flag is simply retried.
+    if (!decided) throw reason;
   }
-  await syncingStorage.transact((tx) => writeLanguageMigrated(tx), {
-    silent: true,
-  });
-  return written;
+  return decided;
 }

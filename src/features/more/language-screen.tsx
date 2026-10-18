@@ -43,8 +43,8 @@ export function LanguageScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{
-        padding: 18,
-        paddingBottom: 40,
+        padding: space.xl,
+        paddingBottom: space.xxxl + space.sm,
         gap: space.lg,
         width: "100%",
         maxWidth: 720,

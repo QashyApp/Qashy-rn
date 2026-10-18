@@ -575,6 +575,9 @@ describe("merge scenarios — repairing a jointly-invalid state", () => {
       const devices = await makeVault({ count: 2 });
       const [alice, bob] = devices;
       await onboard(alice, { locale });
+      // `completeOnboarding` no longer writes `settings.locale` (it only localizes the starter
+      // names), so set the legacy field directly: the replicated value is what this pins.
+      await alice.repository.updateSettings({ locale });
       await sync(devices, 3);
       expect(bob.state.settings.locale).toBe(locale);
       const wire = alice.wireTo(bob);

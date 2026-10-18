@@ -569,7 +569,11 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   getSnapshot = () => this.state;
 
-  /** The locale used for parsing and formatting inside repository rules. */
+  /**
+   * The locale used for parsing and formatting inside repository rules. The pre-provider fallback
+   * is safe: every consumer only feeds `currencyDigits` (pinned per currency) and invariant
+   * parsing, so no persisted value or op output depends on which locale is in effect.
+   */
   private get formatLocale(): string {
     return this.displayLocale ?? this.state.settings.locale;
   }
@@ -807,7 +811,6 @@ export class LocalFinanceRepository implements FinanceRepository {
       throw new Error("Choose a valid accent source.");
     const settings = updateEntity(this.state.settings, {
       onboardingComplete: true,
-      locale: input.locale,
       baseCurrency,
       themeId,
       themeMode: input.themeMode,

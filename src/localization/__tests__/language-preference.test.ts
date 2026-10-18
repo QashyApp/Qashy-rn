@@ -1,5 +1,6 @@
 import {
   decideLanguageMigration,
+  isCanonicalPreference,
   isRtlLocale,
   languageFromLocale,
   languageLabel,
@@ -102,6 +103,7 @@ describe("languageFromLocale and RTL", () => {
 describe("decideLanguageMigration", () => {
   const base = {
     migrated: false,
+    onboardingComplete: true,
     currentPreference: "system",
     legacyLocale: "en-US",
     deviceLocales: ["en-US"],
@@ -163,5 +165,27 @@ describe("decideLanguageMigration", () => {
         legacyLocale: "he-IL",
       }),
     ).toBeNull();
+  });
+
+  it("pins nothing on a fresh install, whatever the device says", () => {
+    expect(
+      decideLanguageMigration({
+        ...base,
+        onboardingComplete: false,
+        legacyLocale: "en-US",
+        deviceLocales: ["de-DE", "he-IL"],
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("isCanonicalPreference", () => {
+  it("is true only for the exact persisted form", () => {
+    expect(isCanonicalPreference("", "system")).toBe(true);
+    expect(isCanonicalPreference("system", "system")).toBe(true);
+    expect(isCanonicalPreference("de-DE", "system")).toBe(false);
+    expect(isCanonicalPreference("he-IL", "he-IL")).toBe(true);
+    expect(isCanonicalPreference("he-IL,en-US", "he-IL")).toBe(false);
+    expect(isCanonicalPreference("he", "he-IL")).toBe(false);
   });
 });
