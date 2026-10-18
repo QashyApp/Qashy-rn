@@ -1,8 +1,8 @@
 package expo.modules.qashylocale
 
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.app.LocaleManagerCompat
 import androidx.core.os.LocaleListCompat
-import androidx.core.os.LocaleManagerCompat
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
