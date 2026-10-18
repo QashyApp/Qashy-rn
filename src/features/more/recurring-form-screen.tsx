@@ -90,7 +90,7 @@ export function RecurringFormScreen() {
   }>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const existing = params.id
     ? state.recurringRules.find((item) => item.id === params.id)
     : undefined;
@@ -123,12 +123,12 @@ export function RecurringFormScreen() {
         ? minorToLocalizedDecimalString(
             existing.template.foreign.amountMinor,
             existing.template.foreign.currency,
-            state.settings.locale,
+            locale,
           )
         : minorToLocalizedDecimalString(
             existing.template.amountMinor,
             existing.template.currency,
-            state.settings.locale,
+            locale,
           );
     }
     return draft?.amount ?? "";
@@ -159,10 +159,7 @@ export function RecurringFormScreen() {
   );
   const [foreignRate, setForeignRate] = useState(() =>
     existing?.template.foreign?.exchangeRate
-      ? localizeDecimalString(
-          existing.template.foreign.exchangeRate,
-          state.settings.locale,
-        )
+      ? localizeDecimalString(existing.template.foreign.exchangeRate, locale)
       : "",
   );
   const [feeKind, setFeeKind] = useState<ForeignFeeKind>(
@@ -171,14 +168,11 @@ export function RecurringFormScreen() {
   const [feeValue, setFeeValue] = useState(() => {
     if (existing?.template.fee) {
       return existing.template.fee.kind === "percent"
-        ? localizeDecimalString(
-            existing.template.fee.percent,
-            state.settings.locale,
-          )
+        ? localizeDecimalString(existing.template.fee.percent, locale)
         : minorToLocalizedDecimalString(
             existing.template.fee.amountMinor,
             existing.template.currency,
-            state.settings.locale,
+            locale,
           );
     }
     return draft?.feeValue ?? "";
@@ -205,7 +199,7 @@ export function RecurringFormScreen() {
     currencyText: foreignCurrency,
     rateText: foreignRate,
     accountCurrency,
-    locale: state.settings.locale,
+    locale: locale,
   });
   const foreignCurrencyError = foreignErrors.currency;
   const foreignRateError = foreignErrors.rate;
@@ -266,7 +260,7 @@ export function RecurringFormScreen() {
     amount,
     feeKind,
     feeValue,
-    locale: state.settings.locale,
+    locale: locale,
   });
   const { closeToOwner } = useFormSheet({
     ownerRoute:
@@ -302,7 +296,7 @@ export function RecurringFormScreen() {
         foreignEnabled && !foreignCurrencyError
           ? trimmedForeignCurrency
           : account.currency,
-        state.settings.locale,
+        locale,
         { label: "Amount", positive: true },
       )
     : "Choose an account before entering an amount.";
@@ -393,14 +387,10 @@ export function RecurringFormScreen() {
       // unchanged snapshot) — each occurrence resolves its own rate as it posts.
       const foreignPayload: ForeignAmountInput | null = foreignEnabled
         ? {
-            amountMinor: parseMoney(
-              amount,
-              trimmedForeignCurrency,
-              state.settings.locale,
-            ),
+            amountMinor: parseMoney(amount, trimmedForeignCurrency, locale),
             currency: trimmedForeignCurrency,
             exchangeRate: foreignRate.trim()
-              ? normalizeDecimalString(foreignRate, state.settings.locale)
+              ? normalizeDecimalString(foreignRate, locale)
               : undefined,
           }
         : null;
@@ -408,11 +398,11 @@ export function RecurringFormScreen() {
         feeKind,
         feeValue,
         account.currency,
-        state.settings.locale,
+        locale,
       );
       const templateAmountMinor = foreignEnabled
         ? (foreignFeePreview.principalMinor ?? foreignPayload!.amountMinor)
-        : parseMoney(amount, account.currency, state.settings.locale);
+        : parseMoney(amount, account.currency, locale);
       await repository.saveRecurringRule(
         {
           template: {
@@ -583,7 +573,7 @@ export function RecurringFormScreen() {
         <Card style={{ gap: 14 }}>
           <ForeignFeeFields
             accountCurrency={account.currency}
-            locale={state.settings.locale}
+            locale={locale}
             foreignEnabled={foreignEnabled}
             onToggleForeign={(enabled) => {
               setForeignEnabled(enabled);
@@ -684,7 +674,7 @@ export function RecurringFormScreen() {
             error={occurrenceCountError}
             hint={
               countedEndDate
-                ? `The last one is on ${mediumDate(countedEndDate, state.settings.locale)}.`
+                ? `The last one is on ${mediumDate(countedEndDate, locale)}.`
                 : "For a set number of payments, like an installment plan."
             }
             required

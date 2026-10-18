@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { accountTypeIcon, accountTypeLabel } from "@/utils/labels";
 import type { WidgetProps } from "@/features/overview/widgets/types";
@@ -17,10 +16,8 @@ import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 export function AccountsWidget({ month }: WidgetProps) {
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
-  const state = useFinanceState();
+  const { locale, t } = useLocalization();
   const summary = useDashboard(month);
-  const locale = state.settings.locale;
 
   return (
     <View style={{ gap: space.sm }}>

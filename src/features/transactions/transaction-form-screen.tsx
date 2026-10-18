@@ -97,7 +97,7 @@ export function TransactionFormScreen() {
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const existing = id
     ? state.transactions.find((item) => item.id === id)
     : undefined;
@@ -116,13 +116,13 @@ export function TransactionFormScreen() {
       return minorToLocalizedDecimalString(
         existing.foreign.amountMinor,
         existing.foreign.currency,
-        state.settings.locale,
+        locale,
       );
     }
     return minorToLocalizedDecimalString(
       principalOf(existing),
       existing.currency,
-      state.settings.locale,
+      locale,
     );
   });
   const [date, setDate] = useState(existing?.localDate ?? todayLocal());
@@ -156,7 +156,7 @@ export function TransactionFormScreen() {
   const [note, setNote] = useState(existing?.note ?? "");
   const [exchangeRate, setExchangeRate] = useState(() =>
     existing?.exchangeRate
-      ? localizeDecimalString(existing.exchangeRate, state.settings.locale)
+      ? localizeDecimalString(existing.exchangeRate, locale)
       : "",
   );
   const existingDestination = state.accounts.find(
@@ -167,7 +167,7 @@ export function TransactionFormScreen() {
       ? minorToLocalizedDecimalString(
           existing.destinationAmountMinor,
           existingDestination.currency,
-          state.settings.locale,
+          locale,
         )
       : "",
   );
@@ -179,10 +179,7 @@ export function TransactionFormScreen() {
   );
   const [foreignRate, setForeignRate] = useState(() =>
     existing?.foreign?.exchangeRate
-      ? localizeDecimalString(
-          existing.foreign.exchangeRate,
-          state.settings.locale,
-        )
+      ? localizeDecimalString(existing.foreign.exchangeRate, locale)
       : "",
   );
   // The rate fields are pre-filled with the saved snapshot when editing. Only a rate the user
@@ -204,7 +201,7 @@ export function TransactionFormScreen() {
     if (!exchangeRateEdited) {
       setExchangeRate(
         unchanged && existing.exchangeRate
-          ? localizeDecimalString(existing.exchangeRate, state.settings.locale)
+          ? localizeDecimalString(existing.exchangeRate, locale)
           : "",
       );
       if (!unchanged) setRateOverrideOpen(false);
@@ -213,10 +210,7 @@ export function TransactionFormScreen() {
     if (!foreignRateEdited) {
       setForeignRate(
         unchanged && existing.foreign?.exchangeRate
-          ? localizeDecimalString(
-              existing.foreign.exchangeRate,
-              state.settings.locale,
-            )
+          ? localizeDecimalString(existing.foreign.exchangeRate, locale)
           : "",
       );
     }
@@ -228,13 +222,13 @@ export function TransactionFormScreen() {
     if (!existing?.fee) return "";
     if (existing.fee.kind === "percent") {
       return existing.fee.percent
-        ? localizeDecimalString(existing.fee.percent, state.settings.locale)
+        ? localizeDecimalString(existing.fee.percent, locale)
         : "";
     }
     return minorToLocalizedDecimalString(
       existing.fee.amountMinor,
       existing.currency,
-      state.settings.locale,
+      locale,
     );
   });
   const [busy, setBusy] = useState(false);
@@ -298,7 +292,7 @@ export function TransactionFormScreen() {
     currencyText: foreignCurrency,
     rateText: foreignRate,
     accountCurrency: account?.currency,
-    locale: state.settings.locale,
+    locale: locale,
   });
   const foreignCurrencyError = foreignErrors.currency;
   const foreignRateError = foreignErrors.rate;
@@ -309,13 +303,8 @@ export function TransactionFormScreen() {
       ? trimmedForeignCurrency
       : (account?.currency ?? state.settings.baseCurrency);
   const amountExpression = useMemo(
-    () =>
-      evaluateAmountExpression(
-        amountInput,
-        amountCurrency,
-        state.settings.locale,
-      ),
-    [amountInput, amountCurrency, state.settings.locale],
+    () => evaluateAmountExpression(amountInput, amountCurrency, locale),
+    [amountInput, amountCurrency, locale],
   );
   const amount =
     amountExpression.kind === "value" ? amountExpression.text : amountInput;
@@ -324,11 +313,7 @@ export function TransactionFormScreen() {
     amountExpression.kind === "invalid" &&
     isAmountOperator(Array.from(amountInput.trim()).at(-1) ?? "");
   const resolveAmount = (expression: string) => {
-    const result = evaluateAmountExpression(
-      expression,
-      amountCurrency,
-      state.settings.locale,
-    );
+    const result = evaluateAmountExpression(expression, amountCurrency, locale);
     return result.kind === "value" ? result.text : null;
   };
   const foreignAppliedRate = useMemo(
@@ -360,10 +345,10 @@ export function TransactionFormScreen() {
     amount,
     feeKind,
     feeValue,
-    locale: state.settings.locale,
+    locale: locale,
   });
   const amountError = account
-    ? validateMoneyInput(amount, amountCurrency, state.settings.locale, {
+    ? validateMoneyInput(amount, amountCurrency, locale, {
         label: "Amount",
         positive: true,
       })
@@ -379,7 +364,7 @@ export function TransactionFormScreen() {
       ? validateMoneyInput(
           destinationAmount,
           destinationAccount.currency,
-          state.settings.locale,
+          locale,
           {
             label: "Destination amount",
             optional: true,
@@ -388,12 +373,7 @@ export function TransactionFormScreen() {
         )
       : undefined;
   const exchangeRateError = needsRate
-    ? validatePositiveDecimal(
-        exchangeRate,
-        "Exchange rate",
-        true,
-        state.settings.locale,
-      )
+    ? validatePositiveDecimal(exchangeRate, "Exchange rate", true, locale)
     : undefined;
   const destinationError =
     kind === "transfer" && !destinationAccountId
@@ -602,14 +582,10 @@ export function TransactionFormScreen() {
       // repository to resolve fresh.
       const foreignPayload: ForeignAmountInput | null = foreignActive
         ? {
-            amountMinor: parseMoney(
-              amount,
-              trimmedForeignCurrency,
-              state.settings.locale,
-            ),
+            amountMinor: parseMoney(amount, trimmedForeignCurrency, locale),
             currency: trimmedForeignCurrency,
             exchangeRate: foreignRate.trim()
-              ? normalizeDecimalString(foreignRate, state.settings.locale)
+              ? normalizeDecimalString(foreignRate, locale)
               : existing?.foreign &&
                   existing.foreign.currency === trimmedForeignCurrency &&
                   existing.accountId === account.id &&
@@ -621,22 +597,17 @@ export function TransactionFormScreen() {
       const feePayload =
         kind === "transfer"
           ? null
-          : feeInputFor(
-              feeKind,
-              feeValue,
-              account.currency,
-              state.settings.locale,
-            );
+          : feeInputFor(feeKind, feeValue, account.currency, locale);
       // The principal in account currency, before fees — `amountMinor` on the
       // input is ignored by the repository once `foreign` is set, but a positive
       // value must still be passed: the converted preview when the rate is
       // known, else the raw foreign amount for the repository to convert itself.
       const principalMinor =
         kind === "transfer"
-          ? parseMoney(amount, account.currency, state.settings.locale)
+          ? parseMoney(amount, account.currency, locale)
           : foreignActive
             ? (foreignFeePreview.principalMinor ?? foreignPayload!.amountMinor)
-            : parseMoney(amount, account.currency, state.settings.locale);
+            : parseMoney(amount, account.currency, locale);
       const saved = await repository.saveTransaction(
         {
           kind,
@@ -661,7 +632,7 @@ export function TransactionFormScreen() {
               ? parseMoney(
                   destinationAmount,
                   destinationAccount.currency,
-                  state.settings.locale,
+                  locale,
                 )
               : null,
           categoryId: kind === "transfer" ? null : categoryId || null,
@@ -678,7 +649,7 @@ export function TransactionFormScreen() {
           fee: feePayload,
           exchangeRate:
             needsRate && exchangeRate.trim()
-              ? normalizeDecimalString(exchangeRate, state.settings.locale)
+              ? normalizeDecimalString(exchangeRate, locale)
               : undefined,
           status: existing?.status ?? "posted",
         },
@@ -939,7 +910,7 @@ export function TransactionFormScreen() {
         <Card style={{ gap: space.md }}>
           <ForeignFeeFields
             accountCurrency={account.currency}
-            locale={state.settings.locale}
+            locale={locale}
             foreignEnabled={foreignEnabled}
             onToggleForeign={(enabled) => {
               setForeignEnabled(enabled);
@@ -1010,7 +981,7 @@ export function TransactionFormScreen() {
             <View style={{ gap: space.md }}>
               {appliedRate ? (
                 <AppText literal variant="caption" muted>
-                  {`1 ${account.currency} = ${localizeDecimalString(appliedRate.rate, state.settings.locale)} ${state.settings.baseCurrency} · ${mediumDate(appliedRate.effectiveDate, state.settings.locale)} · ${appliedRate.automatic ? t("Automatic") : t("Manual")}`}
+                  {`1 ${account.currency} = ${localizeDecimalString(appliedRate.rate, locale)} ${state.settings.baseCurrency} · ${mediumDate(appliedRate.effectiveDate, locale)} · ${appliedRate.automatic ? t("Automatic") : t("Manual")}`}
                 </AppText>
               ) : fetchingRate ? (
                 <AppText variant="caption" muted>

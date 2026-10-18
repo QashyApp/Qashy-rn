@@ -29,10 +29,9 @@ export function BudgetPulseWidget({ card, month }: WidgetProps) {
   const { space } = theme;
   const repository = useFinanceRepository();
   const state = useFinanceState();
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const summary = useDashboard(month);
   const currency = state.settings.baseCurrency;
-  const locale = state.settings.locale;
   const budgetId =
     typeof card.config.budgetId === "string" ? card.config.budgetId : undefined;
 

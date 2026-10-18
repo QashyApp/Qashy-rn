@@ -1,0 +1,20 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'expo.modules.qashylocale'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.qashylocale"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+}
+
+dependencies {
+  // AppCompatDelegate per-app locales + LocaleManagerCompat (androidx.core arrives transitively).
+  implementation "androidx.appcompat:appcompat:1.7.0"
+}

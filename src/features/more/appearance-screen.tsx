@@ -10,7 +10,6 @@ import { Card } from "@/components/ui/card";
 import { ChoiceChip } from "@/components/ui/choice-chip";
 import { ColorSwatch } from "@/components/ui/color-swatch";
 import { FormField } from "@/components/ui/form-field";
-import { LanguageSelector } from "@/components/ui/language-selector";
 import { MotionView } from "@/components/ui/motion";
 import { ProgressBar } from "@/components/ui/progress-bar";
 import {
@@ -64,7 +63,7 @@ export function AppearanceScreen() {
   const settings = useFinanceSettings();
   const theme = useQashyTheme();
   const { radius, space } = theme;
-  const { t } = useLocalization();
+  const { t, locale } = useLocalization();
   const systemScheme = useColorScheme();
   const navBarSheet = useNavBarStyleSheet();
   const [expectedRevision, setExpectedRevision] = useState(settings.revision);
@@ -120,7 +119,7 @@ export function AppearanceScreen() {
     userAccent && source === "custom" && !validHex
       ? "Use a six-digit hex color such as #5070FF."
       : undefined;
-  // Like language, the animation level applies the moment it is chosen and is its own revision.
+  // The animation level applies the moment it is chosen and is its own revision.
   const changeAnimationLevel = async (animationLevel: AnimationLevel) => {
     if (animationLevel === (settings.animationLevel ?? "all")) return;
     try {
@@ -133,22 +132,7 @@ export function AppearanceScreen() {
       );
     }
   };
-  // Language applies immediately, exactly like the onboarding welcome step: it writes
-  // `settings.locale`, and `LocalizationProvider` flips language and RTL from that — no reload.
-  // Adopt the new revision so a pending "Save appearance" doesn't hit a stale-revision conflict.
-  const changeLanguage = async (locale: string) => {
-    if (locale === settings.locale) return;
-    try {
-      const updated = await repository.updateSettings({ locale });
-      setExpectedRevision(updated.revision);
-    } catch (reason) {
-      showError(
-        "Couldn’t apply this setting",
-        errorMessage(reason, "Try again."),
-      );
-    }
-  };
-  // Like language, the theme applies immediately and adopts the new revision, so a pending
+  // The theme applies immediately and adopts the new revision, so a pending
   // "Save appearance" doesn't hit a stale-revision conflict.
   const changeTheme = async (id: string): Promise<boolean> => {
     if (id === themeId) return true;
@@ -294,7 +278,7 @@ export function AppearanceScreen() {
             <AnimatedMoney
               minor={PREVIEW_NET_WORTH_MINOR}
               currency={settings.baseCurrency}
-              locale={settings.locale}
+              locale={locale}
               variant="display"
               style={{ color: preview.onAccent }}
             />
@@ -328,12 +312,6 @@ export function AppearanceScreen() {
             </AppText>
           </View>
         </View>
-      </MotionView>
-      <MotionView>
-        <Card style={{ gap: space.lg }}>
-          <AppText variant="headline">Language</AppText>
-          <LanguageSelector value={settings.locale} onChange={changeLanguage} />
-        </Card>
       </MotionView>
       <MotionView>
         <Card style={{ gap: space.lg }}>

@@ -102,7 +102,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const metrics = useScreenMetrics();
   const { contentWidth } = metrics;
   // Single vs. multi-column is a product decision keyed off `contentWidth` (the room the web
@@ -128,7 +128,6 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   const summary = useDashboard(month);
 
   const currency = state.settings.baseCurrency;
-  const locale = state.settings.locale;
   const missingCurrencies = summary.missingExchangeRates.map(
     (rate) => rate.fromCurrency,
   );

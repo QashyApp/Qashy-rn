@@ -374,7 +374,7 @@ function BudgetCard({
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const {
     budget,
     snapshot,
@@ -404,14 +404,9 @@ function BudgetCard({
   // Dates and the rollover amount are data, so the caption is assembled with
   // its translatable words already resolved and then rendered verbatim.
   const money = (minor: number, options?: { sign: boolean }) =>
-    formatMoney(
-      minor,
-      state.settings.baseCurrency,
-      state.settings.locale,
-      options,
-    );
+    formatMoney(minor, state.settings.baseCurrency, locale, options);
   const signed = (minor: number) => money(minor, { sign: true });
-  const periodSummary = `${customState}${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, state.settings.locale)} ${t("to")} ${mediumDate(snapshot.periodEnd, state.settings.locale)}${budget.rollover ? ` · ${t("rollover")} ${signed(snapshot.rolloverMinor)}` : ""}${adjustmentMinor ? ` · ${t("adjusted")} ${signed(adjustmentMinor)}` : ""}`;
+  const periodSummary = `${customState}${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, locale)} ${t("to")} ${mediumDate(snapshot.periodEnd, locale)}${budget.rollover ? ` · ${t("rollover")} ${signed(snapshot.rolloverMinor)}` : ""}${adjustmentMinor ? ` · ${t("adjusted")} ${signed(adjustmentMinor)}` : ""}`;
   // A custom budget outside its window has no current period to adjust.
   const canAdjust = !customState;
 
@@ -445,7 +440,7 @@ function BudgetCard({
             numeric
             minor={spentMinor}
             currency={state.settings.baseCurrency}
-            locale={state.settings.locale}
+            locale={locale}
           />
           <AppText
             variant="caption"
@@ -476,7 +471,7 @@ function BudgetCard({
           />
           {pace.projectionReliable ? (
             <AppText literal variant="caption" muted numeric>
-              {`${t("Projected")}: ${money(pace.projectedMinor)} ${t("by")} ${mediumDate(snapshot.periodEnd, state.settings.locale)}`}
+              {`${t("Projected")}: ${money(pace.projectedMinor)} ${t("by")} ${mediumDate(snapshot.periodEnd, locale)}`}
             </AppText>
           ) : null}
         </View>
@@ -572,16 +567,16 @@ function GoalCard({
 }) {
   const { space } = useQashyTheme();
   const state = useFinanceState();
-  const { t, isRtl } = useLocalization();
+  const { locale, t, isRtl } = useLocalization();
   const displayProgress = Math.max(0, progress);
   const ratio = goal.targetMinor > 0 ? displayProgress / goal.targetMinor : 0;
   const percent = Math.max(0, Math.min(100, Math.round(ratio * 100)));
   const remainingMinor = Math.max(0, goal.targetMinor - displayProgress);
   useMilestoneHaptics(ratio, GOAL_MILESTONES, hapticSuccess);
   const money = (minor: number) =>
-    formatMoney(minor, state.settings.baseCurrency, state.settings.locale);
+    formatMoney(minor, state.settings.baseCurrency, locale);
   const byDate = goal.targetDate
-    ? ` · ${t("by")} ${mediumDate(goal.targetDate, state.settings.locale)}`
+    ? ` · ${t("by")} ${mediumDate(goal.targetDate, locale)}`
     : "";
 
   return (
@@ -626,7 +621,7 @@ function GoalCard({
             variant="money"
             minor={displayProgress}
             currency={state.settings.baseCurrency}
-            locale={state.settings.locale}
+            locale={locale}
           />
           <AppText
             literal

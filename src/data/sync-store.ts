@@ -114,6 +114,23 @@ export const SYNC_META = {
    */
   customThemes: "customThemes",
 
+  // -- App language. Device-local; see `data/language-preference-store.ts`.
+
+  /**
+   * This device's app-language preference: `'system'` (follow the device, the default) or an
+   * explicit supported tag such as `he-IL`. Used on web, and on Android only when the native
+   * per-app locale is unavailable; on Android the platform per-app locale is the source of truth.
+   *
+   * Never replicated, for the same reason as `ratesAutoFetch`: `AppSettings` syncs to every peer,
+   * and a phone and a laptop legitimately speak different languages.
+   */
+  appLanguage: "appLanguage",
+  /**
+   * `'1'` once the one-time move off the legacy synced `settings.locale` has run on this device,
+   * so the language that was showing before the upgrade keeps showing.
+   */
+  languageMigrated: "languageMigrated",
+
   // -- Transport configuration. Non-secret by construction; see `sync/transport/endpoints.ts`.
 
   /** Origin of the relay and signaling service, without a trailing slash. `''` means none. */

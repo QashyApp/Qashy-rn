@@ -6,6 +6,7 @@ import { Card } from "@/components/ui/card";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SegmentedControl } from "@/components/ui/segmented-control";
+import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import type { WidgetProps } from "@/features/overview/widgets/types";
@@ -14,9 +15,9 @@ import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 export function InsightWidget({ month }: WidgetProps) {
   const { space } = useQashyTheme();
   const state = useFinanceState();
+  const { locale } = useLocalization();
   const summary = useDashboard(month);
   const currency = state.settings.baseCurrency;
-  const locale = state.settings.locale;
   const [insightMode, setInsightMode] = useState<"trend" | "categories">(
     "trend",
   );

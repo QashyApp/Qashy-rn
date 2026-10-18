@@ -182,6 +182,14 @@ export interface FinanceRepository {
   repairProjection(): Promise<ApplyResult>;
   getSnapshot(): FinanceState;
   subscribe(listener: () => void): () => void;
+  /**
+   * Sets the locale the repository uses to parse and format amounts (the UI language).
+   *
+   * In memory only: never persisted, never part of `AppSettings`, and it emits no sync ops.
+   * Until it is first called the synced `settings.locale` is used. Throws on an invalid locale.
+   * `completeOnboarding` still uses the locale in its own input for starter names.
+   */
+  setDisplayLocale(locale: string): void;
   completeOnboarding(input: OnboardingInput): Promise<void>;
   updateSettings(
     patch: SettingsInput,

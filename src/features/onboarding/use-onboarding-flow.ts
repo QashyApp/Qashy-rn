@@ -8,7 +8,7 @@ import {
 } from "@/domain/defaults";
 import type { AccountType, AccentSource, ThemeMode } from "@/domain/models";
 import type { OnboardingInput } from "@/data/repository";
-import { languageFromLocale } from "@/localization/localization";
+import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -102,14 +102,16 @@ export function finishPayload(draft: OnboardingDraft): OnboardingInput {
 export function useOnboardingFlow() {
   const repository = useFinanceRepository();
   const { settings } = useFinanceState();
+  const { locale: uiLocale, setPreference } = useLocalization();
   const [start] = useState(() => initialLocalePreferences(settings));
   const [step, setStep] = useState<OnboardingStep>("welcome");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
   const [draft, setDraft] = useState<OnboardingDraft>(() => {
-    const locale =
-      languageFromLocale(start.locale) === "he" ? "he-IL" : "en-US";
+    // The draft starts in the language the device already shows (this device's preference, not
+    // the legacy synced `settings.locale`); it is only used to localize starter names.
+    const locale = uiLocale;
     return {
       locale,
       currency: start.baseCurrency,
@@ -123,9 +125,9 @@ export function useOnboardingFlow() {
     };
   });
 
-  // Language, theme and accent are previewed live by writing them to settings
-  // as they change, so the rest of setup is already in the chosen language and
-  // colors. Writes are chained so they land in the order they were made. The
+  // Theme and accent are previewed live by writing them to settings as they
+  // change, so the rest of setup is already in the chosen colors. Language is
+  // previewed the same way but is a device-local preference, not a setting. Writes are chained so they land in the order they were made. The
   // base currency is deliberately *not* written here — it is create-only and
   // must arrive with `completeOnboarding` (see `local-finance-repository.ts`).
   const pendingSettingsWrite = useRef<Promise<void>>(Promise.resolve());
@@ -159,7 +161,12 @@ export function useOnboardingFlow() {
 
   const setLocale = (locale: string) => {
     update({ locale });
-    previewSetting({ locale });
+    setPreference(locale).catch((reason) => {
+      showError(
+        "Couldn’t apply this setting",
+        errorMessage(reason, "Try again."),
+      );
+    });
   };
   const setTheme = (themeId: string) => {
     update({ themeId });

@@ -1,8 +1,42 @@
-import { createContext, use, useEffect, useMemo, type ReactNode } from "react";
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { AppState } from "react-native";
 
-import { useFinanceSettings } from "@/providers/finance-provider";
+import {
+  isAndroid,
+  isRtlLocale,
+  languageFromLocale,
+  normalizePreference,
+  resolveLocale,
+  resolveSystemLocale,
+  SYSTEM_PREFERENCE,
+  type AppLanguage,
+  type LanguagePreference,
+} from "@/localization/language-preference";
+import {
+  loadStoredPreference,
+  migrateLegacyLanguage,
+  persistPreference,
+  readDeviceLocales,
+  readNativePreference,
+  usesNativeLocale,
+} from "@/localization/language-store";
+import {
+  useFinanceRepository,
+  useFinanceSettings,
+} from "@/providers/finance-provider";
 
-export type AppLanguage = "en" | "he";
+export type { AppLanguage };
+export { languageFromLocale };
 
 export const APP_LANGUAGE_OPTIONS = [
   { value: "en-US", label: "English" },
@@ -47,6 +81,9 @@ const HEBREW: Record<string, string> = {
   "Follow the system or choose an accent that feels like you.":
     "השתמשו בהגדרת המערכת או בחרו צבע שמתאים לכם.",
   Language: "שפה",
+  "System default": "ברירת המחדל של המערכת",
+  "Qashy follows your device’s language by default. Choose another one for this device only.":
+    "Qashy עוקב אחר שפת המכשיר כברירת מחדל. אפשר לבחור שפה אחרת למכשיר הזה בלבד.",
   "Base currency": "מטבע בסיס",
   "Budgets, goals, and reports use this currency.":
     "תקציבים, יעדים ודוחות משתמשים במטבע הזה.",
@@ -1907,10 +1944,6 @@ function translateDynamic(message: string) {
   return result;
 }
 
-export function languageFromLocale(locale: string): AppLanguage {
-  return locale.toLocaleLowerCase().startsWith("he") ? "he" : "en";
-}
-
 export function translateMessage(message: string, language: AppLanguage) {
   if (language === "en" || !message) return message;
   const leading = message.match(/^\s*/)?.[0] ?? "";
@@ -1932,33 +1965,172 @@ export function translateMessage(message: string, language: AppLanguage) {
 
 type LocalizationValue = {
   language: AppLanguage;
+  /** The resolved supported tag (`en-US`, `he-IL`): what all number, money and date formatting uses. */
   locale: string;
   isRtl: boolean;
   t: (message: string) => string;
+  /** This device's choice: `"system"` or an explicit supported tag. */
+  preference: LanguagePreference;
+  /** What `"system"` resolves to on this device right now. */
+  systemLocale: string;
+  /** Switches the language live and persists it on this device. Rejects, after reverting, if the write fails. */
+  setPreference: (preference: LanguagePreference) => Promise<void>;
 };
 
 const LocalizationContext = createContext<LocalizationValue | null>(null);
 let currentLanguage: AppLanguage = "en";
 
+type DeviceLanguage = {
+  preference: LanguagePreference;
+  deviceLocales: readonly string[];
+};
+
+/** Android's per-app locale is readable synchronously, so its first render is already correct. */
+function readInitial(): DeviceLanguage | null {
+  const preference = readNativePreference();
+  return preference === null
+    ? null
+    : { preference, deviceLocales: readDeviceLocales() };
+}
+
+const sameLocales = (a: readonly string[], b: readonly string[]) =>
+  a.length === b.length && a.every((tag, index) => tag === b[index]);
+
 export function LocalizationProvider({ children }: { children: ReactNode }) {
+  const repository = useFinanceRepository();
   const settings = useFinanceSettings();
-  const language = languageFromLocale(settings.locale);
+  const android = isAndroid();
+  const [device, setDevice] = useState<DeviceLanguage | null>(readInitial);
+  const deviceRef = useRef(device);
+  useLayoutEffect(() => {
+    deviceRef.current = device;
+  }, [device]);
+
+  // Web (and Android without the native module) reads `sync_meta`, which is async. Children
+  // render only once it has loaded, so the first frame is never in the wrong language.
+  useEffect(() => {
+    if (deviceRef.current) return;
+    let cancelled = false;
+    loadStoredPreference()
+      .catch((): LanguagePreference => SYSTEM_PREFERENCE)
+      .then((preference) => {
+        if (!cancelled)
+          setDevice({ preference, deviceLocales: readDeviceLocales() });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // The user can change the app language in system Settings while Qashy is backgrounded.
+  useEffect(() => {
+    if (!usesNativeLocale()) return;
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      const preference = readNativePreference();
+      if (preference === null) return;
+      const deviceLocales = readDeviceLocales();
+      setDevice((current) =>
+        current &&
+        current.preference === preference &&
+        sameLocales(current.deviceLocales, deviceLocales)
+          ? current
+          : { preference, deviceLocales },
+      );
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // One-time: keep the language that was showing before the app followed the device.
+  const legacyLocale = settings.locale;
+  const migrationStarted = useRef(false);
+  const loaded = device !== null;
+  useEffect(() => {
+    if (!loaded || migrationStarted.current) return;
+    migrationStarted.current = true;
+    const current = deviceRef.current;
+    if (!current) return;
+    migrateLegacyLanguage({
+      currentPreference: current.preference,
+      legacyLocale,
+      deviceLocales: current.deviceLocales,
+    })
+      .then((written) => {
+        if (written)
+          setDevice((now) =>
+            now && now.preference === SYSTEM_PREFERENCE
+              ? { ...now, preference: normalizePreference(written, android) }
+              : now,
+          );
+      })
+      // A failed migration is retried on the next launch; the app stays usable meanwhile.
+      .catch(() => undefined);
+  }, [loaded, legacyLocale, android]);
+
+  const preference = device?.preference ?? SYSTEM_PREFERENCE;
+  const deviceLocales = device?.deviceLocales;
+  const systemLocale = useMemo(
+    () => resolveSystemLocale(deviceLocales ?? [], android),
+    [deviceLocales, android],
+  );
+  const locale = useMemo(
+    () => resolveLocale(preference, deviceLocales ?? [], android),
+    [preference, deviceLocales, android],
+  );
+  const language = languageFromLocale(locale);
+  const isRtl = isRtlLocale(locale);
+
+  // Overlapping choices: only the newest request may roll the UI back, or a stale failure
+  // would restore a value the user has already moved past.
+  const latestRequest = useRef(0);
+  const setPreference = useCallback(
+    async (next: LanguagePreference) => {
+      const normalized = normalizePreference(next, android);
+      const previous = deviceRef.current;
+      if (previous?.preference === normalized) return;
+      const request = ++latestRequest.current;
+      // Live first, so the whole UI (and RTL) flips the moment it is chosen.
+      setDevice((current) => ({
+        preference: normalized,
+        deviceLocales: current?.deviceLocales ?? readDeviceLocales(),
+      }));
+      try {
+        await persistPreference(normalized);
+      } catch (reason) {
+        if (request === latestRequest.current) setDevice(previous);
+        throw reason;
+      }
+    },
+    [android],
+  );
+
   const value = useMemo<LocalizationValue>(
     () => ({
       language,
-      locale: settings.locale,
-      isRtl: language === "he",
+      locale,
+      isRtl,
       t: (message) => translateMessage(message, language),
+      preference,
+      systemLocale,
+      setPreference,
     }),
-    [language, settings.locale],
+    [language, locale, isRtl, preference, systemLocale, setPreference],
   );
+
+  // Repository messages and exports format with the same locale the UI does.
+  useLayoutEffect(() => {
+    repository.setDisplayLocale(locale);
+  }, [repository, locale]);
+
   useEffect(() => {
     currentLanguage = language;
     if (process.env.EXPO_OS === "web" && typeof document !== "undefined") {
-      document.documentElement.lang = language === "he" ? "he-IL" : "en-US";
-      document.documentElement.dir = language === "he" ? "rtl" : "ltr";
+      document.documentElement.lang = locale;
+      document.documentElement.dir = isRtl ? "rtl" : "ltr";
     }
-  }, [language]);
+  }, [language, locale, isRtl]);
+
+  if (!device) return null;
   return <LocalizationContext value={value}>{children}</LocalizationContext>;
 }
 

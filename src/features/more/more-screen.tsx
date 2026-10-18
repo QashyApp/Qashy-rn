@@ -16,6 +16,7 @@ import {
   useBatchDelete,
 } from "@/features/more/use-batch-delete";
 import { useLocalization } from "@/localization/localization";
+import { isAndroid, languageLabel } from "@/localization/language-preference";
 import { summarizeSync } from "@/features/sync/sync-summary";
 import { useExchangeRateStatus } from "@/providers/exchange-rate-provider";
 import {
@@ -48,7 +49,11 @@ export function MoreScreen() {
   const theme = useQashyTheme();
   const { space } = theme;
   const rowDividerInset = 38 + space.md;
-  const { t } = useLocalization();
+  const { t, locale, preference, systemLocale } = useLocalization();
+  const languageSubtitle =
+    preference === "system"
+      ? `${t("System default")} · ${languageLabel(systemLocale, isAndroid())}`
+      : languageLabel(preference, isAndroid());
   const { contentWidth } = useScreenMetrics();
   const wide = contentWidth >= 860;
   const summary = useDashboardRange(startOfMonth(), endOfMonth());
@@ -256,11 +261,7 @@ export function MoreScreen() {
                     literal
                     title={account.name}
                     subtitle={`${t(accountTypeLabel(account.type))} · ${account.currency}`}
-                    value={formatMoney(
-                      balance,
-                      account.currency,
-                      state.settings.locale,
-                    )}
+                    value={formatMoney(balance, account.currency, locale)}
                     icon={accountTypeIcon(account.type)}
                     color={account.color}
                     selected={
@@ -372,7 +373,7 @@ export function MoreScreen() {
                   const status = ended
                     ? "Ended"
                     : rule.active
-                      ? `Next ${mediumDate(rule.nextDueDate, state.settings.locale)}`
+                      ? `Next ${mediumDate(rule.nextDueDate, locale)}`
                       : "Paused";
                   const frequency =
                     rule.interval === 1
@@ -383,7 +384,7 @@ export function MoreScreen() {
                           )
                       : t(`Every ${rule.interval} ${rule.unit}s.`);
                   const foreignSuffix = rule.template.foreign
-                    ? ` · ${formatMoney(rule.template.foreign.amountMinor, rule.template.foreign.currency, state.settings.locale)}`
+                    ? ` · ${formatMoney(rule.template.foreign.amountMinor, rule.template.foreign.currency, locale)}`
                     : "";
                   return (
                     <SettingsRow
@@ -394,7 +395,7 @@ export function MoreScreen() {
                       value={formatMoney(
                         rule.template.amountMinor,
                         rule.template.currency,
-                        state.settings.locale,
+                        locale,
                       )}
                       icon="repeat"
                       selected={
@@ -490,6 +491,13 @@ export function MoreScreen() {
                 subtitle="Theme, Material You, and accent"
                 icon="paintbrush"
                 onPress={() => router.push("/appearance")}
+              />
+              <SettingsRow
+                literal
+                title={t("Language")}
+                subtitle={languageSubtitle}
+                icon="globe"
+                onPress={() => router.push("/language")}
               />
               <SettingsRow
                 title="Gestures"

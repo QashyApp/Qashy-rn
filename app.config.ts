@@ -1,12 +1,37 @@
 import type { ExpoConfig } from "expo/config";
 
+import languages from "./src/localization/languages.json";
+
 /**
- * app.json holds the static config, including `version`; this only layers on the
- * Android ABI list for EAS build profiles that set QASHY_ANDROID_ARCHS (see
+ * Language subtags (`en`, `he`) of every bundled and Play-translated language, deduplicated.
+ * Fed to expo-localization so Android generates `locales_config.xml` and lists exactly these
+ * languages in the system per-app language picker.
+ */
+const androidLocales: string[] = [
+  ...new Set(
+    [...languages.bundled, ...languages.playTranslated].map(
+      ({ tag }: { tag: string }) => new Intl.Locale(tag).language,
+    ),
+  ),
+];
+
+/**
+ * app.json holds the static config, including `version`; this layers on the
+ * expo-localization plugin (its language list lives in src/localization/languages.json)
+ * and the Android ABI list for EAS build profiles that set QASHY_ANDROID_ARCHS (see
  * eas.json). Unset (local dev, `expo run:android`) keeps Expo's default of all four
  * ABIs. Build numbers are owned by EAS (`appVersionSource: remote`).
  */
-export default ({ config }: { config: ExpoConfig }): ExpoConfig => {
+export default ({ config }: { config: ExpoConfig }): ExpoConfig =>
+  withAndroidArchs({
+    ...config,
+    plugins: [
+      ...(config.plugins ?? []),
+      ["expo-localization", { supportedLocales: { android: androidLocales } }],
+    ],
+  });
+
+function withAndroidArchs(config: ExpoConfig): ExpoConfig {
   const raw: string = process.env.QASHY_ANDROID_ARCHS ?? "";
   const archs = raw
     .split(",")
@@ -44,4 +69,4 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig => {
       ];
     }),
   };
-};
+}

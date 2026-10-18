@@ -1,0 +1,63 @@
+name: Android native build
+
+# Compiles the Android project (local Expo modules, config plugins, Gradle) so a native
+# break is caught on the pull request instead of in the EAS build after merge. Runs only
+# when something that can affect the native build changed.
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "modules/**"
+      - "plugins/**"
+      - "app.json"
+      - "app.config.ts"
+      - "package.json"
+      - "package-lock.json"
+      - "eas.json"
+      - "src/localization/languages.json"
+      - ".github/workflows/android-native.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  assemble:
+    name: prebuild + assembleDebug
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # One ABI keeps the native compile short; this job checks that it builds, not every ABI.
+      QASHY_ANDROID_ARCHS: arm64-v8a
+    steps:
+      - name: 🏗 Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: 🏗 Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: 🏗 Setup Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: 🏗 Setup Gradle cache
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+
+      - name: 📦 Install dependencies
+        run: npm ci
+
+      - name: 🧱 Generate Android project
+        run: npx expo prebuild -p android --no-install --clean
+
+      - name: 📱 Assemble debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon

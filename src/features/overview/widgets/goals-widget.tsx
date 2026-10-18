@@ -36,7 +36,7 @@ export function GoalsWidget({ card }: WidgetProps) {
   const { space } = useQashyTheme();
   const repository = useFinanceRepository();
   const state = useFinanceState();
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const goals = useActiveGoals();
   const goalId =
     typeof card.config.goalId === "string" ? card.config.goalId : undefined;
@@ -121,7 +121,7 @@ export function GoalsWidget({ card }: WidgetProps) {
               <AnimatedMoney
                 minor={displayProgress}
                 currency={state.settings.baseCurrency}
-                locale={state.settings.locale}
+                locale={locale}
                 variant="caption"
                 numeric
                 muted
@@ -131,7 +131,7 @@ export function GoalsWidget({ card }: WidgetProps) {
                 variant="caption"
                 muted
                 numeric
-              >{`${t("of")} ${formatMoney(goal.targetMinor, state.settings.baseCurrency, state.settings.locale)}`}</AppText>
+              >{`${t("of")} ${formatMoney(goal.targetMinor, state.settings.baseCurrency, locale)}`}</AppText>
             </View>
           );
         })}

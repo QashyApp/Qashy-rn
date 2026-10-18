@@ -54,7 +54,6 @@
       ],
       "expo-sqlite",
       "expo-sharing",
-      "expo-localization",
       "expo-secure-store",
       [
         "expo-camera",

@@ -18,10 +18,9 @@ const MAX_CATEGORIES_SHOWN = 5;
 export function TopCategoriesWidget({ month }: WidgetProps) {
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const state = useFinanceState();
   const summary = useDashboard(month);
-  const locale = state.settings.locale;
   const currency = state.settings.baseCurrency;
 
   const spendItems = summary.categorySpend.filter(
