@@ -62,7 +62,7 @@ export function AccountFormScreen() {
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const existing = id
     ? state.accounts.find((item) => item.id === id)
     : undefined;
@@ -77,7 +77,7 @@ export function AccountFormScreen() {
       ? minorToLocalizedDecimalString(
           existing.openingBalanceMinor,
           existing.currency,
-          state.settings.locale,
+          locale,
         )
       : "0",
   );
@@ -105,16 +105,16 @@ export function AccountFormScreen() {
       [...SUPPORTED_CURRENCY_CODES]
         .map((code) => ({
           value: code,
-          label: currencyLabel(code, state.settings.locale),
+          label: currencyLabel(code, locale),
           description: code,
         }))
-        .sort((a, b) => a.label.localeCompare(b.label, state.settings.locale)),
-    [state.settings.locale],
+        .sort((a, b) => a.label.localeCompare(b.label, locale)),
+    [locale],
   );
   const currencyError = validateCurrencyCode(currency);
   const openingError = currencyError
     ? undefined
-    : validateMoneyInput(opening, currency, state.settings.locale, {
+    : validateMoneyInput(opening, currency, locale, {
         label: "Opening balance",
       });
   const canSave = !currencyError && !openingError;
@@ -139,7 +139,7 @@ export function AccountFormScreen() {
           minorToLocalizedDecimalString(
             existing.openingBalanceMinor,
             value.toUpperCase(),
-            state.settings.locale,
+            locale,
           ),
         );
       } catch {
@@ -157,11 +157,7 @@ export function AccountFormScreen() {
           name: name.trim() || t("Account"),
           type,
           currency: currency.toUpperCase(),
-          openingBalanceMinor: parseMoney(
-            opening,
-            currency,
-            state.settings.locale,
-          ),
+          openingBalanceMinor: parseMoney(opening, currency, locale),
           icon: "wallet.bifold",
           color,
           archived: false,

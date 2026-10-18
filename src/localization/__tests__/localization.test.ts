@@ -124,4 +124,23 @@ describe("localization", () => {
     // a different fixed label to confirm the pattern isn't matching on that label alone.
     expect(translateMessage("Amount (ILS)", "he")).toBe("סכום (ILS)");
   });
+
+  it("translates the language setting copy", () => {
+    expect(translateMessage("Language", "he")).toBe("שפה");
+    expect(translateMessage("System default", "he")).toBe(
+      "ברירת המחדל של המערכת",
+    );
+    expect(
+      translateMessage(
+        "Qashy follows your device’s language by default. Choose another one for this device only.",
+        "he",
+      ),
+    ).toBe(
+      "Qashy עוקב אחר שפת המכשיר כברירת מחדל. אפשר לבחור שפה אחרת למכשיר הזה בלבד.",
+    );
+  });
+
+  it("reads Hebrew for iw, the legacy Android code", () => {
+    expect(languageFromLocale("iw-IL")).toBe("he");
+  });
 });

@@ -55,6 +55,7 @@ Keep domain logic out of screen components when it belongs in the repository or 
 - Recurring generation must remain idempotent through occurrence keys.
 - Batch mutations and CSV commits must use one adapter `putMany` call so SQLite and Dexie can apply them atomically.
 - Validate the complete operation before mutating repository state. Update the in-memory snapshot only after persistence succeeds.
+- The app language is device-local: the Android per-app locale, or `sync_meta` `appLanguage` on web. It is never stored in `AppSettings` (whose `locale` is legacy and unused for display) and never synced.
 - Do not put finance records in service-worker caches, AsyncStorage, URL parameters, or logs.
 
 When adding or changing an entity, update the model, repository contract, both storage paths if necessary, migrations, and contract tests together.

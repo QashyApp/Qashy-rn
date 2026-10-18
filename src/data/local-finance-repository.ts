@@ -451,6 +451,11 @@ type ListKey = Exclude<EntityType, "settings">;
 export class LocalFinanceRepository implements FinanceRepository {
   private state = createInitialState();
   private listeners = new Set<() => void>();
+  /**
+   * The device's display locale. Memory only: never persisted, never in `AppSettings`, and it
+   * emits no ops. Until `setDisplayLocale` is first called the synced `settings.locale` stands in.
+   */
+  private displayLocale: string | null = null;
   private mutationQueue: Promise<void> = Promise.resolve();
   private mutationActive = false;
   private pendingExternalRefresh = false;
@@ -563,6 +568,22 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   getSnapshot = () => this.state;
+
+  /**
+   * The locale used for parsing and formatting inside repository rules. The pre-provider fallback
+   * is safe: every consumer only feeds `currencyDigits` (pinned per currency) and invariant
+   * parsing, so no persisted value or op output depends on which locale is in effect.
+   */
+  private get formatLocale(): string {
+    return this.displayLocale ?? this.state.settings.locale;
+  }
+
+  setDisplayLocale(locale: string): void {
+    this.assertLocale(locale);
+    const changed = locale !== this.formatLocale;
+    this.displayLocale = locale;
+    if (changed) this.emit();
+  }
 
   subscribe = (listener: () => void) => {
     this.listeners.add(listener);
@@ -790,7 +811,6 @@ export class LocalFinanceRepository implements FinanceRepository {
       throw new Error("Choose a valid accent source.");
     const settings = updateEntity(this.state.settings, {
       onboardingComplete: true,
-      locale: input.locale,
       baseCurrency,
       themeId,
       themeMode: input.themeMode,
@@ -2195,7 +2215,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           item.account.currency,
           this.state.settings.baseCurrency,
           rate,
-          this.state.settings.locale,
+          this.formatLocale,
         ),
         "Net worth",
       );
@@ -3102,7 +3122,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         const amountMinor = parseInvariantMoney(
           row.amount,
           row.currency,
-          this.state.settings.locale,
+          this.formatLocale,
         );
         const destination = row.destinationAccount
           ? this.active(this.state.accounts).find(
@@ -3166,7 +3186,7 @@ export class LocalFinanceRepository implements FinanceRepository {
               ? parseInvariantMoney(
                   row.destinationAmount,
                   destination.currency,
-                  this.state.settings.locale,
+                  this.formatLocale,
                 )
               : null,
           destinationBaseAmountMinor: row.destinationBaseAmountMinor
@@ -3189,7 +3209,7 @@ export class LocalFinanceRepository implements FinanceRepository {
             `Amount ${row.amount} does not match the foreign amount and fee, which total ${minorToDecimalString(
               previewTransaction.amountMinor,
               row.currency,
-              this.state.settings.locale,
+              this.formatLocale,
             )}.`,
           );
         }
@@ -3282,7 +3302,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     fee: TransactionFeeInput | null;
     principalMinor: number;
   } {
-    const locale = this.state.settings.locale;
+    const locale = this.formatLocale;
     let foreign: ForeignAmountInput | null = null;
     if (row.foreignAmount || row.foreignCurrency || row.foreignExchangeRate) {
       if (!row.foreignAmount || !row.foreignCurrency)
@@ -4186,7 +4206,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           minorToDecimalString(
             transaction.amountMinor,
             transaction.currency,
-            this.state.settings.locale,
+            this.formatLocale,
           ),
           transaction.currency,
           account,
@@ -4195,7 +4215,7 @@ export class LocalFinanceRepository implements FinanceRepository {
             ? minorToDecimalString(
                 transaction.destinationAmountMinor,
                 destination.currency,
-                this.state.settings.locale,
+                this.formatLocale,
               )
             : "",
           transaction.destinationBaseAmountMinor ?? "",
@@ -4209,7 +4229,7 @@ export class LocalFinanceRepository implements FinanceRepository {
             ? minorToDecimalString(
                 transaction.foreign.amountMinor,
                 transaction.foreign.currency,
-                this.state.settings.locale,
+                this.formatLocale,
               )
             : "",
           transaction.foreign?.currency ?? "",
@@ -4221,7 +4241,7 @@ export class LocalFinanceRepository implements FinanceRepository {
               : minorToDecimalString(
                   transaction.fee.amountMinor,
                   transaction.currency,
-                  this.state.settings.locale,
+                  this.formatLocale,
                 )
             : "",
         ];
@@ -4469,7 +4489,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         foreignCurrency,
         account.currency,
         foreignRate,
-        this.state.settings.locale,
+        this.formatLocale,
       );
       if (principalMinor <= 0) {
         throw new Error(
@@ -4568,7 +4588,7 @@ export class LocalFinanceRepository implements FinanceRepository {
               account.currency,
               this.state.settings.baseCurrency,
               rate,
-              this.state.settings.locale,
+              this.formatLocale,
             );
     // A positive amount that rounds to nothing in the base currency would be a free transaction
     // that still moves an account balance. An unchanged historical record is left alone.
@@ -4621,7 +4641,7 @@ export class LocalFinanceRepository implements FinanceRepository {
             destination!.currency,
             input.localDate,
           ),
-          this.state.settings.locale,
+          this.formatLocale,
         );
       }
       const preservesDestinationSnapshot =
@@ -4709,7 +4729,7 @@ export class LocalFinanceRepository implements FinanceRepository {
                 destination!.currency,
                 this.state.settings.baseCurrency,
                 destinationRate,
-                this.state.settings.locale,
+                this.formatLocale,
               );
       }
     }
@@ -4826,7 +4846,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     destinationBaseAmountMinor: number | null;
   } | null {
     const base = this.state.settings.baseCurrency;
-    const locale = this.state.settings.locale;
+    const locale = this.formatLocale;
     const accountPriced =
       transaction.exchangeRate !== null && transaction.baseAmountMinor !== null;
     const destinationNeedsPricing =
@@ -4930,7 +4950,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     } catch (reason) {
       if (baseAmountMinor === null || amountMinor <= 0 || baseAmountMinor <= 0)
         throw reason;
-      const locale = this.state.settings.locale;
+      const locale = this.formatLocale;
       return new Decimal(baseAmountMinor)
         .div(
           new Decimal(10).pow(
@@ -5227,6 +5247,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       state.budgetAdjustments,
       state.exchangeRates,
       state.settings,
+      this.displayLocale,
       todayLocal(),
     ];
     const cached = this.derivedCache;
@@ -5607,7 +5628,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         foreignCurrency,
         account.currency,
         foreignRate,
-        this.state.settings.locale,
+        this.formatLocale,
       );
       normalizedForeign = {
         amountMinor: input.template.foreign.amountMinor,
@@ -6063,7 +6084,7 @@ export class LocalFinanceRepository implements FinanceRepository {
             foreign.currency,
             transaction.currency,
             foreign.exchangeRate,
-            this.state.settings.locale,
+            this.formatLocale,
           );
         }
         if (fee) {
@@ -6296,7 +6317,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           account.currency,
           this.state.settings.baseCurrency,
           rate,
-          this.state.settings.locale,
+          this.formatLocale,
         ),
         "Net worth",
       );
@@ -6322,7 +6343,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         fromCurrency,
         toCurrency,
         this.resolveRate(fromCurrency, toCurrency, localDate),
-        this.state.settings.locale,
+        this.formatLocale,
       );
     } catch {
       return;
@@ -6367,7 +6388,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           this.state.settings.baseCurrency,
           localDate,
         ),
-        this.state.settings.locale,
+        this.formatLocale,
       );
     } catch {
       return null;

@@ -1,0 +1,7 @@
+{
+  "bundled": [
+    { "tag": "en-US", "label": "English" },
+    { "tag": "he-IL", "label": "עברית" }
+  ],
+  "playTranslated": []
+}

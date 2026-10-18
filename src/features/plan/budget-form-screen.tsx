@@ -36,10 +36,8 @@ export function BudgetFormScreen() {
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
-  const defaultBudgetName = state.settings.locale
-    .toLocaleLowerCase()
-    .startsWith("he")
+  const { locale, t } = useLocalization();
+  const defaultBudgetName = locale.toLocaleLowerCase().startsWith("he")
     ? "הוצאות יומיומיות"
     : "Everyday spending";
   const existing = id
@@ -47,11 +45,7 @@ export function BudgetFormScreen() {
     : undefined;
   const [expectedRevision] = useState(existing?.revision);
   const toMoneyText = (minor: number) =>
-    minorToLocalizedDecimalString(
-      minor,
-      state.settings.baseCurrency,
-      state.settings.locale,
-    );
+    minorToLocalizedDecimalString(minor, state.settings.baseCurrency, locale);
   const [name, setName] = useState(existing?.name ?? "");
   const [limit, setLimit] = useState(
     existing ? toMoneyText(existing.limitMinor) : "",
@@ -104,7 +98,7 @@ export function BudgetFormScreen() {
   const limitError = validateMoneyInput(
     limit,
     state.settings.baseCurrency,
-    state.settings.locale,
+    locale,
     {
       label: "Total limit",
       positive: true,
@@ -128,7 +122,7 @@ export function BudgetFormScreen() {
       validateMoneyInput(
         categoryLimits[categoryId] ?? "",
         state.settings.baseCurrency,
-        state.settings.locale,
+        locale,
         {
           label: "Category cap",
           optional: true,
@@ -160,11 +154,7 @@ export function BudgetFormScreen() {
           name: name.trim() || defaultBudgetName,
           icon: "chart.pie",
           color: existing?.color ?? theme.staticAccent,
-          limitMinor: parseMoney(
-            limit,
-            state.settings.baseCurrency,
-            state.settings.locale,
-          ),
+          limitMinor: parseMoney(limit, state.settings.baseCurrency, locale),
           period: {
             unit,
             interval: 1,
@@ -184,7 +174,7 @@ export function BudgetFormScreen() {
               limitMinor: parseMoney(
                 categoryLimits[categoryId],
                 state.settings.baseCurrency,
-                state.settings.locale,
+                locale,
               ),
             })),
           archived: false,
@@ -336,8 +326,8 @@ export function BudgetFormScreen() {
           <View style={{ gap: space.sm }}>
             <AppText variant="caption" muted>
               {rollover
-                ? `Carrying ${formatMoney(carriedMinor, state.settings.baseCurrency, state.settings.locale)} into this period.`
-                : `${formatMoney(carriedMinor, state.settings.baseCurrency, state.settings.locale)} is remembered and returns if you turn rollover back on.`}
+                ? `Carrying ${formatMoney(carriedMinor, state.settings.baseCurrency, locale)} into this period.`
+                : `${formatMoney(carriedMinor, state.settings.baseCurrency, locale)} is remembered and returns if you turn rollover back on.`}
             </AppText>
             <ActionButton
               title="Reset carried rollover"

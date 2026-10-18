@@ -32,7 +32,7 @@ export function AccountStep({
 }: {
   draft: OnboardingDraft;
   errors: { accountName?: string; openingBalance?: string };
-  onChange: (patch: Partial<OnboardingDraft>) => void;
+  onChange: (patch: Partial<Omit<OnboardingDraft, "locale">>) => void;
   onSubmit: () => void;
 }) {
   const theme = useQashyTheme();

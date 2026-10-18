@@ -13,6 +13,7 @@ import {
   useFinanceRepository,
   useFinanceState,
 } from "@/providers/finance-provider";
+import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
@@ -33,6 +34,7 @@ export function ExchangeRateScreen() {
   }>();
   const repository = useFinanceRepository();
   const state = useFinanceState();
+  const { locale } = useLocalization();
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const existing = id
@@ -45,9 +47,7 @@ export function ExchangeRateScreen() {
     existing?.fromCurrency ?? currency?.toUpperCase() ?? "EUR",
   );
   const [rate, setRate] = useState(() =>
-    existing?.rate
-      ? localizeDecimalString(existing.rate, state.settings.locale)
-      : "",
+    existing?.rate ? localizeDecimalString(existing.rate, locale) : "",
   );
   const [effectiveDate, setEffectiveDate] = useState(
     existing?.effectiveDate ?? todayLocal(),
@@ -73,7 +73,7 @@ export function ExchangeRateScreen() {
     (fromCurrency.toUpperCase() === state.settings.baseCurrency
       ? `Choose a currency other than ${state.settings.baseCurrency}.`
       : undefined);
-  const rateError = validateExchangeRate(rate, state.settings.locale);
+  const rateError = validateExchangeRate(rate, locale);
   const dateError = validateDateInput(effectiveDate, {
     label: "Effective date",
   });
@@ -86,7 +86,7 @@ export function ExchangeRateScreen() {
         {
           fromCurrency: fromCurrency.toUpperCase(),
           toCurrency: state.settings.baseCurrency,
-          rate: normalizeDecimalString(rate, state.settings.locale),
+          rate: normalizeDecimalString(rate, locale),
           effectiveDate,
         },
         existing?.id,

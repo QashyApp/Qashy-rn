@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   defaultAccountName,
@@ -8,7 +8,7 @@ import {
 } from "@/domain/defaults";
 import type { AccountType, AccentSource, ThemeMode } from "@/domain/models";
 import type { OnboardingInput } from "@/data/repository";
-import { languageFromLocale } from "@/localization/localization";
+import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -41,6 +41,11 @@ export interface OnboardingDraft {
   accentSource: AccentSource;
   accentHex: string;
 }
+
+/** What the hook stores itself: the draft minus the language, with the name unset until typed. */
+type DraftFields = Omit<OnboardingDraft, "locale" | "accountName"> & {
+  accountName: string | null;
+};
 
 /** Field errors for a draft. Pure, so the rules are testable without rendering. */
 export function validateDraft(draft: OnboardingDraft) {
@@ -102,30 +107,41 @@ export function finishPayload(draft: OnboardingDraft): OnboardingInput {
 export function useOnboardingFlow() {
   const repository = useFinanceRepository();
   const { settings } = useFinanceState();
+  const { locale: uiLocale, setPreference } = useLocalization();
+  // Read at finish time, so the payload follows the language the UI shows now.
+  const uiLocaleRef = useRef(uiLocale);
+  useEffect(() => {
+    uiLocaleRef.current = uiLocale;
+  }, [uiLocale]);
   const [start] = useState(() => initialLocalePreferences(settings));
   const [step, setStep] = useState<OnboardingStep>("welcome");
   const [direction, setDirection] = useState<"forward" | "back">("forward");
   const [saving, setSaving] = useState(false);
   const savingRef = useRef(false);
-  const [draft, setDraft] = useState<OnboardingDraft>(() => {
-    const locale =
-      languageFromLocale(start.locale) === "he" ? "he-IL" : "en-US";
-    return {
-      locale,
-      currency: start.baseCurrency,
-      accountName: defaultAccountName(locale),
-      accountType: "checking",
-      openingBalance: "",
-      themeId: settings.themeId,
-      themeMode: settings.themeMode,
-      accentSource: settings.accentSource,
-      accentHex: settings.accentHex || QASHY_ACCENT,
-    };
-  });
+  // The language is never copied into this state: `uiLocale` (the provider's resolved locale,
+  // which rolls itself back when a write fails) is the single source of truth, and `draft.locale`
+  // below is derived from it on every render. `accountName` is `null` until the user types, so
+  // the suggested name follows the language without ever overwriting a typed one.
+  const [fields, setFields] = useState<DraftFields>(() => ({
+    currency: start.baseCurrency,
+    accountName: null,
+    accountType: "checking",
+    openingBalance: "",
+    themeId: settings.themeId,
+    themeMode: settings.themeMode,
+    accentSource: settings.accentSource,
+    accentHex: settings.accentHex || QASHY_ACCENT,
+  }));
+  const draft: OnboardingDraft = {
+    ...fields,
+    locale: uiLocale,
+    accountName: fields.accountName ?? defaultAccountName(uiLocale),
+  };
 
-  // Language, theme and accent are previewed live by writing them to settings
-  // as they change, so the rest of setup is already in the chosen language and
-  // colors. Writes are chained so they land in the order they were made. The
+  // Theme and accent are previewed live by writing them to settings as they
+  // change, so the rest of setup is already in the chosen colors. Language is
+  // previewed the same way but is a device-local preference, not a setting.
+  // Writes are chained so they land in the order they were made. The
   // base currency is deliberately *not* written here — it is create-only and
   // must arrive with `completeOnboarding` (see `local-finance-repository.ts`).
   const pendingSettingsWrite = useRef<Promise<void>>(Promise.resolve());
@@ -143,23 +159,18 @@ export function useOnboardingFlow() {
       });
   };
 
-  const update = (patch: Partial<OnboardingDraft>) =>
-    setDraft((current) => {
-      const next = { ...current, ...patch };
-      // Keep the suggested account name in the chosen language, unless the user
-      // has already typed their own.
-      if (
-        patch.locale &&
-        current.accountName === defaultAccountName(current.locale)
-      ) {
-        next.accountName = defaultAccountName(patch.locale);
-      }
-      return next;
-    });
+  const update = (patch: Partial<Omit<OnboardingDraft, "locale">>) =>
+    setFields((current) => ({ ...current, ...patch }));
 
   const setLocale = (locale: string) => {
-    update({ locale });
-    previewSetting({ locale });
+    // The provider applies it live and rolls back to the last persisted value on failure, so
+    // the draft (derived from it) follows with nothing to undo here.
+    setPreference(locale).catch((reason) => {
+      showError(
+        "Couldn’t apply this setting",
+        errorMessage(reason, "Try again."),
+      );
+    });
   };
   const setTheme = (themeId: string) => {
     update({ themeId });
@@ -211,7 +222,14 @@ export function useOnboardingFlow() {
     setSaving(true);
     try {
       await pendingSettingsWrite.current;
-      await repository.completeOnboarding(finishPayload(draft));
+      const locale = uiLocaleRef.current;
+      await repository.completeOnboarding(
+        finishPayload({
+          ...fields,
+          locale,
+          accountName: fields.accountName ?? defaultAccountName(locale),
+        }),
+      );
       hapticSuccess();
       if (
         process.env.EXPO_OS === "web" &&

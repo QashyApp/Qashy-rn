@@ -53,7 +53,7 @@ export function ExchangeRatesScreen() {
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const rowDividerInset = 38 + space.md;
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const [toggling, setToggling] = useState(false);
 
   // Only consulted while auto-fetch is off or failing — `summary.missingExchangeRates` already answers
@@ -231,7 +231,7 @@ export function ExchangeRatesScreen() {
           <SectionHeader title="Manual rates" />
           <Card variant="list" dividerInset={rowDividerInset}>
             {manualRates.map((rate) => {
-              const label = `${rate.fromCurrency} → ${rate.toCurrency}, ${rate.rate}, ${t("Manual")}, ${t(`Effective ${mediumDate(rate.effectiveDate, state.settings.locale)}`)}`;
+              const label = `${rate.fromCurrency} → ${rate.toCurrency}, ${rate.rate}, ${t("Manual")}, ${t(`Effective ${mediumDate(rate.effectiveDate, locale)}`)}`;
               return (
                 <MotionPressable
                   key={rate.id}
@@ -285,9 +285,7 @@ export function ExchangeRatesScreen() {
                       variant="label"
                     >{`${rate.fromCurrency} → ${rate.toCurrency}`}</AppText>
                     <AppText literal variant="caption" muted>
-                      {t(
-                        `Effective ${mediumDate(rate.effectiveDate, state.settings.locale)}`,
-                      )}
+                      {t(`Effective ${mediumDate(rate.effectiveDate, locale)}`)}
                     </AppText>
                   </View>
                   <StatusPill label="Manual" icon="pencil" tone="neutral" />

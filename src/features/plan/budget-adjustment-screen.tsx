@@ -46,9 +46,9 @@ export function BudgetAdjustmentScreen() {
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
+  const { locale, t } = useLocalization();
   const today = todayLocal();
-  const { baseCurrency, locale } = state.settings;
+  const { baseCurrency } = state.settings;
   const status = useMemo(
     () =>
       repository

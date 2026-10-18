@@ -7,11 +7,10 @@ const LANGUAGES = [
 ] as const;
 
 /**
- * The English/Hebrew choice, shared by the onboarding welcome step and
- * Appearance. Callers own persistence (both write `settings.locale`); RTL
- * follows from the locale in `LocalizationProvider`, so no reload is needed.
- * The control stays left-to-right so the two options never swap places when
- * the language flips the layout.
+ * The English/Hebrew choice on the onboarding welcome step. The caller sets this device's
+ * language preference (never `settings.locale`), and RTL follows from the resolved locale in
+ * `LocalizationProvider`, so no reload is needed. The control stays left-to-right so the two
+ * options never swap places when the language flips the layout.
  */
 export function LanguageSelector({
   value,

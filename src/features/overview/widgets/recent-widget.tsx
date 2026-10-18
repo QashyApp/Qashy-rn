@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
+import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { monthKey, monthLabel } from "@/utils/date";
@@ -16,8 +17,8 @@ import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 export function RecentWidget({ month }: WidgetProps) {
   const { space } = useQashyTheme();
   const state = useFinanceState();
+  const { locale } = useLocalization();
   const summary = useDashboard(month);
-  const locale = state.settings.locale;
   const seeMonth = () =>
     router.push({
       pathname: "/transactions",

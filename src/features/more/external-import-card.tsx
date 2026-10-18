@@ -6,7 +6,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
-import { MotionPressable } from "@/components/ui/motion";
+import { OptionRow } from "@/components/ui/option-row";
 import type { RatePair } from "@/data/exchange-rates/rate-service";
 import { IMPORT_SOURCES } from "@/data/import/sources";
 import { parseExternalBackup } from "@/data/import/parse";
@@ -26,11 +26,10 @@ import {
 } from "@/providers/finance-provider";
 import { exchangeRateService } from "@/providers/exchange-rate-provider";
 import { useLocalization } from "@/localization/localization";
-import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { MAX_BACKUP_IMPORT_BYTES } from "@/utils/file-size";
-import { hapticSelection, hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/utils/haptics";
 import { formatMoney } from "@/utils/money";
 
 const COUNT_LABELS: {
@@ -112,98 +111,6 @@ function totalOf(counts: ImportCounts) {
     counts.transactions +
     counts.recurringRules +
     counts.budgets
-  );
-}
-
-/**
- * A large selectable row for a radio group: a source app, or an import mode. Selected reads as
- * pushed in with the accent fill and a filled radio mark; the mark is drawn (icon plus fill),
- * never colour alone. Tapping a selected row does nothing, as a radio should.
- */
-function OptionRow({
-  title,
-  description,
-  icon,
-  selected,
-  disabled = false,
-  onPress,
-}: {
-  title: string;
-  description: string;
-  icon: string;
-  selected: boolean;
-  disabled?: boolean;
-  onPress: () => void;
-}) {
-  const theme = useQashyTheme();
-  const { radius, space } = theme;
-  const { t } = useLocalization();
-  const foreground = selected ? theme.onAccentContainer : theme.text;
-  return (
-    <MotionPressable
-      accessibilityLabel={`${t(title)}, ${t(description)}`}
-      accessibilityRole="radio"
-      accessibilityState={{ checked: selected, disabled }}
-      aria-checked={selected}
-      active={selected}
-      disabled={disabled}
-      onPress={() => {
-        if (selected) return;
-        hapticSelection();
-        onPress();
-      }}
-      pressedScale={0.985}
-      hoverScale={1.01}
-      style={({ pressed }) => [
-        {
-          minHeight: 64,
-          flexDirection: "row",
-          alignItems: "center",
-          gap: space.md,
-          padding: space.md + 2,
-          borderRadius: radius.tile,
-          borderCurve: "continuous",
-          opacity: disabled ? 0.45 : pressed ? 0.8 : 1,
-        },
-        selected
-          ? materialStyle(theme, "selected")
-          : materialStyle(theme, "control"),
-      ]}
-    >
-      <AppIcon
-        name={icon}
-        color={selected ? theme.onAccentContainer : theme.textMuted}
-        size={22}
-      />
-      <View style={{ flex: 1, gap: space.xxs }}>
-        <AppText variant="label" style={{ color: foreground }}>
-          {title}
-        </AppText>
-        <AppText
-          variant="caption"
-          muted={!selected}
-          style={selected ? { color: theme.onAccentContainer } : undefined}
-        >
-          {description}
-        </AppText>
-      </View>
-      <View
-        style={{
-          width: 22,
-          height: 22,
-          borderRadius: radius.pill,
-          alignItems: "center",
-          justifyContent: "center",
-          borderWidth: 2,
-          borderColor: selected ? theme.onAccentContainer : theme.border,
-          backgroundColor: selected ? theme.accent : "transparent",
-        }}
-      >
-        {selected ? (
-          <AppIcon name="checkmark" color={theme.onAccent} size={13} />
-        ) : null}
-      </View>
-    </MotionPressable>
   );
 }
 

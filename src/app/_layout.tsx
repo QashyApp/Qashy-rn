@@ -94,11 +94,7 @@ function useWebDocumentTitle() {
 // Every creation/editing flow gets identical sheet behaviour. Previously only
 // `transaction` carried the detents and transparent content style, so the other
 // six sheets opened at a different height with an opaque backdrop.
-function formSheetOptions(
-  title: string,
-  backTitle: string,
-  fallback: Href,
-) {
+function formSheetOptions(title: string, backTitle: string, fallback: Href) {
   // Android draws and animates its own sheet (`AndroidSheet`, mounted by `sheetScreenLayout`) rather
   // than use the native one, which cannot be restyled or re-timed without patching a library. The
   // sheet carries the title and the close control, so there is no native header.
@@ -237,51 +233,27 @@ function RootNavigator() {
           />
           <Stack.Screen
             name="budget"
-            options={formSheetOptions(
-              t("Budget"),
-              backTitle,
-              "/plan",
-            )}
+            options={formSheetOptions(t("Budget"), backTitle, "/plan")}
           />
           <Stack.Screen
             name="budget-adjustment"
-            options={formSheetOptions(
-              t("Adjust budget"),
-              backTitle,
-              "/plan",
-            )}
+            options={formSheetOptions(t("Adjust budget"), backTitle, "/plan")}
           />
           <Stack.Screen
             name="goal"
-            options={formSheetOptions(
-              t("Goal"),
-              backTitle,
-              "/plan",
-            )}
+            options={formSheetOptions(t("Goal"), backTitle, "/plan")}
           />
           <Stack.Screen
             name="overview-cards"
-            options={formSheetOptions(
-              t("Add cards"),
-              backTitle,
-              "/overview",
-            )}
+            options={formSheetOptions(t("Add cards"), backTitle, "/overview")}
           />
           <Stack.Screen
             name="account"
-            options={formSheetOptions(
-              t("Account"),
-              backTitle,
-              "/more",
-            )}
+            options={formSheetOptions(t("Account"), backTitle, "/more")}
           />
           <Stack.Screen
             name="category"
-            options={formSheetOptions(
-              t("Category"),
-              backTitle,
-              "/more",
-            )}
+            options={formSheetOptions(t("Category"), backTitle, "/more")}
           />
           <Stack.Screen
             name="recurring"
@@ -293,11 +265,7 @@ function RootNavigator() {
           />
           <Stack.Screen
             name="exchange-rate"
-            options={formSheetOptions(
-              t("Exchange rate"),
-              backTitle,
-              "/more",
-            )}
+            options={formSheetOptions(t("Exchange rate"), backTitle, "/more")}
           />
           <Stack.Screen
             name="exchange-rates"
@@ -323,6 +291,15 @@ function RootNavigator() {
               headerShown: true,
               ...backFallbackOptions("/more"),
               title: t("Gestures"),
+              headerBackTitle: backTitle,
+            }}
+          />
+          <Stack.Screen
+            name="language"
+            options={{
+              headerShown: true,
+              ...backFallbackOptions("/more"),
+              title: t("Language"),
               headerBackTitle: backTitle,
             }}
           />

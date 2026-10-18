@@ -58,12 +58,13 @@ function lookup<T extends { id: string }>(
  * inputs are unchanged skips the (much heavier) view entirely.
  */
 export function TransactionRow(props: TransactionRowProps) {
-  const { settings, accounts, categories } = useFinanceState();
+  const { accounts, categories } = useFinanceState();
+  const { locale } = useLocalization();
   const { transaction } = props;
   return (
     <TransactionRowView
       {...props}
-      locale={settings.locale}
+      locale={locale}
       account={lookup(accounts, transaction.accountId)}
       category={lookup(categories, transaction.categoryId)}
       destination={lookup(accounts, transaction.destinationAccountId)}
@@ -90,7 +91,6 @@ const TransactionRowView = memo(function TransactionRowView({
   category: Category | undefined;
   destination: Account | undefined;
 }) {
-  const settings = { locale };
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
@@ -110,7 +110,7 @@ const TransactionRowView = memo(function TransactionRowView({
         ? "Income, money in"
         : "Expense, money out",
   );
-  const signedAmount = `${isIncome ? `${t("plus")} ` : isTransfer ? "" : `${t("minus")} `}${formatMoney(transaction.amountMinor, transaction.currency, settings.locale)}`;
+  const signedAmount = `${isIncome ? `${t("plus")} ` : isTransfer ? "" : `${t("minus")} `}${formatMoney(transaction.amountMinor, transaction.currency, locale)}`;
   const accountContext = isTransfer
     ? `${account?.name ?? t("Unknown account")} ${t("into")} ${destination?.name ?? t("Unknown account")}`
     : (account?.name ?? t("Unknown account"));
@@ -121,18 +121,18 @@ const TransactionRowView = memo(function TransactionRowView({
     ? formatMoney(
         transaction.foreign.amountMinor,
         transaction.foreign.currency,
-        settings.locale,
+        locale,
       )
     : null;
   const feeText =
     transaction.fee && transaction.fee.amountMinor > 0
-      ? `${t("incl.")} ${formatMoney(transaction.fee.amountMinor, transaction.currency, settings.locale)} ${t("fee")}`
+      ? `${t("incl.")} ${formatMoney(transaction.fee.amountMinor, transaction.currency, locale)} ${t("fee")}`
       : null;
   const foreignFeeCaption = [foreignText, feeText]
     .filter((part): part is string => Boolean(part))
     .join(" · ");
   // Read the date the way the app displays it, not as the raw ISO string.
-  const spokenDate = dateFormat(settings.locale, {
+  const spokenDate = dateFormat(locale, {
     dateStyle: "full",
   }).format(parseLocalDate(transaction.localDate));
   const rowLabel = [
@@ -158,7 +158,7 @@ const TransactionRowView = memo(function TransactionRowView({
   const amountText = formatMoney(
     isIncome || isTransfer ? transaction.amountMinor : -transaction.amountMinor,
     transaction.currency,
-    settings.locale,
+    locale,
     { sign: !isTransfer },
   );
   // Category colors are identity, not emphasis. Painted at full saturation
@@ -293,7 +293,7 @@ const TransactionRowView = memo(function TransactionRowView({
           variant="caption"
           muted
           numberOfLines={1}
-        >{`${categoryLabel} · ${accountLabel}${compact && transaction.status === "upcoming" ? ` · ${t("Due")} ${mediumDate(transaction.localDate, settings.locale)}` : ""}`}</AppText>
+        >{`${categoryLabel} · ${accountLabel}${compact && transaction.status === "upcoming" ? ` · ${t("Due")} ${mediumDate(transaction.localDate, locale)}` : ""}`}</AppText>
         {foreignFeeCaption ? (
           <AppText literal variant="caption" muted numberOfLines={1}>
             {foreignFeeCaption}
@@ -306,7 +306,7 @@ const TransactionRowView = memo(function TransactionRowView({
         </AppText>
         {showDate && !compact ? (
           <AppText literal variant="caption" muted>
-            {mediumDate(transaction.localDate, settings.locale)}
+            {mediumDate(transaction.localDate, locale)}
           </AppText>
         ) : null}
       </View>

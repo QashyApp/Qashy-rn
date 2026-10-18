@@ -36,20 +36,14 @@ export function GoalFormScreen() {
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
-  const { t } = useLocalization();
-  const defaultGoalName = state.settings.locale
-    .toLocaleLowerCase()
-    .startsWith("he")
+  const { locale, t } = useLocalization();
+  const defaultGoalName = locale.toLocaleLowerCase().startsWith("he")
     ? "קרן ליום גשום"
     : "Rainy day fund";
   const existing = id ? state.goals.find((item) => item.id === id) : undefined;
   const [expectedRevision] = useState(existing?.revision);
   const toMoneyText = (minor: number) =>
-    minorToLocalizedDecimalString(
-      minor,
-      state.settings.baseCurrency,
-      state.settings.locale,
-    );
+    minorToLocalizedDecimalString(minor, state.settings.baseCurrency, locale);
   const [name, setName] = useState(existing?.name ?? "");
   const [kind, setKind] = useState<GoalKind>(existing?.kind ?? "saving");
   const [target, setTarget] = useState(
@@ -91,7 +85,7 @@ export function GoalFormScreen() {
   const targetError = validateMoneyInput(
     target,
     state.settings.baseCurrency,
-    state.settings.locale,
+    locale,
     {
       label: "Target",
       positive: true,
@@ -100,7 +94,7 @@ export function GoalFormScreen() {
   const initialError = validateMoneyInput(
     initial,
     state.settings.baseCurrency,
-    state.settings.locale,
+    locale,
     {
       label: "Starting progress",
       nonNegative: true,
@@ -121,7 +115,7 @@ export function GoalFormScreen() {
   const contributionError = validateMoneyInput(
     contribution,
     state.settings.baseCurrency,
-    state.settings.locale,
+    locale,
     {
       label: "Contribution",
       optional: true,
@@ -166,15 +160,11 @@ export function GoalFormScreen() {
           kind,
           icon: "target",
           color: existing?.color ?? theme.staticAccent,
-          targetMinor: parseMoney(
-            target,
-            state.settings.baseCurrency,
-            state.settings.locale,
-          ),
+          targetMinor: parseMoney(target, state.settings.baseCurrency, locale),
           initialMinor: parseMoney(
             initial,
             state.settings.baseCurrency,
-            state.settings.locale,
+            locale,
           ),
           targetDate: targetDate || null,
           linkedAccountId: linkedAccountId || null,
@@ -219,7 +209,7 @@ export function GoalFormScreen() {
           amountMinor: parseMoney(
             contribution,
             state.settings.baseCurrency,
-            state.settings.locale,
+            locale,
           ),
           localDate: contributionDate,
           transactionId: null,
@@ -245,12 +235,12 @@ export function GoalFormScreen() {
     const amountLabel = formatMoney(
       item.amountMinor,
       state.settings.baseCurrency,
-      state.settings.locale,
+      locale,
     );
     if (
       !(await confirmDestructive({
         title: "Delete this contribution?",
-        message: `${amountLabel} from ${mediumDate(item.localDate, state.settings.locale)} will be removed from this goal.`,
+        message: `${amountLabel} from ${mediumDate(item.localDate, locale)} will be removed from this goal.`,
       }))
     )
       return;
@@ -410,7 +400,7 @@ export function GoalFormScreen() {
             const amountLabel = formatMoney(
               item.amountMinor,
               state.settings.baseCurrency,
-              state.settings.locale,
+              locale,
             );
             return (
               <View
@@ -438,7 +428,7 @@ export function GoalFormScreen() {
                       literal
                       variant="caption"
                       muted
-                    >{`${mediumDate(item.localDate, state.settings.locale)}${item.note ? ` · ${item.note}` : ""}`}</AppText>
+                    >{`${mediumDate(item.localDate, locale)}${item.note ? ` · ${item.note}` : ""}`}</AppText>
                   </View>
                   <View style={{ flexDirection: "row" }}>
                     <TextButton
