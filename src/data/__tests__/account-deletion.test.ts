@@ -29,9 +29,8 @@ async function createRepository(
   options: { sweeps?: boolean } = {},
 ) {
   const repository = new LocalFinanceRepository(storage);
-  await repository.initialize();
   // A repository that does not sweep stands in for the older build that archived the data.
-  if (options.sweeps ?? true) await repository.sweepArchived();
+  await repository.initialize({ generateRecurring: options.sweeps ?? true });
   await repository.completeOnboarding({
     locale: "en-US",
     baseCurrency: "USD",
@@ -714,7 +713,6 @@ describe("sweeping data an older version archived", () => {
     const vault = await archivedVault();
     const repository = new LocalFinanceRepository(vault.storage);
     await repository.initialize();
-    await repository.sweepArchived();
 
     const snapshot = repository.getSnapshot();
     expect(snapshot.accounts.map((item) => item.id)).toEqual([
@@ -771,7 +769,6 @@ describe("sweeping data an older version archived", () => {
     expect(repository.getSnapshot().recurringRules[0].active).toBe(false);
     const again = new LocalFinanceRepository(vault.storage);
     await again.initialize();
-    await again.sweepArchived();
     expect(again.getSnapshot().recurringRules[0].active).toBe(false);
   });
 
@@ -779,12 +776,10 @@ describe("sweeping data an older version archived", () => {
     const vault = await archivedVault();
     const repository = new LocalFinanceRepository(vault.storage);
     await repository.initialize();
-    await repository.sweepArchived();
     const after = repository.getSnapshot();
     const putMany = jest.spyOn(vault.storage, "putMany");
     const second = new LocalFinanceRepository(vault.storage);
     await second.initialize();
-    await second.sweepArchived();
     await repository.refresh();
     expect(putMany).not.toHaveBeenCalled();
     expect(second.getSnapshot().accounts).toEqual(after.accounts);
@@ -816,9 +811,7 @@ describe("sweeping data an older version archived", () => {
     const first = new LocalFinanceRepository(vault.storage);
     const second = new LocalFinanceRepository(copy);
     await first.initialize();
-    await first.sweepArchived();
     await second.initialize();
-    await second.sweepArchived();
     const strip = (state: ReturnType<typeof first.getSnapshot>) =>
       JSON.parse(
         JSON.stringify({
@@ -848,7 +841,6 @@ describe("sweeping data an older version archived", () => {
 
     const reopened = new LocalFinanceRepository(storage);
     await reopened.initialize();
-    await reopened.sweepArchived();
     expect(reopened.getSnapshot().accounts).toHaveLength(1);
     expect(reopened.getSnapshot().accounts[0]).toMatchObject({
       id: only.id,
@@ -873,7 +865,6 @@ describe("sweeping data an older version archived", () => {
       await patchStored(storage, "accounts", id, { archived: true });
     const reopened = new LocalFinanceRepository(storage);
     await reopened.initialize();
-    await reopened.sweepArchived();
     expect(reopened.getSnapshot().accounts.map((item) => item.id)).toEqual([
       first.id,
     ]);
@@ -895,7 +886,7 @@ describe("sweeping data an older version archived", () => {
   it("sweeps when the app starts after a headless initialization already ran", async () => {
     const vault = await archivedVault();
     // The widget task initializes first, read-only, in the same JS runtime. initialize() is
-    // memoized, so the sweep must be its own step rather than part of it.
+    // memoized, so the later default call does not sweep; the explicit step does.
     const repository = new LocalFinanceRepository(vault.storage);
     await repository.initialize({ generateRecurring: false });
     await repository.initialize();
@@ -914,7 +905,7 @@ describe("sweeping data an older version archived", () => {
   it("never lets a failing sweep step block startup, and logs nothing about the data", async () => {
     const vault = await archivedVault();
     const repository = new LocalFinanceRepository(vault.storage);
-    await repository.initialize();
+    await repository.initialize({ generateRecurring: false });
     const warn = jest
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);
@@ -956,7 +947,7 @@ describe("sweeping data an older version archived", () => {
   it("also survives a non-Error rejection", async () => {
     const vault = await archivedVault();
     const repository = new LocalFinanceRepository(vault.storage);
-    await repository.initialize();
+    await repository.initialize({ generateRecurring: false });
     const warn = jest
       .spyOn(console, "warn")
       .mockImplementation(() => undefined);

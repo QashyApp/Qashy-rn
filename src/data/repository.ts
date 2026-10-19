@@ -172,7 +172,7 @@ export interface FinanceRepository {
   /**
    * Idempotent while in flight or after success, whatever the options of the later call.
    * `generateRecurring: false` skips posting recurring transactions, for a headless read-only
-   * refresh. Never sweeps archived data; see `sweepArchived`.
+   * refresh, which also never sweeps archived data (see `sweepArchived`).
    */
   initialize(options?: { generateRecurring?: boolean }): Promise<void>;
   /**

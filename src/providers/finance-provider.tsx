@@ -134,11 +134,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     financeRepository
-      // Generation is its own step below, after the sweep, so a schedule the sweep deletes never
-      // posts first.
-      .initialize({ generateRecurring: false })
-      // Explicit rather than part of `initialize()`: that is memoized, and a headless widget task
-      // may have run it first in this process. It never rejects, so it cannot fail startup.
+      .initialize()
+      // Idempotent after a sweeping `initialize()`. `initialize()` is memoized, so if a headless
+      // widget task ran it first in this process (no sweep, no generation), this is what sweeps.
+      // It never rejects, so it cannot fail startup.
       .then(() => financeRepository.sweepArchived())
       .then(() => financeRepository.generateRecurring())
       // Best-effort and capped: a slow or failed rate fetch must never delay the app's first
