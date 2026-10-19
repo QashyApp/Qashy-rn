@@ -16,6 +16,7 @@ on:
       - "package-lock.json"
       - "eas.json"
       - "src/localization/languages.json"
+      - "src/localization/android-strings.json"
       - ".github/workflows/android-native.yml"
   workflow_dispatch:
 

@@ -16,6 +16,8 @@ const mockEnv = {
   adapter: null as unknown as MemoryStorageAdapter,
   settings: { locale: "he-IL", onboardingComplete: true },
   deviceLocales: ["en-US"],
+  /** Makes every storage transaction reject, as a full disk or a locked database would. */
+  failStorage: false,
   native: {
     available: false,
     applied: "",
@@ -29,7 +31,10 @@ jest.mock("@/data/local-finance-repository", () => ({
     transact: (
       work: Parameters<MemoryStorageAdapter["transact"]>[0],
       options?: Parameters<MemoryStorageAdapter["transact"]>[1],
-    ) => mockEnv.adapter.transact(work, options),
+    ) =>
+      mockEnv.failStorage
+        ? Promise.reject(new Error("storage unavailable"))
+        : mockEnv.adapter.transact(work, options),
   },
 }));
 jest.mock("@/providers/finance-provider", () => ({
@@ -76,6 +81,7 @@ beforeEach(async () => {
   mockEnv.settings = { locale: "he-IL", onboardingComplete: true };
   mockEnv.deviceLocales = ["en-US"];
   mockEnv.native = { available: false, applied: "", hold: null };
+  mockEnv.failStorage = false;
 });
 
 describe("legacy language migration in the provider", () => {
@@ -142,6 +148,27 @@ describe("legacy language migration in the provider", () => {
     });
     expect(await stored()).toBe("system");
     expect(screen.getByText("system|en-US")).toBeTruthy();
+  });
+
+  it("shows the device language when the migration write fails, and retries on the next launch", async () => {
+    mockEnv.failStorage = true;
+    const view = await mount();
+    // A Hebrew user on an English device: the write failed, so this session follows the device.
+    await waitFor(() => expect(screen.getByText("system|en-US")).toBeTruthy());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(screen.getByText("system|en-US")).toBeTruthy();
+    mockEnv.failStorage = false;
+    expect(await stored()).toBe("system");
+    expect(await migratedFlag()).toBeUndefined();
+    await view.unmount();
+
+    // The next launch runs the migration again, and this time it lands.
+    await mount();
+    await waitFor(async () => expect(await migratedFlag()).toBe("1"));
+    expect(await stored()).toBe("he-IL");
+    expect(screen.getByText("he-IL|he-IL")).toBeTruthy();
   });
 
   it("ends on system when the user picks English, then System default, while the migration is writing", async () => {

@@ -134,7 +134,12 @@ export async function migrateLegacyLanguage(input: {
     { silent: true },
   );
   if (migrated) return null;
-  const decided = decide(false, readNativeRawPreference() ?? "");
+  // An unreadable per-app locale is not "system": deciding on it could pin the legacy language
+  // over an explicit choice. A throwing read rejects, and a missing one skips, so either way the
+  // migration is left for the next launch.
+  const current = readNativeRawPreference();
+  if (current === null) return null;
+  const decided = decide(false, current);
   if (decided) await persistPreference(decided);
   try {
     await syncingStorage.transact((tx) => writeLanguageMigrated(tx), {

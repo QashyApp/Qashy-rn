@@ -18,9 +18,10 @@ const androidLocales: string[] = [
 /**
  * app.json holds the static config, including `version`; this layers on the
  * expo-localization plugin (its language list lives in src/localization/languages.json)
- * and the Android ABI list for EAS build profiles that set QASHY_ANDROID_ARCHS (see
- * eas.json). Unset (local dev, `expo run:android`) keeps Expo's default of all four
- * ABIs. Build numbers are owned by EAS (`appVersionSource: remote`).
+ * and the with-android-strings plugin (src/localization/android-strings.json becomes
+ * res/values and res/values-iw strings.xml), plus the Android ABI list for EAS build
+ * profiles that set QASHY_ANDROID_ARCHS (see eas.json). Unset (local dev,
+ * `expo run:android`) keeps Expo's default of all four ABIs. Build numbers are owned by EAS (`appVersionSource: remote`).
  */
 export default ({ config }: { config: ExpoConfig }): ExpoConfig =>
   withAndroidArchs({
@@ -28,6 +29,9 @@ export default ({ config }: { config: ExpoConfig }): ExpoConfig =>
     plugins: [
       ...(config.plugins ?? []),
       ["expo-localization", { supportedLocales: { android: androidLocales } }],
+      // Ships the UI strings as Android string resources (values/ and values-iw/) so Google
+      // Play can translate them and the app can read the translations back at runtime.
+      "./plugins/with-android-strings",
     ],
   });
 

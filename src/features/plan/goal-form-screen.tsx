@@ -360,7 +360,7 @@ export function GoalFormScreen() {
               key={item.id}
               literal
               icon={item.icon}
-              label={`${item.name}${item.archived ? " (archived)" : ""}`}
+              label={`${item.name}${item.archived ? ` ${t("(archived)")}` : ""}`}
               disabled={item.archived}
               selected={linkedAccountId === item.id}
               onPress={() => setLinkedAccountId(item.id)}
@@ -384,7 +384,7 @@ export function GoalFormScreen() {
               key={item.id}
               literal
               icon={item.icon}
-              label={`${item.name}${item.archived ? " (archived)" : ""}`}
+              label={`${item.name}${item.archived ? ` ${t("(archived)")}` : ""}`}
               disabled={item.archived}
               selected={linkedCategoryId === item.id}
               onPress={() => setLinkedCategoryId(item.id)}

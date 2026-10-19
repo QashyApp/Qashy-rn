@@ -39,13 +39,20 @@ export function evaluateThemeImport(
   };
 }
 
-/** The first few errors, with a count of the rest, as one multi-line message. */
-export function summarizeImportErrors(errors: readonly string[]): string {
+/**
+ * The first few errors, with a count of the rest, as one multi-line message. Each line is passed
+ * through `translate` on its own, because a translation matches a whole message and not several
+ * lines joined together.
+ */
+export function summarizeImportErrors(
+  errors: readonly string[],
+  translate: (message: string) => string = (message) => message,
+): string {
   const shown = errors.slice(0, MAX_IMPORT_ERRORS_SHOWN);
   const rest = errors.length - shown.length;
-  return rest > 0
-    ? [...shown, `…and ${rest} more`].join("\n")
-    : shown.join("\n");
+  return (rest > 0 ? [...shown, `…and ${rest} more`] : shown)
+    .map(translate)
+    .join("\n");
 }
 
 export function themeExportFilename(file: Pick<CustomThemeFile, "id">): string {

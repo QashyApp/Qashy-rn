@@ -25,11 +25,8 @@ const tooManyRows = () =>
     "This backup has more than 500,000 rows and is too large to import.",
   );
 
-const corrupt = (detail: string) =>
-  new ImportError(
-    "corrupt",
-    `This SQLite file looks damaged or incomplete (${detail}).`,
-  );
+/** `message` is a whole sentence, so each cause is its own translatable string. */
+const corrupt = (message: string) => new ImportError("corrupt", message);
 
 interface Header {
   pageSize: number;
@@ -53,14 +50,19 @@ function readHeader(bytes: Uint8Array): Header {
   for (let i = 0; i < MAGIC.length; i += 1) {
     if (bytes[i] !== MAGIC.charCodeAt(i)) throw notSqlite();
   }
-  if (bytes.length < HEADER_SIZE) throw corrupt("the header is cut short");
+  if (bytes.length < HEADER_SIZE)
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (the header is cut short).",
+    );
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   // The page size is a u16, so 65536 cannot be stored directly; the format uses 1 for it.
   const rawPageSize = view.getUint16(16, false);
   const pageSize = rawPageSize === 1 ? 65536 : rawPageSize;
   if (pageSize < 512 || (pageSize & (pageSize - 1)) !== 0)
-    throw corrupt("invalid page size");
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (invalid page size).",
+    );
 
   // 0 means "not set yet" and behaves as UTF-8; 2 and 3 are the two UTF-16 flavours.
   const encoding = view.getUint32(56, false);
@@ -73,7 +75,10 @@ function readHeader(bytes: Uint8Array): Header {
 
   const reserved = view.getUint8(20);
   const usableSize = pageSize - reserved;
-  if (usableSize < 480) throw corrupt("invalid reserved space");
+  if (usableSize < 480)
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (invalid reserved space).",
+    );
 
   // The in-header page count is only trustworthy when the change counter (offset 24)
   // matches "version-valid-for" (offset 92); otherwise derive it from the file length.
@@ -81,9 +86,12 @@ function readHeader(bytes: Uint8Array): Header {
   const trusted =
     headerPages > 0 && view.getUint32(24, false) === view.getUint32(92, false);
   const pageCount = trusted ? headerPages : Math.floor(bytes.length / pageSize);
-  if (pageCount < 1) throw corrupt("no pages");
+  if (pageCount < 1)
+    throw corrupt("This SQLite file looks damaged or incomplete (no pages).");
   if (bytes.length < pageCount * pageSize)
-    throw corrupt("the file is shorter than its header says");
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (the file is shorter than its header says).",
+    );
 
   return { pageSize, usableSize, pageCount };
 }
@@ -111,7 +119,10 @@ export function readSqliteUserVersion(bytes: Uint8Array): number {
 // Every varint is checked, not only the nine-byte form: an eight-byte value can already exceed 2^53,
 // and a value that is not a safe integer cannot be used as a size, page number or row id.
 function checkedVarint(value: number, next: number): Varint {
-  if (!Number.isSafeInteger(value)) throw corrupt("a number is too large");
+  if (!Number.isSafeInteger(value))
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (a number is too large).",
+    );
   return { value, next };
 }
 
@@ -120,15 +131,22 @@ function readVarint(bytes: Uint8Array, offset: number): Varint {
   for (let i = 0; i < 8; i += 1) {
     const byte = bytes[offset + i];
     if (byte === undefined)
-      throw corrupt("a number runs past the end of the page");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (a number runs past the end of the page).",
+      );
     value = value * 128 + (byte & 0x7f);
     if ((byte & 0x80) === 0) return checkedVarint(value, offset + i + 1);
   }
   const last = bytes[offset + 8];
   if (last === undefined)
-    throw corrupt("a number runs past the end of the page");
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (a number runs past the end of the page).",
+    );
   value = value * 256 + last;
-  if (!Number.isSafeInteger(value)) throw corrupt("a number is too large");
+  if (!Number.isSafeInteger(value))
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (a number is too large).",
+    );
   return { value, next: offset + 9 };
 }
 
@@ -219,7 +237,9 @@ function readSignedInt(
     const value =
       view.getInt32(0, false) * 4294967296 + view.getUint32(4, false);
     if (!Number.isSafeInteger(value))
-      throw corrupt("an integer is outside the supported range");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (an integer is outside the supported range).",
+      );
     return value;
   }
   let value = 0;
@@ -233,7 +253,9 @@ function decodeRecord(payload: Uint8Array): RawValue[] {
   const header = readVarint(payload, 0);
   const headerEnd = header.value;
   if (headerEnd > payload.length)
-    throw corrupt("a row header runs past its data");
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (a row header runs past its data).",
+    );
   const serialTypes: number[] = [];
   let pos = header.next;
   while (pos < headerEnd) {
@@ -251,7 +273,9 @@ function decodeRecord(payload: Uint8Array): RawValue[] {
   let offset = headerEnd;
   const need = (size: number) => {
     if (offset + size > payload.length)
-      throw corrupt("a row is shorter than its header says");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (a row is shorter than its header says).",
+      );
   };
   for (const type of serialTypes) {
     if (type === 0) {
@@ -270,7 +294,9 @@ function decodeRecord(payload: Uint8Array): RawValue[] {
     } else if (type === 9) {
       values.push(1);
     } else if (type === 10 || type === 11) {
-      throw corrupt("a row uses a reserved value type");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (a row uses a reserved value type).",
+      );
     } else if (type % 2 === 0) {
       // A BLOB. Cashew stores none, and nothing downstream can use raw bytes, so it is
       // skipped but still measured so the following columns stay aligned.
@@ -303,7 +329,9 @@ class SqliteFile {
       pageNumber < 1 ||
       pageNumber > this.header.pageCount
     ) {
-      throw corrupt(`page ${pageNumber} does not exist`);
+      throw corrupt(
+        `This SQLite file looks damaged or incomplete (page ${pageNumber} does not exist).`,
+      );
     }
     const start = (pageNumber - 1) * this.header.pageSize;
     return this.bytes.subarray(start, start + this.header.pageSize);
@@ -325,9 +353,15 @@ class SqliteFile {
     seen: Set<number>,
     out: RawRecord[],
   ): void {
-    if (depth > MAX_TREE_DEPTH) throw corrupt("the table is nested too deeply");
+    if (depth > MAX_TREE_DEPTH)
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (the table is nested too deeply).",
+      );
     // A page reachable twice means a loop or two branches sharing a page: never valid.
-    if (seen.has(pageNumber)) throw corrupt("a page is referenced twice");
+    if (seen.has(pageNumber))
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (a page is referenced twice).",
+      );
     seen.add(pageNumber);
 
     const page = this.page(pageNumber);
@@ -342,7 +376,9 @@ class SqliteFile {
       for (let i = 0; i < cellCount; i += 1) {
         const cell = view.getUint16(pointerArray + i * 2, false);
         if (cell + 4 > page.length)
-          throw corrupt("a cell points outside its page");
+          throw corrupt(
+            "This SQLite file looks damaged or incomplete (a cell points outside its page).",
+          );
         // The rowid key after the child pointer is only needed to search; a full scan
         // just visits children left to right, then the right-most pointer.
         this.walk(view.getUint32(cell, false), depth + 1, seen, out);
@@ -353,12 +389,16 @@ class SqliteFile {
       for (let i = 0; i < cellCount; i += 1) {
         const cell = view.getUint16(pointerArray + i * 2, false);
         if (cell >= page.length)
-          throw corrupt("a cell points outside its page");
+          throw corrupt(
+            "This SQLite file looks damaged or incomplete (a cell points outside its page).",
+          );
         if (out.length >= this.maxRows) throw tooManyRows();
         out.push(this.readLeafCell(page, cell));
       }
     } else {
-      throw corrupt("unexpected page type");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (unexpected page type).",
+      );
     }
   }
 
@@ -367,7 +407,9 @@ class SqliteFile {
     const rowid = readVarint(page, size.next);
     const payloadSize = size.value;
     if (payloadSize > this.bytes.length)
-      throw corrupt("a row is larger than the file");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (a row is larger than the file).",
+      );
 
     // Exact local-payload rule from the format spec: rows that do not fit keep only
     // enough bytes on the b-tree page that the rest fills whole overflow pages.
@@ -382,7 +424,9 @@ class SqliteFile {
 
     const localStart = rowid.next;
     if (localStart + local > page.length)
-      throw corrupt("a row runs past its page");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (a row runs past its page).",
+      );
     if (local === payloadSize) {
       return {
         rowid: rowid.value,
@@ -391,14 +435,19 @@ class SqliteFile {
     }
 
     if (localStart + local + 4 > page.length)
-      throw corrupt("a row runs past its page");
+      throw corrupt(
+        "This SQLite file looks damaged or incomplete (a row runs past its page).",
+      );
     const payload = new Uint8Array(payloadSize);
     payload.set(page.subarray(localStart, localStart + local), 0);
     const view = new DataView(page.buffer, page.byteOffset, page.byteLength);
     let next = view.getUint32(localStart + local, false);
     let filled = local;
     while (filled < payloadSize) {
-      if (next === 0) throw corrupt("an overflow chain ends early");
+      if (next === 0)
+        throw corrupt(
+          "This SQLite file looks damaged or incomplete (an overflow chain ends early).",
+        );
       const overflow = this.page(next);
       const take = Math.min(usable - 4, payloadSize - filled);
       payload.set(overflow.subarray(4, 4 + take), filled);
@@ -590,6 +639,8 @@ export function readSqliteTables(bytes: Uint8Array): Record<string, RawRow[]> {
     if (error instanceof ImportError) throw error;
     // RangeErrors from reading past a truncated buffer, and anything else unexpected,
     // mean the bytes were not a well-formed database.
-    throw corrupt("unreadable data");
+    throw corrupt(
+      "This SQLite file looks damaged or incomplete (unreadable data).",
+    );
   }
 }

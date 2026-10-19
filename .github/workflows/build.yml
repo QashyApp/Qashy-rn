@@ -1,13 +1,12 @@
 name: Build
 
 # Android builds only. Nothing here depends on the Test workflow.
-#   push to main      -> preview APK
-#   push of a v* tag  -> preview APK + production AAB
-#   manual dispatch   -> whichever buildType you pick
+#   push to main      -> preview APK (the only automatic build)
+#   manual dispatch   -> whichever buildType you pick (dev/preview/production/all)
+#   tags              -> never build
 on:
   push:
     branches: [main]
-    tags: ["v*"]
     paths-ignore:
       - "**.md"
       - "LICENSE"
@@ -45,7 +44,6 @@ jobs:
         id: plan
         env:
           EVENT: ${{ github.event_name }}
-          REF: ${{ github.ref }}
           BUILD_TYPE: ${{ github.event.inputs.buildType }}
         run: |
           dev='{"name":"dev","profile":"development","prefix":"qashy-dev","ext":"apk","node_env":"development"}'
@@ -59,8 +57,6 @@ jobs:
               production) list="$production" ;;
               *) list="$dev,$preview,$production" ;;
             esac
-          elif [[ "$REF" == refs/tags/* ]]; then
-            list="$preview,$production"
           else
             list="$preview"
           fi
@@ -94,8 +90,8 @@ jobs:
           distribution: temurin
           java-version: "17"
 
-      # Only builds on main may write the Gradle cache (~1.7 GB per set); tag and
-      # manual runs read it but never add to it.
+      # Only runs on main may write the Gradle cache (~1.7 GB per set); runs from
+      # other branches read it but never add to it.
       - name: 🏗 Setup Gradle cache
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
         with:

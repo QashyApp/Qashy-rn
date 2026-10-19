@@ -524,7 +524,8 @@ function readFile(input: unknown, errors: Errors): CustomThemeFile | null {
   );
   if (version === undefined) {
     errors.push(
-      `themeSchemaVersion: must be ${SUPPORTED_SCHEMA_VERSIONS.join(" or ")}`,
+      // Mirrors `SUPPORTED_SCHEMA_VERSIONS`; a whole sentence so it is one translatable message.
+      "themeSchemaVersion: must be 1 or 2",
     );
   } else {
     file.themeSchemaVersion = version;

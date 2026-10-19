@@ -961,7 +961,9 @@ function HostCodeStep({
                 where a timestamp is arithmetic somebody has to do while holding two phones. */}
             <StatusPill
               literal
-              label={t(`${remaining} seconds left`)}
+              label={t(
+                remaining === 1 ? "1 second left" : `${remaining} seconds left`,
+              )}
               icon="clock"
               tone={remaining < 20 ? "warning" : "neutral"}
             />

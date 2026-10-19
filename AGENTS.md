@@ -109,6 +109,7 @@ Use Expo Router and preserve real public web paths such as `/overview`, `/transa
 - Maintain 44–48px minimum touch targets and meaningful accessibility roles, labels, and selected states.
 - Respect reduced motion and reduced transparency. Do not encode chart meaning through color alone.
 - Reuse shared UI components before introducing one-off styling or another component library.
+- After changing `src/localization/messages/he.ts`, run `npm run strings:android`: Android UI strings ship as resources for Play translation, and a test fails when the generated files are stale.
 
 ## Platform code
 

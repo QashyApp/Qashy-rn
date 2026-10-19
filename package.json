@@ -86,6 +86,7 @@
     "build:web": "expo export -p web && workbox generateSW workbox-config.cjs",
     "typecheck": "node ./scripts/typecheck.js",
     "lint": "expo lint",
+    "strings:android": "node --no-warnings scripts/generate-android-strings.ts",
     "test": "jest --runInBand",
     "test:web": "playwright test",
     "format:check": "prettier --check ."

@@ -14,6 +14,11 @@ async function confirmDialog(page: Page) {
  * and the keypad is closed afterwards with "Set amount". (`fill` types into a focused field, and
  * WebKit drops the text because the keypad has already taken the focus away.)
  */
+/** The keypad group's accessible name, in English or Hebrew (the UI follows the chosen language). */
+const KEYPAD_NAME = /^(Amount keypad|מקלדת סכומים)$/;
+const BACKSPACE_NAME = /^(Delete last character|מחיקת התו האחרון)$/;
+const DECIMAL_NAME = /^(Decimal separator|מפריד עשרוני)$/;
+
 async function fillAmount(field: Locator, value: string) {
   const page = field.page();
   const touch = await page.evaluate(
@@ -23,7 +28,7 @@ async function fillAmount(field: Locator, value: string) {
     await field.fill(value);
     return;
   }
-  const keypad = page.getByRole("group", { name: "Amount keypad" });
+  const keypad = page.getByRole("group", { name: KEYPAD_NAME });
   // An autofocused field opens the keypad by itself, a little after the sheet settles.
   const opened = await keypad
     .waitFor({ state: "visible", timeout: 1_000 })
@@ -33,7 +38,7 @@ async function fillAmount(field: Locator, value: string) {
   await expect(keypad).toBeVisible();
   // The amount shown in the field may already hold text (an autofocused or prefilled field).
   const backspace = keypad.getByRole("button", {
-    name: "Delete last character",
+    name: BACKSPACE_NAME,
   });
   for (let left = (await field.inputValue()).length; left > 0; left -= 1) {
     await backspace.click();
@@ -41,7 +46,7 @@ async function fillAmount(field: Locator, value: string) {
   for (const character of value) {
     const key =
       character === "."
-        ? keypad.getByRole("button", { name: "Decimal separator" })
+        ? keypad.getByRole("button", { name: DECIMAL_NAME })
         : keypad.getByRole("button", { name: character, exact: true });
     await key.click();
   }
@@ -61,7 +66,7 @@ async function dismissKeypad(page: Page) {
     () => window.matchMedia("(pointer: coarse)").matches,
   );
   if (!touch) return;
-  const keypad = page.getByRole("group", { name: "Amount keypad" });
+  const keypad = page.getByRole("group", { name: KEYPAD_NAME });
   await expect(keypad).toBeVisible();
   // The top of the screen is always the dimmed part, never the keypad.
   await page.mouse.click(10, 10);
@@ -526,13 +531,13 @@ ${todayKey()},expense,posted,Tagged import,10.00,USD,Everyday,,Work,Imported
   await expect(
     page.getByText("Ready").locator("..").getByText("1"),
   ).toBeVisible();
-  await page.getByRole("button", { name: "Import 1 transactions" }).click();
+  await page.getByRole("button", { name: "Import 1 transaction" }).click();
   await confirmDialog(page);
   // Pressable does not await an async onPress handler. Wait for the preview to move out of its
   // pre-commit state before navigating, or WebKit can reload the ledger while the Dexie write is
   // still in flight.
   await expect(
-    page.getByRole("button", { name: "Import 1 transactions" }),
+    page.getByRole("button", { name: "Import 1 transaction" }),
   ).toHaveCount(0);
   // Stay in the same app instance after the async commit. A full WebKit reload can race the
   // browser's IndexedDB restore even after the repository write has completed; returning through

@@ -356,7 +356,7 @@ export function BudgetFormScreen() {
               key={category.id}
               literal
               icon={category.icon}
-              label={`${category.name}${category.archived ? " (archived)" : ""}`}
+              label={`${category.name}${category.archived ? ` ${t("(archived)")}` : ""}`}
               selected={selectedCategories.includes(category.id)}
               onPress={() => toggleCategory(category.id)}
             />

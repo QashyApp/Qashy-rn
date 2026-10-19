@@ -6,6 +6,7 @@ import {
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import {
   migrateLegacyLanguage,
+  readDeviceLocales,
   persistPreference,
 } from "@/localization/language-store";
 
@@ -25,6 +26,8 @@ const mockState: {
 const mockLocale = {
   available: false,
   applied: "",
+  readFails: false,
+  systemFails: false,
   set: async (tags: string): Promise<void> => {
     mockLocale.applied = tags;
   },
@@ -82,9 +85,15 @@ jest.mock("@/data/local-finance-repository", () => ({
 
 jest.mock("../../../modules/qashy-locale", () => ({
   isAvailable: () => mockLocale.available,
-  getApplicationLocales: () => mockLocale.applied,
+  getApplicationLocales: () => {
+    if (mockLocale.readFails) throw new Error("native read failed");
+    return mockLocale.applied;
+  },
   setApplicationLocales: (tags: string) => mockLocale.set(tags),
-  getSystemLocales: () => [],
+  getSystemLocales: () => {
+    if (mockLocale.systemFails) throw new Error("native read failed");
+    return ["de-DE"];
+  },
 }));
 
 const input = {
@@ -106,6 +115,8 @@ beforeEach(async () => {
   mockState.transactions = 0;
   mockLocale.available = false;
   mockLocale.applied = "";
+  mockLocale.readFails = false;
+  mockLocale.systemFails = false;
   mockLocale.set = async (tags) => {
     mockLocale.applied = tags;
   };
@@ -184,6 +195,36 @@ describe("migrateLegacyLanguage", () => {
     expect(await migrateLegacyLanguage(input)).toBe("he-IL");
     expect(mockLocale.applied).toBe("he-IL");
     expect(await migrated()).toBe(true);
+  });
+});
+
+describe("migrateLegacyLanguage with an unreadable per-app locale", () => {
+  it("skips the migration for this launch instead of reading the failure as system", async () => {
+    mockLocale.available = true;
+    mockLocale.readFails = true;
+    await expect(migrateLegacyLanguage(input)).rejects.toThrow(
+      "native read failed",
+    );
+    // Nothing was pinned over a choice that could not be read, and the flag is still unset.
+    expect(mockLocale.applied).toBe("");
+    expect(await migrated()).toBe(false);
+
+    // The next launch, with a readable locale, migrates as usual.
+    mockLocale.readFails = false;
+    await expect(migrateLegacyLanguage(input)).resolves.toBe("he-IL");
+    expect(mockLocale.applied).toBe("he-IL");
+    expect(await migrated()).toBe(true);
+  });
+});
+
+describe("readDeviceLocales", () => {
+  it("reads the system list from native, and falls back when that read throws", () => {
+    mockLocale.available = true;
+    expect(readDeviceLocales()).toEqual(["de-DE"]);
+    mockLocale.systemFails = true;
+    const fallback = readDeviceLocales();
+    expect(Array.isArray(fallback)).toBe(true);
+    expect(fallback).not.toContain("de-DE");
   });
 });
 

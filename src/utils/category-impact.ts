@@ -33,5 +33,5 @@ export function categoryDeletionMessage(
   const archived = budgetsArchivedByCategoryDeletion(budgets, categoryIds);
   if (!archived.length) return base;
   const names = archived.map((budget) => `“${budget.name}”`).join(", ");
-  return `${base} ${archived.length === 1 ? "The budget" : "These budgets"} ${names} would then track nothing, so ${archived.length === 1 ? "it is" : "they are"} archived and leave Plan. Edit ${archived.length === 1 ? "its" : "their"} categories first to keep ${archived.length === 1 ? "it" : "them"}.`;
+  return `${base} ${archived.length === 1 ? "The budget" : "These budgets"} ${names} would then track nothing, so ${archived.length === 1 ? "it is archived and leaves" : "they are archived and leave"} Plan. Edit ${archived.length === 1 ? "its" : "their"} categories first to keep ${archived.length === 1 ? "it" : "them"}.`;
 }

@@ -164,7 +164,7 @@ export function AppearanceScreen() {
       if (!evaluation.ok) {
         showError(
           "Couldn’t import theme",
-          summarizeImportErrors(evaluation.errors),
+          summarizeImportErrors(evaluation.errors, t),
         );
         return;
       }
@@ -178,7 +178,12 @@ export function AppearanceScreen() {
         if (!confirmed) return;
       }
       await saveCustomTheme(evaluation.file);
-      setNotice([t("Theme imported."), ...evaluation.warnings].join("\n"));
+      setNotice(
+        [
+          t("Theme imported."),
+          ...evaluation.warnings.map((line) => t(line)),
+        ].join("\n"),
+      );
       await changeTheme(evaluation.file.id);
     } catch (reason) {
       showError("Couldn’t import theme", errorMessage(reason, "Try again."));

@@ -9,8 +9,15 @@
 
 import languages from "@/localization/languages.json";
 
-/** The interface languages that have a translation dictionary. */
-export type AppLanguage = "en" | "he";
+/** The interface languages that have a bundled translation dictionary. */
+export type BundledLanguage = "en" | "he";
+
+/**
+ * The interface language a resolved locale shows: a bundled one, or the full supported tag
+ * (`"fr-FR"`) of a Play-translated language, whose strings come from Android resources for that
+ * exact locale. Only `"he"` ever selects the Hebrew dictionary.
+ */
+export type AppLanguage = BundledLanguage | (string & Record<never, never>);
 
 /** `"system"` (follow the device) or an explicit supported BCP-47 tag such as `he-IL`. */
 export type LanguagePreference = string;
@@ -49,9 +56,33 @@ export function languageSubtag(tag: string): string {
   return LEGACY_SUBTAGS[primary] ?? primary;
 }
 
-/** The interface language whose dictionary a locale uses. Anything but Hebrew reads English. */
-export function languageFromLocale(locale: string): AppLanguage {
+const canonical = (tag: string) => tag.trim().replace(/_/g, "-").toLowerCase();
+
+/** The bundled dictionary a locale uses. Anything but Hebrew reads English. */
+export function languageFromLocale(locale: string): BundledLanguage {
   return languageSubtag(locale) === "he" ? "he" : "en";
+}
+
+/**
+ * The language the UI shows for a resolved locale: a bundled one, or on Android the supported
+ * tag of a Play-translated language. Anything else reads English, never Hebrew.
+ */
+export function appLanguageFromLocale(
+  locale: string,
+  android: boolean,
+): AppLanguage {
+  const subtag = languageSubtag(locale);
+  if (subtag === "he") return "he";
+  if (!android || subtag === "en") return "en";
+  const exact = canonical(locale);
+  const play =
+    PLAY_TRANSLATED_LANGUAGES.find(
+      (option) => canonical(option.tag) === exact,
+    ) ??
+    PLAY_TRANSLATED_LANGUAGES.find(
+      (option) => languageSubtag(option.tag) === subtag,
+    );
+  return play ? play.tag : "en";
 }
 
 export function isRtlLocale(locale: string): boolean {
@@ -67,8 +98,6 @@ export function supportedLanguages(android: boolean): LanguageOption[] {
     ? [...BUNDLED_LANGUAGES, ...PLAY_TRANSLATED_LANGUAGES]
     : [...BUNDLED_LANGUAGES];
 }
-
-const canonical = (tag: string) => tag.trim().replace(/_/g, "-").toLowerCase();
 
 /** The supported entry for a tag: an exact match first, otherwise the first of the same language. */
 export function matchSupportedLanguage(
@@ -181,9 +210,12 @@ export function decideLanguageMigration(
     input.currentPreference !== SYSTEM_PREFERENCE
   )
     return null;
+  // What the user saw before is what the old app displayed: English or Hebrew only, whatever
+  // `settings.locale` said. What "system" resolves to now may also be a Play-translated language.
   const legacy = languageFromLocale(input.legacyLocale);
-  const system = languageFromLocale(
+  const system = appLanguageFromLocale(
     resolveSystemLocale(input.deviceLocales, input.android),
+    input.android,
   );
   if (legacy === system) return null;
   return legacy === "he" ? "he-IL" : "en-US";
