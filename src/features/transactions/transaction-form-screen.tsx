@@ -703,13 +703,13 @@ export function TransactionFormScreen() {
       allowLeave();
       closeToOwner();
     } catch (reason) {
+      // Only a failed delete frees the form again; after a success it stays locked while the sheet exits.
       setDeleting(false);
+      setBusy(false);
       showError(
         "Couldn’t delete transaction",
         errorMessage(reason, "Try again."),
       );
-    } finally {
-      setBusy(false);
     }
   };
 
