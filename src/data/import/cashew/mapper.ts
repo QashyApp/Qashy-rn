@@ -1,6 +1,7 @@
 import { Decimal } from "decimal.js";
 
 import { mapCashewCategoryIcon } from "@/data/import/cashew/icon-map";
+import { omitArchived } from "@/data/import/omit-archived";
 import {
   ImportError,
   type BalanceCheck,
@@ -603,6 +604,12 @@ const WARNING_MESSAGES: Record<string, string> = {
     "Category limits that Cashew keeps as percentages were converted into amounts of the budget limit.",
   "budget-currency":
     "Budget limits were imported in your base currency, which differs from some account currencies.",
+  "archived-account-skipped":
+    "Accounts archived in Cashew were not imported, nor were their transactions. A transfer with one of them was kept as income or expense on the other account.",
+  "archived-category-skipped":
+    "Categories archived in Cashew were not imported; transactions that used them were imported without a category.",
+  "archived-budget-skipped":
+    "Budgets archived in Cashew, or left with nothing to track once archived accounts and categories were left out, were not imported.",
   "associated-titles-dropped":
     "Cashew’s remembered title suggestions were not imported.",
   "scanner-templates-dropped":
@@ -1031,7 +1038,6 @@ export function mapCashewBackup(
   warnings.add("recurring-ended", endedGroups);
   warnings.add("recurring-stale", staleGroups);
   warnings.add("recurring-catch-up", catchUpGroups);
-  warnings.add("recurring-review", recurringRules.length);
 
   // Transactions -----------------------------------------------------------
   const transactions: BundleTransaction[] = [];
@@ -1293,12 +1299,6 @@ export function mapCashewBackup(
   warnings.add("budget-manual-only", budgetCounters.manualOnly);
   warnings.add("budget-income-skipped", budgetCounters.income);
   warnings.add("budget-percent-limits", budgetCounters.percent);
-  if (
-    budgets.length > 0 &&
-    accounts.some((account) => account.currency !== fallbackCurrency)
-  ) {
-    warnings.add("budget-currency", budgets.length);
-  }
 
   // Dropped data -----------------------------------------------------------
   warnings.add("objectives-not-imported", tableRows(raw, "objectives").length);
@@ -1311,31 +1311,51 @@ export function mapCashewBackup(
     tableRows(raw, "scanner_templates").length,
   );
 
+  // Archived items -----------------------------------------------------------
+  // Nothing is archived here, so what Cashew had archived is left out (see `omitArchived`).
+  const kept = omitArchived({
+    accounts,
+    categories,
+    transactions,
+    recurringRules,
+    budgets,
+  });
+  warnings.add("archived-account-skipped", kept.omitted.accounts);
+  warnings.add("archived-category-skipped", kept.omitted.categories);
+  warnings.add("archived-budget-skipped", kept.omitted.budgets);
+  warnings.add("recurring-review", kept.parts.recurringRules.length);
+  if (
+    kept.parts.budgets.length > 0 &&
+    kept.parts.accounts.some((account) => account.currency !== fallbackCurrency)
+  ) {
+    warnings.add("budget-currency", kept.parts.budgets.length);
+  }
+
   // Reconciliation ---------------------------------------------------------
   const balanceChecks = reconcileBalances(
-    accounts,
-    transactions,
-    computeSourceBalances(raw, accounts, timeZone),
+    kept.parts.accounts,
+    kept.parts.transactions,
+    computeSourceBalances(raw, kept.parts.accounts, timeZone),
   );
 
   return {
     source: "cashew",
     timeZone,
     timeZoneSource,
-    accounts,
-    categories,
+    accounts: kept.parts.accounts,
+    categories: kept.parts.categories,
     tags,
-    transactions,
-    recurringRules,
-    budgets,
+    transactions: kept.parts.transactions,
+    recurringRules: kept.parts.recurringRules,
+    budgets: kept.parts.budgets,
     report: {
       counts: {
-        accounts: accounts.length,
-        categories: categories.length,
+        accounts: kept.parts.accounts.length,
+        categories: kept.parts.categories.length,
         tags: tags.length,
-        transactions: transactions.length,
-        recurringRules: recurringRules.length,
-        budgets: budgets.length,
+        transactions: kept.parts.transactions.length,
+        recurringRules: kept.parts.recurringRules.length,
+        budgets: kept.parts.budgets.length,
       },
       warnings: warnings.toList(),
       balanceChecks,

@@ -309,19 +309,26 @@ describe("buildWidgetSnapshot", () => {
       expect(missing.title).toBe("Transactions");
       expect(missing.groups.flatMap((g) => g.rows)).toHaveLength(2);
 
-      await repository.saveAccount(
+      // Archiving is no longer possible through the repository, but older data can still hold it.
+      const real = sourceOf(repository);
+      const archivedSource: WidgetDataSource = {
+        ...real,
+        accounts: real.accounts.map((account) =>
+          account.id === savings.id ? { ...account, archived: true } : account,
+        ),
+      };
+      const archived = build(
+        repository,
         {
-          name: savings.name,
-          type: savings.type,
-          currency: savings.currency,
-          openingBalanceMinor: 0,
-          icon: savings.icon,
-          color: savings.color,
-          archived: true,
+          widgets: {
+            "1": {
+              ...defaultWidgetConfig("transactions"),
+              accountId: savings.id,
+            },
+          },
         },
-        savings.id,
-      );
-      const archived = titlesFor(savings.id);
+        { source: archivedSource },
+      ).widgets["1"].transactions!;
       expect(archived.title).toBe("Transactions");
       expect(archived.groups.flatMap((g) => g.rows)).toHaveLength(2);
     });

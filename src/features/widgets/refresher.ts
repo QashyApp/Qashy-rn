@@ -98,5 +98,5 @@ const refresher = createWidgetRefresher({
 /** Rebuilds the snapshot and pushes it when it changed. Serialized, coalesced, never rejects. */
 export const refreshWidgets = refresher.refresh;
 
-/** Deletes the stored snapshot and forgets the last push (e.g. after the data was replaced). */
+/** Deletes the stored snapshot, then rebuilds it, in order, through the same queue (e.g. after the data was replaced). */
 export const clearWidgetData = refresher.clearData;

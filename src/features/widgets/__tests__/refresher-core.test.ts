@@ -191,21 +191,29 @@ describe("widget refresher", () => {
     expect(update).toHaveBeenCalledTimes(2);
   });
 
-  it("clearData clears the native store and makes the next refresh push afresh", async () => {
-    const { deps, refresher } = setup();
+  it("clearData clears the native store and then rebuilds and pushes afresh", async () => {
+    const order: string[] = [];
+    const { deps, refresher } = setup({
+      update: jest.fn(async () => void order.push("update")),
+      clear: jest.fn(async () => void order.push("clear")),
+    });
     await refresher.refresh();
     await refresher.clearData();
-    expect(deps.clear).toHaveBeenCalledTimes(1);
-    await refresher.refresh();
-    expect(deps.update).toHaveBeenCalledTimes(2);
+    // Same content as before, but the clear forgot the last push.
+    expect(order).toEqual(["update", "clear", "update"]);
+    expect(deps.buildSnapshot).toHaveBeenCalledTimes(2);
   });
 
-  it("clearData waits for a run in flight so it cannot be overwritten by stale data", async () => {
+  it("runs the rebuild after the clear even when a refresh is in flight or requested meanwhile", async () => {
     const held = gate();
     const order: string[] = [];
+    let first = true;
     const { refresher } = setup({
       buildSnapshot: jest.fn(async () => {
-        await held.promise;
+        if (first) {
+          first = false;
+          await held.promise;
+        }
         return snapshot("t");
       }),
       update: jest.fn(async () => void order.push("update")),
@@ -213,13 +221,15 @@ describe("widget refresher", () => {
     });
     const run = refresher.refresh();
     const cleared = refresher.clearData();
+    // A debounced refresh landing right after the replace import must not slip in before the clear.
+    const late = refresher.refresh();
     await Promise.resolve();
     held.open();
-    await Promise.all([run, cleared]);
-    expect(order).toEqual(["update", "clear"]);
+    await Promise.all([run, cleared, late]);
+    expect(order).toEqual(["update", "clear", "update"]);
   });
 
-  it("clearData swallows and logs a native failure", async () => {
+  it("clearData logs a native clear failure, still rebuilds, and resolves", async () => {
     const { deps, refresher } = setup({
       clear: jest.fn(async () => {
         throw new Error("native");
@@ -227,6 +237,7 @@ describe("widget refresher", () => {
     });
     await expect(refresher.clearData()).resolves.toBeUndefined();
     expect(deps.log).toHaveBeenCalledWith("Widget clear failed", "Error");
+    expect(deps.update).toHaveBeenCalledTimes(1);
   });
 });
 

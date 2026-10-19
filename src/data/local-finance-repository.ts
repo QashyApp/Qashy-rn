@@ -87,6 +87,7 @@ import {
   writeMeta,
   writeStates,
 } from "@/data/sync-store";
+import { omitArchived } from "@/data/import/omit-archived";
 import { eraseEntity } from "@/domain/erasure";
 import { planMerge, type DuplicateGroup } from "@/sync/engine/duplicates";
 import { DEFAULT_THEME_ID, isValidThemeId } from "@/theme/themes/types";
@@ -469,6 +470,11 @@ export class LocalFinanceRepository implements FinanceRepository {
   private mutationQueue: Promise<void> = Promise.resolve();
   private mutationActive = false;
   private pendingExternalRefresh = false;
+  /**
+   * Whether this instance may write the archived-data sweep. Set only by an initialization that
+   * also generates recurring transactions, so the headless widget refresh stays write-free.
+   */
+  private sweepsArchived = false;
   private deletedOccurrenceKeys = new Set<string>();
   // Derived reads keyed by the identity of the snapshot arrays they were computed from.
   // Every mutation replaces the arrays it touches, so a stale entry can never be hit.
@@ -545,7 +551,12 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Deferring the first write to `completeOnboarding` makes that write the create, so the op
     // log states the real base currency from the start. An un-onboarded store rehydrates to
     // exactly `createInitialState()`, so nothing else depends on the row being there early.
-    if (generateRecurring) await this.generateRecurringNow(todayLocal());
+    if (generateRecurring) {
+      this.sweepsArchived = true;
+      // Before generation, so a schedule the sweep is about to delete does not post first.
+      await this.sweepArchivedNow();
+      await this.generateRecurringNow(todayLocal());
+    }
     // Only now is the snapshot complete enough for screens to render against.
     this.state = { ...this.state, ready: true };
     this.emit();
@@ -592,7 +603,102 @@ export class LocalFinanceRepository implements FinanceRepository {
     return this.enqueueMutation(async () => {
       await this.hydrateFromStorage();
       this.emit();
+      // Records another tab or an older build wrote may still be archived.
+      await this.sweepArchivedNow();
     });
+  }
+
+  /**
+   * Deletes, for real, what an earlier version archived. Nothing is archived any more: deleting
+   * erases. Runs where recurring generation runs (never in a headless read-only refresh) and after
+   * a refresh or a merge brings records in, since an older peer can still send `archived: true`.
+   *
+   * Idempotent and deterministic: it reads only the snapshot, orders by creation time and id, and
+   * writes nothing once nothing is archived, so two devices sweeping the same data reach the same
+   * result. Archived budgets and goals are deleted like any other; archived accounts and
+   * categories go through the ordinary delete rules, except that a schedule paused because of an
+   * archived category stays paused (it only becomes uncategorized), and the last account is
+   * un-archived rather than deleted. Not part of the sync repair pass, which must stay pure.
+   *
+   * A failure is left for the next launch or refresh to retry rather than blocking startup.
+   */
+  private async sweepArchivedNow() {
+    if (!this.sweepsArchived) return;
+    const archivedIds = (
+      list: readonly (FinanceEntity & { archived: boolean })[],
+    ) => list.filter((item) => item.archived).map((item) => item.id);
+    const steps: (() => Promise<void>)[] = [
+      async () => {
+        const ids = archivedIds(this.state.budgets);
+        if (ids.length)
+          await this.deleteEntitiesNow("budgets", ids, { sweep: true });
+      },
+      async () => {
+        const ids = archivedIds(this.state.goals);
+        if (ids.length)
+          await this.deleteEntitiesNow("goals", ids, { sweep: true });
+      },
+      async () => {
+        const archived = this.state.accounts
+          .filter((account) => account.archived)
+          .sort(
+            (first, second) =>
+              (first.createdAt < second.createdAt
+                ? -1
+                : first.createdAt > second.createdAt
+                  ? 1
+                  : 0) ||
+              (first.id < second.id ? -1 : first.id > second.id ? 1 : 0),
+          );
+        if (!archived.length) return;
+        let doomed = archived;
+        if (!this.state.accounts.some((account) => !account.archived)) {
+          // Deleting them all would leave no account. The oldest stays, as an ordinary account;
+          // its paused schedules stay paused.
+          const [keep, ...rest] = archived;
+          const released = this.state.recurringRules
+            .filter(
+              (rule) =>
+                rule.pausedByDependency && rule.template.accountId === keep.id,
+            )
+            .map((rule) => updateEntity(rule, { pausedByDependency: false }));
+          const revived = updateEntity(keep, { archived: false });
+          await this.storage.putMany(
+            [
+              ...asRecords("accounts", [revived]),
+              ...asRecords("recurringRules", released),
+            ],
+            this,
+          );
+          this.state = {
+            ...this.state,
+            accounts: replaceById(this.state.accounts, [revived]),
+            recurringRules: replaceById(this.state.recurringRules, released),
+          };
+          this.emit();
+          doomed = rest;
+        }
+        if (doomed.length)
+          await this.deleteEntitiesNow(
+            "accounts",
+            doomed.map((account) => account.id),
+            { sweep: true },
+          );
+      },
+      async () => {
+        const ids = archivedIds(this.state.categories);
+        if (ids.length)
+          await this.deleteEntitiesNow("categories", ids, { sweep: true });
+      },
+    ];
+    for (const step of steps) {
+      try {
+        await step();
+      } catch (reason) {
+        if (!(reason instanceof Error) || isProgrammingError(reason))
+          throw reason;
+      }
+    }
   }
 
   getSnapshot = () => this.state;
@@ -639,6 +745,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       const known = ops.filter((op) => isEntityType(op.entityType));
       if (!known.length) return { applied: 0, changedTypes: [], repairs: [] };
       const { repairs } = await this.projectNow(known);
+      await this.sweepArchivedNow();
       return {
         applied: known.length,
         changedTypes: changedTypes(known),
@@ -658,6 +765,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           ]),
         ),
       );
+      await this.sweepArchivedNow();
       return { applied: states.length, changedTypes: writtenTypes, repairs };
     });
   }
@@ -671,6 +779,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   repairProjection() {
     return this.enqueueMutation(async () => {
       const { writtenTypes, repairs } = await this.projectNow([]);
+      await this.sweepArchivedNow();
       return { applied: 0, changedTypes: writtenTypes, repairs };
     });
   }
@@ -1035,18 +1144,18 @@ export class LocalFinanceRepository implements FinanceRepository {
     canResume: (rule: RecurringRule) => boolean,
   ) {
     const rules = wasArchived
-        ? this.state.recurringRules
-            .filter(
-              (rule) =>
-                !rule.active &&
-                rule.pausedByDependency &&
-                dependsOn(rule) &&
-                canResume(rule),
-            )
-            .map((rule) =>
-              updateEntity(rule, { active: true, pausedByDependency: false }),
-            )
-        : [];
+      ? this.state.recurringRules
+          .filter(
+            (rule) =>
+              !rule.active &&
+              rule.pausedByDependency &&
+              dependsOn(rule) &&
+              canResume(rule),
+          )
+          .map((rule) =>
+            updateEntity(rule, { active: true, pausedByDependency: false }),
+          )
+      : [];
     await this.storage.putMany(
       [
         { type, entity } as StoredEntity,
@@ -3602,12 +3711,15 @@ export class LocalFinanceRepository implements FinanceRepository {
    * imported transactions depend on them.
    */
   private async importExternalBundleNow(
-    bundle: ImportBundle,
+    importedBundle: ImportBundle,
     mode: ImportMode,
     commit: boolean,
   ): Promise<ExternalImportOutcome> {
     if (mode !== "merge" && mode !== "replace")
       throw new Error("Choose how to import: merge or replace.");
+    // Nothing is archived here, so a bundle that still carries archived items has them left out,
+    // exactly as the reader does. A no-op for a bundle the reader already cleaned.
+    const bundle = omitArchived(importedBundle).parts;
     // Base-currency snapshots and the settings row come from onboarding, and onboarding
     // refuses to run once any entity exists, so importing first would strand the vault.
     if (!this.state.settings.onboardingComplete)
@@ -3733,7 +3845,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           openingBalanceMinor: item.openingBalanceMinor,
           icon: item.icon,
           color,
-          archived: item.archived,
+          archived: false,
         }) as Account;
         accountIds.set(item.externalId, account.id);
         newAccounts.push(account);
@@ -3806,7 +3918,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           icon: item.icon,
           color,
           parentId,
-          archived: item.archived,
+          archived: false,
         }) as Category;
         categoryIds.set(item.externalId, category.id);
         newCategories.push(category);
@@ -4142,7 +4254,7 @@ export class LocalFinanceRepository implements FinanceRepository {
                 categoryId: resolveCategory(limit.categoryExternalId),
                 limitMinor: limit.limitMinor,
               })),
-              archived: item.archived,
+              archived: false,
             });
             newBudgets.push(
               createEntity({ id: derivedId, ...normalized }) as Budget,
@@ -5017,7 +5129,10 @@ export class LocalFinanceRepository implements FinanceRepository {
     let exchangeRate: string | null = null;
     if (baseAmountMinor !== null) {
       if (keep.currency === base) exchangeRate = "1";
-      else if (keep.currency === transaction.currency && transaction.exchangeRate)
+      else if (
+        keep.currency === transaction.currency &&
+        transaction.exchangeRate
+      )
         exchangeRate = transaction.exchangeRate;
       else {
         // The rate the destination leg was valued at, implied by its own two amounts.

@@ -43,8 +43,23 @@ export function createWidgetRefresher(deps: RefresherDeps) {
   let lastPushed: string | null = null;
   /** What the native store is known to hold: unknown at process start. */
   let nativeState: "unknown" | "pushed" | "cleared" = "unknown";
+  /** Set by `clearData`; honoured at the start of the next run. */
+  let clearRequested = false;
 
   async function runOnce(): Promise<void> {
+    if (clearRequested) {
+      clearRequested = false;
+      try {
+        await deps.clear();
+        nativeState = "cleared";
+      } catch (error) {
+        deps.log(
+          "Widget clear failed",
+          error instanceof Error ? error.name : "unknown",
+        );
+      }
+      lastPushed = null;
+    }
     try {
       const placed = await deps.getPlacedWidgets();
       if (placed.length === 0) {
@@ -93,21 +108,15 @@ export function createWidgetRefresher(deps: RefresherDeps) {
     return running;
   }
 
-  /** Deletes the stored snapshot and forgets the last push, so the next refresh pushes afresh. */
-  async function clearData(): Promise<void> {
-    if (!deps.isAvailable()) return;
-    // Let a run in flight finish first, so it cannot push stale data after the clear.
-    while (running) await running;
-    try {
-      await deps.clear();
-      nativeState = "cleared";
-    } catch (error) {
-      deps.log(
-        "Widget clear failed",
-        error instanceof Error ? error.name : "unknown",
-      );
-    }
-    lastPushed = null;
+  /**
+   * Deletes the stored snapshot, forgets the last push, and rebuilds. The clear runs inside the
+   * serialized loop (at the start of the next run, or of the rerun a run in flight schedules), so
+   * it can never interleave with a refresh and the rebuild always comes after it.
+   */
+  function clearData(): Promise<void> {
+    if (!deps.isAvailable()) return Promise.resolve();
+    clearRequested = true;
+    return refresh();
   }
 
   return { refresh, clearData };
