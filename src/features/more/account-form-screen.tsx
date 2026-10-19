@@ -30,6 +30,7 @@ import {
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { ACCENT_PRESETS } from "@/theme/tokens";
+import { accountDeletionMessage } from "@/utils/account-impact";
 import { accountTypeLabel } from "@/utils/labels";
 import { useTurnOnAutomaticRates } from "@/features/use-automatic-rates";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
@@ -186,8 +187,7 @@ export function AccountFormScreen() {
     if (
       !(await confirmDestructive({
         title: `Delete ${existing.name}?`,
-        message:
-          "The account leaves your net worth. Its past transactions stay in your history, and its schedules stop.",
+        message: accountDeletionMessage(state, [existing.id]),
       }))
     )
       return;

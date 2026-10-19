@@ -200,14 +200,14 @@ export function accountDeletionMessage(
       .map((item) => `${item.accountName} (${item.count})`)
       .join(", ");
     lines.push(
-      `Transfers with another account stay as income or expense on that account: ${names}.`,
+      `Transfers with an account that stays are kept as income or expense there: ${names}.`,
     );
   }
   if (impact.unfilteredBudgets.length)
     lines.push(unfilteredBudgetsMessage(impact.unfilteredBudgets));
   if (impact.hasBudgetsOrGoals)
     lines.push(
-      "It is removed from budgets, and goals linked to it are unlinked.",
+      "Budgets that use it are updated, and goals linked to it are unlinked.",
     );
   return lines;
 }

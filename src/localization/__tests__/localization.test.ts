@@ -491,11 +491,13 @@ describe("localization", () => {
         [budget("Food"), budget("Fun")],
       ],
     ] as [string[], Budget[]][]) {
-      const message = categoryDeletionMessage(budgets, ids);
-      const hebrew = translateMessage(message, "he");
-      expect(hebrew).not.toBe(message);
-      // Only the quoted budget names stay as typed.
-      expect(hebrew.replace(/“[^”]*”/g, "")).not.toMatch(/[A-Za-z]/);
+      // Each line is translated on its own, as the confirmation dialog does.
+      for (const message of categoryDeletionMessage(budgets, ids)) {
+        const hebrew = translateMessage(message, "he");
+        expect(hebrew).not.toBe(message);
+        // Only the quoted budget names stay as typed.
+        expect(hebrew.replace(/“[^”]*”/g, "")).not.toMatch(/[A-Za-z]/);
+      }
     }
   });
 

@@ -26,6 +26,7 @@ import {
 import { useSyncState } from "@/providers/sync-provider";
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
+import { accountDeletionMessage } from "@/utils/account-impact";
 import { categoryDeletionMessage } from "@/utils/category-impact";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { endOfMonth, mediumDate, startOfMonth } from "@/utils/date";
@@ -58,9 +59,7 @@ export function MoreScreen() {
   const wide = contentWidth >= 860;
   const summary = useDashboardRange(startOfMonth(), endOfMonth());
   const activeAccounts = state.accounts.filter((item) => !item.archived);
-  const archivedCategories = state.categories.filter((item) => item.archived);
   const recurring = state.recurringRules;
-  const [restoringId, setRestoringId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const resettingRef = useRef(false);
   const activeCategories = state.categories.filter((item) => !item.archived);
@@ -69,8 +68,7 @@ export function MoreScreen() {
     liveIds: activeAccounts.map((item) => item.id),
     confirmTitle: (count) =>
       count === 1 ? "Delete 1 account?" : `Delete ${count} accounts?`,
-    confirmMessage:
-      "Deleted accounts leave your net worth. Their past transactions stay in your history, and their schedules stop.",
+    confirmMessage: (ids) => accountDeletionMessage(state, ids),
     errorTitle: "Couldn’t delete accounts",
   });
   const categorySelection = useBatchDelete({
@@ -104,35 +102,6 @@ export function MoreScreen() {
   const now = useNow();
   const syncSummary = sync?.status ? summarizeSync(sync.status, { now }) : null;
   const rateStatus = useExchangeRateStatus();
-
-  const restore = async (entity: "account" | "category", id: string) => {
-    if (restoringId) return;
-    setRestoringId(id);
-    try {
-      if (entity === "account") {
-        const account = state.accounts.find((item) => item.id === id);
-        if (account)
-          await repository.saveAccount(
-            { ...account, archived: false },
-            account.id,
-          );
-      } else {
-        const category = state.categories.find((item) => item.id === id);
-        if (category)
-          await repository.saveCategory(
-            { ...category, archived: false },
-            category.id,
-          );
-      }
-    } catch (reason) {
-      showError(
-        "Couldn’t restore",
-        errorMessage(reason, "Rename the active entry using this name first."),
-      );
-    } finally {
-      setRestoringId(null);
-    }
-  };
 
   const resetAllData = async () => {
     // Held for the whole flow, including the confirm dialog: a second tap while the dialog is
@@ -429,28 +398,6 @@ export function MoreScreen() {
                 busy={ruleSelection.deleting}
                 onDelete={ruleSelection.deleteSelected}
               />
-            ) : null}
-
-            {archivedCategories.length ? (
-              <>
-                <SectionHeader title="Archived" />
-                <Card variant="list" dividerInset={rowDividerInset}>
-                  {archivedCategories.map((category) => (
-                    <SettingsRow
-                      key={category.id}
-                      literal
-                      title={category.name}
-                      subtitle={t(`Archived ${category.kind} category`)}
-                      value={t(
-                        restoringId === category.id ? "Restoring…" : "Restore",
-                      )}
-                      icon={category.icon}
-                      color={category.color}
-                      onPress={() => restore("category", category.id)}
-                    />
-                  ))}
-                </Card>
-              </>
             ) : null}
 
             <SectionHeader title="Data" />

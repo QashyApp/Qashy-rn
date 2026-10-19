@@ -17,11 +17,6 @@
       "he": "מפתח הכספת ההוא"
     },
     {
-      "name": "q_00866a2139877bbe",
-      "en": "Deleted accounts leave your net worth. Their past transactions stay in your history, and their schedules stop.",
-      "he": "חשבונות שנמחקו יוצאים משווי הנקי. התנועות הקודמות שלהם נשארות בהיסטוריה, והתזמונים שלהם נעצרים."
-    },
-    {
       "name": "q_009270c0cdb3a3e1",
       "en": "Transfer destination base amount",
       "he": "סכום הבסיס ביעד ההעברה"
@@ -410,6 +405,11 @@
       "name": "q_0ab6c5a5f81adb48",
       "en": "Sync file is larger than the 64 MiB safety limit.",
       "he": "קובץ הסנכרון גדול ממגבלת הבטיחות של 64 MiB."
+    },
+    {
+      "name": "q_0acc84a23199bf0e",
+      "en": "Deletes 1 recurring schedule.",
+      "he": "מוחק תזמון חוזר אחד."
     },
     {
       "name": "q_0b9969ed6d2d24b1",
@@ -1082,11 +1082,6 @@
       "he": "מטבע הבסיס של האצווה הזו"
     },
     {
-      "name": "q_20e14cc86fbee1a9",
-      "en": "Couldn’t restore",
-      "he": "לא ניתן לשחזר"
-    },
-    {
       "name": "q_211b94c9273ef888",
       "en": "Choose the end date.",
       "he": "בחרו את תאריך הסיום."
@@ -1167,11 +1162,6 @@
       "he": "לא מצליחים לסרוק?"
     },
     {
-      "name": "q_22e79171c2ceb5a5",
-      "en": "The category is hidden from lists and pickers. You can restore it from the Archived section in More.",
-      "he": "הקטגוריה תוסתר מרשימות ומבוררים. ניתן לשחזר אותה מאזור הארכיון במסך עוד."
-    },
-    {
       "name": "q_22f836886b4a2bff",
       "en": "Choose a valid transaction type.",
       "he": "בחרו סוג תנועה תקין."
@@ -1240,11 +1230,6 @@
       "name": "q_24c3bed59ae1b810",
       "en": "The backup lists this transaction more than once.",
       "he": "התנועה הזו מופיעה בגיבוי יותר מפעם אחת."
-    },
-    {
-      "name": "q_24ccc747b3a4b88d",
-      "en": "An account with transactions, schedules, budgets, or goals attached keeps its history, so it is archived rather than erased. If it still holds a balance, that balance stays in your net worth until you restore it from Archived on the More screen.",
-      "he": "חשבון עם תנועות, תזמונים, תקציבים או יעדים מקושרים שומר על ההיסטוריה שלו, ולכן הוא מועבר לארכיון ולא נמחק. אם עדיין יש בו יתרה, היא נשארת בשווי הנקי עד שתשחזרו אותו מ\"בארכיון\" במסך עוד."
     },
     {
       "name": "q_24e30c15457af974",
@@ -1740,6 +1725,11 @@
       "name": "q_34870eb6c04ef6f6",
       "en": "Objectives (savings goals) and income budgets (saving targets)",
       "he": "מטרות (יעדי חיסכון) ותקציבי הכנסה (יעדי צבירה)"
+    },
+    {
+      "name": "q_348d593427735e0f",
+      "en": "Nothing can be archived. Delete it instead.",
+      "he": "אי אפשר להעביר לארכיון. יש למחוק במקום זאת."
     },
     {
       "name": "q_34b265dc319346a2",
@@ -2422,11 +2412,6 @@
       "he": "קטגוריה שמשמשת גם להכנסות וגם להוצאות מפוצלת לעותק הכנסות ולעותק הוצאות, ושמות שמתנגשים בשם קיים מקבלים סיומת."
     },
     {
-      "name": "q_4a36c5a8bfa0db78",
-      "en": "Keep at least one account. Add another account before archiving this one.",
-      "he": "יש להשאיר לפחות חשבון אחד. הוסיפו חשבון נוסף לפני העברת החשבון הזה לארכיון."
-    },
-    {
       "name": "q_4a9bb278da74a5cd",
       "en": "Account balances are checked against the backup before anything is saved. If they do not match, nothing is imported.",
       "he": "יתרות החשבונות נבדקות מול הגיבוי לפני שמשהו נשמר. אם הן אינן תואמות, שום דבר לא מיובא."
@@ -2470,11 +2455,6 @@
       "name": "q_4bd96189067bc825",
       "en": "Made by",
       "he": "נוצר על ידי"
-    },
-    {
-      "name": "q_4bfc4d609ee1ab33",
-      "en": "Archived",
-      "he": "בארכיון"
     },
     {
       "name": "q_4c246cfd58914546",
@@ -2837,11 +2817,6 @@
       "he": "סך מגבלות התקציב"
     },
     {
-      "name": "q_574fc720abf8268e",
-      "en": "This schedule stays paused until its archived account and category are restored.",
-      "he": "התזמון יישאר מושהה עד לשחזור החשבון והקטגוריה שבארכיון."
-    },
-    {
       "name": "q_575fd4664a3f01c2",
       "en": "Fonts and icons",
       "he": "גופנים וסמלים"
@@ -3052,11 +3027,6 @@
       "he": "קטגוריות התחלתיות"
     },
     {
-      "name": "q_5c678bc298bfe8b7",
-      "en": "The account is hidden from lists and pickers, but any balance it holds still counts toward your totals. You can restore it from the Archived section in More.",
-      "he": "החשבון יוסתר מרשימות ומבוררים, אבל היתרה שבו עדיין נספרת בסכומים שלך. ניתן לשחזר אותו מאזור הארכיון במסך עוד."
-    },
-    {
       "name": "q_5d05b4dbcd20e553",
       "en": "Use https:// — an http:// address would send your data unprotected.",
       "he": "השתמשו ב־https:// — כתובת http:// תשלח את הנתונים שלכם ללא הגנה."
@@ -3130,11 +3100,6 @@
       "name": "q_5f4586bc1e2740e6",
       "en": "Clear search",
       "he": "ניקוי החיפוש"
-    },
-    {
-      "name": "q_5f48d91036e36b89",
-      "en": "This is your only account, so it can’t be archived. Add another account first.",
-      "he": "זה החשבון היחיד שלך ולכן אי אפשר להעביר אותו לארכיון. הוסיפו חשבון נוסף קודם."
     },
     {
       "name": "q_5f821717831acf8e",
@@ -3907,11 +3872,6 @@
       "he": "צבע החשבון"
     },
     {
-      "name": "q_75e5e37d51287893",
-      "en": "Accounts with transactions, schedules, budgets, or goals attached keep their history and are archived instead of erased. An archived account that still holds a balance stays in your net worth until you restore it.",
-      "he": "חשבונות עם תנועות, תזמונים, תקציבים או יעדים מקושרים שומרים על ההיסטוריה שלהם ומועברים לארכיון ולא נמחקים. חשבון בארכיון שעדיין יש בו יתרה נשאר בשווי הנקי עד ששחזרתם אותו."
-    },
-    {
       "name": "q_75fc0d37c613ceec",
       "en": "The latest transactions from this month.",
       "he": "התנועות האחרונות מהחודש הזה."
@@ -4377,11 +4337,6 @@
       "he": "הסכום מחוץ לטווח הנתמך."
     },
     {
-      "name": "q_82ae98f4d4643b32",
-      "en": "Couldn’t archive account",
-      "he": "לא ניתן להעביר את החשבון לארכיון"
-    },
-    {
       "name": "q_82dd031f069f729f",
       "en": "Transaction amount does not match its principal and fee.",
       "he": "סכום התנועה אינו תואם לסכום המקורי ולעמלה שלה."
@@ -4557,6 +4512,11 @@
       "he": "בעמלה קבועה אחוז העמלה בתנועה חייב להיות ריק."
     },
     {
+      "name": "q_892f38036fe17e6d",
+      "en": "Budgets that use it are updated, and goals linked to it are unlinked.",
+      "he": "תקציבים שמשתמשים בו יעודכנו, ויעדים המקושרים אליו ינותקו."
+    },
+    {
       "name": "q_894835d6558afc71",
       "en": "What you see may be out of date. Your saved data is untouched.",
       "he": "ייתכן שהמוצג אינו מעודכן. הנתונים השמורים שלכם לא נפגעו."
@@ -4685,11 +4645,6 @@
       "name": "q_8dd38519f42fc289",
       "en": "Pay",
       "he": "משכורת"
-    },
-    {
-      "name": "q_8ddbe57061182e13",
-      "en": "Archive category",
-      "he": "העברת קטגוריה לארכיון"
     },
     {
       "name": "q_8e6608cb7d7a565c",
@@ -5217,11 +5172,6 @@
       "he": "הממסר דחה את המכשיר הזה"
     },
     {
-      "name": "q_a0ca791d0f13f0e5",
-      "en": "Archive",
-      "he": "העברה לארכיון"
-    },
-    {
       "name": "q_a0d8c5effcf8c871",
       "en": "Device added",
       "he": "המכשיר נוסף"
@@ -5440,6 +5390,11 @@
       "name": "q_a748ba6782b48164",
       "en": "Target date must be today or later.",
       "he": "תאריך היעד חייב להיות היום או מאוחר יותר."
+    },
+    {
+      "name": "q_a78cc72b2c4f6f0b",
+      "en": "The account leaves your net worth.",
+      "he": "החשבון יוצא מהשווי הנקי."
     },
     {
       "name": "q_a7e85b02fa10ce88",
@@ -6017,11 +5972,6 @@
       "he": "עבור מכשיר אחר"
     },
     {
-      "name": "q_ba5c83a4de439a0b",
-      "en": "Couldn’t archive category",
-      "he": "לא ניתן להעביר את הקטגוריה לארכיון"
-    },
-    {
       "name": "q_ba98a7152d80b949",
       "en": "Amount",
       "he": "סכום"
@@ -6060,11 +6010,6 @@
       "name": "q_bbb2bd6c5f007e7b",
       "en": "Ends",
       "he": "מסתיים"
-    },
-    {
-      "name": "q_bbb433e224b6b9aa",
-      "en": "Archive account",
-      "he": "העברת חשבון לארכיון"
     },
     {
       "name": "q_bbb97b1c63507dc0",
@@ -6120,6 +6065,11 @@
       "name": "q_bf04ae12a2d9a1dd",
       "en": "Delete this contribution?",
       "he": "למחוק את ההפקדה הזו?"
+    },
+    {
+      "name": "q_bf2dabd50cd2eef4",
+      "en": "Budgets archived in Cashew, or left with nothing to track once archived accounts and categories were left out, were not imported.",
+      "he": "תקציבים שהועברו לארכיון ב־Cashew, או שלא נותר בהם מה לעקוב אחריו לאחר שחשבונות וקטגוריות מהארכיון הושמטו, לא יובאו."
     },
     {
       "name": "q_bf8f0dad21b29b16",
@@ -6330,6 +6280,11 @@
       "name": "q_c5abac4a89710a95",
       "en": "Goal target date",
       "he": "תאריך היעד"
+    },
+    {
+      "name": "q_c5b6b3b0bb9c6552",
+      "en": "Deletes 1 transaction.",
+      "he": "מוחק תנועה אחת."
     },
     {
       "name": "q_c5de432ecb327f99",
@@ -7062,11 +7017,6 @@
       "he": "מטבע החוץ בתנועה המחזורית"
     },
     {
-      "name": "q_db4253e18932d574",
-      "en": "An account with transactions, schedules, budgets, or goals attached keeps its history, so it is removed from lists and pickers rather than erased.",
-      "he": "חשבון עם תנועות, תזמונים, תקציבים או יעדים מקושרים שומר על ההיסטוריה שלו, ולכן הוא יוסר מרשימות ומבוררים ולא יימחק."
-    },
-    {
       "name": "q_db840eeac242d409",
       "en": "Uncategorized",
       "he": "ללא קטגוריה"
@@ -7217,6 +7167,11 @@
       "he": "מזומן"
     },
     {
+      "name": "q_e00d7fd7d1aa02f7",
+      "en": "This transfer cannot be kept as income.",
+      "he": "לא ניתן לשמור את ההעברה הזו כהכנסה."
+    },
+    {
       "name": "q_e0566702062d0ee7",
       "en": "Map required fields:",
       "he": "יש למפות שדות חובה:"
@@ -7352,6 +7307,11 @@
       "he": "אמוג׳י"
     },
     {
+      "name": "q_e3f98c156aef7185",
+      "en": "Categories archived in Cashew were not imported; transactions that used them were imported without a category.",
+      "he": "קטגוריות שהועברו לארכיון ב־Cashew לא יובאו; תנועות שהשתמשו בהן יובאו ללא קטגוריה."
+    },
+    {
       "name": "q_e41eb1f1ef5dffbe",
       "en": "Track the categories and time periods that fit your life.",
       "he": "עקבו אחר הקטגוריות ותקופות הזמן שמתאימות לחיים שלכם."
@@ -7380,11 +7340,6 @@
       "name": "q_e48bd9e6c2a3109d",
       "en": "Accounts",
       "he": "חשבונות"
-    },
-    {
-      "name": "q_e4da7c552ba0c032",
-      "en": "The account is hidden from lists and pickers. You can restore it from the Archived section in More.",
-      "he": "החשבון יוסתר מרשימות ומבוררים. ניתן לשחזר אותו מאזור הארכיון במסך עוד."
     },
     {
       "name": "q_e545180678ab3e53",
@@ -7585,6 +7540,11 @@
       "name": "q_ea536ecac29bb481",
       "en": "Opening…",
       "he": "פותח…"
+    },
+    {
+      "name": "q_ea99fa5b66e4097f",
+      "en": "Accounts archived in Cashew were not imported, nor were their transactions. A transfer with one of them was kept as income or expense on the other account.",
+      "he": "חשבונות שהועברו לארכיון ב־Cashew לא יובאו, וגם לא התנועות שלהם. העברה עם אחד מהם נשמרה כהכנסה או הוצאה בחשבון השני."
     },
     {
       "name": "q_eac3ed8dd2a801c3",
@@ -8047,6 +8007,11 @@
       "he": "העברה"
     },
     {
+      "name": "q_f4fcab6338794f81",
+      "en": "The accounts leave your net worth.",
+      "he": "החשבונות יוצאים מהשווי הנקי."
+    },
+    {
       "name": "q_f54c0093de92d732",
       "en": "Recurring fee percent is invalid.",
       "he": "אחוז העמלה בתנועה המחזורית אינו תקין."
@@ -8185,11 +8150,6 @@
       "name": "q_f8ce38e8c7e9d543",
       "en": "Saving",
       "he": "שומר"
-    },
-    {
-      "name": "q_f8cec6cc32d9d836",
-      "en": "The account leaves your net worth. Its past transactions stay in your history, and its schedules stop.",
-      "he": "החשבון יוצא מהשווי הנקי. התנועות הקודמות שלו נשארות בהיסטוריה, והתזמונים שלו נעצרים."
     },
     {
       "name": "q_f8ef36740c4b73d2",
@@ -9565,12 +9525,6 @@
       "he": "ייבוא %1$s תנועות"
     },
     {
-      "name": "q_6d043b2b915f7e71",
-      "source": "^Archived account · (.+)$",
-      "en": "Archived account · %1$s",
-      "he": "חשבון בארכיון · %1$s"
-    },
-    {
       "name": "q_46a6d2f2d02dbf69",
       "source": "^Add an exchange rate for (.+) → (.+) to save\\.$",
       "en": "Add an exchange rate for %1$s → %2$s to save.",
@@ -9653,12 +9607,6 @@
       "source": "^This contradicts the existing (.+) → (.+) rate of (.+), which implies (.+)\\. Update or remove that rate first\\.$",
       "en": "This contradicts the existing %1$s → %2$s rate of %3$s, which implies %4$s. Update or remove that rate first.",
       "he": "הערך סותר את השער הקיים מ־%1$s ל־%2$s, שערכו %3$s ומשמעותו %4$s. עדכנו או הסירו תחילה את השער הזה."
-    },
-    {
-      "name": "q_6df82a0bebb854b8",
-      "source": "^Archive (.+)\\?$",
-      "en": "Archive %1$s?",
-      "he": "להעביר את %1$s לארכיון?"
     },
     {
       "name": "q_f99e91f8fb98d4b8",
@@ -10189,28 +10137,34 @@
       "he": "השתמשו ב־%1$s ספרות משמעותיות לכל היותר."
     },
     {
-      "name": "q_ac0aa6476f10d0c7",
-      "source": "^Transactions in this category become uncategorized, and it is removed from budgets and goals\\. The budget (.+) would then track nothing, so it is archived and leaves Plan\\. Edit its categories first to keep it\\.$",
-      "en": "Transactions in this category become uncategorized, and it is removed from budgets and goals. The budget %1$s would then track nothing, so it is archived and leaves Plan. Edit its categories first to keep it.",
-      "he": "תנועות בקטגוריה זו יהפכו ללא קטגוריה, והיא תוסר מתקציבים ויעדים. התקציב %1$s לא יעקוב אחר שום דבר, ולכן הוא יועבר לארכיון ויוסר מהתכנון. ערכו קודם את הקטגוריות שלו כדי לשמור עליו."
+      "name": "q_207fd8673528475a",
+      "source": "^Deletes (\\d+) transactions\\.$",
+      "en": "Deletes %1$s transactions.",
+      "he": "מוחק %1$s תנועות."
     },
     {
-      "name": "q_2c9f1b36b3ea9f43",
-      "source": "^Transactions in this category become uncategorized, and it is removed from budgets and goals\\. These budgets (.+) would then track nothing, so they are archived and leave Plan\\. Edit their categories first to keep them\\.$",
-      "en": "Transactions in this category become uncategorized, and it is removed from budgets and goals. These budgets %1$s would then track nothing, so they are archived and leave Plan. Edit their categories first to keep them.",
-      "he": "תנועות בקטגוריה זו יהפכו ללא קטגוריה, והיא תוסר מתקציבים ויעדים. התקציבים %1$s לא יעקבו אחר שום דבר, ולכן הם יועברו לארכיון ויוסרו מהתכנון. ערכו קודם את הקטגוריות שלהם כדי לשמור עליהם."
+      "name": "q_d86652d9031308bc",
+      "source": "^Deletes (\\d+) recurring schedules\\.$",
+      "en": "Deletes %1$s recurring schedules.",
+      "he": "מוחק %1$s תזמונים חוזרים."
     },
     {
-      "name": "q_d52de8aff5082a46",
-      "source": "^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\\. The budget (.+) would then track nothing, so it is archived and leaves Plan\\. Edit its categories first to keep it\\.$",
-      "en": "Transactions in these categories become uncategorized, and the categories are removed from budgets and goals. The budget %1$s would then track nothing, so it is archived and leaves Plan. Edit its categories first to keep it.",
-      "he": "התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים. התקציב %1$s לא יעקוב אחר שום דבר, ולכן הוא יועבר לארכיון ויוסר מהתכנון. ערכו קודם את הקטגוריות שלו כדי לשמור עליו."
+      "name": "q_6817ce05a2412128",
+      "source": "^Transfers with an account that stays are kept as income or expense there: (.+)\\.$",
+      "en": "Transfers with an account that stays are kept as income or expense there: %1$s.",
+      "he": "העברות עם חשבון שנשאר נשמרות כהכנסה או כהוצאה בו: %1$s."
     },
     {
-      "name": "q_5dad6d43cb1abba8",
-      "source": "^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\\. These budgets (.+) would then track nothing, so they are archived and leave Plan\\. Edit their categories first to keep them\\.$",
-      "en": "Transactions in these categories become uncategorized, and the categories are removed from budgets and goals. These budgets %1$s would then track nothing, so they are archived and leave Plan. Edit their categories first to keep them.",
-      "he": "התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים. התקציבים %1$s לא יעקבו אחר שום דבר, ולכן הם יועברו לארכיון ויוסרו מהתכנון. ערכו קודם את הקטגוריות שלהם כדי לשמור עליהם."
+      "name": "q_a427ad5fd381c580",
+      "source": "^The budget (.+) would then cover all your spending\\.$",
+      "en": "The budget %1$s would then cover all your spending.",
+      "he": "התקציב %1$s יכסה אז את כל ההוצאות שלכם."
+    },
+    {
+      "name": "q_0f76c2aa7d9d0f0d",
+      "source": "^These budgets (.+) would then cover all your spending\\.$",
+      "en": "These budgets %1$s would then cover all your spending.",
+      "he": "התקציבים %1$s יכסו אז את כל ההוצאות שלכם."
     }
   ]
 }

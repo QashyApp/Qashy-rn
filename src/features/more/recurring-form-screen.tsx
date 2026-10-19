@@ -188,10 +188,6 @@ export function RecurringFormScreen() {
   const categories = state.categories.filter(
     (item) => item.kind === kind && (!item.archived || item.id === categoryId),
   );
-  const referencesArchivedEntity = Boolean(
-    account?.archived ||
-    categories.find((item) => item.id === categoryId)?.archived,
-  );
   const accountCurrency = account?.currency;
   const trimmedForeignCurrency = foreignCurrency.trim().toUpperCase();
   const foreignErrors = useForeignLegErrors({
@@ -514,8 +510,7 @@ export function RecurringFormScreen() {
               key={item.id}
               literal
               icon={item.icon}
-              label={`${item.name}${item.archived ? ` (${t("Archived")})` : ""}`}
-              disabled={item.archived}
+              label={item.name}
               selected={accountId === item.id}
               onPress={() => {
                 if (item.id === accountId) return;
@@ -560,12 +555,6 @@ export function RecurringFormScreen() {
               ))}
             </View>
           </>
-        ) : null}
-        {referencesArchivedEntity ? (
-          <AppText variant="caption" muted>
-            This schedule stays paused until its archived account and category
-            are restored.
-          </AppText>
         ) : null}
       </Card>
 
@@ -720,7 +709,6 @@ export function RecurringFormScreen() {
             accessibilityLabel={t("Schedule active")}
             value={active}
             onValueChange={setActive}
-            disabled={referencesArchivedEntity}
           />
         </View>
       </Card>

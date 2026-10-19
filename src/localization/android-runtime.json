@@ -116,8 +116,6 @@
     "q_e483deab6827bdfb",
     "q_a748ba6782b48164",
     "q_c0d2ed03e62ee479",
-    "q_24ccc747b3a4b88d",
-    "q_75e5e37d51287893",
     "q_4627a9667a335f23",
     "q_2d5ebf2d00a77043",
     "q_23d05829b0cec743",
@@ -288,7 +286,6 @@
     "q_2eb1a93489dcd48a",
     "q_fb956a5f29bbd323",
     "q_000b72638887834e",
-    "q_4bfc4d609ee1ab33",
     "q_34bbbbb5ef01ac3f",
     "q_7e7ed4725fbb82f9",
     "q_26f91b6796e33111",
@@ -303,13 +300,11 @@
     "q_344ea8f4939cdc98",
     "q_f653e8a07f3e37c7",
     "q_0c97387dc725a9e2",
-    "q_bbb433e224b6b9aa",
     "q_e8b92ef3f8e57128",
     "q_068d4dd16d9106d0",
     "q_fddbf4e4aec52f5b",
     "q_a7f63973069333d0",
     "q_45cae14f72e26efb",
-    "q_8ddbe57061182e13",
     "q_b9378677085f37fb",
     "q_d1137e66ebe71bc4",
     "q_9b2ffa813c8d2064",
@@ -438,12 +433,9 @@
     "q_c3e01a29b8c0a192",
     "q_481f169852d4d33d",
     "q_a612c94940c2c79b",
-    "q_20e14cc86fbee1a9",
     "q_8f596b845c24da3d",
     "q_f83b98716a2572ff",
-    "q_82ae98f4d4643b32",
     "q_373b1277fd386498",
-    "q_ba5c83a4de439a0b",
     "q_eb357cb5a708c278",
     "q_ea0a78f5724a4cf2",
     "q_fa180a11343fff33",
@@ -479,9 +471,6 @@
     "q_cf8ca1bcf1a886e7",
     "q_c869072f330c5fb2",
     "q_ed506337646338e6",
-    "q_22e79171c2ceb5a5",
-    "q_e4da7c552ba0c032",
-    "q_a0ca791d0f13f0e5",
     "q_e4883bd3a804bcd1",
     "q_54ae09a03325ba35",
     "q_5bd271cee8d66d67",
@@ -490,7 +479,6 @@
     "q_d31f884d09d1412e",
     "q_34fbe2b2e99ae609",
     "q_01bc4fd33f22040f",
-    "q_db4253e18932d574",
     "q_d6d11b8c4bd5be81",
     "q_23c01ff88fd864c4",
     "q_b05b00cc1a8f5a22",
@@ -546,7 +534,6 @@
     "q_21a872cb264b5ac3",
     "q_69513a1bfad4ffe4",
     "q_8b8b10f68bacb3f2",
-    "q_574fc720abf8268e",
     "q_5699352c892368e9",
     "q_8fb185f78fff466c",
     "q_c00a88b90cd60661",
@@ -928,8 +915,6 @@
     "q_5e3cb80d43a34044",
     "q_25fcab7e4563067a",
     "q_1995a948733ac7bd",
-    "q_5f48d91036e36b89",
-    "q_5c678bc298bfe8b7",
     "q_5703c67221f9ef35",
     "q_fd556ab70c1545e5",
     "q_265c7ebce12823fd",
@@ -1130,7 +1115,16 @@
     "q_c66781b5a7bf0105",
     "q_797fcbbb61d54625",
     "q_e88659c55cc3c527",
-    "q_00866a2139877bbe",
+    "q_a78cc72b2c4f6f0b",
+    "q_f4fcab6338794f81",
+    "q_c5b6b3b0bb9c6552",
+    "q_0acc84a23199bf0e",
+    "q_892f38036fe17e6d",
+    "q_348d593427735e0f",
+    "q_e00d7fd7d1aa02f7",
+    "q_ea99fa5b66e4097f",
+    "q_e3f98c156aef7185",
+    "q_bf2dabd50cd2eef4",
     "q_a2e8b002f235a14e",
     "q_7eb2e14cf092ad2c",
     "q_6e1d1aad520cf096",
@@ -1210,7 +1204,6 @@
     "q_64ed21603a523ffc",
     "q_1c6686469e3211fb",
     "q_fcd0b03c963b2593",
-    "q_f8cec6cc32d9d836",
     "q_e0a14a07fd32a75a",
     "q_0cd201abfb55c77f",
     "q_4c7408d4a905d142",
@@ -1333,7 +1326,6 @@
     "q_46a093231511af75",
     "q_f678f753fda2ef99",
     "q_480a8159b6231a03",
-    "q_4a36c5a8bfa0db78",
     "q_9687a84ec6ef71f3",
     "q_a631e117292f9be0",
     "q_26ad56ead6e399f4",
@@ -2510,14 +2502,6 @@
       "source": "^Use (#[0-9A-Fa-f]{6}) (.+)$"
     },
     {
-      "name": "q_6d043b2b915f7e71",
-      "source": "^Archived account · (.+)$"
-    },
-    {
-      "name": null,
-      "source": "^Archived (.+) category$"
-    },
-    {
       "name": null,
       "source": "^Every (day|week|month|year)\\.$"
     },
@@ -2640,10 +2624,6 @@
     {
       "name": "q_24a9f268c18bc3ab",
       "source": "^This contradicts the existing (.+) → (.+) rate of (.+), which implies (.+)\\. Update or remove that rate first\\.$"
-    },
-    {
-      "name": "q_6df82a0bebb854b8",
-      "source": "^Archive (.+)\\?$"
     },
     {
       "name": "q_f99e91f8fb98d4b8",
@@ -3054,20 +3034,24 @@
       "source": "^(.+) must be positive\\.$"
     },
     {
-      "name": "q_ac0aa6476f10d0c7",
-      "source": "^Transactions in this category become uncategorized, and it is removed from budgets and goals\\. The budget (.+) would then track nothing, so it is archived and leaves Plan\\. Edit its categories first to keep it\\.$"
+      "name": "q_207fd8673528475a",
+      "source": "^Deletes (\\d+) transactions\\.$"
     },
     {
-      "name": "q_2c9f1b36b3ea9f43",
-      "source": "^Transactions in this category become uncategorized, and it is removed from budgets and goals\\. These budgets (.+) would then track nothing, so they are archived and leave Plan\\. Edit their categories first to keep them\\.$"
+      "name": "q_d86652d9031308bc",
+      "source": "^Deletes (\\d+) recurring schedules\\.$"
     },
     {
-      "name": "q_d52de8aff5082a46",
-      "source": "^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\\. The budget (.+) would then track nothing, so it is archived and leaves Plan\\. Edit its categories first to keep it\\.$"
+      "name": "q_6817ce05a2412128",
+      "source": "^Transfers with an account that stays are kept as income or expense there: (.+)\\.$"
     },
     {
-      "name": "q_5dad6d43cb1abba8",
-      "source": "^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\\. These budgets (.+) would then track nothing, so they are archived and leave Plan\\. Edit their categories first to keep them\\.$"
+      "name": "q_a427ad5fd381c580",
+      "source": "^The budget (.+) would then cover all your spending\\.$"
+    },
+    {
+      "name": "q_0f76c2aa7d9d0f0d",
+      "source": "^These budgets (.+) would then cover all your spending\\.$"
     }
   ]
 }
