@@ -397,8 +397,8 @@ export const HEBREW: Record<string, string> = {
   "Export transactions": "ייצוא תנועות",
   "Export CSV": "ייצוא CSV",
   "Import transactions": "ייבוא תנועות",
-  "Creates a UTF-8 CSV with dates, statuses, amounts, currencies, source and destination accounts, categories, tags, notes, exchange-rate snapshots, and transfer linkage.":
-    "יוצר קובץ CSV בקידוד UTF-8 עם תאריכים, מצבים, סכומים, מטבעות, חשבונות מקור ויעד, קטגוריות, תגיות, הערות, שערי חליפין וקישורי העברות.",
+  "Creates a UTF-8 CSV of your transactions with accounts, categories, tags, notes and exchange rates. Not a full backup: budgets, goals and schedules are not included.":
+    "יוצר קובץ CSV בקידוד UTF-8 של התנועות, כולל חשבונות, קטגוריות, תגיות, הערות ושערי חליפין. זהו לא גיבוי מלא: תקציבים, יעדים ותזמונים אינם נכללים.",
   "Headers are matched automatically. Required columns are date, type, title, amount, currency, and account. Nothing is committed until after preview.":
     "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, סוג, כותרת, סכום, מטבע וחשבון. דבר לא נשמר לפני התצוגה המקדימה.",
   "Choose CSV": "בחירת CSV",
@@ -638,8 +638,6 @@ export const HEBREW: Record<string, string> = {
   "Rent, salary, subscription…": "שכר דירה, משכורת, מנוי…",
   "Kind is locked because transactions, budgets, goals, or schedules reference this category.":
     "סוג הקטגוריה נעול מפני שתנועות, תקציבים, יעדים או תזמונים מפנים אליה.",
-  "CSV is transaction portability, not a complete backup. Budgets, goals, schedules, and appearance settings are not included.":
-    "CSV מיועד להעברת תנועות, לא לגיבוי מלא. תקציבים, יעדים, תזמונים והגדרות מראה אינם נכללים.",
   "Discard changes?": "לבטל את השינויים?",
   "This form has unsaved changes.": "בטופס יש שינויים שלא נשמרו.",
   Discard: "ביטול שינויים",
@@ -743,22 +741,9 @@ export const HEBREW: Record<string, string> = {
   Pause: "השהיה",
   "Resume sync": "המשך סנכרון",
   "Set up sync": "הגדרת סנכרון",
-  "How this works": "איך זה עובד",
   Activity: "פעילות",
   Recovery: "שחזור",
   "Danger zone": "אזור מסוכן",
-  "A blind drop-box in between": "תיבת הפקדה עיוורת באמצע",
-  "No account, ever": "ללא חשבון, אף פעם",
-  "Only your devices can read it": "רק המכשירים שלכם יכולים לקרוא אותו",
-  // The bodies under "How this works" are the app's privacy claim stated in prose. Leaving
-  // them English would show a Hebrew reader the claim in a language they did not choose,
-  // which is exactly the wrong place to fall back.
-  "Every change is sealed on the device that made it, with a key that exists only on devices you paired in person. Nothing else can open it.":
-    "כל שינוי נאטם במכשיר שיצר אותו, במפתח שקיים רק במכשירים שחיברתם פנים אל פנים. שום דבר אחר אינו יכול לפתוח אותו.",
-  "When your other device is closed, sealed changes wait on a relay. It sees a random-looking address and padded ciphertext — never who you are, what changed, or how much you have.":
-    "כשהמכשיר האחר שלכם סגור, שינויים אטומים ממתינים בממסר. הוא רואה כתובת שנראית אקראית וטקסט מוצפן מרופד — לעולם לא מי אתם, מה השתנה או כמה יש לכם.",
-  "There is no sign-in, no server-side identity, and nothing to recover through us. The recovery phrase is the only key.":
-    "אין התחברות, אין זהות בצד השרת ואין דבר לשחזר דרכנו. משפט השחזור הוא המפתח היחיד.",
   "The last sync didn’t finish": "הסנכרון האחרון לא הושלם",
   "Your data is untouched, and the next sync retries on its own.":
     "הנתונים שלכם לא נפגעו, והסנכרון הבא ינסה שוב מעצמו.",
@@ -971,15 +956,11 @@ export const HEBREW: Record<string, string> = {
     "המילים האלה הן הכספת כולה. כל מי שקורא אותן יכול לפתוח כל חשבון, תנועה ויתרה שיש לכם. ודאו שאיש אינו רואה את המסך שלכם ושאינכם משתפים או מקליטים אותו.",
   "Anyone holding these words holds your data":
     "מי שמחזיק במילים האלה מחזיק בנתונים שלכם",
-  "Losing them is not the same as losing a password":
-    "אובדן שלהן אינו כמו אובדן סיסמה",
   "There is no copy button, on purpose": "אין כפתור העתקה, בכוונה",
   "Treat them exactly like the money itself. A password manager or a piece of paper somewhere only you can reach are both fine. A photo in your camera roll or a note that syncs to a cloud account are not.":
     "התייחסו אליהן בדיוק כמו אל הכסף עצמו. מנהל סיסמאות או פתק במקום שרק אתם מגיעים אליו — שניהם בסדר. צילום בגלריה או פתק שמסתנכרן לחשבון ענן — לא.",
   "The clipboard is readable by other apps and, on some systems, by your other computers. Write the words down or type them straight into a password manager instead.":
     "הלוח ניתן לקריאה על ידי אפליקציות אחרות, ובמערכות מסוימות גם על ידי המחשבים האחרים שלכם. במקום זאת רשמו את המילים או הקלידו אותן ישירות לתוך מנהל סיסמאות.",
-  "Qashy cannot reset, re-issue, or recover this. If you lose every paired device and these words, the data on them is gone.":
-    "Qashy אינו יכול לאפס, להנפיק מחדש או לשחזר את זה. אם תאבדו את כל המכשירים המחוברים ואת המילים האלה, הנתונים שבהם אבדו.",
   "Check what you wrote down": "בדיקת מה שרשמתם",
   "Type the words back in order. A phrase with one word wrong looks completely normal and restores nothing, and this is the only moment you can find that out cheaply.":
     "הקלידו את המילים בחזרה לפי הסדר. משפט שבו מילה אחת שגויה נראה נורמלי לחלוטין ואינו משחזר דבר, וזה הרגע היחיד שבו תוכלו לגלות זאת בזול.",
@@ -1111,9 +1092,6 @@ export const HEBREW: Record<string, string> = {
   "Couldn’t restore that backup": "לא ניתן לשחזר את הגיבוי הזה",
   "No backup file? A device that still has your data can add this one from Sync → Add a device instead, which copies the vault across without a file at all.":
     "אין קובץ גיבוי? מכשיר שהנתונים שלכם עדיין נמצאים בו יכול להוסיף את המכשיר הזה דרך סנכרון ← הוספת מכשיר, מה שמעתיק את הכספת ללא קובץ כלל.",
-  "Restoring onto this device": "שחזור למכשיר הזה",
-  "Not offered here, because this device already holds a vault and restoring would replace it. A device that needs restoring is one with nothing on it — or one that has left this vault from Sync → Danger zone first.":
-    "לא מוצע כאן, משום שהמכשיר הזה כבר מחזיק כספת ושחזור יחליף אותה. מכשיר שזקוק לשחזור הוא מכשיר שאין בו דבר — או כזה שיצא מהכספת הזו קודם דרך סנכרון ← אזור מסוכן.",
   // UI refresh: month pager, onboarding, existing-user paths.
   "Net worth": "שווי נקי",
   Insight: "תובנה",

@@ -192,10 +192,6 @@ export function RecoveryScreen() {
               your other computers. Write the words down or type them straight
               into a password manager instead.
             </Warns>
-            <Warns title="Losing them is not the same as losing a password">
-              Qashy cannot reset, re-issue, or recover this. If you lose every
-              paired device and these words, the data on them is gone.
-            </Warns>
           </Card>
 
           <View

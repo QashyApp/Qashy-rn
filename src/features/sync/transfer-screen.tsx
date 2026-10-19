@@ -585,16 +585,6 @@ export function TransferScreen() {
               </MotionView>
             ) : null}
           </Card>
-
-          <SectionHeader title="Restoring onto this device" />
-          <Card>
-            <AppText variant="caption" muted>
-              Not offered here, because this device already holds a vault and
-              restoring would replace it. A device that needs restoring is one
-              with nothing on it — or one that has left this vault from Sync →
-              Danger zone first.
-            </AppText>
-          </Card>
         </>
       ) : (
         <>

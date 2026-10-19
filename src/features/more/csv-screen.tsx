@@ -556,9 +556,9 @@ export function CsvScreen() {
       <Card style={{ gap: 14 }}>
         <AppText variant="headline">Export transactions</AppText>
         <AppText muted>
-          Creates a UTF-8 CSV with dates, statuses, amounts, currencies, source
-          and destination accounts, categories, tags, notes, exchange-rate
-          snapshots, and transfer linkage.
+          Creates a UTF-8 CSV of your transactions with accounts, categories,
+          tags, notes and exchange rates. Not a full backup: budgets, goals and
+          schedules are not included.
         </AppText>
         <ActionButton
           title="Export CSV"
@@ -799,12 +799,6 @@ export function CsvScreen() {
             ) : null}
           </View>
         ) : null}
-      </Card>
-      <Card>
-        <AppText variant="caption" muted>
-          CSV is transaction portability, not a complete backup. Budgets, goals,
-          schedules, and appearance settings are not included.
-        </AppText>
       </Card>
     </FormScreen>
   );

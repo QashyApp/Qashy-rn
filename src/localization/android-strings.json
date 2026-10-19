@@ -992,11 +992,6 @@
       "he": "תאריך סיום"
     },
     {
-      "name": "q_1d700e672b35b4f0",
-      "en": "There is no sign-in, no server-side identity, and nothing to recover through us. The recovery phrase is the only key.",
-      "he": "אין התחברות, אין זהות בצד השרת ואין דבר לשחזר דרכנו. משפט השחזור הוא המפתח היחיד."
-    },
-    {
       "name": "q_1dbd35759ad34c32",
       "en": "The last sync didn’t finish",
       "he": "הסנכרון האחרון לא הושלם"
@@ -1035,11 +1030,6 @@
       "name": "q_1ea9f83fb3b5dbe9",
       "en": "$: the file is not valid JSON",
       "he": "$: הקובץ אינו JSON תקין"
-    },
-    {
-      "name": "q_1ed33a9b83bccce3",
-      "en": "Losing them is not the same as losing a password",
-      "he": "אובדן שלהן אינו כמו אובדן סיסמה"
     },
     {
       "name": "q_1ee2c7ac65382b9b",
@@ -1500,11 +1490,6 @@
       "name": "q_2c58eb4d90327af7",
       "en": "Only the vault owner can change removal policy.",
       "he": "רק בעל הכספת יכול לשנות את מדיניות ההסרה."
-    },
-    {
-      "name": "q_2c650c09114bfeea",
-      "en": "Not offered here, because this device already holds a vault and restoring would replace it. A device that needs restoring is one with nothing on it — or one that has left this vault from Sync → Danger zone first.",
-      "he": "לא מוצע כאן, משום שהמכשיר הזה כבר מחזיק כספת ושחזור יחליף אותה. מכשיר שזקוק לשחזור הוא מכשיר שאין בו דבר — או כזה שיצא מהכספת הזו קודם דרך סנכרון ← אזור מסוכן."
     },
     {
       "name": "q_2c6942c5a2e83f61",
@@ -2382,11 +2367,6 @@
       "he": "קטגוריית הוצאה"
     },
     {
-      "name": "q_47158c05bd31ba99",
-      "en": "How this works",
-      "he": "איך זה עובד"
-    },
-    {
       "name": "q_476b48a2b24452e6",
       "en": "Syncing…",
       "he": "מסנכרן…"
@@ -2727,11 +2707,6 @@
       "he": "חלק מהתנועות מפנות לקטגוריה שחסרה בגיבוי, ולכן יובאו ללא קטגוריה."
     },
     {
-      "name": "q_52ea2f30d5eae6cb",
-      "en": "When your other device is closed, sealed changes wait on a relay. It sees a random-looking address and padded ciphertext — never who you are, what changed, or how much you have.",
-      "he": "כשהמכשיר האחר שלכם סגור, שינויים אטומים ממתינים בממסר. הוא רואה כתובת שנראית אקראית וטקסט מוצפן מרופד — לעולם לא מי אתם, מה השתנה או כמה יש לכם."
-    },
-    {
       "name": "q_52f5abc57a91e764",
       "en": "Add this device to a vault",
       "he": "הוספת המכשיר הזה לכספת"
@@ -3067,11 +3042,6 @@
       "he": "הודעת הפתיחה ריקה."
     },
     {
-      "name": "q_5bcc11000a23a944",
-      "en": "Qashy cannot reset, re-issue, or recover this. If you lose every paired device and these words, the data on them is gone.",
-      "he": "Qashy אינו יכול לאפס, להנפיק מחדש או לשחזר את זה. אם תאבדו את כל המכשירים המחוברים ואת המילים האלה, הנתונים שבהם אבדו."
-    },
-    {
       "name": "q_5bd271cee8d66d67",
       "en": "Add goal",
       "he": "הוספת יעד"
@@ -3270,11 +3240,6 @@
       "name": "q_6114d6978916ab13",
       "en": "Amount keypad",
       "he": "מקלדת סכומים"
-    },
-    {
-      "name": "q_6127e5312503ec95",
-      "en": "No account, ever",
-      "he": "ללא חשבון, אף פעם"
     },
     {
       "name": "q_612cd3419dafd909",
@@ -3747,11 +3712,6 @@
       "he": "בדיקה עכשיו"
     },
     {
-      "name": "q_6f19bfbfcfbc963f",
-      "en": "A blind drop-box in between",
-      "he": "תיבת הפקדה עיוורת באמצע"
-    },
-    {
       "name": "q_6f4cda850de765b4",
       "en": "Importing the same backup twice is safe: items that are already in Qashy are recognised and skipped.",
       "he": "ייבוא אותו גיבוי פעמיים בטוח: פריטים שכבר נמצאים ב־Qashy מזוהים ומדולגים."
@@ -4062,11 +4022,6 @@
       "he": "הצעת חברות חוזרת על מצביע."
     },
     {
-      "name": "q_78b6a345533cc47b",
-      "en": "Every change is sealed on the device that made it, with a key that exists only on devices you paired in person. Nothing else can open it.",
-      "he": "כל שינוי נאטם במכשיר שיצר אותו, במפתח שקיים רק במכשירים שחיברתם פנים אל פנים. שום דבר אחר אינו יכול לפתוח אותו."
-    },
-    {
       "name": "q_78d4a851d5211ac9",
       "en": "The phrase was hidden because screenshots could not be blocked. Try again.",
       "he": "הביטוי הוסתר כי לא ניתן היה לחסום צילומי מסך. נסו שוב."
@@ -4120,11 +4075,6 @@
       "name": "q_7aa82ecfb6113149",
       "en": "Dropped category limits outside the budget filters.",
       "he": "מגבלות קטגוריה שמחוץ למסנני התקציב הוסרו."
-    },
-    {
-      "name": "q_7ac6036839d7e364",
-      "en": "Restoring onto this device",
-      "he": "שחזור למכשיר הזה"
     },
     {
       "name": "q_7afb2236471d249e",
@@ -4330,11 +4280,6 @@
       "name": "q_7f9e9cf1637bff46",
       "en": "After a number of times",
       "he": "אחרי מספר פעמים"
-    },
-    {
-      "name": "q_7fb6ddd5c42d9262",
-      "en": "Creates a UTF-8 CSV with dates, statuses, amounts, currencies, source and destination accounts, categories, tags, notes, exchange-rate snapshots, and transfer linkage.",
-      "he": "יוצר קובץ CSV בקידוד UTF-8 עם תאריכים, מצבים, סכומים, מטבעות, חשבונות מקור ויעד, קטגוריות, תגיות, הערות, שערי חליפין וקישורי העברות."
     },
     {
       "name": "q_7ff5a3822cfa06cc",
@@ -4670,11 +4615,6 @@
       "name": "q_8b7178e29ca12686",
       "en": "Choose the source column for each Qashy field. Optional fields can stay Not mapped.",
       "he": "בחרו את עמודת המקור לכל שדה ב־Qashy. שדות אופציונליים יכולים להישאר לא ממופים."
-    },
-    {
-      "name": "q_8b8b10f68bacb3f2",
-      "en": "CSV is transaction portability, not a complete backup. Budgets, goals, schedules, and appearance settings are not included.",
-      "he": "CSV מיועד להעברת תנועות, לא לגיבוי מלא. תקציבים, יעדים, תזמונים והגדרות מראה אינם נכללים."
     },
     {
       "name": "q_8b97ea84af17c029",
@@ -7277,11 +7217,6 @@
       "he": "לא נוסף שום דבר חדש."
     },
     {
-      "name": "q_df964b0650273aaa",
-      "en": "Only your devices can read it",
-      "he": "רק המכשירים שלכם יכולים לקרוא אותו"
-    },
-    {
       "name": "q_dfeb5d9ce9e7e832",
       "en": "Cash",
       "he": "מזומן"
@@ -8005,6 +7940,11 @@
       "name": "q_f14bbe0a54eac4dd",
       "en": "Every card is already on your overview",
       "he": "כל הכרטיסים כבר נמצאים בסקירה שלכם"
+    },
+    {
+      "name": "q_f17bc6a3820498ac",
+      "en": "Creates a UTF-8 CSV of your transactions with accounts, categories, tags, notes and exchange rates. Not a full backup: budgets, goals and schedules are not included.",
+      "he": "יוצר קובץ CSV בקידוד UTF-8 של התנועות, כולל חשבונות, קטגוריות, תגיות, הערות ושערי חליפין. זהו לא גיבוי מלא: תקציבים, יעדים ותזמונים אינם נכללים."
     },
     {
       "name": "q_f1b8a79abb425f23",

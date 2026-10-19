@@ -32,7 +32,7 @@ import { Card } from "@/components/ui/card";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { SettingsRow } from "@/components/ui/settings-row";
-import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import type { StatusTone } from "@/components/ui/status-pill";
 import { TextButton } from "@/components/ui/text-button";
 import { DeviceCard } from "@/features/sync/device-card";
 import { RelayCard } from "@/features/sync/relay-card";
@@ -317,26 +317,6 @@ export function SyncScreen() {
         onChanged={refresh}
       />
 
-      <SectionHeader title="How this works" />
-      <Card style={{ gap: space.md }}>
-        <Explains icon="lock.shield" title="Only your devices can read it">
-          Every change is sealed on the device that made it, with a key that
-          exists only on devices you paired in person. Nothing else can open it.
-        </Explains>
-        <Explains
-          icon="antenna.radiowaves.left.and.right"
-          title="A blind drop-box in between"
-        >
-          When your other device is closed, sealed changes wait on a relay. It
-          sees a random-looking address and padded ciphertext — never who you
-          are, what changed, or how much you have.
-        </Explains>
-        <Explains icon="key" title="No account, ever">
-          There is no sign-in, no server-side identity, and nothing to recover
-          through us. The recovery phrase is the only key.
-        </Explains>
-      </Card>
-
       {paired ? (
         <>
           <SectionHeader title="Activity" />
@@ -436,35 +416,4 @@ function toneColor(theme: ReturnType<typeof useQashyTheme>, tone: StatusTone) {
     warning: theme.warning,
     negative: theme.negative,
   }[tone];
-}
-
-/**
- * One claim about the system, with the glyph that makes a scanned list readable.
- *
- * This card is the feature's central promise written down where the feature lives, rather than
- * in a help page nobody opens. If any line here stops being true, the line is the bug.
- */
-function Explains({
-  icon,
-  title,
-  children,
-}: {
-  icon: string;
-  title: string;
-  children: string;
-}) {
-  const { radius, space } = useQashyTheme();
-  return (
-    <View style={{ gap: space.xs }}>
-      <StatusPill
-        label={title}
-        icon={icon}
-        tone="neutral"
-        style={{ borderRadius: radius.control }}
-      />
-      <AppText variant="caption" muted>
-        {children}
-      </AppText>
-    </View>
-  );
 }
