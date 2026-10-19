@@ -57,6 +57,11 @@ jobs:
       - name: Generate Android project
         run: npx expo prebuild -p android --no-install --clean
 
+      - name: Print resolved dependency versions
+        working-directory: android
+        run: |
+          ./gradlew :app:dependencies --configuration releaseRuntimeClasspath --no-daemon | grep -E "androidx\.(room|work|glance|startup|sqlite)" | sort -u | head -60 || true
+
       - name: Assemble release APK
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
