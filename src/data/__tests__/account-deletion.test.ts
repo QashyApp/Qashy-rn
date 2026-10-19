@@ -29,8 +29,9 @@ async function createRepository(
   options: { sweeps?: boolean } = {},
 ) {
   const repository = new LocalFinanceRepository(storage);
+  await repository.initialize();
   // A repository that does not sweep stands in for the older build that archived the data.
-  await repository.initialize({ generateRecurring: options.sweeps ?? true });
+  if (options.sweeps ?? true) await repository.sweepArchived();
   await repository.completeOnboarding({
     locale: "en-US",
     baseCurrency: "USD",
@@ -713,6 +714,7 @@ describe("sweeping data an older version archived", () => {
     const vault = await archivedVault();
     const repository = new LocalFinanceRepository(vault.storage);
     await repository.initialize();
+    await repository.sweepArchived();
 
     const snapshot = repository.getSnapshot();
     expect(snapshot.accounts.map((item) => item.id)).toEqual([
@@ -769,6 +771,7 @@ describe("sweeping data an older version archived", () => {
     expect(repository.getSnapshot().recurringRules[0].active).toBe(false);
     const again = new LocalFinanceRepository(vault.storage);
     await again.initialize();
+    await again.sweepArchived();
     expect(again.getSnapshot().recurringRules[0].active).toBe(false);
   });
 
@@ -776,10 +779,12 @@ describe("sweeping data an older version archived", () => {
     const vault = await archivedVault();
     const repository = new LocalFinanceRepository(vault.storage);
     await repository.initialize();
+    await repository.sweepArchived();
     const after = repository.getSnapshot();
     const putMany = jest.spyOn(vault.storage, "putMany");
     const second = new LocalFinanceRepository(vault.storage);
     await second.initialize();
+    await second.sweepArchived();
     await repository.refresh();
     expect(putMany).not.toHaveBeenCalled();
     expect(second.getSnapshot().accounts).toEqual(after.accounts);
@@ -811,7 +816,9 @@ describe("sweeping data an older version archived", () => {
     const first = new LocalFinanceRepository(vault.storage);
     const second = new LocalFinanceRepository(copy);
     await first.initialize();
+    await first.sweepArchived();
     await second.initialize();
+    await second.sweepArchived();
     const strip = (state: ReturnType<typeof first.getSnapshot>) =>
       JSON.parse(
         JSON.stringify({
@@ -841,6 +848,7 @@ describe("sweeping data an older version archived", () => {
 
     const reopened = new LocalFinanceRepository(storage);
     await reopened.initialize();
+    await reopened.sweepArchived();
     expect(reopened.getSnapshot().accounts).toHaveLength(1);
     expect(reopened.getSnapshot().accounts[0]).toMatchObject({
       id: only.id,
@@ -865,6 +873,7 @@ describe("sweeping data an older version archived", () => {
       await patchStored(storage, "accounts", id, { archived: true });
     const reopened = new LocalFinanceRepository(storage);
     await reopened.initialize();
+    await reopened.sweepArchived();
     expect(reopened.getSnapshot().accounts.map((item) => item.id)).toEqual([
       first.id,
     ]);
@@ -881,6 +890,87 @@ describe("sweeping data an older version archived", () => {
     expect(headless.getSnapshot().accounts.some((item) => item.archived)).toBe(
       true,
     );
+  });
+
+  it("sweeps when the app starts after a headless initialization already ran", async () => {
+    const vault = await archivedVault();
+    // The widget task initializes first, read-only, in the same JS runtime. initialize() is
+    // memoized, so the sweep must be its own step rather than part of it.
+    const repository = new LocalFinanceRepository(vault.storage);
+    await repository.initialize({ generateRecurring: false });
+    await repository.initialize();
+    expect(
+      repository.getSnapshot().accounts.some((item) => item.archived),
+    ).toBe(true);
+    await repository.sweepArchived();
+    const snapshot = repository.getSnapshot();
+    expect(snapshot.accounts.map((item) => item.id)).toEqual([
+      vault.everyday.id,
+    ]);
+    expect(snapshot.budgets).toEqual([]);
+    expect(snapshot.goals).toEqual([]);
+  });
+
+  it("never lets a failing sweep step block startup, and logs nothing about the data", async () => {
+    const vault = await archivedVault();
+    const repository = new LocalFinanceRepository(vault.storage);
+    await repository.initialize();
+    const warn = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const real = (
+      repository as unknown as {
+        deleteEntitiesNow: (...args: unknown[]) => Promise<unknown>;
+      }
+    ).deleteEntitiesNow.bind(repository);
+    let calls = 0;
+    // A malformed archived row surfaces as an engine error, not a domain one, in the first step.
+    jest
+      .spyOn(
+        repository as unknown as {
+          deleteEntitiesNow: (...args: unknown[]) => Promise<unknown>;
+        },
+        "deleteEntitiesNow",
+      )
+      .mockImplementation(async (...args) => {
+        calls += 1;
+        if (calls === 1)
+          throw new TypeError("secret-account-name is undefined");
+        return real(...args);
+      });
+    await expect(repository.sweepArchived()).resolves.toBeUndefined();
+    // The later steps still ran.
+    expect(calls).toBeGreaterThan(1);
+    expect(repository.getSnapshot().goals).toEqual([]);
+    expect(warn).toHaveBeenCalledWith(
+      "Qashy could not finish clearing archived data.",
+    );
+    expect(JSON.stringify(warn.mock.calls)).not.toContain("secret");
+    // The failed step is retried by the next sweep.
+    expect(repository.getSnapshot().budgets).toHaveLength(1);
+    await repository.sweepArchived();
+    expect(repository.getSnapshot().budgets).toEqual([]);
+    warn.mockRestore();
+  });
+
+  it("also survives a non-Error rejection", async () => {
+    const vault = await archivedVault();
+    const repository = new LocalFinanceRepository(vault.storage);
+    await repository.initialize();
+    const warn = jest
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    jest
+      .spyOn(
+        repository as unknown as {
+          deleteEntitiesNow: (...args: unknown[]) => Promise<unknown>;
+        },
+        "deleteEntitiesNow",
+      )
+      .mockRejectedValue("not an error");
+    await expect(repository.sweepArchived()).resolves.toBeUndefined();
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("sweeps records that arrive archived after a refresh", async () => {

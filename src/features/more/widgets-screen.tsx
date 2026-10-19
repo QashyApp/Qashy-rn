@@ -61,6 +61,8 @@ const GRAPH_OPTIONS: SegmentOption<`${GraphMonths}`>[] = [
   { value: "12", label: "12 months" },
 ];
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+/** Reading-width cap of the settings column, shared with the other More screens. */
+const CONTENT_MAX_WIDTH = 720;
 
 /** Material You wallpaper colors arrive with Android 12 (API 31). */
 const MATERIAL_YOU_UNSUPPORTED =
@@ -141,14 +143,18 @@ export function WidgetsScreen() {
   const { placed, settings, setSettings } = useWidgetsState();
 
   const apply = useCallback(
-    async (update: (current: WidgetSettings) => WidgetSettings | null) => {
+    async (
+      update: (current: WidgetSettings) => WidgetSettings | null,
+    ): Promise<boolean> => {
       try {
         setSettings(await updateWidgetSettings(update));
+        return true;
       } catch (reason) {
         showError(
           "Couldn’t apply this setting",
           errorMessage(reason, "Try again."),
         );
+        return false;
       }
     },
     [setSettings],
@@ -173,11 +179,11 @@ export function WidgetsScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{
-        padding: 18,
-        paddingBottom: 40,
+        padding: space.lg,
+        paddingBottom: space.xxxl + space.sm,
         gap: space.lg,
         width: "100%",
-        maxWidth: 720,
+        maxWidth: CONTENT_MAX_WIDTH,
         alignSelf: "center",
       }}
     >
@@ -197,7 +203,7 @@ export function WidgetsScreen() {
                 flexDirection: "row",
                 alignItems: "center",
                 justifyContent: "space-between",
-                gap: 14,
+                gap: space.md,
               }}
             >
               <View style={{ flex: 1, gap: space.xxs }}>
@@ -262,9 +268,10 @@ export function WidgetsScreen() {
   );
 }
 
+/** Resolves true when the change was saved (or needed no save), false when the write failed. */
 type Apply = (
   update: (current: WidgetSettings) => WidgetSettings | null,
-) => Promise<void>;
+) => Promise<boolean>;
 
 /** Replaces the one widget's config, validated, leaving every other widget's untouched. */
 function patchWidget(
@@ -303,9 +310,7 @@ function WidgetCard({
   const { space } = theme;
   const { t } = useLocalization();
   const { accounts } = useFinanceState();
-  const change = (patch: WidgetPatch) => {
-    void apply(patchWidget(id, kind, patch));
-  };
+  const change = (patch: WidgetPatch) => apply(patchWidget(id, kind, patch));
 
   const [hex, setHex] = useState(config.customColor ?? "");
   // Follows a color chosen elsewhere (a preset swatch, another editor of the same settings).
@@ -454,7 +459,7 @@ function WidgetCard({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 14,
+          gap: space.md,
         }}
       >
         <View style={{ flex: 1, gap: space.xxs }}>
@@ -467,7 +472,9 @@ function WidgetCard({
         <QashySwitch
           accessibilityLabel={t("Frosted look")}
           value={config.frosted}
-          onValueChange={(frosted) => change({ frosted })}
+          onValueChange={(frosted) => {
+            void change({ frosted });
+          }}
         />
       </View>
 

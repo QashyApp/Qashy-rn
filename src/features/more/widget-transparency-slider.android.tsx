@@ -32,9 +32,15 @@ export function WidgetTransparencySlider({
     setDraft(value);
   }
   const draftRef = useRef(value);
+  const valueRef = useRef(value);
   useEffect(() => {
     draftRef.current = value;
+    valueRef.current = value;
   }, [value]);
+  const resetToStored = () => {
+    draftRef.current = valueRef.current;
+    setDraft(valueRef.current);
+  };
 
   return (
     <Host
@@ -58,7 +64,13 @@ export function WidgetTransparencySlider({
           setDraft(snapped);
         }}
         onValueChangeFinished={() => {
-          if (draftRef.current !== value) onCommit(draftRef.current);
+          const committed = draftRef.current;
+          if (committed === value) return;
+          // A failed write leaves the stored value unchanged, so `value` never changes to pull the
+          // thumb back: reset the draft to it here instead of showing a value that was not saved.
+          void onCommit(committed).then((saved) => {
+            if (!saved) resetToStored();
+          }, resetToStored);
         }}
         modifiers={[
           fillMaxWidth(),

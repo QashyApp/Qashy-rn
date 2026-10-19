@@ -471,8 +471,10 @@ export class LocalFinanceRepository implements FinanceRepository {
   private mutationActive = false;
   private pendingExternalRefresh = false;
   /**
-   * Whether this instance may write the archived-data sweep. Set only by an initialization that
-   * also generates recurring transactions, so the headless widget refresh stays write-free.
+   * Whether this instance may write the archived-data sweep. Set only by the explicit
+   * `sweepArchived()` step, never by `initialize()`: `initialize` is memoized, so a headless
+   * widget task that ran it first would otherwise decide for the whole process, and that path
+   * must stay write-free.
    */
   private sweepsArchived = false;
   private deletedOccurrenceKeys = new Set<string>();
@@ -520,7 +522,8 @@ export class LocalFinanceRepository implements FinanceRepository {
    * whatever its options. A failed attempt is forgotten so the retry button can run it again.
    * `generateRecurring: false` is for a headless read-only refresh (a widget), which must never
    * post transactions; the app's own startup still generates through the provider's explicit
-   * `generateRecurring()` after `initialize()`.
+   * `generateRecurring()` after `initialize()`. Initialization never sweeps archived data; the
+   * provider runs `sweepArchived()` as its own step for the same reason.
    */
   initialize(options: { generateRecurring?: boolean } = {}) {
     if (this.initialization) return this.initialization;
@@ -551,12 +554,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Deferring the first write to `completeOnboarding` makes that write the create, so the op
     // log states the real base currency from the start. An un-onboarded store rehydrates to
     // exactly `createInitialState()`, so nothing else depends on the row being there early.
-    if (generateRecurring) {
-      this.sweepsArchived = true;
-      // Before generation, so a schedule the sweep is about to delete does not post first.
-      await this.sweepArchivedNow();
-      await this.generateRecurringNow(todayLocal());
-    }
+    if (generateRecurring) await this.generateRecurringNow(todayLocal());
     // Only now is the snapshot complete enough for screens to render against.
     this.state = { ...this.state, ready: true };
     this.emit();
@@ -609,9 +607,23 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   /**
+   * Enables the archived-data sweep for this process and runs one. The app's own startup calls it
+   * explicitly after `initialize()` and before `generateRecurring()`; a headless read-only refresh
+   * never does, so it stays write-free. From then on a refresh or a merge also sweeps.
+   * See `sweepArchivedNow` for what it does.
+   */
+  sweepArchived() {
+    return this.enqueueMutation(async () => {
+      this.sweepsArchived = true;
+      if (this.state.ready) await this.sweepArchivedNow();
+    });
+  }
+
+  /**
    * Deletes, for real, what an earlier version archived. Nothing is archived any more: deleting
-   * erases. Runs where recurring generation runs (never in a headless read-only refresh) and after
-   * a refresh or a merge brings records in, since an older peer can still send `archived: true`.
+   * erases. Runs after `sweepArchived()` (never in a headless read-only refresh) and, once
+   * enabled, after a refresh or a merge brings records in, since an older peer can still send
+   * `archived: true`.
    *
    * Idempotent and deterministic: it reads only the snapshot, orders by creation time and id, and
    * writes nothing once nothing is archived, so two devices sweeping the same data reach the same
@@ -694,9 +706,11 @@ export class LocalFinanceRepository implements FinanceRepository {
     for (const step of steps) {
       try {
         await step();
-      } catch (reason) {
-        if (!(reason instanceof Error) || isProgrammingError(reason))
-          throw reason;
+      } catch {
+        // Anything at all, a malformed row included: the sweep must never block startup or a
+        // merge. Fixed text only, since the error can carry finance data. The next launch or
+        // refresh retries.
+        console.warn("Qashy could not finish clearing archived data.");
       }
     }
   }

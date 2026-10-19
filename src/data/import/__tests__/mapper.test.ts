@@ -2061,11 +2061,17 @@ describe("mapCashewBackup archived items", () => {
     expect(byId(bundle, "transaction:t-live").categoryExternalId).toBe(
       "category:c4",
     );
-    // Neither an archived budget nor one that only tracked an archived category is imported.
+    // Only the archived budget is left out. One that tracked just the archived category stays,
+    // unfiltered by category, as deleting that category in the app would leave it.
     expect(bundle.budgets.map((item) => item.externalId)).toEqual([
+      "budget:only-old",
       "budget:kept",
     ]);
+    expect(
+      bundle.budgets.find((item) => item.externalId === "budget:only-old")
+        ?.categoryExternalIds,
+    ).toEqual([]);
     expect(warning(bundle, "archived-category-skipped")?.count).toBe(1);
-    expect(warning(bundle, "archived-budget-skipped")?.count).toBe(2);
+    expect(warning(bundle, "archived-budget-skipped")?.count).toBe(1);
   });
 });

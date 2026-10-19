@@ -681,6 +681,11 @@ export function TransactionFormScreen() {
     }
   };
 
+  // True while this screen is deleting its own transaction. The delete drops `existing` from the
+  // snapshot before `closeToOwner` runs, and without this the "gone" branch below would dismiss
+  // the sheet on the spot: no exit animation, and the discard prompt on a dirty form.
+  const [deleting, setDeleting] = useState(false);
+
   const remove = async () => {
     if (!existing || busy) return;
     if (
@@ -691,10 +696,14 @@ export function TransactionFormScreen() {
     )
       return;
     setBusy(true);
+    setDeleting(true);
     try {
       await repository.deleteEntities("transactions", [existing.id]);
+      // The form is done: leaving after a delete must never ask to discard changes.
+      allowLeave();
       closeToOwner();
     } catch (reason) {
+      setDeleting(false);
       showError(
         "Couldn’t delete transaction",
         errorMessage(reason, "Try again."),
@@ -704,7 +713,7 @@ export function TransactionFormScreen() {
     }
   };
 
-  if (id && !existing) {
+  if (id && !existing && !deleting) {
     return (
       <CloseTo
         href={returnTo === "/overview" ? "/overview" : "/transactions"}

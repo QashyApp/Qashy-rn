@@ -7,8 +7,11 @@ export interface WidgetTransparencySliderProps {
   label: string;
   /** Percent transparent, 0–100. */
   value: number;
-  /** Called once with the final value, when the user finishes choosing. */
-  onCommit: (value: number) => void;
+  /**
+   * Called once with the final value, when the user finishes choosing. Resolves true when the
+   * value was saved and false when the write failed, so the control can fall back to the stored one.
+   */
+  onCommit: (value: number) => Promise<boolean>;
 }
 
 /** Rounds to the nearest step of 5 and clamps to 0–100. */

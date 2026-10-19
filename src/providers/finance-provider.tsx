@@ -134,17 +134,22 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     financeRepository
-      .initialize()
+      // Generation is its own step below, after the sweep, so a schedule the sweep deletes never
+      // posts first.
+      .initialize({ generateRecurring: false })
+      // Explicit rather than part of `initialize()`: that is memoized, and a headless widget task
+      // may have run it first in this process. It never rejects, so it cannot fail startup.
+      .then(() => financeRepository.sweepArchived())
+      .then(() => financeRepository.generateRecurring())
       // Best-effort and capped: a slow or failed rate fetch must never delay the app's first
       // render. `ensurePendingRatesWithCap` already swallows every failure into the service's own
       // status, so nothing here needs a `.catch` of its own.
       .then(() => ensurePendingRatesWithCap())
-      // `initialize()` already generated recurring transactions before this refresh landed, so
-      // any rule that had no rate yet skipped that occurrence. Re-running it here is a no-op
-      // for everything that already posted (idempotent via occurrence keys) and retries only
-      // what was blocked on a missing rate. A failure here is reported the same way `reconcile`
-      // reports one below — in place, not as a fatal startup error — since the app has already
-      // rendered a usable snapshot by this point.
+      // The generation above ran before this refresh landed, so any rule that had no rate yet
+      // skipped that occurrence. Re-running it here is a no-op for everything that already posted
+      // (idempotent via occurrence keys) and retries only what was blocked on a missing rate. A
+      // failure here is reported the same way `reconcile` reports one below — in place, not as a
+      // fatal startup error — since the app has already rendered a usable snapshot by this point.
       .then(() => financeRepository.generateRecurring())
       .catch((reason: unknown) => {
         if (financeRepository.getSnapshot().ready) {

@@ -28,7 +28,9 @@ export function WidgetTransparencySlider({
       label={label}
       options={OPTIONS}
       value={String(nearest)}
-      onChange={(next) => onCommit(Number(next))}
+      onChange={(next) => {
+        void onCommit(Number(next));
+      }}
     />
   );
 }

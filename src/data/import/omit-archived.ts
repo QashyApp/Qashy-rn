@@ -35,9 +35,9 @@ export interface OmittedArchived {
  *   was the destination) on the imported side, so that account's balance still matches.
  * - An archived category is not imported; what used it is imported uncategorized, and its
  *   subcategories become top-level.
- * - An archived budget is not imported. Neither is a budget left with nothing to count once
- *   archived accounts or categories are gone, because an empty selection would silently mean
- *   "everything".
+ * - An archived budget is not imported. A live budget is always kept: omitted accounts and
+ *   categories are removed from its filters, and a filter list that ends up empty means
+ *   unfiltered for that dimension, exactly as deleting an account or category in the app does.
  *
  * Pure and idempotent: a bundle with nothing archived comes back as it was.
  */
@@ -148,11 +148,7 @@ export function omitArchived<T extends ArchivableParts>(
     const categoryExternalIds = budget.categoryExternalIds.filter(
       (id) => !archivedCategories.has(id),
     );
-    const emptiedAccounts =
-      budget.accountExternalIds.length > 0 && accountExternalIds.length === 0;
-    const emptiedCategories =
-      budget.categoryExternalIds.length > 0 && categoryExternalIds.length === 0;
-    if (budget.archived || emptiedAccounts || emptiedCategories) {
+    if (budget.archived) {
       omitted.budgets += 1;
       continue;
     }
