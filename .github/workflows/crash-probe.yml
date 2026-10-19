@@ -1,0 +1,111 @@
+name: Crash probe
+
+# TEMPORARY diagnostic. Builds a release APK (x86_64, R8 on, NODE_ENV=production, like the
+# EAS preview profile), boots it on an emulator and prints the logcat around the crash.
+on:
+  push:
+    branches: [claude/widget-implementation-plan-1s14k0]
+    paths:
+      - ".github/workflows/crash-probe.yml"
+      - "modules/**"
+      - "src/**"
+      - "index.ts"
+      - "app.config.ts"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    name: release APK on emulator
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Same value the preview profile uses, minus the ABIs the x86_64 emulator cannot run.
+      QASHY_ANDROID_ARCHS: x86_64
+      NODE_ENV: production
+      NODE_OPTIONS: --max_old_space_size=4096
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Setup Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: "24"
+          cache: "npm"
+
+      - name: Setup Java
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Setup Gradle cache
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
+
+      - name: Install dependencies
+        # NODE_ENV=production must not make npm skip devDependencies (the build needs them).
+        run: NODE_ENV=development npm ci
+
+      - name: Generate Android project
+        run: npx expo prebuild -p android --no-install --clean
+
+      - name: Assemble release APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Locate APK
+        run: |
+          ls -la android/app/build/outputs/apk/release/
+          cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/probe.apk"
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Launch on emulator and capture logcat
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          disable-spellchecker: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: |
+            adb install -r ${{ runner.temp }}/probe.apk || true
+            adb logcat -c || true
+            adb shell am start -W -n com.venusddev.qashy/.MainActivity || true
+            sleep 30
+            adb logcat -d > logcat.txt || true
+            adb shell pidof com.venusddev.qashy || echo "PROCESS_DEAD"
+
+      - name: Print logcat highlights
+        if: always()
+        run: |
+          if [ ! -f logcat.txt ]; then echo "no logcat.txt produced"; exit 0; fi
+          wc -l logcat.txt || true
+          echo "===== FATAL EXCEPTION context ====="
+          grep -n -A60 -B5 -m1 "FATAL EXCEPTION" logcat.txt || echo "(no FATAL EXCEPTION found)"
+          echo "===== relevant lines ====="
+          grep -nE "FATAL|AndroidRuntime|ReactNativeJS|ReactNative|Expo|qashy|SoLoader|libc|DEBUG" logcat.txt | head -400 || true
+          echo "===== tail 200 ====="
+          tail -200 logcat.txt || true
+
+      - name: Upload logcat
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: logcat
+          path: logcat.txt
+          if-no-files-found: warn
+          retention-days: 7
