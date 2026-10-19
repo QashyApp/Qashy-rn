@@ -72,7 +72,7 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
     val host: ReactHost = (context as? ReactApplication)?.reactHost ?: return false
     val reactContext = host.currentReactContext ?: awaitReactContext(host)
     val taskContext = HeadlessJsTaskContext.getInstance(reactContext)
-    val taskId = AtomicInteger(-1)
+    val startedTaskId = AtomicInteger(-1)
     // RefreshOutcome is process-wide and the "now" and "midnight" workers can overlap, so the
     // whole reset -> run -> read section is serialized; outcomes cannot cross between runs.
     return jsMutex.withLock {
@@ -82,16 +82,16 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
       try {
         suspendCancellableCoroutine<Unit> { cont ->
           val l = object : HeadlessJsTaskEventListener {
-            override fun onHeadlessJsTaskStart(started: Int) = Unit
+            override fun onHeadlessJsTaskStart(taskId: Int) = Unit
 
-            // Posted to the main thread after startTask returned, so taskId is already set.
-            override fun onHeadlessJsTaskFinish(finished: Int) {
-              if (finished == taskId.get() && cont.isActive) cont.resume(Unit)
+            // Posted to the main thread after startTask returned, so startedTaskId is already set.
+            override fun onHeadlessJsTaskFinish(taskId: Int) {
+              if (taskId == startedTaskId.get() && cont.isActive) cont.resume(Unit)
             }
           }
           listener = l
           taskContext.addTaskEventListener(l)
-          taskId.set(taskContext.startTask(HeadlessJsTaskConfig(TASK_KEY, Arguments.createMap(), JS_TIMEOUT_MS, true)))
+          startedTaskId.set(taskContext.startTask(HeadlessJsTaskConfig(TASK_KEY, Arguments.createMap(), JS_TIMEOUT_MS, true)))
         }
       } finally {
         listener?.let { taskContext.removeTaskEventListener(it) }

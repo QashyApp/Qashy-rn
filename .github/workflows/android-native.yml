@@ -1,8 +1,9 @@
 name: Android native build
 
-# Compiles the Android project (local Expo modules, config plugins, Gradle) so a native
-# break is caught on the pull request instead of in the EAS build after merge. Runs only
-# when something that can affect the native build changed.
+# Builds a release APK the way the EAS preview profile does (production JS bundle, R8
+# and resource shrinking from app.json) and launches it on an emulator, so a native
+# compile break or a launch crash is caught on the pull request instead of after merge.
+# Runs only when something that can affect the native build changed.
 on:
   pull_request:
     branches: [main]
@@ -17,6 +18,7 @@ on:
       - "eas.json"
       - "src/localization/languages.json"
       - "src/localization/android-strings.json"
+      - "scripts/android-smoke-test.sh"
       - ".github/workflows/android-native.yml"
   workflow_dispatch:
 
@@ -29,12 +31,16 @@ concurrency:
 
 jobs:
   assemble:
-    name: prebuild + assembleDebug
+    name: release APK + emulator smoke test
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     env:
-      # One ABI keeps the native compile short; this job checks that it builds, not every ABI.
-      QASHY_ANDROID_ARCHS: arm64-v8a
+      # Same value as the preview profile minus the ABIs an x86_64 emulator cannot run;
+      # one ABI also keeps the native compile short.
+      QASHY_ANDROID_ARCHS: x86_64
+      # Same as the preview build in build.yml.
+      NODE_ENV: production
+      NODE_OPTIONS: --max_old_space_size=4096
     steps:
       - name: 🏗 Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -55,11 +61,45 @@ jobs:
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6
 
       - name: 📦 Install dependencies
-        run: npm ci
+        # NODE_ENV=production must not make npm skip devDependencies (the build needs them).
+        run: NODE_ENV=development npm ci
 
       - name: 🧱 Generate Android project
         run: npx expo prebuild -p android --no-install --clean
 
-      - name: 📱 Assemble debug APK
+      # The Expo template signs release builds with the debug keystore, so this installs
+      # on an emulator. It compiles everything assembleDebug did.
+      - name: 📱 Assemble release APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: 🔎 Locate APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/app.apk"
+
+      - name: ⚙ Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: 🧪 Smoke test on emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          disable-spellchecker: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -camera-front none
+          script: bash scripts/android-smoke-test.sh ${{ runner.temp }}/app.apk
+
+      - name: 📦 Upload smoke test artifacts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: smoke-test
+          path: |
+            smoke-*.png
+            smoke-logcat.txt
+          if-no-files-found: warn
+          retention-days: 7
