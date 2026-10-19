@@ -1,7 +1,8 @@
-import { Redirect, useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { View } from "react-native";
 
+import { CloseTo } from "@/components/navigation/close-to";
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
@@ -73,7 +74,7 @@ export function BudgetFormScreen() {
       ),
   );
   const [saving, setSaving] = useState(false);
-  const { closeToOwner } = useFormSheet({
+  const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute: "/plan",
     values: {
       name,
@@ -223,6 +224,11 @@ export function BudgetFormScreen() {
     }
   };
 
+  // True while this screen is deleting its own record. The delete drops `existing` from the
+  // snapshot before `closeToOwner` runs; without this the "gone" branch below would dismiss the
+  // sheet at once: no exit animation, and the discard prompt on a dirty form.
+  const [deleting, setDeleting] = useState(false);
+
   const remove = async () => {
     if (!existing || saving) return;
     if (
@@ -233,17 +239,21 @@ export function BudgetFormScreen() {
     )
       return;
     setSaving(true);
+    setDeleting(true);
     try {
       await repository.deleteEntities("budgets", [existing.id]);
+      // The form is done: leaving after a delete must never ask to discard changes.
+      allowLeave();
       closeToOwner();
     } catch (reason) {
-      showError("Couldn’t delete budget", errorMessage(reason, "Try again."));
-    } finally {
+      // Only a failed delete frees the form again; after a success it stays locked while the sheet exits.
+      setDeleting(false);
       setSaving(false);
+      showError("Couldn’t delete budget", errorMessage(reason, "Try again."));
     }
   };
 
-  if (id && !existing) return <Redirect href="/plan" />;
+  if (id && !existing && !deleting) return <CloseTo href="/plan" />;
 
   return (
     <FormScreen contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}>

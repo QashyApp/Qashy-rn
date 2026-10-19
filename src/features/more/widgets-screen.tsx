@@ -1,0 +1,521 @@
+import { useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useState } from "react";
+import { AppState, Platform, ScrollView, View } from "react-native";
+
+import { AppText } from "@/components/ui/app-text";
+import { Card } from "@/components/ui/card";
+import { ColorSwatch } from "@/components/ui/color-swatch";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FormField } from "@/components/ui/form-field";
+import { OptionRow } from "@/components/ui/option-row";
+import { QashySwitch } from "@/components/ui/qashy-switch";
+import {
+  SegmentedControl,
+  type SegmentOption,
+} from "@/components/ui/segmented-control";
+import { TextButton } from "@/components/ui/text-button";
+import {
+  readWidgetSettings,
+  subscribeWidgetSettings,
+  updateWidgetSettings,
+} from "@/data/widget-settings-store";
+import {
+  configFor,
+  normalizeWidgetConfig,
+  type GraphMonths,
+  type WidgetAppearance,
+  type WidgetConfig,
+  type WidgetMode,
+  type WidgetSettings,
+  type WidgetTheme,
+} from "@/features/widgets/settings";
+import { WidgetTransparencySlider } from "@/features/more/widget-transparency-slider";
+import {
+  opacityFromTransparency,
+  transparencyFromOpacity,
+} from "@/features/more/widget-transparency";
+import { useLocalization } from "@/localization/localization";
+import { useFinanceState } from "@/providers/finance-provider";
+import { useQashyTheme } from "@/theme/theme";
+import { ACCENT_PRESETS } from "@/theme/tokens";
+import { errorMessage, showError } from "@/utils/confirm";
+import * as QashyWidgets from "../../../modules/qashy-widgets";
+
+const THEME_OPTIONS: SegmentOption<WidgetTheme>[] = [
+  { value: "qashy", label: "Qashy" },
+  { value: "materialYou", label: "Material You" },
+];
+const MODE_OPTIONS: SegmentOption<WidgetMode>[] = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
+const BACKGROUND_OPTIONS: SegmentOption<WidgetConfig["background"]>[] = [
+  { value: "surface", label: "Surface" },
+  { value: "accent", label: "Accent" },
+  { value: "custom", label: "Custom" },
+];
+const GRAPH_OPTIONS: SegmentOption<`${GraphMonths}`>[] = [
+  { value: "3", label: "3 months" },
+  { value: "6", label: "6 months" },
+  { value: "12", label: "12 months" },
+];
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+/** Reading-width cap of the settings column, shared with the other More screens. */
+const CONTENT_MAX_WIDTH = 720;
+
+/** Material You wallpaper colors arrive with Android 12 (API 31). */
+const MATERIAL_YOU_UNSUPPORTED =
+  process.env.EXPO_OS === "android" && Number(Platform.Version) < 31;
+
+/** The fields one control changes; `kind` never changes. */
+type WidgetPatch = Partial<WidgetAppearance> & {
+  accountId?: string | null;
+  graphMonths?: GraphMonths;
+};
+
+/** The placed widgets and the stored settings, kept current for the screen's lifetime. */
+function useWidgetsState() {
+  const [placed, setPlaced] = useState<QashyWidgets.PlacedWidget[] | null>(
+    null,
+  );
+  const [settings, setSettings] = useState<WidgetSettings | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    let placedRequest = 0;
+    const loadPlaced = () => {
+      const request = ++placedRequest;
+      QashyWidgets.getPlacedWidgets().then(
+        (next) => {
+          if (live && request === placedRequest)
+            setPlaced([...next].sort((a, b) => a.id - b.id));
+        },
+        () => {
+          // The list is a convenience: a failure reads as "none placed", not a stuck screen.
+          if (live && request === placedRequest) setPlaced([]);
+        },
+      );
+    };
+    const loadSettings = () => {
+      readWidgetSettings().then(
+        (next) => {
+          if (live) setSettings(next);
+        },
+        () => {
+          if (live)
+            setSettings(
+              (current) => current ?? { hideAmounts: false, widgets: {} },
+            );
+        },
+      );
+    };
+    loadPlaced();
+    loadSettings();
+    const unsubscribe = subscribeWidgetSettings(loadSettings);
+    const appState = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      loadPlaced();
+      loadSettings();
+    });
+    return () => {
+      live = false;
+      unsubscribe();
+      appState.remove();
+    };
+  }, []);
+
+  return { placed, settings, setSettings };
+}
+
+export function WidgetsScreen() {
+  const theme = useQashyTheme();
+  const { space } = theme;
+  const { t } = useLocalization();
+  const { widgetId: widgetIdParam } = useLocalSearchParams<{
+    widgetId?: string | string[];
+  }>();
+  const requestedId = Number(
+    Array.isArray(widgetIdParam) ? widgetIdParam[0] : widgetIdParam,
+  );
+  const [showAll, setShowAll] = useState(false);
+  const available = QashyWidgets.isAvailable();
+  const { placed, settings, setSettings } = useWidgetsState();
+
+  const apply = useCallback(
+    async (
+      update: (current: WidgetSettings) => WidgetSettings | null,
+    ): Promise<boolean> => {
+      try {
+        setSettings(await updateWidgetSettings(update));
+        return true;
+      } catch (reason) {
+        showError(
+          "Couldn’t apply this setting",
+          errorMessage(reason, "Try again."),
+        );
+        return false;
+      }
+    },
+    [setSettings],
+  );
+
+  const stored = settings ?? { hideAmounts: false, widgets: {} };
+  const focused =
+    !showAll && placed?.some((widget) => widget.id === requestedId)
+      ? placed.filter((widget) => widget.id === requestedId)
+      : null;
+  const visible = focused ?? placed ?? [];
+  // Numbered by position among all placed widgets of the kind, so "Summary widget 2" keeps its
+  // number while only that one is shown.
+  const ordinals = new Map<number, number>();
+  const totals = { transactions: 0, summary: 0 };
+  for (const widget of placed ?? []) {
+    totals[widget.kind] += 1;
+    ordinals.set(widget.id, totals[widget.kind]);
+  }
+
+  return (
+    <ScrollView
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={{
+        padding: space.lg,
+        paddingBottom: space.xxxl + space.sm,
+        gap: space.lg,
+        width: "100%",
+        maxWidth: CONTENT_MAX_WIDTH,
+        alignSelf: "center",
+      }}
+    >
+      {!available ? (
+        <Card style={{ gap: space.sm }}>
+          <AppText variant="headline">Widgets are an Android feature</AppText>
+          <AppText muted>
+            Home screen widgets are available in the Android app only.
+          </AppText>
+        </Card>
+      ) : (
+        <>
+          <Card style={{ gap: space.lg }}>
+            <View
+              style={{
+                minHeight: 48,
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: space.md,
+              }}
+            >
+              <View style={{ flex: 1, gap: space.xxs }}>
+                <AppText variant="label">Hide amounts</AppText>
+                <AppText variant="caption" muted>
+                  Amounts and the net worth graph are hidden on all widgets.
+                </AppText>
+              </View>
+              <QashySwitch
+                accessibilityLabel={t("Hide amounts")}
+                value={stored.hideAmounts}
+                disabled={settings === null}
+                onValueChange={(hideAmounts) => {
+                  void apply((current) =>
+                    current.hideAmounts === hideAmounts
+                      ? null
+                      : { ...current, hideAmounts },
+                  );
+                }}
+              />
+            </View>
+          </Card>
+
+          {placed !== null && placed.length === 0 ? (
+            <Card>
+              <EmptyState
+                compact
+                icon="ion:apps-outline"
+                title="No widgets yet"
+                body="Press and hold an empty spot on your home screen, choose Widgets, then pick Qashy to add one."
+              />
+            </Card>
+          ) : null}
+
+          {focused && (placed?.length ?? 0) > 1 ? (
+            <TextButton
+              title="Show all widgets"
+              icon="ion:apps-outline"
+              onPress={() => setShowAll(true)}
+            />
+          ) : null}
+
+          {settings !== null
+            ? visible.map((widget) => (
+                <WidgetCard
+                  key={widget.id}
+                  id={widget.id}
+                  kind={widget.kind}
+                  ordinal={
+                    totals[widget.kind] > 1
+                      ? (ordinals.get(widget.id) ?? null)
+                      : null
+                  }
+                  config={configFor(stored, widget.id, widget.kind)}
+                  apply={apply}
+                />
+              ))
+            : null}
+        </>
+      )}
+    </ScrollView>
+  );
+}
+
+/** Resolves true when the change was saved (or needed no save), false when the write failed. */
+type Apply = (
+  update: (current: WidgetSettings) => WidgetSettings | null,
+) => Promise<boolean>;
+
+/** Replaces the one widget's config, validated, leaving every other widget's untouched. */
+function patchWidget(
+  id: number,
+  kind: WidgetConfig["kind"],
+  patch: WidgetPatch,
+) {
+  return (current: WidgetSettings): WidgetSettings | null => {
+    const base = configFor(current, id, kind);
+    const next = normalizeWidgetConfig({ ...base, ...patch });
+    if (!next) return null;
+    if (
+      current.widgets[String(id)] &&
+      JSON.stringify(current.widgets[String(id)]) === JSON.stringify(next)
+    )
+      return null;
+    return { ...current, widgets: { ...current.widgets, [String(id)]: next } };
+  };
+}
+
+function WidgetCard({
+  id,
+  kind,
+  ordinal,
+  config,
+  apply,
+}: {
+  id: number;
+  kind: WidgetConfig["kind"];
+  /** Set only when several widgets of this kind are placed. */
+  ordinal: number | null;
+  config: WidgetConfig;
+  apply: Apply;
+}) {
+  const theme = useQashyTheme();
+  const { space } = theme;
+  const { t } = useLocalization();
+  const { accounts } = useFinanceState();
+  const change = (patch: WidgetPatch) => apply(patchWidget(id, kind, patch));
+
+  const [hex, setHex] = useState(config.customColor ?? "");
+  // Follows a color chosen elsewhere (a preset swatch, another editor of the same settings).
+  const [seenColor, setSeenColor] = useState(config.customColor);
+  if (config.customColor !== seenColor) {
+    setSeenColor(config.customColor);
+    if (config.customColor !== null) setHex(config.customColor);
+  }
+  const hexValid = HEX_COLOR.test(hex);
+
+  const title = `${t(
+    kind === "transactions" ? "Transactions widget" : "Summary widget",
+  )}${ordinal === null ? "" : ` ${ordinal}`}`;
+  const transparency = transparencyFromOpacity(config.opacity);
+  const liveAccounts = accounts.filter(
+    (account) => !account.archived && !account.deletedAt,
+  );
+  const selectedAccountId =
+    config.kind === "transactions" &&
+    liveAccounts.some((account) => account.id === config.accountId)
+      ? config.accountId
+      : null;
+
+  return (
+    <Card style={{ gap: space.lg }}>
+      <AppText literal variant="headline" accessibilityRole="header">
+        {title}
+      </AppText>
+
+      <View style={{ gap: space.sm }}>
+        <AppText variant="label">Theme</AppText>
+        <SegmentedControl
+          label="Theme"
+          options={THEME_OPTIONS}
+          value={config.theme}
+          onChange={(value) => change({ theme: value })}
+        />
+        {MATERIAL_YOU_UNSUPPORTED ? (
+          <AppText variant="caption" muted>
+            Material You colors need Android 12 or later. On this device the
+            widget uses Qashy colors.
+          </AppText>
+        ) : null}
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <AppText variant="label">Mode</AppText>
+        <SegmentedControl
+          label="Mode"
+          options={MODE_OPTIONS}
+          value={config.mode}
+          onChange={(value) => change({ mode: value })}
+        />
+      </View>
+
+      <View style={{ gap: space.sm }}>
+        <AppText variant="label">Background</AppText>
+        <SegmentedControl
+          label="Background"
+          options={BACKGROUND_OPTIONS}
+          value={config.background}
+          onChange={(background) =>
+            change(
+              background === "custom" && config.customColor === null
+                ? { background, customColor: ACCENT_PRESETS[0] }
+                : { background },
+            )
+          }
+        />
+        <AppText variant="caption" muted>
+          Surface follows the theme, Accent tints it with the accent color, and
+          Custom uses a color you choose.
+        </AppText>
+      </View>
+
+      {config.background === "custom" ? (
+        <View style={{ gap: space.md }}>
+          <Card variant="inset">
+            <View
+              accessibilityRole="radiogroup"
+              accessibilityLabel={t("Custom color")}
+              style={{ flexDirection: "row", gap: space.md, flexWrap: "wrap" }}
+            >
+              {ACCENT_PRESETS.map((color) => (
+                <ColorSwatch
+                  key={color}
+                  color={color}
+                  selected={config.customColor === color}
+                  onPress={() => {
+                    setHex(color);
+                    change({ background: "custom", customColor: color });
+                  }}
+                />
+              ))}
+            </View>
+          </Card>
+          <FormField
+            label="Custom color"
+            value={hex}
+            onChangeText={(value) => {
+              setHex(value);
+              if (HEX_COLOR.test(value))
+                change({
+                  background: "custom",
+                  customColor: value.toUpperCase(),
+                });
+            }}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={7}
+            error={
+              hex.length > 0 && !hexValid
+                ? "Use a six-digit hex color such as #5070FF."
+                : undefined
+            }
+          />
+        </View>
+      ) : null}
+
+      <View style={{ gap: space.sm }}>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: space.md,
+          }}
+        >
+          <AppText variant="label">Transparency</AppText>
+          <AppText literal variant="label" muted>
+            {`${transparency}%`}
+          </AppText>
+        </View>
+        <WidgetTransparencySlider
+          label="Transparency"
+          value={transparency}
+          onCommit={(next) =>
+            change({ opacity: opacityFromTransparency(next) })
+          }
+        />
+      </View>
+
+      <View
+        style={{
+          minHeight: 48,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: space.md,
+        }}
+      >
+        <View style={{ flex: 1, gap: space.xxs }}>
+          <AppText variant="label">Frosted look</AppText>
+          <AppText variant="caption" muted>
+            A soft, frosted look. Widgets can’t blur what is behind them, so
+            this is an approximation.
+          </AppText>
+        </View>
+        <QashySwitch
+          accessibilityLabel={t("Frosted look")}
+          value={config.frosted}
+          onValueChange={(frosted) => {
+            void change({ frosted });
+          }}
+        />
+      </View>
+
+      {config.kind === "transactions" ? (
+        <View style={{ gap: space.sm }}>
+          <AppText variant="label">Show transactions from</AppText>
+          <View
+            accessibilityRole="radiogroup"
+            accessibilityLabel={t("Show transactions from")}
+            style={{ gap: space.sm }}
+          >
+            <OptionRow
+              title="All accounts"
+              selected={selectedAccountId === null}
+              onPress={() => change({ accountId: null })}
+            />
+            {liveAccounts.map((account) => (
+              <OptionRow
+                key={account.id}
+                literal
+                title={account.name}
+                description={account.currency}
+                selected={selectedAccountId === account.id}
+                onPress={() => change({ accountId: account.id })}
+              />
+            ))}
+          </View>
+        </View>
+      ) : (
+        <View style={{ gap: space.sm }}>
+          <AppText variant="label">Graph range</AppText>
+          <SegmentedControl
+            label="Graph range"
+            options={GRAPH_OPTIONS}
+            value={`${config.graphMonths}` as `${GraphMonths}`}
+            onChange={(value) =>
+              change({ graphMonths: Number(value) as GraphMonths })
+            }
+          />
+        </View>
+      )}
+    </Card>
+  );
+}

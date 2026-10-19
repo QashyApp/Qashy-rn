@@ -17,6 +17,7 @@ jest.mock("@/data/local-finance-repository", () => ({
     subscribe: () => () => undefined,
     getSnapshot: () => mockSnapshot,
     initialize: () => Promise.reject(mockEnv.failure),
+    sweepArchived: () => Promise.resolve(),
     refresh: () => Promise.resolve(),
     generateRecurring: () => Promise.resolve(),
   },

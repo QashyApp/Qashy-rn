@@ -20,6 +20,7 @@ import {
   type ImportSourceInfo,
 } from "@/data/import/types";
 import { fileExtension, pickAsset, readAssetBytes } from "@/features/pick-file";
+import { clearWidgetData } from "@/features/widgets";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -703,6 +704,9 @@ export function ExternalImportCard() {
         );
         return;
       }
+      // The replaced data is gone, so the widgets' stored snapshot is too; the repository emit that
+      // follows rebuilds it from what was just imported.
+      if (mode === "replace") void clearWidgetData();
       hapticSuccess();
       clearArmed();
       setMode("merge");

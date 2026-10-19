@@ -51,6 +51,7 @@ Keep domain logic out of screen components when it belongs in the repository or 
 - Transfers affect both accounts but never income or expense analytics.
 - Every persisted entity has a UUID, revision, `createdAt`, `updatedAt`, and nullable `deletedAt`.
 - Deleting erases. A deleted finance entity becomes a tombstone that keeps only what `src/domain/erasure.ts` lists (identity, `deletedAt`, kinds, a transaction's `occurrenceKey`, create-time links, and an account's currency, icon and color). Every storage adapter writes tombstones through `toStoredForm`, the op diff emits only the `delete`, and the merge erases causal state at or before the newest delete. A new entity field needs an erasure entry, and the types enforce it. The one hard delete is the import's replace option ("Delete my current data and import"); see the Sync and cryptography rules.
+- Nothing is archived. Deleting an account deletes its transactions and recurring schedules in the same single `putMany` (a transfer whose other side survives is converted in place to income or expense on that side, written as one whole `ledger` group; `src/utils/account-impact.ts` is the shared plan the repository applies and the confirmation describes). A budget that loses its last filter is kept and covers all spending. The `archived` flag stays in the models and the merge registry only because older peers may still send it: nothing may set it to true, and the startup/refresh sweep (`sweepArchivedNow`, run only where recurring generation runs) deletes anything that arrives archived. The repair pass's account resurrection still writes `archived: true` as a transient view, which that sweep then deletes.
 - Preserve historical budget period limits, filters, category caps, and rollover values.
 - Recurring generation must remain idempotent through occurrence keys.
 - Batch mutations and CSV commits must use one adapter `putMany` call so SQLite and Dexie can apply them atomically.
@@ -73,6 +74,13 @@ When adding or changing an entity, update the model, repository contract, both s
 - `work` passed to `StorageAdapter.transact` must not await anything but the transaction it is handed. Dexie tracks membership through its own promise zone, and a foreign await commits or aborts the transaction underneath you.
 - Never hard-delete a `records` row. Tombstones are erased, not removed: they carry recurrence suppression, so deleting one resurrects a transaction the user deleted. The sole exception is the import's replace option, by explicit product decision: it erases the replaced entity types' rows (tombstones included) in one `transact`, and only when `hasSyncHistory` is false. On a device with any sync history it is refused, because the op log and other devices still hold those entities and would restore them. Do not add other hard deletes, and do not weaken that guard.
 - Prefer deterministic entity ids over post-hoc duplicate repair whenever a value uniquely identifies the record.
+
+## Widgets
+
+- Widget settings are device-local: they live in `sync_meta` (`SYNC_META.widgetSettings`, via `src/data/widget-settings-store.ts`) and never in `AppSettings`, which replicates to peers. Write them only through `updateWidgetSettings`.
+- The widget data copy (a formatted snapshot in the app's no-backup storage) holds display strings only, is never logged, and is cleared when the last widget is removed or after a replace import. Hide amounts must keep amounts out of it, not merely hide them when drawing.
+- The headless refresh path (midnight, boot, time and locale changes) must stay write-free: it reads the repository and pushes a snapshot, and never mutates finance data, generates recurring transactions or writes settings other than pruning removed widgets.
+- The snapshot contract lives in `src/features/widgets/snapshot.ts` and `modules/qashy-widgets` `Snapshot.kt`. Change both together, and bump the snapshot version when the shape changes.
 
 ## Navigation and responsive layout
 

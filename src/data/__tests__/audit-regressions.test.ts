@@ -2,7 +2,7 @@ import { LocalFinanceRepository } from "@/data/local-finance-repository";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import type { BudgetInput } from "@/data/repository";
 import {
-  budgetsArchivedByCategoryDeletion,
+  budgetsLeftUnfilteredByCategoryDeletion,
   categoryDeletionMessage,
 } from "@/utils/category-impact";
 import { decodeBundle } from "@/sync/transport/file";
@@ -407,7 +407,7 @@ describe("search", () => {
 });
 
 describe("category deletion impact", () => {
-  it("names the budgets that would be archived", async () => {
+  it("names the budgets that would be left covering all spending, and keeps them", async () => {
     const repository = await createRepository();
     const category = await repository.saveCategory({
       name: "Pet care",
@@ -425,17 +425,24 @@ describe("category deletion impact", () => {
     );
     const budgets = repository.getSnapshot().budgets;
     expect(
-      budgetsArchivedByCategoryDeletion(budgets, [category.id]).map(
+      budgetsLeftUnfilteredByCategoryDeletion(budgets, [category.id]).map(
         (item) => item.id,
       ),
     ).toEqual([budget.id]);
-    expect(categoryDeletionMessage(budgets, [category.id])).toContain("“Food”");
+    expect(categoryDeletionMessage(budgets, [category.id]).join(" ")).toContain(
+      "“Food”",
+    );
 
     await repository.deleteEntities("categories", [category.id]);
-    expect(
-      repository.getSnapshot().budgets.find((item) => item.id === budget.id)
-        ?.archived,
-    ).toBe(true);
+    const kept = repository
+      .getSnapshot()
+      .budgets.find((item) => item.id === budget.id);
+    expect(kept?.archived).toBe(false);
+    expect(kept?.filters).toEqual({
+      accountIds: [],
+      categoryIds: [],
+      tagIds: [],
+    });
   });
 
   it("does not warn for a budget that keeps another category", async () => {
@@ -462,9 +469,10 @@ describe("category deletion impact", () => {
       }),
     );
     expect(
-      budgetsArchivedByCategoryDeletion(repository.getSnapshot().budgets, [
-        a.id,
-      ]),
+      budgetsLeftUnfilteredByCategoryDeletion(
+        repository.getSnapshot().budgets,
+        [a.id],
+      ),
     ).toHaveLength(0);
   });
 });

@@ -1,7 +1,8 @@
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
+import { CloseTo } from "@/components/navigation/close-to";
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
@@ -680,6 +681,11 @@ export function TransactionFormScreen() {
     }
   };
 
+  // True while this screen is deleting its own transaction. The delete drops `existing` from the
+  // snapshot before `closeToOwner` runs, and without this the "gone" branch below would dismiss
+  // the sheet on the spot: no exit animation, and the discard prompt on a dirty form.
+  const [deleting, setDeleting] = useState(false);
+
   const remove = async () => {
     if (!existing || busy) return;
     if (
@@ -690,22 +696,26 @@ export function TransactionFormScreen() {
     )
       return;
     setBusy(true);
+    setDeleting(true);
     try {
       await repository.deleteEntities("transactions", [existing.id]);
+      // The form is done: leaving after a delete must never ask to discard changes.
+      allowLeave();
       closeToOwner();
     } catch (reason) {
+      // Only a failed delete frees the form again; after a success it stays locked while the sheet exits.
+      setDeleting(false);
+      setBusy(false);
       showError(
         "Couldn’t delete transaction",
         errorMessage(reason, "Try again."),
       );
-    } finally {
-      setBusy(false);
     }
   };
 
-  if (id && !existing) {
+  if (id && !existing && !deleting) {
     return (
-      <Redirect
+      <CloseTo
         href={returnTo === "/overview" ? "/overview" : "/transactions"}
       />
     );

@@ -161,8 +161,28 @@ export interface ApplyResult {
   readonly repairs: readonly RepairNote[];
 }
 
+export interface NetWorthSeries {
+  baseCurrency: string;
+  /** Oldest first: each of the last `months` month-ends, then today. */
+  points: { date: string; baseMinor: number }[];
+  missingExchangeRates: DashboardSummary["missingExchangeRates"];
+}
+
 export interface FinanceRepository {
-  initialize(): Promise<void>;
+  /**
+   * Idempotent while in flight or after success, whatever the options of the later call.
+   * `generateRecurring: false` skips posting recurring transactions, for a headless read-only
+   * refresh, which also never sweeps archived data (see `sweepArchived`).
+   */
+  initialize(options?: { generateRecurring?: boolean }): Promise<void>;
+  /**
+   * Deletes, for real, what an older version archived, and enables the same sweep after every
+   * later refresh and merge for this process. The app runs it after `initialize()` and before
+   * `generateRecurring()`, so a schedule the sweep deletes never posts. A headless read-only
+   * refresh never calls it. A failure inside the sweep is logged without finance data and left
+   * for the next launch; it never rejects.
+   */
+  sweepArchived(): Promise<void>;
   refresh(): Promise<void>;
   applyRemoteOps(ops: readonly SyncOpBody[]): Promise<ApplyResult>;
   applyRemoteState(states: readonly CausalMeta[]): Promise<ApplyResult>;
@@ -275,6 +295,11 @@ export interface FinanceRepository {
     snapshot?: TransactionRecord[],
   ): TransactionRecord[];
   getDashboard(fromDate: string, toDate: string): DashboardSummary;
+  /**
+   * Net worth at each of the last `months` (1..24) month-ends, then `today`, in the base
+   * currency. The last point equals the dashboard headline.
+   */
+  getNetWorthSeries(months: number, today?: string): NetWorthSeries;
   getBudgetStatuses(
     onDate: string,
     options?: { includeInactiveCustom?: boolean },

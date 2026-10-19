@@ -55,7 +55,7 @@ export function AccountsWidget({ month }: WidgetProps) {
                       literal
                       variant="caption"
                       muted
-                    >{`${account.currency} · ${t(accountTypeLabel(account.type))}${account.archived ? ` · ${t("Archived")}` : ""}`}</AppText>
+                    >{`${account.currency} · ${t(accountTypeLabel(account.type))}`}</AppText>
                   </View>
                   <AnimatedMoney
                     minor={balanceMinor}

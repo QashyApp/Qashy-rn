@@ -321,17 +321,16 @@ const ACTIONS: readonly Action[] = [
     },
   },
   {
-    name: "archiveAccount",
+    name: "deleteAccount",
     async run(device, tick) {
       const accounts = liveAccounts(device.state);
       // Never the last one: an account-less vault cannot book anything, and the run would
       // spend its remaining operations bailing out rather than exercising the merge.
       if (accounts.length < 3) return false;
       const account = accounts[tick % accounts.length];
-      await device.repository.saveAccount(
-        { ...inputOf(account), archived: true },
-        account.id,
-      );
+      // Deleting takes what was booked on it too, and keeps a transfer's other side as
+      // income or expense, so this exercises the conversion against concurrent edits.
+      await device.repository.deleteEntities("accounts", [account.id]);
       return true;
     },
   },

@@ -136,6 +136,17 @@ async function loadTableWithRetry(localeTag: string): Promise<NativeTable> {
   }
 }
 
+/**
+ * Makes a Play-translated locale's table available outside the provider (home-screen widgets
+ * build their text from a headless task, with no React tree). A table that already holds real
+ * translations is kept; a failed load leaves the locale English. Never rejects.
+ */
+export async function ensureNativeTable(localeTag: string): Promise<void> {
+  const existing = getNativeTable(localeTag);
+  if (existing && existing !== EMPTY_NATIVE_TABLE) return;
+  installNativeTable(localeTag, await loadTableWithRetry(localeTag));
+}
+
 export function translateMessage(message: string, language: AppLanguage) {
   if (language === "en" || !message) return message;
   const leading = message.match(/^\s*/)?.[0] ?? "";

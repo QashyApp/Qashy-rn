@@ -835,7 +835,7 @@ describe("FinanceRepository contract", () => {
     ).toEqual(["Future"]);
   });
 
-  it("deactivates recurring rules when their account or category is deleted", async () => {
+  it("deletes the recurring rules of a deleted account", async () => {
     const storage = new MemoryStorageAdapter();
     const { repository } = await createRepository(storage);
     const account = await repository.saveAccount({
@@ -870,8 +870,8 @@ describe("FinanceRepository contract", () => {
     expect(
       repository
         .getSnapshot()
-        .recurringRules.find((item) => item.id === rule.id)?.active,
-    ).toBe(false);
+        .recurringRules.find((item) => item.id === rule.id),
+    ).toBeUndefined();
 
     const reloaded = new LocalFinanceRepository(storage);
     await expect(reloaded.initialize()).resolves.toBeUndefined();
@@ -1154,45 +1154,6 @@ describe("FinanceRepository contract", () => {
     } finally {
       jest.useRealTimers();
     }
-  });
-
-  it("reserves archived names so CSV lookups and restoration stay unambiguous", async () => {
-    const { repository } = await createRepository();
-    const original = await repository.saveAccount({
-      name: "Savings",
-      type: "savings",
-      currency: "USD",
-      openingBalanceMinor: 0,
-      icon: "wallet",
-      color: "#5966E9",
-      archived: false,
-    });
-    await repository.saveAccount(
-      {
-        name: "Savings",
-        type: "savings",
-        currency: "USD",
-        openingBalanceMinor: 0,
-        icon: "wallet",
-        color: "#5966E9",
-        archived: true,
-      },
-      original.id,
-    );
-    await expect(
-      repository.saveAccount({
-        name: "Savings",
-        type: "savings",
-        currency: "USD",
-        openingBalanceMinor: 0,
-        icon: "wallet",
-        color: "#5966E9",
-        archived: false,
-      }),
-    ).rejects.toThrow("already in use");
-    await expect(
-      repository.saveAccount({ ...original, archived: false }, original.id),
-    ).resolves.toMatchObject({ archived: false });
   });
 
   it("rejects invalid dates, zero targets, and incompatible batch categories", async () => {
@@ -1865,181 +1826,6 @@ describe("FinanceRepository contract", () => {
     } finally {
       jest.useRealTimers();
     }
-  });
-
-  it("keeps archived dependencies editable and reactivates schedules after restoration", async () => {
-    const { repository } = await createRepository();
-    const account = await repository.saveAccount({
-      name: "Projects",
-      type: "checking",
-      currency: "USD",
-      openingBalanceMinor: 0,
-      icon: "wallet",
-      color: "#5966E9",
-      archived: false,
-    });
-    const category = repository
-      .getSnapshot()
-      .categories.find((item) => item.kind === "expense")!;
-    const transaction = await repository.saveTransaction({
-      kind: "expense",
-      title: "Supplies",
-      localDate: "2026-07-15",
-      accountId: account.id,
-      categoryId: category.id,
-      amountMinor: 500,
-    });
-    const budget = await repository.saveBudget({
-      name: "Projects",
-      icon: "chart",
-      color: "#5966E9",
-      limitMinor: 10000,
-      period: {
-        unit: "month",
-        interval: 1,
-        anchorDate: "2026-07-01",
-        endDate: null,
-      },
-      rollover: false,
-      filters: {
-        accountIds: [account.id],
-        categoryIds: [category.id],
-        tagIds: [],
-      },
-      categoryLimits: [{ categoryId: category.id, limitMinor: 5000 }],
-      archived: false,
-    });
-    const goal = await repository.saveGoal({
-      name: "Project purchase",
-      kind: "spending",
-      icon: "target",
-      color: "#5966E9",
-      targetMinor: 10000,
-      initialMinor: 0,
-      targetDate: null,
-      linkedAccountId: account.id,
-      linkedCategoryId: category.id,
-      archived: false,
-    });
-    const rule = await repository.saveRecurringRule({
-      template: {
-        kind: "expense",
-        title: "Hosting",
-        note: "",
-        accountId: account.id,
-        categoryId: category.id,
-        tagIds: [],
-        amountMinor: 100,
-        currency: "USD",
-      },
-      unit: "month",
-      interval: 1,
-      startDate: "2099-01-01",
-      endDate: null,
-      nextDueDate: "2099-01-01",
-      autoPost: false,
-      active: true,
-    });
-
-    await repository.saveAccount({ ...account, archived: true }, account.id);
-    await repository.saveCategory({ ...category, archived: true }, category.id);
-    expect(
-      repository
-        .getSnapshot()
-        .recurringRules.find((item) => item.id === rule.id)?.active,
-    ).toBe(false);
-    await expect(
-      repository.saveTransaction(
-        {
-          kind: transaction.kind,
-          status: transaction.status,
-          title: "Updated supplies",
-          note: transaction.note,
-          localDate: transaction.localDate,
-          accountId: transaction.accountId,
-          categoryId: transaction.categoryId,
-          amountMinor: transaction.amountMinor,
-        },
-        transaction.id,
-      ),
-    ).resolves.toMatchObject({ title: "Updated supplies" });
-    await expect(
-      repository.saveBudget({ ...budget, name: "Updated projects" }, budget.id),
-    ).resolves.toMatchObject({ name: "Updated projects" });
-    await expect(
-      repository.saveGoal({ ...goal, name: "Updated purchase" }, goal.id),
-    ).resolves.toMatchObject({ name: "Updated purchase" });
-    await expect(
-      repository.saveRecurringRule(
-        {
-          ...repository
-            .getSnapshot()
-            .recurringRules.find((item) => item.id === rule.id)!,
-          template: { ...rule.template, title: "Updated hosting" },
-          active: true,
-        },
-        rule.id,
-      ),
-    ).resolves.toMatchObject({ active: false });
-
-    await repository.saveAccount({ ...account, archived: false }, account.id);
-    expect(
-      repository
-        .getSnapshot()
-        .recurringRules.find((item) => item.id === rule.id)?.active,
-    ).toBe(false);
-    await repository.saveCategory(
-      { ...category, archived: false },
-      category.id,
-    );
-    expect(
-      repository
-        .getSnapshot()
-        .recurringRules.find((item) => item.id === rule.id)?.active,
-    ).toBe(true);
-  });
-
-  it("does not reactivate a schedule that was already paused before its account was archived", async () => {
-    const { repository } = await createRepository();
-    const account = repository.getSnapshot().accounts[0];
-    // Archiving the last live account is refused, so a second one keeps the vault usable.
-    await repository.saveAccount({
-      name: "Backup",
-      type: "checking",
-      currency: "USD",
-      openingBalanceMinor: 0,
-      icon: account.icon,
-      color: "#123456",
-      archived: false,
-    });
-    const rule = await repository.saveRecurringRule({
-      template: {
-        kind: "expense",
-        title: "Paused",
-        note: "",
-        accountId: account.id,
-        categoryId: null,
-        tagIds: [],
-        amountMinor: 100,
-        currency: "USD",
-      },
-      unit: "month",
-      interval: 1,
-      startDate: "2099-01-01",
-      endDate: null,
-      nextDueDate: "2099-01-01",
-      autoPost: false,
-      active: false,
-    });
-
-    await repository.saveAccount({ ...account, archived: true }, account.id);
-    await repository.saveAccount({ ...account, archived: false }, account.id);
-
-    expect(
-      repository
-        .getSnapshot()
-        .recurringRules.find((item) => item.id === rule.id),
-    ).toMatchObject({ active: false, pausedByDependency: false });
   });
 
   it("updates generated upcoming transactions when a recurring template changes", async () => {
@@ -3312,57 +3098,6 @@ describe("FinanceRepository contract", () => {
     ).resolves.toMatchObject({ active: true });
   });
 
-  it("catches up a dependency-paused schedule as soon as its account is restored", async () => {
-    jest.useFakeTimers();
-    try {
-      jest.setSystemTime(new Date("2026-01-01T09:00:00Z"));
-      const { repository } = await createRepository();
-      const account = repository.getSnapshot().accounts[0];
-      // Archiving the last live account is refused, so a second one keeps the vault usable.
-      await repository.saveAccount({
-        name: "Backup",
-        type: "checking",
-        currency: "USD",
-        openingBalanceMinor: 0,
-        icon: account.icon,
-        color: "#123456",
-        archived: false,
-      });
-      await repository.saveRecurringRule({
-        template: {
-          kind: "expense",
-          title: "Restored",
-          note: "",
-          accountId: account.id,
-          categoryId: null,
-          tagIds: [],
-          amountMinor: 100,
-          currency: "USD",
-        },
-        unit: "month",
-        interval: 1,
-        startDate: "2026-02-01",
-        endDate: "2026-05-01",
-        nextDueDate: "2026-02-01",
-        autoPost: false,
-        active: true,
-      });
-      await repository.saveAccount({ ...account, archived: true }, account.id);
-      jest.setSystemTime(new Date("2026-04-15T09:00:00Z"));
-
-      await repository.saveAccount({ ...account, archived: false }, account.id);
-
-      expect(
-        repository
-          .getSnapshot()
-          .transactions.filter((item) => item.title === "Restored")
-          .map((item) => item.localDate),
-      ).toEqual(["2026-02-01", "2026-03-01", "2026-04-01"]);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
   it("includes an overlapping short custom budget in the dashboard period", async () => {
     const { repository } = await createRepository();
     await repository.saveBudget({
@@ -3673,9 +3408,9 @@ describe("FinanceRepository contract", () => {
       .recurringRules.find((item) => item.id === rule.id)!;
     expect(cleanedBudget.filters.tagIds).toEqual([]);
     expect(cleanedRule.template.tagIds).toEqual([]);
-    // Losing its only filter would otherwise widen this budget to match every
-    // expense in the app with no warning, so it must be archived instead.
-    expect(cleanedBudget.archived).toBe(true);
+    // Losing its only filter leaves the budget as it is, now covering all spending (the
+    // confirmation says so first). It is never archived.
+    expect(cleanedBudget.archived).toBe(false);
     await expect(
       repository.saveBudget(
         cleanedBudget,
@@ -3987,7 +3722,7 @@ describe("FinanceRepository contract", () => {
     expect(repository.getSnapshot().budgets).toHaveLength(1);
   });
 
-  it("cleans category references atomically and archives referenced accounts", async () => {
+  it("cleans category references atomically and deletes referenced accounts with their transactions", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     const category = await repository.saveCategory({
@@ -4097,14 +3832,18 @@ describe("FinanceRepository contract", () => {
     });
     await repository.deleteEntities("accounts", [account.id]);
     expect(
-      repository.getSnapshot().accounts.find((item) => item.id === account.id)
-        ?.archived,
-    ).toBe(true);
+      repository.getSnapshot().accounts.find((item) => item.id === account.id),
+    ).toBeUndefined();
     expect(
       repository
         .getSnapshot()
-        .transactions.find((item) => item.id === transaction.id)?.accountId,
-    ).toBe(account.id);
+        .transactions.find((item) => item.id === transaction.id),
+    ).toBeUndefined();
+    expect(
+      repository
+        .getSnapshot()
+        .recurringRules.find((item) => item.id === rule.id),
+    ).toBeUndefined();
   });
 
   it("edits a foreign-currency transaction using its own rate snapshot after the rate is deleted", async () => {
@@ -4208,7 +3947,7 @@ describe("FinanceRepository contract", () => {
     ).toBe(-1500);
   });
 
-  it("drops a deleted account from net worth while its history still counts", async () => {
+  it("drops a deleted account from net worth and takes its transactions out of the totals", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
     await repository.saveAccount({
@@ -4237,7 +3976,7 @@ describe("FinanceRepository contract", () => {
     expect(after.accountBalances.map((item) => item.account.id)).not.toContain(
       account.id,
     );
-    expect(after.incomeMinor).toBe(50000);
+    expect(after.incomeMinor).toBe(0);
   });
 
   it("returns a stable identity for a budget period that is not persisted yet", async () => {
@@ -4482,67 +4221,6 @@ describe("FinanceRepository contract", () => {
     }
   });
 
-  it("keeps a rule paused by an archived account when an unrelated category is deleted", async () => {
-    const { repository } = await createRepository();
-    const spare = await repository.saveAccount({
-      name: "Spare",
-      type: "cash",
-      currency: "USD",
-      openingBalanceMinor: 0,
-      icon: "wallet",
-      color: "#00A58E",
-      archived: false,
-    });
-    const category = repository
-      .getSnapshot()
-      .categories.find((item) => item.kind === "expense")!;
-    const rule = await repository.saveRecurringRule({
-      template: {
-        kind: "expense",
-        title: "Rent",
-        note: "",
-        amountMinor: 50_00,
-        currency: "USD",
-        accountId: spare.id,
-        categoryId: category.id,
-        tagIds: [],
-      },
-      unit: "month",
-      interval: 1,
-      startDate: "2026-07-01",
-      endDate: null,
-      nextDueDate: "2026-07-01",
-      autoPost: false,
-      active: true,
-    });
-
-    await repository.saveAccount({ ...spare, archived: true }, spare.id);
-    expect(
-      repository
-        .getSnapshot()
-        .recurringRules.find((item) => item.id === rule.id),
-    ).toMatchObject({ active: false, pausedByDependency: true });
-
-    await repository.deleteEntities("categories", [category.id]);
-    const afterDelete = repository
-      .getSnapshot()
-      .recurringRules.find((item) => item.id === rule.id)!;
-    // The account is still archived, so the rule must stay recoverable rather than
-    // losing the flag both reactivation gates key off.
-    expect(afterDelete.template.categoryId).toBeNull();
-    expect(afterDelete).toMatchObject({
-      active: false,
-      pausedByDependency: true,
-    });
-
-    await repository.saveAccount({ ...spare, archived: false }, spare.id);
-    expect(
-      repository
-        .getSnapshot()
-        .recurringRules.find((item) => item.id === rule.id),
-    ).toMatchObject({ active: true, pausedByDependency: false });
-  });
-
   it("filters transactions by parent category the same way budgets aggregate them", async () => {
     const { repository } = await createRepository();
     const account = repository.getSnapshot().accounts[0];
@@ -4568,43 +4246,6 @@ describe("FinanceRepository contract", () => {
 
     const byParent = repository.queryTransactions({ categoryIds: [parent.id] });
     expect(byParent.map((item) => item.title)).toEqual(["Milk"]);
-  });
-
-  it("reports an archived account by name instead of claiming the CSV is unknown", async () => {
-    const { repository } = await createRepository();
-    const spare = await repository.saveAccount({
-      name: "Spare",
-      type: "cash",
-      currency: "USD",
-      openingBalanceMinor: 0,
-      icon: "wallet",
-      color: "#00A58E",
-      archived: false,
-    });
-    await repository.saveAccount({ ...spare, archived: true }, spare.id);
-
-    const result = await repository.importCsv(
-      [
-        {
-          rowNumber: 2,
-          date: "2026-07-10",
-          type: "expense" as TransactionKind,
-          title: "Old purchase",
-          amount: "10.00",
-          currency: "USD",
-          account: "Spare",
-          category: "",
-          tags: "",
-          note: "",
-          exchangeRate: "",
-          destinationAccount: "",
-          destinationAmount: "",
-        },
-      ],
-      false,
-    );
-
-    expect(result.rejectedRows[0].reason).toBe("Account Spare is archived.");
   });
 });
 

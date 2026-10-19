@@ -1,7 +1,8 @@
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
+import { CloseTo } from "@/components/navigation/close-to";
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { IconBadge } from "@/components/ui/icon-badge";
@@ -30,6 +31,7 @@ import {
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { ACCENT_PRESETS } from "@/theme/tokens";
+import { accountDeletionMessage } from "@/utils/account-impact";
 import { accountTypeLabel } from "@/utils/labels";
 import { useTurnOnAutomaticRates } from "@/features/use-automatic-rates";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
@@ -181,28 +183,36 @@ export function AccountFormScreen() {
     }
   };
 
+  // True while this screen is deleting its own record. The delete drops `existing` from the
+  // snapshot before `closeToOwner` runs; without this the "gone" branch below would dismiss the
+  // sheet at once: no exit animation, and the discard prompt on a dirty form.
+  const [deleting, setDeleting] = useState(false);
+
   const remove = async () => {
     if (!existing || busy) return;
     if (
       !(await confirmDestructive({
         title: `Delete ${existing.name}?`,
-        message:
-          "The account leaves your net worth. Its past transactions stay in your history, and its schedules stop.",
+        message: accountDeletionMessage(state, [existing.id]),
       }))
     )
       return;
     setBusy(true);
+    setDeleting(true);
     try {
       await repository.deleteEntities("accounts", [existing.id]);
+      // The form is done: leaving after a delete must never ask to discard changes.
+      allowLeave();
       closeToOwner();
     } catch (reason) {
-      showError("Couldn’t delete account", errorMessage(reason, "Try again."));
-    } finally {
+      // Only a failed delete frees the form again; after a success it stays locked while the sheet exits.
+      setDeleting(false);
       setBusy(false);
+      showError("Couldn’t delete account", errorMessage(reason, "Try again."));
     }
   };
 
-  if (id && !existing) return <Redirect href="/more" />;
+  if (id && !existing && !deleting) return <CloseTo href="/more" />;
 
   return (
     <FormScreen contentContainerStyle={{ gap: space.lg }}>

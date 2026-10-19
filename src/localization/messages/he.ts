@@ -141,10 +141,6 @@ export const HEBREW: Record<string, string> = {
     "תאריך היעד חייב להיות היום או מאוחר יותר.",
   "Exchange rate is outside the supported range.":
     "שער החליפין מחוץ לטווח הנתמך.",
-  "An account with transactions, schedules, budgets, or goals attached keeps its history, so it is archived rather than erased. If it still holds a balance, that balance stays in your net worth until you restore it from Archived on the More screen.":
-    'חשבון עם תנועות, תזמונים, תקציבים או יעדים מקושרים שומר על ההיסטוריה שלו, ולכן הוא מועבר לארכיון ולא נמחק. אם עדיין יש בו יתרה, היא נשארת בשווי הנקי עד שתשחזרו אותו מ"בארכיון" במסך עוד.',
-  "Accounts with transactions, schedules, budgets, or goals attached keep their history and are archived instead of erased. An archived account that still holds a balance stays in your net worth until you restore it.":
-    "חשבונות עם תנועות, תזמונים, תקציבים או יעדים מקושרים שומרים על ההיסטוריה שלהם ומועברים לארכיון ולא נמחקים. חשבון בארכיון שעדיין יש בו יתרה נשאר בשווי הנקי עד ששחזרתם אותו.",
   Upcoming: "בקרוב",
   upcoming: "בקרוב",
   UPCOMING: "בקרוב",
@@ -339,7 +335,6 @@ export const HEBREW: Record<string, string> = {
   "New recurring": "מחזורית חדשה",
   "Exchange rates": "שערי חליפין",
   "Add rate": "הוספת שער",
-  Archived: "בארכיון",
   "Subscriptions and scheduled income will appear here.":
     "מינויים והכנסות מתוזמנות יופיעו כאן.",
   "Add a manual rate when you create an account in another currency.":
@@ -358,13 +353,11 @@ export const HEBREW: Record<string, string> = {
   Color: "צבע",
   "Save account": "שמירת חשבון",
   "Create account": "יצירת חשבון",
-  "Archive account": "העברת חשבון לארכיון",
   "Category name": "שם הקטגוריה",
   Icon: "סמל",
   "Parent category": "קטגוריית אב",
   "Save category": "שמירת קטגוריה",
   "Create category": "יצירת קטגוריה",
-  "Archive category": "העברת קטגוריה לארכיון",
   Repeats: "חוזר",
   Every: "כל",
   Starts: "מתחיל",
@@ -526,12 +519,9 @@ export const HEBREW: Record<string, string> = {
     "מטבע התנועה המחזורית חייב להתאים לחשבון.",
   "Couldn’t apply this setting": "לא ניתן להחיל את ההגדרה",
   "Couldn’t finish setup": "לא ניתן להשלים את ההגדרה",
-  "Couldn’t restore": "לא ניתן לשחזר",
   "Couldn’t finish resetting Qashy": "לא ניתן להשלים את איפוס Qashy",
   "Couldn’t save account": "לא ניתן לשמור את החשבון",
-  "Couldn’t archive account": "לא ניתן להעביר את החשבון לארכיון",
   "Couldn’t save category": "לא ניתן לשמור את הקטגוריה",
-  "Couldn’t archive category": "לא ניתן להעביר את הקטגוריה לארכיון",
   "Couldn’t save transaction": "לא ניתן לשמור את התנועה",
   "Couldn’t delete transaction": "לא ניתן למחוק את התנועה",
   "Couldn’t delete transactions": "לא ניתן למחוק את התנועות",
@@ -572,11 +562,6 @@ export const HEBREW: Record<string, string> = {
     "תמונות המצב של תקופות קודמות יימחקו יחד איתו.",
   "Transactions that need this rate will report it as missing.":
     "תנועות שזקוקות לשער הזה ידווחו שהוא חסר.",
-  "The category is hidden from lists and pickers. You can restore it from the Archived section in More.":
-    "הקטגוריה תוסתר מרשימות ומבוררים. ניתן לשחזר אותה מאזור הארכיון במסך עוד.",
-  "The account is hidden from lists and pickers. You can restore it from the Archived section in More.":
-    "החשבון יוסתר מרשימות ומבוררים. ניתן לשחזר אותו מאזור הארכיון במסך עוד.",
-  Archive: "העברה לארכיון",
   "Reset everything": "איפוס הכול",
   "Add budget": "הוספת תקציב",
   "Add goal": "הוספת יעד",
@@ -586,8 +571,6 @@ export const HEBREW: Record<string, string> = {
   "Couldn’t delete account": "לא ניתן למחוק את החשבון",
   "Transactions in this category become uncategorized, and it is removed from budgets and goals.":
     "תנועות בקטגוריה זו יהפכו ללא קטגוריה, והיא תוסר מתקציבים ויעדים.",
-  "An account with transactions, schedules, budgets, or goals attached keeps its history, so it is removed from lists and pickers rather than erased.":
-    "חשבון עם תנועות, תזמונים, תקציבים או יעדים מקושרים שומר על ההיסטוריה שלו, ולכן הוא יוסר מרשימות ומבוררים ולא יימחק.",
   "Choose icon": "בחירת סמל",
   "Close icon browser": "סגירת בורר הסמלים",
   "Opens the icon browser": "פותח את בורר הסמלים",
@@ -657,8 +640,6 @@ export const HEBREW: Record<string, string> = {
     "סוג הקטגוריה נעול מפני שתנועות, תקציבים, יעדים או תזמונים מפנים אליה.",
   "CSV is transaction portability, not a complete backup. Budgets, goals, schedules, and appearance settings are not included.":
     "CSV מיועד להעברת תנועות, לא לגיבוי מלא. תקציבים, יעדים, תזמונים והגדרות מראה אינם נכללים.",
-  "This schedule stays paused until its archived account and category are restored.":
-    "התזמון יישאר מושהה עד לשחזור החשבון והקטגוריה שבארכיון.",
   "Discard changes?": "לבטל את השינויים?",
   "This form has unsaved changes.": "בטופס יש שינויים שלא נשמרו.",
   Discard: "ביטול שינויים",
@@ -1143,6 +1124,40 @@ export const HEBREW: Record<string, string> = {
   "Swipe to change month": "החלקה למעבר בין חודשים",
   "Swipe left or right on Overview and Transactions to move between months.":
     "החליקו ימינה או שמאלה במסכי הסקירה והתנועות כדי לעבור בין חודשים.",
+  // Home-screen widgets (More → Widgets) and the text the widgets themselves draw.
+  Widgets: "ווידג׳טים",
+  "Home screen widgets": "ווידג׳טים למסך הבית",
+  "Hide amounts": "הסתרת סכומים",
+  "Amounts and the net worth graph are hidden on all widgets.":
+    "הסכומים וגרף השווי הנקי מוסתרים בכל הווידג׳טים.",
+  "Widgets are an Android feature": "ווידג׳טים זמינים באנדרואיד",
+  "Home screen widgets are available in the Android app only.":
+    "ווידג׳טים למסך הבית זמינים באפליקציית אנדרואיד בלבד.",
+  "No widgets yet": "עדיין אין ווידג׳טים",
+  "Press and hold an empty spot on your home screen, choose Widgets, then pick Qashy to add one.":
+    "לחצו לחיצה ארוכה על מקום פנוי במסך הבית, בחרו ״ווידג׳טים״ ואז בחרו ב־Qashy כדי להוסיף ווידג׳ט.",
+  "Show all widgets": "הצגת כל הווידג׳טים",
+  "Transactions widget": "ווידג׳ט תנועות",
+  "Summary widget": "ווידג׳ט סיכום",
+  "Material You colors need Android 12 or later. On this device the widget uses Qashy colors.":
+    "צבעי Material You דורשים אנדרואיד 12 ומעלה. במכשיר הזה הווידג׳ט משתמש בצבעי Qashy.",
+  Mode: "מצב",
+  Background: "רקע",
+  Surface: "משטח",
+  "Surface follows the theme, Accent tints it with the accent color, and Custom uses a color you choose.":
+    "״משטח״ תואם לערכת העיצוב, ״צבע הדגשה״ צובע אותו בגוון ההדגשה, ו״מותאם״ משתמש בצבע שתבחרו.",
+  Transparency: "שקיפות",
+  "Frosted look": "מראה חלבי",
+  "A soft, frosted look. Widgets can’t blur what is behind them, so this is an approximation.":
+    "מראה רך וחלבי. ווידג׳טים לא יכולים לטשטש את מה שמאחוריהם, ולכן זו רק הדמיה של האפקט.",
+  "Show transactions from": "הצגת תנועות מתוך",
+  "All accounts": "כל החשבונות",
+  "Graph range": "טווח הגרף",
+  "3 months": "3 חודשים",
+  "6 months": "6 חודשים",
+  "12 months": "12 חודשים",
+  "Open Qashy to load your widget": "פתחו את Qashy כדי לטעון את הווידג׳ט",
+  Today: "היום",
   "Navigation bar style": "סגנון סרגל הניווט",
   Native: "מובנה",
   Floating: "צף",
@@ -1204,10 +1219,6 @@ export const HEBREW: Record<string, string> = {
   Black: "שחור",
   Gray: "אפור",
   "Custom color": "צבע מותאם",
-  "This is your only account, so it can’t be archived. Add another account first.":
-    "זה החשבון היחיד שלך ולכן אי אפשר להעביר אותו לארכיון. הוסיפו חשבון נוסף קודם.",
-  "The account is hidden from lists and pickers, but any balance it holds still counts toward your totals. You can restore it from the Archived section in More.":
-    "החשבון יוסתר מרשימות ומבוררים, אבל היתרה שבו עדיין נספרת בסכומים שלך. ניתן לשחזר אותו מאזור הארכיון במסך עוד.",
   "Category name is required.": "שם הקטגוריה נדרש.",
   "A category with this name already exists.": "כבר קיימת קטגוריה בשם הזה.",
   Shopping: "קניות",
@@ -1485,8 +1496,25 @@ export const HEBREW: Record<string, string> = {
     "פתחו את המסך הזה מחדש כדי לראות את המצב הנוכחי.",
   // More: account and category deletion, CSV and import screens.
   "Delete 1 account?": "למחוק חשבון אחד?",
-  "Deleted accounts leave your net worth. Their past transactions stay in your history, and their schedules stop.":
-    "חשבונות שנמחקו יוצאים משווי הנקי. התנועות הקודמות שלהם נשארות בהיסטוריה, והתזמונים שלהם נעצרים.",
+  // Account deletion confirmation: one sentence per line, each translated on its own.
+  "The account leaves your net worth.": "החשבון יוצא מהשווי הנקי.",
+  "The accounts leave your net worth.": "החשבונות יוצאים מהשווי הנקי.",
+  "Deletes 1 transaction.": "מוחק תנועה אחת.",
+  "Deletes 1 recurring schedule.": "מוחק תזמון חוזר אחד.",
+  "Budgets that use it are updated, and goals linked to it are unlinked.":
+    "תקציבים שמשתמשים בו יעודכנו, ויעדים המקושרים אליו ינותקו.",
+  "Nothing can be archived. Delete it instead.":
+    "אי אפשר להעביר לארכיון. יש למחוק במקום זאת.",
+  "This transfer cannot be kept as income.":
+    "לא ניתן לשמור את ההעברה הזו כהכנסה.",
+  "Accounts archived in Cashew were not imported, nor were their transactions. A transfer with one of them was kept as income or expense on the other account.":
+    "חשבונות שהועברו לארכיון ב־Cashew לא יובאו, וגם לא התנועות שלהם. העברה עם אחד מהם נשמרה כהכנסה או הוצאה בחשבון השני.",
+  "Categories archived in Cashew were not imported; transactions that used them were imported without a category.":
+    "קטגוריות שהועברו לארכיון ב־Cashew לא יובאו; תנועות שהשתמשו בהן יובאו ללא קטגוריה.",
+  "Budgets archived in Cashew were not imported.":
+    "תקציבים שהועברו לארכיון ב־Cashew לא יובאו.",
+  "Budgets whose only accounts or categories were archived in Cashew now cover all accounts or all categories, since the archived ones were not imported.":
+    "תקציבים שכל החשבונות או הקטגוריות שלהם הועברו לארכיון ב־Cashew חלים כעת על כל החשבונות או על כל הקטגוריות, כי הפריטים מהארכיון לא יובאו.",
   "Couldn’t delete accounts": "לא ניתן למחוק חשבונות",
   "Delete 1 category?": "למחוק קטגוריה אחת?",
   "Couldn’t delete categories": "לא ניתן למחוק קטגוריות",
@@ -1583,8 +1611,6 @@ export const HEBREW: Record<string, string> = {
   "Suggested from earlier transactions with this title.":
     "מוצע לפי תנועות קודמות עם אותה כותרת.",
   // Account deletion (one account), batch deletion of budgets and goals.
-  "The account leaves your net worth. Its past transactions stay in your history, and its schedules stop.":
-    "החשבון יוצא מהשווי הנקי. התנועות הקודמות שלו נשארות בהיסטוריה, והתזמונים שלו נעצרים.",
   "This is your only account, so it can’t be deleted. Add another account first.":
     "זה החשבון היחיד שלכם, ולכן אי אפשר למחוק אותו. הוסיפו קודם חשבון נוסף.",
   "Past period snapshots are removed with them.":
@@ -1825,8 +1851,6 @@ export const HEBREW: Record<string, string> = {
   "Choose a valid navigation bar style.": "בחרו סגנון תקין לסרגל הניווט.",
   "Choose a valid animation level.": "בחרו רמת אנימציה תקינה.",
   "Choose a valid appearance override.": "בחרו התאמת מראה תקינה.",
-  "Keep at least one account. Add another account before archiving this one.":
-    "יש להשאיר לפחות חשבון אחד. הוסיפו חשבון נוסף לפני העברת החשבון הזה לארכיון.",
   "Keep at least one account. Add another account before deleting this one.":
     "יש להשאיר לפחות חשבון אחד. הוסיפו חשבון נוסף לפני מחיקת החשבון הזה.",
   "Choose a valid icon.": "בחרו סמל תקין.",
@@ -3160,11 +3184,6 @@ export function createDynamicPatterns(
       /^Use (#[0-9A-Fa-f]{6}) (.+)$/,
       (color, item) => `שימוש ב־${color} עבור ${translateMessage(item, "he")}`,
     ],
-    [/^Archived account · (.+)$/, (currency) => `חשבון בארכיון · ${currency}`],
-    [
-      /^Archived (.+) category$/,
-      (kind) => `קטגוריית ${translateMessage(kind, "he")} בארכיון`,
-    ],
     [
       /^Every (day|week|month|year)\.$/,
       (unit) => `כל ${translateMessage(unit, "he")}`,
@@ -3215,6 +3234,10 @@ export function createDynamicPatterns(
     [
       /^Use a real (.+) in YYYY-MM-DD format\.$/,
       (label) => `השתמשו ב${translateField(label)} אמיתי בתבנית YYYY-MM-DD.`,
+    ],
+    [
+      /^Choose a whole number of months from 1 to (\d+)\.$/,
+      (max) => `בחרו מספר שלם של חודשים מ־1 עד ${max}.`,
     ],
     [
       /^(.+) must be a positive whole number\.$/,
@@ -3299,7 +3322,6 @@ export function createDynamicPatterns(
       (from, to, rate, implied) =>
         `הערך סותר את השער הקיים מ־${from} ל־${to}, שערכו ${rate} ומשמעותו ${implied}. עדכנו או הסירו תחילה את השער הזה.`,
     ],
-    [/^Archive (.+)\?$/, (name) => `להעביר את ${name} לארכיון?`],
     [/^Delete the (.+) rate\?$/, (currency) => `למחוק את שער ${currency}?`],
     [/^Delete (\d+) transactions\?$/, (count) => `למחוק ${count} תנועות?`],
     [/^Delete (\d+) budgets\?$/, (count) => `למחוק ${count} תקציבים?`],
@@ -3593,28 +3615,24 @@ export function createDynamicPatterns(
         `${translateField(label)} ${agree(label, "חייב להיות חיובי", "חייבת להיות חיובית")}.`,
     ],
 
-    // Deleting categories names the budgets that would be left tracking nothing and are
-    // archived instead. The sentence is one of two plain category messages followed by one of
-    // two budget messages, so each of the four combinations is its own template pattern.
+    // Account and category deletion confirmations. Each sentence is its own message, so a name
+    // or a count never multiplies the combinations.
+    [/^Deletes (\d+) transactions\.$/, (count) => `מוחק ${count} תנועות.`],
     [
-      /^Transactions in this category become uncategorized, and it is removed from budgets and goals\. The budget (.+) would then track nothing, so it is archived and leaves Plan\. Edit its categories first to keep it\.$/,
-      (names) =>
-        `תנועות בקטגוריה זו יהפכו ללא קטגוריה, והיא תוסר מתקציבים ויעדים. התקציב ${names} לא יעקוב אחר שום דבר, ולכן הוא יועבר לארכיון ויוסר מהתכנון. ערכו קודם את הקטגוריות שלו כדי לשמור עליו.`,
+      /^Deletes (\d+) recurring schedules\.$/,
+      (count) => `מוחק ${count} תזמונים חוזרים.`,
     ],
     [
-      /^Transactions in this category become uncategorized, and it is removed from budgets and goals\. These budgets (.+) would then track nothing, so they are archived and leave Plan\. Edit their categories first to keep them\.$/,
-      (names) =>
-        `תנועות בקטגוריה זו יהפכו ללא קטגוריה, והיא תוסר מתקציבים ויעדים. התקציבים ${names} לא יעקבו אחר שום דבר, ולכן הם יועברו לארכיון ויוסרו מהתכנון. ערכו קודם את הקטגוריות שלהם כדי לשמור עליהם.`,
+      /^Transfers with an account that stays are kept as income or expense there: (.+)\.$/,
+      (names) => `העברות עם חשבון שנשאר נשמרות כהכנסה או כהוצאה בו: ${names}.`,
     ],
     [
-      /^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\. The budget (.+) would then track nothing, so it is archived and leaves Plan\. Edit its categories first to keep it\.$/,
-      (names) =>
-        `התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים. התקציב ${names} לא יעקוב אחר שום דבר, ולכן הוא יועבר לארכיון ויוסר מהתכנון. ערכו קודם את הקטגוריות שלו כדי לשמור עליו.`,
+      /^The budget (.+) would then cover all your spending\.$/,
+      (names) => `התקציב ${names} יכסה אז את כל ההוצאות שלכם.`,
     ],
     [
-      /^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\. These budgets (.+) would then track nothing, so they are archived and leave Plan\. Edit their categories first to keep them\.$/,
-      (names) =>
-        `התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים. התקציבים ${names} לא יעקבו אחר שום דבר, ולכן הם יועברו לארכיון ויוסרו מהתכנון. ערכו קודם את הקטגוריות שלהם כדי לשמור עליהם.`,
+      /^These budgets (.+) would then cover all your spending\.$/,
+      (names) => `התקציבים ${names} יכסו אז את כל ההוצאות שלכם.`,
     ],
   ];
 }

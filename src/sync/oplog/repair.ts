@@ -331,12 +331,14 @@ function collapseDuplicates(draft: Draft) {
 /**
  * Brings back a tombstoned account that something live still points at.
  *
- * `deleteEntities` deliberately archives rather than deletes an account that is referenced,
- * because an account is part of the identity of every ledger entry booked against it — the
- * currency, the balance, the conversion. A merge can produce the state the repository
- * refuses to create: A deletes an account it believes unused while B books a transaction on
- * it. Archived-and-live is the state the repository would have chosen, so that is what this
- * restores. Categories, tags, and goals can legitimately be nulled instead, and are.
+ * An account is part of the identity of every ledger entry booked against it — the currency,
+ * the balance, the conversion. A merge can leave a live transaction pointing at an account that
+ * was deleted: A deletes the account while B books a transaction on it. The merged set has to be
+ * renderable, so the account is shown again, archived and under a placeholder name. That is a
+ * transient view, not a state the app keeps: nothing archives any more, and the repository's
+ * sweep of archived data deletes the account again together with what was booked on it, as
+ * deleting an account does. Categories, tags, and goals can legitimately be nulled instead, and
+ * are.
  */
 function resurrectReferencedAccounts(draft: Draft) {
   const referenced = new Set<string>();

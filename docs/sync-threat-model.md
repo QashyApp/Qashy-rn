@@ -60,6 +60,14 @@ State these in the UI and the README. Pretending otherwise would be worse than t
   compaction drops them: once every peer has acknowledged them, or after 90 days. They cannot be
   rewritten sooner without breaking the chain. A recurring schedule's next-due date is a monotone
   register and stays in causal state, and IndexedDB has no secure-delete equivalent to SQLite's.
+- **The home-screen widget data copy.** Android widgets cannot read the app's database, so the app writes a
+  formatted copy of what the widgets display (display strings such as payees, notes, amounts and a net worth
+  series — not records, ids of other entities or keys) to the app's private no-backup storage. It is **outside
+  the encrypted sync path**: it is never synced, never sent anywhere, written in plain text on the device inside
+  the same app sandbox as the database, and excluded from Android backups and device-to-device transfers. It is
+  deleted when the last widget is removed or after a replace import. The "Hide amounts" setting keeps amounts
+  out of it. Widget settings are device-local sync metadata and never replicate. A compromised OS or a rooted
+  device sees it exactly as it sees the database, covered by the first bullet above.
 - **A compromised _paired_ device.** There is no partial authorization in a single-user vault: a device you
   paired can read and write everything. Revocation limits future access only.
 - **Global passive traffic analysis** by an adversary who can observe both endpoints at once.

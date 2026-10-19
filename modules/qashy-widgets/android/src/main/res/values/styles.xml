@@ -1,0 +1,6 @@
+<resources>
+  <!-- The configure activity draws nothing: it hands over to the app and finishes. -->
+  <style name="Theme.QashyWidgets.Trampoline" parent="@android:style/Theme.Translucent.NoTitleBar">
+    <item name="android:windowAnimationStyle">@null</item>
+  </style>
+</resources>

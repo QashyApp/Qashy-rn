@@ -1,0 +1,50 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <application>
+    <receiver
+      android:name="expo.modules.qashywidgets.TransactionsWidgetReceiver"
+      android:exported="true"
+      android:label="@string/qashy_widget_transactions_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/qashy_transactions_widget_info" />
+    </receiver>
+
+    <receiver
+      android:name="expo.modules.qashywidgets.SummaryWidgetReceiver"
+      android:exported="true"
+      android:label="@string/qashy_widget_summary_label">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+      </intent-filter>
+      <meta-data
+        android:name="android.appwidget.provider"
+        android:resource="@xml/qashy_summary_widget_info" />
+    </receiver>
+
+    <!-- System broadcasts need exported=true. It is inert unless a widget is placed. -->
+    <receiver
+      android:name="expo.modules.qashywidgets.TimeChangedReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+        <action android:name="android.intent.action.TIME_SET" />
+        <action android:name="android.intent.action.DATE_CHANGED" />
+        <action android:name="android.intent.action.LOCALE_CHANGED" />
+      </intent-filter>
+    </receiver>
+
+    <!-- Launchers call a configure activity from outside the app, hence exported=true. -->
+    <activity
+      android:name="expo.modules.qashywidgets.WidgetConfigureActivity"
+      android:exported="true"
+      android:excludeFromRecents="true"
+      android:theme="@style/Theme.QashyWidgets.Trampoline">
+      <intent-filter>
+        <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+      </intent-filter>
+    </activity>
+  </application>
+</manifest>
