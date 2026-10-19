@@ -392,7 +392,7 @@ function systemTokens(
  * whole palette is derived in JS like a seed theme, so every value is real hex, gradients, chart
  * tints and contrast math all work, and nothing relies on opaque platform colors.
  */
-function paletteTokens(
+export function paletteTokens(
   palettes: SystemPalettes,
   dark: boolean,
   theme: ThemeDefinition,

@@ -114,6 +114,16 @@ export const SYNC_META = {
    */
   customThemes: "customThemes",
 
+  /**
+   * The home-screen widgets' per-widget appearance and the hide-amounts switch, serialized JSON.
+   * See `data/widget-settings-store.ts`.
+   *
+   * Device-local like `overviewLayout`: widgets are placed on this device's home screen, so their
+   * ids and styling mean nothing to a peer. Written through `transact`, never `putMany`, so it
+   * never diffs into a sync op, and never held in `AppSettings`, which replicates.
+   */
+  widgetSettings: "widgetSettings",
+
   // -- App language. Device-local; see `data/language-preference-store.ts`.
 
   /**

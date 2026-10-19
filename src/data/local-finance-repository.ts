@@ -58,6 +58,7 @@ import type {
   FinanceRepository,
   GoalInput,
   GoalContributionInput,
+  NetWorthSeries,
   OnboardingInput,
   RateInput,
   RecurringInput,
@@ -98,9 +99,12 @@ import {
 import { canActivateRecurringRule } from "@/domain/rules";
 import {
   addRecurrence,
+  endOfMonth,
   firstRecurrenceOnOrAfter,
   isLocalDate,
+  moveMonth,
   parseLocalDate,
+  startOfMonth,
   todayLocal,
   toLocalDate,
 } from "@/utils/date";
@@ -276,6 +280,7 @@ function searchTextOf(transaction: { title: string; note: string }) {
 // Roughly a century of daily points. A dashboard range wider than this used to
 // truncate the daily series silently and return a chart that was simply wrong.
 const MAX_DASHBOARD_DAYS = 36_600;
+const MAX_NET_WORTH_MONTHS = 24;
 const CSV_YIELD_EVERY = 250;
 const yieldToEventLoop = () =>
   new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -473,6 +478,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   private derivedCache: {
     deps: readonly unknown[];
     dashboards: Map<string, DashboardSummary>;
+    netWorthSeries: Map<string, NetWorthSeries>;
     budgetStatuses: Map<string, BudgetStatus[]>;
   } | null = null;
 
@@ -496,11 +502,28 @@ export class LocalFinanceRepository implements FinanceRepository {
     });
   }
 
-  initialize() {
-    return this.enqueueMutation(() => this.initializeNow());
+  private initialization: Promise<void> | null = null;
+
+  /**
+   * Idempotent: a call while initialization is in flight or finished returns the same promise,
+   * whatever its options. A failed attempt is forgotten so the retry button can run it again.
+   * `generateRecurring: false` is for a headless read-only refresh (a widget), which must never
+   * post transactions; the app's own startup still generates through the provider's explicit
+   * `generateRecurring()` after `initialize()`.
+   */
+  initialize(options: { generateRecurring?: boolean } = {}) {
+    if (this.initialization) return this.initialization;
+    const attempt = this.enqueueMutation(() =>
+      this.initializeNow(options.generateRecurring ?? true),
+    );
+    this.initialization = attempt;
+    attempt.catch(() => {
+      if (this.initialization === attempt) this.initialization = null;
+    });
+    return attempt;
   }
 
-  private async initializeNow() {
+  private async initializeNow(generateRecurring: boolean) {
     await this.storage.initialize();
     await this.eraseStoredTombstones();
     await this.hydrateFromStorage();
@@ -517,7 +540,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Deferring the first write to `completeOnboarding` makes that write the create, so the op
     // log states the real base currency from the start. An un-onboarded store rehydrates to
     // exactly `createInitialState()`, so nothing else depends on the row being there early.
-    await this.generateRecurringNow(todayLocal());
+    if (generateRecurring) await this.generateRecurringNow(todayLocal());
     // Only now is the snapshot complete enough for screens to render against.
     this.state = { ...this.state, ready: true };
     this.emit();
@@ -2240,6 +2263,155 @@ export class LocalFinanceRepository implements FinanceRepository {
     };
     derived.dashboards.set(dashboardKey, summary);
     return summary;
+  }
+
+  getNetWorthSeries(
+    months: number,
+    today: string = todayLocal(),
+  ): NetWorthSeries {
+    if (
+      !Number.isInteger(months) ||
+      months < 1 ||
+      months > MAX_NET_WORTH_MONTHS
+    ) {
+      throw new Error(
+        `Choose a whole number of months from 1 to ${MAX_NET_WORTH_MONTHS}.`,
+      );
+    }
+    this.assertDate(today);
+    const derived = this.derived();
+    const seriesKey = `${months}|${today}`;
+    const cached = derived.netWorthSeries.get(seriesKey);
+    if (cached) return cached;
+
+    const base = this.state.settings.baseCurrency;
+    const missingExchangeRates: NetWorthSeries["missingExchangeRates"] = [];
+    // Values never saved in the base currency convert at today's rate, as the headline does.
+    const convertAtToday = (amountMinor: number, currency: string): number => {
+      if (currency === base) return amountMinor;
+      let rate: string;
+      try {
+        rate = this.resolveRate(currency, base, today);
+      } catch (reason) {
+        if (!(reason instanceof MissingExchangeRateError)) throw reason;
+        if (
+          !missingExchangeRates.some((item) => item.fromCurrency === currency)
+        ) {
+          missingExchangeRates.push({
+            fromCurrency: currency,
+            toCurrency: base,
+          });
+        }
+        return 0;
+      }
+      return convertMinor(amountMinor, currency, base, rate, this.formatLocale);
+    };
+
+    const includedAccounts = this.active(this.state.accounts).filter(
+      (account) => !account.archived,
+    );
+    const included = new Map(includedAccounts.map((a) => [a.id, a]));
+    const everyAccount = new Map(this.state.accounts.map((a) => [a.id, a]));
+
+    let openingMinor = 0;
+    for (const account of includedAccounts) {
+      openingMinor = addMinor(
+        openingMinor,
+        convertAtToday(account.openingBalanceMinor, account.currency),
+        "Net worth",
+      );
+    }
+
+    // One signed base-currency effect per account leg, so each point is a running total.
+    const effects: { date: string; deltaMinor: number }[] = [];
+    for (const item of this.postedTransactions()) {
+      const source = included.get(item.accountId);
+      if (item.kind === "expense" || item.kind === "income") {
+        if (!source) continue;
+        const valueMinor =
+          item.baseAmountMinor ??
+          convertAtToday(item.amountMinor, item.currency);
+        effects.push({
+          date: item.localDate,
+          deltaMinor: item.kind === "expense" ? -valueMinor : valueMinor,
+        });
+        continue;
+      }
+      if (item.kind !== "transfer") continue;
+      const destination = item.destinationAccountId
+        ? included.get(item.destinationAccountId)
+        : undefined;
+      const sourceCurrency = (source ?? everyAccount.get(item.accountId))
+        ?.currency;
+      const destinationCurrency = item.destinationAccountId
+        ? everyAccount.get(item.destinationAccountId)?.currency
+        : undefined;
+      const sameCurrency =
+        sourceCurrency !== undefined && sourceCurrency === destinationCurrency;
+      if (source) {
+        const outMinor =
+          sameCurrency && item.baseAmountMinor !== null
+            ? item.baseAmountMinor
+            : convertAtToday(item.amountMinor, source.currency);
+        effects.push({ date: item.localDate, deltaMinor: -outMinor });
+      }
+      if (destination) {
+        const inMinor =
+          sameCurrency && item.destinationBaseAmountMinor !== null
+            ? item.destinationBaseAmountMinor
+            : convertAtToday(
+                item.destinationAmountMinor ?? 0,
+                destination.currency,
+              );
+        effects.push({ date: item.localDate, deltaMinor: inMinor });
+      }
+    }
+    effects.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+
+    const dates: string[] = [];
+    for (let back = months; back >= 1; back -= 1) {
+      dates.push(endOfMonth(moveMonth(today, -back)));
+    }
+    dates.push(today);
+
+    const points: NetWorthSeries["points"] = [];
+    let runningMinor = openingMinor;
+    let cursor = 0;
+    for (const date of dates) {
+      while (cursor < effects.length && effects[cursor].date <= date) {
+        runningMinor = addMinor(
+          runningMinor,
+          effects[cursor].deltaMinor,
+          "Net worth",
+        );
+        cursor += 1;
+      }
+      points.push({ date, baseMinor: runningMinor });
+    }
+
+    // The chart must end on the headline number, so the last point is the dashboard's own value.
+    const headline = this.getDashboard(startOfMonth(today), today);
+    points[points.length - 1] = {
+      date: today,
+      baseMinor: headline.netWorthMinor,
+    };
+    for (const missing of headline.missingExchangeRates) {
+      if (
+        !missingExchangeRates.some(
+          (item) => item.fromCurrency === missing.fromCurrency,
+        )
+      ) {
+        missingExchangeRates.push(missing);
+      }
+    }
+
+    const series: NetWorthSeries = {
+      baseCurrency: base,
+      points,
+      missingExchangeRates,
+    };
+    derived.netWorthSeries.set(seriesKey, series);
+    return series;
   }
 
   getBudgetStatuses(
@@ -5256,6 +5428,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     this.derivedCache = {
       deps,
       dashboards: new Map(),
+      netWorthSeries: new Map(),
       budgetStatuses: new Map(),
     };
     return this.derivedCache;
