@@ -88,19 +88,23 @@ const MODES: {
   },
 ];
 
-/** "3 transactions, 2 categories and 1 account" from the non-zero counts; null when everything is zero. */
+/**
+ * The non-zero counts as translated bullet lines ("• 3 transactions"); null when everything is
+ * zero. One line per kind, translated on its own, so no sentence has to join a list of
+ * counts in every language.
+ */
 function describeCounts(
   counts: ImportCounts & { goals?: number },
+  t: (message: string) => string,
 ): string | null {
-  const parts = COUNT_LABELS.filter((item) => counts[item.key] > 0).map(
+  const items = COUNT_LABELS.filter((item) => counts[item.key] > 0).map(
     (item) =>
       `${counts[item.key]} ${counts[item.key] === 1 ? item.singular : item.plural}`,
   );
   if (counts.goals)
-    parts.push(`${counts.goals} ${counts.goals === 1 ? "goal" : "goals"}`);
-  if (!parts.length) return null;
-  if (parts.length === 1) return parts[0];
-  return `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+    items.push(`${counts.goals} ${counts.goals === 1 ? "goal" : "goals"}`);
+  if (!items.length) return null;
+  return items.map((item) => `• ${t(item)}`).join("\n");
 }
 
 function totalOf(counts: ImportCounts) {
@@ -675,12 +679,12 @@ export function ExternalImportCard() {
     setBusyFlag(true);
     try {
       if (mode === "replace") {
-        const deleted = describeCounts(outcome.replaced);
+        const deleted = describeCounts(outcome.replaced, t);
         setConfirming(true);
         const confirmed = await confirmDestructive({
           title: "Delete your current data?",
           message: deleted
-            ? `This permanently deletes ${deleted} you have now, then imports the backup. You can’t undo this.`
+            ? `${t("This permanently deletes your current data, then imports the backup. You can’t undo this.")}\n\n${t("Will be deleted")}:\n${deleted}`
             : "This permanently deletes your current data, then imports the backup. You can’t undo this.",
           confirmLabel: "Delete and import",
         }).finally(() => setConfirming(false));
@@ -702,9 +706,10 @@ export function ExternalImportCard() {
       hapticSuccess();
       clearArmed();
       setMode("merge");
+      const added = describeCounts(result.created, t);
       showError(
         "Import complete",
-        `Added ${describeCounts(result.created) ?? "nothing new"}.`,
+        added ? `${t("Added to your data:")}\n${added}` : "Added nothing new.",
       );
     } catch (reason) {
       showError(

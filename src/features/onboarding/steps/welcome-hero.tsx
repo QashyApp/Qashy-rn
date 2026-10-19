@@ -153,7 +153,7 @@ export function WelcomeHero() {
             balanceFloat,
           ]}
         >
-          <AppText literal variant="eyebrow" muted style={HERO_TEXT}>
+          <AppText variant="eyebrow" muted style={HERO_TEXT}>
             NET WORTH
           </AppText>
           <AppText
@@ -222,11 +222,7 @@ export function WelcomeHero() {
           >
             <AppIcon name="cart" color={theme.staticAccent} size={13} />
           </View>
-          <AppText
-            literal
-            variant="caption"
-            style={[HERO_TEXT, { fontWeight: "500" }]}
-          >
+          <AppText variant="caption" style={[HERO_TEXT, { fontWeight: "500" }]}>
             Groceries
           </AppText>
         </Animated.View>

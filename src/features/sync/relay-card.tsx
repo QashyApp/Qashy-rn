@@ -73,6 +73,7 @@ export function RelayCard({
   readonly onChanged: () => Promise<void>;
 }) {
   const { setup } = useSync();
+  const { t } = useLocalization();
   const theme = useQashyTheme();
   const { radius, space } = theme;
 
@@ -223,9 +224,10 @@ export function RelayCard({
               <AppText variant="caption" muted>
                 What the server said
               </AppText>
-              {/* Verbatim and selectable. Whoever runs this relay needs the actual error. */}
+              {/* Selectable, and as written when the dictionary does not know it: whoever runs
+                  this relay needs the actual error. */}
               <AppText literal selectable variant="caption">
-                {health.detail}
+                {t(health.detail)}
               </AppText>
             </View>
           </MotionView>

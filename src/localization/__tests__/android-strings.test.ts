@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { buildAndroidCatalog } from "@/localization/android-catalog";
+import {
+  buildAndroidCatalog,
+  groupCount,
+  sampleArguments,
+} from "@/localization/android-catalog";
 import { translateMessage } from "@/localization/localization";
 import { createDynamicPatterns, HEBREW } from "@/localization/messages/he";
 import {
@@ -23,25 +27,17 @@ function referenceName(text: string) {
   return `q_${hash.toString(16).padStart(16, "0")}`;
 }
 
-const SAMPLE_ARGS: readonly (readonly string[])[] = [
-  ["12", "7", "3", "40", "5", "6"],
-  ["1", "2", "3", "4", "5", "6"],
-  ["word", "other", "third", "fourth", "fifth", "sixth"],
-  ["Rent", "2025-01-31", "3", "4", "5", "6"],
-  ["Food & Drink", "Rent", "Savings", "Travel", "Gifts", "Fees"],
-];
-
 /** The Hebrew table with nested translation off, the one the catalog is built from. */
 const hebrewPatterns = createDynamicPatterns((message) => message);
 const firstHebrewMatch = (message: string) =>
   hebrewPatterns.find(([regex]) => regex.test(message));
 
-/** English messages a pattern matches, from the sample arguments. */
+/** English messages a pattern matches, from the catalog's own sample arguments. */
 function sampleMessages(en: string, source: string) {
   const regex = new RegExp(source);
-  return SAMPLE_ARGS.map((args) => formatResource(en, args)).filter((message) =>
-    regex.test(message),
-  );
+  return sampleArguments(regex, groupCount(en))
+    .map((args) => formatResource(en, args))
+    .filter((message) => regex.test(message));
 }
 
 describe("android string catalog", () => {
@@ -111,6 +107,39 @@ describe("android string catalog", () => {
     );
   });
 
+  it("refuses a pattern with flags", () => {
+    expect(() =>
+      buildAndroidCatalog({}, () => [[/^a (\d+)$/i, (n) => `b ${n}`]]),
+    ).toThrow(/flags/);
+  });
+
+  it("includes a pattern whose capture is an alternation of literals", () => {
+    const { catalog: built } = buildAndroidCatalog({}, () => [
+      [/^Skipped (\d+) unreadable (row|rows)$/, (count) => `דולגו ${count}`],
+    ]);
+    expect(built.patterns.map((pattern) => pattern.en)).toEqual([
+      "Skipped %1$s unreadable %2$s",
+    ]);
+    expect(built.patterns[0].he).toBe("דולגו %1$s");
+  });
+
+  it("still skips an alternation whose output depends on the alternative", () => {
+    const { catalog: built, skipped } = buildAndroidCatalog({}, () => [
+      [/^Every (day|week)$/, (unit) => (unit === "day" ? "יום" : "שבוע")],
+    ]);
+    expect(built.patterns).toHaveLength(0);
+    expect(skipped[0]?.reason).toMatch(/pure template/);
+  });
+
+  it("translates 1 transaction without a capture, and leaves other counts English", () => {
+    expect(translateMessage("1 transaction", "he")).toBe("תנועה אחת");
+    expect(translateMessage("5 transactions", "he")).toBe("5 תנועות");
+    expect(translateMessage("2 transaction", "he")).toBe("2 transaction");
+    expect(catalog.patterns.find((p) => p.en === "1 transaction")?.he).toBe(
+      "תנועה אחת",
+    );
+  });
+
   it("only includes patterns that round-trip", () => {
     expect(catalog.patterns.length).toBeGreaterThan(0);
     for (const pattern of catalog.patterns) {
@@ -155,7 +184,6 @@ describe("android string catalog", () => {
       "Delete the EUR → ILS rate?",
       "Edit (12)",
       "Edit (Rent)",
-      "Map required fields: Rent.",
       ...catalog.patterns.flatMap((pattern) =>
         sampleMessages(pattern.en, pattern.source),
       ),
@@ -179,20 +207,25 @@ describe("android string catalog", () => {
     });
 
     it("keeps the patterns without a resource, so they still claim their messages", () => {
-      // A pattern with no template matches this before the one that names "Map required fields".
-      const message = "Map required fields: Rent.";
-      const first = firstHebrewMatch(message);
-      expect(
-        runtime.patterns.find((entry) => entry.source === first?.[0].source)
-          ?.name,
-      ).toBeNull();
-      expect(translateWithTable(message, table)).toBe(message);
-      // Dropping the nameless entries would let the later, broader-looking pattern translate it.
-      const dropped: NativeTable = {
-        ...table,
-        patterns: table.patterns.filter((entry) => entry.template !== null),
+      // A pattern with no template claims a message before a later pattern that could translate
+      // it, exactly as in the Hebrew table; the message then stays English.
+      const claim: NativeTable = {
+        strings: new Map(),
+        patterns: [
+          { regex: /^Edit \((.+)\)$/, template: null },
+          { regex: /^Edit \((\d+)\)$/, template: "עריכה (%1$s)" },
+        ],
       };
-      expect(translateWithTable(message, dropped)).not.toBe(message);
+      expect(translateWithTable("Edit (12)", claim)).toBe("Edit (12)");
+      // Dropping the nameless entries would let the later, narrower pattern translate it.
+      const dropped: NativeTable = {
+        ...claim,
+        patterns: claim.patterns.filter((entry) => entry.template !== null),
+      };
+      expect(translateWithTable("Edit (12)", dropped)).toBe("עריכה (12)");
+      // The real runtime list keeps its nameless entries, in the Hebrew table's own order.
+      expect(runtime.patterns.some((entry) => entry.name === null)).toBe(true);
+      expect(runtime.patterns).toHaveLength(hebrewPatterns.length);
     });
   });
 });

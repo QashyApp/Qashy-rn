@@ -168,9 +168,9 @@ export function EditableCardFrame({
         animatedStyle,
       ]}
       accessibilityActions={[
-        { name: "moveUp", label: "Move up" },
-        { name: "moveDown", label: "Move down" },
-        { name: "remove", label: "Remove" },
+        { name: "moveUp", label: t("Move up") },
+        { name: "moveDown", label: t("Move down") },
+        { name: "remove", label: t("Remove") },
       ]}
       onAccessibilityAction={(event) => {
         if (event.nativeEvent.actionName === "moveUp") moveUp();

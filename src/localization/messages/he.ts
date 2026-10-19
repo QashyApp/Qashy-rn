@@ -431,7 +431,7 @@ export const HEBREW: Record<string, string> = {
   "Check the form and try again.": "בדקו את הטופס ונסו שוב.",
   Target: "יעד",
   Contribution: "הפקדה",
-  "Contribution date": "תאריך ההפקדה",
+  "Contribution date": "תאריך הפקדה",
   "Contribution amount": "סכום ההפקדה",
   "Contribution note": "הערת הפקדה",
   "Start date": "תאריך התחלה",
@@ -535,6 +535,10 @@ export const HEBREW: Record<string, string> = {
   "Couldn’t save transaction": "לא ניתן לשמור את התנועה",
   "Couldn’t delete transaction": "לא ניתן למחוק את התנועה",
   "Couldn’t delete transactions": "לא ניתן למחוק את התנועות",
+  "Delete 1 budget?": "למחוק תקציב אחד?",
+  "Delete 1 goal?": "למחוק יעד אחד?",
+  "Couldn’t delete budgets": "לא ניתן למחוק תקציבים",
+  "Couldn’t delete goals": "לא ניתן למחוק יעדים",
   "Couldn’t delete recurring transactions":
     "לא ניתן למחוק את התנועות המחזוריות",
   "Couldn’t change category": "לא ניתן לשנות את הקטגוריה",
@@ -1550,12 +1554,882 @@ export const HEBREW: Record<string, string> = {
   Fee: "עמלה",
   "Fee must be greater than 0% and at most 100%.":
     "העמלה חייבת להיות גדולה מ־0% ועד 100%.",
+  // Transaction form, amount keypad and misc accessibility labels.
+  "Amount keypad": "מקלדת סכומים",
+  Calculate: "חישוב",
+  "Decimal separator": "מפריד עשרוני",
+  "Delete last character": "מחיקת התו האחרון",
+  Subtract: "חיסור",
+  Multiply: "כפל",
+  Divide: "חילוק",
+  fee: "עמלה",
+  charged: "יחויב",
+  received: "יתקבל",
+  "Select an option": "בחרו אפשרות",
+  "Opens a list of choices": "פותח רשימת אפשרויות",
+  "Fetching latest rates…": "טוען את השערים העדכניים…",
+  "Spending by category. No spending yet.":
+    "הוצאות לפי קטגוריה. אין הוצאות עדיין.",
+  "App update available": "יש עדכון זמין לאפליקציה",
+  "Move up": "הזזה למעלה",
+  "Move down": "הזזה למטה",
+  "Turn on": "הפעלה",
+  "Turning on…": "מפעיל…",
+  "Hide rate override": "הסתרת שער מותאם",
+  "Use a different rate": "שימוש בשער אחר",
+  "Calculated automatically": "מחושב אוטומטית",
+  "Leave blank to calculate through your automatic or manual exchange rates.":
+    "השאירו ריק כדי לחשב לפי שערי החליפין האוטומטיים או הידניים שלכם.",
+  "Suggested from earlier transactions with this title.":
+    "מוצע לפי תנועות קודמות עם אותה כותרת.",
+  // Account deletion (one account), batch deletion of budgets and goals.
+  "The account leaves your net worth. Its past transactions stay in your history, and its schedules stop.":
+    "החשבון יוצא מהשווי הנקי. התנועות הקודמות שלו נשארות בהיסטוריה, והתזמונים שלו נעצרים.",
+  "This is your only account, so it can’t be deleted. Add another account first.":
+    "זה החשבון היחיד שלכם, ולכן אי אפשר למחוק אותו. הוסיפו קודם חשבון נוסף.",
+  "Past period snapshots are removed with them.":
+    "תמונות המצב של תקופות קודמות יימחקו יחד איתם.",
+  "Manual contributions are removed with them.":
+    "ההפקדות הידניות יימחקו יחד איתם.",
+  // More → Appearance: animation level.
+  Animations: "אנימציות",
+  Minimal: "מינימלי",
+  "Minimal keeps quick fades only; Off changes things instantly. Your device’s reduce-motion setting always applies on top.":
+    "במצב מינימלי נשארות רק דעיכות מהירות, ובמצב כבוי השינויים מתבצעים מיידית. הגדרת הפחתת התנועה של המכשיר חלה תמיד בנוסף.",
+  // More → Import from another app: what the Cashew import reads, skips and warns about.
+  "Accounts (Cashew wallets) with their currencies":
+    "חשבונות (הארנקים של Cashew) עם המטבעות שלהם",
+  "Categories and subcategories, with colours and matched icons":
+    "קטגוריות ותת־קטגוריות, עם הצבעים שלהן וסמלים תואמים",
+  "Every expense, income and transfer between wallets, with notes and tags":
+    "כל הוצאה, הכנסה והעברה בין ארנקים, עם הערות ותגיות",
+  "The paid, upcoming and skipped state of each transaction":
+    "מצב כל תנועה: שולמה, צפויה או דולגה",
+  "Subscriptions and repeating transactions, as recurring schedules that wait for your review, with each one’s next unpaid entry already waiting":
+    "מנויים ותנועות חוזרות, כתזמונים חוזרים שממתינים לסקירתכם, כשהרשומה הבאה שטרם שולמה של כל אחד מהם כבר ממתינה",
+  "Budgets: amount, period, wallets, included categories and per-category limits (Cashew’s percentage limits are converted to amounts)":
+    "תקציבים: סכום, תקופה, ארנקים, קטגוריות כלולות ומגבלות לכל קטגוריה (מגבלות באחוזים של Cashew מומרות לסכומים)",
+  "Loans and credit/debt entries (money lent, borrowed or deposited)":
+    "הלוואות ורשומות אשראי וחוב (כסף שהולווה, נלקח בהלוואה או הופקד)",
+  "Objectives (savings goals) and income budgets (saving targets)":
+    "מטרות (יעדי חיסכון) ותקציבי הכנסה (יעדי צבירה)",
+  'Budget transaction filters (for example "include income" or "added to another budget"), shared budgets and "added transactions only" budgets, which become ordinary budgets':
+    'מסנני תנועות בתקציב (למשל "כולל הכנסות" או "נוסף לתקציב אחר"), תקציבים משותפים ותקציבים של "תנועות שנוספו בלבד", שהופכים לתקציבים רגילים',
+  "Associated titles (automatic category suggestions) and scanner templates":
+    "כותרות משויכות (הצעות קטגוריה אוטומטיות) ותבניות סורק",
+  "Cashew app settings, widgets, cached exchange rates and cloud-sync history":
+    "הגדרות האפליקציה של Cashew, ווידג׳טים, שערי חליפין שמורים והיסטוריית סנכרון בענן",
+  "Amounts are converted to exact minor units of each account’s currency. An amount with more decimals than its currency allows is rounded.":
+    "הסכומים מומרים ליחידות משנה מדויקות של מטבע כל חשבון. סכום עם יותר ספרות עשרוניות ממה שהמטבע מאפשר מעוגל.",
+  "Cashew backups do not record a timezone, so dates use this device’s timezone unless the backup states one. A transaction made near midnight in another timezone can land on the neighbouring day.":
+    "גיבויי Cashew אינם שומרים אזור זמן, ולכן התאריכים משתמשים באזור הזמן של המכשיר הזה, אלא אם הגיבוי מציין אחד. תנועה שבוצעה בסמוך לחצות באזור זמן אחר עלולה להירשם ביום הסמוך.",
+  "Account balances are checked against the backup before anything is saved. If they do not match, nothing is imported.":
+    "יתרות החשבונות נבדקות מול הגיבוי לפני שמשהו נשמר. אם הן אינן תואמות, שום דבר לא מיובא.",
+  "Accounts in a currency other than your base currency need exchange rates for their dates. Turn on automatic rates or add manual ones first, otherwise the import is blocked.":
+    "חשבונות במטבע שאינו מטבע הבסיס שלכם זקוקים לשערי חליפין לתאריכים שלהם. הפעילו שערים אוטומטיים או הוסיפו שערים ידניים תחילה, אחרת הייבוא ייחסם.",
+  "A category used for both income and expenses is split into an income copy and an expense copy, and names that clash with an existing name get a suffix.":
+    "קטגוריה שמשמשת גם להכנסות וגם להוצאות מפוצלת לעותק הכנסות ולעותק הוצאות, ושמות שמתנגשים בשם קיים מקבלים סיומת.",
+  "Imported recurring schedules are set to review, not to post automatically.":
+    "תזמונים חוזרים שיובאו מוגדרים לסקירה, ולא לרישום אוטומטי.",
+  "A subscription or repeating series only becomes a schedule if Cashew still has an upcoming entry for it. Series with no upcoming entry are treated as ended and only their past payments are imported.":
+    "מנוי או סדרה חוזרת הופכים לתזמון רק אם ל־Cashew עדיין יש עבורם רשומה קרובה. סדרות ללא רשומה קרובה נחשבות כמסתיימות, ורק התשלומים הקודמים שלהן מיובאים.",
+  "Importing the same backup twice is safe: items that are already in Qashy are recognised and skipped.":
+    "ייבוא אותו גיבוי פעמיים בטוח: פריטים שכבר נמצאים ב־Qashy מזוהים ומדולגים.",
+  "Deleting your current data first permanently erases your accounts, transactions, budgets and goals before the backup is added, and cannot be undone. It is not available on a device that syncs, because your other devices would keep that data and send it back.":
+    "מחיקת הנתונים הנוכחיים תחילה מוחקת לצמיתות את החשבונות, התנועות, התקציבים והיעדים שלכם לפני הוספת הגיבוי, ואי אפשר לבטל זאת. האפשרות אינה זמינה במכשיר שמסנכרן, כי המכשירים האחרים שלכם ישמרו את הנתונים האלה וישלחו אותם בחזרה.",
+  "Budget limits are read in your base currency.":
+    "מגבלות התקציב נקראות במטבע הבסיס שלכם.",
+  // Undo bar and search field defaults.
+  Undo: "ביטול הפעולה",
+  Search: "חיפוש",
+  "Added nothing new.": "לא נוסף שום דבר חדש.",
+  // Cashew import: notes shown after reading a backup (one per warning code).
+  "Some amounts had more decimal places than their currency allows and were rounded.":
+    "בחלק מהסכומים היו יותר ספרות עשרוניות ממה שהמטבע מאפשר, ולכן הם עוגלו.",
+  "Transactions with a zero amount were not imported.":
+    "תנועות עם סכום אפס לא יובאו.",
+  "Transactions with an unreadable or out-of-range amount were not imported.":
+    "תנועות עם סכום שלא ניתן לקרוא או שחורג מהטווח הנתמך לא יובאו.",
+  "Transactions with an unreadable date were not imported.":
+    "תנועות עם תאריך שלא ניתן לקרוא לא יובאו.",
+  "Transaction rows without an identifier were not imported.":
+    "שורות תנועה ללא מזהה לא יובאו.",
+  "Transactions that belong to an account missing from the backup were not imported.":
+    "תנועות ששייכות לחשבון שחסר בגיבוי לא יובאו.",
+  "Some transactions reference a category missing from the backup and were imported without one.":
+    "חלק מהתנועות מפנות לקטגוריה שחסרה בגיבוי, ולכן יובאו ללא קטגוריה.",
+  "Transactions without a name were titled after their category.":
+    "תנועות ללא שם קיבלו את שם הקטגוריה שלהן ככותרת.",
+  "Some transactions did not match their category’s type, so a matching category was created for them.":
+    "חלק מהתנועות לא התאימו לסוג הקטגוריה שלהן, ולכן נוצרה עבורן קטגוריה מתאימה.",
+  "Some subcategories could not keep their parent and were imported as top-level categories.":
+    "חלק מתתי־הקטגוריות לא יכלו לשמור על הקטגוריה הראשית שלהן, ולכן יובאו כקטגוריות ברמה העליונה.",
+  "Accounts with a missing or unsupported currency use your base currency.":
+    "חשבונות ללא מטבע, או עם מטבע שאינו נתמך, משתמשים במטבע הבסיס שלכם.",
+  "Loans and credit/debt entries were not imported.":
+    "הלוואות ורשומות אשראי וחוב לא יובאו.",
+  "Cashew objectives were not imported; their transactions were kept without the objective link.":
+    "המטרות של Cashew לא יובאו; התנועות שלהן נשמרו ללא הקישור למטרה.",
+  "Some transfers could not be matched to both accounts and were imported as regular transactions.":
+    "חלק מההעברות לא הותאמו לשני החשבונות, ולכן יובאו כתנועות רגילות.",
+  "Recurring transactions with a custom period cannot be scheduled and were imported as regular transactions.":
+    "אי אפשר לתזמן תנועות חוזרות עם תקופה מותאמת אישית, ולכן הן יובאו כתנועות רגילות.",
+  "Subscriptions and repeating transactions with no upcoming entry in Cashew were treated as ended: their past payments were imported, but no schedule was created.":
+    "מנויים ותנועות חוזרות שאין להם ב־Cashew רשומה קרובה נחשבו כמסתיימים: התשלומים הקודמים שלהם יובאו, אך לא נוצר תזמון.",
+  "Subscriptions and repeating transactions whose upcoming entry in Cashew was overdue and would not have been paid automatically (or had been overdue for a very long time) were treated as stopped: their past payments were imported, but no schedule was created.":
+    "מנויים ותנועות חוזרות שהרשומה הקרובה שלהם ב־Cashew הייתה באיחור ולא הייתה משולמת אוטומטית (או שהייתה באיחור זמן רב מאוד) נחשבו כמופסקים: התשלומים הקודמים שלהם יובאו, אך לא נוצר תזמון.",
+  "Subscriptions and repeating transactions that Cashew had not yet paid (it pays them when it is opened) were imported as schedules, so the payments missed since then will appear for your review.":
+    "מנויים ותנועות חוזרות ש־Cashew עדיין לא שילם (הוא משלם אותם כשהוא נפתח) יובאו כתזמונים, ולכן התשלומים שהוחמצו מאז יופיעו לסקירתכם.",
+  "Recurring transactions were imported as schedules that ask for your review before posting.":
+    "תנועות חוזרות יובאו כתזמונים שמבקשים את סקירתכם לפני הרישום.",
+  "Shared budgets were imported as ordinary budgets without sharing.":
+    "תקציבים משותפים יובאו כתקציבים רגילים, ללא שיתוף.",
+  "Budgets with an invalid limit, period or category selection were not imported.":
+    "תקציבים עם מגבלה, תקופה או בחירת קטגוריות לא תקינות לא יובאו.",
+  "Budget category exclusions were converted into an explicit category list.":
+    "קטגוריות שהוחרגו מתקציבים הומרו לרשימה מפורשת של קטגוריות.",
+  "Budget transaction-type filters were not imported.":
+    "מסנני סוג תנועה בתקציבים לא יובאו.",
+  "Budgets that only count manually added transactions now count all matching transactions.":
+    "תקציבים שספרו רק תנועות שנוספו ידנית סופרים כעת את כל התנועות התואמות.",
+  "Income budgets (Cashew saving goals) were not imported: budgets here track spending only.":
+    "תקציבי הכנסה (יעדי החיסכון של Cashew) לא יובאו: התקציבים כאן עוקבים אחר הוצאות בלבד.",
+  "Category limits that Cashew keeps as percentages were converted into amounts of the budget limit.":
+    "מגבלות קטגוריה ש־Cashew שומר באחוזים הומרו לסכומים מתוך מגבלת התקציב.",
+  "Budget limits were imported in your base currency, which differs from some account currencies.":
+    "מגבלות התקציב יובאו במטבע הבסיס שלכם, שונה ממטבעות של חלק מהחשבונות.",
+  "Cashew’s remembered title suggestions were not imported.":
+    "הצעות הכותרות השמורות של Cashew לא יובאו.",
+  "Cashew’s email scanner templates were not imported.":
+    "תבניות סורק האימייל של Cashew לא יובאו.",
+  // Cashew import: files that cannot be read.
+  "Amounts in this backup are too large to import.":
+    "הסכומים בגיבוי הזה גדולים מדי לייבוא.",
+  "Account balances did not match the backup, so nothing was imported.":
+    "יתרות החשבונות לא תאמו את הגיבוי, ולכן שום דבר לא יובא.",
+  "This SQLite file does not look like a Cashew backup.":
+    "קובץ ה־SQLite הזה אינו נראה כגיבוי של Cashew.",
+  "This SQLite file does not look like a supported Cashew backup version.":
+    "קובץ ה־SQLite הזה אינו נראה כגרסה נתמכת של גיבוי Cashew.",
+  "This backup has more than 500,000 rows and is too large to import.":
+    "בגיבוי הזה יש יותר מ־500,000 שורות, והוא גדול מדי לייבוא.",
+  "This SQLite file uses UTF-16 text, which is not supported.":
+    "קובץ ה־SQLite הזה משתמש בטקסט UTF-16, שאינו נתמך.",
+  "This file is not a SQLite database, so it cannot be imported.":
+    "הקובץ הזה אינו מסד נתונים של SQLite, ולכן אי אפשר לייבא אותו.",
+  // Damaged SQLite files: one message per cause, so each is a whole translatable sentence.
+  "This SQLite file looks damaged or incomplete (the header is cut short).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (הכותרת קטועה).",
+  "This SQLite file looks damaged or incomplete (invalid page size).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (גודל עמוד לא תקין).",
+  "This SQLite file looks damaged or incomplete (invalid reserved space).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (שטח שמור לא תקין).",
+  "This SQLite file looks damaged or incomplete (no pages).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (אין עמודים).",
+  "This SQLite file looks damaged or incomplete (the file is shorter than its header says).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (הקובץ קצר ממה שהכותרת שלו מציינת).",
+  "This SQLite file looks damaged or incomplete (a number is too large).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (מספר גדול מדי).",
+  "This SQLite file looks damaged or incomplete (a number runs past the end of the page).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (מספר חורג מסוף העמוד).",
+  "This SQLite file looks damaged or incomplete (an integer is outside the supported range).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (מספר שלם מחוץ לטווח הנתמך).",
+  "This SQLite file looks damaged or incomplete (a row header runs past its data).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (כותרת שורה חורגת מהנתונים שלה).",
+  "This SQLite file looks damaged or incomplete (a row is shorter than its header says).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (שורה קצרה ממה שהכותרת שלה מציינת).",
+  "This SQLite file looks damaged or incomplete (a row uses a reserved value type).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (שורה משתמשת בסוג ערך שמור).",
+  "This SQLite file looks damaged or incomplete (the table is nested too deeply).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (הטבלה מקוננת לעומק רב מדי).",
+  "This SQLite file looks damaged or incomplete (a page is referenced twice).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (עמוד מופיע בהפניה פעמיים).",
+  "This SQLite file looks damaged or incomplete (a cell points outside its page).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (תא מצביע אל מחוץ לעמוד שלו).",
+  "This SQLite file looks damaged or incomplete (unexpected page type).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (סוג עמוד לא צפוי).",
+  "This SQLite file looks damaged or incomplete (a row is larger than the file).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (שורה גדולה מהקובץ).",
+  "This SQLite file looks damaged or incomplete (a row runs past its page).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (שורה חורגת מהעמוד שלה).",
+  "This SQLite file looks damaged or incomplete (an overflow chain ends early).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (שרשרת גלישה מסתיימת מוקדם מדי).",
+  "This SQLite file looks damaged or incomplete (unreadable data).":
+    "קובץ ה־SQLite הזה נראה פגום או חלקי (נתונים שלא ניתן לקרוא).",
+  // Import source file hint, and the sentences built around it (one set per source).
+  "Cashew backup": "גיבוי Cashew",
+  "Choose Cashew backup file": "בחירת קובץ גיבוי Cashew",
+  "This file does not look like a Cashew backup. Choose a Cashew backup file.":
+    "הקובץ הזה אינו נראה כגיבוי של Cashew. בחרו קובץ גיבוי Cashew.",
+  // File size limits, per kind of file.
+  "Backup file size could not be checked safely. Choose another file.":
+    "לא ניתן היה לבדוק בבטחה את גודל קובץ הגיבוי. בחרו קובץ אחר.",
+  "CSV file size could not be checked safely. Choose another file.":
+    "לא ניתן היה לבדוק בבטחה את גודל קובץ ה־CSV. בחרו קובץ אחר.",
+  "Vault backup size could not be checked safely. Choose another file.":
+    "לא ניתן היה לבדוק בבטחה את גודל גיבוי הכספת. בחרו קובץ אחר.",
+  "Sync file size could not be checked safely. Choose another file.":
+    "לא ניתן היה לבדוק בבטחה את גודל קובץ הסנכרון. בחרו קובץ אחר.",
+  "Backup file is larger than the 64 MiB safety limit.":
+    "קובץ הגיבוי גדול ממגבלת הבטיחות של 64 MiB.",
+  "CSV file is larger than the 16 MiB safety limit.":
+    "קובץ ה־CSV גדול ממגבלת הבטיחות של 16 MiB.",
+  "Vault backup is larger than the 64 MiB safety limit.":
+    "גיבוי הכספת גדול ממגבלת הבטיחות של 64 MiB.",
+  "Sync file is larger than the 64 MiB safety limit.":
+    "קובץ הסנכרון גדול ממגבלת הבטיחות של 64 MiB.",
+  // A record a backup lists twice.
+  "The backup lists this account more than once.":
+    "החשבון הזה מופיע בגיבוי יותר מפעם אחת.",
+  "The backup lists this category more than once.":
+    "הקטגוריה הזו מופיעה בגיבוי יותר מפעם אחת.",
+  "The backup lists this tag more than once.":
+    "התגית הזו מופיעה בגיבוי יותר מפעם אחת.",
+  "The backup lists this schedule more than once.":
+    "התזמון הזה מופיע בגיבוי יותר מפעם אחת.",
+  "The backup lists this transaction more than once.":
+    "התנועה הזו מופיעה בגיבוי יותר מפעם אחת.",
+  "The backup lists this budget more than once.":
+    "התקציב הזה מופיע בגיבוי יותר מפעם אחת.",
+  // Import result dialogs: the counts follow as one translated line each.
+  "Added to your data:": "נוסף לנתונים שלכם:",
+  // Import: why an item cannot be imported.
+  "Could not be imported.": "לא ניתן היה לייבא.",
+  "An account imported earlier has a different currency now.":
+    "לחשבון שיובא קודם יש כעת מטבע אחר.",
+  "A category imported earlier has a different kind now.":
+    "לקטגוריה שיובאה קודם יש כעת סוג אחר.",
+  "Its account could not be imported.": "לא ניתן היה לייבא את החשבון המשויך.",
+  "Its category could not be imported.":
+    "לא ניתן היה לייבא את הקטגוריה המשויכת.",
+  "One of its tags could not be imported.":
+    "לא ניתן היה לייבא אחת מהתגיות המשויכות.",
+  "Its account is archived in this vault.":
+    "החשבון המשויך נמצא בארכיון בכספת הזו.",
+  "Its destination account is archived in this vault.":
+    "חשבון היעד המשויך נמצא בארכיון בכספת הזו.",
+  "Its category is archived in this vault.":
+    "הקטגוריה המשויכת נמצאת בארכיון בכספת הזו.",
+  "It belongs to a schedule that is not in the backup.":
+    "התנועה שייכת לתזמון שאינו נמצא בגיבוי.",
+  "Choose how to import: merge or replace.": "בחרו כיצד לייבא: מיזוג או החלפה.",
+  "Finish setting up Qashy before importing.":
+    "סיימו להגדיר את Qashy לפני הייבוא.",
+  "Your current data can’t be deleted for real while this device syncs: your other devices would keep it and send it back. Remove this device from sync first, or choose “Add to my current data”.":
+    "אי אפשר למחוק לצמיתות את הנתונים הנוכחיים שלכם כל עוד המכשיר הזה מסנכרן: המכשירים האחרים שלכם ישמרו אותם וישלחו אותם בחזרה. הסירו קודם את המכשיר הזה מהסנכרון, או בחרו ״הוספה לנתונים הקיימים שלי״.",
+  // Repository errors.
+  "Recurring schedule did not advance.": "התזמון החוזר לא התקדם.",
+  "Recurring schedule has too many occurrences to generate in one run.":
+    "לתזמון החוזר יש יותר מדי מופעים ליצירה בבת אחת.",
+  "Choose a valid theme.": "בחרו ערכת עיצוב תקינה.",
+  "Choose a valid navigation bar style.": "בחרו סגנון תקין לסרגל הניווט.",
+  "Choose a valid animation level.": "בחרו רמת אנימציה תקינה.",
+  "Choose a valid appearance override.": "בחרו התאמת מראה תקינה.",
+  "Keep at least one account. Add another account before archiving this one.":
+    "יש להשאיר לפחות חשבון אחד. הוסיפו חשבון נוסף לפני העברת החשבון הזה לארכיון.",
+  "Keep at least one account. Add another account before deleting this one.":
+    "יש להשאיר לפחות חשבון אחד. הוסיפו חשבון נוסף לפני מחיקת החשבון הזה.",
+  "Choose a valid icon.": "בחרו סמל תקין.",
+  "Choose a valid budget.": "בחרו תקציב תקין.",
+  "This budget has no active period to reset.":
+    "לתקציב הזה אין תקופה פעילה לאיפוס.",
+  "Resetting the rollover would reduce the budget below zero.":
+    "איפוס ההעברה יוריד את התקציב מתחת לאפס.",
+  "An automatic rate already exists for this date.":
+    "כבר קיים שער אוטומטי לתאריך הזה.",
+  "A fetched rate must convert into the base currency.":
+    "שער שנטען חייב להמיר אל מטבע הבסיס.",
+  "Dashboard start date must not be after its end date.":
+    "תאריך ההתחלה של הסקירה אינו יכול להיות אחרי תאריך הסיום שלה.",
+  "Choose a dashboard range no longer than a century.":
+    "בחרו טווח תאריכים שאינו ארוך ממאה שנה.",
+  "Invalid amount or exchange rate.": "סכום או שער חליפין לא תקינים.",
+  "Foreign amount and foreign currency must be given together.":
+    "יש לציין סכום במטבע חוץ ומטבע חוץ יחד.",
+  "Fee kind and fee value must be given together.":
+    "יש לציין סוג עמלה וערך עמלה יחד.",
+  "Fee kind must be percent or fixed.":
+    "סוג העמלה חייב להיות אחוז (percent) או קבוע (fixed).",
+  "Foreign amounts and fees apply to expenses and income only.":
+    "סכומים במטבע חוץ ועמלות חלים על הוצאות והכנסות בלבד.",
+  "Choose a foreign currency different from the account’s.":
+    "בחרו מטבע חוץ השונה ממטבע החשבון.",
+  "Destination base amount does not match the destination amount and exchange rate.":
+    "סכום הבסיס ביעד אינו תואם לסכום היעד ולשער החליפין.",
+  "Posted transactions need an exchange rate.":
+    "תנועות שנרשמו זקוקות לשער חליפין.",
+  "This record changed in another window. Reopen it and try again.":
+    "הרשומה הזו השתנתה בחלון אחר. פתחו אותה מחדש ונסו שוב.",
+  // CSV row checks.
+  "Row number is missing.": "מספר השורה חסר.",
+  "Enter a real calendar date.": "הזינו תאריך אמיתי בלוח השנה.",
+  "Currency must be a three-letter code.":
+    "המטבע חייב להיות קוד בן שלוש אותיות.",
+  "Foreign currency must be a three-letter code.":
+    "מטבע החוץ חייב להיות קוד בן שלוש אותיות.",
+  // Utilities.
+  "Recurrence interval must be a positive safe integer.":
+    "מרווח החזרה חייב להיות מספר שלם וחיובי.",
+  "Recurrence dates must be valid local calendar dates.":
+    "תאריכי החזרה חייבים להיות תאריכים תקינים בלוח השנה המקומי.",
+  "Recurrence interval is outside the supported calendar range.":
+    "מרווח החזרה חורג מטווח התאריכים הנתמך.",
+  "Occurrence count must be a positive whole number.":
+    "מספר המופעים חייב להיות מספר שלם וחיובי.",
+  "Fee percentage must be greater than 0 and at most 100.":
+    "אחוז העמלה חייב להיות גדול מ־0 ולכל היותר 100.",
+  "Fees can’t exceed the income amount.":
+    "העמלות לא יכולות לעלות על סכום ההכנסה.",
+  "Transactions in these categories become uncategorized, and the categories are removed from budgets and goals.":
+    "התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים.",
+  // Sync merge checks: a batch from another device is refused when it holds values no
+  // honest device could have written. The shape ("... must be text.") is a dynamic pattern.
+  "Theme is invalid.": "ערכת העיצוב אינה תקינה.",
+  "Settings locale is invalid.": "הגדרת האזור אינה תקינה.",
+  "Transaction exchange rate and base amount must be set together.":
+    "יש להגדיר יחד את שער החליפין ואת סכום הבסיס של התנועה.",
+  "Transaction currency must match its account.":
+    "מטבע התנועה חייב להתאים לחשבון שלה.",
+  "Transfer destination does not match its account.":
+    "יעד ההעברה אינו מתאים לחשבון שלה.",
+  "Non-transfer transaction has transfer fields.":
+    "בתנועה שאינה העברה יש שדות של העברה.",
+  "Transaction fee amount must be a safe minor-unit integer.":
+    "סכום העמלה בתנועה חייב להיות מספר שלם ביחידות משנה, בטווח הנתמך.",
+  "Transaction fee percent is invalid.": "אחוז העמלה בתנועה אינו תקין.",
+  "Transaction fee percent must be null for a fixed fee.":
+    "בעמלה קבועה אחוז העמלה בתנועה חייב להיות ריק.",
+  "Transaction amount does not match its principal and fee.":
+    "סכום התנועה אינו תואם לסכום המקורי ולעמלה שלה.",
+  "Budget interval is invalid.": "מרווח התקציב אינו תקין.",
+  "Custom budget end date is invalid.":
+    "תאריך הסיום של התקציב המותאם אינו תקין.",
+  "Budget adjustment amount cannot be zero.":
+    "סכום התאמת התקציב לא יכול להיות אפס.",
+  "Goal initial progress cannot be negative.":
+    "ההתקדמות ההתחלתית של היעד אינה יכולה להיות שלילית.",
+  "Recurring interval is invalid.": "מרווח התנועה המחזורית אינו תקין.",
+  "Recurring fee percent is invalid.": "אחוז העמלה בתנועה המחזורית אינו תקין.",
+  // Field labels used by validation messages.
+  "Account currency": "מטבע החשבון",
+  "Budget adjustment amount": "סכום התאמת התקציב",
+  "Budget adjustment date": "תאריך התאמת התקציב",
+  "Budget adjustment note": "הערת התאמת התקציב",
+  "Budget anchor date": "תאריך העוגן של התקציב",
+  "Budget category limit": "מגבלת הקטגוריה בתקציב",
+  "Budget period end": "סוף תקופת התקציב",
+  "Budget period limit": "מגבלת תקופת התקציב",
+  "Budget period rollover": "העברת תקופת התקציב",
+  "Budget period start": "תחילת תקופת התקציב",
+  "Goal initial progress": "ההתקדמות ההתחלתית של היעד",
+  "Goal kind": "סוג היעד",
+  "Goal target date": "תאריך היעד",
+  "Goal target": "סכום היעד",
+  "Recurring end date": "תאריך הסיום של התנועה המחזורית",
+  "Recurring fee amount": "סכום העמלה בתנועה המחזורית",
+  "Recurring fee kind": "סוג העמלה בתנועה המחזורית",
+  "Recurring foreign amount": "הסכום במטבע חוץ בתנועה המחזורית",
+  "Recurring foreign currency": "מטבע החוץ בתנועה המחזורית",
+  "Recurring foreign exchange rate": "שער החליפין של מטבע החוץ בתנועה המחזורית",
+  "Recurring next date": "התאריך הבא של התנועה המחזורית",
+  "Recurring period": "תקופת התנועה המחזורית",
+  "Recurring start date": "תאריך ההתחלה של התנועה המחזורית",
+  "Recurring transaction amount": "סכום התנועה המחזורית",
+  "Recurring transaction currency": "מטבע התנועה המחזורית",
+  "Recurring transaction type": "סוג התנועה המחזורית",
+  "Tag name": "שם התגית",
+  "Theme mode": "מצב ערכת העיצוב",
+  "Transaction amount": "סכום התנועה",
+  "Transaction base amount": "סכום הבסיס של התנועה",
+  "Transaction currency": "מטבע התנועה",
+  "Transaction date": "תאריך התנועה",
+  "Transaction exchange rate": "שער החליפין של התנועה",
+  "Transaction fee kind": "סוג העמלה בתנועה",
+  "Transaction foreign amount": "הסכום במטבע חוץ בתנועה",
+  "Transaction foreign currency": "מטבע החוץ בתנועה",
+  "Transaction foreign exchange rate": "שער החליפין של מטבע החוץ בתנועה",
+  "Transaction status": "מצב התנועה",
+  "Transfer destination amount": "סכום היעד של ההעברה",
+  "Transfer destination base amount": "סכום הבסיס ביעד ההעברה",
+  Tag: "תגית",
+  "Recurring rule": "תנועה מחזורית",
+  "Expense category": "קטגוריית הוצאה",
+  "Income category": "קטגוריית הכנסה",
+  "Account balance": "יתרת חשבון",
+  "Budget limit total": "סך מגבלות התקציב",
+  "Category limit": "מגבלת קטגוריה",
+  "Income total": "סך ההכנסות",
+  "Expense total": "סך ההוצאות",
+  "Converted amount": "הסכום שהומר",
+  Number: "מספר",
+  // Sync, backups and file transfer: messages shown when a sync step fails.
+  "That backup file is damaged.": "קובץ הגיבוי הזה פגום.",
+  "There is no vault on this device to back up.": "אין במכשיר הזה כספת לגבות.",
+  "That file is not a Qashy vault backup.":
+    "הקובץ הזה אינו גיבוי כספת של Qashy.",
+  "That backup is protected by a passphrase, not a recovery phrase.":
+    "הגיבוי הזה מוגן במשפט סיסמה, לא במשפט שחזור.",
+  "That backup is opened with a recovery phrase, not a passphrase.":
+    "הגיבוי הזה נפתח במשפט שחזור, לא במשפט סיסמה.",
+  "That backup does not contain a usable vault key.":
+    "הגיבוי הזה אינו מכיל מפתח כספת שאפשר להשתמש בו.",
+  "This device is already part of a vault. Leave it from Sync → Danger zone before restoring a backup.":
+    "המכשיר הזה כבר חלק מכספת. עזבו אותה דרך ״סנכרון ← אזור מסוכן״ לפני שחזור גיבוי.",
+  "That backup's membership history does not check out, so it was not restored.":
+    "היסטוריית החברות בגיבוי הזה אינה עוברת בדיקה, ולכן הוא לא שוחזר.",
+  "The restore failed, and the vault key it wrote could not be removed. Erase this device's sync data from Sync → Danger zone before trying again.":
+    "השחזור נכשל, ולא ניתן היה להסיר את מפתח הכספת שנכתב. מחקו את נתוני הסנכרון של המכשיר הזה דרך ״סנכרון ← אזור מסוכן״ לפני שתנסו שוב.",
+  "Padded payload is truncated.": "המטען המרופד קטוע.",
+  "Padded payload declares an impossible length.":
+    "המטען המרופד מצהיר על אורך בלתי אפשרי.",
+  "Frame exceeds the maximum accepted size.":
+    "המסגרת חורגת מהגודל המרבי המותר.",
+  "Frame is truncated.": "המסגרת קטועה.",
+  "Not a Qashy sync frame.": "זו אינה מסגרת סנכרון של Qashy.",
+  "Frame declares an unknown purpose.": "המסגרת מצהירה על ייעוד לא מוכר.",
+  "Frame is not the kind of frame that was expected here.":
+    "המסגרת אינה מהסוג שהיה צפוי כאן.",
+  "Hello is truncated.": "הודעת הפתיחה קטועה.",
+  "Hello is empty.": "הודעת הפתיחה ריקה.",
+  "Hello has trailing bytes.": "בהודעת הפתיחה יש בתים עודפים בסופה.",
+  "The other device sent a malformed key.": "המכשיר האחר שלח מפתח פגום.",
+  "The other device sent a malformed nonce.":
+    "המכשיר האחר שלח ערך חד־פעמי פגום.",
+  "The other device presented an identity that does not match its key.":
+    "המכשיר האחר הציג זהות שאינה תואמת למפתח שלו.",
+  "That device has the same identity as this one.":
+    "למכשיר ההוא יש אותה זהות כמו למכשיר הזה.",
+  "A different device answered than the one expected.":
+    "ענה מכשיר אחר מזה שהיה צפוי.",
+  "The other device sent a malformed proof of identity.":
+    "המכשיר האחר שלח הוכחת זהות פגומה.",
+  "The other device could not prove its identity. Something is intercepting this connection.":
+    "המכשיר האחר לא הצליח להוכיח את זהותו. משהו מיירט את החיבור הזה.",
+  "That pairing code is too large.": "קוד החיבור הזה גדול מדי.",
+  "That is not a Qashy pairing code.": "זה אינו קוד חיבור של Qashy.",
+  "That pairing code is damaged.": "קוד החיבור הזה פגום.",
+  "That pairing code does not match the device that made it.":
+    "קוד החיבור הזה אינו תואם למכשיר שיצר אותו.",
+  "That pairing code has expired. Generate a new one on the other device.":
+    "תוקף קוד החיבור הזה פג. צרו קוד חדש במכשיר האחר.",
+  "That pairing code claims an implausible expiry.":
+    "קוד החיבור הזה מצהיר על מועד תפוגה לא סביר.",
+  "Decrypted payload is not valid UTF-8.": "המטען המפוענח אינו UTF-8 תקין.",
+  "Not a valid pairing code.": "זה אינו קוד חיבור תקין.",
+  "Not valid base64url.": "אינו base64url תקין.",
+  "Not valid hex.": "אינו הקסדצימלי תקין.",
+  "Field is too long to encode.": "השדה ארוך מדי לקידוד.",
+  "scrypt r and p must be positive integers.":
+    "הפרמטרים r ו־p של scrypt חייבים להיות מספרים שלמים חיוביים.",
+  "That backup asks for an unreasonable amount of work to open.":
+    "הגיבוי הזה דורש כמות עבודה בלתי סבירה כדי להיפתח.",
+  "scrypt N must be a power of two of at least 4096.":
+    "הפרמטר N של scrypt חייב להיות חזקה של שתיים, לפחות 4096.",
+  "Ciphertext is shorter than its authentication tag.":
+    "הטקסט המוצפן קצר מתג האימות שלו.",
+  "Authentication failed — the data was tampered with or is not for this vault.":
+    "האימות נכשל — הנתונים שונו או שאינם שייכים לכספת הזו.",
+  "Peer offered an unusable public key.":
+    "המכשיר האחר הציע מפתח ציבורי שאי אפשר להשתמש בו.",
+  "Peer offered a small-order public key.":
+    "המכשיר האחר הציע מפתח ציבורי מסדר קטן.",
+  "That recovery phrase is not valid. Check for a mistyped or out-of-order word.":
+    "משפט השחזור הזה אינו תקין. בדקו אם יש מילה שהוקלדה בטעות או שאינה בסדר הנכון.",
+  "That file is not a Qashy backup.": "הקובץ הזה אינו גיבוי של Qashy.",
+  "That backup was written by a newer version of Qashy.":
+    "הגיבוי הזה נכתב בגרסה חדשה יותר של Qashy.",
+  "Wrong passphrase, or the backup file is damaged.":
+    "משפט סיסמה שגוי, או שקובץ הגיבוי פגום.",
+  "That recovery phrase does not match this backup, or the file is damaged.":
+    "משפט השחזור הזה אינו תואם לגיבוי הזה, או שהקובץ פגום.",
+  "That batch is not readable.": "האצווה הזו אינה קריאה.",
+  "That batch is not an object.": "האצווה הזו אינה אובייקט.",
+  "That batch has no ops.": "באצווה הזו אין פעולות.",
+  "That batch does not say what the sender holds.":
+    "האצווה הזו אינה מציינת מה השולח מחזיק.",
+  "That batch names a device with a malformed id.":
+    "האצווה הזו מזכירה מכשיר עם מזהה פגום.",
+  "That batch has no signed device roster.":
+    "באצווה הזו אין רשימת מכשירים חתומה.",
+  "That batch has a malformed full state.": "באצווה הזו יש מצב מלא פגום.",
+  "A transfer moves money between these accounts, so they are not the same account.":
+    "העברה מזיזה כסף בין החשבונות האלה, ולכן הם אינם אותו חשבון.",
+  "These categories track different kinds of money — one income, one expense.":
+    "הקטגוריות האלה עוקבות אחר סוגי כסף שונים — אחת הכנסה ואחת הוצאה.",
+  "The record to keep no longer exists.": "הרשומה שיש להשאיר כבר אינה קיימת.",
+  "A record to merge no longer exists.": "רשומה שיש למזג כבר אינה קיימת.",
+  "That record is already being merged into another.":
+    "הרשומה הזו כבר ממוזגת לרשומה אחרת.",
+  "That batch was sealed under an older version of this vault's key.":
+    "האצווה הזו נאטמה תחת גרסה ישנה יותר של מפתח הכספת הזו.",
+  "That batch was not signed by the device it claims to come from.":
+    "האצווה הזו לא נחתמה על ידי המכשיר שממנו היא טוענת להגיע.",
+  "This app cannot apply a full-state sync batch.":
+    "האפליקציה הזו אינה יכולה להחיל אצוות סנכרון של מצב מלא.",
+  "That batch contains an oversized device roster entry.":
+    "האצווה הזו מכילה רשומה גדולה מדי ברשימת המכשירים.",
+  "That batch contains a device from a future vault epoch.":
+    "האצווה הזו מכילה מכשיר מתקופת כספת עתידית.",
+  "That batch contains a malformed device membership time.":
+    "האצווה הזו מכילה זמן חברות פגום של מכשיר.",
+  "That batch contains an inconsistent revocation cutoff.":
+    "האצווה הזו מכילה נקודת חיתוך סותרת להסרה.",
+  "A roster device id does not match its signing key.":
+    "מזהה מכשיר ברשימה אינו תואם למפתח החתימה שלו.",
+  "That batch contains malformed device keys.":
+    "האצווה הזו מכילה מפתחות מכשיר פגומים.",
+  "That batch names the same roster device more than once.":
+    "האצווה הזו מזכירה את אותו מכשיר ברשימה יותר מפעם אחת.",
+  "That batch attempted to alter this device’s own roster entry.":
+    "האצווה הזו ניסתה לשנות את הרשומה של המכשיר הזה ברשימה.",
+  "That batch introduced a device without a signed pairing control.":
+    "האצווה הזו הציגה מכשיר ללא בקרת חיבור חתומה.",
+  "That batch introduces an active device from an old vault epoch.":
+    "האצווה הזו מציגה מכשיר פעיל מתקופת כספת ישנה.",
+  "A known device arrived with different identity keys.":
+    "מכשיר מוכר הגיע עם מפתחות זהות שונים.",
+  "A re-paired device does not match the current vault epoch.":
+    "מכשיר שחובר מחדש אינו תואם לתקופת הכספת הנוכחית.",
+  "A device that is not paired with this vault tried to sync.":
+    "מכשיר שאינו מחובר לכספת הזו ניסה לסנכרן.",
+  "That batch carries changes from a device this vault has never been paired with.":
+    "האצווה הזו נושאת שינויים ממכשיר שהכספת הזו מעולם לא חוברה אליו.",
+  "That channel is closed.": "הערוץ הזה סגור.",
+  "Connection cancelled.": "החיבור בוטל.",
+  "Unlock this device before changing its vault.":
+    "בטלו את נעילת המכשיר הזה לפני שינוי הכספת שלו.",
+  "This device protects the vault with the system keychain, which cannot be replaced by a passphrase.":
+    "המכשיר הזה מגן על הכספת באמצעות מחזיק המפתחות של המערכת, ואי אפשר להחליף אותו במשפט סיסמה.",
+  "There is no vault on this device to protect.":
+    "אין במכשיר הזה כספת להגן עליה.",
+  "There is no vault on this device.": "אין כספת במכשיר הזה.",
+  "Unlock was cancelled because this device was locked.":
+    "ביטול הנעילה בוטל כי המכשיר הזה ננעל.",
+  "This vault is protected by a passphrase on this device. Enter it to continue.":
+    "הכספת הזו מוגנת במשפט סיסמה במכשיר הזה. הזינו אותו כדי להמשיך.",
+  "This device has no secure storage available for sync keys.":
+    "אין במכשיר הזה אחסון מאובטח זמין למפתחות סנכרון.",
+  "The vault stored on this device is damaged and cannot be opened. Erase sync data on this device and pair it again.":
+    "הכספת השמורה במכשיר הזה פגומה ולא ניתן לפתוח אותה. מחקו את נתוני הסנכרון במכשיר הזה וחברו אותו מחדש.",
+  "IndexedDB request failed.": "בקשת IndexedDB נכשלה.",
+  "Could not open the Qashy keystore.":
+    "לא ניתן היה לפתוח את מאגר המפתחות של Qashy.",
+  "Close other Qashy tabs and try again.":
+    "סגרו לשוניות אחרות של Qashy ונסו שוב.",
+  "Keystore transaction aborted.": "עסקת מאגר המפתחות בוטלה.",
+  "Keystore transaction failed.": "עסקת מאגר המפתחות נכשלה.",
+  "The stored vault record is the wrong size.":
+    "רשומת הכספת השמורה בגודל שגוי.",
+  "The stored vault record is not a Qashy vault.":
+    "רשומת הכספת השמורה אינה כספת של Qashy.",
+  "This vault was stored by a newer version of Qashy. Update the app to read it.":
+    "הכספת הזו נשמרה בגרסה חדשה יותר של Qashy. עדכנו את האפליקציה כדי לקרוא אותה.",
+  "The stored vault record has no epoch.": "לרשומת הכספת השמורה אין תקופה.",
+  "Device id is not a valid identifier.": "מזהה המכשיר אינו מזהה תקין.",
+  "Not a valid clock reading.": "זו אינה קריאת שעון תקינה.",
+  "Clock cannot advance beyond its maximum wall time.":
+    "השעון אינו יכול להתקדם מעבר לזמן המרבי שלו.",
+  "Restored as archived because a transaction or schedule still uses it.":
+    "שוחזר כמועבר לארכיון כי תנועה או תזמון עדיין משתמשים בו.",
+  "Posted without an exchange rate snapshot; returned to upcoming.":
+    "נרשם ללא צילום מצב של שער חליפין; הוחזר לצפוי.",
+  "Parent category is missing, deleted, or not a valid parent.":
+    "קטגוריית האב חסרה, נמחקה או אינה אב תקין.",
+  "Category is missing, deleted, or the wrong kind.":
+    "הקטגוריה חסרה, נמחקה או מהסוג הלא נכון.",
+  "Transfers cannot carry a category.": "העברות אינן יכולות לשאת קטגוריה.",
+  "Dropped tags that no longer exist.": "תגיות שאינן קיימות עוד הוסרו.",
+  "Recurring schedule is gone.": "התזמון החוזר אינו קיים עוד.",
+  "Linked account is gone.": "החשבון המקושר אינו קיים עוד.",
+  "Linked transaction is gone.": "התנועה המקושרת אינה קיימת עוד.",
+  "Dropped filters whose target is gone.":
+    "מסננים שהיעד שלהם אינו קיים עוד הוסרו.",
+  "Dropped category limits outside the budget filters.":
+    "מגבלות קטגוריה שמחוץ למסנני התקציב הוסרו.",
+  "Cleared an end date on a repeating budget.": "תאריך סיום בתקציב חוזר נוקה.",
+  "Paused: an account or category it needs is unavailable.":
+    "הושהה: חשבון או קטגוריה שהוא זקוק להם אינם זמינים.",
+  "Resumed.": "חודש.",
+  "The other device refused to complete pairing.":
+    "המכשיר האחר סירב להשלים את החיבור.",
+  "That vault did not say which epoch it is on.":
+    "הכספת ההיא לא ציינה באיזו תקופה היא נמצאת.",
+  "That vault did not say which removal policy it uses.":
+    "הכספת ההיא לא ציינה באיזו מדיניות הסרה היא משתמשת.",
+  "That vault did not identify the device that sent it.":
+    "הכספת ההיא לא זיהתה את המכשיר ששלח אותה.",
+  "That vault sent no device list.": "הכספת ההיא לא שלחה רשימת מכשירים.",
+  "The other device sent an invalid pairing message. Start pairing again on both devices.":
+    "המכשיר האחר שלח הודעת חיבור לא תקינה. התחילו את החיבור מחדש בשני המכשירים.",
+  "A different device answered than the one on the code.":
+    "ענה מכשיר אחר מזה שמופיע בקוד.",
+  "That pairing code has expired. Generate a new one and start again.":
+    "תוקף קוד החיבור הזה פג. צרו קוד חדש והתחילו מחדש.",
+  "A membership control has an invalid revocation cutoff.":
+    "לבקרת חברות יש נקודת חיתוך להסרה לא תקינה.",
+  "A membership control has an invalid time.": "לבקרת חברות יש זמן לא תקין.",
+  "A membership control has an invalid policy.":
+    "לבקרת חברות יש מדיניות לא תקינה.",
+  "A membership control has an invalid operation shape.":
+    "לבקרת חברות יש מבנה פעולה לא תקין.",
+  "A membership control has no payload.": "לבקרת חברות אין מטען.",
+  "A membership proposal has an invalid voter list.":
+    "להצעת חברות יש רשימת מצביעים לא תקינה.",
+  "A membership proposal repeats a voter.": "הצעת חברות חוזרת על מצביע.",
+  "A membership proposal has an invalid quorum.":
+    "להצעת חברות יש מניין לא תקין.",
+  "A membership control has an unknown action.":
+    "לבקרת חברות יש פעולה לא מוכרת.",
+  "A membership approval does not match a valid proposal.":
+    "אישור חברות אינו תואם להצעה תקינה.",
+  "A removed device tried to change vault membership.":
+    "מכשיר שהוסר ניסה לשנות את החברות בכספת.",
+  "Only the vault owner can change removal policy.":
+    "רק בעל הכספת יכול לשנות את מדיניות ההסרה.",
+  "Only the current owner can transfer ownership to an active device.":
+    "רק הבעלים הנוכחי יכול להעביר בעלות למכשיר פעיל.",
+  "This device is not allowed to remove that device.":
+    "המכשיר הזה אינו מורשה להסיר את המכשיר ההוא.",
+  "This vault requires a quorum proposal.": "הכספת הזו דורשת הצעת מניין.",
+  "This vault does not accept quorum controls.":
+    "הכספת הזו אינה מקבלת בקרות מניין.",
+  "A membership proposal does not describe the active vault.":
+    "הצעת חברות אינה מתארת את הכספת הפעילה.",
+  "A membership proposal id was reused.":
+    "מזהה של הצעת חברות נעשה בו שימוש חוזר.",
+  "This device is already part of a vault.": "המכשיר הזה כבר חלק מכספת.",
+  "This device identity does not match its vault.":
+    "זהות המכשיר הזה אינה תואמת לכספת שלו.",
+  "There is no vault on this device to resume.":
+    "אין במכשיר הזה כספת להמשיך בה.",
+  "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.":
+    "החלפת מפתח הסנכרון הופסקה לפני שהמצב המקומי הושלם. ההיסטוריה המקומית שלכם נשמרה; שחזרו את מפתח הכספת התואם לפני שתמשיכו בסנכרון.",
+  "There is no vault on this device to rotate.":
+    "אין במכשיר הזה כספת שאפשר להחליף לה מפתח.",
+  "That is not a complete address. It should start with https://.":
+    "זו אינה כתובת שלמה. היא צריכה להתחיל ב־https://.",
+  "Use https:// — an http:// address would send your data unprotected.":
+    "השתמשו ב־https:// — כתובת http:// תשלח את הנתונים שלכם ללא הגנה.",
+  "Only https:// addresses can be used here.":
+    "אפשר להשתמש כאן רק בכתובות https://.",
+  "That is more than one file can carry.": "זה יותר ממה שקובץ אחד יכול לשאת.",
+  "That export is too large for one sync file. Sync in smaller passes.":
+    "הייצוא הזה גדול מדי לקובץ סנכרון אחד. סנכרנו בכמה מעברים קטנים יותר.",
+  "That sync file is too large to import.": "קובץ הסנכרון הזה גדול מדי לייבוא.",
+  "That file is not a Qashy sync file.": "הקובץ הזה אינו קובץ סנכרון של Qashy.",
+  "That sync file is incomplete.": "קובץ הסנכרון הזה חלקי.",
+  "That sync file is damaged.": "קובץ הסנכרון הזה פגום.",
+  "This device is offline.": "המכשיר הזה אינו מחובר לאינטרנט.",
+  "The relay sent more than this device will accept.":
+    "הממסר שלח יותר ממה שהמכשיר הזה מוכן לקבל.",
+  "The relay response has no readable body.":
+    "לתשובת הממסר אין גוף שאפשר לקרוא.",
+  "request timed out": "הבקשה חרגה מזמן ההמתנה",
+  "The relay sent something that is not a Qashy relay response.":
+    "הממסר שלח משהו שאינו תשובת ממסר של Qashy.",
+  "no relay address configured": "לא הוגדרה כתובת ממסר",
+  "not a Qashy relay": "אינו ממסר של Qashy",
+  "Sync was cancelled.": "הסנכרון בוטל.",
+  "That batch is too large to upload.": "האצווה הזו גדולה מדי להעלאה.",
+  "The rendezvous server did not answer.": "שרת המפגש לא ענה.",
+  "Could not reach the rendezvous server.": "לא ניתן היה להגיע לשרת המפגש.",
+  "The rendezvous connection closed.": "החיבור לנקודת המפגש נסגר.",
+  "That rendezvous is not open.": "נקודת המפגש הזו אינה פתוחה.",
+  "That signaling message is too large to send.":
+    "הודעת האיתות הזו גדולה מדי לשליחה.",
+  "The other device did not respond.": "המכשיר האחר לא הגיב.",
+  "The rendezvous was closed.": "נקודת המפגש נסגרה.",
+  "The pairing rendezvous sent too many queued messages.":
+    "נקודת המפגש לחיבור שלחה יותר מדי הודעות בתור.",
+  "This platform cannot open a rendezvous connection.":
+    "הפלטפורמה הזו אינה יכולה לפתוח חיבור לנקודת מפגש.",
+  "Sync could not complete.": "הסנכרון לא הושלם.",
+  // Names of the fields a refused sync batch or pairing message points at ("Op 3's hash is missing").
+  device: "המכשיר",
+  "sequence number": "מספר הרצף",
+  "schema version": "גרסת הסכמה",
+  "previous hash": "הגיבוב הקודם",
+  kind: "הסוג",
+  hash: "הגיבוב",
+  "entity id": "מזהה הישות",
+  "entity type": "סוג הישות",
+  "clock reading": "קריאת השעון",
+  signature: "החתימה",
+  "added time": "זמן ההוספה",
+  "agreement key": "מפתח ההסכמה",
+  "device id": "מזהה המכשיר",
+  epoch: "התקופה",
+  name: "השם",
+  platform: "הפלטפורמה",
+  "revocation sequence": "רצף ההסרה",
+  "revoked time": "זמן ההסרה",
+  "signing key": "מפתח החתימה",
+  id: "המזהה",
+  "join date": "תאריך ההצטרפות",
+  owner: "בעלים",
+  target: "יעד",
+  voter: "מצביע",
+  "proposal id": "מזהה הצעה",
+  time: "זמן",
+  "The other device's platform": "הפלטפורמה של המכשיר האחר",
+  "The other device's name": "השם של המכשיר האחר",
+  "The other device's agreement key": "מפתח ההסכמה של המכשיר האחר",
+  "The other device's base currency": "מטבע הבסיס של המכשיר האחר",
+  "The other device's details": "הפרטים של המכשיר האחר",
+  "The vault the other device sent": "הכספת שהמכשיר האחר שלח",
+  "That vault key": "מפתח הכספת ההוא",
+  "That vault's base currency": "מטבע הבסיס של הכספת ההיא",
+  "That vault's owner": "הבעלים של הכספת ההיא",
+  "That batch's vault epoch": "תקופת הכספת של האצווה הזו",
+  "That batch's sender": "השולח של האצווה הזו",
+  "That batch's sender signature": "חתימת השולח של האצווה הזו",
+  "That batch's format version": "גרסת הפורמט של האצווה הזו",
+  "That batch's base currency": "מטבע הבסיס של האצווה הזו",
+  "No spending from the start of this period to the end of this period.":
+    "אין הוצאות מתחילת התקופה הזו ועד סופה.",
+  "Remove the username and password from the address.":
+    "הסירו את שם המשתמש והסיסמה מהכתובת.",
+  "Remove everything after the path from the address.":
+    "הסירו מהכתובת כל מה שאחרי הנתיב.",
+  "Setup is incomplete.": "ההגדרה אינה שלמה.",
+  "Linked category must be income.":
+    "הקטגוריה המקושרת חייבת להיות קטגוריית הכנסה.",
+  "Linked category must be expense.":
+    "הקטגוריה המקושרת חייבת להיות קטגוריית הוצאה.",
+  "themeSchemaVersion: must be 1 or 2": "themeSchemaVersion: חייב להיות 1 או 2",
+  "id: must be lowercase letters, digits and hyphens, starting with a letter or digit, up to 48 characters":
+    "id: חייב להכיל אותיות קטנות, ספרות ומקפים, להתחיל באות או בספרה, ולהיות באורך של עד 48 תווים",
+  "name: must be 1 to 40 characters": "name: חייב להיות באורך של 1 עד 40 תווים",
+  "name: must not contain control or direction-override characters":
+    "name: אסור שיכיל תווי בקרה או תווים שמבטלים כיוון כתיבה",
+  'charts.gridDash: must be up to four numbers separated by spaces, like "4 4", or "" for solid':
+    'charts.gridDash: חייב להיות עד ארבעה מספרים מופרדים ברווחים, כמו "4 4", או "" לקו רציף',
+  "shape.tile.icon: must not be larger than shape.tile.size":
+    "shape.tile.icon: אסור שיהיה גדול מ־shape.tile.size",
+  "shape.tile.compactIcon: must not be larger than shape.tile.compactSize":
+    "shape.tile.compactIcon: אסור שיהיה גדול מ־shape.tile.compactSize",
+  'material.gradients: must be false when material.engine is "flat"':
+    'material.gradients: חייב להיות false כש־material.engine הוא "flat"',
+  'motion.pressTranslate: must be at least 1 when motion.press is "translate"':
+    'motion.pressTranslate: חייב להיות לפחות 1 כש־motion.press הוא "translate"',
+  'motion.pressScale: must be below 1 when motion.press is "scale"':
+    'motion.pressScale: חייב להיות קטן מ־1 כש־motion.press הוא "scale"',
+  "$: must be plain JSON data": "$: חייב להיות נתוני JSON פשוטים",
+  "$: must be a JSON object": "$: חייב להיות אובייקט JSON",
+  "extends: must be a built-in theme id":
+    "extends: חייב להיות מזהה של ערכת עיצוב מובנית",
+  "The theme failed validation.": "ערכת העיצוב נכשלה באימות.",
+  "$: the theme could not be read": "$: לא ניתן היה לקרוא את ערכת העיצוב",
+  "$: the file is not valid JSON": "$: הקובץ אינו JSON תקין",
+  Dining: "אוכל בחוץ",
+  Pay: "משכורת",
+  "Other income": "הכנסה אחרת",
+  "NET WORTH": "שווי נקי",
+  "a circular reference cannot be encoded": "לא ניתן לקודד הפניה מעגלית",
+  "a symbol key cannot be encoded": "לא ניתן לקודד מפתח מסוג symbol",
+  "a sparse array hole has no JSON representation":
+    "אין ייצוג JSON לחור במערך דליל",
+  "The local database is busy. Close other Qashy windows and try again.":
+    "מסד הנתונים המקומי עסוק. סגרו חלונות אחרים של Qashy ונסו שוב.",
+  "There is no room left on this device for Qashy’s data. Free some space and try again.":
+    "אין עוד מקום במכשיר הזה לנתונים של Qashy. פנו מקום ונסו שוב.",
+  "The local database is damaged and can’t be opened.":
+    "מסד הנתונים המקומי פגום ולא ניתן לפתוח אותו.",
+  "The local database can’t be written to. Check the device storage and try again.":
+    "לא ניתן לכתוב למסד הנתונים המקומי. בדקו את האחסון במכשיר ונסו שוב.",
+  "The local database was written by a newer version of Qashy. Update the app and try again.":
+    "מסד הנתונים המקומי נכתב בגרסה חדשה יותר של Qashy. עדכנו את האפליקציה ונסו שוב.",
+  "Qashy could not open its local database.":
+    "Qashy לא הצליח לפתוח את מסד הנתונים המקומי.",
+  "Something went wrong with the local database. Restart Qashy and try again.":
+    "משהו השתבש במסד הנתונים המקומי. הפעילו מחדש את Qashy ונסו שוב.",
+  "Database error": "שגיאת מסד נתונים",
+  "Type must be one of: expense, income, transfer.":
+    "הסוג חייב להיות הוצאה (expense), הכנסה (income) או העברה (transfer).",
+  "Status must be one of: posted, upcoming, skipped.":
+    "המצב חייב להיות שולמה (posted), צפויה (upcoming) או דולגה (skipped).",
+  "Invalid row": "שורה לא תקינה",
 };
 
 export type DynamicPattern = [RegExp, (...parts: string[]) => string];
 
+/**
+ * English field labels whose Hebrew noun is feminine, so a predicate about the field agrees with
+ * it: "הפקדה חייבת", not "הפקדה חייב". Every other label is masculine. A new label whose
+ * Hebrew noun is feminine belongs here; `localization.test.ts` checks the ones in use.
+ */
+export const FEMININE_FIELDS: ReadonlySet<string> = new Set([
+  "Fee",
+  "Contribution",
+  "Opening balance",
+  "Category cap",
+  "Category limit",
+  "Total limit",
+  "Budget limit",
+  "Starting progress",
+  "Account balance",
+  "Budget adjustment note",
+  "Budget category limit",
+  "Budget period",
+  "Budget period limit",
+  "Budget period rollover",
+  "Budget period start",
+  "Goal initial progress",
+  "Recurring period",
+]);
+
 /** The `translateMessage` the patterns call to translate a captured fragment. */
 export type NestedTranslate = (message: string, language: "he") => string;
+
+/**
+ * A count of one written with the plural noun ("1 transactions") reads as the singular message
+ * ("1 transaction"), which has its own Hebrew. The app spells ones as singulars, so this is a
+ * safety net: without it the plural pattern would print "1 תנועות".
+ */
+export const ONE_WITH_PLURAL: Readonly<Record<string, string>> = {
+  "Edit 1 transactions": "Edit 1 transaction",
+  "Move 1 transactions": "Move 1 transaction",
+  "Delete 1 transactions?": "Delete 1 transaction?",
+  "Delete 1 budgets?": "Delete 1 budget?",
+  "Delete 1 goals?": "Delete 1 goal?",
+  "Delete 1 accounts?": "Delete 1 account?",
+  "Delete 1 categories?": "Delete 1 category?",
+  "Delete 1 recurring transactions?": "Delete 1 recurring transaction?",
+  "1 transactions": "1 transaction",
+  "Import 1 transactions": "Import 1 transaction",
+  "1 transactions imported.": "1 transaction imported.",
+  "1 choices available": "1 choice available",
+  "Skipped 1 unreadable rows": "Skipped 1 unreadable row",
+  "+1 more rejected rows": "+1 more rejected row",
+  "1 minutes ago": "1 minute ago",
+  "1 hours ago": "1 hour ago",
+  "1 days ago": "1 day ago",
+  "1 months ago": "1 month ago",
+  "1 devices": "1 device",
+  "Transfer files only · 1 devices": "Transfer files only · 1 device",
+  "1 changes need attention": "1 change needs attention",
+  "Sent 1 changes": "Sent 1 change",
+  "Received 1 changes": "Received 1 change",
+  "Held back 1 changes": "Held back 1 change",
+  "Applied 1 held-back changes": "Applied 1 held-back change",
+  "Merged 1 duplicates": "Merged 1 duplicate",
+  "Cleared 1 old changes": "Cleared 1 old change",
+  "1 seconds left": "1 second left",
+  "Merged 1 records": "Merged 1 record",
+  "1 records now point at the copy you kept.":
+    "1 record now points at the copy you kept.",
+  "Merge 1 groups": "Merge 1 group",
+  "Keep this one, remove 1 copies": "Keep this one, remove 1 copy",
+  "1 automatic rates stored.": "1 automatic rate stored.",
+  "1 relay messages were not delivered: the sender is not an active device, or the frame was evicted.":
+    "1 relay message was not delivered: the sender is not an active device, or the frame was evicted.",
+  "1 accounts": "1 account",
+  "1 categories": "1 category",
+  "1 tags": "1 tag",
+  "1 recurring schedules": "1 recurring schedule",
+  "1 budgets": "1 budget",
+  "1 goals": "1 goal",
+};
 
 /**
  * Builds the dynamic pattern table. Some replacements translate a captured
@@ -1565,14 +2439,642 @@ export type NestedTranslate = (message: string, language: "he") => string;
 export function createDynamicPatterns(
   translateMessage: NestedTranslate,
 ): DynamicPattern[] {
+  const fieldKey = (field: string) =>
+    field ? `${field[0].toUpperCase()}${field.slice(1)}` : field;
   const translateField = (field: string) =>
-    translateMessage(
-      field ? `${field[0].toUpperCase()}${field.slice(1)}` : field,
-      "he",
-    );
+    translateMessage(fieldKey(field), "he");
+  /** The masculine or the feminine form, for the noun a field label names. */
+  const agree = (field: string, masculine: string, feminine: string) =>
+    FEMININE_FIELDS.has(fieldKey(field)) ? feminine : masculine;
 
   // Built once by the caller: the table is static, and every non-dictionary string in Hebrew walks it.
   return [
+    [
+      new RegExp(
+        `^(${Object.keys(ONE_WITH_PLURAL)
+          .map((key) => key.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+          .join("|")})$`,
+      ),
+      (message) => translateMessage(ONE_WITH_PLURAL[message], "he"),
+    ],
+    // Two of a unit of time has its own Hebrew word, not "2" and the plural.
+    [/^2 minutes ago$/, () => "לפני שתי דקות"],
+    [/^2 hours ago$/, () => "לפני שעתיים"],
+    [/^2 days ago$/, () => "לפני יומיים"],
+    [/^2 months ago$/, () => "לפני חודשיים"],
+    [/^2 seconds left$/, () => "נותרו שתי שניות"],
+    // Sync, backup, file transfer and custom theme messages. First, so the broader patterns
+    // below (`(.+) (value)`, `Remove (.+)`) never claim a message that has its own.
+    [
+      /^(.+) is not an Ed25519 signature\.$/,
+      (p1) => `ערך שאינו חתימת Ed25519: ${translateMessage(p1, "he")}.`,
+    ],
+    [
+      /^Qashy can fetch (.+) rates automatically from frankfurter\.dev\. Only currency codes and dates are sent\.$/,
+      (p1) =>
+        `Qashy יכול לטעון שערי ${p1} אוטומטית מ־frankfurter.dev. נשלחים רק קודי מטבעות ותאריכים.`,
+    ],
+    [
+      /^\$: theme file is too large \((\d+) characters; the limit is (\d+)\)$/,
+      (p1, p2) =>
+        `$: קובץ ערכת העיצוב גדול מדי (${p1} תווים; המגבלה היא ${p2})`,
+    ],
+    [
+      /^(.+)\.(.+) changed on (.+) but is immutable; not synced\.$/,
+      (p1, p2, p3) =>
+        `${p1}.${p2} השתנה ב־${p3} אך הוא בלתי ניתן לשינוי; לא סונכרן.`,
+    ],
+    [
+      /^(.+) cannot be encoded; convert it first$/,
+      (p1) => `לא ניתן לקודד את ${p1}; המירו אותו תחילה`,
+    ],
+    [/^(.+) has no JSON representation$/, (p1) => `אין ייצוג JSON עבור ${p1}`],
+    [/^1 automatic rate stored\.$/, () => `נשמר שער אוטומטי אחד.`],
+    [
+      /^(\d+) automatic rates stored\.$/,
+      (p1) => `נשמרו ${p1} שערים אוטומטיים.`,
+    ],
+    [/^(.+) cannot be encoded$/, (p1) => `לא ניתן לקודד את ${p1}`],
+    [
+      /^(.+) sent a different version of a change this vault already accepted \((.+)\)\. That device's history has been rewritten\.$/,
+      (p1, p2) =>
+        `${p1} שלח גרסה אחרת של שינוי שהכספת הזו כבר קיבלה (${p2}). ההיסטוריה של המכשיר ההוא נכתבה מחדש.`,
+    ],
+    [
+      /^That backup was written by a different version of Qashy \(format v(.+)\)\. Update this device before restoring it\.$/,
+      (p1) =>
+        `הגיבוי הזה נכתב בגרסה אחרת של Qashy (פורמט v${p1}). עדכנו את המכשיר הזה לפני שחזורו.`,
+    ],
+    [
+      /^That code was made by a device using sync protocol v(.+); this one speaks v(.+)\. Update whichever is older\.$/,
+      (p1, p2) =>
+        `הקוד הזה נוצר במכשיר שמשתמש בפרוטוקול סנכרון v${p1}; המכשיר הזה משתמש ב־v${p2}. עדכנו את הישן מביניהם.`,
+    ],
+    [
+      /^(\d+) relay messages were not delivered: the sender is not an active device, or the frame was evicted\.$/,
+      (p1) =>
+        `${p1} הודעות ממסר לא נמסרו: השולח אינו מכשיר פעיל, או שהמסגרת הוסרה.`,
+    ],
+    [
+      /^Theme "(.+)" type\.text must cover Hebrew and Latin \(directly or through a fallback font\); it covers (.+)\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: type.text חייב לכסות עברית ולטינית (ישירות או דרך גופן חלופי); הוא מכסה ${p2}.`,
+    ],
+    [
+      /^1 relay message was not delivered: the sender is not an active device, or the frame was evicted\.$/,
+      () => `הודעת ממסר אחת לא נמסרה: השולח אינו מכשיר פעיל, או שהמסגרת הוסרה.`,
+    ],
+    [
+      /^These devices use different base currencies — (.+) and (.+)\. Syncing would corrupt your totals\.$/,
+      (p1, p2) =>
+        `המכשירים האלה משתמשים במטבעות בסיס שונים — ${p1} ו־${p2}. סנכרון ישבש את הסכומים שלכם.`,
+    ],
+    [
+      /^The other device speaks sync protocol v(.+); this one speaks v(.+)\. Update whichever is older\.$/,
+      (p1, p2) =>
+        `המכשיר האחר משתמש בפרוטוקול סנכרון v${p1}; המכשיר הזה משתמש ב־v${p2}. עדכנו את הישן מביניהם.`,
+    ],
+    [
+      /^extends: must be a built-in theme id \((.+)\); custom themes cannot extend custom themes$/,
+      (p1) =>
+        `extends: חייב להיות מזהה של ערכת עיצוב מובנית (${p1}); ערכות עיצוב מותאמות אינן יכולות להרחיב ערכות מותאמות`,
+    ],
+    [
+      /^Theme "(.+)" charts\.gridDash must be an SVG dash array like "4 4", or empty for solid\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: charts.gridDash חייב להיות מערך קווים מקווקווים של SVG כמו "4 4", או ריק לקו רציף.`,
+    ],
+    [
+      /^That file was written by a newer version of Qashy \(format v(.+)\)\. Update this device\.$/,
+      (p1) =>
+        `הקובץ הזה נכתב בגרסה חדשה יותר של Qashy (פורמט v${p1}). עדכנו את המכשיר הזה.`,
+    ],
+    [
+      /^Theme "(.+)" charts\.tone\.containerMix\.(.+) must be a number between 0 and 1 \(exclusive\)\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: charts.tone.containerMix.${p2} חייב להיות מספר בין 0 ל־1 (לא כולל).`,
+    ],
+    [
+      /^This frame uses sync protocol v(.+); this device speaks v(.+)\. Update the other device\.$/,
+      (p1, p2) =>
+        `המסגרת הזו משתמשת בפרוטוקול סנכרון v${p1}; המכשיר הזה משתמש ב־v${p2}. עדכנו את המכשיר האחר.`,
+    ],
+    [
+      /^(.+): must define at least one color \(every theme must define both light and dark\)$/,
+      (p1) =>
+        `${p1}: חייב להגדיר לפחות צבע אחד (כל ערכת עיצוב חייבת להגדיר גם בהיר וגם כהה)`,
+    ],
+    [
+      /^Theme "(.+)" material\.bevelDepth must be at least 1 for the bevel engine\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: material.bevelDepth חייב להיות לפחות 1 במנוע bevel.`,
+    ],
+    [
+      /^Mix letters with digits or symbols, or make it at least (\d+) characters\.$/,
+      (p1) =>
+        `שלבו אותיות עם ספרות או סמלים, או הגדילו את האורך ל־${p1} תווים לפחות.`,
+    ],
+    [
+      /^Theme "(.+)" charts\.categoryPalette must hold at least 6 #RRGGBB colors\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: charts.categoryPalette חייב להכיל לפחות 6 צבעים בפורמט #RRGGBB.`,
+    ],
+    [
+      /^Theme "(.+)" material\.card must be "elevated", "outlined" or "tonal"\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: material.card חייב להיות "elevated", "outlined" או "tonal".`,
+    ],
+    [
+      /^(.+) could not be verified\. Start the pairing again on both devices\.$/,
+      (p1) => `לא ניתן היה לאמת: ${p1}. התחילו את החיבור מחדש בשני המכשירים.`,
+    ],
+    [
+      /^Op (.+) contains a partial field group and cannot be applied safely\.$/,
+      (p1) => `פעולה ${p1} מכילה קבוצת שדות חלקית ואי אפשר להחיל אותה בבטחה.`,
+    ],
+    [
+      /^Theme "(.+)" motion\.press must be "scale", "translate" or "overlay"\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: motion.press חייב להיות "scale", "translate" או "overlay".`,
+    ],
+    [
+      /^Theme "(.+)" charts\.tone\.containerMix\.(.+) must be between 0\.4 and 0\.95\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: charts.tone.containerMix.${p2} חייב להיות בין 0.4 ל־0.95.`,
+    ],
+    [
+      /^Theme "(.+)" material\.gradients must be false for the flat engine\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: material.gradients חייב להיות false במנוע flat.`,
+    ],
+    [
+      /^type\.scale\.(.+)\.lineHeight: must be at least type\.scale\.(.+)\.fontSize$/,
+      (p1, p2) =>
+        `type.scale.${p1}.lineHeight: חייב להיות לפחות type.scale.${p2}.fontSize`,
+    ],
+    [
+      /^Theme "(.+)" motion\.pressTranslate must be a number from 0 to 8\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: motion.pressTranslate חייב להיות מספר בין 0 ל־8.`,
+    ],
+    [
+      /^Theme "(.+)" charts\.lineCap must be "round", "butt" or "square"\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: charts.lineCap חייב להיות "round", "butt" או "square".`,
+    ],
+    [
+      /^Theme "(.+)" icons\.categorySet must be a registered icon set \((.+)\)\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: icons.categorySet חייב להיות ערכת סמלים רשומה (${p2}).`,
+    ],
+    [
+      /^The snapshot for (.+) (.+) is stamped ahead of this device's clock\.$/,
+      (p1, p2) =>
+        `תמונת המצב של ${p1} ${p2} נושאת חותמת זמן מאוחרת משעון המכשיר הזה.`,
+    ],
+    [
+      /^Renamed to "(.+)" because another entry already used that name\.$/,
+      (p1) => `שונה שם ל־״${p1}״ כי רשומה אחרת כבר השתמשה בשם הזה.`,
+    ],
+    [
+      /^Theme "(.+)" material\.engine must be "soft", "bevel" or "flat"\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: material.engine חייב להיות "soft", "bevel" או "flat".`,
+    ],
+    [
+      /^Theme "(.+)" (.+)\.lineHeight must be a number of at least fontSize\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: ${p2}.lineHeight חייב להיות מספר שאינו קטן מ־fontSize.`,
+    ],
+    [
+      /^Theme "(.+)" (.+)\.weight must be regular, medium, semibold or bold\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: ${p2}.weight חייב להיות regular, medium, semibold או bold.`,
+    ],
+    [
+      /^That device uses sync batch format v(.+); this app requires v(.+)\.$/,
+      (p1, p2) =>
+        `המכשיר ההוא משתמש בפורמט אצווה v${p1}; האפליקציה הזו דורשת v${p2}.`,
+    ],
+    [
+      /^Theme "(.+)" material\.bevelDepth must be a number from 0 to 8\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: material.bevelDepth חייב להיות מספר בין 0 ל־8.`,
+    ],
+    [
+      /^Theme "(.+)" shadows\.(.+)\.(.+) must have no blur for the bevel engine\.$/,
+      (p1, p2, p3) =>
+        `ערכת העיצוב ״${p1}״: ב־shadows.${p2}.${p3} אסור שיהיה טשטוש במנוע bevel.`,
+    ],
+    [
+      /^Theme "(.+)" icons\.badge must be "tinted", "filled" or "none"\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: icons.badge חייב להיות "tinted", "filled" או "none".`,
+    ],
+    [
+      /^Device (\d+) in that roster has a malformed revocation cutoff\.$/,
+      (p1) => `למכשיר ${p1} ברשימה ההיא יש נקודת חיתוך להסרה פגומה.`,
+    ],
+    [
+      /^Theme "(.+)" icons\.badgeShape must be "circle" or "squircle"\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: icons.badgeShape חייב להיות "circle" או "squircle".`,
+    ],
+    [
+      /^Theme "(.+)" accent\.mode must be "user", "fixed" or "system"\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: accent.mode חייב להיות "user", "fixed" או "system".`,
+    ],
+    [
+      /^Op (.+) was not signed by the device it claims to come from\.$/,
+      (p1) => `פעולה ${p1} לא נחתמה על ידי המכשיר שממנו היא טוענת להגיע.`,
+    ],
+    [
+      /^That batch carries too many chain heads; the limit is (\d+)\.$/,
+      (p1) => `האצווה הזו נושאת יותר מדי ראשי שרשרת; המגבלה היא ${p1}.`,
+    ],
+    [
+      /^Dropped a frame: (\d+) are already waiting from this device\.$/,
+      (p1) => `מסגרת נזרקה: כבר ממתינות ${p1} מסגרות מהמכשיר הזה.`,
+    ],
+    [
+      /^Device (\d+) in that roster does not match its signing key\.$/,
+      (p1) => `מכשיר ${p1} ברשימה ההיא אינו תואם למפתח החתימה שלו.`,
+    ],
+    [
+      /^Op (.+) has an id that does not match its chain position\.$/,
+      (p1) => `לפעולה ${p1} יש מזהה שאינו תואם למיקומה בשרשרת.`,
+    ],
+    [
+      /^(.+) was removed from this vault and can no longer sync\.$/,
+      (p1) => `${p1} הוסר מהכספת הזו ואינו יכול עוד לסנכרן.`,
+    ],
+    [
+      /^Theme "(.+)" charts\.tone\.minContrast must be at least 3\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: charts.tone.minContrast חייב להיות לפחות 3.`,
+    ],
+    [
+      /^Theme "(.+)" icons\.set must be a registered icon set \((.+)\)\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: icons.set חייב להיות ערכת סמלים רשומה (${p2}).`,
+    ],
+    [
+      /^Op (.+)'s clock reading belongs to a different device\.$/,
+      (p1) => `קריאת השעון של פעולה ${p1} שייכת למכשיר אחר.`,
+    ],
+    [
+      /^Device (\d+) in that roster has a malformed revocation\.$/,
+      (p1) => `למכשיר ${p1} ברשימה ההיא יש הסרה פגומה.`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed deletion state\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש מצב מחיקה פגום.`,
+    ],
+    [
+      /^That batch carries (\d+) state entries; the limit is (\d+)\.$/,
+      (p1, p2) => `האצווה הזו נושאת ${p1} רשומות מצב; המגבלה היא ${p2}.`,
+    ],
+    [
+      /^That batch would exceed the (\d+)-device roster limit\.$/,
+      (p1) => `האצווה הזו תחרוג ממגבלת רשימה של ${p1} מכשירים.`,
+    ],
+    [
+      /^(.+) was removed at change (.+); change (.+) is not accepted\.$/,
+      (p1, p2, p3) => `${p1} הוסר בשינוי ${p2}; שינוי ${p3} אינו מתקבל.`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed erasure state\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש מצב מחיקה מוחלטת פגום.`,
+    ],
+    [
+      /^(.+): key must not contain a URL, data URI or script$/,
+      (p1) => `${p1}: אסור שהמפתח יכיל כתובת URL, data URI או סקריפט`,
+    ],
+    [
+      /^Theme "(.+)" (.+)\.letterSpacing must be a finite number\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: ${p2}.letterSpacing חייב להיות מספר סופי.`,
+    ],
+    [
+      /^Theme "(.+)" accent\.default must be a #RRGGBB color\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: accent.default חייב להיות צבע בפורמט #RRGGBB.`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed create state\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש מצב יצירה פגום.`,
+    ],
+    [
+      /^(.+) changed from (.+) to (.+) to keep (.+):1 contrast against (.+)$/,
+      (p1, p2, p3, p4, p5) =>
+        `${p1} שונה מ־${p2} ל־${p3} כדי לשמור על ניגודיות ${p4}:1 מול ${p5}`,
+    ],
+    [
+      /^Theme "(.+)" accent\.presets must be #RRGGBB colors\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: accent.presets חייבים להיות צבעים בפורמט #RRGGBB.`,
+    ],
+    [
+      /^The snapshot for (.+) (.+) has a partial (.+) field group\.$/,
+      (p1, p2, p3) => `בתמונת המצב של ${p1} ${p2} יש קבוצת שדות ${p3} חלקית.`,
+    ],
+    [
+      /^Theme "(.+)" material\.gradients must be a boolean\.$/,
+      (p1) =>
+        `ערכת העיצוב ״${p1}״: material.gradients חייב להיות true או false.`,
+    ],
+    [
+      /^Theme "(.+)" shadows\.(.+)\.(.+) must be a non-empty string\.$/,
+      (p1, p2, p3) =>
+        `ערכת העיצוב ״${p1}״: shadows.${p2}.${p3} חייב להיות מחרוזת לא ריקה.`,
+    ],
+    [
+      /^id: "(.+)" is a built-in theme id; choose another$/,
+      (p1) => `id: ״${p1}״ הוא מזהה של ערכת עיצוב מובנית; בחרו מזהה אחר`,
+    ],
+    [
+      /^Theme "(.+)" motion\.pressScale must be at most 1\.$/,
+      (p1) => `ערכת העיצוב ״${p1}״: motion.pressScale חייב להיות 1 לכל היותר.`,
+    ],
+    [
+      /^Theme "(.+)" type\.(.+) must be \{ family, fallbacks \}\.$/,
+      (p1, p2) =>
+        `ערכת העיצוב ״${p1}״: type.${p2} חייב להיות { family, fallbacks }.`,
+    ],
+    [
+      /^Theme "(.+)" (.+)\.fontSize must be a positive number\.$/,
+      (p1, p2) => `ערכת העיצוב ״${p1}״: ${p2}.fontSize חייב להיות מספר חיובי.`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed set entry\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש פריט קבוצה פגום.`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed map entry\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש פריט מפה פגום.`,
+    ],
+    [
+      /^(.+): must not contain a URL, data URI or script$/,
+      (p1) => `${p1}: אסור שיכיל כתובת URL, data URI או סקריפט`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed register\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש רגיסטר פגום.`,
+    ],
+    [
+      /^That batch carries (\d+) devices; the limit is (\d+)\.$/,
+      (p1, p2) => `האצווה הזו נושאת ${p1} מכשירים; המגבלה היא ${p2}.`,
+    ],
+    [
+      /^These accounts use different currencies \((.+)\)\.$/,
+      (p1) => `החשבונות האלה משתמשים במטבעות שונים (${p1}).`,
+    ],
+    [
+      /^Theme "(.+)" charts\.(.+) must be a positive number\.$/,
+      (p1, p2) => `ערכת העיצוב ״${p1}״: charts.${p2} חייב להיות מספר חיובי.`,
+    ],
+    [
+      /^Theme "(.+)" charts\.patterns must be a boolean\.$/,
+      (p1) => `ערכת העיצוב ״${p1}״: charts.patterns חייב להיות true או false.`,
+    ],
+    [
+      /^Theme "(.+)" palette\.(.+)\.(.+) must be a #RRGGBB color\.$/,
+      (p1, p2, p3) =>
+        `ערכת העיצוב ״${p1}״: palette.${p2}.${p3} חייב להיות צבע בפורמט #RRGGBB.`,
+    ],
+    [
+      /^Device (\d+) in that roster has no vault epoch\.$/,
+      (p1) => `למכשיר ${p1} ברשימה ההיא אין תקופת כספת.`,
+    ],
+    [
+      /^Device (\d+) in that roster is not an object\.$/,
+      (p1) => `מכשיר ${p1} ברשימה ההיא אינו אובייקט.`,
+    ],
+    [
+      /^Op (.+) does not follow the history we hold\.$/,
+      (p1) => `פעולה ${p1} אינה נמשכת מההיסטוריה שברשותנו.`,
+    ],
+    [
+      /^Theme "(.+)" (.+) must be a non-negative number\.$/,
+      (p1, p2) => `ערכת העיצוב ״${p1}״: ${p2} חייב להיות מספר לא־שלילי.`,
+    ],
+    [
+      /^That batch carries (\d+) ops; the limit is (\d+)\.$/,
+      (p1, p2) => `האצווה הזו נושאת ${p1} פעולות; המגבלה היא ${p2}.`,
+    ],
+    [
+      /^(.+): must be a list of (\d+) to (\d+) #RRGGBB colors$/,
+      (p1, p2, p3) =>
+        `${p1}: חייב להיות רשימה של ${p2} עד ${p3} צבעים בפורמט #RRGGBB`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed set\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש קבוצה פגומה.`,
+    ],
+    [
+      /^Full-state entry (\d+) has a malformed map\.$/,
+      (p1) => `ברשומת המצב המלא ${p1} יש מפה פגומה.`,
+    ],
+    [
+      /^Op (.+) rewinds this device's history to (.+)\.$/,
+      (p1, p2) => `פעולה ${p1} מחזירה את ההיסטוריה של המכשיר הזה אל ${p2}.`,
+    ],
+    [
+      /^Missing ops between (.+) and (.+) for device (.+)\.$/,
+      (p1, p2, p3) => `חסרות פעולות בין ${p1} ל־${p2} עבור המכשיר ${p3}.`,
+    ],
+    [
+      /^A membership control has an invalid (.+)\.$/,
+      (p1) => `בבקרת חברות יש ${translateMessage(p1, "he")} לא תקין.`,
+    ],
+    [
+      /^(.+) is not a safe non-negative integer\.$/,
+      (p1) => `${p1} אינו מספר שלם לא־שלילי בטווח הבטוח.`,
+    ],
+    [
+      /^Full-state entry (\d+) repeats an entity\.$/,
+      (p1) => `רשומת המצב המלא ${p1} חוזרת על ישות.`,
+    ],
+    [
+      /^That frame is (\d+) bytes; the limit is (\d+)\.$/,
+      (p1, p2) => `המסגרת הזו היא בת ${p1} בתים; המגבלה היא ${p2}.`,
+    ],
+    [
+      /^Theme "(.+)" (.+) must be a positive number\.$/,
+      (p1, p2) => `ערכת העיצוב ״${p1}״: ${p2} חייב להיות מספר חיובי.`,
+    ],
+    [
+      /^Theme "(.+)" type\.(.+) uses unknown font "(.+)"\.$/,
+      (p1, p2, p3) =>
+        `ערכת העיצוב ״${p1}״: type.${p2} משתמש בגופן לא מוכר ״${p3}״.`,
+    ],
+    [
+      /^Full-state entry (\d+) is not an object\.$/,
+      (p1) => `רשומת המצב המלא ${p1} אינה אובייקט.`,
+    ],
+    [
+      /^(.+): must be a list of (\d+) #RRGGBB colors$/,
+      (p1, p2) => `${p1}: חייב להיות רשימה של ${p2} צבעים בפורמט #RRGGBB`,
+    ],
+    [
+      /^A Qashy recovery phrase is (\d+) words\.$/,
+      (p1) => `משפט שחזור של Qashy הוא בן ${p1} מילים.`,
+    ],
+    [
+      /^Op (.+) has a malformed clock reading\.$/,
+      (p1) => `לפעולה ${p1} יש קריאת שעון פגומה.`,
+    ],
+    [
+      /^relay speaks v(.+); this app speaks v(.+)$/,
+      (p1, p2) => `הממסר משתמש ב־v${p1}; האפליקציה הזו משתמשת ב־v${p2}`,
+    ],
+    [
+      /^Roster member (\d+) is not an object\.$/,
+      (p1) => `חבר הרשימה ${p1} אינו אובייקט.`,
+    ],
+    [
+      /^Op (.+) arrived without a signature\.$/,
+      (p1) => `פעולה ${p1} הגיעה ללא חתימה.`,
+    ],
+    [
+      /^Op (.+) does not match its own hash\.$/,
+      (p1) => `פעולה ${p1} אינה תואמת לגיבוב שלה.`,
+    ],
+    [
+      /^themeSchemaVersion: must be (.+) or (.+)$/,
+      (p1, p2) => `themeSchemaVersion: חייב להיות ${p1} או ${p2}`,
+    ],
+    [
+      /^Full-state entry (\d+) is malformed\.$/,
+      (p1) => `רשומת המצב המלא ${p1} פגומה.`,
+    ],
+    [
+      /^Clock reading (.+) is out of range\.$/,
+      (p1) => `קריאת השעון ${p1} מחוץ לטווח.`,
+    ],
+    [
+      /^Clock counter (.+) is out of range\.$/,
+      (p1) => `מונה השעון ${p1} מחוץ לטווח.`,
+    ],
+    [
+      /^(.+): requires themeSchemaVersion 2$/,
+      (p1) => `${p1}: דורש themeSchemaVersion 2`,
+    ],
+    [
+      /^The sender's position on chain (.+)$/,
+      (p1) => `מיקום השולח בשרשרת ${p1}`,
+    ],
+    [
+      /^Device id must be (\d+) characters\.$/,
+      (p1) => `מזהה המכשיר חייב להיות בן ${p1} תווים.`,
+    ],
+    [
+      /^Duplicate of (.+) for occurrence (.+)\.$/,
+      (p1, p2) => `כפילות של ${p1} עבור המופע ${p2}.`,
+    ],
+    [
+      /^Set to (.+) to match transaction (.+)\.$/,
+      (p1, p2) => `הוגדר ל־${p1} כדי להתאים לתנועה ${p2}.`,
+    ],
+    [
+      /^(.+): must be an integer from (.+) to (.+)$/,
+      (p1, p2, p3) => `${p1}: חייב להיות מספר שלם בין ${p2} ל־${p3}`,
+    ],
+    [
+      /^(.+) is not a valid vault epoch\.$/,
+      (p1) => `${p1} אינה תקופת כספת תקינה.`,
+    ],
+    [
+      /^(.+): must be a number from (.+) to (.+)$/,
+      (p1, p2, p3) => `${p1}: חייב להיות מספר בין ${p2} ל־${p3}`,
+    ],
+    [
+      /^Could not reach the relay: (.+)$/,
+      (p1) => `לא ניתן היה להגיע לממסר: ${p1}`,
+    ],
+    [
+      /^Duplicate of (.+) for period (.+)\.$/,
+      (p1, p2) => `כפילות של ${p1} עבור התקופה ${p2}.`,
+    ],
+    [
+      /^(.+): cannot reach (.+):1 against (.+)$/,
+      (p1, p2, p3) => `${p1}: לא ניתן להגיע לניגודיות ${p2}:1 מול ${p3}`,
+    ],
+    [/^No loopback channel for (.+)\.$/, (p1) => `אין ערוץ לולאה עבור ${p1}.`],
+    [
+      /^(.+): unknown key \(allowed: (.+)\)$/,
+      (p1, p2) => `${p1}: מפתח לא מוכר (מותרים: ${p2})`,
+    ],
+    [
+      /^(.+): must be a #RRGGBB color$/,
+      (p1) => `${p1}: חייב להיות צבע בפורמט #RRGGBB`,
+    ],
+    [/^(\d+) uploads failed in a row$/, (p1) => `${p1} העלאות נכשלו ברצף`],
+    [
+      /^(.+) is not a valid number\.$/,
+      (p1) => `ערך שאינו מספר תקין: ${translateMessage(p1, "he")}.`,
+    ],
+    [/^Goal (.+) no longer exists\.$/, (p1) => `היעד ${p1} אינו קיים עוד.`],
+    [
+      /^(.+): must be true or false$/,
+      (p1) => `${p1}: חייב להיות true או false`,
+    ],
+    [
+      /^Theme id "(.+)" is invalid\.$/,
+      (p1) => `מזהה ערכת העיצוב ״${p1}״ אינו תקין.`,
+    ],
+    [
+      /^(.+) must be (.+) bytes, got (.+)\.$/,
+      (p1, p2, p3) => `${p1} חייב להיות בן ${p2} בתים, התקבלו ${p3}.`,
+    ],
+    [
+      /^Theme "(.+)" must define (.+)\.$/,
+      (p1, p2) => `ערכת העיצוב ״${p1}״ חייבת להגדיר ${p2}.`,
+    ],
+    [/^Theme "(.+)" needs a name\.$/, (p1) => `ערכת העיצוב ״${p1}״ זקוקה לשם.`],
+    [/^Op (.+) is not an object\.$/, (p1) => `פעולה ${p1} אינה אובייקט.`],
+    [/^The relay answered (\d+)\.$/, (p1) => `הממסר ענה ${p1}.`],
+    [/^Op (.+) has no payload\.$/, (p1) => `לפעולה ${p1} אין מטען.`],
+    [
+      /^Duplicate of (.+) for (.+)\.$/,
+      (p1, p2) => `כפילות של ${p1} עבור ${p2}.`,
+    ],
+    [/^(.+): must be an object$/, (p1) => `${p1}: חייב להיות אובייקט`],
+    [/^(.+): nested too deeply$/, (p1) => `${p1}: מקונן עמוק מדי`],
+    [
+      /^(.+) is not an object\.$/,
+      (p1) => `ערך שאינו אובייקט: ${translateMessage(p1, "he")}.`,
+    ],
+    [/^(.+) is not a uint32\.$/, (p1) => `${p1} אינו מספר uint32.`],
+    [
+      /^(.+) is not a string\.$/,
+      (p1) => `ערך שאינו מחרוזת: ${translateMessage(p1, "he")}.`,
+    ],
+    [
+      /^(.+) is not readable\.$/,
+      (p1) => `ערך שאינו קריא: ${translateMessage(p1, "he")}.`,
+    ],
+    [
+      /^(.+): must be one of (.+)$/,
+      (p1, p2) => `${p1}: חייב להיות אחד מאלה: ${p2}`,
+    ],
+    [
+      /^Roster member (.+)'s (.+)$/,
+      (p1, p2) => `${translateMessage(p2, "he")} של חבר הרשימה ${p1}`,
+    ],
+    [/^Unknown font "(.+)"\.$/, (p1) => `גופן לא מוכר ״${p1}״.`],
+    [/^(.+) is not a byte\.$/, (p1) => `${p1} אינו בית.`],
+    [/^(.+) is missing\.$/, (p1) => `ערך חסר: ${translateMessage(p1, "he")}.`],
+    [/^…and (\d+) more$/, (p1) => `…ועוד ${p1}`],
+    [
+      /^Device (.+)'s (.+)$/,
+      (p1, p2) => `${translateMessage(p2, "he")} של מכשיר ${p1}`,
+    ],
+    [
+      /^Op (.+)'s (.+)$/,
+      (p1, p2) => `${translateMessage(p2, "he")} של פעולה ${p1}`,
+    ],
     [/^Edit \((\d+)\)$/, (count) => `עריכה (${count})`],
     [/^Edit (\d+) transactions$/, (count) => `עריכת ${count} תנועות`],
     [/^Move (\d+) transactions$/, (count) => `העברת ${count} תנועות`],
@@ -1581,10 +3083,30 @@ export function createDynamicPatterns(
       /^Number of times must be (\d+) or less\.$/,
       (count) => `מספר הפעמים חייב להיות ${count} או פחות.`,
     ],
+    [/^1 choice available$/, () => `אפשרות אחת זמינה`],
     [/^(\d+) choices available$/, (count) => `${count} אפשרויות זמינות`],
     [/^(\d+) transactions$/, (count) => `${count} תנועות`],
-    [/^(\d+) transaction$/, (count) => `תנועה אחת`],
+    [/^1 transaction$/, () => `תנועה אחת`],
+    [/^1 account$/, () => `חשבון אחד`],
+    [/^(\d+) accounts$/, (count) => `${count} חשבונות`],
+    [/^1 category$/, () => `קטגוריה אחת`],
+    [/^(\d+) categories$/, (count) => `${count} קטגוריות`],
+    [/^1 tag$/, () => `תגית אחת`],
+    [/^(\d+) tags$/, (count) => `${count} תגיות`],
+    [/^1 recurring schedule$/, () => `תזמון חוזר אחד`],
+    [/^(\d+) recurring schedules$/, (count) => `${count} תזמונים חוזרים`],
+    [/^1 budget$/, () => `תקציב אחד`],
+    [/^(\d+) budgets$/, (count) => `${count} תקציבים`],
+    [/^1 goal$/, () => `יעד אחד`],
+    [/^(\d+) goals$/, (count) => `${count} יעדים`],
+    [/^incl\. (.+) fee$/, (amount) => `כולל עמלה של ${amount}`],
+    [/^1 selected$/, () => `פריט אחד נבחר`],
     [/^(\d+) selected$/, (count) => `${count} נבחרו`],
+    [/^\+(\d+) more$/, (count) => `ועוד ${count}`],
+    [
+      /^(\d+) icons, or use any emoji$/,
+      (count) => `${count} סמלים, או כל אימוג׳י`,
+    ],
     [
       /^Daily spending from (.+) to (.+)\. Highest day (.+?)\.(?: Largest refund day (.+)\.)?$/,
       (from, to, highest, refund) =>
@@ -1627,6 +3149,8 @@ export function createDynamicPatterns(
     ],
     [/^Step (\d+) of (\d+)$/, (step, total) => `שלב ${step} מתוך ${total}`],
     [/^No activity in (.+)$/, (month) => `אין פעילות ב${month}`],
+    // Singular first: a count of one reads as a noun, not "1 transactions".
+    [/^Import 1 transaction$/, () => `ייבוא תנועה אחת`],
     [/^Import (\d+) transactions$/, (count) => `ייבוא ${count} תנועות`],
     [
       /^Row (\d+): (.+)$/,
@@ -1650,9 +3174,21 @@ export function createDynamicPatterns(
       (from, to) => `יש להוסיף שער חליפין מ־${from} ל־${to} כדי לשמור.`,
     ],
     [
+      // Hebrew has a dual for two ("כל יומיים") and a plural for more; one never reaches here,
+      // because "Every day." is its own message.
       /^Every (\d+) (day|week|month|year)s?\.$/,
-      (count, unit) => `כל ${count} ${translateMessage(unit, "he")}`,
+      (count, unit) => {
+        const forms: Record<string, [string, string]> = {
+          day: ["יומיים", "ימים"],
+          week: ["שבועיים", "שבועות"],
+          month: ["חודשיים", "חודשים"],
+          year: ["שנתיים", "שנים"],
+        };
+        const [dual, plural] = forms[unit];
+        return count === "2" ? `כל ${dual}` : `כל ${count} ${plural}`;
+      },
     ],
+    [/^1% remains in this period\.$/, () => `1% נותר בתקופה הזו.`],
     [
       /^(\d+)% remains in this period\.$/,
       (percent) => `${percent}% נותרו בתקופה הזו.`,
@@ -1663,15 +3199,18 @@ export function createDynamicPatterns(
     ],
     [
       /^(.+) must be greater than zero\.$/,
-      (label) => `${translateField(label)} חייב להיות גדול מאפס.`,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב להיות גדול מאפס", "חייבת להיות גדולה מאפס")}.`,
     ],
     [
       /^(.+) cannot be negative\.$/,
-      (label) => `${translateField(label)} אינו יכול להיות שלילי.`,
+      (label) =>
+        `${translateField(label)} ${agree(label, "אינו יכול להיות שלילי", "אינה יכולה להיות שלילית")}.`,
     ],
     [
       /^Enter a valid (.+)\.$/,
-      (label) => `הזינו ${translateField(label)} תקין.`,
+      (label) =>
+        `הזינו ${translateField(label)} ${agree(label, "תקין", "תקינה")}.`,
     ],
     [
       /^Use a real (.+) in YYYY-MM-DD format\.$/,
@@ -1679,17 +3218,25 @@ export function createDynamicPatterns(
     ],
     [
       /^(.+) must be a positive whole number\.$/,
-      (label) => `${translateField(label)} חייב להיות מספר שלם וחיובי.`,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב", "חייבת")} להיות מספר שלם וחיובי.`,
     ],
     [
       /^(.+) must be a whole number\.$/,
-      (label) => `${translateField(label)} חייב להיות מספר שלם.`,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב", "חייבת")} להיות מספר שלם.`,
     ],
+    // Zero places (a yen has none) and one place have their own wording; two and more are plural.
     [
       /^(.+) can have at most (\d+) decimal places\.$/,
       (label, digits) =>
-        `ל${translateField(label)} יכולות להיות לכל היותר ${digits} ספרות אחרי הנקודה.`,
+        digits === "0"
+          ? `ל${translateField(label)} אסור שיהיו ספרות אחרי הנקודה.`
+          : digits === "1"
+            ? `ל${translateField(label)} יכולה להיות לכל היותר ספרה אחת אחרי הנקודה.`
+            : `ל${translateField(label)} יכולות להיות לכל היותר ${digits} ספרות אחרי הנקודה.`,
     ],
+    [/^\+1 more rejected row$/, () => `ועוד שורה אחת שנדחתה`],
     [/^\+(\d+) more rejected rows$/, (count) => `ועוד ${count} שורות שנדחו`],
     [
       /^(.+) is outside the supported range\.$/,
@@ -1702,6 +3249,15 @@ export function createDynamicPatterns(
     [
       /^Choose a currency other than (.+)\.$/,
       (currency) => `בחרו מטבע אחר מ־${currency}.`,
+    ],
+    // Before `Map (.+)`, which would otherwise swallow it as one field.
+    [
+      /^Map required fields: (.+)\.$/,
+      (fields) =>
+        `מפו את שדות החובה: ${fields
+          .split(", ")
+          .map((field) => translateField(field))
+          .join(", ")}.`,
     ],
     [/^Map (.+)$/, (field) => `מיפוי ${translateField(field)}`],
     [
@@ -1746,6 +3302,10 @@ export function createDynamicPatterns(
     [/^Archive (.+)\?$/, (name) => `להעביר את ${name} לארכיון?`],
     [/^Delete the (.+) rate\?$/, (currency) => `למחוק את שער ${currency}?`],
     [/^Delete (\d+) transactions\?$/, (count) => `למחוק ${count} תנועות?`],
+    [/^Delete (\d+) budgets\?$/, (count) => `למחוק ${count} תקציבים?`],
+    [/^Delete (\d+) goals\?$/, (count) => `למחוק ${count} יעדים?`],
+    [/^Delete (\d+) accounts\?$/, (count) => `למחוק ${count} חשבונות?`],
+    [/^Delete (\d+) categories\?$/, (count) => `למחוק ${count} קטגוריות?`],
     [
       /^Delete (\d+) recurring transactions\?$/,
       (count) => `למחוק ${count} תנועות מחזוריות?`,
@@ -1759,18 +3319,20 @@ export function createDynamicPatterns(
       /^(.+) from (\d{4}-\d{2}-\d{2}) will be removed from this goal\.$/,
       (amount, date) => `${amount} מתאריך ${date} יוסר מהיעד הזה.`,
     ],
+    [/^1 transaction imported\.$/, () => `יובאה תנועה אחת.`],
     [/^(\d+) transactions imported\.$/, (count) => `יובאו ${count} תנועות.`],
+    [/^Skipped 1 unreadable row$/, () => `דולגה שורה אחת שלא ניתן לקרוא`],
     [
-      /^Skipped (\d+) unreadable (row|rows)$/,
+      /^Skipped (\d+) unreadable rows$/,
       (count) => `דולגו ${count} שורות שלא ניתן לקרוא`,
     ],
     [
-      /^The rest of the file was read\. Check (?:line|lines) (.+) for stray quotes\.$/,
-      (lines) => `שאר הקובץ נקרא. בדקו בשורות ${lines} אם יש מירכאות מיותרות.`,
+      /^The rest of the file was read\. Check line (.+) for stray quotes\.$/,
+      (line) => `שאר הקובץ נקרא. בדקו בשורה ${line} אם יש מירכאות מיותרות.`,
     ],
     [
-      /^Map required fields: (.+)\.$/,
-      (fields) => `מפו את שדות החובה: ${fields}.`,
+      /^The rest of the file was read\. Check lines (.+) for stray quotes\.$/,
+      (lines) => `שאר הקובץ נקרא. בדקו בשורות ${lines} אם יש מירכאות מיותרות.`,
     ],
     [
       /^Malformed CSV quote on line (\d+)\.$/,
@@ -1897,10 +3459,182 @@ export function createDynamicPatterns(
       /^Excludes (.+) until an effective exchange rate is added\.$/,
       (codes) => `מוחרגים ${codes} עד שיתווסף שער חליפין אפקטיבי.`,
     ],
+    // Donut chart summary read by screen readers: total, then "1. Name, 20 percent. 2. ...".
+    [
+      /^Spending by category\. Total (.+?)\. (\d+\. .+)\.$/,
+      (total, slices) =>
+        `הוצאות לפי קטגוריה. סך הכול ${total}. ${slices.replace(
+          /, (\d+) percent/g,
+          (_match, percent: string) =>
+            percent === "1" ? ", אחוז אחד" : `, ${percent} אחוזים`,
+        )}.`,
+    ],
     // Overview edit-mode announcement after a card moves; the title is already translated.
     [
       /^(.+), position (\d+) of (\d+)$/,
       (name, position, total) => `${name}, מיקום ${position} מתוך ${total}`,
     ],
+
+    // More → Exchange rates: what each row that still needs a manual rate says.
+    [
+      /^Automatic rates aren’t available for (.+); add rates manually\.$/,
+      (code) =>
+        `שערים אוטומטיים אינם זמינים עבור ${code}; הוסיפו שערים ידניים.`,
+    ],
+    [
+      /^Your manual (.+) → (.+) rate disagrees with the automatic rate; edit or remove it\.$/,
+      (from, to) =>
+        `השער הידני שלכם מ־${from} ל־${to} אינו תואם לשער האוטומטי; ערכו או הסירו אותו.`,
+    ],
+    [
+      /^No effective rate for (.+) yet\.$/,
+      (code) => `עדיין אין שער בתוקף עבור ${code}.`,
+    ],
+    // Sync → devices: transferring ownership of the vault.
+    [/^Make (.+) the vault owner\?$/, (name) => `להפוך את ${name} לבעל הכספת?`],
+    [/^Make (.+) owner$/, (name) => `הפיכת ${name} לבעלים`],
+
+    [
+      /^The time zone "(.+)" is not supported on this device\.$/,
+      (zone) => `אזור הזמן ״${zone}״ אינו נתמך במכשיר הזה.`,
+    ],
+    [
+      /^The currency (.+) is not supported\.$/,
+      (code) => `המטבע ${code} אינו נתמך.`,
+    ],
+    [
+      /^The schedule "(.+)" runs past the supported calendar range\.$/,
+      (title) => `התזמון ״${title}״ חורג מטווח התאריכים הנתמך.`,
+    ],
+    [
+      /^This SQLite file looks damaged or incomplete \(page (\d+) does not exist\)\.$/,
+      (page) => `קובץ ה־SQLite הזה נראה פגום או חלקי (עמוד ${page} אינו קיים).`,
+    ],
+    // Singular first, as with the transaction counts: a count of one is a noun, not "1 items".
+    [
+      /^Import blocked: 1 item\(s\) could not be imported, so nothing was imported\.$/,
+      () => "הייבוא נחסם: לא ניתן היה לייבא פריט אחד, ולכן שום דבר לא יובא.",
+    ],
+    [
+      /^Import blocked: (\d+) item\(s\) could not be imported, so nothing was imported\.$/,
+      (count) =>
+        `הייבוא נחסם: לא ניתן היה לייבא ${count} פריטים, ולכן שום דבר לא יובא.`,
+    ],
+    [
+      /^Invalid custom theme: (.+)$/,
+      // The errors are joined with "; " by the store; each is translated on its own.
+      (details) =>
+        `ערכת עיצוב מותאמת לא תקינה: ${details
+          .split("; ")
+          .map((detail) => translateMessage(detail, "he"))
+          .join("; ")}`,
+    ],
+    // CSV rows.
+    [/^Account (.+) is archived\.$/, (name) => `החשבון ${name} בארכיון.`],
+    [/^Category (.+) is archived\.$/, (name) => `הקטגוריה ${name} בארכיון.`],
+    [
+      /^Amount (.+) does not match the foreign amount and fee, which total (.+)\.$/,
+      (amount, total) =>
+        `הסכום ${amount} אינו תואם לסכום במטבע חוץ ולעמלה, שסכומם הכולל ${total}.`,
+    ],
+    [
+      /^Amount (.+) does not match the fee \((.+)\)\.$/,
+      (amount, fee) => `הסכום ${amount} אינו תואם לעמלה (${fee}).`,
+    ],
+    [
+      /^This amount converts to less than the smallest unit of (.+)\. Enter a larger amount or check the exchange rate\.$/,
+      (currency) =>
+        `הסכום הזה מומר לפחות מהיחידה הקטנה ביותר של ${currency}. הזינו סכום גדול יותר או בדקו את שער החליפין.`,
+    ],
+    [
+      /^Destination amount is far from the known (.+) → (.+) rate for (.+)\. Check the amount, or update the rate first\.$/,
+      (from, to, date) =>
+        `סכום היעד רחוק מהשער הידוע מ־${from} ל־${to} לתאריך ${date}. בדקו את הסכום, או עדכנו קודם את השער.`,
+    ],
+    [
+      /^Use at most (\d+) significant digits\.$/,
+      (count) => `השתמשו ב־${count} ספרות משמעותיות לכל היותר.`,
+    ],
+
+    // Sync merge checks. Each says what a field of a batch from another device must be.
+    [
+      /^(.+) must be text\.$/,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב", "חייבת")} להיות טקסט.`,
+    ],
+    [
+      /^(.+) must be a calendar date\.$/,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב", "חייבת")} להיות תאריך תקין בלוח השנה.`,
+    ],
+    [
+      /^(.+) must be (a positive |a )safe minor-unit integer\.$/,
+      (label, kind) =>
+        `${translateField(label)} ${agree(label, "חייב", "חייבת")} להיות מספר שלם ${kind === "a " ? "" : "חיובי "}ביחידות משנה, בטווח הנתמך.`,
+    ],
+    [
+      /^(.+) must be a supported currency\.$/,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב", "חייבת")} להיות מטבע נתמך.`,
+    ],
+    [
+      /^(.+) is invalid\.$/,
+      (label) =>
+        `${translateField(label)} ${agree(label, "אינו תקין", "אינה תקינה")}.`,
+    ],
+    [
+      /^(.+) must be a decimal string\.$/,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב", "חייבת")} להיות מספר עשרוני.`,
+    ],
+    [
+      /^(.+) must be positive\.$/,
+      (label) =>
+        `${translateField(label)} ${agree(label, "חייב להיות חיובי", "חייבת להיות חיובית")}.`,
+    ],
+
+    // Deleting categories names the budgets that would be left tracking nothing and are
+    // archived instead. The sentence is one of two plain category messages followed by one of
+    // two budget messages, so each of the four combinations is its own template pattern.
+    [
+      /^Transactions in this category become uncategorized, and it is removed from budgets and goals\. The budget (.+) would then track nothing, so it is archived and leaves Plan\. Edit its categories first to keep it\.$/,
+      (names) =>
+        `תנועות בקטגוריה זו יהפכו ללא קטגוריה, והיא תוסר מתקציבים ויעדים. התקציב ${names} לא יעקוב אחר שום דבר, ולכן הוא יועבר לארכיון ויוסר מהתכנון. ערכו קודם את הקטגוריות שלו כדי לשמור עליו.`,
+    ],
+    [
+      /^Transactions in this category become uncategorized, and it is removed from budgets and goals\. These budgets (.+) would then track nothing, so they are archived and leave Plan\. Edit their categories first to keep them\.$/,
+      (names) =>
+        `תנועות בקטגוריה זו יהפכו ללא קטגוריה, והיא תוסר מתקציבים ויעדים. התקציבים ${names} לא יעקבו אחר שום דבר, ולכן הם יועברו לארכיון ויוסרו מהתכנון. ערכו קודם את הקטגוריות שלהם כדי לשמור עליהם.`,
+    ],
+    [
+      /^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\. The budget (.+) would then track nothing, so it is archived and leaves Plan\. Edit its categories first to keep it\.$/,
+      (names) =>
+        `התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים. התקציב ${names} לא יעקוב אחר שום דבר, ולכן הוא יועבר לארכיון ויוסר מהתכנון. ערכו קודם את הקטגוריות שלו כדי לשמור עליו.`,
+    ],
+    [
+      /^Transactions in these categories become uncategorized, and the categories are removed from budgets and goals\. These budgets (.+) would then track nothing, so they are archived and leave Plan\. Edit their categories first to keep them\.$/,
+      (names) =>
+        `התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים. התקציבים ${names} לא יעקבו אחר שום דבר, ולכן הם יועברו לארכיון ויוסרו מהתכנון. ערכו קודם את הקטגוריות שלהם כדי לשמור עליהם.`,
+    ],
   ];
+}
+
+let hebrewPatterns: DynamicPattern[] | null = null;
+
+/**
+ * The Hebrew for `message`, or `null` when the dictionary and the patterns have none. For code
+ * that renders outside the localization provider (the startup failure screen); everything else
+ * goes through `translateMessage`.
+ */
+export function lookupHebrew(message: string): string | null {
+  const core = message.trim();
+  if (Object.hasOwn(HEBREW, core)) return HEBREW[core];
+  hebrewPatterns ??= createDynamicPatterns(
+    (fragment) => lookupHebrew(fragment) ?? fragment,
+  );
+  for (const [pattern, replacement] of hebrewPatterns) {
+    const match = core.match(pattern);
+    if (match) return replacement(...match.slice(1));
+  }
+  return null;
 }

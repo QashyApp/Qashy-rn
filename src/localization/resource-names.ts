@@ -110,6 +110,28 @@ export function patternFormat(regex: RegExp): string | null {
 }
 
 /**
+ * The source text of each capture group of a regex source, in order, or null when the source is
+ * not a plain pattern in the sense of `patternFormat`'s grammar. Used to sample alternations.
+ */
+export function captureGroupBodies(source: string): string[] | null {
+  const bodies: string[] = [];
+  let i = 0;
+  while (i < source.length) {
+    if (source[i] === "\\") {
+      i += 2;
+    } else if (source[i] === "(") {
+      const end = captureGroupEnd(source, i);
+      if (end === null) return null;
+      bodies.push(source.slice(i + 1, end));
+      i = end + 1;
+    } else {
+      i += 1;
+    }
+  }
+  return bodies;
+}
+
+/**
  * Index of the `)` closing the capture group opened at `start`, or null when the
  * group is not a plain capture group (starts with `?`, or contains a nested capture group).
  */

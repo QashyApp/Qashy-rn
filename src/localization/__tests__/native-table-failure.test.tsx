@@ -6,6 +6,9 @@ import {
   useLocalization,
 } from "@/localization/localization";
 import {
+  clearNativeTables,
+  EMPTY_NATIVE_TABLE,
+  getNativeTable,
   NATIVE_LOAD_TIMEOUT_MS,
   withTimeout,
 } from "@/localization/native-table";
@@ -59,6 +62,8 @@ const renderProvider = () =>
 const french = (names: string[]) =>
   names.map((name) => (name === resourceName("Language") ? "Langue" : null));
 
+beforeEach(clearNativeTables);
+
 afterEach(() => {
   jest.useRealTimers();
   mockNativeGetStrings.mockReset();
@@ -80,6 +85,21 @@ describe("a failing native read", () => {
       expect(screen.getByText("ready:Language")).toBeTruthy(),
     );
     expect(mockNativeGetStrings).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("a native read that finds no translations", () => {
+  it("counts as a failure: retried once, English meanwhile, and tried again on a later visit", async () => {
+    mockNativeGetStrings.mockImplementation(async (names) =>
+      names.map(() => null),
+    );
+    await renderProvider();
+    await waitFor(() =>
+      expect(screen.getByText("ready:Language")).toBeTruthy(),
+    );
+    expect(mockNativeGetStrings).toHaveBeenCalledTimes(2);
+    // Not installed as a good table: nothing is cached for the locale.
+    expect(getNativeTable("fr-FR")).toBe(EMPTY_NATIVE_TABLE);
   });
 });
 

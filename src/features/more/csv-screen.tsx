@@ -513,7 +513,7 @@ export function CsvScreen() {
       setPreview(result);
       showError(
         "Import complete",
-        `${result.committedIds.length} transactions imported.`,
+        `${result.committedIds.length} ${result.committedIds.length === 1 ? "transaction" : "transactions"} imported.`,
       );
     } catch (reason) {
       showError(
@@ -720,8 +720,7 @@ export function CsvScreen() {
                 variant="caption"
                 style={{ color: theme.negative }}
               >
-                Map required fields:{" "}
-                {missingRequiredFields.map((field) => field.label).join(", ")}.
+                {`Map required fields: ${missingRequiredFields.map((field) => field.label).join(", ")}.`}
               </AppText>
             ) : null}
             <ActionButton
@@ -778,7 +777,7 @@ export function CsvScreen() {
                   >
                     <AppText literal variant="caption" muted>
                       {t(
-                        `+${preview.rejectedRows.length - 20} more rejected rows`,
+                        `+${preview.rejectedRows.length - 20} more rejected ${preview.rejectedRows.length - 20 === 1 ? "row" : "rows"}`,
                       )}
                     </AppText>
                   </View>
@@ -790,7 +789,7 @@ export function CsvScreen() {
                 title={
                   busy
                     ? "Importing…"
-                    : `Import ${preview.validRows.length} transactions`
+                    : `Import ${preview.validRows.length} ${preview.validRows.length === 1 ? "transaction" : "transactions"}`
                 }
                 icon="checkmark"
                 size="large"

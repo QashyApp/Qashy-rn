@@ -11,6 +11,8 @@ import {
 const mockSetDisplayLocale = jest.fn();
 const mockStore = {
   native: null as string | null,
+  /** Makes the native read throw, as when the OS call fails while the queue drains. */
+  nativeThrows: false,
   stored: "system",
   deviceLocales: ["en-GB"],
   persisted: [] as string[],
@@ -28,7 +30,10 @@ jest.mock("@/providers/finance-provider", () => ({
 }));
 
 jest.mock("@/localization/language-store", () => ({
-  readNativeRawPreference: () => mockStore.native,
+  readNativeRawPreference: () => {
+    if (mockStore.nativeThrows) throw new Error("native read failed");
+    return mockStore.native;
+  },
   usesNativeLocale: () => mockStore.native !== null,
   readDeviceLocales: () => mockStore.readDeviceLocales(),
   loadStoredRawPreference: () => mockStore.load(),
@@ -67,6 +72,7 @@ function deferred() {
 beforeEach(() => {
   mockSetDisplayLocale.mockReset();
   mockStore.native = null;
+  mockStore.nativeThrows = false;
   mockStore.stored = "system";
   mockStore.deviceLocales = ["en-GB"];
   mockStore.persisted = [];
@@ -160,6 +166,193 @@ describe("LocalizationProvider", () => {
     });
     // Not "system" (the initial value) and not Hebrew (the older success): the newer success.
     expect(screen.getByText("en-US|en-US|false|en")).toBeTruthy();
+  });
+
+  it("keeps the queue running when the drain after a job throws", async () => {
+    mockStore.native = "en-US";
+    mockStore.persist = async (preference) => {
+      mockStore.persisted.push(preference);
+      // The write itself lands, then the read the drain makes fails.
+      mockStore.nativeThrows = true;
+    };
+    await renderProvider();
+    expect(screen.getByText("en-US|en-US|false|en")).toBeTruthy();
+    await act(async () => {
+      await latest!.setPreference("he-IL");
+    });
+    expect(mockStore.persisted).toEqual(["he-IL"]);
+
+    // A later choice still runs: the failed drain did not leave a rejected promise at the tail.
+    mockStore.nativeThrows = false;
+    mockStore.persist = async (preference) => {
+      mockStore.persisted.push(preference);
+    };
+    await act(async () => {
+      await latest!.setPreference("en-US");
+    });
+    expect(mockStore.persisted).toEqual(["he-IL", "en-US"]);
+  });
+
+  it("shows the persisted value when a write fails and the native read throws", async () => {
+    mockStore.native = "";
+    await renderProvider();
+    expect(screen.getByText("system|en-US|false|en")).toBeTruthy();
+    mockStore.persist = async () => {
+      // Both OS calls fail: setApplicationLocales rejects, getApplicationLocales throws.
+      mockStore.nativeThrows = true;
+      throw new Error("write failed");
+    };
+    await act(async () => {
+      await expect(latest!.setPreference("he-IL")).rejects.toThrow(
+        "write failed",
+      );
+    });
+    expect(screen.getByText("system|en-US|false|en")).toBeTruthy();
+    expect(mockSetDisplayLocale).toHaveBeenLastCalledWith("en-US");
+  });
+
+  it("after a failed stored read on web, the next choice always writes", async () => {
+    mockStore.native = null;
+    mockStore.load = async () => {
+      throw new Error("read failed");
+    };
+    await renderProvider();
+    await waitFor(() =>
+      expect(screen.getByText("system|en-US|false|en")).toBeTruthy(),
+    );
+    // "System default" looks like what is already shown, but nothing verified it is stored.
+    await act(async () => {
+      await latest!.setPreference("system");
+    });
+    expect(mockStore.persisted).toEqual(["system"]);
+    await act(async () => {
+      await latest!.setPreference("en-US");
+    });
+    expect(mockStore.persisted).toEqual(["system", "en-US"]);
+  });
+
+  describe("a failing native read", () => {
+    // `AppState.addEventListener` is a bare jest mock here: put back a working stub, because
+    // `mockRestore` would leave it returning nothing for the tests after this block.
+    afterEach(() => {
+      jest
+        .spyOn(AppState, "addEventListener")
+        .mockImplementation(
+          () =>
+            ({ remove: jest.fn() }) as unknown as ReturnType<
+              typeof AppState.addEventListener
+            >,
+        );
+    });
+
+    const captureAppState = () => {
+      let listener: (state: string) => void = () => undefined;
+      const spy = jest
+        .spyOn(AppState, "addEventListener")
+        .mockImplementation((_type, handler) => {
+          listener = handler as (state: string) => void;
+          return { remove: jest.fn() } as unknown as ReturnType<
+            typeof AppState.addEventListener
+          >;
+        });
+      return { fire: (state: string) => listener(state), spy };
+    };
+
+    it("starts on the device language and writes nothing, then adopts the real value once readable", async () => {
+      const app = captureAppState();
+      mockStore.native = "he-IL";
+      mockStore.deviceLocales = ["en-US"];
+      mockStore.nativeThrows = true;
+      await renderProvider();
+      expect(screen.getByText("system|en-US|false|en")).toBeTruthy();
+      expect(mockStore.persisted).toEqual([]);
+
+      // Choosing "System default" while the real value is unknown still writes it.
+      await act(async () => {
+        await latest!.setPreference("system");
+      });
+      expect(mockStore.persisted).toEqual(["system"]);
+      mockStore.persisted = [];
+
+      // Once the read works again, the next resume adopts it.
+      mockStore.nativeThrows = false;
+      mockStore.native = "he-IL";
+      await act(async () => app.fire("active"));
+      expect(screen.getByText("he-IL|he-IL|true|he")).toBeTruthy();
+      expect(mockStore.persisted).toEqual([]);
+    });
+
+    it("keeps the shown language when the resume re-read fails", async () => {
+      const app = captureAppState();
+      mockStore.native = "he-IL";
+      await renderProvider();
+      expect(screen.getByText("he-IL|he-IL|true|he")).toBeTruthy();
+      mockStore.nativeThrows = true;
+      mockStore.native = "en-US";
+      await act(async () => app.fire("active"));
+      expect(screen.getByText("he-IL|he-IL|true|he")).toBeTruthy();
+      expect(mockStore.persisted).toEqual([]);
+    });
+
+    it("keeps the shown language when the drain after a choice cannot read", async () => {
+      mockStore.native = "en-US";
+      mockStore.persist = async (preference) => {
+        mockStore.persisted.push(preference);
+        mockStore.nativeThrows = true;
+      };
+      await renderProvider();
+      await act(async () => {
+        await latest!.setPreference("he-IL");
+      });
+      expect(screen.getByText("he-IL|he-IL|true|he")).toBeTruthy();
+    });
+    it("a successful read after a failed one clears the unverified fallback", async () => {
+      mockStore.native = "";
+      mockStore.nativeThrows = true;
+      // The migration job's drain is the first read that works.
+      mockStore.migrate = async () => {
+        mockStore.nativeThrows = false;
+        return null;
+      };
+      await renderProvider();
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(screen.getByText("system|en-US|false|en")).toBeTruthy();
+      // Verified now, so choosing what is already persisted is the no-write shortcut.
+      await act(async () => {
+        await latest!.setPreference("system");
+      });
+      expect(mockStore.persisted).toEqual([]);
+    });
+
+    it("reverts an unpersisted choice, so re-picking the persisted language writes nothing", async () => {
+      mockStore.native = "en-US";
+      let calls = 0;
+      mockStore.persist = async (preference) => {
+        calls += 1;
+        if (calls === 1) {
+          // The write fails, and the native read after it fails too.
+          mockStore.nativeThrows = true;
+          throw new Error("write failed");
+        }
+        mockStore.persisted.push(preference);
+      };
+      await renderProvider();
+      await act(async () => {
+        await expect(latest!.setPreference("he-IL")).rejects.toThrow(
+          "write failed",
+        );
+      });
+      // The native read failed too, so the screen shows what is persisted, not the failed Hebrew.
+      expect(screen.getByText("en-US|en-US|false|en")).toBeTruthy();
+      // Nothing is out of step, so choosing the persisted language is the no-write shortcut.
+      await act(async () => {
+        await latest!.setPreference("en-US");
+      });
+      expect(screen.getByText("en-US|en-US|false|en")).toBeTruthy();
+      expect(mockStore.persisted).toEqual([]);
+    });
   });
 
   describe("overlapping choices", () => {

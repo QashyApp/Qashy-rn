@@ -12,6 +12,7 @@ import {
   type NestedTranslate,
 } from "./messages/he.ts";
 import {
+  captureGroupBodies,
   formatResource,
   patternFormat,
   patternResourceName,
@@ -62,7 +63,7 @@ const SAMPLE_ARGS: readonly (readonly string[])[] = [
 ];
 
 /** Number of capture groups in a regex of the shape `patternFormat` accepts. */
-function groupCount(format: string): number {
+export function groupCount(format: string): number {
   return new Set(format.match(/%(\d+)\$s/g)).size;
 }
 
@@ -88,6 +89,36 @@ function hebrewFormat(
     );
 }
 
+/** The literal alternatives of a capture group written `a|b|c`, or null for any other group. */
+function alternatives(body: string): string[] | null {
+  return /^[A-Za-z0-9 _-]+(?:\|[A-Za-z0-9 _-]+)+$/.test(body)
+    ? body.split("|")
+    : null;
+}
+
+/**
+ * The sample argument lists to try for a pattern: the fixed samples, plus, for every capture
+ * group that is an alternation of literals, a copy of each sample with that group set to each
+ * alternative (every combination when there are several such groups).
+ */
+export function sampleArguments(
+  regex: RegExp,
+  count: number,
+): (readonly string[])[] {
+  const groups = captureGroupBodies(regex.source) ?? [];
+  let samples: string[][] = SAMPLE_ARGS.map((args) => args.slice(0, count));
+  groups.forEach((body, index) => {
+    const options = alternatives(body);
+    if (options === null || index >= count) return;
+    samples = samples.flatMap((args) =>
+      options.map((option) =>
+        args.map((arg, i) => (i === index ? option : arg)),
+      ),
+    );
+  });
+  return samples;
+}
+
 function roundTrips(
   regex: RegExp,
   replacement: (...parts: string[]) => string,
@@ -96,8 +127,7 @@ function roundTrips(
   count: number,
 ): string | null {
   let matched = 0;
-  for (const sample of SAMPLE_ARGS) {
-    const args = sample.slice(0, count);
+  for (const args of sampleArguments(regex, count)) {
     const english = formatResource(en, args);
     const match = regex.exec(english);
     if (!match) continue;
@@ -152,11 +182,20 @@ export function buildAndroidCatalog(
   const patterns: CatalogPattern[] = [];
   const runtimePatterns: RuntimePattern[] = [];
   const skipped: SkippedPattern[] = [];
+  const patternTable = createPatterns(taintingTranslate);
+  // Runtime matching rebuilds each regex from its source alone, so a flag would be lost.
+  for (const [regex] of patternTable) {
+    if (regex.flags !== "") {
+      throw new Error(
+        `Dynamic pattern ${regex.toString()} has flags; runtime matching rebuilds it from its source only`,
+      );
+    }
+  }
   const skip = (regex: RegExp, reason: string) => {
     skipped.push({ source: regex.source, reason });
     runtimePatterns.push({ name: null, source: regex.source });
   };
-  for (const [regex, replacement] of createPatterns(taintingTranslate)) {
+  for (const [regex, replacement] of patternTable) {
     const en = patternFormat(regex);
     if (en === null) {
       skip(regex, "not a plain literal pattern");

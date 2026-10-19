@@ -1,16 +1,16 @@
 /**
  * Translations of a Play-translated language, read from Android string resources.
  *
- * Only English text and names are bundled in the app: the HEBREW keys, and the slim
- * `android-runtime.json` (the resource name of every key and the dynamic patterns, both
- * precomputed by `npm run strings:android` so nothing is hashed at runtime). The translations
- * themselves are never bundled: they live in the resources Google Play delivers, and one
- * `getStrings` call per locale reads them. Every missing entry stays English.
+ * This file holds what every platform shares: the table types, the table store, and the
+ * lookup. The loader is split by platform (`native-table-loader.native.ts` reads the resources
+ * and bundles `android-runtime.json`; `native-table-loader.web.ts` is a stub), because Play
+ * languages exist on Android only and the web bundle should not carry that list.
+ *
+ * Only English text and names are bundled in the app. The translations themselves never are:
+ * they live in the resources Google Play delivers, and one `getStrings` call per locale reads
+ * them. Every missing entry stays English.
  */
 
-import * as QashyLocale from "../../modules/qashy-locale";
-import runtime from "@/localization/android-runtime.json";
-import { HEBREW } from "@/localization/messages/he";
 import { formatResource } from "@/localization/resource-names";
 
 export type NativePattern = {
@@ -43,41 +43,13 @@ export function getNativeTable(localeTag: string): NativeTable | undefined {
   return tables.get(localeTag);
 }
 
-export function setNativeTable(localeTag: string, table: NativeTable) {
-  tables.set(localeTag, table);
+/** Forgets every loaded table. For tests, which share module state between cases. */
+export function clearNativeTables() {
+  tables.clear();
 }
 
-/**
- * Loads the translations of `localeTag` with one `getStrings` call. Null results (no such
- * resource, no native module, web) are ignored. Rejects only if `getStrings` does.
- */
-export async function loadNativeTable(localeTag: string): Promise<NativeTable> {
-  const keys = Object.keys(HEBREW);
-  // Names are precomputed in `Object.keys(HEBREW)` order; a test keeps them aligned.
-  const patternNames = runtime.patterns.flatMap((entry) =>
-    entry.name === null ? [] : [entry.name],
-  );
-  const values = await QashyLocale.getStrings(
-    [...runtime.strings, ...patternNames],
-    localeTag,
-  );
-
-  const strings = new Map<string, string>();
-  keys.forEach((english, index) => {
-    const value = values[index];
-    if (value != null) strings.set(english, value);
-  });
-  const patterns: NativePattern[] = [];
-  let next = keys.length;
-  for (const { name, source } of runtime.patterns) {
-    const template = name === null ? null : (values[next++] ?? null);
-    try {
-      patterns.push({ regex: new RegExp(source), template });
-    } catch {
-      // A malformed source can only come from a bad generated file; it can match nothing.
-    }
-  }
-  return { strings, patterns };
+export function setNativeTable(localeTag: string, table: NativeTable) {
+  tables.set(localeTag, table);
 }
 
 /** How long one read of a locale's resources may take before it counts as failed. */

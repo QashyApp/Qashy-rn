@@ -194,10 +194,11 @@ export function ChoiceListField({
                     individually, so "Choose " and "language" would each miss
                     the dictionary and never resolve. */}
                 <AppText variant="headline">{`Choose ${label.toLocaleLowerCase()}`}</AppText>
-                <AppText
-                  variant="caption"
-                  muted
-                >{`${options.length} choices available`}</AppText>
+                <AppText variant="caption" muted>
+                  {options.length === 1
+                    ? "1 choice available"
+                    : `${options.length} choices available`}
+                </AppText>
               </View>
               <IconButton
                 label={`Close ${label.toLocaleLowerCase()} choices`}

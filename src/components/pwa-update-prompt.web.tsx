@@ -6,6 +6,7 @@ import { AppText } from "@/components/ui/app-text";
 import { GlassSurface } from "@/components/ui/glass-surface";
 import { MotionView } from "@/components/ui/motion";
 import { TextButton } from "@/components/ui/text-button";
+import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 
 /** How long Reload waits for the new worker to take control before reloading anyway. */
@@ -16,6 +17,7 @@ export function PwaUpdatePrompt() {
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { t } = useLocalization();
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const compact = width < 768;
@@ -69,7 +71,7 @@ export function PwaUpdatePrompt() {
   if (!visible) return null;
   return (
     <MotionView
-      accessibilityLabel="App update available"
+      accessibilityLabel={t("App update available")}
       accessibilityLiveRegion="polite"
       exit
       role="status"

@@ -27,7 +27,7 @@ export function prefersAmountKeypad() {
 type KeyDefinition = { key: KeypadKey; label: string; a11y: string };
 
 const OPERATOR_NAMES: Record<AmountOperator, string> = {
-  "+": "Add",
+  "+": "plus",
   "−": "Subtract",
   "×": "Multiply",
   "÷": "Divide",

@@ -270,12 +270,9 @@ function assertFullStateSound(
 ): void {
   if (!states) return;
   const horizon = Math.floor(nowMs) + MAX_CLOCK_SKEW_MS;
-  const badState = (state: CausalMeta, reason: string) =>
-    new SyncEngineError(
-      `The snapshot for ${state.entityType} ${state.entityId} ${reason}.`,
-      "badBatch",
-      sender,
-    );
+  // Whole sentences, not a frame and a reason, so each one is its own translatable message.
+  const badState = (message: string) =>
+    new SyncEngineError(message, "badBatch", sender);
 
   for (const state of states) {
     const readings: string[] = [state.maxHlc];
@@ -293,7 +290,9 @@ function assertFullStateSound(
       for (const entry of Object.values(entries)) readings.push(entry.hlc);
     }
     if (readings.some((hlc) => parseHlc(hlc).wall > horizon)) {
-      throw badState(state, "is stamped ahead of this device's clock");
+      throw badState(
+        `The snapshot for ${state.entityType} ${state.entityId} is stamped ahead of this device's clock.`,
+      );
     }
 
     for (const spec of registersOf(state.entityType)) {
@@ -306,7 +305,9 @@ function assertFullStateSound(
         Array.isArray(value) ||
         spec.fields.some((field) => !(field in value))
       ) {
-        throw badState(state, `has a partial ${spec.name} field group`);
+        throw badState(
+          `The snapshot for ${state.entityType} ${state.entityId} has a partial ${spec.name} field group.`,
+        );
       }
     }
   }

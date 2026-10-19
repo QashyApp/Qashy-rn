@@ -19,10 +19,23 @@ import {
   useColorScheme,
 } from "react-native";
 
+import {
+  storageFailureMessage,
+  STORAGE_UNKNOWN_MESSAGE,
+} from "@/data/storage-error";
 import type { FinanceRepository } from "@/data/repository";
 import { financeRepository } from "@/data/local-finance-repository";
 import { ensurePendingRatesWithCap } from "@/providers/exchange-rate-provider";
 import { QASHY_ACCENT } from "@/domain/defaults";
+import {
+  languageFromLocale,
+  SYSTEM_PREFERENCE,
+} from "@/localization/language-preference";
+import {
+  readDeviceLocales,
+  readNativeRawPreference,
+} from "@/localization/language-store";
+import { lookupHebrew } from "@/localization/messages/he";
 import type { AppSettings, FinanceState } from "@/domain/models";
 import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
@@ -52,6 +65,47 @@ interface FinanceReloadValue {
 // Separate from FinanceContext so a failed background reload re-renders only the
 // banner that reports it, not every screen subscribed to the finance snapshot.
 const FinanceReloadContext = createContext<FinanceReloadValue | null>(null);
+
+/**
+ * Whether the startup failure screen should speak Hebrew. It cannot use the app's localization:
+ * the database that holds the saved language, and the provider that reads it, are what failed.
+ * So it reads what survives without them. On Android that is the native per-app locale, which the
+ * system Settings picker and the in-app picker both write and which reads synchronously; a
+ * device with no per-app choice, and the web, fall back to the device's own language. The legacy
+ * `iw` code counts as Hebrew, as everywhere else (`languageFromLocale`).
+ */
+function startupIsHebrew() {
+  try {
+    const perApp = readNativeRawPreference()?.split(",")[0]?.trim();
+    if (perApp && perApp !== SYSTEM_PREFERENCE)
+      return languageFromLocale(perApp) === "he";
+    const [device] = readDeviceLocales();
+    return device ? languageFromLocale(device) === "he" : false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The failure's message in English, for the reload banner (which translates it) and the startup
+ * screen (which looks it up). A storage engine's own diagnostic never reaches the user: it
+ * becomes one of Qashy's sentences. A Qashy message the dictionary knows is kept, and anything
+ * else is replaced by a generic sentence, because a message nobody translated would show as
+ * English in every language.
+ */
+function failureMessage(reason: unknown, fallback: string) {
+  const known = storageFailureMessage(reason);
+  if (known) return known;
+  if (
+    reason instanceof Error &&
+    reason.message &&
+    lookupHebrew(reason.message) !== null
+  ) {
+    return reason.message;
+  }
+  if (reason instanceof Error) console.error(reason);
+  return reason instanceof Error ? STORAGE_UNKNOWN_MESSAGE : fallback;
+}
 
 export function FinanceProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
@@ -95,16 +149,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       .catch((reason: unknown) => {
         if (financeRepository.getSnapshot().ready) {
           setReloadError(
-            reason instanceof Error
-              ? reason.message
-              : "Qashy could not reload its local database.",
+            failureMessage(
+              reason,
+              "Qashy could not reload its local database.",
+            ),
           );
           return;
         }
         setError(
-          reason instanceof Error
-            ? reason.message
-            : "Qashy could not open its local database.",
+          failureMessage(reason, "Qashy could not open its local database."),
         );
       });
   }, []);
@@ -136,9 +189,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         // rule that throws during generation would repeat that on every resume.
         // Report it in place so the user can retry, or keep working and ignore it.
         setReloadError(
-          reason instanceof Error
-            ? reason.message
-            : "Qashy could not reload its local database.",
+          failureMessage(reason, "Qashy could not reload its local database."),
         );
       })
       .finally(() => {
@@ -183,14 +234,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   );
 
   if (error) {
-    // The database, and with it the saved language, failed to open, so this screen
-    // follows the device language instead of the app's own localization.
-    const hebrew = (
-      globalThis.navigator?.language ??
-      Intl.DateTimeFormat().resolvedOptions().locale
-    )
-      .toLowerCase()
-      .startsWith("he");
+    // The database, and with it the saved language, failed to open, so this screen cannot use
+    // the app's localization; see `startupIsHebrew` for what it follows instead.
+    const hebrew = startupIsHebrew();
     return (
       <View
         style={{
@@ -212,7 +258,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           selectable
           style={{ textAlign: "center", color: tokens.textMuted }}
         >
-          {error}
+          {hebrew ? (lookupHebrew(error) ?? error) : error}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -221,9 +267,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
             financeRepository
               .initialize()
               .catch((reason: unknown) =>
-                setError(
-                  reason instanceof Error ? reason.message : "Database error",
-                ),
+                setError(failureMessage(reason, "Database error")),
               );
           }}
           style={{

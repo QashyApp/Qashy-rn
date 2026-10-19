@@ -28,13 +28,13 @@ import { createDynamicPatterns, HEBREW } from "@/localization/messages/he";
 import {
   EMPTY_NATIVE_TABLE,
   getNativeTable,
-  loadNativeTable,
   NATIVE_LOAD_TIMEOUT_MS,
   setNativeTable,
   translateWithTable,
   type NativeTable,
   withTimeout,
 } from "@/localization/native-table";
+import { loadNativeTable } from "@/localization/native-table-loader";
 import {
   loadStoredRawPreference,
   migrateLegacyLanguage,
@@ -54,17 +54,18 @@ export { languageFromLocale };
 // Built once: the table is static, and every non-dictionary string in Hebrew walks it.
 const DYNAMIC_PATTERNS = createDynamicPatterns(translateMessage);
 
-// One cache per language: the same English message has a different result in each.
-const dynamicCaches = new Map<string, Map<string, string>>();
+// One cache per language: the same English message has a different result in each. The
+// Hebrew one is a plain map; a Play-translated language's lives with its table, so a table
+// swapped in starts with an empty cache and no result can outlive the table it came from.
+const hebrewCache = new Map<string, string>();
+const tableCaches = new WeakMap<NativeTable, Map<string, string>>();
 const DYNAMIC_CACHE_LIMIT = 500;
 
 function cached(
-  language: string,
+  cache: Map<string, string>,
   message: string,
   compute: () => string,
 ): string {
-  let cache = dynamicCaches.get(language);
-  if (!cache) dynamicCaches.set(language, (cache = new Map()));
   const hit = cache.get(message);
   if (hit !== undefined) return hit;
   const result = compute();
@@ -74,7 +75,7 @@ function cached(
 }
 
 function translateHebrewDynamic(message: string) {
-  return cached("he", message, () => {
+  return cached(hebrewCache, message, () => {
     for (const [pattern, replacement] of DYNAMIC_PATTERNS) {
       const match = message.match(pattern);
       if (match) return replacement(...match.slice(1));
@@ -83,26 +84,55 @@ function translateHebrewDynamic(message: string) {
   });
 }
 
-/** Puts a freshly loaded Play-translated table in use; its earlier cached results are stale. */
+/**
+ * Puts a loaded Play-translated table in use. The English
+ * fallback (an empty table) never replaces a table that holds real translations.
+ */
 function installNativeTable(localeTag: string, table: NativeTable) {
+  const existing = getNativeTable(localeTag);
+  // The first real table of a locale stays: a later or superseded read of the same resources
+  // changes nothing, and the empty fallback of a failed read must not replace it.
+  if (existing && existing !== EMPTY_NATIVE_TABLE) return;
   setNativeTable(localeTag, table);
-  dynamicCaches.delete(localeTag);
+}
+
+/** Settles with the first of `loads` to succeed, or rejects once every one has failed. */
+function firstSuccess<T>(loads: readonly Promise<T>[]): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let failed = 0;
+    for (const load of loads) {
+      load.then(resolve, (reason: unknown) => {
+        if (++failed === loads.length) reject(reason);
+      });
+    }
+  });
 }
 
 /**
  * Loads a locale's table. A failed read, or one that has not settled within the timeout, is
  * retried once, and only a second failure leaves the locale English (an empty table), so one
- * transient error does not cost the whole session. The wait is bounded: at most two attempts of
- * `NATIVE_LOAD_TIMEOUT_MS` (5 s), so a first launch into a Play locale whose reads both hang
- * renders nothing for up to about 10 s, then shows English.
+ * transient error does not cost the whole session. The timeout only stops the waiting: when the
+ * first attempt times out, it keeps running beside the retry, and whichever succeeds first wins.
+ * The wait is bounded: at most two attempts of `NATIVE_LOAD_TIMEOUT_MS` (5 s), so a first launch
+ * into a Play locale whose reads both hang renders nothing for up to about 10 s, then shows
+ * English. A result arriving after that is ignored.
  */
 async function loadTableWithRetry(localeTag: string): Promise<NativeTable> {
-  const attempt = () =>
-    withTimeout(loadNativeTable(localeTag), NATIVE_LOAD_TIMEOUT_MS);
+  // An empty table from the loader means nothing was read (no module, or every value null).
+  const read = async () => {
+    const table = await loadNativeTable(localeTag);
+    if (table === EMPTY_NATIVE_TABLE) throw new Error("No translations read");
+    return table;
+  };
+  const first = read();
   try {
-    return await attempt();
+    return await withTimeout(first, NATIVE_LOAD_TIMEOUT_MS);
   } catch {
-    return attempt().catch(() => EMPTY_NATIVE_TABLE);
+    const second = read();
+    return withTimeout(
+      firstSuccess([first, second]),
+      NATIVE_LOAD_TIMEOUT_MS,
+    ).catch(() => EMPTY_NATIVE_TABLE);
   }
 }
 
@@ -114,6 +144,8 @@ export function translateMessage(message: string, language: AppLanguage) {
     leading.length,
     message.length - trailing.length || undefined,
   );
+  // Whitespace only: nothing to translate, and the message must come back as it was.
+  if (core === "") return message;
   let translated: string;
   if (language === "he") {
     // `hasOwn`, not a bare lookup: HEBREW is an object literal, so a message that
@@ -128,9 +160,13 @@ export function translateMessage(message: string, language: AppLanguage) {
     // Any other language reads the native table of its own locale tag, and English until that
     // has loaded or where it has no entry. Never the Hebrew dictionary.
     const table = getNativeTable(language);
-    translated = table
-      ? cached(language, core, () => translateWithTable(core, table))
-      : core;
+    if (table) {
+      let cache = tableCaches.get(table);
+      if (!cache) tableCaches.set(table, (cache = new Map()));
+      translated = cached(cache, core, () => translateWithTable(core, table));
+    } else {
+      translated = core;
+    }
   }
   return `${leading}${translated}${trailing}`;
 }
@@ -141,12 +177,16 @@ type LocalizationValue = {
   locale: string;
   isRtl: boolean;
   t: (message: string) => string;
-  /** This device's choice: `"system"` or an explicit supported tag. */
+  /**
+   * This device's choice: `"system"` or an explicit supported tag. It changes the moment it is
+   * chosen; `language`, `locale` and `isRtl` follow it at once for a bundled language, and once
+   * its translations have loaded for a Play-translated one.
+   */
   preference: LanguagePreference;
   /** What `"system"` resolves to on this device right now. */
   systemLocale: string;
   /**
-   * Switches the language live and persists it on this device. Rejects only when its write fails
+   * Switches the language and persists it on this device (see `preference` for when the UI follows). Rejects only when its write fails
    * and no later choice is queued (the UI then shows what is persisted); a failure superseded by
    * a later choice resolves, because that later choice decides the outcome.
    */
@@ -167,12 +207,36 @@ type DeviceLanguage = {
    */
   raw: string;
   deviceLocales: readonly string[];
+  /**
+   * Set when the native per-app locale could not be read, so `raw` is only the "system"
+   * fallback shown meanwhile. Nothing is persisted because of it, and a later successful read
+   * (or a user choice, even "System default") replaces it.
+   */
+  unverified?: true;
 };
 
 /** Android's per-app locale is readable synchronously, so its first render is already correct. */
 function readInitial(): DeviceLanguage | null {
-  const raw = readNativeRawPreference();
-  return raw === null ? null : { raw, deviceLocales: readDeviceLocales() };
+  try {
+    const raw = readNativeRawPreference();
+    return raw === null ? null : { raw, deviceLocales: readDeviceLocales() };
+  } catch {
+    // The native read failed: show the device language, and write nothing.
+    return {
+      raw: SYSTEM_PREFERENCE,
+      deviceLocales: readDeviceLocales(),
+      unverified: true,
+    };
+  }
+}
+
+/** The native per-app locale, or `undefined` when reading it failed (so nothing should change). */
+function readNativeOrUndefined(): string | null | undefined {
+  try {
+    return readNativeRawPreference();
+  } catch {
+    return undefined;
+  }
 }
 
 const sameLocales = (a: readonly string[], b: readonly string[]) =>
@@ -220,19 +284,31 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
         .catch(() => undefined)
         .then(() => {
           if (--queued.current > 0) return;
-          const raw = readNativeRawPreference();
+          const raw = readNativeOrUndefined();
+          if (raw === undefined) {
+            // The read failed, so the native value is unknown: show what this provider knows
+            // is persisted, so a choice whose write failed does not stay on screen.
+            if (deviceRef.current !== persisted.current)
+              show(persisted.current);
+            return;
+          }
           const known = persisted.current;
+          // A successful read also clears `unverified`: the value is now known.
           if (
             raw !== null &&
-            normalizePreference(raw, android) !==
-              normalizePreference(known?.raw, android)
+            (known?.unverified ||
+              normalizePreference(raw, android) !==
+                normalizePreference(known?.raw, android))
           )
             persisted.current = {
               raw,
               deviceLocales: known?.deviceLocales ?? readDeviceLocales(),
             };
           if (deviceRef.current !== persisted.current) show(persisted.current);
-        });
+        })
+        // The drain reads the native module and the device locales; if that throws, `tail` must
+        // still settle, or every later job would wait behind a rejected promise and never run.
+        .catch(() => undefined);
       return run;
     },
     [show, android],
@@ -253,32 +329,55 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (deviceRef.current) return;
     loadStoredRawPreference()
-      .catch(() => SYSTEM_PREFERENCE)
-      .then((raw) => {
-        if (mounted.current) adopt({ raw, deviceLocales: readDeviceLocales() });
+      .then(
+        (raw) => ({ raw, unverified: false }),
+        // A failed read shows the device language but is not "system": nothing is known about
+        // what is stored, so the next choice must always write.
+        () => ({ raw: SYSTEM_PREFERENCE, unverified: true }),
+      )
+      .then(({ raw, unverified }) => {
+        // The device locales are read only when the load is still wanted.
+        if (!mounted.current) return;
+        adopt({
+          raw,
+          deviceLocales: readDeviceLocales(),
+          ...(unverified ? { unverified: true as const } : {}),
+        });
       });
   }, [adopt]);
 
   // The user can change the app language in system Settings while Qashy is backgrounded.
   const rereadNative = useCallback(async () => {
-    const raw = readNativeRawPreference();
+    const raw = readNativeOrUndefined();
     const known = persisted.current;
+    if (raw === undefined) {
+      // A failed read: nothing is known about the native value, so fall back to what is
+      // persisted. Inside a queued job the drain does this once the queue is empty.
+      if (queued.current === 0 && deviceRef.current !== persisted.current)
+        show(persisted.current);
+      return;
+    }
+    // `null` is not native at all.
     if (raw === null) return;
     const deviceLocales = readDeviceLocales();
     if (
       known &&
+      !known.unverified &&
       known.raw === raw &&
       sameLocales(known.deviceLocales, deviceLocales)
     )
       return;
     adopt({ raw, deviceLocales });
-  }, [adopt]);
+  }, [adopt, show]);
   useEffect(() => {
     if (!usesNativeLocale()) return;
     const subscription = AppState.addEventListener("change", (state) => {
       if (state !== "active") return;
       // Behind a write in flight the native value may still be the old one, so wait for it.
-      void (queued.current === 0 ? rereadNative() : enqueue(rereadNative));
+      // A rejection is dropped: the drain after a queued job already shows what is persisted.
+      void (
+        queued.current === 0 ? rereadNative() : enqueue(rereadNative)
+      ).catch(() => undefined);
     });
     return () => subscription.remove();
   }, [enqueue, rereadNative]);
@@ -302,7 +401,8 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
       if (written && known)
         adopt({ raw: written, deviceLocales: known.deviceLocales });
     })
-      // A failed migration is retried on the next launch; the app stays usable meanwhile.
+      // A failed write leaves `languageMigrated` unset, so the next launch retries it. Until
+      // then this session shows what is persisted (the device language), like any other.
       .catch(() => undefined);
   }, [loaded, enqueue, adopt]);
 
@@ -329,18 +429,32 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
   );
   useEffect(() => {
     if (!loaded || !needsTable) return;
+    // A table that already loaded is kept: revisiting a locale never reloads it, and so can
+    // never replace real translations with the English fallback of a failed read.
+    const existing = getNativeTable(resolvedLocale);
+    if (existing && existing !== EMPTY_NATIVE_TABLE) return;
     let cancelled = false;
     loadTableWithRetry(resolvedLocale).then((table) => {
-      if (cancelled) return;
+      // A read that finished after the user left this locale is still a good read: cache it, so
+      // a later visit (whose own load may fail) shows it. Only the state update is gated.
       installNativeTable(resolvedLocale, table);
+      if (cancelled) return;
       setLoadedTable({ locale: resolvedLocale });
     });
     return () => {
       cancelled = true;
+      // Leaving this locale forgets that its load settled. A failed one left an empty table,
+      // and without this a revisit would count as ready at once, show English, and flip when
+      // the reload finishes; now the gate holds the previous locale until the reload settles.
+      setLoadedTable(null);
     };
   }, [loaded, needsTable, resolvedLocale]);
+  const existingTable = needsTable ? getNativeTable(resolvedLocale) : undefined;
+  const hasTable =
+    existingTable !== undefined && existingTable !== EMPTY_NATIVE_TABLE;
   const ready =
-    loaded && (!needsTable || loadedTable?.locale === resolvedLocale);
+    loaded &&
+    (!needsTable || hasTable || loadedTable?.locale === resolvedLocale);
   const [shownLocale, setShownLocale] = useState<string | null>(null);
   if (ready && shownLocale !== resolvedLocale) setShownLocale(resolvedLocale);
   // What the UI is formatted and translated with: the target once its table is in place.
@@ -367,6 +481,10 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
       if (
         queued.current === 0 &&
         known &&
+        // What is on screen must be what is persisted, or the shortcut would leave an unpersisted
+        // choice showing (a failed write followed by a failed read).
+        deviceRef.current === known &&
+        !known.unverified &&
         normalizePreference(known.raw, android) === normalized &&
         isCanonicalPreference(known.raw, normalized)
       )
@@ -375,7 +493,8 @@ export function LocalizationProvider({ children }: { children: ReactNode }) {
         raw: normalized,
         deviceLocales: deviceRef.current?.deviceLocales ?? readDeviceLocales(),
       };
-      // Live first, so the whole UI (and RTL) flips the moment it is chosen.
+      // Shown first: the preference flips at once, and the UI with it for a bundled language.
+      // A Play locale keeps the previous strings, locale and RTL until its table has loaded.
       show(target);
       const id = ++userSeq.current;
       const promise = enqueue(async () => {

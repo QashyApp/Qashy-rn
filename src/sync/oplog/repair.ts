@@ -585,7 +585,11 @@ function clearDanglingReferences(draft: Draft) {
       const category = liveCategories.get(goal.linkedCategoryId);
       if (!category || category.kind !== goalCategoryKind(goal.kind)) {
         changes.linkedCategoryId = null;
-        details.push(`Linked category must be ${goalCategoryKind(goal.kind)}.`);
+        details.push(
+          goalCategoryKind(goal.kind) === "income"
+            ? "Linked category must be income."
+            : "Linked category must be expense.",
+        );
       }
     }
     if (details.length) {

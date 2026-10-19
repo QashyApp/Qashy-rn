@@ -268,7 +268,7 @@ export function CategoryFormScreen() {
               key={item.id}
               literal
               icon={item.icon}
-              label={`${item.name}${item.archived ? " (archived)" : ""}`}
+              label={`${item.name}${item.archived ? ` ${t("(archived)")}` : ""}`}
               disabled={item.archived || hasChildren}
               selected={selectedParentId === item.id}
               onPress={() => setParentId(item.id)}

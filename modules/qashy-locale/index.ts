@@ -9,15 +9,12 @@ export function isAvailable(): boolean {
 
 /**
  * The per-app locale list as comma-separated BCP-47 tags. "" means follow the system, and is
- * also what web or a build without the native module returns. Never throws.
+ * also what web or a build without the native module returns. When the native module is
+ * available, a read error propagates: it is not "system", and callers decide what to keep.
  */
 export function getApplicationLocales(): string {
   if (Platform.OS !== "android" || !NativeModule) return "";
-  try {
-    return NativeModule.getApplicationLocales() ?? "";
-  } catch {
-    return "";
-  }
+  return NativeModule.getApplicationLocales() ?? "";
 }
 
 /**
@@ -29,14 +26,13 @@ export async function setApplicationLocales(tags: string): Promise<void> {
   await NativeModule.setApplicationLocales(tags);
 }
 
-/** The system (not per-app) locale list as BCP-47 tags; [] on web or when unavailable. */
+/**
+ * The system (not per-app) locale list as BCP-47 tags; [] on web or when unavailable. When the
+ * native module is available, a read error propagates.
+ */
 export function getSystemLocales(): string[] {
   if (Platform.OS !== "android" || !NativeModule) return [];
-  try {
-    return (NativeModule.getSystemLocales() ?? "").split(",").filter(Boolean);
-  } catch {
-    return [];
-  }
+  return (NativeModule.getSystemLocales() ?? "").split(",").filter(Boolean);
 }
 
 /**

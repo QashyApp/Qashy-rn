@@ -4,6 +4,7 @@ import android.content.res.Configuration
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.app.LocaleManagerCompat
 import androidx.core.os.LocaleListCompat
+import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Queues
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
@@ -33,8 +34,9 @@ class QashyLocaleModule : Module() {
     // the default (English) value, as Android resource lookup does. Runs on the default
     // (background) queue.
     AsyncFunction("getStrings") { names: List<String>, localeTag: String ->
+      // A lost context rejects the JS promise (CodedException), so the caller can retry.
       val context = appContext.reactContext?.applicationContext
-        ?: return@AsyncFunction names.map<String, String?> { null }
+        ?: throw Exceptions.ReactContextLost()
       // Resources live under the package aapt2 compiled them with, which differs from
       // packageName when an applicationIdSuffix is set. The app label is a known resource
       // (@string/app_name), so ask it; fall back to packageName if it is not a resource.

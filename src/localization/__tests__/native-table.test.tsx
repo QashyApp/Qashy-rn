@@ -10,6 +10,7 @@ import {
   translateMessage,
   useLocalization,
 } from "@/localization/localization";
+import { clearNativeTables } from "@/localization/native-table";
 import { resourceName } from "@/localization/resource-names";
 
 // A Play-translated language list, which `languages.json` does not have yet.
@@ -53,6 +54,7 @@ const mockGetStrings = jest.fn<
   [readonly string[], string]
 >();
 jest.mock("../../../modules/qashy-locale", () => ({
+  isAvailable: () => true,
   getStrings: (names: readonly string[], tag: string) =>
     mockGetStrings(names, tag),
 }));
@@ -93,6 +95,7 @@ const renderProvider = () =>
   );
 
 beforeEach(() => {
+  clearNativeTables();
   mockPlatform.android = true;
   mockStore.native = "fr-FR";
   mockStore.stored = "system";
@@ -257,10 +260,13 @@ describe("loading translations", () => {
     });
     expect(latest?.language).toBe("fr-FR");
     expect(latest?.t("Language")).toBe("Langue newest");
-    expect(translateMessage("Language", "de-DE")).not.toBe("Sprache stale");
+    // The superseded German read is a good read of German: cached for its own locale, and never
+    // mixed into French.
+    expect(translateMessage("Language", "de-DE")).toBe("Sprache stale");
+    expect(translateMessage("Language", "fr-FR")).toBe("Langue newest");
   });
 
-  it("does not apply a load that finishes after unmount", async () => {
+  it("caches, but does not render, a load that finishes after unmount", async () => {
     const calls = controlledLoads();
     const view = await renderProvider();
     await waitFor(() => expect(calls).toHaveLength(1));
@@ -271,7 +277,8 @@ describe("loading translations", () => {
     await act(async () => calls[0].settle("Langue unmounted"));
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
-    expect(translateMessage("Language", "fr-FR")).not.toBe("Langue unmounted");
+    // A good read is kept for the next visit; only the state update is skipped.
+    expect(translateMessage("Language", "fr-FR")).toBe("Langue unmounted");
   });
 
   it("keeps the previous locale's strings and direction until the new table is ready", async () => {
@@ -322,6 +329,56 @@ describe("loading translations", () => {
   });
 });
 
+describe("revisiting a Play locale", () => {
+  it("keeps a loaded table: no reload, and failing reads cannot replace it with English", async () => {
+    mockStore.native = null;
+    await renderProvider();
+    await waitFor(() => expect(latest).not.toBeNull());
+    await act(async () => {
+      await latest?.setPreference("fr-FR");
+    });
+    await waitFor(() => expect(latest?.t("Language")).toBe("Langue"));
+    expect(mockGetStrings).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      await latest?.setPreference("he-IL");
+    });
+    await waitFor(() => expect(latest?.language).toBe("he"));
+    // Every later read would fail, but none is made.
+    mockGetStrings.mockRejectedValue(new Error("gone"));
+    await act(async () => {
+      await latest?.setPreference("fr-FR");
+    });
+    await waitFor(() => expect(latest?.language).toBe("fr-FR"));
+    expect(latest?.t("Language")).toBe("Langue");
+    expect(mockGetStrings).toHaveBeenCalledTimes(1);
+  });
+
+  it("tries again to load a locale whose earlier reads both failed", async () => {
+    mockStore.native = null;
+    mockGetStrings.mockRejectedValue(new Error("gone"));
+    await renderProvider();
+    await waitFor(() => expect(latest).not.toBeNull());
+    await act(async () => {
+      await latest?.setPreference("fr-FR");
+    });
+    await waitFor(() => expect(latest?.language).toBe("fr-FR"));
+    expect(latest?.t("Language")).toBe("Language");
+    expect(mockGetStrings).toHaveBeenCalledTimes(2);
+
+    mockGetStrings.mockImplementation(async (names, tag) =>
+      names.map((name) => resources[tag]?.[name] ?? null),
+    );
+    await act(async () => {
+      await latest?.setPreference("he-IL");
+    });
+    await act(async () => {
+      await latest?.setPreference("fr-FR");
+    });
+    await waitFor(() => expect(latest?.t("Language")).toBe("Langue"));
+  });
+});
+
 describe("a read that times out", () => {
   afterEach(() => {
     jest.useRealTimers();
@@ -369,6 +426,56 @@ describe("a read that times out", () => {
     expect(translateMessage("Language", "fr-FR")).toBe("Language");
     expect(error).not.toHaveBeenCalled();
     error.mockRestore();
+  });
+});
+
+describe("attempts that outlive the timeout", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  async function startAndTimeOutFirst() {
+    jest.useFakeTimers();
+    const calls = controlledLoads();
+    await renderProvider();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(5000);
+    });
+    // The first attempt timed out and is still pending; the retry has started.
+    expect(calls).toHaveLength(2);
+    expect(screen.queryByText(/\|/)).toBeNull();
+    return calls;
+  }
+
+  it("uses the first attempt when it succeeds after the retry has started", async () => {
+    const calls = await startAndTimeOutFirst();
+    await act(async () => calls[0].settle("Langue first"));
+    expect(screen.getByText("fr-FR|fr-FR|false")).toBeTruthy();
+    expect(latest?.t("Language")).toBe("Langue first");
+    // The retry finishing afterwards changes nothing.
+    await act(async () => calls[1].settle("Langue second"));
+    expect(latest?.t("Language")).toBe("Langue first");
+  });
+
+  it("uses the retry when it succeeds first", async () => {
+    const calls = await startAndTimeOutFirst();
+    await act(async () => calls[1].settle("Langue second"));
+    expect(latest?.t("Language")).toBe("Langue second");
+    await act(async () => calls[0].settle("Langue first"));
+    expect(latest?.t("Language")).toBe("Langue second");
+  });
+});
+
+describe("whitespace-only messages", () => {
+  it("come back unchanged in every language", async () => {
+    await renderProvider();
+    await waitFor(() => expect(latest).not.toBeNull());
+    for (const message of ["   ", "\n", " \t "]) {
+      expect(translateMessage(message, "he")).toBe(message);
+      expect(translateMessage(message, "fr-FR")).toBe(message);
+      expect(translateMessage(message, "en")).toBe(message);
+      expect(latest?.t(message)).toBe(message);
+    }
   });
 });
 

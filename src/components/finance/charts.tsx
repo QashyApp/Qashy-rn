@@ -454,7 +454,7 @@ export function CategoryDonut({
     // the donut only sweeps its cover arc to draw the data.
     <View
       accessibilityRole="image"
-      accessibilityLabel={label}
+      accessibilityLabel={t(label)}
       style={{
         flexDirection: "row",
         alignItems: "center",

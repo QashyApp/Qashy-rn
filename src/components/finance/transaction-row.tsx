@@ -126,7 +126,9 @@ const TransactionRowView = memo(function TransactionRowView({
     : null;
   const feeText =
     transaction.fee && transaction.fee.amountMinor > 0
-      ? `${t("incl.")} ${formatMoney(transaction.fee.amountMinor, transaction.currency, locale)} ${t("fee")}`
+      ? t(
+          `incl. ${formatMoney(transaction.fee.amountMinor, transaction.currency, locale)} fee`,
+        )
       : null;
   const foreignFeeCaption = [foreignText, feeText]
     .filter((part): part is string => Boolean(part))

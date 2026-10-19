@@ -322,14 +322,12 @@ export function AccountFormScreen() {
         <Card variant="inset" style={{ gap: space.md }}>
           {currencyUnsupported ? (
             <AppText
-              literal
               variant="caption"
               muted
             >{`Automatic rates aren’t available for ${currencyCode}; add rates manually.`}</AppText>
           ) : (
             <>
               <AppText
-                literal
                 variant="caption"
                 muted
               >{`Qashy can fetch ${currencyCode} rates automatically from frankfurter.dev. Only currency codes and dates are sent.`}</AppText>

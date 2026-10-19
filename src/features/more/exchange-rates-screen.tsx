@@ -310,7 +310,6 @@ export function ExchangeRatesScreen() {
           </Card>
           {automaticCount ? (
             <AppText
-              literal
               variant="caption"
               muted
             >{`${automaticCount} automatic rate${automaticCount === 1 ? "" : "s"} stored.`}</AppText>

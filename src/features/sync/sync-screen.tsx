@@ -277,10 +277,11 @@ export function SyncScreen() {
             <AppText variant="label" style={{ color: theme.negative }}>
               The last sync didn’t finish
             </AppText>
-            {/* The engine's own message, verbatim. It is transport-level by construction and it
-                is the only thing here that tells a self-hoster which layer failed. */}
+            {/* The engine's own message, translated when the dictionary knows it and otherwise as
+                written: it is transport-level by construction and it is what tells a self-hoster
+                which layer failed. */}
             <AppText literal selectable variant="caption" muted>
-              {error}
+              {t(error)}
             </AppText>
             <AppText variant="caption" muted>
               Your data is untouched, and the next sync retries on its own.
@@ -346,11 +347,11 @@ export function SyncScreen() {
                 return (
                   <SettingsRow
                     key={row.key}
-                    // `literal` is all-or-nothing, so the fixed halves are translated here and
-                    // `detail` — a transport-level string from the engine — passes through raw.
+                    // `literal` is all-or-nothing, so each half is translated here: `detail` is a
+                    // transport-level string from the engine, shown as written when unknown.
                     literal
                     title={t(described.title)}
-                    subtitle={row.detail || undefined}
+                    subtitle={row.detail ? t(row.detail) : undefined}
                     value={t(relativeTime(row.recordedAt, now))}
                     icon={described.icon}
                     tone={described.tone === "negative" ? "danger" : "default"}

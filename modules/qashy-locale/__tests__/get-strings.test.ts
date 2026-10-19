@@ -1,5 +1,7 @@
 import { Platform } from "react-native";
 
+import { getStrings } from "../index";
+
 const mockGetStrings = jest.fn();
 
 jest.mock("../src/QashyLocaleModule", () => ({
@@ -8,8 +10,6 @@ jest.mock("../src/QashyLocaleModule", () => ({
     getStrings: (...args: unknown[]) => mockGetStrings(...args),
   },
 }));
-
-import { getStrings } from "../index";
 
 const originalOS = Platform.OS;
 function setOS(os: string): void {

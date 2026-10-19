@@ -1,11 +1,11 @@
 import { Platform } from "react-native";
 
+import { getStrings } from "../index";
+
 jest.mock("../src/QashyLocaleModule", () => ({
   __esModule: true,
   default: null,
 }));
-
-import { getStrings } from "../index";
 
 describe("getStrings without the native module", () => {
   it("resolves to all nulls", async () => {

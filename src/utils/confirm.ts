@@ -1,5 +1,6 @@
 import { Alert } from "react-native";
 
+import { storageFailureMessage } from "@/data/storage-error";
 import { translateCurrent } from "@/localization/localization";
 import { hapticWarning } from "@/utils/haptics";
 import { webDialogStore } from "@/utils/web-dialog-store";
@@ -84,5 +85,8 @@ export function showError(title: string, message?: string) {
 }
 
 export function errorMessage(reason: unknown, fallback: string) {
+  // A storage engine's own diagnostic is English that no dictionary knows; show Qashy's sentence.
+  const storage = storageFailureMessage(reason);
+  if (storage) return storage;
   return reason instanceof Error && reason.message ? reason.message : fallback;
 }
