@@ -1,0 +1,38 @@
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath("org.jetbrains.kotlin.plugin.compose:org.jetbrains.kotlin.plugin.compose.gradle.plugin:${kotlinVersion}")
+  }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'expo-module-gradle-plugin'
+apply plugin: 'org.jetbrains.kotlin.plugin.compose'
+
+group = 'expo.modules.qashywidgets'
+version = '1.0.0'
+
+android {
+  namespace "expo.modules.qashywidgets"
+  defaultConfig {
+    versionCode 1
+    versionName "1.0.0"
+  }
+  buildFeatures {
+    compose true
+  }
+  lintOptions {
+    abortOnError false
+  }
+}
+
+dependencies {
+  // ReactApplication / ReactHost / HeadlessJsTaskContext for the refresh worker.
+  implementation 'com.facebook.react:react-android'
+
+  // Home-screen widgets (the versions expo-widgets 58 ships with).
+  implementation "androidx.glance:glance-appwidget:1.2.0"
+  implementation "androidx.work:work-runtime-ktx:2.9.1"
+}

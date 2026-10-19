@@ -1,0 +1,7 @@
+<resources>
+  <string name="qashy_widget_open_app">פתחו את Qashy כדי לטעון את הווידג׳ט</string>
+  <string name="qashy_widget_transactions_label">עסקאות Qashy</string>
+  <string name="qashy_widget_transactions_description">עסקאות אחרונות וצפויות</string>
+  <string name="qashy_widget_summary_label">סיכום Qashy</string>
+  <string name="qashy_widget_summary_description">שווי נקי והוצאות החודש</string>
+</resources>

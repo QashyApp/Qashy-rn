@@ -1,0 +1,90 @@
+package expo.modules.qashywidgets
+
+import android.content.Context
+import android.util.Log
+import androidx.work.CoroutineWorker
+import androidx.work.WorkerParameters
+import com.facebook.react.ReactApplication
+import com.facebook.react.ReactHost
+import com.facebook.react.ReactInstanceEventListener
+import com.facebook.react.bridge.Arguments
+import com.facebook.react.bridge.ReactContext
+import com.facebook.react.jstasks.HeadlessJsTaskConfig
+import com.facebook.react.jstasks.HeadlessJsTaskContext
+import com.facebook.react.jstasks.HeadlessJsTaskEventListener
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.coroutines.resume
+
+/**
+ * Runs the JS headless task "QashyWidgetRefresh" (which rebuilds the snapshot and calls update())
+ * and schedules the next midnight run. JS is started in-process without a Service, because
+ * background service starts are restricted on Android 8+.
+ */
+class WidgetRefreshWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+  override suspend fun doWork(): Result {
+    val context = applicationContext
+    if (WidgetScheduler.hasWidgets(context)) {
+      try {
+        // Null means the 40 s budget ran out; success either way, the next run retries.
+        withTimeoutOrNull(TOTAL_TIMEOUT_MS) { withContext(Dispatchers.Main) { runJsTask(context) } }
+      } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        Log.w(TAG, "Widget refresh task failed", e)
+      }
+      // Last step: REPLACE cancels the running midnight worker, i.e. this one.
+      if (WidgetScheduler.hasWidgets(context)) WidgetScheduler.scheduleMidnight(context)
+    }
+    return Result.success()
+  }
+
+  // Main thread only: ReactHost listeners and HeadlessJsTaskContext.startTask require it.
+  private suspend fun runJsTask(context: Context) {
+    val host: ReactHost = (context as? ReactApplication)?.reactHost ?: return
+    val reactContext = host.currentReactContext ?: awaitReactContext(host)
+    val taskContext = HeadlessJsTaskContext.getInstance(reactContext)
+    val taskId = AtomicInteger(-1)
+    var listener: HeadlessJsTaskEventListener? = null
+    try {
+      suspendCancellableCoroutine<Unit> { cont ->
+        val l = object : HeadlessJsTaskEventListener {
+          override fun onHeadlessJsTaskStart(started: Int) = Unit
+
+          // Posted to the main thread after startTask returned, so taskId is already set.
+          override fun onHeadlessJsTaskFinish(finished: Int) {
+            if (finished == taskId.get() && cont.isActive) cont.resume(Unit)
+          }
+        }
+        listener = l
+        taskContext.addTaskEventListener(l)
+        taskId.set(taskContext.startTask(HeadlessJsTaskConfig(TASK_KEY, Arguments.createMap(), JS_TIMEOUT_MS, true)))
+      }
+    } finally {
+      listener?.let { taskContext.removeTaskEventListener(it) }
+    }
+  }
+
+  private suspend fun awaitReactContext(host: ReactHost): ReactContext =
+    suspendCancellableCoroutine<ReactContext> { cont ->
+      val l = object : ReactInstanceEventListener {
+        override fun onReactContextInitialized(context: ReactContext) {
+          host.removeReactInstanceEventListener(this)
+          if (cont.isActive) cont.resume(context)
+        }
+      }
+      host.addReactInstanceEventListener(l)
+      cont.invokeOnCancellation { host.removeReactInstanceEventListener(l) }
+      host.start()
+    }
+
+  private companion object {
+    const val TAG = "QashyWidgets"
+    const val TASK_KEY = "QashyWidgetRefresh"
+    const val JS_TIMEOUT_MS = 30_000L
+    const val TOTAL_TIMEOUT_MS = 40_000L
+  }
+}

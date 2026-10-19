@@ -1,0 +1,7 @@
+<resources>
+  <string name="qashy_widget_open_app">Open Qashy to load your widget</string>
+  <string name="qashy_widget_transactions_label">Qashy transactions</string>
+  <string name="qashy_widget_transactions_description">Recent and upcoming transactions</string>
+  <string name="qashy_widget_summary_label">Qashy summary</string>
+  <string name="qashy_widget_summary_description">Net worth and this month\'s spending</string>
+</resources>
