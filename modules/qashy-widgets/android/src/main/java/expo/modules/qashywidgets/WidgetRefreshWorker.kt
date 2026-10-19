@@ -29,13 +29,17 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
   override suspend fun doWork(): Result {
     val context = applicationContext
     if (WidgetScheduler.hasWidgets(context)) {
-      try {
-        // Null means the 40 s budget ran out; success either way, the next run retries.
-        withTimeoutOrNull(TOTAL_TIMEOUT_MS) { withContext(Dispatchers.Main) { runJsTask(context) } }
+      // Null means the 40 s budget ran out; false means no React host or an exception.
+      val finished = try {
+        withTimeoutOrNull(TOTAL_TIMEOUT_MS) { withContext(Dispatchers.Main) { runJsTask(context) } } == true
       } catch (e: Exception) {
         if (e is CancellationException) throw e
         Log.w(TAG, "Widget refresh task failed", e)
+        false
       }
+      // Retry a failed or timed-out run; the next midnight is scheduled only once, on the final
+      // attempt or on success, so a retry never loses or duplicates it.
+      if (!finished && runAttemptCount < MAX_RETRIES) return Result.retry()
       // Last step: REPLACE cancels the running midnight worker, i.e. this one.
       if (WidgetScheduler.hasWidgets(context)) WidgetScheduler.scheduleMidnight(context)
     }
@@ -43,8 +47,8 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
   }
 
   // Main thread only: ReactHost listeners and HeadlessJsTaskContext.startTask require it.
-  private suspend fun runJsTask(context: Context) {
-    val host: ReactHost = (context as? ReactApplication)?.reactHost ?: return
+  private suspend fun runJsTask(context: Context): Boolean {
+    val host: ReactHost = (context as? ReactApplication)?.reactHost ?: return false
     val reactContext = host.currentReactContext ?: awaitReactContext(host)
     val taskContext = HeadlessJsTaskContext.getInstance(reactContext)
     val taskId = AtomicInteger(-1)
@@ -66,6 +70,7 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
     } finally {
       listener?.let { taskContext.removeTaskEventListener(it) }
     }
+    return true
   }
 
   private suspend fun awaitReactContext(host: ReactHost): ReactContext =
@@ -86,5 +91,6 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
     const val TASK_KEY = "QashyWidgetRefresh"
     const val JS_TIMEOUT_MS = 30_000L
     const val TOTAL_TIMEOUT_MS = 40_000L
+    const val MAX_RETRIES = 2
   }
 }

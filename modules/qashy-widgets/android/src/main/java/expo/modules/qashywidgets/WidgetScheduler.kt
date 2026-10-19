@@ -3,6 +3,7 @@ package expo.modules.qashywidgets
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import androidx.work.BackoffPolicy
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -17,6 +18,7 @@ object WidgetScheduler {
   private const val MIDNIGHT_WORK = "qashy-widget-midnight"
   private const val NOW_WORK = "qashy-widget-now"
   private const val THROTTLE_MS = 60_000L
+  private const val BACKOFF_MS = 60_000L
 
   /** (appWidgetId, kind) for every placed widget of both kinds. */
   fun placed(context: Context): List<Pair<Int, String>> {
@@ -38,6 +40,7 @@ object WidgetScheduler {
   fun scheduleMidnight(context: Context, replace: Boolean = true) {
     val request = OneTimeWorkRequestBuilder<WidgetRefreshWorker>()
       .setInitialDelay(millisUntilNextMidnight(), TimeUnit.MILLISECONDS)
+      .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MS, TimeUnit.MILLISECONDS)
       .build()
     WorkManager.getInstance(context).enqueueUniqueWork(
       MIDNIGHT_WORK,
@@ -51,7 +54,9 @@ object WidgetScheduler {
     WorkManager.getInstance(context).enqueueUniqueWork(
       NOW_WORK,
       ExistingWorkPolicy.KEEP,
-      OneTimeWorkRequestBuilder<WidgetRefreshWorker>().build(),
+      OneTimeWorkRequestBuilder<WidgetRefreshWorker>()
+        .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MS, TimeUnit.MILLISECONDS)
+        .build(),
     )
   }
 
