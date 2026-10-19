@@ -943,7 +943,7 @@ describe("sweeping data an older version archived", () => {
     expect(calls).toBeGreaterThan(1);
     expect(repository.getSnapshot().goals).toEqual([]);
     expect(warn).toHaveBeenCalledWith(
-      "Qashy could not finish clearing archived data.",
+      "[archive-sweep] Step failed (TypeError)",
     );
     expect(JSON.stringify(warn.mock.calls)).not.toContain("secret");
     // The failed step is retried by the next sweep.
@@ -969,7 +969,7 @@ describe("sweeping data an older version archived", () => {
       )
       .mockRejectedValue("not an error");
     await expect(repository.sweepArchived()).resolves.toBeUndefined();
-    expect(warn).toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledWith("[archive-sweep] Step failed (unknown)");
     warn.mockRestore();
   });
 

@@ -706,11 +706,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     for (const step of steps) {
       try {
         await step();
-      } catch {
+      } catch (reason) {
         // Anything at all, a malformed row included: the sweep must never block startup or a
-        // merge. Fixed text only, since the error can carry finance data. The next launch or
-        // refresh retries.
-        console.warn("Qashy could not finish clearing archived data.");
+        // merge. A fixed message and an error name only, since the text can carry finance
+        // data. The next launch or refresh retries.
+        console.warn(
+          `[archive-sweep] Step failed (${reason instanceof Error ? reason.name : "unknown"})`,
+        );
       }
     }
   }

@@ -124,6 +124,8 @@ export class VaultDevice {
       if (peers.length) await tx.table("syncPeers").put(peers.map(toPeerRow));
     });
     await this.repository.initialize();
+    // The app's own startup step, which `initialize()` no longer performs.
+    await this.repository.sweepArchived();
     return this;
   }
 
