@@ -1,6 +1,5 @@
 import { LocalFinanceRepository } from "@/data/local-finance-repository";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
-import type { Account } from "@/domain/models";
 
 const TODAY = "2026-07-15";
 
@@ -50,21 +49,6 @@ function rate(
     rate: value,
     effectiveDate: date,
   });
-}
-
-function archive(repository: Repo, account: Account) {
-  return repository.saveAccount(
-    {
-      name: account.name,
-      type: account.type,
-      currency: account.currency,
-      openingBalanceMinor: account.openingBalanceMinor,
-      icon: account.icon,
-      color: account.color,
-      archived: true,
-    },
-    account.id,
-  );
 }
 
 const values = (repository: Repo, months: number, today = TODAY) =>
@@ -287,7 +271,7 @@ describe("FinanceRepository.getNetWorthSeries", () => {
     expect(values(repository, 3).slice(0, 3)).toEqual([30000, 29500, 29500]);
   });
 
-  it("counts a transfer to an archived account on the included side only", async () => {
+  it("keeps a transfer with a deleted account on the surviving side only", async () => {
     const { repository, usd } = await setup(5000);
     const archived = await addAccount(repository, "USD", 0);
     await repository.saveTransaction({
@@ -306,11 +290,12 @@ describe("FinanceRepository.getNetWorthSeries", () => {
       destinationAccountId: usd.id,
       amountMinor: 300,
     });
-    await archive(repository, archived);
+    // Deleting the account keeps each transfer as an expense or income on the other account.
+    await repository.deleteEntities("accounts", [archived.id]);
     expect(values(repository, 3)).toEqual([5000, 4000, 4300, 4300]);
   });
 
-  it("excludes archived and deleted accounts entirely", async () => {
+  it("excludes deleted accounts and their transactions entirely", async () => {
     const { repository, usd } = await setup(1000);
     const archived = await addAccount(repository, "USD", 9000);
     const doomed = await addAccount(repository, "USD", 7000);
@@ -328,8 +313,7 @@ describe("FinanceRepository.getNetWorthSeries", () => {
       accountId: doomed.id,
       amountMinor: 50,
     });
-    await archive(repository, archived);
-    await repository.deleteEntities("accounts", [doomed.id]);
+    await repository.deleteEntities("accounts", [archived.id, doomed.id]);
     expect(usd.id).toBeDefined();
     expect(values(repository, 3)).toEqual([1000, 1000, 1000, 1000]);
   });

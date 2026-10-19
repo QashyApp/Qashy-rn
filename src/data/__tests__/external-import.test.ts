@@ -647,84 +647,74 @@ describe("importExternalBundle", () => {
     expect(milk.categoryId).toBe(groceries.id);
   });
 
-  it("rejects a posting to a reused account that is archived in the vault", async () => {
+  it("leaves out archived source accounts, categories and budgets, keeping a transfer's imported side", async () => {
     const { repository } = await createRepository();
-    const dormant = await repository.saveAccount({
-      name: "Dormant",
-      type: "cash",
+    const account = (externalId: string, name: string, archived: boolean) => ({
+      externalId,
+      name,
+      type: "cash" as const,
       currency: "USD",
-      openingBalanceMinor: 0,
+      openingBalanceMinor: 1_000,
       icon: "wallet",
       color: "#5966E9",
-      archived: true,
+      archived,
+    });
+    const transaction = (
+      externalId: string,
+      overrides: Partial<ImportBundle["transactions"][number]>,
+    ) => ({
+      externalId,
+      kind: "expense" as const,
+      status: "posted" as const,
+      title: externalId,
+      note: "",
+      localDate: "2026-07-10",
+      accountExternalId: "kept",
+      destinationAccountExternalId: null,
+      categoryExternalId: null,
+      tagExternalIds: [],
+      amountMinor: 100,
+      destinationAmountMinor: null,
+      recurringRuleExternalId: null,
+      ...overrides,
     });
     const bundle = makeBundle({
       accounts: [
-        {
-          externalId: "a",
-          name: "Dormant",
-          type: "cash",
-          currency: "USD",
-          openingBalanceMinor: 0,
-          icon: "wallet",
-          color: "#5966E9",
-          archived: false,
-        },
+        account("kept", "Kept wallet", false),
+        account("old", "Old wallet", true),
       ],
-      categories: [],
-      tags: [],
-      recurringRules: [],
-      budgets: [],
-      transactions: [
+      categories: [
         {
-          externalId: "x",
+          externalId: "old-cat",
+          name: "Old category",
           kind: "expense",
-          status: "posted",
-          title: "Nope",
-          note: "",
-          localDate: "2026-07-10",
-          accountExternalId: "a",
-          destinationAccountExternalId: null,
-          categoryExternalId: null,
-          tagExternalIds: [],
-          amountMinor: 100,
-          destinationAmountMinor: null,
-          recurringRuleExternalId: null,
-        },
-      ],
-    });
-    const outcome = await repository.importExternalBundle(bundle, {
-      mode: "merge",
-    });
-    expect(outcome.reused.accounts).toBe(1);
-    expect(outcome.rejected).toEqual([
-      { externalId: "x", reason: "Its account is archived in this vault." },
-    ]);
-    await expect(
-      repository.importExternalBundle(bundle, { mode: "merge" }, true),
-    ).rejects.toThrow("Import blocked: 1 item(s)");
-    expect(repository.getSnapshot().transactions).toHaveLength(0);
-    expect(dormant.archived).toBe(true);
-  });
-
-  it("imports an archived source account with history, keeping it archived", async () => {
-    const { repository } = await createRepository();
-    const bundle = makeBundle({
-      accounts: [
-        {
-          externalId: "old",
-          name: "Old wallet",
-          type: "cash",
-          currency: "USD",
-          openingBalanceMinor: 1_000,
-          icon: "wallet",
+          icon: "cart",
           color: "#5966E9",
+          parentExternalId: null,
           archived: true,
         },
       ],
-      categories: [],
       tags: [],
-      budgets: [],
+      budgets: [
+        {
+          externalId: "old-budget",
+          name: "Old budget",
+          icon: "chart",
+          color: "#5966E9",
+          limitMinor: 1000,
+          period: {
+            unit: "month",
+            interval: 1,
+            anchorDate: "2026-07-01",
+            endDate: null,
+          },
+          accountExternalIds: [],
+          categoryExternalIds: [],
+          tagExternalIds: [],
+          categoryLimits: [],
+          archived: true,
+        },
+      ],
       recurringRules: [
         {
           externalId: "r",
@@ -746,34 +736,56 @@ describe("importExternalBundle", () => {
         },
       ],
       transactions: [
-        {
-          externalId: "x",
-          kind: "expense",
-          status: "posted",
-          title: "Old lunch",
-          note: "",
-          localDate: "2026-07-10",
+        transaction("on-old", { accountExternalId: "old" }),
+        transaction("old-to-kept", {
+          kind: "transfer",
           accountExternalId: "old",
-          destinationAccountExternalId: null,
-          categoryExternalId: null,
-          tagExternalIds: [],
-          amountMinor: 100,
-          destinationAmountMinor: null,
-          recurringRuleExternalId: null,
-        },
+          destinationAccountExternalId: "kept",
+          amountMinor: 700,
+          destinationAmountMinor: 700,
+        }),
+        transaction("kept-to-old", {
+          kind: "transfer",
+          accountExternalId: "kept",
+          destinationAccountExternalId: "old",
+          amountMinor: 300,
+          destinationAmountMinor: 300,
+        }),
+        transaction("uncategorised", {
+          categoryExternalId: "old-cat",
+          amountMinor: 50,
+        }),
       ],
     });
     await repository.importExternalBundle(bundle, { mode: "merge" }, true);
     const snapshot = repository.getSnapshot();
+    expect(snapshot.accounts.map((item) => item.name).sort()).toEqual([
+      "Everyday",
+      "Kept wallet",
+    ]);
     expect(
-      snapshot.accounts.find((item) => item.name === "Old wallet")?.archived,
-    ).toBe(true);
-    expect(snapshot.transactions).toHaveLength(1);
-    // A rule on an archived account is paused by its dependency, exactly as archiving does.
-    expect(snapshot.recurringRules[0]).toMatchObject({
-      active: false,
-      pausedByDependency: true,
+      snapshot.categories.some((item) => item.name === "Old category"),
+    ).toBe(false);
+    expect(snapshot.budgets).toEqual([]);
+    expect(snapshot.recurringRules).toEqual([]);
+    expect(snapshot.accounts.some((item) => item.archived)).toBe(false);
+    const byTitle = (title: string) =>
+      snapshot.transactions.find((item) => item.title === title);
+    // The archived account's own transaction is skipped.
+    expect(byTitle("on-old")).toBeUndefined();
+    // A transfer with the archived side comes in as income or expense on the imported side.
+    expect(byTitle("old-to-kept")).toMatchObject({
+      kind: "income",
+      amountMinor: 700,
+      destinationAccountId: null,
     });
+    expect(byTitle("kept-to-old")).toMatchObject({
+      kind: "expense",
+      amountMinor: 300,
+      destinationAccountId: null,
+    });
+    // An archived category's transactions come in uncategorized.
+    expect(byTitle("uncategorised")).toMatchObject({ categoryId: null });
   });
 
   it("does not resurrect a transaction the user deleted", async () => {

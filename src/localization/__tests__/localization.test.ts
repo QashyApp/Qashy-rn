@@ -4,6 +4,7 @@ import {
   translateMessage,
 } from "@/localization/localization";
 import { ONE_WITH_PLURAL } from "@/localization/messages/he";
+import { accountDeletionMessage } from "@/utils/account-impact";
 import { categoryDeletionMessage } from "@/utils/category-impact";
 
 describe("localization", () => {
@@ -446,25 +447,86 @@ describe("localization", () => {
     );
   });
 
-  it("translates the category deletion message with the budgets it archives", () => {
+  it("translates the category deletion message with the budgets it leaves unfiltered", () => {
     const he = (message: string) => translateMessage(message, "he");
-    const one =
-      "Transactions in this category become uncategorized, and it is removed from budgets and goals.";
-    const many =
-      "Transactions in these categories become uncategorized, and the categories are removed from budgets and goals.";
-    expect(he(many)).toBe(
+    expect(
+      he(
+        "Transactions in these categories become uncategorized, and the categories are removed from budgets and goals.",
+      ),
+    ).toBe(
       "התנועות בקטגוריות האלה יהפכו ללא קטגוריה, והקטגוריות יוסרו מהתקציבים והיעדים.",
     );
+    expect(he("The budget “Food” would then cover all your spending.")).toBe(
+      "התקציב “Food” יכסה אז את כל ההוצאות שלכם.",
+    );
     expect(
-      he(
-        `${one} The budget “Food” would then track nothing, so it is archived and leaves Plan. Edit its categories first to keep it.`,
-      ),
-    ).toContain("התקציב “Food” לא יעקוב אחר שום דבר");
-    expect(
-      he(
-        `${many} These budgets “Food”, “Fun” would then track nothing, so they are archived and leave Plan. Edit their categories first to keep them.`,
-      ),
-    ).toContain("התקציבים “Food”, “Fun” לא יעקבו אחר שום דבר");
+      he("These budgets “Food”, “Fun” would then cover all your spending."),
+    ).toBe("התקציבים “Food”, “Fun” יכסו אז את כל ההוצאות שלכם.");
+  });
+
+  it("translates every line of the account deletion dialog, with counts and names", () => {
+    const he = (message: string) => translateMessage(message, "he");
+    const budget = (name: string): Budget =>
+      ({
+        name,
+        deletedAt: null,
+        archived: false,
+        filters: { categoryIds: [], accountIds: ["a1"], tagIds: [] },
+      }) as unknown as Budget;
+    const lines = accountDeletionMessage(
+      {
+        accounts: [
+          { id: "a1", name: "Old", deletedAt: null },
+          { id: "a2", name: 'Cash "main"', deletedAt: null },
+        ],
+        transactions: [
+          {
+            id: "t1",
+            kind: "transfer",
+            status: "posted",
+            accountId: "a1",
+            destinationAccountId: "a2",
+            recurringRuleId: null,
+            deletedAt: null,
+          },
+          {
+            id: "t2",
+            kind: "expense",
+            status: "posted",
+            accountId: "a1",
+            destinationAccountId: null,
+            recurringRuleId: null,
+            deletedAt: null,
+          },
+          {
+            id: "t3",
+            kind: "expense",
+            status: "posted",
+            accountId: "a1",
+            destinationAccountId: null,
+            recurringRuleId: null,
+            deletedAt: null,
+          },
+        ],
+        recurringRules: [
+          { id: "r1", template: { accountId: "a1" }, deletedAt: null },
+          { id: "r2", template: { accountId: "a1" }, deletedAt: null },
+        ],
+        budgets: [budget("Food")],
+        goals: [],
+      } as unknown as Parameters<typeof accountDeletionMessage>[0],
+      ["a1"],
+    );
+    for (const line of lines) {
+      const hebrew = he(line);
+      expect(hebrew).not.toBe(line);
+      // Only the account and budget names stay as typed.
+      expect(
+        hebrew.replace(/“[^”]*”/g, "").replace(/Cash "main" \(\d+\)/g, ""),
+      ).not.toMatch(/[A-Za-z]/);
+    }
+    expect(he("Deletes 1 transaction.")).toBe("מוחק תנועה אחת.");
+    expect(he("Deletes 2 recurring schedules.")).toBe("מוחק 2 תזמונים חוזרים.");
   });
 
   it("translates the undo bar and search defaults", () => {

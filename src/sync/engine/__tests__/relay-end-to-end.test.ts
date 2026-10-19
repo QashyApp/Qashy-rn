@@ -109,7 +109,7 @@ function sessionFor(device: VaultDevice, transport: RelayTransport) {
 }
 
 describe("relay sync", () => {
-  it("moves an offline device’s transaction and account archive on the receiver’s later pass", async () => {
+  it("moves an offline device’s transaction and account deletion on the receiver’s later pass", async () => {
     const [source, target] = await makeVault();
     const fetch = inMemoryRelay();
     const sourceSession = sessionFor(
@@ -130,15 +130,8 @@ describe("relay sync", () => {
       color: "#5966E9",
       archived: false,
     });
-    await source.repository.saveTransaction({
-      kind: "expense",
-      title: "Synced transaction",
-      localDate: "2026-07-30",
-      accountId: account.id,
-      amountMinor: 1250,
-    });
-    // The app keeps at least one live account, so the account being archived needs a successor.
-    await source.repository.saveAccount({
+    // The app keeps at least one live account, so the account being deleted needs a successor.
+    const everyday = await source.repository.saveAccount({
       name: "Everyday account",
       type: "checking",
       currency: "USD",
@@ -147,13 +140,24 @@ describe("relay sync", () => {
       color: "#5966E9",
       archived: false,
     });
-    await source.repository.saveAccount(
-      { ...account, archived: true },
-      account.id,
-    );
+    await source.repository.saveTransaction({
+      kind: "expense",
+      title: "Synced transaction",
+      localDate: "2026-07-30",
+      accountId: everyday.id,
+      amountMinor: 1250,
+    });
+    await source.repository.saveTransaction({
+      kind: "expense",
+      title: "Goes with the account",
+      localDate: "2026-07-30",
+      accountId: account.id,
+      amountMinor: 400,
+    });
+    await source.repository.deleteEntities("accounts", [account.id]);
 
     const sent = await sourceSession.reconcile();
-    expect(sent.pushed).toMatchObject([{ ops: 4 }]);
+    expect(sent.pushed).toMatchObject([{ ops: 6 }]);
 
     await targetSession.reconcile();
     await settle(6);
@@ -163,11 +167,10 @@ describe("relay sync", () => {
         expect.objectContaining({ title: "Synced transaction" }),
       ]),
     );
-    expect(target.state.accounts).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: account.id, archived: true }),
-      ]),
-    );
+    expect(target.state.accounts.map((row) => row.id)).toEqual([everyday.id]);
+    expect(target.state.transactions.map((row) => row.title)).toEqual([
+      "Synced transaction",
+    ]);
     expect([...source.errors, ...target.errors]).toEqual([]);
   });
 });

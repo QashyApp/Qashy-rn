@@ -92,7 +92,7 @@ describe("one-time budget adjustments", () => {
     });
   });
 
-  it("rejects zero, unsafe, unknown-budget and archived-budget adjustments", async () => {
+  it("rejects zero, unsafe and unknown-budget adjustments", async () => {
     const { repository } = await createRepository();
     const budget = await repository.saveBudget(monthly());
     await expect(
@@ -119,14 +119,6 @@ describe("one-time budget adjustments", () => {
     await expect(
       repository.addBudgetAdjustment({
         budgetId: "missing",
-        amountMinor: 100,
-        note: "",
-      }),
-    ).rejects.toThrow("valid budget");
-    await repository.saveBudget(monthly({ archived: true }), budget.id);
-    await expect(
-      repository.addBudgetAdjustment({
-        budgetId: budget.id,
         amountMinor: 100,
         note: "",
       }),

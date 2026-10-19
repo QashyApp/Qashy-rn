@@ -2206,8 +2206,8 @@ export class LocalFinanceRepository implements FinanceRepository {
         account,
         balanceMinor: balances.get(account.id) ?? account.openingBalanceMinor,
       }))
-      // Deleting a referenced account keeps its history (it is flagged archived internally),
-      // but to the user it is deleted, so its balance leaves net worth.
+      // Nothing is archived any more; an account an older build archived is swept at startup, and
+      // until then its balance stays out of net worth.
       .filter(({ account }) => !account.archived);
     const expenseCategories = this.active(this.state.categories).filter(
       (category) => category.kind === "expense",

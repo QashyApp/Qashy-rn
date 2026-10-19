@@ -24,7 +24,6 @@
 
 import type { Budget, Category, TransactionRecord } from "@/domain/models";
 import { convertMinor } from "@/utils/money";
-import { RESTORED_ACCOUNT_NAME } from "@/sync/oplog/repair";
 import {
   activityOf,
   BASE_CURRENCY,
@@ -497,7 +496,7 @@ describe("merge scenarios — repairing a jointly-invalid state", () => {
     expectConverged([alice, bob]);
   });
 
-  it("resurrects an account a merged-in transaction needs, and lets it go again", async () => {
+  it("deletes what a peer booked on an account that was deleted meanwhile, on every device", async () => {
     const [alice, bob] = await populated();
     const wire = alice.wireTo(bob);
     const savings = await alice.repository.saveAccount({
@@ -512,8 +511,7 @@ describe("merge scenarios — repairing a jointly-invalid state", () => {
     await sync([alice, bob], 3);
 
     wire.partition();
-    // Nothing references it on Alice's side, so this is a real tombstone rather than the
-    // archive `deleteEntities` falls back to. Bob, meanwhile, books against it.
+    // Alice deletes the account. Bob, meanwhile, books against it.
     await alice.repository.deleteEntities("accounts", [savings.id]);
     expect(alice.state.accounts.map((row) => row.id)).not.toContain(savings.id);
     const booked = await bob.repository.saveTransaction({
@@ -526,47 +524,34 @@ describe("merge scenarios — repairing a jointly-invalid state", () => {
 
     wire.heal();
     await settle();
-    await sync([alice, bob], 3);
+    await sync([alice, bob], 4);
 
+    // The merge cannot render a transaction on an account that is not there, so the repair
+    // pass brings the account back (archived, under a placeholder name) for an instant, and the
+    // sweep of archived data then deletes it again — with the transaction, because deleting an
+    // account deletes what was booked on it. Both devices reach the same empty answer, and
+    // neither is left holding an archived account.
     const converged = expectConverged([alice, bob]);
-    // Live again, and archived — an account is part of every ledger entry's identity, so a
-    // transaction pointing at a row that is not there is not a state the finance core can
-    // render. Archiving keeps it out of the pickers without rewriting history.
-    const resurrected = converged.accounts.find((row) => row.id === savings.id);
-    // The delete erased its name and opening balance on every device, so it returns under a
-    // placeholder rather than with the content the user asked Qashy to forget.
-    expect(resurrected).toMatchObject({
-      deletedAt: null,
-      archived: true,
-      name: RESTORED_ACCOUNT_NAME,
-      openingBalanceMinor: 0,
-      currency: BASE_CURRENCY,
-    });
-
-    const before = await Promise.all([opsOf(alice), opsOf(bob)]);
-    await alice.repository.deleteEntities("transactions", [booked.id]);
-    await sync([alice, bob], 3);
-
-    const settled = expectConverged([alice, bob]);
-    // The reason for the repair is gone, so the repair stops firing and the account returns
-    // to the tombstone it never stopped having. Nothing un-deleted it; it was only ever being
-    // shown because something needed it.
-    expect(settled.accounts.map((row) => row.id)).not.toContain(savings.id);
+    expect(converged.accounts.map((row) => row.id)).not.toContain(savings.id);
     expect(
-      live(settled.transactions as { deletedAt: string | null }[]),
+      live(converged.transactions as { deletedAt: string | null }[]),
     ).toHaveLength(0);
+    for (const device of [alice, bob]) {
+      expect(device.state.accounts.some((row) => row.archived)).toBe(false);
+      expect(device.state.transactions.map((row) => row.id)).not.toContain(
+        booked.id,
+      );
+    }
+    expect(alice.errors).toEqual([]);
+    expect(bob.errors).toEqual([]);
 
-    // One op — the delete Alice actually made. The repair pass emits nothing, and that is
-    // load-bearing rather than tidy: a repair that emitted even one op would work on two
-    // devices and ping-pong forever on three, each reacting to the other's correction.
+    // It stays settled: a further round writes nothing new on either device.
+    const before = await Promise.all([opsOf(alice), opsOf(bob)]);
+    await sync([alice, bob], 3);
     const after = await Promise.all([opsOf(alice), opsOf(bob)]);
-    const added = after.map((rows, index) =>
-      rows.filter((row) => !before[index].some((old) => old.opId === row.opId)),
+    expect(after.map((rows) => rows.length)).toEqual(
+      before.map((rows) => rows.length),
     );
-    expect(added.map((rows) => rows.length)).toEqual([1, 1]);
-    expect(added[0]).toMatchObject([
-      { entityType: "transactions", kind: "delete" },
-    ]);
   });
 
   it.each(["en-US", "he-IL"])(

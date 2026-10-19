@@ -1935,3 +1935,137 @@ const realBackupPath = process.env.CASHEW_BACKUP_PATH;
     });
   },
 );
+
+describe("mapCashewBackup archived items", () => {
+  const wallets = [
+    wallet(),
+    wallet({ wallet_pk: "1", name: "Dollars", currency: "usd" }),
+    wallet({ wallet_pk: "2", name: "Old wallet", archived: 1 }),
+  ];
+
+  it("leaves out an archived account with its transactions and schedules", () => {
+    const bundle = map(
+      rawData({
+        wallets,
+        transactions: [
+          transaction({ transaction_pk: "kept", wallet_fk: "0" }),
+          transaction({ transaction_pk: "on-old", wallet_fk: "2" }),
+        ],
+      }),
+    );
+    expect(bundle.accounts.map((item) => item.name)).toEqual([
+      "Main",
+      "Dollars",
+    ]);
+    expect(bundle.accounts.some((item) => item.archived)).toBe(false);
+    expect(bundle.transactions.map((item) => item.externalId)).toEqual([
+      "transaction:kept",
+    ]);
+    expect(bundle.report.counts).toMatchObject({
+      accounts: 2,
+      transactions: 1,
+    });
+    expect(warning(bundle, "archived-account-skipped")?.count).toBe(1);
+  });
+
+  it("imports a transfer with an archived account as income or expense on the other side", () => {
+    const bundle = map(
+      rawData({
+        wallets,
+        transactions: [
+          // Archived -> main: the main side received 5.00.
+          transaction({
+            transaction_pk: "in",
+            wallet_fk: "0",
+            amount: 5,
+            income: 1,
+            paired_transaction_fk: "out",
+          }),
+          transaction({
+            transaction_pk: "out",
+            wallet_fk: "2",
+            amount: -5,
+            paired_transaction_fk: "in",
+            name: "From old",
+          }),
+          // Dollars -> archived: the dollar side paid 7.00.
+          transaction({
+            transaction_pk: "in2",
+            wallet_fk: "2",
+            amount: 7,
+            income: 1,
+            paired_transaction_fk: "out2",
+          }),
+          transaction({
+            transaction_pk: "out2",
+            wallet_fk: "1",
+            amount: -7,
+            paired_transaction_fk: "in2",
+            name: "To old",
+          }),
+        ],
+      }),
+    );
+    expect(byId(bundle, "transaction:out")).toMatchObject({
+      kind: "income",
+      accountExternalId: "wallet:0",
+      amountMinor: 500,
+      destinationAccountExternalId: null,
+      destinationAmountMinor: null,
+    });
+    expect(byId(bundle, "transaction:out2")).toMatchObject({
+      kind: "expense",
+      accountExternalId: "wallet:1",
+      amountMinor: 700,
+      destinationAccountExternalId: null,
+    });
+    // The surviving side of each pair still reconciles with the backup.
+    expect(
+      bundle.report.balanceChecks.map((item) => item.importedBalanceMinor),
+    ).toEqual([500, -700]);
+  });
+
+  it("imports an archived category's transactions uncategorized, and leaves the category out", () => {
+    const bundle = map(
+      rawData({
+        categories: [
+          category({ category_pk: "c1", name: "Old", archived: 1 }),
+          category({
+            category_pk: "c3",
+            name: "Old child",
+            main_category_pk: "c1",
+          }),
+          category({ category_pk: "c4", name: "Live" }),
+        ],
+        transactions: [
+          transaction({ transaction_pk: "t-old", category_fk: "c1" }),
+          transaction({ transaction_pk: "t-live", category_fk: "c4" }),
+        ],
+        budgets: [
+          budget({ budget_pk: "only-old", category_fks: '["c1"]' }),
+          budget({ budget_pk: "archived-budget", archived: 1 }),
+          budget({ budget_pk: "kept" }),
+        ],
+      }),
+    );
+    expect(bundle.categories.map((item) => item.name).sort()).toEqual([
+      "Live",
+      "Old child",
+    ]);
+    // A subcategory of an archived category becomes top-level.
+    expect(
+      bundle.categories.find((item) => item.name === "Old child")
+        ?.parentExternalId,
+    ).toBeNull();
+    expect(byId(bundle, "transaction:t-old").categoryExternalId).toBeNull();
+    expect(byId(bundle, "transaction:t-live").categoryExternalId).toBe(
+      "category:c4",
+    );
+    // Neither an archived budget nor one that only tracked an archived category is imported.
+    expect(bundle.budgets.map((item) => item.externalId)).toEqual([
+      "budget:kept",
+    ]);
+    expect(warning(bundle, "archived-category-skipped")?.count).toBe(1);
+    expect(warning(bundle, "archived-budget-skipped")?.count).toBe(2);
+  });
+});
