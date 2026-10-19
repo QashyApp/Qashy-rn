@@ -16,7 +16,7 @@
     "@noble/ciphers": "2.2.0",
     "@noble/curves": "2.2.0",
     "@noble/hashes": "2.2.0",
-    "@scure/base": "2.2.0",
+    "@scure/base": "2.4.0",
     "@scure/bip39": "2.2.0",
     "decimal.js": "^10.6.0",
     "dexie": "^4.4.4",
