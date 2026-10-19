@@ -21,7 +21,10 @@ export function useBatchDelete(options: {
   type: DeletableType;
   liveIds: string[];
   confirmTitle: (count: number) => string;
-  confirmMessage: string | ((ids: string[]) => string);
+  confirmMessage:
+    | string
+    | readonly string[]
+    | ((ids: string[]) => string | readonly string[]);
   errorTitle: string;
 }) {
   const repository = useFinanceRepository();

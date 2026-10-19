@@ -7,7 +7,8 @@ import { webDialogStore } from "@/utils/web-dialog-store";
 
 interface ConfirmOptions {
   title: string;
-  message?: string;
+  /** A list is one sentence per line; each is translated on its own and shown on its own line. */
+  message?: string | readonly string[];
   confirmLabel?: string;
 }
 
@@ -18,7 +19,11 @@ export function confirmDestructive({
   confirmLabel = "Delete",
 }: ConfirmOptions) {
   const translatedTitle = translateCurrent(title);
-  const translatedMessage = message ? translateCurrent(message) : undefined;
+  const translatedMessage = message
+    ? typeof message === "string"
+      ? translateCurrent(message)
+      : message.map((line) => translateCurrent(line)).join("\n")
+    : undefined;
   const translatedConfirmLabel = translateCurrent(confirmLabel);
   if (process.env.EXPO_OS === "web") {
     if (webDialogStore.hasHost()) {

@@ -253,7 +253,6 @@ describe("buildWidgetSnapshot", () => {
       const { repository, everyday } = await setup();
       const day = (index: number) =>
         `2026-06-${String((index % 28) + 1).padStart(2, "0")}`;
-      await repository.importCsv; // keep the import above referenced by the type only
       for (let index = 0; index < 35; index += 1)
         await expense(repository, everyday.id, `Row ${index}`, day(index), 100);
       let rows = build(repository, { widgets: {} }).widgets[
