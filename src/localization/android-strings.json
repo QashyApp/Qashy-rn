@@ -92,6 +92,11 @@
       "he": "השינויים שלכם שמורים כאן ויישלחו ברגע שהוא יענה. בינתיים קובץ העברה עדיין עובד."
     },
     {
+      "name": "q_027d6f2819d87200",
+      "en": "Hide amounts",
+      "he": "הסתרת סכומים"
+    },
+    {
       "name": "q_02bdab3de3680b92",
       "en": "Add your first income, expense, or transfer.",
       "he": "הוסיפו הכנסה, הוצאה או העברה ראשונה."
@@ -330,6 +335,11 @@
       "name": "q_08d632e964752aa6",
       "en": "That batch contains an oversized device roster entry.",
       "he": "האצווה הזו מכילה רשומה גדולה מדי ברשימת המכשירים."
+    },
+    {
+      "name": "q_08e22a2dc90d9557",
+      "en": "Transparency",
+      "he": "שקיפות"
     },
     {
       "name": "q_08f584a53fd3efe4",
@@ -807,6 +817,11 @@
       "he": "ללא מגבלה"
     },
     {
+      "name": "q_18550f80b6805714",
+      "en": "Amounts and the net worth graph are hidden on all widgets.",
+      "he": "הסכומים וגרף השווי הנקי מוסתרים בכל הווידג׳טים."
+    },
+    {
       "name": "q_18ae4b0d61fbd0d3",
       "en": "Choose a valid budget period.",
       "he": "בחרו תקופת תקציב תקינה."
@@ -1027,6 +1042,11 @@
       "he": "נסו שם אחר."
     },
     {
+      "name": "q_1efbfc3937d565bd",
+      "en": "Background",
+      "he": "רקע"
+    },
+    {
       "name": "q_1f4cef745ca93182",
       "en": "Credit card",
       "he": "כרטיס אשראי"
@@ -1235,6 +1255,11 @@
       "name": "q_24e30c15457af974",
       "en": "Restore a backup",
       "he": "שחזור גיבוי"
+    },
+    {
+      "name": "q_253782a57dd4a1b7",
+      "en": "Press and hold an empty spot on your home screen, choose Widgets, then pick Qashy to add one.",
+      "he": "לחצו לחיצה ארוכה על מקום פנוי במסך הבית, בחרו ״ווידג׳טים״ ואז בחרו ב־Qashy כדי להוסיף ווידג׳ט."
     },
     {
       "name": "q_253e49cee942622b",
@@ -1505,6 +1530,11 @@
       "name": "q_2ceb11be2290bb1b",
       "en": "Cancel",
       "he": "ביטול"
+    },
+    {
+      "name": "q_2cfa8c2c483fecb2",
+      "en": "Graph range",
+      "he": "טווח הגרף"
     },
     {
       "name": "q_2d088b4965fed271",
@@ -1797,6 +1827,11 @@
       "he": "ארנק"
     },
     {
+      "name": "q_369180edef23d909",
+      "en": "A soft, frosted look. Widgets can’t blur what is behind them, so this is an approximation.",
+      "he": "מראה רך וחלבי. ווידג׳טים לא יכולים לטשטש את מה שמאחוריהם, ולכן זו רק הדמיה של האפקט."
+    },
+    {
       "name": "q_36b08539e89cc8e8",
       "en": "Paired",
       "he": "מחובר"
@@ -1837,6 +1872,11 @@
       "he": "אין במכשיר הזה כספת להגן עליה."
     },
     {
+      "name": "q_37813ce291d5a507",
+      "en": "Home screen widgets",
+      "he": "ווידג׳טים למסך הבית"
+    },
+    {
       "name": "q_37a9e8aec5713460",
       "en": "More",
       "he": "עוד"
@@ -1850,6 +1890,11 @@
       "name": "q_37c2c9757e0e6d9d",
       "en": "Passphrase again",
       "he": "משפט הסיסמה שוב"
+    },
+    {
+      "name": "q_37cbecaec58e2192",
+      "en": "Mode",
+      "he": "מצב"
     },
     {
       "name": "q_37cc56d57a98d2f0",
@@ -2042,6 +2087,11 @@
       "he": "ייבוא ערכת עיצוב"
     },
     {
+      "name": "q_3da9d815a26aea7c",
+      "en": "Surface",
+      "he": "משטח"
+    },
+    {
       "name": "q_3dd98b8046b2f86a",
       "en": "Choose a valid goal.",
       "he": "בחרו יעד תקין."
@@ -2165,6 +2215,11 @@
       "name": "q_41d271f0d995ab6e",
       "en": "Pairing progress",
       "he": "התקדמות החיבור"
+    },
+    {
+      "name": "q_41f134751f381801",
+      "en": "Summary widget",
+      "he": "ווידג׳ט סיכום"
     },
     {
       "name": "q_41f7dca46d3f1b4a",
@@ -2402,6 +2457,11 @@
       "he": "שמירת תזמון"
     },
     {
+      "name": "q_494e4da17b41f0f9",
+      "en": "3 months",
+      "he": "3 חודשים"
+    },
+    {
       "name": "q_49b3aec4dc627cd1",
       "en": "Choose a valid transaction status.",
       "he": "בחרו מצב תנועה תקין."
@@ -2565,6 +2625,11 @@
       "name": "q_4fcfd18ec7a2f83f",
       "en": "Transfer vault ownership",
       "he": "העברת בעלות על הכספת"
+    },
+    {
+      "name": "q_5004b1a3eecac0b7",
+      "en": "Frosted look",
+      "he": "מראה חלבי"
     },
     {
       "name": "q_503169a4cddc02fe",
@@ -2867,6 +2932,11 @@
       "he": "חשבונות במטבע שאינו מטבע הבסיס שלכם זקוקים לשערי חליפין לתאריכים שלהם. הפעילו שערים אוטומטיים או הוסיפו שערים ידניים תחילה, אחרת הייבוא ייחסם."
     },
     {
+      "name": "q_59021ddc40a6871b",
+      "en": "Show transactions from",
+      "he": "הצגת תנועות מתוך"
+    },
+    {
       "name": "q_59079607b8c92756",
       "en": "The clipboard is readable by other apps and, on some systems, by your other computers. Write the words down or type them straight into a password manager instead.",
       "he": "הלוח ניתן לקריאה על ידי אפליקציות אחרות, ובמערכות מסוימות גם על ידי המחשבים האחרים שלכם. במקום זאת רשמו את המילים או הקלידו אותן ישירות לתוך מנהל סיסמאות."
@@ -2900,6 +2970,11 @@
       "name": "q_598ccda13c81314b",
       "en": "That code could not be used. Show a fresh one and try again.",
       "he": "לא ניתן היה להשתמש בקוד הזה. הציגו קוד חדש ונסו שוב."
+    },
+    {
+      "name": "q_59c810718924d9a9",
+      "en": "Surface follows the theme, Accent tints it with the accent color, and Custom uses a color you choose.",
+      "he": "״משטח״ תואם לערכת העיצוב, ״צבע הדגשה״ צובע אותו בגוון ההדגשה, ו״מותאם״ משתמש בצבע שתבחרו."
     },
     {
       "name": "q_5a00839943ad68f7",
@@ -3267,6 +3342,11 @@
       "he": "בטלו את נעילת המכשיר הזה לפני שינוי הכספת שלו."
     },
     {
+      "name": "q_63d040e37887f17e",
+      "en": "Today",
+      "he": "היום"
+    },
+    {
       "name": "q_63ef5c29fc60b009",
       "en": "Could not reach the rendezvous server.",
       "he": "לא ניתן היה להגיע לשרת המפגש."
@@ -3560,6 +3640,11 @@
       "name": "q_6bdcfacf3b6a00b4",
       "en": "Invalid row",
       "he": "שורה לא תקינה"
+    },
+    {
+      "name": "q_6c63e82443691191",
+      "en": "12 months",
+      "he": "12 חודשים"
     },
     {
       "name": "q_6c73dc3d63f2c30c",
@@ -4442,6 +4527,11 @@
       "he": "הצג הכול"
     },
     {
+      "name": "q_86c10af564834ffa",
+      "en": "Show all widgets",
+      "he": "הצגת כל הווידג׳טים"
+    },
+    {
       "name": "q_86d14a047fbcb883",
       "en": "Couldn’t change category",
       "he": "לא ניתן לשנות את הקטגוריה"
@@ -4475,6 +4565,11 @@
       "name": "q_87ddb352d9972edb",
       "en": "Progress toward savings targets and planned purchases.",
       "he": "התקדמות לעבר יעדי חיסכון ורכישות מתוכננות."
+    },
+    {
+      "name": "q_8804135806fdde52",
+      "en": "Home screen widgets are available in the Android app only.",
+      "he": "ווידג׳טים למסך הבית זמינים באפליקציית אנדרואיד בלבד."
     },
     {
       "name": "q_880bba9f2ab6b30b",
@@ -5262,6 +5357,11 @@
       "he": "לצאת מהכספת הזו?"
     },
     {
+      "name": "q_a3b6d53b60aaa982",
+      "en": "Widgets",
+      "he": "ווידג׳טים"
+    },
+    {
       "name": "q_a3c19a96f8d4c17e",
       "en": "Only https:// addresses can be used here.",
       "he": "אפשר להשתמש כאן רק בכתובות https://."
@@ -5395,6 +5495,11 @@
       "name": "q_a78cc72b2c4f6f0b",
       "en": "The account leaves your net worth.",
       "he": "החשבון יוצא מהשווי הנקי."
+    },
+    {
+      "name": "q_a7d421ac2dd522ae",
+      "en": "Material You colors need Android 12 or later. On this device the widget uses Qashy colors.",
+      "he": "צבעי Material You דורשים אנדרואיד 12 ומעלה. במכשיר הזה הווידג׳ט משתמש בצבעי Qashy."
     },
     {
       "name": "q_a7e85b02fa10ce88",
@@ -5767,6 +5872,11 @@
       "he": "כסף"
     },
     {
+      "name": "q_b4632d427b05f6e1",
+      "en": "No widgets yet",
+      "he": "עדיין אין ווידג׳טים"
+    },
+    {
       "name": "q_b47daaf9e1c4a905",
       "en": "Month",
       "he": "חודש"
@@ -6030,6 +6140,11 @@
       "name": "q_bbebdea81378bf9d",
       "en": "Posted without an exchange rate snapshot; returned to upcoming.",
       "he": "נרשם ללא צילום מצב של שער חליפין; הוחזר לצפוי."
+    },
+    {
+      "name": "q_bc585815a4c72e8f",
+      "en": "Open Qashy to load your widget",
+      "he": "פתחו את Qashy כדי לטעון את הווידג׳ט"
     },
     {
       "name": "q_bc877a8e2684af4c",
@@ -7407,6 +7522,11 @@
       "he": "הנתונים שלכם נשמרים רק במכשירים שלכם, אז מעבירים אותם מאחד מהם."
     },
     {
+      "name": "q_e74842d6683869d2",
+      "en": "Widgets are an Android feature",
+      "he": "ווידג׳טים זמינים באנדרואיד"
+    },
+    {
       "name": "q_e7536342becd93f8",
       "en": "A subscription or repeating series only becomes a schedule if Cashew still has an upcoming entry for it. Series with no upcoming entry are treated as ended and only their past payments are imported.",
       "he": "מנוי או סדרה חוזרת הופכים לתזמון רק אם ל־Cashew עדיין יש עבורם רשומה קרובה. סדרות ללא רשומה קרובה נחשבות כמסתיימות, ורק התשלומים הקודמים שלהן מיובאים."
@@ -7597,6 +7717,11 @@
       "he": "הוא ענה אך דחה את הכספת הזו. בדקו את כתובת הממסר בהגדרות הסנכרון — ממסר שהוחלף או נפרס מחדש הוא הסיבה הרגילה."
     },
     {
+      "name": "q_eb76ff1455acffa4",
+      "en": "6 months",
+      "he": "6 חודשים"
+    },
+    {
       "name": "q_eb80d3fa1206db4b",
       "en": "Fetching…",
       "he": "טוען…"
@@ -7770,6 +7895,11 @@
       "name": "q_ef57bb53e02b26d9",
       "en": "Parent category is missing, deleted, or not a valid parent.",
       "he": "קטגוריית האב חסרה, נמחקה או אינה אב תקין."
+    },
+    {
+      "name": "q_ef6956b8c477cddc",
+      "en": "Transactions widget",
+      "he": "ווידג׳ט תנועות"
     },
     {
       "name": "q_ef6b380543d1bfe3",
@@ -8305,6 +8435,11 @@
       "name": "q_fd7a9ed8381bcd4c",
       "en": "Add another account",
       "he": "הוספת חשבון נוסף"
+    },
+    {
+      "name": "q_fd958ff324260330",
+      "en": "All accounts",
+      "he": "כל החשבונות"
     },
     {
       "name": "q_fddbf4e4aec52f5b",
@@ -9541,6 +9676,12 @@
       "source": "^(\\d+)% remains in this period\\.$",
       "en": "%1$s%% remains in this period.",
       "he": "%1$s%% נותרו בתקופה הזו."
+    },
+    {
+      "name": "q_bf8ff0c4e39b2129",
+      "source": "^Choose a whole number of months from 1 to (\\d+)\\.$",
+      "en": "Choose a whole number of months from 1 to %1$s.",
+      "he": "בחרו מספר שלם של חודשים מ־1 עד %1$s."
     },
     {
       "name": "q_0f93a45baead0786",

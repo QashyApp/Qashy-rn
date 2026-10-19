@@ -1,7 +1,8 @@
-import { Redirect, router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { useMemo, useState } from "react";
 import { View } from "react-native";
 
+import { CloseTo } from "@/components/navigation/close-to";
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
@@ -705,7 +706,7 @@ export function TransactionFormScreen() {
 
   if (id && !existing) {
     return (
-      <Redirect
+      <CloseTo
         href={returnTo === "/overview" ? "/overview" : "/transactions"}
       />
     );

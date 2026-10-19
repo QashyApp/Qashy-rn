@@ -1124,6 +1124,40 @@ export const HEBREW: Record<string, string> = {
   "Swipe to change month": "החלקה למעבר בין חודשים",
   "Swipe left or right on Overview and Transactions to move between months.":
     "החליקו ימינה או שמאלה במסכי הסקירה והתנועות כדי לעבור בין חודשים.",
+  // Home-screen widgets (More → Widgets) and the text the widgets themselves draw.
+  Widgets: "ווידג׳טים",
+  "Home screen widgets": "ווידג׳טים למסך הבית",
+  "Hide amounts": "הסתרת סכומים",
+  "Amounts and the net worth graph are hidden on all widgets.":
+    "הסכומים וגרף השווי הנקי מוסתרים בכל הווידג׳טים.",
+  "Widgets are an Android feature": "ווידג׳טים זמינים באנדרואיד",
+  "Home screen widgets are available in the Android app only.":
+    "ווידג׳טים למסך הבית זמינים באפליקציית אנדרואיד בלבד.",
+  "No widgets yet": "עדיין אין ווידג׳טים",
+  "Press and hold an empty spot on your home screen, choose Widgets, then pick Qashy to add one.":
+    "לחצו לחיצה ארוכה על מקום פנוי במסך הבית, בחרו ״ווידג׳טים״ ואז בחרו ב־Qashy כדי להוסיף ווידג׳ט.",
+  "Show all widgets": "הצגת כל הווידג׳טים",
+  "Transactions widget": "ווידג׳ט תנועות",
+  "Summary widget": "ווידג׳ט סיכום",
+  "Material You colors need Android 12 or later. On this device the widget uses Qashy colors.":
+    "צבעי Material You דורשים אנדרואיד 12 ומעלה. במכשיר הזה הווידג׳ט משתמש בצבעי Qashy.",
+  Mode: "מצב",
+  Background: "רקע",
+  Surface: "משטח",
+  "Surface follows the theme, Accent tints it with the accent color, and Custom uses a color you choose.":
+    "״משטח״ תואם לערכת העיצוב, ״צבע הדגשה״ צובע אותו בגוון ההדגשה, ו״מותאם״ משתמש בצבע שתבחרו.",
+  Transparency: "שקיפות",
+  "Frosted look": "מראה חלבי",
+  "A soft, frosted look. Widgets can’t blur what is behind them, so this is an approximation.":
+    "מראה רך וחלבי. ווידג׳טים לא יכולים לטשטש את מה שמאחוריהם, ולכן זו רק הדמיה של האפקט.",
+  "Show transactions from": "הצגת תנועות מתוך",
+  "All accounts": "כל החשבונות",
+  "Graph range": "טווח הגרף",
+  "3 months": "3 חודשים",
+  "6 months": "6 חודשים",
+  "12 months": "12 חודשים",
+  "Open Qashy to load your widget": "פתחו את Qashy כדי לטעון את הווידג׳ט",
+  Today: "היום",
   "Navigation bar style": "סגנון סרגל הניווט",
   Native: "מובנה",
   Floating: "צף",
@@ -3198,6 +3232,10 @@ export function createDynamicPatterns(
     [
       /^Use a real (.+) in YYYY-MM-DD format\.$/,
       (label) => `השתמשו ב${translateField(label)} אמיתי בתבנית YYYY-MM-DD.`,
+    ],
+    [
+      /^Choose a whole number of months from 1 to (\d+)\.$/,
+      (max) => `בחרו מספר שלם של חודשים מ־1 עד ${max}.`,
     ],
     [
       /^(.+) must be a positive whole number\.$/,

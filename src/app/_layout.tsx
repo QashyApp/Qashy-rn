@@ -29,6 +29,7 @@ import { NavBarStyleSheetProvider } from "@/components/navigation/nav-bar-style-
 import { AnimationLevelProvider } from "@/components/ui/animation-level";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { WebDialogHost } from "@/components/web-dialog-host";
+import { WidgetRefresher } from "@/features/widgets";
 import { ReloadErrorBanner } from "@/components/reload-error-banner";
 import {
   LocalizationProvider,
@@ -295,6 +296,15 @@ function RootNavigator() {
             }}
           />
           <Stack.Screen
+            name="widgets"
+            options={{
+              headerShown: true,
+              ...backFallbackOptions("/more"),
+              title: t("Widgets"),
+              headerBackTitle: backTitle,
+            }}
+          />
+          <Stack.Screen
             name="language"
             options={{
               headerShown: true,
@@ -418,6 +428,12 @@ export default function RootLayout() {
               <AnimationLevelProvider>
                 <NavBarStyleSheetProvider>
                   <RootNavigator />
+                  {/* Keeps the home-screen widgets current while the app is open. The repository
+                      is ready here (FinanceProvider renders its children only once it is), and
+                      widgets are an Android feature. */}
+                  {process.env.EXPO_OS === "android" ? (
+                    <WidgetRefresher />
+                  ) : null}
                 </NavBarStyleSheetProvider>
               </AnimationLevelProvider>
             </QashyThemeProvider>

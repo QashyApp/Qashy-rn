@@ -75,6 +75,13 @@ When adding or changing an entity, update the model, repository contract, both s
 - Never hard-delete a `records` row. Tombstones are erased, not removed: they carry recurrence suppression, so deleting one resurrects a transaction the user deleted. The sole exception is the import's replace option, by explicit product decision: it erases the replaced entity types' rows (tombstones included) in one `transact`, and only when `hasSyncHistory` is false. On a device with any sync history it is refused, because the op log and other devices still hold those entities and would restore them. Do not add other hard deletes, and do not weaken that guard.
 - Prefer deterministic entity ids over post-hoc duplicate repair whenever a value uniquely identifies the record.
 
+## Widgets
+
+- Widget settings are device-local: they live in `sync_meta` (`SYNC_META.widgetSettings`, via `src/data/widget-settings-store.ts`) and never in `AppSettings`, which replicates to peers. Write them only through `updateWidgetSettings`.
+- The widget data copy (a formatted snapshot in the app's no-backup storage) holds display strings only, is never logged, and is cleared when the last widget is removed or after a replace import. Hide amounts must keep amounts out of it, not merely hide them when drawing.
+- The headless refresh path (midnight, boot, time and locale changes) must stay write-free: it reads the repository and pushes a snapshot, and never mutates finance data, generates recurring transactions or writes settings other than pruning removed widgets.
+- The snapshot contract lives in `src/features/widgets/snapshot.ts` and `modules/qashy-widgets` `Snapshot.kt`. Change both together, and bump the snapshot version when the shape changes.
+
 ## Navigation and responsive layout
 
 The primary sections are:

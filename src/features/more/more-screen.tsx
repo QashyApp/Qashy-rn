@@ -452,6 +452,14 @@ export function MoreScreen() {
                 icon="arrow.left.arrow.right"
                 onPress={() => router.push("/gestures")}
               />
+              {process.env.EXPO_OS === "android" ? (
+                <SettingsRow
+                  title="Widgets"
+                  subtitle="Home screen widgets"
+                  icon="ion:apps-outline"
+                  onPress={() => router.push("/widgets")}
+                />
+              ) : null}
               {/* Dev-only component gallery; the route itself redirects away in production
                   builds (see src/app/kitchen-sink.tsx), but the row is also hidden there so
                   it never shows up as a dead end for a real user. */}
