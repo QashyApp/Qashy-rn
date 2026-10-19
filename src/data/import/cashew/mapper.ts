@@ -608,8 +608,7 @@ const WARNING_MESSAGES: Record<string, string> = {
     "Accounts archived in Cashew were not imported, nor were their transactions. A transfer with one of them was kept as income or expense on the other account.",
   "archived-category-skipped":
     "Categories archived in Cashew were not imported; transactions that used them were imported without a category.",
-  "archived-budget-skipped":
-    "Budgets archived in Cashew were not imported.",
+  "archived-budget-skipped": "Budgets archived in Cashew were not imported.",
   "archived-budget-broadened":
     "Budgets whose only accounts or categories were archived in Cashew now cover all accounts or all categories, since the archived ones were not imported.",
   "associated-titles-dropped":

@@ -15,6 +15,8 @@ import com.facebook.react.jstasks.HeadlessJsTaskEventListener
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
@@ -57,8 +59,10 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
       // Retry a failed or timed-out run; the next midnight is scheduled only once, on the final
       // attempt or on success, so a retry never loses or duplicates it.
       if (!finished && runAttemptCount < MAX_RETRIES) return Result.retry()
-      // Last step: REPLACE cancels the running midnight worker, i.e. this one.
-      if (WidgetScheduler.hasWidgets(context)) WidgetScheduler.scheduleMidnight(context)
+      // Last step. Only the midnight worker replaces (it is the one being replaced, after its own
+      // run); the "now" worker keeps, since REPLACE could cancel an in-flight midnight run.
+      val isNowWorker = inputData.getString(WidgetScheduler.INPUT_WORKER_KIND) == WidgetScheduler.WORKER_NOW
+      if (WidgetScheduler.hasWidgets(context)) WidgetScheduler.scheduleMidnight(context, replace = !isNowWorker)
     }
     return Result.success()
   }
@@ -69,27 +73,31 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
     val reactContext = host.currentReactContext ?: awaitReactContext(host)
     val taskContext = HeadlessJsTaskContext.getInstance(reactContext)
     val taskId = AtomicInteger(-1)
-    // Cleared before the task starts; JS sets it (reportHeadlessResult) right before resolving.
-    RefreshOutcome.reset()
-    var listener: HeadlessJsTaskEventListener? = null
-    try {
-      suspendCancellableCoroutine<Unit> { cont ->
-        val l = object : HeadlessJsTaskEventListener {
-          override fun onHeadlessJsTaskStart(started: Int) = Unit
+    // RefreshOutcome is process-wide and the "now" and "midnight" workers can overlap, so the
+    // whole reset -> run -> read section is serialized; outcomes cannot cross between runs.
+    return jsMutex.withLock {
+      // Cleared before the task starts; JS sets it (reportHeadlessResult) right before resolving.
+      RefreshOutcome.reset()
+      var listener: HeadlessJsTaskEventListener? = null
+      try {
+        suspendCancellableCoroutine<Unit> { cont ->
+          val l = object : HeadlessJsTaskEventListener {
+            override fun onHeadlessJsTaskStart(started: Int) = Unit
 
-          // Posted to the main thread after startTask returned, so taskId is already set.
-          override fun onHeadlessJsTaskFinish(finished: Int) {
-            if (finished == taskId.get() && cont.isActive) cont.resume(Unit)
+            // Posted to the main thread after startTask returned, so taskId is already set.
+            override fun onHeadlessJsTaskFinish(finished: Int) {
+              if (finished == taskId.get() && cont.isActive) cont.resume(Unit)
+            }
           }
+          listener = l
+          taskContext.addTaskEventListener(l)
+          taskId.set(taskContext.startTask(HeadlessJsTaskConfig(TASK_KEY, Arguments.createMap(), JS_TIMEOUT_MS, true)))
         }
-        listener = l
-        taskContext.addTaskEventListener(l)
-        taskId.set(taskContext.startTask(HeadlessJsTaskConfig(TASK_KEY, Arguments.createMap(), JS_TIMEOUT_MS, true)))
+      } finally {
+        listener?.let { taskContext.removeTaskEventListener(it) }
       }
-    } finally {
-      listener?.let { taskContext.removeTaskEventListener(it) }
+      RefreshOutcome.succeeded()
     }
-    return RefreshOutcome.succeeded()
   }
 
   private suspend fun awaitReactContext(host: ReactHost): ReactContext =
@@ -106,6 +114,7 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
     }
 
   private companion object {
+    val jsMutex = Mutex()
     const val TAG = "QashyWidgets"
     const val TASK_KEY = "QashyWidgetRefresh"
     const val JS_TIMEOUT_MS = 30_000L

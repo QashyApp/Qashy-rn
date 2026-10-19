@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.os.SystemClock
 import androidx.work.BackoffPolicy
+import androidx.work.Data
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -19,6 +20,11 @@ object WidgetScheduler {
   private const val NOW_WORK = "qashy-widget-now"
   private const val THROTTLE_MS = 60_000L
   private const val BACKOFF_MS = 60_000L
+
+  /** inputData key telling WidgetRefreshWorker which unique work it runs for. */
+  const val INPUT_WORKER_KIND = "workerKind"
+  const val WORKER_NOW = "now"
+  const val WORKER_MIDNIGHT = "midnight"
 
   /** appWidgetId to the time (elapsedRealtime) of its last no-data refresh request. Guarded by this. */
   private val lastRefreshRequest = HashMap<Int, Long>()
@@ -37,11 +43,12 @@ object WidgetScheduler {
 
   /**
    * Replaces the pending midnight run (needed after a clock or time zone change, and after a
-   * midnight run). Never call it with replace = true from inside the refresh task: REPLACE
-   * cancels the running worker.
+   * midnight run). Never call it with replace = true from the "now" worker: REPLACE would cancel
+   * an in-flight midnight run.
    */
   fun scheduleMidnight(context: Context, replace: Boolean = true) {
     val request = OneTimeWorkRequestBuilder<WidgetRefreshWorker>()
+      .setInputData(Data.Builder().putString(INPUT_WORKER_KIND, WORKER_MIDNIGHT).build())
       .setInitialDelay(millisUntilNextMidnight(), TimeUnit.MILLISECONDS)
       .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MS, TimeUnit.MILLISECONDS)
       .build()
@@ -58,6 +65,7 @@ object WidgetScheduler {
       NOW_WORK,
       policy,
       OneTimeWorkRequestBuilder<WidgetRefreshWorker>()
+        .setInputData(Data.Builder().putString(INPUT_WORKER_KIND, WORKER_NOW).build())
         .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, BACKOFF_MS, TimeUnit.MILLISECONDS)
         .build(),
     )
