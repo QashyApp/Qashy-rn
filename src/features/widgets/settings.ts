@@ -72,7 +72,9 @@ const GRAPH_MONTHS: readonly GraphMonths[] = [3, 6, 12];
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
-export function defaultWidgetConfig(kind: "transactions"): TransactionsWidgetConfig;
+export function defaultWidgetConfig(
+  kind: "transactions",
+): TransactionsWidgetConfig;
 export function defaultWidgetConfig(kind: "summary"): SummaryWidgetConfig;
 export function defaultWidgetConfig(kind: WidgetConfig["kind"]): WidgetConfig;
 export function defaultWidgetConfig(kind: WidgetConfig["kind"]): WidgetConfig {
@@ -98,7 +100,11 @@ function normalizeAppearance(raw: Record<string, unknown>): WidgetAppearance {
   return {
     theme: oneOf(raw.theme, THEMES, DEFAULT_APPEARANCE.theme),
     mode: oneOf(raw.mode, MODES, DEFAULT_APPEARANCE.mode),
-    background: oneOf(raw.background, BACKGROUNDS, DEFAULT_APPEARANCE.background),
+    background: oneOf(
+      raw.background,
+      BACKGROUNDS,
+      DEFAULT_APPEARANCE.background,
+    ),
     customColor:
       typeof raw.customColor === "string" && HEX_COLOR.test(raw.customColor)
         ? raw.customColor.toUpperCase()
