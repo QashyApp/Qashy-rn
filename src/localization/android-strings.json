@@ -2957,6 +2957,11 @@
       "he": "״משטח״ תואם לערכת העיצוב, ״צבע הדגשה״ צובע אותו בגוון ההדגשה, ו״מותאם״ משתמש בצבע שתבחרו."
     },
     {
+      "name": "q_59ca2d6917609fcc",
+      "en": "Start import",
+      "he": "התחלת ייבוא"
+    },
+    {
       "name": "q_5a00839943ad68f7",
       "en": "Close base currency choices",
       "he": "סגירת אפשרויות המטבע"
@@ -3490,6 +3495,11 @@
       "name": "q_67c29996eb05206a",
       "en": "Majority vote",
       "he": "הצבעת רוב"
+    },
+    {
+      "name": "q_67e8c3c346c5b2ac",
+      "en": "Choose an app",
+      "he": "בחירת אפליקציה"
     },
     {
       "name": "q_67eb73d5e4631ef5",
@@ -4632,6 +4642,11 @@
       "he": "אני כבר משתמש/ת ב־Qashy"
     },
     {
+      "name": "q_8bdea8eac18ecbce",
+      "en": "What this includes",
+      "he": "מה כלול בייבוא"
+    },
+    {
       "name": "q_8bdeff2995320225",
       "en": "Done selecting",
       "he": "סיום בחירה"
@@ -4730,6 +4745,11 @@
       "name": "q_8f596b845c24da3d",
       "en": "Couldn’t finish resetting Qashy",
       "he": "לא ניתן להשלים את איפוס Qashy"
+    },
+    {
+      "name": "q_8f647a73b113c737",
+      "en": "Import progress",
+      "he": "התקדמות הייבוא"
     },
     {
       "name": "q_8f9d3b18c44c01db",
@@ -6552,9 +6572,19 @@
       "he": "העותקים נמחקים וכל מה שהפנה אליהם מכוון לרשומה שהשארתם. הסכומים שלכם אינם משתנים, אך לא ניתן לבטל זאת מכאן."
     },
     {
+      "name": "q_cc579bed2bb0be0f",
+      "en": "Import another backup",
+      "he": "ייבוא גיבוי נוסף"
+    },
+    {
       "name": "q_cc620c14ab593006",
       "en": "Transaction foreign currency",
       "he": "מטבע החוץ בתנועה"
+    },
+    {
+      "name": "q_cc983f3d40116a8a",
+      "en": "Review import",
+      "he": "סקירת הייבוא"
     },
     {
       "name": "q_ccab01c27d4cd5d3",
@@ -7530,6 +7560,11 @@
       "name": "q_e90a54239335566f",
       "en": "This SQLite file looks damaged or incomplete (an overflow chain ends early).",
       "he": "קובץ ה־SQLite הזה נראה פגום או חלקי (שרשרת גלישה מסתיימת מוקדם מדי)."
+    },
+    {
+      "name": "q_e9460a6e5973af7f",
+      "en": "Preview again",
+      "he": "תצוגה מקדימה שוב"
     },
     {
       "name": "q_e95992921d950735",

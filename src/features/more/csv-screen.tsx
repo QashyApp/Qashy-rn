@@ -33,7 +33,7 @@ import { todayLocal } from "@/utils/date";
 import { hapticSuccess } from "@/utils/haptics";
 import { MAX_CSV_IMPORT_BYTES } from "@/utils/file-size";
 import { exchangeRateService } from "@/providers/exchange-rate-provider";
-import { ExternalImportCard } from "@/features/more/external-import-card";
+import { ExternalImportLauncher } from "@/features/more/external-import-launcher";
 import { insetHighlight } from "@/theme/highlight";
 
 type CsvField = Exclude<keyof CsvImportRow, "rowNumber">;
@@ -568,7 +568,7 @@ export function CsvScreen() {
           disabled={exporting}
         />
       </Card>
-      <ExternalImportCard />
+      <ExternalImportLauncher />
       <Card style={{ gap: 14 }}>
         <AppText variant="headline">Import transactions</AppText>
         <CsvStepper

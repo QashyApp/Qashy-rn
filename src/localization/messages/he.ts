@@ -1533,6 +1533,13 @@ export const HEBREW: Record<string, string> = {
   "Nothing can be imported until these are fixed. For missing exchange rates, turn on automatic rates or add manual rates in More → Exchange rates, then preview again.":
     "לא ניתן לייבא עד שאלה יתוקנו. לשערי חליפין חסרים, הפעילו שערים אוטומטיים או הוסיפו שערים ידניים ב״עוד ← שערי חליפין״, ואז הציגו שוב תצוגה מקדימה.",
   "Open exchange rates": "פתיחת שערי חליפין",
+  "Preview again": "תצוגה מקדימה שוב",
+  "Import progress": "התקדמות הייבוא",
+  "Review import": "סקירת הייבוא",
+  "Start import": "התחלת ייבוא",
+  "Choose an app": "בחירת אפליקציה",
+  "What this includes": "מה כלול בייבוא",
+  "Import another backup": "ייבוא גיבוי נוסף",
   "Will be imported": "ייובאו",
   "Will not be imported": "לא ייובאו",
   "Good to know": "דברים לדעת",

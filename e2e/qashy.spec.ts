@@ -553,6 +553,36 @@ ${todayKey()},expense,posted,Tagged import,10.00,USD,Everyday,,Work,Imported
   await expect(page.getByRole("checkbox", { name: "Work" })).not.toBeChecked();
 });
 
+test("opens the external import wizard and keeps its source copy behind a disclosure", async ({
+  page,
+}) => {
+  await completeOnboarding(page);
+  await page.goto("/csv");
+
+  await page.getByRole("button", { name: "Start import" }).click();
+  await expect(page).toHaveURL(/\/import-app$/);
+  await expect(page.getByText("Step 1 of 4")).toBeVisible();
+  await expect(page.getByText("Choose an app", { exact: true })).toBeVisible();
+  // The long reference copy is collapsed so the source step stays one decision.
+  await expect(page.getByText("Will be imported", { exact: true })).toHaveCount(
+    0,
+  );
+  await page.getByRole("button", { name: "What this includes" }).click();
+  await expect(
+    page.getByText("Will be imported", { exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Continue" }).click();
+  await expect(page.getByText("Step 2 of 4")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Choose Cashew backup file" }),
+  ).toBeVisible();
+
+  // Back moves one stage within the wizard rather than leaving it.
+  await page.getByRole("button", { name: "Back", exact: true }).last().click();
+  await expect(page.getByText("Step 1 of 4")).toBeVisible();
+});
+
 test("keeps Plan creation actions inside their empty sections", async ({
   page,
 }) => {

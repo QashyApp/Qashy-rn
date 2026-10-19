@@ -323,6 +323,15 @@ function RootNavigator() {
             }}
           />
           <Stack.Screen
+            name="import-app"
+            options={{
+              headerShown: true,
+              ...backFallbackOptions("/csv"),
+              title: t("Import from another app"),
+              headerBackTitle: backTitle,
+            }}
+          />
+          <Stack.Screen
             name="sync"
             options={{
               headerShown: true,
