@@ -42,3 +42,13 @@ export async function clear(): Promise<void> {
   if (Platform.OS !== "android" || !NativeModule) return;
   await NativeModule.clear();
 }
+
+/**
+ * Called by the headless refresh task right before it resolves: `ok` is whether the refresh
+ * actually completed. The native worker retries a task that finished without `ok = true`. A no-op
+ * on web or without the native module.
+ */
+export function reportHeadlessResult(ok: boolean): void {
+  if (Platform.OS !== "android" || !NativeModule) return;
+  NativeModule.reportHeadlessResult(ok);
+}

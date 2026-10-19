@@ -609,7 +609,9 @@ const WARNING_MESSAGES: Record<string, string> = {
   "archived-category-skipped":
     "Categories archived in Cashew were not imported; transactions that used them were imported without a category.",
   "archived-budget-skipped":
-    "Budgets archived in Cashew, or left with nothing to track once archived accounts and categories were left out, were not imported.",
+    "Budgets archived in Cashew were not imported.",
+  "archived-budget-broadened":
+    "Budgets whose only accounts or categories were archived in Cashew now cover all accounts or all categories, since the archived ones were not imported.",
   "associated-titles-dropped":
     "Cashew’s remembered title suggestions were not imported.",
   "scanner-templates-dropped":
@@ -1323,6 +1325,7 @@ export function mapCashewBackup(
   warnings.add("archived-account-skipped", kept.omitted.accounts);
   warnings.add("archived-category-skipped", kept.omitted.categories);
   warnings.add("archived-budget-skipped", kept.omitted.budgets);
+  warnings.add("archived-budget-broadened", kept.omitted.budgetsBroadened);
   warnings.add("recurring-review", kept.parts.recurringRules.length);
   if (
     kept.parts.budgets.length > 0 &&

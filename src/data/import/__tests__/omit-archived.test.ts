@@ -123,5 +123,31 @@ describe("omitArchived budgets", () => {
     );
     expect(out.budgets.map((item) => item.externalId)).toEqual(["alive"]);
     expect(omitted.budgets).toBe(1);
+    expect(omitted.budgetsBroadened).toBe(1);
+  });
+
+  it("counts a budget as broadened once, only when a filter list emptied", () => {
+    const { omitted } = omitArchived(
+      parts([
+        // Both lists empty out: still one budget.
+        budget({
+          externalId: "both",
+          accountExternalIds: ["gone"],
+          categoryExternalIds: ["old"],
+        }),
+        // Partly archived, so it still filters.
+        budget({ externalId: "partial", accountExternalIds: ["gone", "live"] }),
+        // Never filtered anything.
+        budget({ externalId: "plain" }),
+        // Archived itself: not imported, so not broadened.
+        budget({
+          externalId: "dead",
+          archived: true,
+          accountExternalIds: ["gone"],
+        }),
+      ]),
+    );
+    expect(omitted.budgets).toBe(1);
+    expect(omitted.budgetsBroadened).toBe(1);
   });
 });

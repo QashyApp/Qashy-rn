@@ -32,14 +32,20 @@ class QashyWidgetsModule : Module() {
       }
     }
 
+    // Called by the headless JS task right before it resolves, so the worker can tell a refresh
+    // that completed from one that failed (the task itself always resolves).
+    Function("reportHeadlessResult") { ok: Boolean ->
+      RefreshOutcome.report(ok)
+    }
+
     AsyncFunction("clear") Coroutine { ->
       val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) {
         SnapshotStore.delete(context)
         // Widgets re-render to "open the app"; that must not trigger a refresh that refills them.
-        WidgetScheduler.markRefreshRequested(context)
+        WidgetScheduler.markAllRefreshRequested(context)
         updateWidgets(context)
-        WidgetScheduler.cancelAll(context)
+        WidgetScheduler.afterClear(context)
       }
     }
   }

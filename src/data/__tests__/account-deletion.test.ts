@@ -871,6 +871,18 @@ describe("sweeping data an older version archived", () => {
     expect(reopened.getSnapshot().accounts[0].archived).toBe(false);
   });
 
+  it("writes nothing at startup, or on a later sweep or refresh, when nothing is archived", async () => {
+    const storage = new MemoryStorageAdapter();
+    await createRepository(storage, { sweeps: false });
+    const putMany = jest.spyOn(storage, "putMany");
+    const repository = new LocalFinanceRepository(storage);
+    await repository.initialize();
+    await repository.sweepArchived();
+    await repository.refresh();
+    expect(repository.getSnapshot().ready).toBe(true);
+    expect(putMany).not.toHaveBeenCalled();
+  });
+
   it("does not run in a headless read-only initialization", async () => {
     const vault = await archivedVault();
     const putMany = jest.spyOn(vault.storage, "putMany");

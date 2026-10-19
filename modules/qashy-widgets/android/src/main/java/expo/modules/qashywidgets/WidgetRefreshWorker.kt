@@ -17,8 +17,24 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.coroutines.resume
+
+/**
+ * Process-wide result of the headless refresh task. The task always resolves (and React Native's
+ * own timeout also finishes it), so "finished" says nothing about success; JS reports whether the
+ * refresh actually completed through QashyWidgets.reportHeadlessResult just before it resolves.
+ */
+internal object RefreshOutcome {
+  private val ok = AtomicBoolean(false)
+
+  fun reset() = ok.set(false)
+
+  fun report(value: Boolean) = ok.set(value)
+
+  fun succeeded(): Boolean = ok.get()
+}
 
 /**
  * Runs the JS headless task "QashyWidgetRefresh" (which rebuilds the snapshot and calls update())
@@ -29,7 +45,8 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
   override suspend fun doWork(): Result {
     val context = applicationContext
     if (WidgetScheduler.hasWidgets(context)) {
-      // Null means the 40 s budget ran out; false means no React host or an exception.
+      // Null means the 40 s budget ran out; false means no React host, an exception, or a task
+      // that finished without JS reporting a completed refresh.
       val finished = try {
         withTimeoutOrNull(TOTAL_TIMEOUT_MS) { withContext(Dispatchers.Main) { runJsTask(context) } } == true
       } catch (e: Exception) {
@@ -52,6 +69,8 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
     val reactContext = host.currentReactContext ?: awaitReactContext(host)
     val taskContext = HeadlessJsTaskContext.getInstance(reactContext)
     val taskId = AtomicInteger(-1)
+    // Cleared before the task starts; JS sets it (reportHeadlessResult) right before resolving.
+    RefreshOutcome.reset()
     var listener: HeadlessJsTaskEventListener? = null
     try {
       suspendCancellableCoroutine<Unit> { cont ->
@@ -70,7 +89,7 @@ class WidgetRefreshWorker(context: Context, params: WorkerParameters) : Coroutin
     } finally {
       listener?.let { taskContext.removeTaskEventListener(it) }
     }
-    return true
+    return RefreshOutcome.succeeded()
   }
 
   private suspend fun awaitReactContext(host: ReactHost): ReactContext =

@@ -8,6 +8,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.coerceAtLeast
 import androidx.compose.ui.unit.sp
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -101,7 +102,7 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
     val snapshot = withContext(Dispatchers.IO) { SnapshotStore.read(context) }
     val data = snapshot?.widgets?.get(appWidgetId)?.takeIf { it.kind == kind }
     // No data for this widget: ask JS (through the refresh worker) to produce it.
-    if (data == null) WidgetScheduler.enqueueNowThrottled(context)
+    if (data == null) WidgetScheduler.enqueueNowThrottled(context, appWidgetId)
     val radius = WidgetTheme.radius(context)
     val openApp = if (snapshot != null) snapshot.labels.openApp
     else context.getString(R.string.qashy_widget_open_app)

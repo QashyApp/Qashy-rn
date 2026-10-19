@@ -95,7 +95,10 @@ const refresher = createWidgetRefresher({
     console.warn(`[widgets] ${message} (${errorName})`),
 });
 
-/** Rebuilds the snapshot and pushes it when it changed. Serialized, coalesced, never rejects. */
+/**
+ * Rebuilds the snapshot and pushes it when it changed. Serialized, coalesced, never rejects;
+ * resolves to whether the refresh completed (an unchanged snapshot counts as completed).
+ */
 export const refreshWidgets = refresher.refresh;
 
 /** Deletes the stored snapshot, then rebuilds it, in order, through the same queue (e.g. after the data was replaced). */

@@ -4,7 +4,9 @@
  * Serialized and coalesced: one run at a time, and any number of calls made during a run schedule
  * exactly one more run afterwards. A run pushes the snapshot only when it differs from the last
  * one pushed (ignoring `generatedAt`), and a failure is logged without any finance data and never
- * rejects.
+ * rejects. The promise resolves to whether the refresh completed (`true`), where "unchanged, so not
+ * pushed" and "no widgets placed" count as completed; the headless task reports it to the native
+ * worker, which retries a failure.
  */
 
 import type { WidgetSnapshot } from "@/features/widgets/snapshot";
@@ -37,7 +39,7 @@ export function comparableSnapshot(snapshot: WidgetSnapshot): string {
 }
 
 export function createWidgetRefresher(deps: RefresherDeps) {
-  let running: Promise<void> | null = null;
+  let running: Promise<boolean> | null = null;
   let rerun = false;
   /** The last snapshot pushed in this process; `null` forces the next push. */
   let lastPushed: string | null = null;
@@ -46,13 +48,16 @@ export function createWidgetRefresher(deps: RefresherDeps) {
   /** Set by `clearData`; honoured at the start of the next run. */
   let clearRequested = false;
 
-  async function runOnce(): Promise<void> {
+  /** Resolves to whether this run completed; never rejects. */
+  async function runOnce(): Promise<boolean> {
+    let ok = true;
     if (clearRequested) {
       clearRequested = false;
       try {
         await deps.clear();
         nativeState = "cleared";
       } catch (error) {
+        ok = false;
         deps.log(
           "Widget clear failed",
           error instanceof Error ? error.name : "unknown",
@@ -69,41 +74,47 @@ export function createWidgetRefresher(deps: RefresherDeps) {
           nativeState = "cleared";
         }
         lastPushed = null;
-        return;
+        return ok;
       }
       const settings = await deps.pruneSettings(
         new Set(placed.map((widget) => String(widget.id))),
       );
       const snapshot = await deps.buildSnapshot(placed, settings);
-      if (!snapshot) return;
+      // Data not ready: nothing was refreshed, so this is not a success.
+      if (!snapshot) return false;
       const comparable = comparableSnapshot(snapshot);
-      if (comparable === lastPushed) return;
+      if (comparable === lastPushed) return ok;
       await deps.update(JSON.stringify(snapshot));
       lastPushed = comparable;
       nativeState = "pushed";
     } catch (error) {
+      ok = false;
       deps.log(
         "Widget refresh failed",
         error instanceof Error ? error.name : "unknown",
       );
     }
+    return ok;
   }
 
-  function refresh(): Promise<void> {
-    if (!deps.isAvailable()) return Promise.resolve();
+  /** Resolves to whether the refresh completed (the result of the final run); never rejects. */
+  function refresh(): Promise<boolean> {
+    if (!deps.isAvailable()) return Promise.resolve(true);
     if (running) {
       rerun = true;
       return running;
     }
     running = (async () => {
+      let ok = true;
       try {
         do {
           rerun = false;
-          await runOnce();
+          ok = await runOnce();
         } while (rerun);
       } finally {
         running = null;
       }
+      return ok;
     })();
     return running;
   }
@@ -113,8 +124,8 @@ export function createWidgetRefresher(deps: RefresherDeps) {
    * serialized loop (at the start of the next run, or of the rerun a run in flight schedules), so
    * it can never interleave with a refresh and the rebuild always comes after it.
    */
-  function clearData(): Promise<void> {
-    if (!deps.isAvailable()) return Promise.resolve();
+  function clearData(): Promise<boolean> {
+    if (!deps.isAvailable()) return Promise.resolve(true);
     clearRequested = true;
     return refresh();
   }

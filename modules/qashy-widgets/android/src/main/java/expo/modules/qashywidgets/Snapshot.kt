@@ -89,7 +89,7 @@ object SnapshotStore {
   fun read(context: Context): Snapshot? =
     try {
       file(context).takeIf { it.exists() }?.readText(Charsets.UTF_8)?.let(::parse)
-    } catch (_: Exception) {
+    } catch (e: Exception) {
       null
     }
 
@@ -111,15 +111,16 @@ object SnapshotStore {
           l.optString("empty"), l.optString("openApp"),
         )
         val widgets = HashMap<Int, WidgetData>()
-        val ws = root.optJSONObject("widgets")
-        ws?.keys()?.forEach { key ->
-          val id = key.toIntOrNull() ?: return@forEach
-          // One malformed widget entry must not hide the others.
-          runCatching { parseWidget(ws.getJSONObject(key)) }.getOrNull()?.let { widgets[id] = it }
+        root.optJSONObject("widgets")?.let { ws ->
+          ws.keys().forEach { key ->
+            val id = key.toIntOrNull() ?: return@forEach
+            // One malformed widget entry must not hide the others.
+            runCatching { parseWidget(ws.getJSONObject(key)) }.getOrNull()?.let { widgets[id] = it }
+          }
         }
         Snapshot(root.optBoolean("hideAmounts", false), labels, widgets)
       }
-    } catch (_: Exception) {
+    } catch (e: Exception) {
       null
     }
 

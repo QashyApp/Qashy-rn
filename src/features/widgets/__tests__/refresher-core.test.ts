@@ -171,13 +171,65 @@ describe("widget refresher", () => {
       )
       .mockResolvedValue(snapshot("t"));
     const { deps, refresher } = setup({ buildSnapshot: failing });
-    await expect(refresher.refresh()).resolves.toBeUndefined();
+    await expect(refresher.refresh()).resolves.toBe(false);
     expect(deps.log).toHaveBeenCalledTimes(1);
     expect(deps.log).toHaveBeenCalledWith("Widget refresh failed", "BoomError");
     expect(JSON.stringify(deps.log.mock.calls)).not.toMatch(/Coffee|4\.50/);
     expect(deps.update).not.toHaveBeenCalled();
     await refresher.refresh();
     expect(deps.update).toHaveBeenCalledTimes(1);
+  });
+
+  describe("completion result", () => {
+    it("resolves true after a push, for an unchanged snapshot, and with no widgets placed", async () => {
+      const { refresher, place } = setup();
+      await expect(refresher.refresh()).resolves.toBe(true);
+      // Same content, new generatedAt: skipped as unchanged, still a success.
+      await expect(refresher.refresh()).resolves.toBe(true);
+      place([]);
+      await expect(refresher.refresh()).resolves.toBe(true);
+    });
+
+    it("resolves true when the module is unavailable", async () => {
+      const { refresher } = setup({ isAvailable: () => false });
+      await expect(refresher.refresh()).resolves.toBe(true);
+    });
+
+    it("resolves false when the data is not ready, or the push or the clear fails", async () => {
+      const notReady = setup({ buildSnapshot: jest.fn(async () => null) });
+      await expect(notReady.refresher.refresh()).resolves.toBe(false);
+
+      const pushFails = setup({
+        update: jest.fn().mockRejectedValue(new Error("native")),
+      });
+      await expect(pushFails.refresher.refresh()).resolves.toBe(false);
+
+      const clearFails = setup({
+        clear: jest.fn().mockRejectedValue(new Error("native")),
+      });
+      await expect(clearFails.refresher.clearData()).resolves.toBe(false);
+    });
+
+    it("resolves false when clearing with no widgets placed fails", async () => {
+      const { refresher } = setup({
+        getPlacedWidgets: jest.fn(async () => []),
+        clear: jest.fn().mockRejectedValue(new Error("native")),
+      });
+      await expect(refresher.refresh()).resolves.toBe(false);
+    });
+
+    it("reports the final run of a coalesced burst", async () => {
+      const buildSnapshot = jest
+        .fn()
+        .mockRejectedValueOnce(new Error("first"))
+        .mockResolvedValue(snapshot("t"));
+      const { refresher } = setup({ buildSnapshot });
+      const results = await Promise.all([
+        refresher.refresh(),
+        refresher.refresh(),
+      ]);
+      expect(results).toEqual([true, true]);
+    });
   });
 
   it("does not remember a push that failed", async () => {
@@ -235,7 +287,7 @@ describe("widget refresher", () => {
         throw new Error("native");
       }),
     });
-    await expect(refresher.clearData()).resolves.toBeUndefined();
+    await expect(refresher.clearData()).resolves.toBe(false);
     expect(deps.log).toHaveBeenCalledWith("Widget clear failed", "Error");
     expect(deps.update).toHaveBeenCalledTimes(1);
   });

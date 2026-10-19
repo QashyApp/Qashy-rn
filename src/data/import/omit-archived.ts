@@ -18,7 +18,13 @@ export interface ArchivableParts {
 export interface OmittedArchived {
   accounts: number;
   categories: number;
+  /** Budgets that were themselves archived and so not imported. */
   budgets: number;
+  /**
+   * Kept budgets that lost every account or every category filter to omission, and so now cover
+   * all accounts or all categories. Each budget is counted once.
+   */
+  budgetsBroadened: number;
   /** Transactions dropped because they were booked on an archived account. */
   transactions: number;
   /** Transfers with one archived side, kept as income or expense on the other side. */
@@ -58,6 +64,7 @@ export function omitArchived<T extends ArchivableParts>(
     accounts: archivedAccounts.size,
     categories: archivedCategories.size,
     budgets: 0,
+    budgetsBroadened: 0,
     transactions: 0,
     transfersKept: 0,
     recurringRules: 0,
@@ -152,6 +159,11 @@ export function omitArchived<T extends ArchivableParts>(
       omitted.budgets += 1;
       continue;
     }
+    if (
+      (budget.accountExternalIds.length > 0 && !accountExternalIds.length) ||
+      (budget.categoryExternalIds.length > 0 && !categoryExternalIds.length)
+    )
+      omitted.budgetsBroadened += 1;
     budgets.push({
       ...budget,
       accountExternalIds,

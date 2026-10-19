@@ -57,12 +57,12 @@ object WidgetTheme {
     if (style.mode == "system") {
       val day = set(false)
       val night = set(true)
-      fun pair(pick: (ColorSet) -> Color, withAlpha: Float = 1f) = DayNightColorProvider(
+      fun pair(withAlpha: Float = 1f, pick: (ColorSet) -> Color) = DayNightColorProvider(
         day = pick(day).copy(alpha = withAlpha),
         night = pick(night).copy(alpha = withAlpha),
       )
       return WidgetColors(
-        pair({ it.background }, alpha), pair { it.text }, pair { it.muted },
+        pair(alpha) { it.background }, pair { it.text }, pair { it.muted },
         pair { it.accent }, pair { it.positive }, pair { it.negative },
       )
     }

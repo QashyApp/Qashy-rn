@@ -1511,8 +1511,10 @@ export const HEBREW: Record<string, string> = {
     "חשבונות שהועברו לארכיון ב־Cashew לא יובאו, וגם לא התנועות שלהם. העברה עם אחד מהם נשמרה כהכנסה או הוצאה בחשבון השני.",
   "Categories archived in Cashew were not imported; transactions that used them were imported without a category.":
     "קטגוריות שהועברו לארכיון ב־Cashew לא יובאו; תנועות שהשתמשו בהן יובאו ללא קטגוריה.",
-  "Budgets archived in Cashew, or left with nothing to track once archived accounts and categories were left out, were not imported.":
-    "תקציבים שהועברו לארכיון ב־Cashew, או שלא נותר בהם מה לעקוב אחריו לאחר שחשבונות וקטגוריות מהארכיון הושמטו, לא יובאו.",
+  "Budgets archived in Cashew were not imported.":
+    "תקציבים שהועברו לארכיון ב־Cashew לא יובאו.",
+  "Budgets whose only accounts or categories were archived in Cashew now cover all accounts or all categories, since the archived ones were not imported.":
+    "תקציבים שכל החשבונות או הקטגוריות שלהם הועברו לארכיון ב־Cashew חלים כעת על כל החשבונות או על כל הקטגוריות, כי הפריטים מהארכיון לא יובאו.",
   "Couldn’t delete accounts": "לא ניתן למחוק חשבונות",
   "Delete 1 category?": "למחוק קטגוריה אחת?",
   "Couldn’t delete categories": "לא ניתן למחוק קטגוריות",

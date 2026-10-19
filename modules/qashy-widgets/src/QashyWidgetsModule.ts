@@ -4,6 +4,7 @@ interface NativeModule {
   getPlacedWidgets(): Promise<{ id: number; kind: string }[]>;
   update(json: string): Promise<void>;
   clear(): Promise<void>;
+  reportHeadlessResult(ok: boolean): void;
 }
 
 // Optional: the module only exists in an Android dev-client / release build that includes it.

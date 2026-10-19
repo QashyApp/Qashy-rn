@@ -2073,5 +2073,10 @@ describe("mapCashewBackup archived items", () => {
     ).toEqual([]);
     expect(warning(bundle, "archived-category-skipped")?.count).toBe(1);
     expect(warning(bundle, "archived-budget-skipped")?.count).toBe(1);
+    expect(warning(bundle, "archived-budget-skipped")?.message).toBe(
+      "Budgets archived in Cashew were not imported.",
+    );
+    // The budget that tracked only the archived category now covers every category.
+    expect(warning(bundle, "archived-budget-broadened")?.count).toBe(1);
   });
 });

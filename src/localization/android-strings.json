@@ -22,6 +22,11 @@
       "he": "סכום הבסיס ביעד ההעברה"
     },
     {
+      "name": "q_00a0b5b5527e788f",
+      "en": "Budgets archived in Cashew were not imported.",
+      "he": "תקציבים שהועברו לארכיון ב־Cashew לא יובאו."
+    },
+    {
       "name": "q_00a5c173bc530586",
       "en": "This cannot be undone from inside Qashy.",
       "he": "לא ניתן לבטל זאת מתוך Qashy."
@@ -4007,6 +4012,11 @@
       "he": "סכום התאמת התקציב"
     },
     {
+      "name": "q_77aac470d5e4e623",
+      "en": "Budgets whose only accounts or categories were archived in Cashew now cover all accounts or all categories, since the archived ones were not imported.",
+      "he": "תקציבים שכל החשבונות או הקטגוריות שלהם הועברו לארכיון ב־Cashew חלים כעת על כל החשבונות או על כל הקטגוריות, כי הפריטים מהארכיון לא יובאו."
+    },
+    {
       "name": "q_77b0fad872285139",
       "en": "No matching choices",
       "he": "לא נמצאו אפשרויות מתאימות"
@@ -6180,11 +6190,6 @@
       "name": "q_bf04ae12a2d9a1dd",
       "en": "Delete this contribution?",
       "he": "למחוק את ההפקדה הזו?"
-    },
-    {
-      "name": "q_bf2dabd50cd2eef4",
-      "en": "Budgets archived in Cashew, or left with nothing to track once archived accounts and categories were left out, were not imported.",
-      "he": "תקציבים שהועברו לארכיון ב־Cashew, או שלא נותר בהם מה לעקוב אחריו לאחר שחשבונות וקטגוריות מהארכיון הושמטו, לא יובאו."
     },
     {
       "name": "q_bf8f0dad21b29b16",
