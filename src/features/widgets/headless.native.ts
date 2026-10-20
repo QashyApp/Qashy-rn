@@ -27,7 +27,8 @@ AppRegistry.registerHeadlessTask(
       },
       async refresh() {
         const { refreshWidgets } = await import("@/features/widgets/refresher");
-        return refreshWidgets();
+        // Forced: the native side asked for data, so an unchanged snapshot must still be pushed.
+        return refreshWidgets({ force: true });
       },
       report: reportHeadlessResult,
       // A fixed message and an error name only: no finance data in a log.

@@ -83,9 +83,11 @@ object WidgetTheme {
 
   private fun fromPalette(p: Palette, accentBg: Boolean): ColorSet =
     if (accentBg) {
+      // The status colors are tuned for the surface and unreadable on the accent (red on blue), so
+      // amounts take the text color here; their sign still says income from expense.
       ColorSet(
         Color(p.accent), Color(p.onAccent), Color(p.onAccent).copy(alpha = 0.78f), Color(p.onAccent),
-        Color(p.positive), Color(p.negative),
+        Color(p.onAccent), Color(p.onAccent),
       )
     } else {
       ColorSet(

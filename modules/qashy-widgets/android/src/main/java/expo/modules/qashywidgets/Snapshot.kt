@@ -40,21 +40,11 @@ class Labels(
   val openApp: String,
 )
 
-class TxRow(val id: String, val title: String, val detail: String, val amount: String, val tone: String)
-class TxGroup(val heading: String, val rows: List<TxRow>)
-class TxData(val title: String, val groups: List<TxGroup>)
-
-class SummaryData(
-  val monthLabel: String,
-  val netWorth: String,
-  val spent: String,
-  val earned: String,
-  val series: List<Double>?,
-  val seriesStart: String,
-  val seriesEnd: String,
-)
-
-class WidgetData(val kind: String, val style: WidgetStyle, val transactions: TxData?, val summary: SummaryData?)
+/**
+ * One placed widget's data. `payload` is the kind's own parsed part of the entry (see
+ * `WidgetKind.parse`); the kind's widget casts it to the type its parser returns.
+ */
+class WidgetData(val kind: String, val style: WidgetStyle, val payload: Any?)
 
 class Snapshot(val hideAmounts: Boolean, val labels: Labels, val widgets: Map<Int, WidgetData>)
 
@@ -125,8 +115,7 @@ object SnapshotStore {
     }
 
   private fun parseWidget(o: JSONObject): WidgetData {
-    val kind = o.getString("kind")
-    require(kind == "transactions" || kind == "summary")
+    val kind = requireNotNull(WidgetKinds.byId(o.getString("kind"))) { "Unknown widget kind" }
     val s = o.getJSONObject("style")
     val style = WidgetStyle(
       theme = s.optString("theme", "qashy"),
@@ -137,12 +126,7 @@ object SnapshotStore {
       light = parsePalette(s.getJSONObject("light")),
       dark = parsePalette(s.getJSONObject("dark")),
     )
-    return WidgetData(
-      kind,
-      style,
-      o.optJSONObject("transactions")?.let(::parseTransactions),
-      o.optJSONObject("summary")?.let(::parseSummary),
-    )
+    return WidgetData(kind.id, style, kind.parse(o))
   }
 
   private fun parsePalette(p: JSONObject): Palette {
@@ -152,31 +136,7 @@ object SnapshotStore {
       c("onAccent"), c("positive"), c("negative"), c("border"),
     )
   }
-
-  private fun parseTransactions(o: JSONObject): TxData {
-    val groups = o.optJSONArray("groups").objects().map { g ->
-      TxGroup(
-        g.optString("heading"),
-        g.optJSONArray("rows").objects().map { r ->
-          TxRow(
-            r.optString("id"), r.optString("title"), r.optString("detail"),
-            r.optString("amount"), r.optString("tone", "neutral"),
-          )
-        },
-      )
-    }
-    return TxData(o.optString("title"), groups)
-  }
-
-  private fun parseSummary(o: JSONObject): SummaryData {
-    val arr = o.optJSONArray("series")
-    val series = arr?.let { a -> (0 until a.length()).map { a.getDouble(it) } }
-    return SummaryData(
-      o.optString("monthLabel"), o.optString("netWorth"), o.optString("spent"),
-      o.optString("earned"), series, o.optString("seriesStart"), o.optString("seriesEnd"),
-    )
-  }
-
-  private fun JSONArray?.objects(): List<JSONObject> =
-    if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
 }
+
+internal fun JSONArray?.objects(): List<JSONObject> =
+  if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }

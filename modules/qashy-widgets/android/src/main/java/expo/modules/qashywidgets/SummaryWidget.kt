@@ -12,7 +12,6 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
@@ -25,13 +24,39 @@ import androidx.glance.layout.padding
 import androidx.glance.layout.width
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
+import org.json.JSONObject
+
+const val KIND_SUMMARY = "summary"
 
 private val PADDING = 12.dp
 
+class SummaryData(
+  val monthLabel: String,
+  val netWorth: String,
+  val spent: String,
+  val earned: String,
+  val series: List<Double>?,
+  val seriesStart: String,
+  val seriesEnd: String,
+)
+
+internal fun parseSummary(entry: JSONObject): SummaryData? =
+  entry.optJSONObject("summary")?.let { o ->
+    val arr = o.optJSONArray("series")
+    val series = arr?.let { a -> (0 until a.length()).map { a.getDouble(it) } }
+    SummaryData(
+      o.optString("monthLabel"), o.optString("netWorth"), o.optString("spent"),
+      o.optString("earned"), series, o.optString("seriesStart"), o.optString("seriesEnd"),
+    )
+  }
+
 class SummaryWidget : QashyWidget(KIND_SUMMARY) {
+  // The whole widget opens the overview.
+  override val rootUri: String = "qashy:///overview"
+
   @Composable
   override fun Content(context: Context, snapshot: Snapshot, data: WidgetData, colors: WidgetColors, size: DpSize) {
-    val s = data.summary ?: return
+    val s = data.payload as? SummaryData ?: return
     val labels = snapshot.labels
     val series = s.series?.filter { it.isFinite() }
     val showGraph = series != null && series.size >= 2 && size.width >= 250.dp && size.height >= 110.dp
@@ -39,9 +64,9 @@ class SummaryWidget : QashyWidget(KIND_SUMMARY) {
     val density = context.resources.displayMetrics.density
 
     @Composable
-    fun Stats() {
+    fun Stats(netWorthSize: Int = if (wideStats) 24 else 20) {
       Text(s.monthLabel, style = textStyle(colors.muted, 12), maxLines = 1)
-      Text(s.netWorth, style = textStyle(colors.text, if (wideStats) 24 else 20, bold = true), maxLines = 1)
+      Text(s.netWorth, style = textStyle(colors.text, netWorthSize, bold = true), maxLines = 1)
       Spacer(modifier = GlanceModifier.height(4.dp))
       if (wideStats && !showGraph) {
         Row(modifier = GlanceModifier.fillMaxWidth()) {
@@ -78,7 +103,8 @@ class SummaryWidget : QashyWidget(KIND_SUMMARY) {
         Graph(size.width - PADDING * 2, (size.height - 134.dp).coerceIn(36.dp, 120.dp))
       }
       showGraph -> Row(modifier = GlanceModifier.fillMaxSize().padding(PADDING), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = GlanceModifier.defaultWeight()) { Stats() }
+        // Half the width: a smaller net worth keeps a seven-digit amount from ellipsizing.
+        Column(modifier = GlanceModifier.defaultWeight()) { Stats(18) }
         Spacer(modifier = GlanceModifier.width(8.dp))
         Column(modifier = GlanceModifier.defaultWeight()) {
           Graph((size.width - PADDING * 2 - 8.dp) / 2, (size.height - PADDING * 2 - 16.dp).coerceIn(36.dp, 120.dp))
@@ -108,16 +134,6 @@ private fun StatLine(label: String, value: String, tone: ColorProvider, colors: 
   }
 }
 
-class SummaryWidgetReceiver : GlanceAppWidgetReceiver() {
+class SummaryWidgetReceiver : QashyWidgetReceiver() {
   override val glanceAppWidget: GlanceAppWidget = SummaryWidget()
-
-  override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-    super.onDeleted(context, appWidgetIds)
-    WidgetScheduler.cleanupIfNoWidgets(context, appWidgetIds.toSet())
-  }
-
-  override fun onDisabled(context: Context) {
-    super.onDisabled(context)
-    WidgetScheduler.cleanupIfNoWidgets(context)
-  }
 }

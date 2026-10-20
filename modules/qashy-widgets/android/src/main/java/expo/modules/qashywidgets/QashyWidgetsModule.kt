@@ -6,10 +6,12 @@ import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Bridge between the JS snapshot builder and the two Glance home-screen widgets. The snapshot
+ * Bridge between the JS snapshot builder and the Glance home-screen widgets. The snapshot
  * (finance figures, already formatted by JS) is stored device-locally and excluded from backups.
  */
 class QashyWidgetsModule : Module() {
@@ -50,8 +52,10 @@ class QashyWidgetsModule : Module() {
     }
   }
 
+  // Both kinds render at once: one slow composition must not delay the other kind's redraw.
   private suspend fun updateWidgets(context: android.content.Context) {
-    TransactionsWidget().updateAll(context)
-    SummaryWidget().updateAll(context)
+    coroutineScope {
+      WidgetKinds.all.forEach { kind -> launch { kind.widget().updateAll(context) } }
+    }
   }
 }

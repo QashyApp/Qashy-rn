@@ -8,10 +8,26 @@
  * is unknown is dropped, and a whole document that does not parse is the default settings.
  */
 
+import {
+  isWidgetKind,
+  kindDefaults,
+  normalizeKindFields,
+  type WidgetConfig,
+  type WidgetKind,
+} from "@/features/widgets/kinds";
+import { oneOf } from "@/features/widgets/kinds/shared";
+
+export type {
+  GraphMonths,
+  SummaryWidgetConfig,
+  TransactionsWidgetConfig,
+  WidgetConfig,
+  WidgetKind,
+} from "@/features/widgets/kinds";
+
 export type WidgetTheme = "qashy" | "materialYou";
 export type WidgetMode = "system" | "light" | "dark";
 export type WidgetBackground = "surface" | "accent" | "custom";
-export type GraphMonths = 3 | 6 | 12;
 
 export interface WidgetAppearance {
   theme: WidgetTheme;
@@ -23,19 +39,6 @@ export interface WidgetAppearance {
   opacity: number;
   frosted: boolean;
 }
-
-export interface TransactionsWidgetConfig extends WidgetAppearance {
-  kind: "transactions";
-  /** `null` means every account. */
-  accountId: string | null;
-}
-
-export interface SummaryWidgetConfig extends WidgetAppearance {
-  kind: "summary";
-  graphMonths: GraphMonths;
-}
-
-export type WidgetConfig = TransactionsWidgetConfig | SummaryWidgetConfig;
 
 export interface WidgetSettings {
   /** Masks every amount, and the net-worth line, on every widget. */
@@ -68,31 +71,18 @@ const BACKGROUNDS: readonly WidgetBackground[] = [
   "accent",
   "custom",
 ];
-const GRAPH_MONTHS: readonly GraphMonths[] = [3, 6, 12];
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 
-export function defaultWidgetConfig(
-  kind: "transactions",
-): TransactionsWidgetConfig;
-export function defaultWidgetConfig(kind: "summary"): SummaryWidgetConfig;
-export function defaultWidgetConfig(kind: WidgetConfig["kind"]): WidgetConfig;
-export function defaultWidgetConfig(kind: WidgetConfig["kind"]): WidgetConfig {
-  return kind === "transactions"
-    ? { kind, ...DEFAULT_APPEARANCE, accountId: null }
-    : { kind, ...DEFAULT_APPEARANCE, graphMonths: 12 };
+export function defaultWidgetConfig<K extends WidgetKind>(
+  kind: K,
+): Extract<WidgetConfig, { kind: K }>;
+export function defaultWidgetConfig(kind: WidgetKind): WidgetConfig {
+  return { kind, ...DEFAULT_APPEARANCE, ...kindDefaults(kind) } as WidgetConfig;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function oneOf<T extends string | number>(
-  value: unknown,
-  allowed: readonly T[],
-  fallback: T,
-): T {
-  return allowed.includes(value as T) ? (value as T) : fallback;
 }
 
 function normalizeAppearance(raw: Record<string, unknown>): WidgetAppearance {
@@ -125,26 +115,12 @@ function normalizeAppearance(raw: Record<string, unknown>): WidgetAppearance {
 
 /** A valid config for `raw`, or `null` when its `kind` is not one this build knows. */
 export function normalizeWidgetConfig(raw: unknown): WidgetConfig | null {
-  if (!isRecord(raw)) return null;
-  const appearance = normalizeAppearance(raw);
-  if (raw.kind === "transactions") {
-    return {
-      kind: "transactions",
-      ...appearance,
-      accountId:
-        typeof raw.accountId === "string" && raw.accountId.length > 0
-          ? raw.accountId
-          : null,
-    };
-  }
-  if (raw.kind === "summary") {
-    return {
-      kind: "summary",
-      ...appearance,
-      graphMonths: oneOf(raw.graphMonths, GRAPH_MONTHS, 12),
-    };
-  }
-  return null;
+  if (!isRecord(raw) || !isWidgetKind(raw.kind)) return null;
+  return {
+    kind: raw.kind,
+    ...normalizeAppearance(raw),
+    ...normalizeKindFields(raw.kind, raw),
+  } as WidgetConfig;
 }
 
 /** Turns whatever was stored (or passed) into valid settings. Never throws. */
@@ -183,7 +159,7 @@ export function serializeWidgetSettings(settings: WidgetSettings): string {
 export function configFor(
   settings: WidgetSettings,
   id: number | string,
-  kind: WidgetConfig["kind"],
+  kind: WidgetKind,
 ): WidgetConfig {
   const stored = settings.widgets[String(id)];
   return stored && stored.kind === kind ? stored : defaultWidgetConfig(kind);

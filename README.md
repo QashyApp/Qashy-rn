@@ -48,7 +48,7 @@ On Android, Qashy offers two home-screen widgets (long-press the home screen, ch
 Widgets are a local feature with no network use and no sync:
 
 - A widget cannot read the app's database, so the app keeps a **formatted copy of exactly what the widgets show** (display strings, not records) in the app's private, no-backup storage (`modules/qashy-widgets`). It is excluded from Android backups and device transfers, is replaced whenever the shown data changes, and is deleted when the last widget is removed or after a "Delete my current data and import" replace import. It is plain text on the device, inside the same app sandbox as the database; **Hide amounts** keeps amounts out of it entirely.
-- Widgets refresh only when the data they show changes while the app is open, at midnight (so "Today" and the graph's end stay right), and when the system time, timezone or language changes. They never post recurring transactions; a schedule that comes due still waits for the app.
+- Widgets refresh as soon as the data they show, their settings or a custom theme changes while the app is open (and again when you leave the app or return to it), at midnight (so "Today" and the graph's end stay right), and when the system time, timezone or language changes. They never post recurring transactions; a schedule that comes due still waits for the app.
 - Widget settings (including Hide amounts) are device-local in the sync metadata table, never in the synced settings, and are never sent to your other devices.
 
 <H3 div align="center"> Exchange rates </H3>

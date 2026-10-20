@@ -17,6 +17,7 @@ import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
+import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
@@ -88,6 +89,9 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
     ),
   )
 
+  /** Where a tap anywhere on the widget goes; null when the kind has per-element targets instead. */
+  protected open val rootUri: String? = null
+
   @Composable
   protected abstract fun Content(
     context: Context,
@@ -117,12 +121,24 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
           }
         }
       } else {
-        // Summary taps anywhere; the transactions widget has per-element targets instead.
-        val rootAction = if (kind == KIND_SUMMARY) openAction(context, "qashy:///overview") else null
+        val rootAction = rootUri?.let { openAction(context, it) }
         WidgetContainer(radius, colors.background, style.frosted, rootAction) {
           Content(context, snapshot, data, colors, LocalSize.current)
         }
       }
     }
+  }
+}
+
+/** The receiver of a kind: on top of the Glance one, it drops the data and schedule with the last widget. */
+abstract class QashyWidgetReceiver : GlanceAppWidgetReceiver() {
+  override fun onDeleted(context: Context, appWidgetIds: IntArray) {
+    super.onDeleted(context, appWidgetIds)
+    WidgetScheduler.cleanupIfNoWidgets(context, appWidgetIds.toSet())
+  }
+
+  override fun onDisabled(context: Context) {
+    super.onDisabled(context)
+    WidgetScheduler.cleanupIfNoWidgets(context)
   }
 }

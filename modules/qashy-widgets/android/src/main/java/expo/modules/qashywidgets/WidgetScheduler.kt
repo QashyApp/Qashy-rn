@@ -12,9 +12,6 @@ import androidx.work.WorkManager
 import java.util.Calendar
 import java.util.concurrent.TimeUnit
 
-const val KIND_TRANSACTIONS = "transactions"
-const val KIND_SUMMARY = "summary"
-
 object WidgetScheduler {
   private const val MIDNIGHT_WORK = "qashy-widget-midnight"
   private const val NOW_WORK = "qashy-widget-now"
@@ -29,13 +26,12 @@ object WidgetScheduler {
   /** appWidgetId to the time (elapsedRealtime) of its last no-data refresh request. Guarded by this. */
   private val lastRefreshRequest = HashMap<Int, Long>()
 
-  /** (appWidgetId, kind) for every placed widget of both kinds. */
+  /** (appWidgetId, kind id) for every placed widget of every kind. */
   fun placed(context: Context): List<Pair<Int, String>> {
     val manager = AppWidgetManager.getInstance(context)
-    fun ids(receiver: Class<*>, kind: String) =
-      manager.getAppWidgetIds(ComponentName(context, receiver)).map { it to kind }
-    return ids(TransactionsWidgetReceiver::class.java, KIND_TRANSACTIONS) +
-      ids(SummaryWidgetReceiver::class.java, KIND_SUMMARY)
+    return WidgetKinds.all.flatMap { kind ->
+      manager.getAppWidgetIds(ComponentName(context, kind.receiver)).map { it to kind.id }
+    }
   }
 
   fun hasWidgets(context: Context, excluding: Set<Int> = emptySet()): Boolean =

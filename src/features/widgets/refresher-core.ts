@@ -9,13 +9,11 @@
  * worker, which retries a failure.
  */
 
+import type { PlacedWidgetRef } from "@/features/widgets/kinds";
 import type { WidgetSnapshot } from "@/features/widgets/snapshot";
 import type { WidgetSettings } from "@/features/widgets/settings";
 
-export interface PlacedWidgetRef {
-  id: number;
-  kind: "transactions" | "summary";
-}
+export type { PlacedWidgetRef };
 
 export interface RefresherDeps {
   isAvailable(): boolean;
@@ -47,10 +45,16 @@ export function createWidgetRefresher(deps: RefresherDeps) {
   let nativeState: "unknown" | "pushed" | "cleared" = "unknown";
   /** Set by `clearData`; honoured at the start of the next run. */
   let clearRequested = false;
+  /** Set by a forced refresh; the next run pushes even an unchanged snapshot. */
+  let forceRequested = false;
 
   /** Resolves to whether this run completed; never rejects. */
   async function runOnce(): Promise<boolean> {
     let ok = true;
+    if (forceRequested) {
+      forceRequested = false;
+      lastPushed = null;
+    }
     if (clearRequested) {
       clearRequested = false;
       try {
@@ -97,9 +101,14 @@ export function createWidgetRefresher(deps: RefresherDeps) {
     return ok;
   }
 
-  /** Resolves to whether the refresh completed (the result of the final run); never rejects. */
-  function refresh(): Promise<boolean> {
+  /**
+   * Resolves to whether the refresh completed (the result of the final run); never rejects.
+   * `force` pushes even an unchanged snapshot, for when the native side asked for data: it may
+   * have lost the stored snapshot without JS knowing (for instance after the last widget was removed).
+   */
+  function refresh(options?: { force?: boolean }): Promise<boolean> {
     if (!deps.isAvailable()) return Promise.resolve(true);
+    if (options?.force) forceRequested = true;
     if (running) {
       rerun = true;
       return running;

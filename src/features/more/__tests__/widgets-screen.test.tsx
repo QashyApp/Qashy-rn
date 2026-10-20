@@ -10,6 +10,7 @@ let mockAvailable = true;
 let mockPlaced: { id: number; kind: "transactions" | "summary" }[] = [];
 let mockParams: { widgetId?: string } = {};
 let mockSettings: WidgetSettings = { hideAmounts: false, widgets: {} };
+let mockReadGate: Promise<void> | null = null;
 const mockListeners = new Set<() => void>();
 
 jest.mock("expo-router", () => ({
@@ -20,7 +21,10 @@ jest.mock("../../../../modules/qashy-widgets", () => ({
   getPlacedWidgets: async () => mockPlaced,
 }));
 jest.mock("@/data/widget-settings-store", () => ({
-  readWidgetSettings: async () => mockSettings,
+  readWidgetSettings: async () => {
+    if (mockReadGate) await mockReadGate;
+    return mockSettings;
+  },
   subscribeWidgetSettings: (listener: () => void) => {
     mockListeners.add(listener);
     return () => mockListeners.delete(listener);
@@ -73,6 +77,7 @@ describe("WidgetsScreen", () => {
     mockPlaced = [];
     mockParams = {};
     mockSettings = { hideAmounts: false, widgets: {} };
+    mockReadGate = null;
     mockListeners.clear();
   });
 
@@ -173,5 +178,38 @@ describe("WidgetsScreen", () => {
     await settle();
     expect(screen.getByText("Transactions widget")).toBeTruthy();
     expect(screen.getByText("Summary widget")).toBeTruthy();
+  });
+
+  it("focuses the widget of a new deep link even after Show all was pressed", async () => {
+    mockPlaced = [
+      { id: 7, kind: "transactions" },
+      { id: 12, kind: "summary" },
+    ];
+    mockParams = { widgetId: "12" };
+    const view = await render(<WidgetsScreen />);
+    await settle();
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Show all widgets" }),
+    );
+    await settle();
+    expect(screen.getByText("Transactions widget")).toBeTruthy();
+    mockParams = { widgetId: "7" };
+    await view.rerender(<WidgetsScreen />);
+    await settle();
+    expect(screen.getByText("Transactions widget")).toBeTruthy();
+    expect(screen.queryByText("Summary widget")).toBeNull();
+  });
+
+  it("does not draw the Hide amounts switch until the stored value is read", async () => {
+    let open!: () => void;
+    mockReadGate = new Promise<void>((resolve) => (open = resolve));
+    mockSettings = { hideAmounts: true, widgets: {} };
+    await render(<WidgetsScreen />);
+    await settle();
+    expect(screen.queryByText("Hide amounts")).toBeNull();
+    open();
+    await settle();
+    expect(screen.getByText("Hide amounts")).toBeTruthy();
+    expect(screen.getByLabelText("Hide amounts")).toBeTruthy();
   });
 });

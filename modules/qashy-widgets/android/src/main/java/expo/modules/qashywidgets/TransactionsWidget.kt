@@ -8,7 +8,6 @@ import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceModifier
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.lazy.LazyColumn
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
@@ -25,8 +24,31 @@ import androidx.glance.semantics.contentDescription
 import androidx.glance.semantics.semantics
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
+import org.json.JSONObject
+
+const val KIND_TRANSACTIONS = "transactions"
 
 private const val MAX_ENTRIES = 80
+
+class TxRow(val id: String, val title: String, val detail: String, val amount: String, val tone: String)
+class TxGroup(val heading: String, val rows: List<TxRow>)
+class TxData(val title: String, val groups: List<TxGroup>)
+
+internal fun parseTransactions(entry: JSONObject): TxData? =
+  entry.optJSONObject("transactions")?.let { o ->
+    val groups = o.optJSONArray("groups").objects().map { g ->
+      TxGroup(
+        g.optString("heading"),
+        g.optJSONArray("rows").objects().map { r ->
+          TxRow(
+            r.optString("id"), r.optString("title"), r.optString("detail"),
+            r.optString("amount"), r.optString("tone", "neutral"),
+          )
+        },
+      )
+    }
+    TxData(o.optString("title"), groups)
+  }
 
 private sealed interface Entry {
   class Heading(val text: String) : Entry
@@ -36,7 +58,7 @@ private sealed interface Entry {
 class TransactionsWidget : QashyWidget(KIND_TRANSACTIONS) {
   @Composable
   override fun Content(context: Context, snapshot: Snapshot, data: WidgetData, colors: WidgetColors, size: DpSize) {
-    val tx = data.transactions
+    val tx = data.payload as? TxData
     val labels = snapshot.labels
     val entries = buildList<Entry> {
       tx?.groups?.forEach { g ->
@@ -109,16 +131,6 @@ class TransactionsWidget : QashyWidget(KIND_TRANSACTIONS) {
   }
 }
 
-class TransactionsWidgetReceiver : GlanceAppWidgetReceiver() {
+class TransactionsWidgetReceiver : QashyWidgetReceiver() {
   override val glanceAppWidget: GlanceAppWidget = TransactionsWidget()
-
-  override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-    super.onDeleted(context, appWidgetIds)
-    WidgetScheduler.cleanupIfNoWidgets(context, appWidgetIds.toSet())
-  }
-
-  override fun onDisabled(context: Context) {
-    super.onDisabled(context)
-    WidgetScheduler.cleanupIfNoWidgets(context)
-  }
 }
