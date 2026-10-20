@@ -4,6 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.Dp
@@ -33,8 +36,6 @@ import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
 import androidx.glance.text.TextStyle
 import androidx.glance.unit.ColorProvider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /** Every tap goes to the app through its own URL scheme. */
 fun viewIntent(context: Context, uri: String): Intent =
@@ -103,18 +104,24 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
-    val snapshot = withContext(Dispatchers.IO) { SnapshotStore.read(context) }
-    val data = snapshot?.widgets?.get(appWidgetId)?.takeIf { it.kind == kind }
-    // No data for this widget: ask JS (through the refresh worker) to produce it.
-    if (data == null) WidgetScheduler.enqueueNowThrottled(context, appWidgetId)
+    // Loaded before provideContent so the first frame already has the data (no empty flash).
+    val initial = SnapshotStore.load(context)
     val radius = WidgetTheme.radius(context)
-    val openApp = if (snapshot != null) snapshot.labels.openApp
-    else context.getString(R.string.qashy_widget_open_app)
 
     provideContent {
+      // Read the snapshot inside the composition: values captured before provideContent are
+      // frozen for the whole session, and update() does not re-run provideGlance on a live one.
+      val snapshot by SnapshotStore.flow.collectAsState(initial)
+      val data = snapshot?.widgets?.get(appWidgetId)?.takeIf { it.kind == kind }
+      val openApp = snapshot?.labels?.openApp ?: context.getString(R.string.qashy_widget_open_app)
+      // No data for this widget: ask JS (through the refresh worker) to produce it.
+      LaunchedEffect(data == null) {
+        if (data == null) WidgetScheduler.enqueueNowThrottled(context, appWidgetId)
+      }
       val style = data?.style ?: WidgetTheme.DEFAULT_STYLE
       val colors = WidgetTheme.resolve(context, style)
-      if (snapshot == null || data == null) {
+      val current = snapshot
+      if (current == null || data == null) {
         WidgetContainer(radius, colors.background, style.frosted, openAction(context, "qashy:///")) {
           Box(modifier = GlanceModifier.fillMaxSize().padding(12.dp), contentAlignment = Alignment.Center) {
             Text(openApp, style = textStyle(colors.text, 14, align = TextAlign.Center), maxLines = 4)
@@ -123,7 +130,7 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
       } else {
         val rootAction = rootUri?.let { openAction(context, it) }
         WidgetContainer(radius, colors.background, style.frosted, rootAction) {
-          Content(context, snapshot, data, colors, LocalSize.current)
+          Content(context, current, data, colors, LocalSize.current)
         }
       }
     }

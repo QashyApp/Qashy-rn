@@ -2,6 +2,11 @@ package expo.modules.qashywidgets
 
 import android.content.Context
 import android.graphics.Color
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -55,37 +60,73 @@ class Snapshot(val hideAmounts: Boolean, val labels: Labels, val widgets: Map<In
 object SnapshotStore {
   private const val VERSION = 1
 
+  // Serializes writers (the temp file name is fixed) and keeps the flow in step with the file.
+  private val lock = Any()
+  private val state = MutableStateFlow<Snapshot?>(null)
+  @Volatile private var loaded = false
+
+  /**
+   * The parsed snapshot, or null when there is none. Widget content must collect this inside
+   * `provideContent`: anything read before it is frozen for the whole Glance session, and
+   * `update()` does not re-run `provideGlance` on a live session. Call [load] first.
+   */
+  val flow: StateFlow<Snapshot?> = state.asStateFlow()
+
   fun dir(context: Context) = File(context.noBackupFilesDir, "qashy-widgets")
   private fun file(context: Context) = File(dir(context), "snapshot.json")
 
   fun exists(context: Context) = file(context).exists()
 
+  /** The current snapshot; the first call reads the file off the main thread, later ones are free. */
+  suspend fun load(context: Context): Snapshot? {
+    if (!loaded) {
+      withContext(Dispatchers.IO) {
+        synchronized(lock) {
+          if (!loaded) {
+            state.value = readFile(context)
+            loaded = true
+          }
+        }
+      }
+    }
+    return state.value
+  }
+
   /** Throws when the JSON is not a version-1 snapshot, so a bad write never replaces good data. */
   fun write(context: Context, json: String) {
-    requireNotNull(parse(json)) { "Not a version $VERSION widget snapshot" }
-    val dir = dir(context).apply { mkdirs() }
-    val tmp = File(dir, "snapshot.json.tmp")
-    FileOutputStream(tmp).use {
-      it.write(json.toByteArray(Charsets.UTF_8))
-      it.fd.sync()
-    }
-    val dest = file(context)
-    if (!tmp.renameTo(dest)) {
-      dest.delete()
-      check(tmp.renameTo(dest)) { "Could not store the widget snapshot" }
+    val parsed = requireNotNull(parse(json)) { "Not a version $VERSION widget snapshot" }
+    synchronized(lock) {
+      val dir = dir(context).apply { mkdirs() }
+      val tmp = File(dir, "snapshot.json.tmp")
+      FileOutputStream(tmp).use {
+        it.write(json.toByteArray(Charsets.UTF_8))
+        it.fd.sync()
+      }
+      val dest = file(context)
+      if (!tmp.renameTo(dest)) {
+        dest.delete()
+        check(tmp.renameTo(dest)) { "Could not store the widget snapshot" }
+      }
+      state.value = parsed
+      loaded = true
     }
   }
 
-  fun read(context: Context): Snapshot? =
+  /** Erases the file and the in-memory copy together. */
+  fun delete(context: Context) {
+    synchronized(lock) {
+      dir(context).deleteRecursively()
+      state.value = null
+      loaded = true
+    }
+  }
+
+  private fun readFile(context: Context): Snapshot? =
     try {
       file(context).takeIf { it.exists() }?.readText(Charsets.UTF_8)?.let(::parse)
     } catch (e: Exception) {
       null
     }
-
-  fun delete(context: Context) {
-    dir(context).deleteRecursively()
-  }
 
   /** Null on a parse failure or any version other than 1; unknown fields are ignored. */
   fun parse(json: String): Snapshot? =

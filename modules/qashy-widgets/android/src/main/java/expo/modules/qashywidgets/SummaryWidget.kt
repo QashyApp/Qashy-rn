@@ -2,6 +2,7 @@ package expo.modules.qashywidgets
 
 import android.content.Context
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.glance.ColorFilter
 import androidx.glance.unit.ColorProvider
 import androidx.compose.ui.unit.Dp
@@ -81,7 +82,9 @@ class SummaryWidget : QashyWidget(KIND_SUMMARY) {
 
     @Composable
     fun Graph(widthDp: Dp, heightDp: Dp) {
-      val bitmap = LineChart.render(series.orEmpty(), widthDp.value, heightDp.value, density)
+      val bitmap = remember(series, widthDp, heightDp, density) {
+        LineChart.render(series.orEmpty(), widthDp.value, heightDp.value, density)
+      }
       Image(
         provider = ImageProvider(bitmap),
         contentDescription = "${labels.netWorth}: ${s.seriesStart} - ${s.seriesEnd}",
