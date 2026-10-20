@@ -64,9 +64,9 @@ class SummaryWidget : QashyWidget(KIND_SUMMARY) {
     val density = context.resources.displayMetrics.density
 
     @Composable
-    fun Stats() {
+    fun Stats(netWorthSize: Int = if (wideStats) 24 else 20) {
       Text(s.monthLabel, style = textStyle(colors.muted, 12), maxLines = 1)
-      Text(s.netWorth, style = textStyle(colors.text, if (wideStats) 24 else 20, bold = true), maxLines = 1)
+      Text(s.netWorth, style = textStyle(colors.text, netWorthSize, bold = true), maxLines = 1)
       Spacer(modifier = GlanceModifier.height(4.dp))
       if (wideStats && !showGraph) {
         Row(modifier = GlanceModifier.fillMaxWidth()) {
@@ -103,7 +103,8 @@ class SummaryWidget : QashyWidget(KIND_SUMMARY) {
         Graph(size.width - PADDING * 2, (size.height - 134.dp).coerceIn(36.dp, 120.dp))
       }
       showGraph -> Row(modifier = GlanceModifier.fillMaxSize().padding(PADDING), verticalAlignment = Alignment.CenterVertically) {
-        Column(modifier = GlanceModifier.defaultWeight()) { Stats() }
+        // Half the width: a smaller net worth keeps a seven-digit amount from ellipsizing.
+        Column(modifier = GlanceModifier.defaultWeight()) { Stats(18) }
         Spacer(modifier = GlanceModifier.width(8.dp))
         Column(modifier = GlanceModifier.defaultWeight()) {
           Graph((size.width - PADDING * 2 - 8.dp) / 2, (size.height - PADDING * 2 - 16.dp).coerceIn(36.dp, 120.dp))
