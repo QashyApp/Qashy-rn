@@ -4,14 +4,16 @@ import { runHeadlessRefresh } from "@/features/widgets/headless-task";
 import { reportHeadlessResult } from "../../../modules/qashy-widgets";
 
 /**
- * The task the native widget side starts (midnight, boot, a widget update) while the app is not
- * running, so widgets stay current without opening the app. It registers at bundle load, before
+ * The task the native widget side starts (midnight, a clock/time-zone/locale change, a widget
+ * needing data; there is no boot receiver, WorkManager persists the midnight work across
+ * reboots) while the app is not running, so widgets stay current without opening the app. It registers at bundle load, before
  * any component exists, which is why it imports only React Native, the tiny task body and the
  * native module's thin wrapper: the finance repository and the refresher are loaded inside the
  * task, only when it actually runs.
  *
  * Recurring transactions are not generated here (`generateRecurring: false`): a background wake
- * must not post transactions the user has not seen. The task always resolves, after reporting
+ * must not post transactions the user has not seen. The only write it may cause is the repository's
+ * one-time initialization and tombstone-erasure migration. The task always resolves, after reporting
  * whether the refresh completed so the native worker can retry a failure.
  */
 export const WIDGET_HEADLESS_TASK = "QashyWidgetRefresh";
