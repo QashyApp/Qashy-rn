@@ -138,7 +138,10 @@ export function WidgetsScreen() {
   const requestedId = Number(
     Array.isArray(widgetIdParam) ? widgetIdParam[0] : widgetIdParam,
   );
-  const [showAll, setShowAll] = useState(false);
+  // "Show all" belongs to the widget a deep link focused: a link to another widget focuses it.
+  const requestKey = String(requestedId);
+  const [showAllFor, setShowAllFor] = useState<string | null>(null);
+  const showAll = showAllFor === requestKey;
   const available = QashyWidgets.isAvailable();
   const { placed, settings, setSettings } = useWidgetsState();
 
@@ -197,36 +200,38 @@ export function WidgetsScreen() {
         </Card>
       ) : (
         <>
-          <Card style={{ gap: space.lg }}>
-            <View
-              style={{
-                minHeight: 48,
-                flexDirection: "row",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: space.md,
-              }}
-            >
-              <View style={{ flex: 1, gap: space.xxs }}>
-                <AppText variant="label">Hide amounts</AppText>
-                <AppText variant="caption" muted>
-                  Amounts and the net worth graph are hidden on all widgets.
-                </AppText>
-              </View>
-              <QashySwitch
-                accessibilityLabel={t("Hide amounts")}
-                value={stored.hideAmounts}
-                disabled={settings === null}
-                onValueChange={(hideAmounts) => {
-                  void apply((current) =>
-                    current.hideAmounts === hideAmounts
-                      ? null
-                      : { ...current, hideAmounts },
-                  );
+          {/* Not drawn until the stored value is read, so it never flashes the wrong state. */}
+          {settings !== null ? (
+            <Card style={{ gap: space.lg }}>
+              <View
+                style={{
+                  minHeight: 48,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: space.md,
                 }}
-              />
-            </View>
-          </Card>
+              >
+                <View style={{ flex: 1, gap: space.xxs }}>
+                  <AppText variant="label">Hide amounts</AppText>
+                  <AppText variant="caption" muted>
+                    Amounts and the net worth graph are hidden on all widgets.
+                  </AppText>
+                </View>
+                <QashySwitch
+                  accessibilityLabel={t("Hide amounts")}
+                  value={stored.hideAmounts}
+                  onValueChange={(hideAmounts) => {
+                    void apply((current) =>
+                      current.hideAmounts === hideAmounts
+                        ? null
+                        : { ...current, hideAmounts },
+                    );
+                  }}
+                />
+              </View>
+            </Card>
+          ) : null}
 
           {placed !== null && placed.length === 0 ? (
             <Card>
@@ -243,7 +248,7 @@ export function WidgetsScreen() {
             <TextButton
               title="Show all widgets"
               icon="ion:apps-outline"
-              onPress={() => setShowAll(true)}
+              onPress={() => setShowAllFor(requestKey)}
             />
           ) : null}
 
