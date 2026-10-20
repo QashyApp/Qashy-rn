@@ -6,7 +6,9 @@
  * - *WHEN_UNLOCKED* — the vault is unreadable while the phone is locked. Sync runs in the
  *   foreground only (see the plan's §3.6), so there is no background task that would need
  *   the key at a moment the user is not present, and nothing is given up by the stricter
- *   setting.
+ *   setting. (The opt-in background check-in, `sync/background.ts`, reads the key too. It is
+ *   deliberately not given a weaker accessibility class: when the keystore will not answer
+ *   because the device is locked, that wake simply skips and the next one tries again.)
  * - *THIS_DEVICE_ONLY* — the entry is excluded from cloud and device-transfer
  *   backups. That is the point of the whole design: a device key that syncs itself to
  *   a cloud is a device key a provider can be compelled to produce. Restoring a backup onto a new

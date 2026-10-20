@@ -15,7 +15,9 @@
  * - **Nothing here contacts the network on a schedule.** The relay is measured on foreground,
  *   on pull-to-refresh, and on the two explicit buttons — never on a timer. A relay contacted on
  *   a schedule is itself a traffic pattern, which is the thing the design went to some trouble
- *   to avoid. (`useNow` does keep a display clock ticking, but it talks to nothing.)
+ *   to avoid. (`useNow` does keep a display clock ticking, but it talks to nothing.) The one
+ *   exception is the Android-only, per-device "Sync in the background" switch, off by default
+ *   and worded to say the relay can see when the device checks in.
  * - **The irreversible actions are last, spelled out, and confirmed.** Rotating the key unpairs
  *   every device; leaving the vault cannot be undone from here. Both say so in the dialog rather
  *   than in a tooltip.
@@ -34,6 +36,7 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { SettingsRow } from "@/components/ui/settings-row";
 import type { StatusTone } from "@/components/ui/status-pill";
 import { TextButton } from "@/components/ui/text-button";
+import { BackgroundSyncCard } from "@/features/sync/background-sync-card";
 import { DeviceCard } from "@/features/sync/device-card";
 import { RelayCard } from "@/features/sync/relay-card";
 import { describeActivity, summarizeSync } from "@/features/sync/sync-summary";
@@ -316,6 +319,8 @@ export function SyncScreen() {
         onCheck={check}
         onChanged={refresh}
       />
+
+      {paired ? <BackgroundSyncCard status={status} /> : null}
 
       {paired ? (
         <>

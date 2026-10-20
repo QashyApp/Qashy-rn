@@ -38,6 +38,13 @@ end-to-end encrypted with keys that never leave your devices.
   between them yourself.
 - Conflicting edits merge automatically without losing either side; deletions and rejected updates are
   recorded in a visible activity log rather than applied silently.
+- Sync normally runs only when you open the app. On Android you can opt in, per device and off by default,
+  to **More → Sync → Sync in the background**: about every 30 minutes, when the device is connected and
+  the battery is not low, Qashy checks for changes from your other devices (so widgets stay current) and
+  applies them. It uses some battery and data, and **the relay can see when this device checks in**. It never
+  posts recurring transactions, never runs while the app is open, and the switch is stored only on this
+  device. It needs the device to be unlocked enough for Android to release the sync key; otherwise that check
+  is skipped.
 
 Read [docs/sync-threat-model.md](docs/sync-threat-model.md) for the full model, including a plain list of
 what sync deliberately does **not** protect against.
@@ -48,7 +55,7 @@ On Android, Qashy offers two home-screen widgets (long-press the home screen, ch
 Widgets are a local feature with no network use and no sync:
 
 - A widget cannot read the app's database, so the app keeps a **formatted copy of exactly what the widgets show** (display strings, not records) in the app's private, no-backup storage (`modules/qashy-widgets`). It is excluded from Android backups and device transfers, is replaced whenever the shown data changes, and is deleted when the last widget is removed or after a "Delete my current data and import" replace import. It is plain text on the device, inside the same app sandbox as the database; **Hide amounts** keeps amounts out of it entirely.
-- Widgets refresh as soon as the data they show, their settings or a custom theme changes while the app is open (and again when you leave the app or return to it), at midnight (so the month and the day's figures stay right), and when the system time, timezone or language changes. They never post recurring transactions: a schedule that comes due still waits for the app to post it, but the widgets already count the auto-post occurrences that are due, as a read-only preview that stores nothing.
+- Widgets refresh as soon as the data they show, their settings or a custom theme changes while the app is open (and again when you leave the app or return to it), at midnight (so the month and the day's figures stay right), and when the system time, timezone or language changes. They never post recurring transactions: a schedule that comes due still waits for the app to post it, but the widgets already count the auto-post occurrences that are due, as a read-only preview that stores nothing. Changes from your other devices reach the widgets when you open the app, unless you turn on the optional **Sync in the background** switch (see Sync below).
 - Widget settings (including Hide amounts) are device-local in the sync metadata table, never in the synced settings, and are never sent to your other devices.
 
 <H3 div align="center"> Exchange rates </H3>

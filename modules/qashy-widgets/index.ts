@@ -74,3 +74,26 @@ export async function registerPreviews(): Promise<PreviewRegistration> {
     return "failed";
   }
 }
+
+/**
+ * True when this build can schedule the opt-in periodic background sync: Android with a native
+ * module that has `setBackgroundSync` (an older dev client may lack it).
+ */
+export function isBackgroundSyncAvailable(): boolean {
+  return (
+    Platform.OS === "android" &&
+    NativeModule != null &&
+    typeof NativeModule.setBackgroundSync === "function"
+  );
+}
+
+/**
+ * Schedules (`true`) or cancels (`false`) the unique periodic WorkManager work that starts the
+ * "QashyBackgroundSync" headless task about every 30 minutes while connected and the battery is
+ * not low. Idempotent: scheduling keeps an existing schedule and its timing. A no-op on web or
+ * without the native function.
+ */
+export async function setBackgroundSync(enabled: boolean): Promise<void> {
+  if (!NativeModule?.setBackgroundSync || !isBackgroundSyncAvailable()) return;
+  await NativeModule.setBackgroundSync(enabled);
+}

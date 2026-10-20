@@ -4,5 +4,6 @@ const none: {
   clear(): Promise<void>;
   registerPreviews(): Promise<string>;
   reportHeadlessResult(ok: boolean): void;
+  setBackgroundSync?(enabled: boolean): Promise<void>;
 } | null = null;
 export default none;

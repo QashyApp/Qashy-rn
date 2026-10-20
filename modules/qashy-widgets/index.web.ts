@@ -24,3 +24,9 @@ export type PreviewRegistration =
 export async function registerPreviews(): Promise<PreviewRegistration> {
   return "unsupported";
 }
+
+export function isBackgroundSyncAvailable(): boolean {
+  return false;
+}
+
+export async function setBackgroundSync(_enabled: boolean): Promise<void> {}

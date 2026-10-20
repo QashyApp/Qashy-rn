@@ -199,6 +199,9 @@ async function clearForgottenVaultState(tx: StorageTx): Promise<void> {
       SYNC_META.relayCheckedAt,
       SYNC_META.relayDetail,
       SYNC_META.relayFailures,
+      // Consent to a periodic relay check-in belongs to the vault being left: joining another
+      // one must ask again rather than silently resume contacting a relay on a schedule.
+      SYNC_META.backgroundSync,
     ]);
 }
 

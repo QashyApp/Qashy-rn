@@ -776,6 +776,13 @@ export const HEBREW: Record<string, string> = {
   "Couldn’t replace the vault key": "לא ניתן להחליף את מפתח הכספת",
   "Couldn’t leave the vault": "לא ניתן לצאת מהכספת",
   "Nothing was changed.": "שום דבר לא שונה.",
+  "Background sync": "סנכרון ברקע",
+  "Sync in the background": "סנכרון ברקע",
+  "Couldn’t change background sync": "לא ניתן לשנות את הסנכרון ברקע",
+  "Checks for changes from your other devices about every 30 minutes when this device is connected, so widgets stay current without opening Qashy. It uses some battery and data, and the relay can see when this device checks in.":
+    "בודק שינויים מהמכשירים האחרים שלכם בערך כל 30 דקות כשהמכשיר הזה מחובר לרשת, כך שהווידג׳טים נשארים מעודכנים בלי לפתוח את Qashy. זה צורך מעט סוללה ונתונים, והממסר יכול לראות מתי המכשיר הזה מתחבר.",
+  "Turn sync on to use this. It checks for changes about every 30 minutes when connected, uses some battery and data, and lets the relay see when this device checks in.":
+    "הפעילו סנכרון כדי להשתמש בזה. זה בודק שינויים בערך כל 30 דקות כשהמכשיר מחובר, צורך מעט סוללה ונתונים, ומאפשר לממסר לראות מתי המכשיר מתחבר.",
 
   // /sync → Connections
   Connections: "חיבורים",

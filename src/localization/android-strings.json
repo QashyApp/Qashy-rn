@@ -762,6 +762,11 @@
       "he": "איפוס העברה"
     },
     {
+      "name": "q_15da7434b9f1da76",
+      "en": "Couldn’t change background sync",
+      "he": "לא ניתן לשנות את הסנכרון ברקע"
+    },
+    {
       "name": "q_16309a86d987e533",
       "en": "Treat them exactly like the money itself. A password manager or a piece of paper somewhere only you can reach are both fine. A photo in your camera roll or a note that syncs to a cloud account are not.",
       "he": "התייחסו אליהן בדיוק כמו אל הכסף עצמו. מנהל סיסמאות או פתק במקום שרק אתם מגיעים אליו — שניהם בסדר. צילום בגלריה או פתק שמסתנכרן לחשבון ענן — לא."
@@ -1425,6 +1430,11 @@
       "name": "q_29ff8e98cbacb915",
       "en": "No other devices yet",
       "he": "אין עדיין מכשירים אחרים"
+    },
+    {
+      "name": "q_29ffe2d983b28b60",
+      "en": "Background sync",
+      "he": "סנכרון ברקע"
     },
     {
       "name": "q_2a1125da5ef4cf2e",
@@ -6012,6 +6022,11 @@
       "he": "הקובץ נקרא במכשיר הזה ולא מועלה לשום מקום."
     },
     {
+      "name": "q_b8e43054ebeb9d2d",
+      "en": "Turn sync on to use this. It checks for changes about every 30 minutes when connected, uses some battery and data, and lets the relay see when this device checks in.",
+      "he": "הפעילו סנכרון כדי להשתמש בזה. זה בודק שינויים בערך כל 30 דקות כשהמכשיר מחובר, צורך מעט סוללה ונתונים, ומאפשר לממסר לראות מתי המכשיר מתחבר."
+    },
+    {
       "name": "q_b9378677085f37fb",
       "en": "Repeats",
       "he": "חוזר"
@@ -7242,6 +7257,11 @@
       "he": "לא ניתן להציג תצוגה מקדימה של הייבוא"
     },
     {
+      "name": "q_df07ecf111f9c83f",
+      "en": "Checks for changes from your other devices about every 30 minutes when this device is connected, so widgets stay current without opening Qashy. It uses some battery and data, and the relay can see when this device checks in.",
+      "he": "בודק שינויים מהמכשירים האחרים שלכם בערך כל 30 דקות כשהמכשיר הזה מחובר לרשת, כך שהווידג׳טים נשארים מעודכנים בלי לפתוח את Qashy. זה צורך מעט סוללה ונתונים, והממסר יכול לראות מתי המכשיר הזה מתחבר."
+    },
+    {
       "name": "q_df10e2ebc2ac85e6",
       "en": "shape.tile.compactIcon: must not be larger than shape.tile.compactSize",
       "he": "shape.tile.compactIcon: אסור שיהיה גדול מ־shape.tile.compactSize"
@@ -7340,6 +7360,11 @@
       "name": "q_e1f04390a83869b6",
       "en": "Stop syncing and forget the key. Your finance data stays on this device.",
       "he": "להפסיק לסנכרן ולשכוח את המפתח. הנתונים הפיננסיים נשארים במכשיר הזה."
+    },
+    {
+      "name": "q_e20f6898fe5c38c2",
+      "en": "Sync in the background",
+      "he": "סנכרון ברקע"
     },
     {
       "name": "q_e22e372bf8ece9bd",

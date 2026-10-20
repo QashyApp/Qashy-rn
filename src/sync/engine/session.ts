@@ -11,7 +11,10 @@
  * There are no timers in this file, and that is a privacy decision as much as a battery one.
  * A device that polls a relay on a fixed interval is emitting a traffic pattern whether or
  * not it has anything to say, and a pattern is exactly the metadata §1.8 spends so much
- * effort not producing. Sync runs when the user opens the app.
+ * effort not producing. Sync runs when the user opens the app. The one exception is the
+ * Android-only background check-in the user can opt into per device (about every 30 minutes,
+ * scheduled by the OS, not by this file); it calls this same `reconcile()` once per wake. It is
+ * off by default, and `docs/sync-threat-model.md` records the cadence it exposes to the relay.
  *
  * The pass is ordered so that each step makes the next one possible:
  *

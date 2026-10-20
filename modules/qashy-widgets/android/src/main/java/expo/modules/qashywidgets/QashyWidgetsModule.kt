@@ -59,6 +59,13 @@ class QashyWidgetsModule : Module() {
       if (context == null) "failed" else WidgetPreviews.register(context).id
     }
 
+    // Opt-in background sync: schedules (true) or cancels (false) the unique periodic work. Lives
+    // here because this module already owns WorkManager and the headless-task start.
+    AsyncFunction("setBackgroundSync") { enabled: Boolean ->
+      val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
+      BackgroundSyncWorker.setEnabled(context, enabled)
+    }
+
     AsyncFunction("clear") Coroutine { ->
       val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) {
