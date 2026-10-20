@@ -20,7 +20,10 @@
  * 3. **Running a pass on the foreground seam** — the same `AppState` / `visibilitychange`
  *    seam the finance reconcile already uses. There are no timers anywhere in the sync stack,
  *    and this file is where that stays true: a relay contacted on a schedule is itself a
- *    traffic pattern, which is the thing §1.8 of the design exists to avoid.
+ *    traffic pattern, which is the thing §1.8 of the design exists to avoid. The one exception
+ *    is the Android-only, per-device, opt-in background check-in, which is scheduled by the OS
+ *    (WorkManager), not by a timer here; this file only keeps that schedule reconciled with
+ *    the sync state and serializes passes with it.
  *
  * **Sync failures never unmount anything.** They land in `error` and the UI reports them in
  * place. A device that cannot reach its peers is still a perfectly good budget app, and
@@ -44,7 +47,9 @@ import {
   financeRepository,
   syncingStorage,
 } from "@/data/local-finance-repository";
+import { syncBackgroundSchedule } from "@/features/background-sync";
 import { createPlatformKeystore } from "@/sync/keystore/platform";
+import { withSyncPassLock } from "@/sync/pass-lock";
 import type { SyncKeystore } from "@/sync/keystore";
 import { SyncRuntime, type SyncPass } from "@/sync/runtime";
 import {
@@ -159,7 +164,9 @@ export function SyncProvider({
     running.current = true;
     setSyncing(true);
     try {
-      const result = await engine.reconcile();
+      // Through the process-wide pass lock, so it never overlaps an opt-in background pass that
+      // Android started inside this process (see `sync/background.ts`).
+      const result = await withSyncPassLock(() => engine.reconcile());
       setPass(result);
       // Only a pass that actually ran clears the banner. A pass that returned `disabled` or
       // `unpaired` did no work, so it is no evidence that whatever failed last time is fixed.
@@ -198,6 +205,18 @@ export function SyncProvider({
       void engine.close();
     };
   }, [engine, refresh]);
+
+  // Keeps the opt-in background schedule in step with sync state: on app start (first status
+  // read), and whenever sync is paused, resumed or left. Idempotent, and a no-op off Android.
+  const scheduleEnabled = status?.enabled;
+  const scheduleDeviceId = status?.deviceId;
+  useEffect(() => {
+    if (scheduleEnabled === undefined || scheduleDeviceId === undefined) return;
+    void syncBackgroundSchedule({
+      enabled: scheduleEnabled,
+      deviceId: scheduleDeviceId,
+    });
+  }, [scheduleEnabled, scheduleDeviceId]);
 
   // The lifecycle seam, mirroring `FinanceProvider.reconcile` exactly. Same events, same
   // ordering, deliberately duplicated rather than shared: the finance reload must run even

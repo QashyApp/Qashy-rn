@@ -3,5 +3,6 @@ const none: {
   update(json: string): Promise<void>;
   clear(): Promise<void>;
   reportHeadlessResult(ok: boolean): void;
+  setBackgroundSync?(enabled: boolean): Promise<void>;
 } | null = null;
 export default none;

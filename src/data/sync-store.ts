@@ -124,6 +124,18 @@ export const SYNC_META = {
    */
   widgetSettings: "widgetSettings",
 
+  // -- Background sync. Device-local opt-in; see `data/background-sync-store.ts`.
+
+  /**
+   * `'1'` once the user has opted this device into a periodic background check-in (Android
+   * only). Absent or anything else means off, which is the default.
+   *
+   * Deliberately never replicated: `AppSettings` syncs to every peer, and whether THIS device
+   * contacts the relay on a schedule is a per-device network consent, like `ratesAutoFetch`.
+   * Written through `transact`, never `putMany`, so it never diffs into a sync op.
+   */
+  backgroundSync: "backgroundSync",
+
   // -- App language. Device-local; see `data/language-preference-store.ts`.
 
   /**
