@@ -60,9 +60,14 @@ object SnapshotStore {
 
   fun exists(context: Context) = file(context).exists()
 
+  /** The parsed file as of the last write or read; every widget render would otherwise parse it again. */
+  private class Cached(val length: Long, val modified: Long, val snapshot: Snapshot)
+
+  @Volatile private var cached: Cached? = null
+
   /** Throws when the JSON is not a version-1 snapshot, so a bad write never replaces good data. */
   fun write(context: Context, json: String) {
-    requireNotNull(parse(json)) { "Not a version $VERSION widget snapshot" }
+    val parsed = requireNotNull(parse(json)) { "Not a version $VERSION widget snapshot" }
     val dir = dir(context).apply { mkdirs() }
     val tmp = File(dir, "snapshot.json.tmp")
     FileOutputStream(tmp).use {
@@ -74,16 +79,28 @@ object SnapshotStore {
       dest.delete()
       check(tmp.renameTo(dest)) { "Could not store the widget snapshot" }
     }
+    cached = Cached(dest.length(), dest.lastModified(), parsed)
   }
 
+  /** Reads through the cache while the file is the one that was cached (same size and time). */
   fun read(context: Context): Snapshot? =
     try {
-      file(context).takeIf { it.exists() }?.readText(Charsets.UTF_8)?.let(::parse)
+      val file = file(context)
+      if (!file.exists()) {
+        cached = null
+        null
+      } else {
+        val length = file.length()
+        val modified = file.lastModified()
+        cached?.takeIf { it.length == length && it.modified == modified }?.snapshot
+          ?: file.readText(Charsets.UTF_8).let(::parse)?.also { cached = Cached(length, modified, it) }
+      }
     } catch (e: Exception) {
       null
     }
 
   fun delete(context: Context) {
+    cached = null
     dir(context).deleteRecursively()
   }
 

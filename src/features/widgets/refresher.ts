@@ -10,7 +10,10 @@ import {
   syncingStorage,
 } from "@/data/local-finance-repository";
 import { loadCustomThemeFiles } from "@/data/custom-themes-store";
-import { updateWidgetSettings } from "@/data/widget-settings-store";
+import {
+  readWidgetSettings,
+  updateWidgetSettings,
+} from "@/data/widget-settings-store";
 import { createStandaloneTranslator } from "@/localization/standalone";
 import { knownPlacedWidgets } from "@/features/widgets/kinds";
 import { createWidgetRefresher } from "@/features/widgets/refresher-core";
@@ -18,6 +21,7 @@ import { resolveWidgetPalettes } from "@/features/widgets/palette";
 import { buildWidgetSnapshot } from "@/features/widgets/snapshot";
 import { parseCustomTheme } from "@/theme/custom/schema";
 import { isSystemPalettes } from "@/theme/dynamic-palette";
+import { BUILT_IN_THEMES } from "@/theme/themes/registry";
 import type { ThemeDefinition } from "@/theme/themes/types";
 import { todayLocal } from "@/utils/date";
 import * as QashyDynamicColors from "../../../modules/qashy-dynamic-colors";
@@ -51,8 +55,9 @@ const refresher = createWidgetRefresher({
     knownPlacedWidgets(await QashyWidgets.getPlacedWidgets()),
   update: (json) => QashyWidgets.update(json),
   clear: () => QashyWidgets.clear(),
-  pruneSettings: (placedIds) =>
-    updateWidgetSettings((current) => {
+  readSettings: readWidgetSettings,
+  pruneSettings: async (placedIds) => {
+    await updateWidgetSettings((current) => {
       const stale = Object.keys(current.widgets).filter(
         (id) => !placedIds.has(id),
       );
@@ -60,13 +65,18 @@ const refresher = createWidgetRefresher({
       const widgets = { ...current.widgets };
       for (const id of stale) delete widgets[id];
       return { ...current, widgets };
-    }),
+    });
+  },
   async buildSnapshot(placed, settings) {
     const state = financeRepository.getSnapshot();
     if (!state.ready) return null;
+    // A built-in theme needs no storage read; only a custom one has to be loaded.
+    const themeIsBuiltIn = BUILT_IN_THEMES.some(
+      (theme) => theme.id === state.settings.themeId,
+    );
     const [translator, customThemes] = await Promise.all([
       createStandaloneTranslator(),
-      loadCustomThemes(),
+      themeIsBuiltIn ? [] : loadCustomThemes(),
     ]);
     const systemPalettes = readPalettes();
     return buildWidgetSnapshot({

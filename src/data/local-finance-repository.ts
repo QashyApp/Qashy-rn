@@ -137,6 +137,7 @@ import {
   sumMinor,
 } from "@/utils/money";
 import { resolvePeriod } from "@/utils/period";
+import { selectFirst, transactionComparator } from "@/utils/transaction-order";
 import {
   feeMinorFor,
   normalizeFeePercent,
@@ -2093,7 +2094,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     const matchesCategory = query.categoryIds?.length
       ? this.categoryMatcher(query.categoryIds)
       : null;
-    let result = snapshot.filter((transaction) => {
+    const result = snapshot.filter((transaction) => {
       if (transaction.deletedAt) return false;
       if (
         normalizedSearch &&
@@ -2147,30 +2148,18 @@ export class LocalFinanceRepository implements FinanceRepository {
         return false;
       return true;
     });
-    if (query.sort !== false) {
-      result = result.sort((a, b) => {
-        if (query.sort === "oldest")
-          return (
-            a.localDate.localeCompare(b.localDate) ||
-            a.createdAt.localeCompare(b.createdAt)
-          );
-        if (query.sort === "amount-desc") {
-          // Unpriced rows sort after priced ones, then by id so the order is deterministic.
-          if (a.baseAmountMinor === null || b.baseAmountMinor === null)
-            return (
-              Number(a.baseAmountMinor === null) -
-                Number(b.baseAmountMinor === null) || a.id.localeCompare(b.id)
-            );
-          return b.baseAmountMinor - a.baseAmountMinor;
-        }
-        return (
-          b.localDate.localeCompare(a.localDate) ||
-          b.createdAt.localeCompare(a.createdAt)
-        );
-      });
-    }
     const offset = query.offset ?? 0;
-    return result.slice(offset, query.limit ? offset + query.limit : undefined);
+    if (query.sort === false)
+      return result.slice(
+        offset,
+        query.limit ? offset + query.limit : undefined,
+      );
+    const compare = transactionComparator(query.sort);
+    // A page of a long ledger only needs its first rows in order, so select them instead of sorting
+    // every match: it is the difference between a pass and a full sort on each widget refresh.
+    if (query.limit)
+      return selectFirst(result, compare, offset + query.limit).slice(offset);
+    return result.sort(compare).slice(offset);
   }
 
   getDashboard(fromDate: string, toDate: string): DashboardSummary {

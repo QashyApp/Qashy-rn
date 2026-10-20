@@ -5,7 +5,11 @@ import {
   type RefresherDeps,
 } from "@/features/widgets/refresher-core";
 import type { WidgetSnapshot } from "@/features/widgets/snapshot";
-import { DEFAULT_WIDGET_SETTINGS } from "@/features/widgets/settings";
+import {
+  DEFAULT_WIDGET_SETTINGS,
+  defaultWidgetConfig,
+  type WidgetSettings,
+} from "@/features/widgets/settings";
 
 const snapshot = (generatedAt: string, marker = "a"): WidgetSnapshot =>
   ({
@@ -20,12 +24,14 @@ function setup(overrides: Partial<RefresherDeps> = {}) {
   let placed: PlacedWidgetRef[] = [{ id: 1, kind: "summary" }];
   let counter = 0;
   let marker = "a";
+  let settings: WidgetSettings = DEFAULT_WIDGET_SETTINGS;
   const mocks = {
     isAvailable: jest.fn(() => true),
     getPlacedWidgets: jest.fn(async () => placed),
     update: jest.fn(async (_json: string) => undefined),
     clear: jest.fn(async () => undefined),
-    pruneSettings: jest.fn(async () => DEFAULT_WIDGET_SETTINGS),
+    readSettings: jest.fn(async () => settings),
+    pruneSettings: jest.fn(async () => undefined),
     buildSnapshot: jest.fn(async () => snapshot(`t${(counter += 1)}`, marker)),
     log: jest.fn(),
   };
@@ -36,6 +42,7 @@ function setup(overrides: Partial<RefresherDeps> = {}) {
     refresher: createWidgetRefresher(deps),
     place: (next: PlacedWidgetRef[]) => (placed = next),
     setMarker: (next: string) => (marker = next),
+    setSettings: (next: WidgetSettings) => (settings = next),
   };
 }
 
@@ -170,14 +177,46 @@ describe("widget refresher", () => {
     expect(deps.update).toHaveBeenCalledTimes(2);
   });
 
-  it("prunes with the ids that are placed", async () => {
-    const { deps, refresher, place } = setup();
+  it("prunes after the push, and only when a removed widget left a config behind", async () => {
+    const { deps, refresher, place, setSettings } = setup();
     place([
       { id: 3, kind: "summary" },
       { id: 8, kind: "transactions" },
     ]);
     await refresher.refresh();
+    expect(deps.pruneSettings).not.toHaveBeenCalled();
+
+    setSettings({
+      ...DEFAULT_WIDGET_SETTINGS,
+      widgets: {
+        "3": defaultWidgetConfig("summary"),
+        "99": defaultWidgetConfig("summary"),
+      },
+    });
+    const order: string[] = [];
+    deps.update.mockImplementation(async () => void order.push("update"));
+    deps.pruneSettings.mockImplementation(async () => void order.push("prune"));
+    await refresher.refresh({ force: true });
     expect(deps.pruneSettings).toHaveBeenCalledWith(new Set(["3", "8"]));
+    // The data goes out first; housekeeping never delays it.
+    expect(order).toEqual(["update", "prune"]);
+  });
+
+  it("reads the placed widgets and the settings together", async () => {
+    const placedGate = gate();
+    const { deps, refresher } = setup({
+      getPlacedWidgets: jest.fn(async () => {
+        await placedGate.promise;
+        return [{ id: 1, kind: "summary" as const }];
+      }),
+    });
+    const done = refresher.refresh();
+    await Promise.resolve();
+    // The settings read has started although the placed-widgets call is still pending.
+    expect(deps.readSettings).toHaveBeenCalledTimes(1);
+    placedGate.open();
+    await done;
+    expect(deps.update).toHaveBeenCalledTimes(1);
   });
 
   it("skips the push when the data is not ready", async () => {

@@ -20,8 +20,10 @@ export interface RefresherDeps {
   getPlacedWidgets(): Promise<PlacedWidgetRef[]>;
   update(json: string): Promise<void>;
   clear(): Promise<void>;
-  /** Drops stored configs of widgets that are no longer placed and returns the settings now stored. */
-  pruneSettings(placedIds: ReadonlySet<string>): Promise<WidgetSettings>;
+  /** Reads the stored widget settings. */
+  readSettings(): Promise<WidgetSettings>;
+  /** Drops stored configs of widgets that are no longer placed. Runs after the push, never before it. */
+  pruneSettings(placedIds: ReadonlySet<string>): Promise<void>;
   /** Builds the snapshot, or `null` when the data is not ready yet (the next repository event retries). */
   buildSnapshot(
     placed: readonly PlacedWidgetRef[],
@@ -70,7 +72,11 @@ export function createWidgetRefresher(deps: RefresherDeps) {
       lastPushed = null;
     }
     try {
-      const placed = await deps.getPlacedWidgets();
+      // Independent reads, so the push waits on the slower of the two, not on their sum.
+      const [placed, settings] = await Promise.all([
+        deps.getPlacedWidgets(),
+        deps.readSettings(),
+      ]);
       if (placed.length === 0) {
         // Nothing to draw. Clear what an earlier run (or an earlier process) may have left, once.
         if (nativeState !== "cleared") {
@@ -80,17 +86,20 @@ export function createWidgetRefresher(deps: RefresherDeps) {
         lastPushed = null;
         return ok;
       }
-      const settings = await deps.pruneSettings(
-        new Set(placed.map((widget) => String(widget.id))),
-      );
       const snapshot = await deps.buildSnapshot(placed, settings);
       // Data not ready: nothing was refreshed, so this is not a success.
       if (!snapshot) return false;
       const comparable = comparableSnapshot(snapshot);
-      if (comparable === lastPushed) return ok;
-      await deps.update(JSON.stringify(snapshot));
-      lastPushed = comparable;
-      nativeState = "pushed";
+      if (comparable !== lastPushed) {
+        await deps.update(JSON.stringify(snapshot));
+        lastPushed = comparable;
+        nativeState = "pushed";
+      }
+      // Housekeeping comes last: the widgets already show the new data, and a stale config of a
+      // removed widget changes nothing the snapshot draws.
+      const placedIds = new Set(placed.map((widget) => String(widget.id)));
+      if (Object.keys(settings.widgets).some((id) => !placedIds.has(id)))
+        await deps.pruneSettings(placedIds);
     } catch (error) {
       ok = false;
       deps.log(

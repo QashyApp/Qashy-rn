@@ -28,6 +28,7 @@ import androidx.glance.layout.Alignment
 import androidx.glance.layout.Box
 import androidx.glance.layout.fillMaxSize
 import androidx.glance.layout.padding
+import androidx.glance.state.GlanceStateDefinition
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
@@ -88,6 +89,10 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
       DpSize(250.dp, 170.dp),
     ),
   )
+
+  // The widget keeps no Glance state (it reads the snapshot store), so skip the per-widget
+  // DataStore Glance would otherwise open and read before every render.
+  override val stateDefinition: GlanceStateDefinition<*>? = null
 
   /** Where a tap anywhere on the widget goes; null when the kind has per-element targets instead. */
   protected open val rootUri: String? = null
