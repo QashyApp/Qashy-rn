@@ -7,7 +7,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
@@ -38,10 +37,7 @@ class Labels(
   val netWorth: String,
   val spent: String,
   val earned: String,
-  val upcoming: String,
-  val recent: String,
   val add: String,
-  val empty: String,
   val openApp: String,
 )
 
@@ -58,7 +54,7 @@ class Snapshot(val hideAmounts: Boolean, val labels: Labels, val widgets: Map<In
  * backups or device transfer.
  */
 object SnapshotStore {
-  private const val VERSION = 1
+  private const val VERSION = 2
 
   // Serializes writers (the temp file name is fixed) and keeps the flow in step with the file.
   private val lock = Any()
@@ -92,7 +88,7 @@ object SnapshotStore {
     return state.value
   }
 
-  /** Throws when the JSON is not a version-1 snapshot, so a bad write never replaces good data. */
+  /** Throws when the JSON is not a version-2 snapshot, so a bad write never replaces good data. */
   fun write(context: Context, json: String) {
     val parsed = requireNotNull(parse(json)) { "Not a version $VERSION widget snapshot" }
     synchronized(lock) {
@@ -128,7 +124,7 @@ object SnapshotStore {
       null
     }
 
-  /** Null on a parse failure or any version other than 1; unknown fields are ignored. */
+  /** Null on a parse failure or any version other than 2; unknown fields are ignored. */
   fun parse(json: String): Snapshot? =
     try {
       val root = JSONObject(json)
@@ -138,8 +134,7 @@ object SnapshotStore {
         val l = root.getJSONObject("labels")
         val labels = Labels(
           l.optString("netWorth"), l.optString("spent"), l.optString("earned"),
-          l.optString("upcoming"), l.optString("recent"), l.optString("add"),
-          l.optString("empty"), l.optString("openApp"),
+          l.optString("add"), l.optString("openApp"),
         )
         val widgets = HashMap<Int, WidgetData>()
         root.optJSONObject("widgets")?.let { ws ->
@@ -179,5 +174,5 @@ object SnapshotStore {
   }
 }
 
-internal fun JSONArray?.objects(): List<JSONObject> =
-  if (this == null) emptyList() else (0 until length()).mapNotNull { optJSONObject(it) }
+/** The string at [name], or null when it is absent or JSON null (a value the widget does not show). */
+internal fun JSONObject.optStringOrNull(name: String): String? = if (isNull(name)) null else optString(name)

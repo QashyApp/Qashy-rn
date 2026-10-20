@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview for Android 12 to 14: plain views a launcher can inflate for a RemoteViews
+     provider, filled with fixed sample strings. Android 15 and later get a Glance-rendered one. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+  android:layout_width="match_parent"
+  android:layout_height="match_parent"
+  android:background="@drawable/qashy_preview_background"
+  android:gravity="center_vertical"
+  android:orientation="horizontal"
+  android:paddingHorizontal="12dp"
+  android:paddingVertical="6dp">
+
+  <LinearLayout
+    android:layout_width="0dp"
+    android:layout_height="wrap_content"
+    android:layout_weight="1"
+    android:orientation="vertical">
+
+    <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+      <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:maxLines="1"
+        android:text="@string/qashy_preview_label_net_worth"
+        android:textColor="@color/qashy_preview_muted"
+        android:textSize="11sp" />
+      <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/qashy_preview_net_worth_value"
+        android:textColor="@color/qashy_preview_text"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+      <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:maxLines="1"
+        android:text="@string/qashy_preview_label_spent"
+        android:textColor="@color/qashy_preview_muted"
+        android:textSize="11sp" />
+      <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/qashy_preview_spent_value"
+        android:textColor="@color/qashy_preview_negative"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+    </LinearLayout>
+
+    <LinearLayout
+      android:layout_width="match_parent"
+      android:layout_height="wrap_content"
+      android:orientation="horizontal">
+      <TextView
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:maxLines="1"
+        android:text="@string/qashy_preview_label_earned"
+        android:textColor="@color/qashy_preview_muted"
+        android:textSize="11sp" />
+      <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:maxLines="1"
+        android:text="@string/qashy_preview_earned_value"
+        android:textColor="@color/qashy_preview_positive"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+    </LinearLayout>
+  </LinearLayout>
+
+  <FrameLayout
+    android:layout_width="48dp"
+    android:layout_height="48dp"
+    android:layout_marginStart="8dp"
+    android:background="@drawable/qashy_preview_button">
+    <ImageView
+      android:layout_width="24dp"
+      android:layout_height="24dp"
+      android:layout_gravity="center"
+      android:contentDescription="@string/qashy_preview_label_add"
+      android:src="@drawable/qashy_preview_plus" />
+  </FrameLayout>
+</LinearLayout>

@@ -15,6 +15,7 @@ internal class ColorSet(
   val text: Color,
   val muted: Color,
   val accent: Color,
+  val onAccent: Color,
   val positive: Color,
   val negative: Color,
 )
@@ -28,6 +29,8 @@ class WidgetColors(
   val text: ColorProvider,
   val muted: ColorProvider,
   val accent: ColorProvider,
+  /** What is drawn on top of a surface filled with [accent]. */
+  val onAccent: ColorProvider,
   val positive: ColorProvider,
   val negative: ColorProvider,
 ) {
@@ -63,13 +66,13 @@ object WidgetTheme {
       )
       return WidgetColors(
         pair(alpha) { it.background }, pair { it.text }, pair { it.muted },
-        pair { it.accent }, pair { it.positive }, pair { it.negative },
+        pair { it.accent }, pair { it.onAccent }, pair { it.positive }, pair { it.negative },
       )
     }
     val c = set(style.mode == "dark")
     return WidgetColors(
       ColorProvider(c.background.copy(alpha = alpha)), ColorProvider(c.text), ColorProvider(c.muted),
-      ColorProvider(c.accent), ColorProvider(c.positive), ColorProvider(c.negative),
+      ColorProvider(c.accent), ColorProvider(c.onAccent), ColorProvider(c.positive), ColorProvider(c.negative),
     )
   }
 
@@ -87,12 +90,12 @@ object WidgetTheme {
       // amounts take the text color here; their sign still says income from expense.
       ColorSet(
         Color(p.accent), Color(p.onAccent), Color(p.onAccent).copy(alpha = 0.78f), Color(p.onAccent),
-        Color(p.onAccent), Color(p.onAccent),
+        Color(p.accent), Color(p.onAccent), Color(p.onAccent),
       )
     } else {
       ColorSet(
         Color(p.background), Color(p.text), Color(p.textMuted), Color(p.accent),
-        Color(p.positive), Color(p.negative),
+        Color(p.onAccent), Color(p.positive), Color(p.negative),
       )
     }
 
@@ -102,19 +105,19 @@ object WidgetTheme {
     return when {
       accentBg && night -> ColorSet(
         c(sys.system_accent1_700), c(sys.system_accent1_100), c(sys.system_accent1_200), c(sys.system_accent1_100),
-        Color(p.positive), Color(p.negative),
+        c(sys.system_accent1_700), Color(p.positive), Color(p.negative),
       )
       accentBg -> ColorSet(
         c(sys.system_accent1_100), c(sys.system_accent1_900), c(sys.system_accent1_700), c(sys.system_accent1_700),
-        Color(p.positive), Color(p.negative),
+        c(sys.system_accent1_100), Color(p.positive), Color(p.negative),
       )
       night -> ColorSet(
         c(sys.system_neutral1_900), c(sys.system_neutral1_100), c(sys.system_neutral2_300), c(sys.system_accent1_200),
-        Color(p.positive), Color(p.negative),
+        c(sys.system_accent1_800), Color(p.positive), Color(p.negative),
       )
       else -> ColorSet(
         c(sys.system_neutral1_10), c(sys.system_neutral1_900), c(sys.system_neutral2_700), c(sys.system_accent1_600),
-        Color(p.positive), Color(p.negative),
+        c(sys.system_accent1_0), Color(p.positive), Color(p.negative),
       )
     }
   }

@@ -8,6 +8,8 @@ import {
 } from "@/features/widgets/widget-refresher";
 
 const mockRefresh = jest.fn(async () => true);
+const mockRequestPreviews = jest.fn();
+const mockRegisterPreviews = jest.fn(async () => "registered");
 const mockRepositoryListeners = new Set<() => void>();
 const mockSettingsListeners = new Set<() => void>();
 const mockThemeListeners = new Set<() => void>();
@@ -38,8 +40,15 @@ jest.mock("@/theme/custom/use-custom-themes", () => ({
     },
   },
 }));
+jest.mock("@/features/widgets/preview-registration", () => ({
+  requestPreviewRegistration: (register: () => Promise<unknown>) => {
+    mockRequestPreviews();
+    void register();
+  },
+}));
 jest.mock("../../../../modules/qashy-widgets", () => ({
   isAvailable: () => mockAvailable,
+  registerPreviews: () => mockRegisterPreviews(),
 }));
 
 const advance = (ms: number) =>
@@ -55,6 +64,8 @@ describe("<WidgetRefresher />", () => {
   let appStateListener: (state: string) => void;
   beforeEach(() => {
     jest.useFakeTimers();
+    mockRequestPreviews.mockClear();
+    mockRegisterPreviews.mockClear();
     mockRefresh.mockReset();
     mockRefresh.mockResolvedValue(true);
     mockAvailable = true;
@@ -178,5 +189,17 @@ describe("<WidgetRefresher />", () => {
     await render(<WidgetRefresher />);
     expect(mockRefresh).not.toHaveBeenCalled();
     expect(mockRepositoryListeners.size).toBe(0);
+  });
+
+  it("asks for the picker previews on mount", async () => {
+    await render(<WidgetRefresher />);
+    expect(mockRequestPreviews).toHaveBeenCalledTimes(1);
+    expect(mockRegisterPreviews).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not ask for previews without the native module", async () => {
+    mockAvailable = false;
+    await render(<WidgetRefresher />);
+    expect(mockRequestPreviews).not.toHaveBeenCalled();
   });
 });

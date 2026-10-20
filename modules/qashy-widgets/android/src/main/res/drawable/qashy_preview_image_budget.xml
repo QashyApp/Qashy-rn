@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview for Android 11 and earlier (previewImage must be a drawable, so no text):
+     the card, a budget ring, and placeholder bars for the name and amounts. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <item android:drawable="@drawable/qashy_preview_background" />
+
+  <item
+    android:width="76dp"
+    android:height="76dp"
+    android:drawable="@drawable/qashy_preview_ring"
+    android:gravity="start|center_vertical"
+    android:start="14dp" />
+
+  <item
+    android:width="90dp"
+    android:height="8dp"
+    android:gravity="start|top"
+    android:start="106dp"
+    android:top="30dp">
+    <shape android:shape="rectangle">
+      <solid android:color="@color/qashy_preview_text" />
+      <corners android:radius="4dp" />
+    </shape>
+  </item>
+  <item
+    android:width="60dp"
+    android:height="6dp"
+    android:gravity="start|top"
+    android:start="106dp"
+    android:top="46dp">
+    <shape android:shape="rectangle">
+      <solid android:color="@color/qashy_preview_muted" />
+      <corners android:radius="3dp" />
+    </shape>
+  </item>
+  <item
+    android:width="76dp"
+    android:height="8dp"
+    android:gravity="start|top"
+    android:start="106dp"
+    android:top="62dp">
+    <shape android:shape="rectangle">
+      <solid android:color="@color/qashy_preview_text" />
+      <corners android:radius="4dp" />
+    </shape>
+  </item>
+</layer-list>

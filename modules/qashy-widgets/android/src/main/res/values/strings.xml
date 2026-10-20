@@ -1,7 +1,23 @@
 <resources>
   <string name="qashy_widget_open_app">Open Qashy to load your widget</string>
-  <string name="qashy_widget_transactions_label">Qashy transactions</string>
-  <string name="qashy_widget_transactions_description">Recent and upcoming transactions</string>
-  <string name="qashy_widget_summary_label">Qashy summary</string>
-  <string name="qashy_widget_summary_description">Net worth and this month\'s spending</string>
+  <string name="qashy_widget_quick_add_label">Qashy quick add</string>
+  <string name="qashy_widget_quick_add_description">Add a transaction in one tap and see this month at a glance</string>
+  <string name="qashy_widget_budget_label">Qashy budget</string>
+  <string name="qashy_widget_budget_description">How much of one budget you have used</string>
+
+  <!-- Sample text for the widget picker previews. Fixed examples, never the the user's data. -->
+  <string name="qashy_preview_label_net_worth">Net worth</string>
+  <string name="qashy_preview_label_spent">Spent</string>
+  <string name="qashy_preview_label_earned">Income</string>
+  <string name="qashy_preview_label_add">Add transaction</string>
+  <string name="qashy_preview_month">This month</string>
+  <string name="qashy_preview_net_worth_value">$12,480</string>
+  <string name="qashy_preview_spent_value">$1,320</string>
+  <string name="qashy_preview_earned_value">$3,200</string>
+  <string name="qashy_preview_budget_name">Groceries</string>
+  <string name="qashy_preview_budget_status">On track</string>
+  <string name="qashy_preview_budget_spent">$310</string>
+  <string name="qashy_preview_budget_limit">$500</string>
+  <string name="qashy_preview_budget_remaining">$190 left</string>
+  <string name="qashy_preview_budget_percent">62%</string>
 </resources>

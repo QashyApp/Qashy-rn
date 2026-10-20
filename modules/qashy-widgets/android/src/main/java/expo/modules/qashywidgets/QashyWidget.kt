@@ -102,6 +102,23 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
     size: DpSize,
   )
 
+  /**
+   * The picker preview of this kind (Android 15+), drawn from fixed sample data and never from the
+   * snapshot or the user's data. A kind overrides `providePreview` and calls this with its own
+   * sample payload and sample labels, both built from string resources.
+   */
+  protected suspend fun providePreviewContent(context: Context, labels: Labels, payload: Any) {
+    val snapshot = Snapshot(hideAmounts = false, labels = labels, widgets = emptyMap())
+    val data = WidgetData(kind, WidgetTheme.DEFAULT_STYLE, payload)
+    val radius = WidgetTheme.radius(context)
+    provideContent {
+      val colors = WidgetTheme.resolve(context, data.style)
+      WidgetContainer(radius, colors.background, false, null) {
+        Content(context, snapshot, data, colors, LocalSize.current)
+      }
+    }
+  }
+
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
     // Loaded before provideContent so the first frame already has the data (no empty flash).

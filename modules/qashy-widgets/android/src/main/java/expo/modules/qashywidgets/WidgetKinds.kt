@@ -22,8 +22,8 @@ class WidgetKind(
  */
 object WidgetKinds {
   val all: List<WidgetKind> = listOf(
-    WidgetKind(KIND_TRANSACTIONS, TransactionsWidgetReceiver::class.java, ::TransactionsWidget, ::parseTransactions),
-    WidgetKind(KIND_SUMMARY, SummaryWidgetReceiver::class.java, ::SummaryWidget, ::parseSummary),
+    WidgetKind(KIND_QUICK_ADD, QuickAddWidgetReceiver::class.java, ::QuickAddWidget, ::parseQuickAdd),
+    WidgetKind(KIND_BUDGET, BudgetWidgetReceiver::class.java, ::BudgetWidget, ::parseBudget),
   )
 
   fun byId(id: String): WidgetKind? = all.firstOrNull { it.id == id }

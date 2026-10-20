@@ -26,7 +26,7 @@ class QashyWidgetsModule : Module() {
       WidgetScheduler.placed(context).map { (id, kind) -> mapOf<String, Any>("id" to id, "kind" to kind) }
     }
 
-    // Rejects (and keeps the old data) when the JSON is not a version-1 snapshot.
+    // Rejects (and keeps the old data) when the JSON is not a version-2 snapshot.
     AsyncFunction("update") Coroutine { json: String ->
       val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) {
@@ -52,6 +52,13 @@ class QashyWidgetsModule : Module() {
       RefreshOutcome.report(ok)
     }
 
+    // Publishes the picker previews (Android 15+) when they are out of date; a no-op otherwise.
+    // Resolves to a short status and never rejects, so a failure can only cost the preview.
+    AsyncFunction("registerPreviews") Coroutine { ->
+      val context = appContext.reactContext?.applicationContext
+      if (context == null) "failed" else WidgetPreviews.register(context).id
+    }
+
     AsyncFunction("clear") Coroutine { ->
       val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) {
@@ -64,7 +71,7 @@ class QashyWidgetsModule : Module() {
     }
   }
 
-  // Both kinds render at once: one slow composition must not delay the other kind's redraw.
+  // Every kind renders at once: one slow composition must not delay another kind's redraw.
   private suspend fun updateWidgets(context: android.content.Context) {
     coroutineScope {
       WidgetKinds.all.forEach { kind -> launch { kind.widget().updateAll(context) } }

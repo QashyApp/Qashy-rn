@@ -17,3 +17,10 @@ export async function update(_json: string): Promise<void> {}
 export async function clear(): Promise<void> {}
 
 export function reportHeadlessResult(_ok: boolean): void {}
+
+export type PreviewRegistration =
+  "unsupported" | "unchanged" | "registered" | "rateLimited" | "failed";
+
+export async function registerPreviews(): Promise<PreviewRegistration> {
+  return "unsupported";
+}
