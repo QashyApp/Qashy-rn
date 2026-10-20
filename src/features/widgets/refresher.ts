@@ -12,6 +12,7 @@ import {
 import { loadCustomThemeFiles } from "@/data/custom-themes-store";
 import { updateWidgetSettings } from "@/data/widget-settings-store";
 import { createStandaloneTranslator } from "@/localization/standalone";
+import { knownPlacedWidgets } from "@/features/widgets/kinds";
 import { createWidgetRefresher } from "@/features/widgets/refresher-core";
 import { resolveWidgetPalettes } from "@/features/widgets/palette";
 import { buildWidgetSnapshot } from "@/features/widgets/snapshot";
@@ -46,7 +47,8 @@ function readPalettes() {
 
 const refresher = createWidgetRefresher({
   isAvailable: () => QashyWidgets.isAvailable(),
-  getPlacedWidgets: () => QashyWidgets.getPlacedWidgets(),
+  getPlacedWidgets: async () =>
+    knownPlacedWidgets(await QashyWidgets.getPlacedWidgets()),
   update: (json) => QashyWidgets.update(json),
   clear: () => QashyWidgets.clear(),
   pruneSettings: (placedIds) =>

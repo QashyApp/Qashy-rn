@@ -11,7 +11,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Bridge between the JS snapshot builder and the two Glance home-screen widgets. The snapshot
+ * Bridge between the JS snapshot builder and the Glance home-screen widgets. The snapshot
  * (finance figures, already formatted by JS) is stored device-locally and excluded from backups.
  */
 class QashyWidgetsModule : Module() {
@@ -55,8 +55,7 @@ class QashyWidgetsModule : Module() {
   // Both kinds render at once: one slow composition must not delay the other kind's redraw.
   private suspend fun updateWidgets(context: android.content.Context) {
     coroutineScope {
-      launch { TransactionsWidget().updateAll(context) }
-      launch { SummaryWidget().updateAll(context) }
+      WidgetKinds.all.forEach { kind -> launch { kind.widget().updateAll(context) } }
     }
   }
 }

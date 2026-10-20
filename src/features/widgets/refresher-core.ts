@@ -9,13 +9,11 @@
  * worker, which retries a failure.
  */
 
+import type { PlacedWidgetRef } from "@/features/widgets/kinds";
 import type { WidgetSnapshot } from "@/features/widgets/snapshot";
 import type { WidgetSettings } from "@/features/widgets/settings";
 
-export interface PlacedWidgetRef {
-  id: number;
-  kind: "transactions" | "summary";
-}
+export type { PlacedWidgetRef };
 
 export interface RefresherDeps {
   isAvailable(): boolean;

@@ -12,7 +12,6 @@ import androidx.glance.GlanceModifier
 import androidx.glance.Image
 import androidx.glance.ImageProvider
 import androidx.glance.appwidget.GlanceAppWidget
-import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.layout.Alignment
 import androidx.glance.layout.Column
 import androidx.glance.layout.ContentScale
@@ -25,13 +24,39 @@ import androidx.glance.layout.padding
 import androidx.glance.layout.width
 import androidx.glance.text.Text
 import androidx.glance.text.TextAlign
+import org.json.JSONObject
+
+const val KIND_SUMMARY = "summary"
 
 private val PADDING = 12.dp
 
+class SummaryData(
+  val monthLabel: String,
+  val netWorth: String,
+  val spent: String,
+  val earned: String,
+  val series: List<Double>?,
+  val seriesStart: String,
+  val seriesEnd: String,
+)
+
+internal fun parseSummary(entry: JSONObject): SummaryData? =
+  entry.optJSONObject("summary")?.let { o ->
+    val arr = o.optJSONArray("series")
+    val series = arr?.let { a -> (0 until a.length()).map { a.getDouble(it) } }
+    SummaryData(
+      o.optString("monthLabel"), o.optString("netWorth"), o.optString("spent"),
+      o.optString("earned"), series, o.optString("seriesStart"), o.optString("seriesEnd"),
+    )
+  }
+
 class SummaryWidget : QashyWidget(KIND_SUMMARY) {
+  // The whole widget opens the overview.
+  override val rootUri: String = "qashy:///overview"
+
   @Composable
   override fun Content(context: Context, snapshot: Snapshot, data: WidgetData, colors: WidgetColors, size: DpSize) {
-    val s = data.summary ?: return
+    val s = data.payload as? SummaryData ?: return
     val labels = snapshot.labels
     val series = s.series?.filter { it.isFinite() }
     val showGraph = series != null && series.size >= 2 && size.width >= 250.dp && size.height >= 110.dp
@@ -108,16 +133,6 @@ private fun StatLine(label: String, value: String, tone: ColorProvider, colors: 
   }
 }
 
-class SummaryWidgetReceiver : GlanceAppWidgetReceiver() {
+class SummaryWidgetReceiver : QashyWidgetReceiver() {
   override val glanceAppWidget: GlanceAppWidget = SummaryWidget()
-
-  override fun onDeleted(context: Context, appWidgetIds: IntArray) {
-    super.onDeleted(context, appWidgetIds)
-    WidgetScheduler.cleanupIfNoWidgets(context, appWidgetIds.toSet())
-  }
-
-  override fun onDisabled(context: Context) {
-    super.onDisabled(context)
-    WidgetScheduler.cleanupIfNoWidgets(context)
-  }
 }

@@ -1,9 +1,7 @@
 // Web has no home-screen widgets; same surface as index.ts, no native code.
-export type WidgetKind = "transactions" | "summary";
-
 export interface PlacedWidget {
   id: number;
-  kind: WidgetKind;
+  kind: string;
 }
 
 export function isAvailable(): boolean {

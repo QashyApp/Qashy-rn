@@ -2,12 +2,11 @@ import { Platform } from "react-native";
 
 import NativeModule from "./src/QashyWidgetsModule";
 
-export type WidgetKind = "transactions" | "summary";
-
 export interface PlacedWidget {
   /** The Android appWidgetId; the key into the snapshot's `widgets` map. */
   id: number;
-  kind: WidgetKind;
+  /** Which widget provider it belongs to; the app decides which kinds it knows. */
+  kind: string;
 }
 
 /** True on Android builds that include the native module. */
@@ -15,13 +14,11 @@ export function isAvailable(): boolean {
   return Platform.OS === "android" && NativeModule != null;
 }
 
-/** Home-screen widgets currently placed (both kinds); [] on web or without the native module. */
+/** Home-screen widgets currently placed (every kind); [] on web or without the native module. */
 export async function getPlacedWidgets(): Promise<PlacedWidget[]> {
   if (Platform.OS !== "android" || !NativeModule) return [];
   const placed = await NativeModule.getPlacedWidgets();
-  return (placed ?? []).filter(
-    (w): w is PlacedWidget => w.kind === "transactions" || w.kind === "summary",
-  );
+  return placed ?? [];
 }
 
 /**

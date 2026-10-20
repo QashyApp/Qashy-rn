@@ -7,7 +7,6 @@ import { Card } from "@/components/ui/card";
 import { ColorSwatch } from "@/components/ui/color-swatch";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormField } from "@/components/ui/form-field";
-import { OptionRow } from "@/components/ui/option-row";
 import { QashySwitch } from "@/components/ui/qashy-switch";
 import {
   SegmentedControl,
@@ -20,22 +19,29 @@ import {
   updateWidgetSettings,
 } from "@/data/widget-settings-store";
 import {
+  knownPlacedWidgets,
+  type PlacedWidgetRef,
+  type WidgetKind,
+} from "@/features/widgets/kinds";
+import {
   configFor,
   normalizeWidgetConfig,
-  type GraphMonths,
   type WidgetAppearance,
   type WidgetConfig,
   type WidgetMode,
   type WidgetSettings,
   type WidgetTheme,
 } from "@/features/widgets/settings";
+import {
+  WidgetKindSection,
+  widgetKindTitle,
+} from "@/features/more/widget-kind-sections";
 import { WidgetTransparencySlider } from "@/features/more/widget-transparency-slider";
 import {
   opacityFromTransparency,
   transparencyFromOpacity,
 } from "@/features/more/widget-transparency";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { ACCENT_PRESETS } from "@/theme/tokens";
 import { errorMessage, showError } from "@/utils/confirm";
@@ -55,11 +61,6 @@ const BACKGROUND_OPTIONS: SegmentOption<WidgetConfig["background"]>[] = [
   { value: "accent", label: "Accent" },
   { value: "custom", label: "Custom" },
 ];
-const GRAPH_OPTIONS: SegmentOption<`${GraphMonths}`>[] = [
-  { value: "3", label: "3 months" },
-  { value: "6", label: "6 months" },
-  { value: "12", label: "12 months" },
-];
 const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
 /** Reading-width cap of the settings column, shared with the other More screens. */
 const CONTENT_MAX_WIDTH = 720;
@@ -68,17 +69,15 @@ const CONTENT_MAX_WIDTH = 720;
 const MATERIAL_YOU_UNSUPPORTED =
   process.env.EXPO_OS === "android" && Number(Platform.Version) < 31;
 
-/** The fields one control changes; `kind` never changes. */
-type WidgetPatch = Partial<WidgetAppearance> & {
-  accountId?: string | null;
-  graphMonths?: GraphMonths;
-};
+/**
+ * The fields one control changes; `kind` never changes. A kind's own fields are typed by its
+ * section (`KindSectionProps`) and validated by `normalizeWidgetConfig` when saved.
+ */
+type WidgetPatch = Partial<WidgetAppearance> & Record<string, unknown>;
 
 /** The placed widgets and the stored settings, kept current for the screen's lifetime. */
 function useWidgetsState() {
-  const [placed, setPlaced] = useState<QashyWidgets.PlacedWidget[] | null>(
-    null,
-  );
+  const [placed, setPlaced] = useState<PlacedWidgetRef[] | null>(null);
   const [settings, setSettings] = useState<WidgetSettings | null>(null);
 
   useEffect(() => {
@@ -87,7 +86,8 @@ function useWidgetsState() {
     const loadPlaced = () => {
       const request = ++placedRequest;
       QashyWidgets.getPlacedWidgets().then(
-        (next) => {
+        (all) => {
+          const next = knownPlacedWidgets(all);
           if (live && request === placedRequest)
             setPlaced([...next].sort((a, b) => a.id - b.id));
         },
@@ -169,10 +169,11 @@ export function WidgetsScreen() {
   // Numbered by position among all placed widgets of the kind, so "Summary widget 2" keeps its
   // number while only that one is shown.
   const ordinals = new Map<number, number>();
-  const totals = { transactions: 0, summary: 0 };
+  const totals = new Map<WidgetKind, number>();
   for (const widget of placed ?? []) {
-    totals[widget.kind] += 1;
-    ordinals.set(widget.id, totals[widget.kind]);
+    const count = (totals.get(widget.kind) ?? 0) + 1;
+    totals.set(widget.kind, count);
+    ordinals.set(widget.id, count);
   }
 
   return (
@@ -253,7 +254,7 @@ export function WidgetsScreen() {
                   id={widget.id}
                   kind={widget.kind}
                   ordinal={
-                    totals[widget.kind] > 1
+                    (totals.get(widget.kind) ?? 0) > 1
                       ? (ordinals.get(widget.id) ?? null)
                       : null
                   }
@@ -274,11 +275,7 @@ type Apply = (
 ) => Promise<boolean>;
 
 /** Replaces the one widget's config, validated, leaving every other widget's untouched. */
-function patchWidget(
-  id: number,
-  kind: WidgetConfig["kind"],
-  patch: WidgetPatch,
-) {
+function patchWidget(id: number, kind: WidgetKind, patch: WidgetPatch) {
   return (current: WidgetSettings): WidgetSettings | null => {
     const base = configFor(current, id, kind);
     const next = normalizeWidgetConfig({ ...base, ...patch });
@@ -300,7 +297,7 @@ function WidgetCard({
   apply,
 }: {
   id: number;
-  kind: WidgetConfig["kind"];
+  kind: WidgetKind;
   /** Set only when several widgets of this kind are placed. */
   ordinal: number | null;
   config: WidgetConfig;
@@ -309,7 +306,6 @@ function WidgetCard({
   const theme = useQashyTheme();
   const { space } = theme;
   const { t } = useLocalization();
-  const { accounts } = useFinanceState();
   const change = (patch: WidgetPatch) => apply(patchWidget(id, kind, patch));
 
   const [hex, setHex] = useState(config.customColor ?? "");
@@ -321,18 +317,8 @@ function WidgetCard({
   }
   const hexValid = HEX_COLOR.test(hex);
 
-  const title = `${t(
-    kind === "transactions" ? "Transactions widget" : "Summary widget",
-  )}${ordinal === null ? "" : ` ${ordinal}`}`;
+  const title = `${t(widgetKindTitle(kind))}${ordinal === null ? "" : ` ${ordinal}`}`;
   const transparency = transparencyFromOpacity(config.opacity);
-  const liveAccounts = accounts.filter(
-    (account) => !account.archived && !account.deletedAt,
-  );
-  const selectedAccountId =
-    config.kind === "transactions" &&
-    liveAccounts.some((account) => account.id === config.accountId)
-      ? config.accountId
-      : null;
 
   return (
     <Card style={{ gap: space.lg }}>
@@ -478,44 +464,7 @@ function WidgetCard({
         />
       </View>
 
-      {config.kind === "transactions" ? (
-        <View style={{ gap: space.sm }}>
-          <AppText variant="label">Show transactions from</AppText>
-          <View
-            accessibilityRole="radiogroup"
-            accessibilityLabel={t("Show transactions from")}
-            style={{ gap: space.sm }}
-          >
-            <OptionRow
-              title="All accounts"
-              selected={selectedAccountId === null}
-              onPress={() => change({ accountId: null })}
-            />
-            {liveAccounts.map((account) => (
-              <OptionRow
-                key={account.id}
-                literal
-                title={account.name}
-                description={account.currency}
-                selected={selectedAccountId === account.id}
-                onPress={() => change({ accountId: account.id })}
-              />
-            ))}
-          </View>
-        </View>
-      ) : (
-        <View style={{ gap: space.sm }}>
-          <AppText variant="label">Graph range</AppText>
-          <SegmentedControl
-            label="Graph range"
-            options={GRAPH_OPTIONS}
-            value={`${config.graphMonths}` as `${GraphMonths}`}
-            onChange={(value) =>
-              change({ graphMonths: Number(value) as GraphMonths })
-            }
-          />
-        </View>
-      )}
+      <WidgetKindSection config={config} change={change} />
     </Card>
   );
 }
