@@ -69,6 +69,33 @@ describe("widget refresher", () => {
     });
   });
 
+  it("pushes an unchanged snapshot when forced, once", async () => {
+    const { deps, refresher } = setup();
+    await refresher.refresh();
+    await refresher.refresh({ force: true });
+    await refresher.refresh();
+    expect(deps.update).toHaveBeenCalledTimes(2);
+  });
+
+  it("honours a force requested while a run is in flight on the rerun", async () => {
+    const hold = gate();
+    let build = 0;
+    const { deps, refresher } = setup({
+      buildSnapshot: jest.fn(async () => {
+        build += 1;
+        if (build === 2) await hold.promise;
+        return snapshot(`t${build}`);
+      }),
+    });
+    await refresher.refresh();
+    const first = refresher.refresh();
+    await Promise.resolve();
+    void refresher.refresh({ force: true });
+    hold.open();
+    await first;
+    expect(deps.update).toHaveBeenCalledTimes(2);
+  });
+
   it("pushes again when the content changes", async () => {
     const { deps, refresher, setMarker } = setup();
     await refresher.refresh();

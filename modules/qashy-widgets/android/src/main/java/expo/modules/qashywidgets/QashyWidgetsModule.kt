@@ -6,6 +6,8 @@ import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -50,8 +52,11 @@ class QashyWidgetsModule : Module() {
     }
   }
 
+  // Both kinds render at once: one slow composition must not delay the other kind's redraw.
   private suspend fun updateWidgets(context: android.content.Context) {
-    TransactionsWidget().updateAll(context)
-    SummaryWidget().updateAll(context)
+    coroutineScope {
+      launch { TransactionsWidget().updateAll(context) }
+      launch { SummaryWidget().updateAll(context) }
+    }
   }
 }
