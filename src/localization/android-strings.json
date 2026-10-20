@@ -427,6 +427,11 @@
       "he": "מוחק תזמון חוזר אחד."
     },
     {
+      "name": "q_0b27572a77a29863",
+      "en": "Amounts are hidden on all widgets.",
+      "he": "הסכומים מוסתרים בכל הווידג׳טים."
+    },
+    {
       "name": "q_0b9969ed6d2d24b1",
       "en": "This SQLite file does not look like a supported Cashew backup version.",
       "he": "קובץ ה־SQLite הזה אינו נראה כגרסה נתמכת של גיבוי Cashew."
@@ -500,6 +505,11 @@
       "name": "q_0d4bd97b58eda9f8",
       "en": "Qashy couldn’t save the exchange rates on this device.",
       "he": "ל־Qashy לא הצליח לשמור את השערים במכשיר הזה."
+    },
+    {
+      "name": "q_0d4e2a0d3ccd1e6d",
+      "en": "Quick add widget",
+      "he": "ווידג׳ט הוספה מהירה"
     },
     {
       "name": "q_0d52fa927c035225",
@@ -820,11 +830,6 @@
       "name": "q_183c36ca108be316",
       "en": "No cap",
       "he": "ללא מגבלה"
-    },
-    {
-      "name": "q_18550f80b6805714",
-      "en": "Amounts and the net worth graph are hidden on all widgets.",
-      "he": "הסכומים וגרף השווי הנקי מוסתרים בכל הווידג׳טים."
     },
     {
       "name": "q_18ae4b0d61fbd0d3",
@@ -1522,11 +1527,6 @@
       "he": "ביטול"
     },
     {
-      "name": "q_2cfa8c2c483fecb2",
-      "en": "Graph range",
-      "he": "טווח הגרף"
-    },
-    {
       "name": "q_2d088b4965fed271",
       "en": "Reset Qashy?",
       "he": "לאפס את Qashy?"
@@ -1655,6 +1655,11 @@
       "name": "q_31d6dcea9b52463d",
       "en": "Create backup",
       "he": "יצירת גיבוי"
+    },
+    {
+      "name": "q_32051cc18c8b7613",
+      "en": "With none selected, the widget is just the add button.",
+      "he": "אם לא נבחר דבר, הווידג׳ט הוא כפתור ההוספה בלבד."
     },
     {
       "name": "q_325437d22f36b520",
@@ -1942,6 +1947,11 @@
       "he": "תנועות"
     },
     {
+      "name": "q_390b5b6a1cfdb87a",
+      "en": "Show on the widget",
+      "he": "הצגה בווידג׳ט"
+    },
+    {
       "name": "q_3913b220e1a24b29",
       "en": "Show phrase",
       "he": "הצגת המשפט"
@@ -2207,11 +2217,6 @@
       "he": "התקדמות החיבור"
     },
     {
-      "name": "q_41f134751f381801",
-      "en": "Summary widget",
-      "he": "ווידג׳ט סיכום"
-    },
-    {
       "name": "q_41f7dca46d3f1b4a",
       "en": "Value",
       "he": "ערך"
@@ -2365,6 +2370,11 @@
       "name": "q_46efd8429f57b4b1",
       "en": "Expense category",
       "he": "קטגוריית הוצאה"
+    },
+    {
+      "name": "q_46fa2206c6cb83ba",
+      "en": "First active budget",
+      "he": "התקציב הפעיל הראשון"
     },
     {
       "name": "q_476b48a2b24452e6",
@@ -2912,11 +2922,6 @@
       "he": "חשבונות במטבע שאינו מטבע הבסיס שלכם זקוקים לשערי חליפין לתאריכים שלהם. הפעילו שערים אוטומטיים או הוסיפו שערים ידניים תחילה, אחרת הייבוא ייחסם."
     },
     {
-      "name": "q_59021ddc40a6871b",
-      "en": "Show transactions from",
-      "he": "הצגת תנועות מתוך"
-    },
-    {
       "name": "q_59079607b8c92756",
       "en": "The clipboard is readable by other apps and, on some systems, by your other computers. Write the words down or type them straight into a password manager instead.",
       "he": "הלוח ניתן לקריאה על ידי אפליקציות אחרות, ובמערכות מסוימות גם על ידי המחשבים האחרים שלכם. במקום זאת רשמו את המילים או הקלידו אותן ישירות לתוך מנהל סיסמאות."
@@ -3150,6 +3155,11 @@
       "name": "q_5ee752bd8685418c",
       "en": "The theme file size could not be checked safely. Choose another file.",
       "he": "לא ניתן היה לבדוק בבטחה את גודל קובץ ערכת העיצוב. בחרו קובץ אחר."
+    },
+    {
+      "name": "q_5f4181c1844f0636",
+      "en": "Budget to show",
+      "he": "התקציב להצגה"
     },
     {
       "name": "q_5f4586bc1e2740e6",
@@ -6252,6 +6262,11 @@
       "he": "מחיקת קטגוריה"
     },
     {
+      "name": "q_c2a38db44454a06f",
+      "en": "over",
+      "he": "מעל"
+    },
+    {
       "name": "q_c2b1c41b9ef7895a",
       "en": "The other device refused to complete pairing.",
       "he": "המכשיר האחר סירב להשלים את החיבור."
@@ -7272,6 +7287,11 @@
       "he": "לתשלום עד"
     },
     {
+      "name": "q_e0756c409cc315d4",
+      "en": "Budget widget",
+      "he": "ווידג׳ט תקציב"
+    },
+    {
       "name": "q_e0955919920ee87d",
       "en": "Day",
       "he": "יום"
@@ -7870,11 +7890,6 @@
       "name": "q_ef57bb53e02b26d9",
       "en": "Parent category is missing, deleted, or not a valid parent.",
       "he": "קטגוריית האב חסרה, נמחקה או אינה אב תקין."
-    },
-    {
-      "name": "q_ef6956b8c477cddc",
-      "en": "Transactions widget",
-      "he": "ווידג׳ט תנועות"
     },
     {
       "name": "q_ef6b380543d1bfe3",

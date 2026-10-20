@@ -1,6 +1,5 @@
 /** Constants and helpers the widget kinds and the snapshot share. */
 
-export const MAX_WIDGET_ROWS = 30;
 /** Shown in place of every amount when "hide amounts" is on. */
 export const MASKED_AMOUNT = "•••";
 

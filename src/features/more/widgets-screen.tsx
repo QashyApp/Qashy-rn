@@ -169,7 +169,7 @@ export function WidgetsScreen() {
       ? placed.filter((widget) => widget.id === requestedId)
       : null;
   const visible = focused ?? placed ?? [];
-  // Numbered by position among all placed widgets of the kind, so "Summary widget 2" keeps its
+  // Numbered by position among all placed widgets of the kind, so "Budget widget 2" keeps its
   // number while only that one is shown.
   const ordinals = new Map<number, number>();
   const totals = new Map<WidgetKind, number>();
@@ -215,7 +215,7 @@ export function WidgetsScreen() {
                 <View style={{ flex: 1, gap: space.xxs }}>
                   <AppText variant="label">Hide amounts</AppText>
                   <AppText variant="caption" muted>
-                    Amounts and the net worth graph are hidden on all widgets.
+                    Amounts are hidden on all widgets.
                   </AppText>
                 </View>
                 <QashySwitch

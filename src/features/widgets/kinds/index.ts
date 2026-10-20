@@ -6,13 +6,13 @@
  */
 
 import {
-  summaryKind,
-  type SummaryWidgetConfig,
-} from "@/features/widgets/kinds/summary";
+  budgetKind,
+  type BudgetWidgetConfig,
+} from "@/features/widgets/kinds/budget";
 import {
-  transactionsKind,
-  type TransactionsWidgetConfig,
-} from "@/features/widgets/kinds/transactions";
+  quickAddKind,
+  type QuickAddWidgetConfig,
+} from "@/features/widgets/kinds/quick-add";
 import type {
   KindFields,
   WidgetKindDefinition,
@@ -20,14 +20,11 @@ import type {
 } from "@/features/widgets/kinds/types";
 import type { SnapshotInput } from "@/features/widgets/snapshot";
 
-export type {
-  GraphMonths,
-  SummaryWidgetConfig,
-} from "@/features/widgets/kinds/summary";
-export type { TransactionsWidgetConfig } from "@/features/widgets/kinds/transactions";
+export type { BudgetWidgetConfig } from "@/features/widgets/kinds/budget";
+export type { QuickAddWidgetConfig } from "@/features/widgets/kinds/quick-add";
 export type { KindFields, WidgetKindDefinition, WidgetKindPayload };
 
-export type WidgetConfig = TransactionsWidgetConfig | SummaryWidgetConfig;
+export type WidgetConfig = QuickAddWidgetConfig | BudgetWidgetConfig;
 export type WidgetKind = WidgetConfig["kind"];
 
 type Registry = {
@@ -35,8 +32,8 @@ type Registry = {
 };
 
 const REGISTRY: Registry = {
-  transactions: transactionsKind,
-  summary: summaryKind,
+  quickAdd: quickAddKind,
+  budget: budgetKind,
 };
 
 export const WIDGET_KINDS = Object.keys(REGISTRY) as WidgetKind[];

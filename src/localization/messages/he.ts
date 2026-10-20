@@ -1106,8 +1106,7 @@ export const HEBREW: Record<string, string> = {
   Widgets: "ווידג׳טים",
   "Home screen widgets": "ווידג׳טים למסך הבית",
   "Hide amounts": "הסתרת סכומים",
-  "Amounts and the net worth graph are hidden on all widgets.":
-    "הסכומים וגרף השווי הנקי מוסתרים בכל הווידג׳טים.",
+  "Amounts are hidden on all widgets.": "הסכומים מוסתרים בכל הווידג׳טים.",
   "Widgets are an Android feature": "ווידג׳טים זמינים באנדרואיד",
   "Home screen widgets are available in the Android app only.":
     "ווידג׳טים למסך הבית זמינים באפליקציית אנדרואיד בלבד.",
@@ -1115,8 +1114,8 @@ export const HEBREW: Record<string, string> = {
   "Press and hold an empty spot on your home screen, choose Widgets, then pick Qashy to add one.":
     "לחצו לחיצה ארוכה על מקום פנוי במסך הבית, בחרו ״ווידג׳טים״ ואז בחרו ב־Qashy כדי להוסיף ווידג׳ט.",
   "Show all widgets": "הצגת כל הווידג׳טים",
-  "Transactions widget": "ווידג׳ט תנועות",
-  "Summary widget": "ווידג׳ט סיכום",
+  "Quick add widget": "ווידג׳ט הוספה מהירה",
+  "Budget widget": "ווידג׳ט תקציב",
   "Material You colors need Android 12 or later. On this device the widget uses Qashy colors.":
     "צבעי Material You דורשים אנדרואיד 12 ומעלה. במכשיר הזה הווידג׳ט משתמש בצבעי Qashy.",
   Mode: "מצב",
@@ -1128,9 +1127,13 @@ export const HEBREW: Record<string, string> = {
   "Frosted look": "מראה חלבי",
   "A soft, frosted look. Widgets can’t blur what is behind them, so this is an approximation.":
     "מראה רך וחלבי. ווידג׳טים לא יכולים לטשטש את מה שמאחוריהם, ולכן זו רק הדמיה של האפקט.",
-  "Show transactions from": "הצגת תנועות מתוך",
   "All accounts": "כל החשבונות",
-  "Graph range": "טווח הגרף",
+  "Show on the widget": "הצגה בווידג׳ט",
+  "With none selected, the widget is just the add button.":
+    "אם לא נבחר דבר, הווידג׳ט הוא כפתור ההוספה בלבד.",
+  "Budget to show": "התקציב להצגה",
+  "First active budget": "התקציב הפעיל הראשון",
+  over: "מעל",
   "3 months": "3 חודשים",
   "6 months": "6 חודשים",
   "12 months": "12 חודשים",

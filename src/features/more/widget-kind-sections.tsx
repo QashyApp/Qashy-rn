@@ -1,23 +1,13 @@
-/**
- * The settings UI of each widget kind: its title and the controls for the fields that kind adds
- * to the shared appearance controls of `widgets-screen.tsx`. A new kind adds a section here and
- * one line in `UI`; the compiler rejects a kind in `WidgetConfig` that has no entry.
- */
-
 import type { ComponentType } from "react";
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { OptionRow } from "@/components/ui/option-row";
-import {
-  SegmentedControl,
-  type SegmentOption,
-} from "@/components/ui/segmented-control";
+import { QashySwitch } from "@/components/ui/qashy-switch";
 import type {
-  GraphMonths,
+  BudgetWidgetConfig,
   KindFields,
-  SummaryWidgetConfig,
-  TransactionsWidgetConfig,
+  QuickAddWidgetConfig,
   WidgetConfig,
   WidgetKind,
 } from "@/features/widgets/kinds";
@@ -37,71 +27,88 @@ interface WidgetKindUi<C extends WidgetConfig> {
   Section: ComponentType<KindSectionProps<C>>;
 }
 
-const GRAPH_OPTIONS: SegmentOption<`${GraphMonths}`>[] = [
-  { value: "3", label: "3 months" },
-  { value: "6", label: "6 months" },
-  { value: "12", label: "12 months" },
+type Metric = "showNetWorth" | "showSpent" | "showEarned";
+
+const METRICS: { field: Metric; label: string }[] = [
+  { field: "showNetWorth", label: "Net worth" },
+  { field: "showSpent", label: "Spent" },
+  { field: "showEarned", label: "Income" },
 ];
 
-function TransactionsSection({
+function QuickAddSection({
   config,
   change,
-}: KindSectionProps<TransactionsWidgetConfig>) {
+}: KindSectionProps<QuickAddWidgetConfig>) {
   const { space } = useQashyTheme();
   const { t } = useLocalization();
-  const { accounts } = useFinanceState();
-  const liveAccounts = accounts.filter(
-    (account) => !account.archived && !account.deletedAt,
-  );
-  const selectedAccountId = liveAccounts.some(
-    (account) => account.id === config.accountId,
-  )
-    ? config.accountId
-    : null;
   return (
     <View style={{ gap: space.sm }}>
-      <AppText variant="label">Show transactions from</AppText>
-      <View
-        accessibilityRole="radiogroup"
-        accessibilityLabel={t("Show transactions from")}
-        style={{ gap: space.sm }}
-      >
-        <OptionRow
-          title="All accounts"
-          selected={selectedAccountId === null}
-          onPress={() => change({ accountId: null })}
-        />
-        {liveAccounts.map((account) => (
-          <OptionRow
-            key={account.id}
-            literal
-            title={account.name}
-            description={account.currency}
-            selected={selectedAccountId === account.id}
-            onPress={() => change({ accountId: account.id })}
+      <AppText variant="label">Show on the widget</AppText>
+      <AppText variant="caption" muted>
+        With none selected, the widget is just the add button.
+      </AppText>
+      {METRICS.map(({ field, label }) => (
+        <View
+          key={field}
+          style={{
+            minHeight: 48,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: space.md,
+          }}
+        >
+          <AppText style={{ flex: 1 }}>{label}</AppText>
+          <QashySwitch
+            accessibilityLabel={t(label)}
+            value={config[field]}
+            onValueChange={(value) => {
+              void change({ [field]: value });
+            }}
           />
-        ))}
-      </View>
+        </View>
+      ))}
     </View>
   );
 }
 
-function SummarySection({
+function BudgetSection({
   config,
   change,
-}: KindSectionProps<SummaryWidgetConfig>) {
+}: KindSectionProps<BudgetWidgetConfig>) {
   const { space } = useQashyTheme();
+  const { t } = useLocalization();
+  const { budgets } = useFinanceState();
+  // The Plan screen's order; archived (an older peer may still send one) and deleted are not offered.
+  const liveBudgets = budgets.filter(
+    (budget) => !budget.archived && !budget.deletedAt,
+  );
+  const selectedId = liveBudgets.some((budget) => budget.id === config.budgetId)
+    ? config.budgetId
+    : null;
   return (
     <View style={{ gap: space.sm }}>
-      <AppText variant="label">Graph range</AppText>
-      <SegmentedControl
-        label="Graph range"
-        options={GRAPH_OPTIONS}
-        value={`${config.graphMonths}` as `${GraphMonths}`}
-        onChange={(value) =>
-          change({ graphMonths: Number(value) as GraphMonths })
-        }
-      />
+      <AppText variant="label">Budget to show</AppText>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={t("Budget to show")}
+        style={{ gap: space.sm }}
+      >
+        <OptionRow
+          title="First active budget"
+          selected={selectedId === null}
+          onPress={() => change({ budgetId: null })}
+        />
+        {liveBudgets.map((budget) => (
+          <OptionRow
+            key={budget.id}
+            literal
+            title={budget.name}
+            selected={selectedId === budget.id}
+            onPress={() => change({ budgetId: budget.id })}
+          />
+        ))}
+      </View>
     </View>
   );
 }
@@ -111,8 +118,8 @@ type Ui = {
 };
 
 const UI: Ui = {
-  transactions: { title: "Transactions widget", Section: TransactionsSection },
-  summary: { title: "Summary widget", Section: SummarySection },
+  quickAdd: { title: "Quick add widget", Section: QuickAddSection },
+  budget: { title: "Budget widget", Section: BudgetSection },
 };
 
 export function widgetKindTitle(kind: WidgetKind): string {

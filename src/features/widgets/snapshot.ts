@@ -3,19 +3,14 @@
  *
  * Pure: everything it needs arrives as arguments (the repository reads through a narrow
  * `WidgetDataSource`, the translator, the locale, the clock), so it is deterministic and can be
- * tested without a device. The wire format is version 1 and fixed; the native side only renders it.
+ * tested without a device. The wire format is version 2 and fixed; the native side only renders it.
  *
  * Everything user-visible is already formatted here: the native widgets never see an amount as a
- * number. With `hideAmounts` every amount string is "•••" and the net-worth line is dropped too.
+ * number. With `hideAmounts` every amount of the quick-add widget is "•••" and the budget widget
+ * carries no amount at all (its percentage and pace wording are not amounts).
  */
 
-import type {
-  Account,
-  Category,
-  DashboardSummary,
-  TransactionQuery,
-  TransactionRecord,
-} from "@/domain/models";
+import type { BudgetStatus, DashboardSummary } from "@/domain/models";
 import {
   buildKindPayload,
   type PlacedWidgetRef,
@@ -24,27 +19,11 @@ import {
 import type { Palette, WidgetPalettes } from "@/features/widgets/palette";
 import { configFor, type WidgetSettings } from "@/features/widgets/settings";
 
-export {
-  MASKED_AMOUNT,
-  MAX_WIDGET_ROWS,
-} from "@/features/widgets/kinds/shared";
+export { MASKED_AMOUNT } from "@/features/widgets/kinds/shared";
 
-export const SNAPSHOT_VERSION = 1;
+export const SNAPSHOT_VERSION = 2;
 
-export type RowTone = "positive" | "negative" | "neutral";
-
-export interface SnapshotRow {
-  id: string;
-  title: string;
-  detail: string;
-  amount: string;
-  tone: RowTone;
-}
-
-export interface SnapshotGroup {
-  heading: string;
-  rows: SnapshotRow[];
-}
+export type BudgetPaceKey = "under" | "onTrack" | "projectedOver" | "over";
 
 export interface SnapshotStyle {
   theme: WidgetConfig["theme"];
@@ -63,15 +42,39 @@ export interface SnapshotStyle {
 export interface WidgetSnapshotEntry {
   kind: WidgetConfig["kind"];
   style: SnapshotStyle;
-  transactions?: { title: string; groups: SnapshotGroup[] };
-  summary?: {
+  /**
+   * This month at a glance. A metric the widget does not show is `null`; with hidden amounts the
+   * ones it shows are "•••".
+   */
+  quickAdd?: {
     monthLabel: string;
-    netWorth: string;
-    spent: string;
-    earned: string;
-    series: number[] | null;
-    seriesStart: string;
-    seriesEnd: string;
+    netWorth: string | null;
+    spent: string | null;
+    earned: string | null;
+  };
+  /**
+   * One budget's progress. `empty` means there is no active budget (then only `name`, the prompt
+   * to create one, is meaningful). With hidden amounts `spent`, `limit` and `remaining` are `null`.
+   */
+  budget?: {
+    empty: boolean;
+    name: string;
+    /** The period in words, e.g. "July 2026" or "Jul 1 – Jul 14". */
+    period: string;
+    /** Whole percent of the limit spent, 0 to 999. */
+    percent: number;
+    /** `percent` as a 0 to 1 fill, clamped. */
+    progress: number;
+    /** How far through the period today is, 0 to 1. */
+    elapsed: number;
+    /** True once spending is past the limit; drawn with words and a mark, never color alone. */
+    over: boolean;
+    status: BudgetPaceKey;
+    statusText: string;
+    spent: string | null;
+    limit: string | null;
+    /** "$120 left" or "$30 over". */
+    remaining: string | null;
   };
 }
 
@@ -79,10 +82,7 @@ export interface SnapshotLabels {
   netWorth: string;
   spent: string;
   earned: string;
-  upcoming: string;
-  recent: string;
   add: string;
-  empty: string;
   openApp: string;
 }
 
@@ -94,22 +94,25 @@ export interface WidgetSnapshot {
   widgets: Record<string, WidgetSnapshotEntry>;
 }
 
-/** The slice of `FinanceRepository` the snapshot reads. */
+/**
+ * The slice of `FinanceRepository` the snapshot reads. The reads are the display ones: they count
+ * the auto-post recurring occurrences that are due but not generated yet (the headless refresh
+ * never generates), which is the caller's to arrange.
+ */
 export interface WidgetDataSource {
-  accounts: readonly Account[];
-  categories: readonly Category[];
-  queryTransactions(query: TransactionQuery): TransactionRecord[];
+  /** The currency every figure is formatted in. */
+  baseCurrency: string;
   getDashboard(
     fromDate: string,
     toDate: string,
   ): Pick<DashboardSummary, "incomeMinor" | "expenseMinor" | "netWorthMinor">;
-  getNetWorthSeries(
-    months: number,
-    today?: string,
-  ): {
-    baseCurrency: string;
-    points: readonly { date: string; baseMinor: number }[];
-  };
+  /** The budgets active on `onDate`, in the Plan screen's order. */
+  getBudgetStatuses(
+    onDate: string,
+  ): readonly Pick<
+    BudgetStatus,
+    "budget" | "snapshot" | "spentMinor" | "effectiveLimitMinor"
+  >[];
 }
 
 export interface SnapshotInput {
@@ -130,10 +133,7 @@ function snapshotLabels(t: (message: string) => string): SnapshotLabels {
     netWorth: t("Net worth"),
     spent: t("Spent"),
     earned: t("Income"),
-    upcoming: t("Upcoming"),
-    recent: t("Recent activity"),
     add: t("Add transaction"),
-    empty: t("No transactions yet"),
     openApp: t("Open Qashy to load your widget"),
   };
 }
