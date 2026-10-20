@@ -2173,7 +2173,17 @@ export class LocalFinanceRepository implements FinanceRepository {
     return result.slice(offset, query.limit ? offset + query.limit : undefined);
   }
 
-  getDashboard(fromDate: string, toDate: string): DashboardSummary {
+  getDashboard(
+    fromDate: string,
+    toDate: string,
+    options: { includePendingAutoPosts?: boolean } = {},
+  ): DashboardSummary {
+    if (options.includePendingAutoPosts) {
+      this.assertDate(toDate);
+      return this.withPendingRecurring(true, toDate, () =>
+        this.getDashboard(fromDate, toDate),
+      );
+    }
     this.assertDate(fromDate);
     this.assertDate(toDate);
     if (fromDate > toDate)
@@ -2542,9 +2552,19 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   getBudgetStatuses(
     onDate: string,
-    options: { includeInactiveCustom?: boolean } = {},
+    options: {
+      includeInactiveCustom?: boolean;
+      includePendingAutoPosts?: boolean;
+    } = {},
   ): BudgetStatus[] {
     this.assertDate(onDate);
+    if (options.includePendingAutoPosts) {
+      return this.withPendingRecurring(true, onDate, () =>
+        this.getBudgetStatuses(onDate, {
+          includeInactiveCustom: options.includeInactiveCustom,
+        }),
+      );
+    }
     const derived = this.derived();
     const statusKey = `${onDate}|${options.includeInactiveCustom === true}`;
     const cached = derived.budgetStatuses.get(statusKey);
@@ -2638,9 +2658,65 @@ export class LocalFinanceRepository implements FinanceRepository {
     return this.enqueueMutation(() => this.generateRecurringNow(horizonDate));
   }
 
-  private async generateRecurringNow(horizonDate: string, onlyRuleId?: string) {
-    this.assertDate(horizonDate);
-    const today = todayLocal();
+  getPendingAutoPosts(onDate: string): TransactionRecord[] {
+    this.assertDate(onDate);
+    return this.pendingRecurring(onDate).filter(
+      (transaction) => transaction.status === "posted",
+    );
+  }
+
+  /** Everything a generation run on `onDate` would write for transactions; nothing is stored. */
+  private pendingRecurring(onDate: string) {
+    return this.planRecurring(onDate, onDate, { virtualIds: true })
+      .transactionChanges;
+  }
+
+  /**
+   * Runs the synchronous read `work` as if generation had already run for `onDate`, when
+   * `include` asks for it: the pending transactions are laid over the snapshot for the duration of
+   * the call only, and neither the snapshot nor the derived-read cache keeps them. A preview that
+   * cannot be computed is skipped (the persisted numbers are shown) rather than failing the read.
+   */
+  private withPendingRecurring<T>(
+    include: boolean | undefined,
+    onDate: string,
+    work: () => T,
+  ): T {
+    if (!include) return work();
+    let pending: TransactionRecord[];
+    try {
+      pending = this.pendingRecurring(onDate);
+    } catch {
+      return work();
+    }
+    if (!pending.length) return work();
+    const byId = new Map(pending.map((item) => [item.id, item]));
+    const existing = new Set(this.state.transactions.map((item) => item.id));
+    const transactions = [
+      ...this.state.transactions.map((item) => byId.get(item.id) ?? item),
+      ...pending.filter((item) => !existing.has(item.id)),
+    ];
+    const derivedCache = this.derivedCache;
+    try {
+      return this.withProspectiveState({ transactions }, work);
+    } finally {
+      this.derivedCache = derivedCache;
+    }
+  }
+
+  /**
+   * What a generation run for `horizonDate` would write for the recurring schedules, without
+   * writing it: the transactions it would create or post, and the rules it would advance. Reads
+   * `this.state` and changes nothing, so a run commits it and a read-only preview only looks at it.
+   * `virtualIds` gives new transactions an id derived from their occurrence key instead of a
+   * random one, so a preview is deterministic.
+   */
+  private planRecurring(
+    horizonDate: string,
+    today: string,
+    options: { onlyRuleId?: string; virtualIds?: boolean } = {},
+  ) {
+    const { onlyRuleId, virtualIds = false } = options;
     let generated = 0;
     const transactions = [...this.state.transactions];
     const occurrenceKeys = new Set<string>();
@@ -2678,14 +2754,22 @@ export class LocalFinanceRepository implements FinanceRepository {
             occurrenceKeys.has(occurrenceKey)
           )
             return;
-          const transaction = this.buildTransaction({
-            ...rule.template,
-            localDate: occurrenceDate,
-            status:
-              rule.autoPost && occurrenceDate <= today ? "posted" : "upcoming",
-            recurringRuleId: rule.id,
-            occurrenceKey,
-          });
+          const transaction = this.buildTransaction(
+            {
+              ...rule.template,
+              localDate: occurrenceDate,
+              status:
+                rule.autoPost && occurrenceDate <= today
+                  ? "posted"
+                  : "upcoming",
+              recurringRuleId: rule.id,
+              occurrenceKey,
+            },
+            undefined,
+            [],
+            undefined,
+            virtualIds ? `pending:${occurrenceKey}` : undefined,
+          );
           transactions.push(transaction);
           occurrenceKeys.add(occurrenceKey);
           transactionChanges.push(transaction);
@@ -2714,6 +2798,13 @@ export class LocalFinanceRepository implements FinanceRepository {
         continue;
       }
     }
+    return { transactions, transactionChanges, ruleChanges, generated };
+  }
+
+  private async generateRecurringNow(horizonDate: string, onlyRuleId?: string) {
+    this.assertDate(horizonDate);
+    const { transactions, transactionChanges, ruleChanges, generated } =
+      this.planRecurring(horizonDate, todayLocal(), { onlyRuleId });
     const recurringChanged =
       transactionChanges.length > 0 || ruleChanges.length > 0;
     // Merged into the current state rather than replacing it with the pre-await snapshot, so
