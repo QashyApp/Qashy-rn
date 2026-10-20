@@ -1,5 +1,8 @@
 package expo.modules.qashywidgets
 
+import android.content.pm.ApplicationInfo
+import android.os.SystemClock
+import android.util.Log
 import androidx.glance.appwidget.updateAll
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Coroutine
@@ -27,8 +30,17 @@ class QashyWidgetsModule : Module() {
     AsyncFunction("update") Coroutine { json: String ->
       val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) {
+        val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        val start = SystemClock.elapsedRealtime()
         SnapshotStore.write(context, json)
+        val written = SystemClock.elapsedRealtime()
+        // updateAll still starts sessions for widgets without a live one; live ones recompose from the flow.
         updateWidgets(context)
+        if (debug) {
+          // Durations only, never snapshot contents.
+          val done = SystemClock.elapsedRealtime()
+          Log.d("QashyWidgets", "update: write ${written - start} ms, updateAll ${done - written} ms")
+        }
         // KEEP: update() also runs inside the refresh task, which REPLACE would cancel.
         WidgetScheduler.scheduleMidnight(context, replace = false)
       }
