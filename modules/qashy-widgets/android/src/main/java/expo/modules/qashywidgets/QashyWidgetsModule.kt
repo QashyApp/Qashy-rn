@@ -1,16 +1,10 @@
 package expo.modules.qashywidgets
 
-import android.content.pm.ApplicationInfo
-import android.os.SystemClock
-import android.util.Log
-import androidx.glance.appwidget.updateAll
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.functions.Coroutine
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -30,17 +24,8 @@ class QashyWidgetsModule : Module() {
     AsyncFunction("update") Coroutine { json: String ->
       val context = appContext.reactContext?.applicationContext ?: throw Exceptions.ReactContextLost()
       withContext(Dispatchers.IO) {
-        val debug = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
-        val start = SystemClock.elapsedRealtime()
         SnapshotStore.write(context, json)
-        val written = SystemClock.elapsedRealtime()
-        // updateAll still starts sessions for widgets without a live one; live ones recompose from the flow.
-        updateWidgets(context)
-        if (debug) {
-          // Durations only, never snapshot contents.
-          val done = SystemClock.elapsedRealtime()
-          Log.d("QashyWidgets", "update: write ${written - start} ms, updateAll ${done - written} ms")
-        }
+        WidgetPublisher.publishAll(context)
         // KEEP: update() also runs inside the refresh task, which REPLACE would cancel.
         WidgetScheduler.scheduleMidnight(context, replace = false)
       }
@@ -72,16 +57,9 @@ class QashyWidgetsModule : Module() {
         SnapshotStore.delete(context)
         // Widgets re-render to "open the app"; that must not trigger a refresh that refills them.
         WidgetScheduler.markAllRefreshRequested(context)
-        updateWidgets(context)
+        WidgetPublisher.publishAll(context)
         WidgetScheduler.afterClear(context)
       }
-    }
-  }
-
-  // Every kind renders at once: one slow composition must not delay another kind's redraw.
-  private suspend fun updateWidgets(context: android.content.Context) {
-    coroutineScope {
-      WidgetKinds.all.forEach { kind -> launch { kind.widget().updateAll(context) } }
     }
   }
 }
