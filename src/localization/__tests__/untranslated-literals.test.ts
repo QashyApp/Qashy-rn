@@ -803,7 +803,10 @@ describe("literal UI strings", () => {
   it("covers the data layer: repository errors, import warnings and reader errors", () => {
     const where = (prefix: string) =>
       everything.filter((found) => found.where.startsWith(prefix)).length;
-    expect(where("data/local-finance-repository")).toBeGreaterThan(100);
+    // The repository's rules live in `data/finance/`, beside the class in `data/local-finance-repository`.
+    expect(
+      where("data/local-finance-repository") + where("data/finance/"),
+    ).toBeGreaterThan(100);
     expect(where("data/import/cashew/mapper")).toBeGreaterThan(40);
     expect(where("data/import/cashew/sqlite-reader")).toBeGreaterThan(20);
     expect(where("utils/")).toBeGreaterThan(5);
