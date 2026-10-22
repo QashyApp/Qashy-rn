@@ -47,6 +47,8 @@ export interface AppSettings extends SyncEntity {
   navBarStyle?: NavBarStyle;
   /** Per device (`deviceLocal`). `all` is the full motion system, `minimal` keeps only quick fades, `off` shows changes instantly. Saves from before this existed read as `all`. */
   animationLevel?: AnimationLevel;
+  /** Per device (`deviceLocal`). Android only: short vibrations on taps, selections, saves and errors. Saves from before this existed read as on. */
+  hapticsEnabled?: boolean;
   /**
    * Per device (`deviceLocal`). Appearance overrides that sit on top of the active theme: a font
    * registry id for text / figures, an icon-set id for the UI chrome / for category and account

@@ -447,8 +447,12 @@ export function MoreScreen() {
                 onPress={() => router.push("/language")}
               />
               <SettingsRow
-                title="Gestures"
-                subtitle="Swipe between months"
+                title="Gestures and Animations"
+                subtitle={
+                  process.env.EXPO_OS === "android"
+                    ? "Swipe, haptics and animations"
+                    : "Swipe and animations"
+                }
                 icon="arrow.left.arrow.right"
                 onPress={() => router.push("/gestures")}
               />

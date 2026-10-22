@@ -4,8 +4,17 @@ import * as Haptics from "expo-haptics";
 // sites never need to branch per platform.
 const supportsHaptics = process.env.EXPO_OS === "android";
 
+// The device's own switch (Gestures and Animations). Module state rather than context because
+// the helpers are plain functions called from handlers, worklet callbacks and utilities.
+let enabled = true;
+
+/** Applies the device's haptics preference. Mounted once from the `hapticsEnabled` setting. */
+export function setHapticsEnabled(next: boolean) {
+  enabled = next;
+}
+
 function trigger(effect: () => Promise<void>) {
-  if (!supportsHaptics) return;
+  if (!supportsHaptics || !enabled) return;
   effect().catch(() => {});
 }
 

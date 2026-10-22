@@ -105,6 +105,7 @@ export type SettingsInput = Partial<
     | "swipeBetweenMonths"
     | "navBarStyle"
     | "animationLevel"
+    | "hapticsEnabled"
     | "fontTextOverride"
     | "fontNumericOverride"
     | "uiIconSetOverride"

@@ -4,6 +4,10 @@
  *
  * The native copy is left in the cache directory afterwards, so callers should only pass data
  * that is acceptable to leave there (exports the user asked for, or ciphertext).
+ *
+ * Resolving does not mean the file went anywhere: the share sheet reports the same result whether
+ * the user picked a target or dismissed it, and a browser download has no outcome at all. Callers
+ * must not treat it as a success to celebrate (no success haptic, no "saved" claim).
  */
 
 import { File as ExpoFile, Paths } from "expo-file-system";

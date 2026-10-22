@@ -3,6 +3,11 @@ import { ScrollView, View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
 import { QashySwitch } from "@/components/ui/qashy-switch";
+import {
+  SegmentedControl,
+  type SegmentOption,
+} from "@/components/ui/segmented-control";
+import type { AnimationLevel } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
@@ -10,6 +15,13 @@ import {
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
+import { hapticSelection, setHapticsEnabled } from "@/utils/haptics";
+
+const ANIMATION_LEVEL_OPTIONS: SegmentOption<AnimationLevel>[] = [
+  { value: "all", label: "All" },
+  { value: "minimal", label: "Minimal" },
+  { value: "off", label: "Off" },
+];
 
 export function GesturesScreen() {
   const repository = useFinanceRepository();
@@ -18,16 +30,39 @@ export function GesturesScreen() {
   const { space } = theme;
   const { t } = useLocalization();
 
-  // Applies immediately, like language and theme.
-  const changeSwipe = async (enabled: boolean) => {
+  // Every setting here applies immediately, like language and theme.
+  const apply = async (
+    patch: Parameters<typeof repository.updateSettings>[0],
+  ) => {
     try {
-      await repository.updateSettings({ swipeBetweenMonths: enabled });
+      await repository.updateSettings(patch);
+      return true;
     } catch (reason) {
       showError(
         "Couldn’t apply this setting",
         errorMessage(reason, "Try again."),
       );
+      return false;
     }
+  };
+
+  const changeSwipe = async (enabled: boolean) => {
+    await apply({ swipeBetweenMonths: enabled });
+  };
+
+  const changeHaptics = async (enabled: boolean) => {
+    if (!(await apply({ hapticsEnabled: enabled }))) return;
+    // The switch's own tick fires before the preference lands, so turning haptics on would be
+    // silent; this one lets the user feel what they just enabled.
+    if (enabled) {
+      setHapticsEnabled(true);
+      hapticSelection();
+    }
+  };
+
+  const changeAnimationLevel = async (animationLevel: AnimationLevel) => {
+    if (animationLevel === (settings.animationLevel ?? "all")) return;
+    await apply({ animationLevel });
   };
 
   return (
@@ -65,6 +100,45 @@ export function GesturesScreen() {
             onValueChange={changeSwipe}
           />
         </View>
+      </Card>
+      {process.env.EXPO_OS === "android" ? (
+        <Card style={{ gap: space.lg }}>
+          <View
+            style={{
+              minHeight: 48,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: 14,
+            }}
+          >
+            <View style={{ flex: 1, gap: space.xxs }}>
+              <AppText variant="label">Haptic feedback</AppText>
+              <AppText variant="caption" muted>
+                Short vibrations when you tap, switch options, save or hit an
+                error.
+              </AppText>
+            </View>
+            <QashySwitch
+              accessibilityLabel={t("Haptic feedback")}
+              value={settings.hapticsEnabled ?? true}
+              onValueChange={changeHaptics}
+            />
+          </View>
+        </Card>
+      ) : null}
+      <Card style={{ gap: space.md }}>
+        <AppText variant="headline">Animations</AppText>
+        <SegmentedControl
+          label="Animations"
+          options={ANIMATION_LEVEL_OPTIONS}
+          value={settings.animationLevel ?? "all"}
+          onChange={changeAnimationLevel}
+        />
+        <AppText variant="caption" muted>
+          Minimal keeps quick fades only; Off changes things instantly. Your
+          device’s reduce-motion setting always applies on top.
+        </AppText>
       </Card>
     </ScrollView>
   );

@@ -542,7 +542,6 @@ export function CsvScreen() {
         csv,
         t("Export Qashy transactions"),
       );
-      hapticSuccess();
     } catch (reason) {
       showError("Couldn’t export CSV", errorMessage(reason, "Try again."));
     } finally {

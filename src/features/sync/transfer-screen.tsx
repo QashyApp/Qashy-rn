@@ -212,7 +212,6 @@ export function TransferScreen() {
         setPassphrase("");
         setRepeated("");
         setSaved(true);
-        hapticSuccess();
       },
       "Couldn’t create the backup",
     );
@@ -326,7 +325,6 @@ export function TransferScreen() {
           bundle.text,
           t("Send Qashy changes"),
         );
-        hapticSuccess();
       },
       "Couldn’t create the sync file",
     );

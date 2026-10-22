@@ -22,7 +22,7 @@ import {
   saveThemeFile,
   pickThemeFileText,
 } from "@/features/more/custom-theme-files";
-import type { AccentSource, AnimationLevel, ThemeMode } from "@/domain/models";
+import type { AccentSource, ThemeMode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
@@ -50,11 +50,6 @@ const THEME_MODE_OPTIONS: SegmentOption<ThemeMode>[] = [
   { value: "system", label: "System", icon: THEME_MODE_ICONS.system },
   { value: "light", label: "Light", icon: THEME_MODE_ICONS.light },
   { value: "dark", label: "Dark", icon: THEME_MODE_ICONS.dark },
-];
-const ANIMATION_LEVEL_OPTIONS: SegmentOption<AnimationLevel>[] = [
-  { value: "all", label: "All" },
-  { value: "minimal", label: "Minimal" },
-  { value: "off", label: "Off" },
 ];
 /** A representative amount for the live preview hero — never a real balance. */
 const PREVIEW_NET_WORTH_MINOR = 1284350;
@@ -120,19 +115,6 @@ export function AppearanceScreen() {
     userAccent && source === "custom" && !validHex
       ? "Use a six-digit hex color such as #5070FF."
       : undefined;
-  // The animation level applies the moment it is chosen and is its own revision.
-  const changeAnimationLevel = async (animationLevel: AnimationLevel) => {
-    if (animationLevel === (settings.animationLevel ?? "all")) return;
-    try {
-      const updated = await repository.updateSettings({ animationLevel });
-      setExpectedRevision(updated.revision);
-    } catch (reason) {
-      showError(
-        "Couldn’t apply this setting",
-        errorMessage(reason, "Try again."),
-      );
-    }
-  };
   // The theme applies immediately and adopts the new revision, so a pending
   // "Save appearance" doesn't hit a stale-revision conflict.
   const changeTheme = async (id: string): Promise<boolean> => {
@@ -202,7 +184,6 @@ export function AppearanceScreen() {
         exportCustomThemeJson(selectedCustomFile),
         t("Export theme"),
       );
-      hapticSuccess();
     } catch (reason) {
       showError("Couldn’t export theme", errorMessage(reason, "Try again."));
     }
@@ -413,21 +394,6 @@ export function AppearanceScreen() {
           </Card>
         </MotionView>
       ) : null}
-      <MotionView>
-        <Card style={{ gap: space.md }}>
-          <AppText variant="headline">Animations</AppText>
-          <SegmentedControl
-            label="Animations"
-            options={ANIMATION_LEVEL_OPTIONS}
-            value={settings.animationLevel ?? "all"}
-            onChange={changeAnimationLevel}
-          />
-          <AppText variant="caption" muted>
-            Minimal keeps quick fades only; Off changes things instantly. Your
-            device’s reduce-motion setting always applies on top.
-          </AppText>
-        </Card>
-      </MotionView>
       <MotionView>
         <Card style={{ gap: space.lg }}>
           <AppText variant="headline">Appearance</AppText>

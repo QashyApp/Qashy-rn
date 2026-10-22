@@ -27,6 +27,7 @@ import {
 } from "@/components/navigation/android-sheet";
 import { NavBarStyleSheetProvider } from "@/components/navigation/nav-bar-style-sheet";
 import { AnimationLevelProvider } from "@/components/ui/animation-level";
+import { HapticsPreference } from "@/components/ui/haptics-preference";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { WebDialogHost } from "@/components/web-dialog-host";
 import { WidgetRefresher } from "@/features/widgets";
@@ -291,7 +292,7 @@ function RootNavigator() {
             options={{
               headerShown: true,
               ...backFallbackOptions("/more"),
-              title: t("Gestures"),
+              title: t("Gestures and Animations"),
               headerBackTitle: backTitle,
             }}
           />
@@ -436,6 +437,7 @@ export default function RootLayout() {
             <QashyThemeProvider>
               <AnimationLevelProvider>
                 <NavBarStyleSheetProvider>
+                  <HapticsPreference />
                   <RootNavigator />
                   {/* Keeps the home-screen widgets current while the app is open. The repository
                       is ready here (FinanceProvider renders its children only once it is), and

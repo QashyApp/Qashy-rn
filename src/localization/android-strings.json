@@ -1207,6 +1207,11 @@
       "he": "עסקים"
     },
     {
+      "name": "q_235143a76d7e6985",
+      "en": "Swipe, haptics and animations",
+      "he": "החלקה, רטט ואנימציות"
+    },
+    {
       "name": "q_23c01ff88fd864c4",
       "en": "Close icon browser",
       "he": "סגירת בורר הסמלים"
@@ -3207,11 +3212,6 @@
       "he": "לא ניתן להשהות את הסנכרון"
     },
     {
-      "name": "q_5fe7fb637002c2a5",
-      "en": "Gestures",
-      "he": "מחוות"
-    },
-    {
       "name": "q_600e177a614ee0bf",
       "en": "That vault sent no device list.",
       "he": "הכספת ההיא לא שלחה רשימת מכשירים."
@@ -4922,6 +4922,11 @@
       "he": "הגיבוי שוחזר"
     },
     {
+      "name": "q_948affb07e688476",
+      "en": "Short vibrations when you tap, switch options, save or hit an error.",
+      "he": "רטט קצר בעת הקשה, החלפת אפשרות, שמירה או שגיאה."
+    },
+    {
       "name": "q_94d07fca2c5fb5c9",
       "en": "Category kind",
       "he": "סוג הקטגוריה"
@@ -4980,6 +4985,11 @@
       "name": "q_963af64ce96f6574",
       "en": "Delete and import",
       "he": "מחיקה וייבוא"
+    },
+    {
+      "name": "q_964cb42875f4d175",
+      "en": "Haptic feedback",
+      "he": "משוב רטט"
     },
     {
       "name": "q_96667120245adee3",
@@ -5362,6 +5372,11 @@
       "he": "ווידג׳טים"
     },
     {
+      "name": "q_a3bda3e644d15abf",
+      "en": "Gestures and Animations",
+      "he": "מחוות ואנימציות"
+    },
+    {
       "name": "q_a3c19a96f8d4c17e",
       "en": "Only https:// addresses can be used here.",
       "he": "אפשר להשתמש כאן רק בכתובות https://."
@@ -5400,11 +5415,6 @@
       "name": "q_a4a23a3726dcac6a",
       "en": "That pairing code is damaged.",
       "he": "קוד החיבור הזה פגום."
-    },
-    {
-      "name": "q_a4b2bab902a655b8",
-      "en": "Swipe between months",
-      "he": "החלקה בין חודשים"
     },
     {
       "name": "q_a4f67cde0771adda",
@@ -8485,6 +8495,11 @@
       "name": "q_fe01b214ced93e57",
       "en": "Type the words back in order. A phrase with one word wrong looks completely normal and restores nothing, and this is the only moment you can find that out cheaply.",
       "he": "הקלידו את המילים בחזרה לפי הסדר. משפט שבו מילה אחת שגויה נראה נורמלי לחלוטין ואינו משחזר דבר, וזה הרגע היחיד שבו תוכלו לגלות זאת בזול."
+    },
+    {
+      "name": "q_fe09a859f5885ef3",
+      "en": "Swipe and animations",
+      "he": "החלקה ואנימציות"
     },
     {
       "name": "q_fe81d5d73a35a2cf",
