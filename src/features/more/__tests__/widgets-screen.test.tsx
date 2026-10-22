@@ -20,6 +20,11 @@ jest.mock("../../../../modules/qashy-widgets", () => ({
   isAvailable: () => mockAvailable,
   getPlacedWidgets: async () => mockPlaced,
 }));
+// The Android switch is a Compose view, which has no native module under Jest: use the platform switch.
+jest.mock("@/components/ui/qashy-switch", () => ({
+  QashySwitch: jest.requireActual("@/components/ui/platform-switch")
+    .PlatformSwitch,
+}));
 jest.mock("@/data/device-local/widget-settings-store", () => ({
   readWidgetSettings: async () => {
     if (mockReadGate) await mockReadGate;

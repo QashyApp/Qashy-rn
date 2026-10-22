@@ -13,6 +13,7 @@ import {
 import { useTabLongPress } from "@/components/navigation/use-tab-long-press";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
+import { hapticSelection } from "@/services/haptics";
 import {
   BottomBarClearanceContext,
   floatingBarClearance,
@@ -128,6 +129,14 @@ function NativeTabsLayout() {
   // would push every screen down by a second status bar's worth.
   return (
     <NativeTabs
+      // Emitted before navigation, so `isFocused()` still reports the tab being left: a press on the
+      // tab that is already open (or one the native bar refused) gets no haptic, like the floating bar.
+      screenListeners={({ navigation }) => ({
+        tabPress: (event) => {
+          if (event.data?.isPrevented) return;
+          if (!navigation.isFocused()) hapticSelection();
+        },
+      })}
       tintColor={theme.accent}
       backgroundColor={theme.navBackground}
       iconColor={{ default: theme.textMuted, selected: theme.accent }}
