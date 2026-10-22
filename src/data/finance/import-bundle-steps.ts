@@ -121,10 +121,9 @@ export function importAccounts(run: ImportRun, bundle: ImportBundle) {
   const { liveAccounts, source, idOf, outcome, reject, firstSighting } = run;
   const accountIds = new Map<string, string>();
   const newAccounts: Account[] = [];
-  // `buildTransaction` refuses to post to an archived account, and an imported archived
-  // account has history that must still be importable. So the *view* used to build and
-  // validate holds a non-archived copy of each new account while the entity that is written
-  // keeps the flag from the backup.
+  // The *view* used to build and validate holds a non-archived copy of each new account, while
+  // the entity that is written keeps the flag from the backup. Why: `buildTransaction` refuses to post to an archived
+  // account, and an imported archived account has history that must still be importable.
   const buildAccounts: Account[] = [...liveAccounts];
   const takenAccountNames = new Set(
     liveAccounts.map((item) => normalizeName(item.name)),

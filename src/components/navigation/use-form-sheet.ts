@@ -11,12 +11,12 @@ export type OwnerRoute = "/overview" | "/transactions" | "/plan" | "/more";
 /**
  * Shared behaviour for the create/edit sheets.
  *
- * Two things every one of them needs and only one of them used to do:
+ * Two things every one of them needs:
  *
  * 1. Closing back to the owning section. `dismissTo` alone leaves the web history
  *    entry pointing at the sheet, so the projection behind it can render against a
- *    stale URL; replacing on the next frame settles it. Only the transaction sheet
- *    carried this, and the other six shared the gap.
+ *    stale URL; replacing on the next frame settles it. Why shared: only the
+ *    transaction sheet carried this, and the other six shared the gap.
  * 2. Guarding unsaved work. Every sheet is swipe-dismissible, and nothing asked
  *    before throwing a half-typed entry away.
  *

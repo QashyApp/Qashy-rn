@@ -27,8 +27,8 @@ import {
   deletionRecords,
   planEntityDeletion,
 } from "@/data/finance/deletion";
-import { runExternalImport } from "@/data/finance/external-import";
-import type { ExternalImportHost } from "@/data/finance/external-import-steps";
+import { runExternalImport } from "@/data/finance/import-bundle";
+import type { ExternalImportHost } from "@/data/finance/import-bundle-steps";
 import { assertMergedSetSafe } from "@/data/finance/merge-safety";
 import { queryTransactions } from "@/data/finance/queries";
 import {
@@ -183,7 +183,7 @@ export { MissingExchangeRateError } from "@/data/finance/rates";
  * - `merge-safety.ts`: the pure checks that gate a merged (remote) set
  * - `deletion.ts`: what deleting an entity takes with it
  * - `csv.ts`: CSV row parsing, import staging and export
- * - `external-import.ts` (and `external-import-steps.ts`): importing another app's backup
+ * - `import-bundle.ts` (and `import-bundle-steps.ts`): importing another app's backup
  */
 export class LocalFinanceRepository implements FinanceRepository {
   private state = createInitialState();

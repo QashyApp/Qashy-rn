@@ -8,12 +8,10 @@ const IS_WEB = process.env.EXPO_OS === "web";
 /**
  * Shared stack for the four tab sections.
  *
- * Native gets a real navigation header. It used to run `headerShown: false` with
- * the sections drawing their own headings, which meant Transactions, Plan, and
- * More had no visible title at all on Android — `PageHeading` returns
- * null off web — and Overview compensated with a hand-rolled duplicate of it.
- * The platform header brings back the title, and with it the standard
- * back affordance and the system's own scroll-edge treatment.
+ * Native gets a real navigation header, which supplies the section title, the standard
+ * back affordance and the system's own scroll-edge treatment. Why: with `headerShown: false`
+ * and the sections drawing their own headings, Transactions, Plan, and More had no visible
+ * title on Android (`PageHeading` returns null off web).
  *
  * Web keeps `headerShown: false`. The shell's persistent rail already names the
  * section, and the in-page `PageHeading` is what carries the `h1` a document

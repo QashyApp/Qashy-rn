@@ -188,7 +188,7 @@ export interface LanguageMigrationInput {
    * `settings.locale` there is only a guess from the device, so nothing is pinned.
    */
   readonly onboardingComplete: boolean;
-  /** `settings.locale`, the language this app used to display before it followed the device. */
+  /** `settings.locale`, the language the app displayed before it followed the device. */
   readonly legacyLocale: string;
   readonly deviceLocales: readonly string[];
   readonly android: boolean;

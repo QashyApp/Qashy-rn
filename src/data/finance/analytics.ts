@@ -27,7 +27,7 @@ import {
 } from "@/utils/date";
 import { addMinor, convertMinor, subtractMinor, sumMinor } from "@/utils/money";
 
-// Roughly a century of daily points. A dashboard range wider than this used to
+// Roughly a century of daily points. A wider dashboard range is rejected. Why: it would
 // truncate the daily series silently and return a chart that was simply wrong.
 const MAX_DASHBOARD_DAYS = 36_600;
 const MAX_NET_WORTH_MONTHS = 24;

@@ -31,7 +31,7 @@ Sync is the one deliberate exception to "no network". It is peer-to-peer and zer
 
 - `src/domain/` defines sync-ready entities and defaults.
 - `src/data/repository.ts` is the public `FinanceRepository` contract.
-- `src/data/local-finance-repository.ts` owns finance rules, queries, aggregates, recurrence, and CSV transactions. It keeps the stateful core (snapshot, mutation queue, caches, the `foo()` → `fooNow()` mutations), while the rules themselves are plain functions split by topic across `src/data/finance/` (validation, rates, budgets, recurring, analytics, deletion, CSV, external import, merge safety). The class doc comment lists which file holds what.
+- `src/data/local-finance-repository.ts` owns finance rules, queries, aggregates, recurrence, and CSV transactions. It keeps the stateful core (snapshot, mutation queue, caches, the `foo()` → `fooNow()` mutations), while the rules themselves are plain functions split by topic across `src/data/finance/` (validation, rates, budgets, recurring, analytics, deletion, CSV, importing another app's backup in `import-bundle.ts`, merge safety). The class doc comment lists which file holds what.
 - `src/data/storage.native.ts` persists native records with Expo SQLite, migrations, WAL mode, and exclusive transactions.
 - `src/data/storage.web.ts` persists web records in IndexedDB through Dexie. Do not replace it with Expo SQLite web support.
 - `src/providers/finance-provider.tsx` initializes and exposes the repository snapshot.

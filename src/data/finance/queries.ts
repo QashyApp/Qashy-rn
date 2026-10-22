@@ -64,10 +64,10 @@ export function queryTransactions(
       )
     )
       return false;
-    // Hierarchy-aware, matching `budgetSpend` and goal progress. Selecting a
-    // parent category used to return nothing for transactions filed under its
-    // children, so the same category could read "spent 240.00" in a budget while
-    // the transaction list filtered to it came back empty.
+    // Hierarchy-aware, matching `budgetSpend` and goal progress. Why: a parent category that
+    // matched only itself would return nothing for transactions filed under its children, so
+    // the same category could read "spent 240.00" in a budget while the transaction list
+    // filtered to it came back empty.
     if (matchesCategory && !matchesCategory(transaction.categoryId))
       return false;
     if (

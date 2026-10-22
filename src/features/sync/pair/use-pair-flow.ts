@@ -258,9 +258,10 @@ export function usePairFlow() {
         })
         .catch((reason: unknown) => {
           if (abort.signal.aborted) return;
-          // PairingHost has closed and zeroized this attempt at this point. Leaving its QR on
-          // screen until the timer reaches zero invited the other device to scan a secret that
-          // can no longer answer, which looked exactly like an expired-code retry bug.
+          // PairingHost has closed and zeroized this attempt at this point, so mark the code
+          // unusable now. Why: leaving its QR on screen until the timer reaches zero invites the
+          // other device to scan a secret that can no longer answer, which looks exactly like an
+          // expired-code retry bug.
           session.current = null;
           accept.current = null;
           setSas(null);

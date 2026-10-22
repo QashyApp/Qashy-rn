@@ -36,7 +36,7 @@ const ENTRANCE_START: Record<
 /**
  * The entrance, driven by a shared value rather than Reanimated's `entering`.
  *
- * Softening the presets used to mean `withInitialValues`, which makes Reanimated
+ * It does not use `withInitialValues` to soften the presets. Why: that makes Reanimated
  * generate a keyframe whose name is not in its built-in `Animations` registry.
  * On web that is the one branch of `setElementAnimation` that schedules cleanup,
  * and cleanup for an ENTERING animation calls `setElementPosition` — so roughly

@@ -322,7 +322,7 @@ export function NavigationItem({
         </Animated.View>
         {/* Mounted for the whole time the rail is compact, so only a breakpoint
             change adds or removes it. `aria-hidden` keeps a faded-out tooltip
-            out of the accessibility tree exactly as unmounting used to. */}
+            out of the accessibility tree exactly as unmounting would. */}
         {compact && !mobile && !m3 ? (
           <Animated.View
             aria-hidden={!showTooltip}

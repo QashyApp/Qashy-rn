@@ -427,7 +427,7 @@ export async function enableSync(
  * Joins a vault another device already holds.
  *
  * The joiner's half of pairing, called with what `PairingJoiner` returned and the identity it
- * used to earn it — the same identity, necessarily, because the host has already written that
+ * presented to earn it — the same identity, necessarily, because the host has already written that
  * device id and those public keys into its own roster.
  *
  * Key, roster, epoch, and base currency land together. A device that adopted the key but not

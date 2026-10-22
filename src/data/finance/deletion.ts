@@ -290,11 +290,11 @@ function ruleChangesFor(
       deletedIds.has(rule.template.categoryId)
     ) {
       const template = { ...rule.template, categoryId: null };
-      // Dropping the category removes one blocker, not necessarily every one:
-      // clearing `pausedByDependency` unconditionally used to strand a rule whose
-      // account is still archived, because both reactivation gates key off that
-      // flag. Only a rule that is paused *and* now has all of its dependencies
-      // satisfied may come back; a user-paused rule is left exactly as it is.
+      // Only reactivate a dependency-paused rule once all of its dependencies are satisfied;
+      // a user-paused rule is left exactly as it is. Why: dropping the category removes one
+      // blocker, not necessarily every one, and clearing `pausedByDependency` unconditionally
+      // would strand a rule whose account is still archived, because both reactivation gates
+      // key off that flag.
       // The sweep of archived data never resumes anything: the rule becomes an ordinary
       // paused schedule, and the user decides whether to turn it back on.
       if (options.sweep && rule.pausedByDependency) {

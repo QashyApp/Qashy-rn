@@ -152,7 +152,7 @@ export function PagerImpl({
   });
 
   // Mount the neighbours once the month swap's frames have run, or on the first touch if that is
-  // sooner. (RN 0.88 removed `InteractionManager`, which used to defer this.)
+  // sooner. (RN 0.88 removed `InteractionManager`, so this does not use it.)
   useEffect(() => {
     if (WEB || width <= 0) return;
     let inner = 0;

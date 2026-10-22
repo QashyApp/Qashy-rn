@@ -40,8 +40,8 @@ export const SIGNAL_IDLE_TIMEOUT_MS = 45_000;
 /**
  * A fixed, non-secret control frame emitted by the relay when a rendezvous has both parties.
  *
- * Sending a handshake hello before the second socket joined used to drop that hello at the
- * relay. The second side then received an authentication proof when it was expecting a hello,
+ * Senders wait for it before sending a handshake hello. Why: a hello sent before the second
+ * socket joined is dropped at the relay, and the second side then receives an authentication proof when it was expecting a hello,
  * which it quite correctly rejected as malformed. This marker is a liveness hint only: a
  * hostile relay can forge or omit it, but can never authenticate a handshake frame.
  */

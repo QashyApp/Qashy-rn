@@ -106,8 +106,8 @@ export function useCsvImport() {
       setSourceRows(table.rows);
       setHeaders(table.headers);
       setMapping(inferMapping(table.headers));
-      // Malformed rows no longer abort the file, but they must not disappear
-      // quietly either — the user needs to know what was left behind.
+      // Malformed rows are skipped rather than aborting the file, and they must not disappear
+      // quietly — the user needs to know what was left behind.
       if (table.rowErrors.length) {
         const lines = table.rowErrors.map((item) => item.lineNumber).join(", ");
         showError(

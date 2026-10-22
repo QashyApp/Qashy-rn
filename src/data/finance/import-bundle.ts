@@ -21,7 +21,7 @@ import {
   type ImportedRows,
   type ImportRun,
   type StoredRows,
-} from "@/data/finance/external-import-steps";
+} from "@/data/finance/import-bundle-steps";
 import { assertRecurringRuleGenerationSafe } from "@/data/finance/recurring";
 import { asRecords } from "@/data/finance/records";
 import { assertTransactionSetSafe } from "@/data/finance/safety";
@@ -43,7 +43,7 @@ import { externalImportId } from "@/utils/deterministic-id";
 import { updateEntity } from "@/utils/entity";
 
 // Re-exported for the repository, which builds the host an import runs against.
-export type { ExternalImportHost } from "@/data/finance/external-import-steps";
+export type { ExternalImportHost } from "@/data/finance/import-bundle-steps";
 
 /**
  * What a replace-import deletes: every finance entity the backup stands in for. Settings and

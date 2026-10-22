@@ -170,8 +170,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const lastReconcile = useRef(0);
   const reconcile = useCallback(() => {
     if (!financeRepository.getSnapshot().ready) return;
-    // Returning to a tab fires `visibilitychange`, `focus` and `pageshow` together. Each used
-    // to run a full reload; one in flight (or one that just finished) already covers the rest.
+    // Run at most one reload per return to a tab, which fires `visibilitychange`, `focus` and
+    // `pageshow` together: one in flight (or one that just finished) already covers the rest.
     if (reconciling.current) return;
     if (Date.now() - lastReconcile.current < RECONCILE_MIN_INTERVAL_MS) return;
     reconciling.current = true;

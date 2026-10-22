@@ -211,7 +211,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
       ]}
     >
       <ScreenContainer>
-        {/* Native no longer draws its own copy of this heading: the section
+        {/* Native does not draw its own copy of this heading: the section
               stack shows a real navigation header titled "Overview". Web keeps
               PageHeading, which is where the document's h1 lives. */}
         <View

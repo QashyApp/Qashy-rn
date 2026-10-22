@@ -7,10 +7,9 @@ import type { PropsWithChildren } from "react";
 import { classicTheme } from "@/theme/themes/classic";
 import { CONTENT_SECURITY_POLICY } from "@/utils/csp";
 
-// Derived from the same tokens the app renders with, rather than hand-copied. The
-// static shell used to carry its own `#F7F7FB`/`#121217` pair while the app painted
-// `#F6F7F9`/`#0E0F13`, so first paint stepped to a different colour in both schemes
-// and the address-bar tint never matched the page behind it.
+// Derived from the same tokens the app renders with, rather than hand-copied. Why: a separate
+// `#F7F7FB`/`#121217` pair in the static shell, against the app's `#F6F7F9`/`#0E0F13`, made first
+// paint step to a different colour in both schemes and the address-bar tint miss the page.
 const LIGHT_BACKGROUND = classicTheme.palette.light.background;
 const DARK_BACKGROUND = classicTheme.palette.dark.background;
 const QASHY_INDIGO = classicTheme.accent.default;
@@ -109,9 +108,9 @@ export default function Root({ children }: PropsWithChildren) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover"
         />
-        {/* Tints the address bar to match the page behind it. The light entry
-            used to be the indigo accent, which is not a surface the app ever
-            paints. QashyThemeProvider rewrites both once it knows whether the
+        {/* Tints the address bar to match the page behind it. The light entry is
+            the page background, not the indigo accent, which is not a surface
+            the app ever paints. QashyThemeProvider rewrites both once it knows whether the
             user has forced a mode instead of following the system. */}
         <meta
           id="qashy-theme-color-light"

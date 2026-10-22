@@ -83,8 +83,8 @@ function useWebDocumentTitle() {
         : DOCUMENT_TITLE;
     };
     apply(navigationRef.getCurrentOptions() as { title?: string } | undefined);
-    // The core no longer emits a dedicated `options` event, so re-read the focused
-    // route's options whenever the navigation state changes.
+    // Re-read the focused route's options whenever the navigation state changes. Why: the
+    // core emits no dedicated `options` event.
     return navigationRef.addListener("state", () => {
       apply(
         navigationRef.getCurrentOptions() as { title?: string } | undefined,
