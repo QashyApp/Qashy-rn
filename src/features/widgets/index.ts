@@ -5,7 +5,7 @@ export {
   subscribeWidgetSettings,
   updateWidgetSettings,
   writeWidgetSettings,
-} from "@/data/widget-settings-store";
+} from "@/data/device-local/widget-settings-store";
 export {
   configFor,
   defaultWidgetConfig,

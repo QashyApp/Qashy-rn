@@ -39,8 +39,12 @@ import { FormScreen } from "@/components/ui/form-screen";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { StatusPill } from "@/components/ui/status-pill";
-import { pickAsset, readAssetBytes, readAssetText } from "@/features/pick-file";
-import { saveFile } from "@/features/save-file";
+import {
+  pickAsset,
+  readAssetBytes,
+  readAssetText,
+} from "@/features/shared/pick-file";
+import { saveFile } from "@/features/shared/save-file";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceRepository } from "@/providers/finance-provider";
 import { useSync } from "@/providers/sync-provider";
@@ -71,7 +75,7 @@ import { BUNDLE_MIME, bundleFileName } from "@/sync/transport/file";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { toLocalDate, todayLocal } from "@/utils/date";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import {
   MAX_SYNC_IMPORT_BYTES,
   MAX_VAULT_IMPORT_BYTES,

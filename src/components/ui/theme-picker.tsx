@@ -11,7 +11,7 @@ import { accentTokens, useQashyTheme } from "@/theme/theme";
 import { listAvailableThemes } from "@/theme/themes/registry";
 import type { ThemeDefinition } from "@/theme/themes/types";
 import { fontStyle } from "@/theme/typography";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /**
  * One-line descriptions of the built-in themes, keyed by `theme.id`. They are English UI copy,

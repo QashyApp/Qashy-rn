@@ -1,7 +1,7 @@
 /**
  * Home-screen widget settings: types, defaults and fail-safe validation.
  *
- * Device-local by construction (they live in `sync_meta`, see `data/widget-settings-store.ts`),
+ * Device-local by construction (they live in `sync_meta`, see `data/device-local/widget-settings-store.ts`),
  * never in `AppSettings`, which replicates to peers. Pure: no I/O, no clock, no randomness.
  *
  * Validation never throws. Any invalid field falls back to its default, a config whose `kind`

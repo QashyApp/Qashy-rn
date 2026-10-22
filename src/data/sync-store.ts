@@ -107,7 +107,7 @@ export const SYNC_META = {
 
   /**
    * The user-authored themes on this device, as one JSON document of validated theme FILES
-   * (never the derived theme objects). See `data/custom-themes-store.ts`.
+   * (never the derived theme objects). See `data/device-local/custom-themes-store.ts`.
    *
    * Device-local like `overviewLayout`: written through `transact` so it never diffs into a
    * sync op, never held in `AppSettings` (which replicates), and never near the keystore.
@@ -116,7 +116,7 @@ export const SYNC_META = {
 
   /**
    * The home-screen widgets' per-widget appearance and the hide-amounts switch, serialized JSON.
-   * See `data/widget-settings-store.ts`.
+   * See `data/device-local/widget-settings-store.ts`.
    *
    * Device-local like `overviewLayout`: widgets are placed on this device's home screen, so their
    * ids and styling mean nothing to a peer. Written through `transact`, never `putMany`, so it
@@ -124,7 +124,7 @@ export const SYNC_META = {
    */
   widgetSettings: "widgetSettings",
 
-  // -- Background sync. Device-local opt-in; see `data/background-sync-store.ts`.
+  // -- Background sync. Device-local opt-in; see `data/device-local/background-sync-store.ts`.
 
   /**
    * `'1'` once the user has opted this device into a periodic background check-in (Android
@@ -136,7 +136,7 @@ export const SYNC_META = {
    */
   backgroundSync: "backgroundSync",
 
-  // -- App language. Device-local; see `data/language-preference-store.ts`.
+  // -- App language. Device-local; see `data/device-local/language-preference-store.ts`.
 
   /**
    * This device's app-language preference: `'system'` (follow the device, the default) or an

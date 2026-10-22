@@ -17,7 +17,7 @@ import {
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /** Material 3 caps a modal bottom sheet at 640dp wide. */
 const SHEET_MAX_WIDTH = 640;

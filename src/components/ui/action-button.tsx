@@ -9,7 +9,7 @@ import {
   hapticImpactLight,
   hapticSelection,
   hapticWarning,
-} from "@/utils/haptics";
+} from "@/services/haptics";
 import { insetHighlight } from "@/theme/highlight";
 import { withAlpha } from "@/theme/tokens";
 

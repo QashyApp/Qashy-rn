@@ -36,7 +36,7 @@ import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { moveMonth } from "@/utils/date";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 const WEB = process.env.EXPO_OS === "web";
 /** Pans that start this close to a screen edge are left to the system back gesture. */

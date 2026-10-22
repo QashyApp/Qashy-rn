@@ -26,7 +26,7 @@ jest.mock("@/data/local-finance-repository", () => ({
     },
   },
 }));
-jest.mock("@/data/widget-settings-store", () => ({
+jest.mock("@/data/device-local/widget-settings-store", () => ({
   subscribeWidgetSettings: (listener: () => void) => {
     mockSettingsListeners.add(listener);
     return () => mockSettingsListeners.delete(listener);

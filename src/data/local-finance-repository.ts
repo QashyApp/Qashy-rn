@@ -4,7 +4,7 @@ import {
   emptyImportCounts,
   orderParentsFirst,
   uniquifyName,
-} from "@/data/external-import";
+} from "@/data/import/external-import";
 import type {
   ExternalImportOutcome,
   ImportBundle,

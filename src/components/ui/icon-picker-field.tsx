@@ -30,7 +30,7 @@ import {
   type IconTopic,
 } from "@/theme/icon-catalog";
 import { fontStyle } from "@/theme/typography";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 import { emojiIconId, normalizeEmoji, parseIconId } from "@/utils/icon-id";
 
 type Tab = "suggested" | "all" | IconTopic | "custom";

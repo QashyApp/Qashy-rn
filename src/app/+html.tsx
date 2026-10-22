@@ -95,7 +95,7 @@ export default function Root({ children }: PropsWithChildren) {
         {/* Production only. The dev server rewrites the bundle on every save and talks to
             Metro over its own socket, and a policy fixed at build time cannot describe that
             without being loosened to the point of proving nothing. The exported `dist/` is
-            what ships and what `e2e/qashy.spec.ts` runs against, so that is where it holds. */}
+            what ships and what `e2e/pwa.spec.ts` runs against, so that is where it holds. */}
         {process.env.NODE_ENV === "production" ? (
           <meta
             httpEquiv="Content-Security-Policy"

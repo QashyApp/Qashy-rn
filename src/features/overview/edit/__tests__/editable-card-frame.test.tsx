@@ -51,7 +51,7 @@ jest.mock("@/localization/localization", () => ({
   }),
 }));
 
-jest.mock("@/utils/haptics", () => ({
+jest.mock("@/services/haptics", () => ({
   hapticSelection: jest.fn(),
 }));
 

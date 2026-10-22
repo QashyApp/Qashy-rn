@@ -2,8 +2,8 @@ import { Alert } from "react-native";
 
 import { storageFailureMessage } from "@/data/storage-error";
 import { translateCurrent } from "@/localization/localization";
-import { hapticError, hapticWarning } from "@/utils/haptics";
-import { webDialogStore } from "@/utils/web-dialog-store";
+import { hapticError, hapticWarning } from "@/services/haptics";
+import { webDialogStore } from "@/services/web-dialog-store";
 
 interface ConfirmOptions {
   title: string;

@@ -39,7 +39,7 @@ import { previewAccentTokens, useQashyTheme } from "@/theme/theme";
 import { getTheme, listAvailableThemes } from "@/theme/themes/registry";
 import { ACCENT_PRESETS, mixHex } from "@/theme/tokens";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 
 const THEME_MODE_ICONS: Record<ThemeMode, string> = {
   system: "circle.lefthalf.filled",

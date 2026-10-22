@@ -80,7 +80,7 @@ import type { SpaceScale } from "@/theme/themes/types";
 import { usePreventScreenCaptureWhile } from "@/features/sync/use-screen-capture-guard";
 import { errorMessage } from "@/utils/confirm";
 import { nowIso } from "@/utils/entity";
-import { hapticError, hapticSuccess, hapticWarning } from "@/utils/haptics";
+import { hapticError, hapticSuccess, hapticWarning } from "@/services/haptics";
 
 type Role = "host" | "join";
 type Stage = "role" | "code" | "confirm" | "done";

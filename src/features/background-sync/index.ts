@@ -6,7 +6,7 @@
 import {
   readBackgroundSync,
   writeBackgroundSync,
-} from "@/data/background-sync-store";
+} from "@/data/device-local/background-sync-store";
 import {
   reconcileBackgroundSchedule,
   type ScheduleSyncState,

@@ -33,13 +33,13 @@ import { useQashyTheme } from "@/theme/theme";
 import { ACCENT_PRESETS } from "@/theme/tokens";
 import { accountDeletionMessage } from "@/utils/account-impact";
 import { accountTypeLabel } from "@/utils/labels";
-import { useTurnOnAutomaticRates } from "@/features/use-automatic-rates";
+import { useTurnOnAutomaticRates } from "@/features/shared/use-automatic-rates";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import {
   validateCurrencyCode,
   validateMoneyInput,
 } from "@/utils/form-validation";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import {
   minorToLocalizedDecimalString,
   parseMoney,

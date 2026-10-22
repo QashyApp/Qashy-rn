@@ -2,7 +2,7 @@ import {
   readBackgroundSync,
   subscribeBackgroundSync,
   writeBackgroundSync,
-} from "@/data/background-sync-store";
+} from "@/data/device-local/background-sync-store";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import { SYNC_META, writeMeta } from "@/data/sync-store";
 import { initialSettings } from "@/domain/defaults";

@@ -175,6 +175,6 @@ Use the semantic tokens from `useQashyTheme()`, never a hex string or a light/da
 ## Device-local, no network
 
 - `themeId`, `themeMode`, `accentSource`, `accentHex` and the four font and icon-set overrides are `deviceLocal` in `src/sync/oplog/registry.ts`, so choosing a theme on one device never changes another. Do not add theme settings to a synced field group.
-- Custom themes are not in `AppSettings` either. They live in a device-local `sync_meta` key (`SYNC_META.customThemes`) behind `src/data/custom-themes-store.ts`, written with `transact` so no sync op is captured.
+- Custom themes are not in `AppSettings` either. They live in a device-local `sync_meta` key (`SYNC_META.customThemes`) behind `src/data/device-local/custom-themes-store.ts`, written with `transact` so no sync op is captured.
 - Themes are data and bundled assets. No remote fonts, images or textures, no fetching, no clock. The CSP and the "no network" rule stand, and the source hygiene test enforces the obvious cases.
 - Both light and dark are required for every theme, built-in or custom.

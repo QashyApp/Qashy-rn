@@ -16,7 +16,7 @@ import {
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { endOfMonth, startOfMonth, toLocalDate } from "@/utils/date";
-import { useNow } from "@/utils/use-now";
+import { useNow } from "@/hooks/use-now";
 import { formatMoney } from "@/utils/money";
 import type {
   WidgetConfigSheetProps,

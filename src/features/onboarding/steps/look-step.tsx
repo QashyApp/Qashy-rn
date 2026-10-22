@@ -14,7 +14,7 @@ import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { getTheme } from "@/theme/themes/registry";
 import { ACCENT_PRESET_NAMES, ACCENT_PRESETS } from "@/theme/tokens";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 import { formatMoney } from "@/utils/money";
 
 const THEMES = [

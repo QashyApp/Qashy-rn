@@ -2,7 +2,7 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { MotionPressable, MotionView } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { ACCENT_PRESET_NAMES, readableTextColor } from "@/theme/tokens";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /** A coarse, human name for a hex color, so screen readers never announce raw hex digits. */
 export function describeColor(hex: string) {

@@ -37,7 +37,7 @@ import {
   categoryKindLabel,
 } from "@/utils/labels";
 import { formatMoney } from "@/utils/money";
-import { useNow } from "@/utils/use-now";
+import { useNow } from "@/hooks/use-now";
 
 // A settings row is a 38pt icon tile plus a 12pt gap, so hairlines start where
 // the text does. Running them edge to edge cut the icons off from their labels

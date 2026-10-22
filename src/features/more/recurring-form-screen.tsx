@@ -26,7 +26,7 @@ import { AmountHero } from "@/components/finance/amount-hero";
 import {
   useRateLookup,
   useTurnOnAutomaticRates,
-} from "@/features/use-automatic-rates";
+} from "@/features/shared/use-automatic-rates";
 import type { RatePair } from "@/data/exchange-rates/rate-service";
 import {
   feeInputFor,
@@ -51,7 +51,7 @@ import {
   validateMoneyInput,
   validatePositiveInteger,
 } from "@/utils/form-validation";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import {
   localizeDecimalString,
   minorToLocalizedDecimalString,

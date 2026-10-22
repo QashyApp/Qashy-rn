@@ -13,7 +13,7 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { endOfMonth, startOfMonth, toLocalDate } from "@/utils/date";
-import { useNow } from "@/utils/use-now";
+import { useNow } from "@/hooks/use-now";
 
 export function useDashboardRange(fromDate: string, toDate: string) {
   // The React Compiler drops the `void state.x` reads below as dead code and then memoizes on

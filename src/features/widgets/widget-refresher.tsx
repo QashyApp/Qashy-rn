@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { AppState } from "react-native";
 
 import { financeRepository } from "@/data/local-finance-repository";
-import { subscribeWidgetSettings } from "@/data/widget-settings-store";
+import { subscribeWidgetSettings } from "@/data/device-local/widget-settings-store";
 import { requestPreviewRegistration } from "@/features/widgets/preview-registration";
 import { refreshWidgets } from "@/features/widgets/refresher";
 import { customThemesStore } from "@/theme/custom/use-custom-themes";

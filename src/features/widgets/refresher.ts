@@ -9,8 +9,8 @@ import {
   financeRepository,
   syncingStorage,
 } from "@/data/local-finance-repository";
-import { loadCustomThemeFiles } from "@/data/custom-themes-store";
-import { updateWidgetSettings } from "@/data/widget-settings-store";
+import { loadCustomThemeFiles } from "@/data/device-local/custom-themes-store";
+import { updateWidgetSettings } from "@/data/device-local/widget-settings-store";
 import { createStandaloneTranslator } from "@/localization/standalone";
 import { knownPlacedWidgets } from "@/features/widgets/kinds";
 import { createWidgetRefresher } from "@/features/widgets/refresher-core";

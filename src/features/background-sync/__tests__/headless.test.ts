@@ -38,7 +38,7 @@ jest.mock("@/data/local-finance-repository", () => ({
     return Object.assign(mockStorage, { setDeviceId: mockSetDeviceId });
   },
 }));
-jest.mock("@/data/background-sync-store", () => ({
+jest.mock("@/data/device-local/background-sync-store", () => ({
   readBackgroundSync: async () => mockSetting,
 }));
 jest.mock("@/sync/keystore/platform", () => ({

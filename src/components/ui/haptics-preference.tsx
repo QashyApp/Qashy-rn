@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 
 import { useFinanceSettings } from "@/providers/finance-provider";
-import { setHapticsEnabled } from "@/utils/haptics";
+import { setHapticsEnabled } from "@/services/haptics";
 
 /** Applies the device's `hapticsEnabled` setting to the haptic helpers. Mount inside the finance provider. */
 export function HapticsPreference() {

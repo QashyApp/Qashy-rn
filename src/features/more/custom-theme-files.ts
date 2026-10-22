@@ -7,8 +7,8 @@
 
 import { File as ExpoFile } from "expo-file-system";
 
-import { fileExtension, pickAsset } from "@/features/pick-file";
-import { saveFile } from "@/features/save-file";
+import { fileExtension, pickAsset } from "@/features/shared/pick-file";
+import { saveFile } from "@/features/shared/save-file";
 import { MAX_THEME_FILE_BYTES } from "@/theme/custom/theme-import";
 
 /**

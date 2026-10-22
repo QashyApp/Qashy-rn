@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/js-segmented-control";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 export type { SegmentOption };
 

@@ -38,7 +38,7 @@ import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
+import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 
 /**
  * Route options for a creation/editing sheet on Android.

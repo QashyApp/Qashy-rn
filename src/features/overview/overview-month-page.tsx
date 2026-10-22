@@ -46,7 +46,7 @@ import {
 import { useFinanceState } from "@/providers/finance-provider";
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
-import { useTurnOnAutomaticRates } from "@/features/use-automatic-rates";
+import { useTurnOnAutomaticRates } from "@/features/shared/use-automatic-rates";
 import { amountTone } from "@/utils/labels";
 import { formatMoney } from "@/utils/money";
 

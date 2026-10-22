@@ -4,7 +4,7 @@ import type { ColorValue, SwitchProps } from "react-native";
 
 import { PlatformSwitch } from "@/components/ui/platform-switch";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /**
  * The app's one toggle. On the flat (Material 3) engine this is the real Jetpack Compose

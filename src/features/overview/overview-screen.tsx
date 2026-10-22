@@ -34,7 +34,7 @@ import { resolveBottomChromeInset, useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
 import { startOfMonth } from "@/utils/date";
-import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
+import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 
 interface UndoState {
   readonly card: OverviewCard;

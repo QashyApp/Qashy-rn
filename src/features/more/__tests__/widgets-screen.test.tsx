@@ -20,7 +20,7 @@ jest.mock("../../../../modules/qashy-widgets", () => ({
   isAvailable: () => mockAvailable,
   getPlacedWidgets: async () => mockPlaced,
 }));
-jest.mock("@/data/widget-settings-store", () => ({
+jest.mock("@/data/device-local/widget-settings-store", () => ({
   readWidgetSettings: async () => {
     if (mockReadGate) await mockReadGate;
     return mockSettings;

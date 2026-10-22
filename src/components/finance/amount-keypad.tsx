@@ -8,7 +8,7 @@ import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { type AmountOperator } from "@/utils/amount-expression";
 import { applyKeypadKey, type KeypadKey } from "@/utils/amount-keypad";
-import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
+import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 import { decimalSymbolFor } from "@/utils/money";
 
 /** Phones and tablets get the on-screen keypad; a desktop browser keeps typing into the field. */

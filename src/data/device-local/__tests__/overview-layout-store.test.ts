@@ -2,7 +2,7 @@ import { MemoryStorageAdapter } from "@/data/memory-storage";
 import {
   readOverviewLayout,
   writeOverviewLayout,
-} from "@/data/overview-layout-store";
+} from "@/data/device-local/overview-layout-store";
 import { SYNC_META, writeMeta } from "@/data/sync-store";
 import {
   DEFAULT_OVERVIEW_LAYOUT,

@@ -18,7 +18,7 @@ import {
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { contrastRatio } from "@/theme/tokens";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 // Material 3 switch geometry: a 52x32 track with a 2px outline, and a thumb that grows
 // from 16px (off) to 24px (on) and slides across.

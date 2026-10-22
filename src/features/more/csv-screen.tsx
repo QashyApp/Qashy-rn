@@ -19,8 +19,12 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { FormScreen } from "@/components/ui/form-screen";
-import { fileExtension, pickAsset, readAssetText } from "@/features/pick-file";
-import { saveFile } from "@/features/save-file";
+import {
+  fileExtension,
+  pickAsset,
+  readAssetText,
+} from "@/features/shared/pick-file";
+import { saveFile } from "@/features/shared/save-file";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
@@ -30,7 +34,7 @@ import {
   parseCsvTable,
 } from "@/utils/csv";
 import { todayLocal } from "@/utils/date";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import { MAX_CSV_IMPORT_BYTES } from "@/utils/file-size";
 import { exchangeRateService } from "@/providers/exchange-rate-provider";
 import { ExternalImportLauncher } from "@/features/more/external-import-launcher";

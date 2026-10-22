@@ -36,7 +36,11 @@ import {
   type ImportSourceId,
   type ImportSourceInfo,
 } from "@/data/import/types";
-import { fileExtension, pickAsset, readAssetBytes } from "@/features/pick-file";
+import {
+  fileExtension,
+  pickAsset,
+  readAssetBytes,
+} from "@/features/shared/pick-file";
 import { clearWidgetData } from "@/features/widgets";
 import { useLocalization } from "@/localization/localization";
 import {
@@ -47,7 +51,7 @@ import { exchangeRateService } from "@/providers/exchange-rate-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { MAX_BACKUP_IMPORT_BYTES } from "@/utils/file-size";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import { formatMoney } from "@/utils/money";
 
 type Stage = "source" | "file" | "review" | "done";

@@ -37,7 +37,7 @@ import {
 import {
   useRateLookup,
   useTurnOnAutomaticRates,
-} from "@/features/use-automatic-rates";
+} from "@/features/shared/use-automatic-rates";
 import {
   feeInputFor,
   useFeeBreakdown,
@@ -63,7 +63,7 @@ import {
   validateMoneyInput,
   validatePositiveDecimal,
 } from "@/utils/form-validation";
-import { hapticError, hapticSuccess } from "@/utils/haptics";
+import { hapticError, hapticSuccess } from "@/services/haptics";
 import {
   localizeDecimalString,
   minorToLocalizedDecimalString,
