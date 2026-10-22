@@ -29,3 +29,5 @@ framework's own code on the exact pixel size of each breakpoint, so what clips h
 device. Glyphs come from Robolectric's fonts, the launcher's rounded corner clipping and the real
 wallpaper are not reproduced, and a device font may be a little wider or narrower than the
 fonts here (the layouts measure text with a small margin for that).
+
+The device-case test renders USD amounts of -$57,306.00 at several font scales (including a wider-glyph emulation) and fails on any ellipsized amount, clipping, or full and compact amounts mixed in one widget. At a 130% font scale only the amount rules are enforced; three lines cannot fit a two-row widget there.

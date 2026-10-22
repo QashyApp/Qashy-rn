@@ -19,6 +19,7 @@ import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.LocalAppWidgetOptions
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
 import androidx.glance.appwidget.PreviewSizeMode
@@ -97,6 +98,8 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
     data: WidgetData,
     colors: WidgetColors,
     size: DpSize,
+    /** [size] narrowed to what the launcher reports (see [WidgetSizes.fitSize]); text is fitted to this. */
+    fitSize: DpSize,
   )
 
   /**
@@ -111,7 +114,7 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
     provideContent {
       val colors = WidgetTheme.resolve(context, data.style)
       WidgetContainer(radius, colors.background, false, null) {
-        Content(context, snapshot, data, colors, LocalSize.current)
+        Content(context, snapshot, data, colors, LocalSize.current, WidgetSizes.fitSize(context, LocalSize.current, LocalAppWidgetOptions.current))
       }
     }
   }
@@ -144,7 +147,7 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
       } else {
         val rootAction = rootUri?.let { openAction(context, it) }
         WidgetContainer(radius, colors.background, style.frosted, rootAction) {
-          Content(context, current, data, colors, LocalSize.current)
+          Content(context, current, data, colors, LocalSize.current, WidgetSizes.fitSize(context, LocalSize.current, LocalAppWidgetOptions.current))
         }
       }
     }

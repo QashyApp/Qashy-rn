@@ -21,12 +21,12 @@
     android:width="48dp"
     android:height="48dp"
     android:drawable="@drawable/qashy_preview_button"
-    android:end="14dp"
-    android:gravity="end|center_vertical" />
+    android:right="14dp"
+    android:gravity="right|center_vertical" />
   <item
     android:width="24dp"
     android:height="24dp"
     android:drawable="@drawable/qashy_preview_plus"
-    android:end="26dp"
-    android:gravity="end|center_vertical" />
+    android:right="26dp"
+    android:gravity="right|center_vertical" />
 </layer-list>

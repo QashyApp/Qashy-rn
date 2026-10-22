@@ -26,7 +26,6 @@ import {
   BatchDeleteBar,
   useBatchDelete,
 } from "@/features/more/use-batch-delete";
-import { PaceBar } from "@/features/plan/pace-bar";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
@@ -448,10 +447,9 @@ function BudgetCard({
           >{`${t("of")} ${money(effectiveLimitMinor)}`}</AppText>
         </View>
 
-        <PaceBar
+        <ProgressBar
           label={`${budget.name}: ${t("Budget progress")}`}
           value={pace.spentRatio}
-          elapsedRatio={pace.elapsedRatio}
           color={barColor}
         />
 

@@ -132,16 +132,16 @@ describe("buildWidgetSnapshot", () => {
     jest.useRealTimers();
   });
 
-  it("produces the version-3 envelope with labels and per-widget style", async () => {
+  it("produces the version-4 envelope with labels and per-widget style", async () => {
     const { repository } = await setup();
     const snapshot = build(repository, {
       widgets: {
         "1": { ...defaultWidgetConfig("quickAdd"), opacity: 80 },
       },
     });
-    expect(SNAPSHOT_VERSION).toBe(3);
+    expect(SNAPSHOT_VERSION).toBe(4);
     expect(snapshot).toMatchObject({
-      version: 3,
+      version: 4,
       generatedAt: NOW.toISOString(),
       hideAmounts: false,
       labels: {
@@ -378,8 +378,6 @@ describe("buildWidgetSnapshot", () => {
         limitCompact: "$500.00",
         remainingCompact: "$375.00 left",
       });
-      // 15 of 31 days.
-      expect(budget?.elapsed).toBeCloseTo(15 / 31);
     });
 
     it("says over budget in words, with the overspent amount", async () => {

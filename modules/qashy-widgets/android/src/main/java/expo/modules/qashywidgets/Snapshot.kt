@@ -54,7 +54,7 @@ class Snapshot(val hideAmounts: Boolean, val labels: Labels, val widgets: Map<In
  * backups or device transfer.
  */
 object SnapshotStore {
-  private const val VERSION = 3
+  private const val VERSION = 4
 
   // Serializes writers (the temp file name is fixed) and keeps the flow in step with the file.
   private val lock = Any()
@@ -88,7 +88,7 @@ object SnapshotStore {
     return state.value
   }
 
-  /** Throws when the JSON is not a version-3 snapshot, so a bad write never replaces good data. */
+  /** Throws when the JSON is not a version-4 snapshot, so a bad write never replaces good data. */
   fun write(context: Context, json: String) {
     val parsed = requireNotNull(parse(json)) { "Not a version $VERSION widget snapshot" }
     synchronized(lock) {
@@ -124,7 +124,7 @@ object SnapshotStore {
       null
     }
 
-  /** Null on a parse failure or any version other than 3; unknown fields are ignored. */
+  /** Null on a parse failure or any version other than 4; unknown fields are ignored. */
   fun parse(json: String): Snapshot? =
     try {
       val root = JSONObject(json)

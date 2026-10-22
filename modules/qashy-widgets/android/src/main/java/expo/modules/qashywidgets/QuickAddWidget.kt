@@ -1,6 +1,7 @@
 package expo.modules.qashywidgets
 
 import android.content.Context
+import android.view.View
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
@@ -41,6 +42,7 @@ private val BUTTON_DRAWN_SHORT = 40.dp
 private val EDGE = 12.dp
 private val BUTTON_GAP = 6.dp
 private val BLOCK_GAP = 8.dp
+private val LINE_GAP = 6.dp
 
 /**
  * A metric the user switched off is null; the amounts are already masked when amounts are hidden.
@@ -110,12 +112,13 @@ class QuickAddWidget : QashyWidget(KIND_QUICK_ADD) {
   }
 
   @Composable
-  override fun Content(context: Context, snapshot: Snapshot, data: WidgetData, colors: WidgetColors, size: DpSize) {
+  override fun Content(context: Context, snapshot: Snapshot, data: WidgetData, colors: WidgetColors, size: DpSize, fitSize: DpSize) {
     val q = data.payload as? QuickAddData ?: return
     val labels = snapshot.labels
     val cols = WidgetSizes.cols(size)
     val rows = WidgetSizes.rows(size)
     val fit = TextFit(context)
+    val rtl = isRtl(context)
     val addAction = openAction(context, "qashy:///transaction")
     val overviewAction = openAction(context, "qashy:///overview")
     val metrics = orderedMetrics(q, labels, colors)
@@ -123,11 +126,20 @@ class QuickAddWidget : QashyWidget(KIND_QUICK_ADD) {
     when {
       // Nothing to show, or no room for it: the add button alone, the whole widget its target.
       metrics.isEmpty() || cols == 1 -> JustTheButton(labels, colors, addAction, drawn = if (rows == 1) BUTTON_DRAWN_SHORT else BUTTON_DRAWN)
-      rows == 1 -> OneRow(labels, colors, metrics, cols, size, fit, addAction, overviewAction)
-      else -> Tall(q, labels, colors, metrics, cols, rows, size, fit, addAction, overviewAction)
+      rows == 1 -> OneRow(labels, colors, metrics, cols, fitSize, fit, rtl, addAction, overviewAction)
+      else -> Tall(q, labels, colors, metrics, cols, rows, fitSize, fit, rtl, addAction, overviewAction)
     }
   }
 }
+
+/**
+ * The add button is always on the physical right, in every language. A Glance Row (like any row
+ * with a locale layout direction) puts its first child on the right in RTL, so in RTL the button
+ * is the first child; the metrics still run in the reading direction. This reads the app's own
+ * layout direction, which is the one the widget's text and labels were produced for.
+ */
+private fun isRtl(context: Context): Boolean =
+  context.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
 
 @Composable
 private fun JustTheButton(labels: Labels, colors: WidgetColors, addAction: Action, drawn: Dp) {
@@ -148,30 +160,37 @@ private fun OneRow(
   cols: Int,
   size: DpSize,
   fit: TextFit,
+  rtl: Boolean,
   addAction: Action,
   overviewAction: Action,
 ) {
   val shown = all.take(if (cols == 2) 1 else if (cols == 3) 2 else 3)
   val space = size.width - EDGE - BUTTON_GAP - BUTTON_TOUCH - BUTTON_GAP
   val blockWidth = (space - BLOCK_GAP * (shown.size - 1)) / shown.size
-  val valueSp = if (cols >= 4) 14 else 13
+  // One decision for every figure in the widget: all full or all compact, at one size.
+  val plan = fit.plan(shown.map { Amount(it.full, it.compact) }, shown.map { blockWidth }, if (cols >= 4) 14 else 13)
 
-  // The row runs start to end, so the button sits at the end: on the right, and on the left in RTL.
   Row(
-    modifier = GlanceModifier.fillMaxSize().padding(start = EDGE, end = BUTTON_GAP),
+    modifier = GlanceModifier.fillMaxSize().padding(start = if (rtl) BUTTON_GAP else EDGE, end = if (rtl) EDGE else BUTTON_GAP),
     verticalAlignment = Alignment.CenterVertically,
   ) {
+    if (rtl) {
+      PlusButton(colors, BUTTON_DRAWN_SHORT, addAction, labels.add)
+      Spacer(modifier = GlanceModifier.width(BUTTON_GAP))
+    }
     Row(
       modifier = GlanceModifier.defaultWeight().fillMaxHeight().clickable(overviewAction),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       shown.forEachIndexed { i, m ->
         if (i > 0) Spacer(modifier = GlanceModifier.width(BLOCK_GAP))
-        StatBlock(m, colors, fit, blockWidth, valueSp, GlanceModifier.defaultWeight())
+        StatBlock(m, plan, colors, fit, blockWidth, GlanceModifier.defaultWeight())
       }
     }
-    Spacer(modifier = GlanceModifier.width(BUTTON_GAP))
-    PlusButton(colors, BUTTON_DRAWN_SHORT, addAction, labels.add)
+    if (!rtl) {
+      Spacer(modifier = GlanceModifier.width(BUTTON_GAP))
+      PlusButton(colors, BUTTON_DRAWN_SHORT, addAction, labels.add)
+    }
   }
 }
 
@@ -190,21 +209,29 @@ private fun Tall(
   rows: Int,
   size: DpSize,
   fit: TextFit,
+  rtl: Boolean,
   addAction: Action,
   overviewAction: Action,
 ) {
   val inner = size.width - EDGE - EDGE
   val monthSp = if (cols <= 2) 11 else 12
-  val month = fit.ellipsize(q.monthLabel, monthSp, false, inner - BUTTON_TOUCH - BUTTON_GAP)
+  // The month is a label, but half a month ("July 20…") says nothing: it is shown whole or not at all.
+  val month = q.monthLabel.takeIf { fit.fits(it, monthSp, false, inner - BUTTON_TOUCH - BUTTON_GAP) } ?: ""
   val blocks = cols >= 4 && rows == 2
 
   Column(
     modifier = GlanceModifier.fillMaxSize().padding(start = EDGE, end = EDGE, top = 6.dp, bottom = 6.dp),
   ) {
     Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+      if (rtl) {
+        PlusButton(colors, BUTTON_DRAWN, addAction, labels.add)
+        Spacer(modifier = GlanceModifier.width(BUTTON_GAP))
+      }
       Text(month, modifier = GlanceModifier.defaultWeight(), style = textStyle(colors.muted, monthSp), maxLines = 1)
-      Spacer(modifier = GlanceModifier.width(BUTTON_GAP))
-      PlusButton(colors, BUTTON_DRAWN, addAction, labels.add)
+      if (!rtl) {
+        Spacer(modifier = GlanceModifier.width(BUTTON_GAP))
+        PlusButton(colors, BUTTON_DRAWN, addAction, labels.add)
+      }
     }
     Column(
       modifier = GlanceModifier.fillMaxWidth().defaultWeight().clickable(overviewAction),
@@ -212,18 +239,26 @@ private fun Tall(
     ) {
       if (blocks) {
         val blockWidth = (inner - BLOCK_GAP * (metrics.size - 1)) / metrics.size
+        val plan = fit.plan(metrics.map { Amount(it.full, it.compact) }, metrics.map { blockWidth }, 18)
         Row(modifier = GlanceModifier.fillMaxWidth()) {
           metrics.forEachIndexed { i, m ->
             if (i > 0) Spacer(modifier = GlanceModifier.width(BLOCK_GAP))
-            StatBlock(m, colors, fit, blockWidth, 18, GlanceModifier.defaultWeight())
+            StatBlock(m, plan, colors, fit, blockWidth, GlanceModifier.defaultWeight())
           }
         }
       } else {
         val labelSp = if (rows >= 3) 13 else if (cols <= 2) 11 else 12
-        val valueSp = if (rows >= 3) 20 else if (cols >= 3) 14 else 12
+        // A large font scale can make the lines taller than the room under the month row.
+        val roomForLines = size.height.value - 12f - BUTTON_DRAWN.value
+        val gaps = (metrics.size - 1) * (if (rows >= 3) 8f else 2f)
+        var valueSp = if (rows >= 3) 20 else if (cols >= 3) 14 else 12
+        while (valueSp > 10 && metrics.size * maxOf(fit.lineHeight(valueSp, true), fit.lineHeight(labelSp)) + gaps > roomForLines) valueSp--
+        // The amount keeps its room and the label gives way, down to a few characters of it.
+        val widths = metrics.map { inner - LINE_GAP - minOf(fit.width(it.label, labelSp), 48f).dp }
+        val plan = fit.plan(metrics.map { Amount(it.full, it.compact) }, widths, valueSp)
         metrics.forEachIndexed { i, m ->
           if (i > 0) Spacer(modifier = GlanceModifier.height(if (rows >= 3) 8.dp else 2.dp))
-          StatLine(m, colors, fit, inner, labelSp, valueSp)
+          StatLine(m, plan, colors, fit, inner, labelSp)
         }
       }
     }
@@ -252,34 +287,28 @@ private fun PlusButton(colors: WidgetColors, drawn: Dp, action: Action? = null, 
   }
 }
 
-/** Label over amount; the amount is the full one when it fits [width], else the compact one. */
+/** Label over amount; the label may be cut with an ellipsis, the amount is as [plan] decided. */
 @Composable
-private fun StatBlock(m: Metric, colors: WidgetColors, fit: TextFit, width: Dp, valueSp: Int, modifier: GlanceModifier) {
+private fun StatBlock(m: Metric, plan: AmountPlan, colors: WidgetColors, fit: TextFit, width: Dp, modifier: GlanceModifier) {
   Column(modifier = modifier) {
     Text(fit.ellipsize(m.label, 11, false, width), style = textStyle(colors.muted, 11), maxLines = 1)
-    Text(fit.amount(m.full, m.compact, valueSp, true, width), style = textStyle(m.tone, valueSp, bold = true), maxLines = 1)
+    Text(plan.text(Amount(m.full, m.compact)), style = textStyle(m.tone, plan.sp, bold = true), maxLines = 1)
   }
 }
 
 /** Label at the start, amount at the end; the amount keeps its room and the label gives way. */
 @Composable
-private fun StatLine(m: Metric, colors: WidgetColors, fit: TextFit, width: Dp, labelSp: Int, valueSp: Int) {
-  val labelWidth = fit.width(m.label, labelSp)
-  val gap = 6.dp
-  val value = if (fit.fits(m.full, valueSp, true, width - gap - minOf(labelWidth, 48f).dp)) {
-    m.full
-  } else {
-    m.compact
-  }
-  val valueWidth = fit.width(value, valueSp, true).dp
+private fun StatLine(m: Metric, plan: AmountPlan, colors: WidgetColors, fit: TextFit, width: Dp, labelSp: Int) {
+  val value = plan.text(Amount(m.full, m.compact))
+  val valueWidth = fit.width(value, plan.sp, true).dp
   Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
     Text(
-      fit.ellipsize(m.label, labelSp, false, width - valueWidth - gap),
+      fit.ellipsize(m.label, labelSp, false, width - valueWidth - LINE_GAP),
       modifier = GlanceModifier.defaultWeight(),
       style = textStyle(colors.muted, labelSp),
       maxLines = 1,
     )
-    Text(value, style = textStyle(m.tone, valueSp, bold = true, align = TextAlign.End), maxLines = 1)
+    Text(value, style = textStyle(m.tone, plan.sp, bold = true, align = TextAlign.End), maxLines = 1)
   }
 }
 

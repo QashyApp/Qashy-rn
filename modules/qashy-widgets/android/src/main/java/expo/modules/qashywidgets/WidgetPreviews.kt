@@ -28,7 +28,7 @@ internal fun sampleLabels(context: Context) = Labels(
  */
 object WidgetPreviews {
   /** Bump when a kind's preview visuals or sample strings change. */
-  const val PREVIEW_VERSION = 2
+  const val PREVIEW_VERSION = 3
 
   private const val PREFS = "qashy_widget_previews"
   private const val TAG = "QashyWidgets"

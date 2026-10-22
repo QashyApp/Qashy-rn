@@ -3,7 +3,7 @@
  *
  * Pure: everything it needs arrives as arguments (the repository reads through a narrow
  * `WidgetDataSource`, the translator, the locale, the clock), so it is deterministic and can be
- * tested without a device. The wire format is version 3 and fixed; the native side only renders it.
+ * tested without a device. The wire format is version 4 and fixed; the native side only renders it.
  *
  * Everything user-visible is already formatted here: the native widgets never see an amount as a
  * number. With `hideAmounts` every amount of the quick-add widget is "•••" and the budget widget
@@ -21,7 +21,7 @@ import { configFor, type WidgetSettings } from "@/features/widgets/settings";
 
 export { MASKED_AMOUNT } from "@/features/widgets/kinds/shared";
 
-export const SNAPSHOT_VERSION = 3;
+export const SNAPSHOT_VERSION = 4;
 
 export type BudgetPaceKey = "under" | "onTrack" | "projectedOver" | "over";
 
@@ -71,8 +71,6 @@ export interface WidgetSnapshotEntry {
     percent: number;
     /** `percent` as a 0 to 1 fill, clamped. */
     progress: number;
-    /** How far through the period today is, 0 to 1. */
-    elapsed: number;
     /** True once spending is past the limit; drawn with words and a mark, never color alone. */
     over: boolean;
     status: BudgetPaceKey;

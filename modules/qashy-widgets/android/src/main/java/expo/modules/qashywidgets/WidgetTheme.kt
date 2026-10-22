@@ -156,8 +156,8 @@ object WidgetTheme {
       // White or gray (text on an accent surface): only the value can move.
       hsv[1] < 0.15f -> hsv[2] *= 0.6f
       darkSurface -> {
-        hsv[1] = (hsv[1] + 0.32f).coerceAtMost(1f)
-        hsv[2] = (hsv[2] * 0.78f).coerceIn(0.35f, 0.85f)
+        hsv[1] = (hsv[1] + 0.4f).coerceAtMost(1f)
+        hsv[2] = (hsv[2] * 0.72f).coerceIn(0.45f, 0.8f)
       }
       else -> {
         hsv[1] = (hsv[1] * 1.08f + 0.06f).coerceAtMost(1f)

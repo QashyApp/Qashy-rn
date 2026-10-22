@@ -1,5 +1,9 @@
 package expo.modules.qashywidgets
 
+import android.appwidget.AppWidgetManager
+import android.content.Context
+import android.content.res.Configuration
+import android.os.Bundle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
@@ -36,6 +40,25 @@ internal object WidgetSizes {
     DpSize(WIDTHS[3], HEIGHTS[1]),
     DpSize(WIDTHS[3], HEIGHTS[2]),
   )
+
+  /**
+   * The size text is fitted against: the smaller, per axis, of the layout's breakpoint and what
+   * the launcher reports in the widget [options] (portrait: minimum width by maximum height;
+   * landscape: maximum width by minimum height). The breakpoint is never larger than the real size
+   * on a launcher that reports honestly, but some (and OEM grids with their own padding) hand out
+   * more than they show, so the conservative one wins. It only narrows text decisions; the layout
+   * itself still comes from the breakpoint.
+   */
+  fun fitSize(context: Context, layout: DpSize, options: Bundle?): DpSize {
+    if (options == null) return layout
+    val landscape = context.resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val reportedW = options.getInt(if (landscape) AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH else AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH, 0)
+    val reportedH = options.getInt(if (landscape) AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT else AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT, 0)
+    return DpSize(
+      if (reportedW > 0) minOf(layout.width, reportedW.dp) else layout.width,
+      if (reportedH > 0) minOf(layout.height, reportedH.dp) else layout.height,
+    )
+  }
 
   /** The number of cells wide (1 to 5) a chosen breakpoint stands for. */
   fun cols(size: DpSize): Int = count(WIDTHS, size.width)

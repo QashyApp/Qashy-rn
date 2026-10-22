@@ -42,7 +42,7 @@ internal object Fixtures {
       put(payloadKey, payload)
     }
     return JSONObject().apply {
-      put("version", 3)
+      put("version", 4)
       put("generatedAt", "2026-07-15T10:00:00.000Z")
       put("hideAmounts", hide)
       put("labels", JSONObject().apply {
@@ -74,6 +74,14 @@ internal object Fixtures {
 
   private fun cur(lang: Lang, number: String) = if (lang == Lang.EN) "$$number" else "$number ₪"
 
+  /** The strings of the device case (USD, net worth -$57,306.00): full and compact forms. */
+  val DEVICE_FULL = setOf("-$57,306.00", "$57,306.00")
+  val DEVICE_COMPACT = setOf("-$57.3K", "$57.3K")
+
+  val DEVICE_CASE = Scenario("device") { l ->
+    quickAdd(l, "-$57,306.00", "$57,306.00", "$0.00", "-$57.3K", "$57.3K", "$0.00", "netWorth")
+  }
+
   val QUICK_ADD = listOf(
     Scenario("normal") { l ->
       quickAdd(l, cur(l, "12,480.00"), cur(l, "1,320.50"), cur(l, "3,200.00"), cur(l, "12.5K"), cur(l, "1.3K"), cur(l, "3.2K"), "netWorth")
@@ -100,7 +108,7 @@ internal object Fixtures {
   // ---- Budget ------------------------------------------------------------------------------
 
   private fun budget(
-    lang: Lang, name: String, percent: Int, elapsed: Double,
+    lang: Lang, name: String, percent: Int, elapsed: Double = 0.0,
     spent: String?, limit: String?, remaining: String?,
     spentC: String?, limitC: String?, remainingC: String?,
     statusText: String, hide: Boolean = false, empty: Boolean = false,
@@ -113,7 +121,6 @@ internal object Fixtures {
       put("period", if (empty) "" else if (lang == Lang.EN) "July 2026" else "יולי 2026")
       put("percent", percent)
       put("progress", (percent / 100.0).coerceAtMost(1.0))
-      put("elapsed", elapsed)
       put("over", percent > 100)
       put("status", "onTrack")
       put("statusText", statusText)
@@ -137,6 +144,10 @@ internal object Fixtures {
     },
     Scenario("over130") { l ->
       budget(l, name(l), 130, 0.55, cur(l, "650.00"), cur(l, "500.00"), over(l, "150.00"), cur(l, "650"), cur(l, "500"), over(l, "150"), overText(l))
+    },
+    // Far past the limit: the second lap is closed, and must still read as a lap.
+    Scenario("over819") { l ->
+      budget(l, name(l), 819, 0.4, cur(l, "4,095.00"), cur(l, "500.00"), over(l, "3,595.00"), cur(l, "4.1K"), cur(l, "500"), over(l, "3.6K"), overText(l))
     },
     Scenario("over250") { l ->
       budget(l, name(l), 250, 0.4, cur(l, "1,250.00"), cur(l, "500.00"), over(l, "750.00"), cur(l, "1.3K"), cur(l, "500"), over(l, "750"), overText(l))

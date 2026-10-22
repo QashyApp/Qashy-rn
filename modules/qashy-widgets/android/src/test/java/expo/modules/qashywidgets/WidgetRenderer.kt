@@ -35,7 +35,7 @@ internal object WidgetRenderer {
   /** The widget id every test snapshot is addressed to. */
   const val APP_WIDGET_ID = 7
 
-  class Result(val bitmap: Bitmap, val problems: List<String>)
+  class Result(val bitmap: Bitmap, val problems: List<String>, val texts: List<String>)
 
   /** Glance's `AppWidgetId` is internal to its module; a test needs one with a chosen id. */
   private fun glanceId(appWidgetId: Int): GlanceId =
@@ -43,7 +43,7 @@ internal object WidgetRenderer {
       .getConstructor(Int::class.javaPrimitiveType)
       .newInstance(appWidgetId) as GlanceId
 
-  fun render(context: Context, widget: QashyWidget, size: DpSize, rtl: Boolean, night: Boolean, preview: Boolean = false): Result {
+  fun render(context: Context, widget: QashyWidget, size: DpSize, rtl: Boolean, night: Boolean, preview: Boolean = false, textScaleX: Float = 1f): Result {
     val views = runBlocking {
       if (preview) {
         widget.composeForPreview(context, android.appwidget.AppWidgetProviderInfo.WIDGET_CATEGORY_HOME_SCREEN)
@@ -58,6 +58,8 @@ internal object WidgetRenderer {
     val root = FrameLayout(context)
     root.layoutDirection = if (rtl) View.LAYOUT_DIRECTION_RTL else View.LAYOUT_DIRECTION_LTR
     val view = views.apply(context, root)
+    // Emulates an OEM font that is wider than the one the layouts measure with.
+    if (textScaleX != 1f) widen(view, textScaleX)
     root.addView(view, FrameLayout.LayoutParams(w, h))
     root.measure(View.MeasureSpec.makeMeasureSpec(w, View.MeasureSpec.EXACTLY), View.MeasureSpec.makeMeasureSpec(h, View.MeasureSpec.EXACTLY))
     root.layout(0, 0, w, h)
@@ -68,8 +70,18 @@ internal object WidgetRenderer {
     canvas.drawColor(if (night) 0xFF2A2B33.toInt() else 0xFFCBD0D9.toInt())
     canvas.translate(margin.toFloat(), margin.toFloat())
     root.draw(canvas)
-    return Result(out, problems(root, density))
+    return Result(out, problems(root, density), texts(root))
   }
+
+  private fun widen(v: View, scaleX: Float) {
+    if (v is TextView) v.textScaleX = scaleX
+    if (v is ViewGroup) for (i in 0 until v.childCount) widen(v.getChildAt(i), scaleX)
+  }
+
+  /** The text of every TextView in the widget. */
+  private fun texts(v: View): List<String> =
+    (if (v is TextView && v.text.isNotEmpty()) listOf(v.text.toString()) else emptyList()) +
+      (if (v is ViewGroup) (0 until v.childCount).flatMap { texts(v.getChildAt(it)) } else emptyList())
 
   /** What is clipped or sticks out: a text wider than its box, or any view outside the widget. */
   private fun problems(root: View, density: Float): List<String> {
@@ -87,6 +99,9 @@ internal object WidgetRenderer {
           if (layout != null) {
             val widest = (0 until layout.lineCount).maxOf { layout.getLineWidth(it) }
             if (widest > room + 1) found += "\"${v.text}\" is ${(widest / density).roundToInt()}dp wide in ${(room / density).roundToInt()}dp"
+            // The TextView's own ellipsis, or ours on something with figures in it: an amount was cut.
+            if ((0 until layout.lineCount).any { layout.getEllipsisCount(it) > 0 }) found += "\"${v.text}\" is ellipsized by the TextView"
+            if (v.text.any { it in "$₪•" } && v.text.contains('…')) found += "\"${v.text}\" has an ellipsis"
             if (layout.lineCount > 1 && v.maxLines == 1) found += "\"${v.text}\" wraps"
             if (v.height > 0 && layout.height > v.height - v.compoundPaddingTop - v.compoundPaddingBottom + 1) {
               found += "\"${v.text}\" is ${(layout.height / density).roundToInt()}dp tall in ${(v.height / density).roundToInt()}dp"

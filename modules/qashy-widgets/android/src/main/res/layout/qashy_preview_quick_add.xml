@@ -1,12 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Picker preview for Android 12 to 14: plain views a launcher can inflate for a RemoteViews
      provider, filled with fixed sample strings. Android 15 and later get a Glance-rendered one.
-     It matches the 3x1 layout: two figures side by side (compact amounts) and the add button. -->
+     It matches the 3x1 layout, with the add button always on the physical right (the root is
+     left to right, the figures follow the locale): two figures side by side (compact amounts) and the add button. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
   android:layout_width="match_parent"
   android:layout_height="match_parent"
   android:background="@drawable/qashy_preview_background"
   android:gravity="center_vertical"
+  android:layoutDirection="ltr"
   android:orientation="horizontal"
   android:paddingStart="12dp"
   android:paddingEnd="6dp">
@@ -15,6 +17,7 @@
     android:layout_width="0dp"
     android:layout_height="wrap_content"
     android:layout_weight="1"
+    android:layoutDirection="locale"
     android:orientation="horizontal">
     <LinearLayout
       android:layout_width="0dp"

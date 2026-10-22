@@ -45,7 +45,6 @@ class BudgetData(
   val period: String,
   val percent: Int,
   val progress: Float,
-  val elapsed: Float,
   val over: Boolean,
   val statusText: String,
   val spent: String?,
@@ -84,7 +83,6 @@ internal fun parseBudget(entry: JSONObject): BudgetData? =
       period = o.optString("period"),
       percent = o.optInt("percent", 0).coerceIn(0, 999),
       progress = o.optDouble("progress", 0.0).toFloat().coerceIn(0f, 1f),
-      elapsed = o.optDouble("elapsed", 0.0).toFloat().coerceIn(0f, 1f),
       over = o.optBoolean("over", false),
       statusText = o.optString("statusText"),
       spent = o.optStringOrNull("spent"),
@@ -111,7 +109,6 @@ class BudgetWidget : QashyWidget(KIND_BUDGET) {
         period = context.getString(R.string.qashy_preview_month),
         percent = 62,
         progress = 0.62f,
-        elapsed = 0.5f,
         over = false,
         statusText = context.getString(R.string.qashy_preview_budget_status),
         spent = context.getString(R.string.qashy_preview_budget_spent),
@@ -122,20 +119,20 @@ class BudgetWidget : QashyWidget(KIND_BUDGET) {
   }
 
   @Composable
-  override fun Content(context: Context, snapshot: Snapshot, data: WidgetData, colors: WidgetColors, size: DpSize) {
+  override fun Content(context: Context, snapshot: Snapshot, data: WidgetData, colors: WidgetColors, size: DpSize, fitSize: DpSize) {
     val b = data.payload as? BudgetData ?: return
     val density = context.resources.displayMetrics.density
     val cols = WidgetSizes.cols(size)
     val rows = WidgetSizes.rows(size)
     val fit = TextFit(context)
     when {
-      b.empty -> EmptyBudget(b, colors, fit, size)
+      b.empty -> EmptyBudget(b, colors, fit, fitSize)
       // One row: a ring that is only its percentage, or a bar with more and more around it.
-      rows == 1 && cols == 1 -> MiniRing(b, colors, fit, size, density)
-      rows == 1 -> BarLayout(b, colors, fit, size, cols, density)
+      rows == 1 && cols == 1 -> MiniRing(b, colors, fit, fitSize, density)
+      rows == 1 -> BarLayout(b, colors, fit, fitSize, cols, density)
       // Two or more rows: a ring, with its name under it when narrow and details beside it when wide.
-      cols <= 2 -> RingWithName(b, colors, fit, size, density)
-      else -> RingWithDetails(b, colors, fit, size, cols, rows, density)
+      cols <= 2 -> RingWithName(b, colors, fit, fitSize, density)
+      else -> RingWithDetails(b, colors, fit, fitSize, cols, rows, density)
     }
   }
 }
@@ -169,8 +166,8 @@ private fun EmptyBudget(b: BudgetData, colors: WidgetColors, fit: TextFit, size:
 /** The ring (and its overflow lap) as stacked Images, bottom first. */
 @Composable
 private fun MeterRing(b: BudgetData, colors: WidgetColors, ringSize: Dp, density: Float) {
-  val layers = remember(b.progress, b.overflow, b.elapsed, ringSize, density) {
-    Meter.ring(b.progress, b.overflow, b.elapsed, ringSize.value, density)
+  val layers = remember(b.progress, b.overflow, ringSize, density) {
+    Meter.ring(b.progress, b.overflow, ringSize.value, density)
   }
   MeterLayerImages(layers, b, colors, GlanceModifier.fillMaxSize())
 }
@@ -186,6 +183,15 @@ private fun MeterLayerImages(layers: MeterLayers, b: BudgetData, colors: WidgetC
       contentScale = scale,
       colorFilter = ColorFilter.tint(colors.accent),
     )
+    layers.overflow?.let {
+      Image(
+        provider = ImageProvider(it),
+        contentDescription = null,
+        modifier = modifier,
+        contentScale = scale,
+        colorFilter = ColorFilter.tint(colors.accentDeep),
+      )
+    }
     layers.shadow?.let {
       Image(
         provider = ImageProvider(it),
@@ -195,7 +201,7 @@ private fun MeterLayerImages(layers: MeterLayers, b: BudgetData, colors: WidgetC
         colorFilter = ColorFilter.tint(colors.shadow),
       )
     }
-    layers.overflow?.let {
+    layers.cap?.let {
       Image(
         provider = ImageProvider(it),
         contentDescription = null,
@@ -242,8 +248,8 @@ private fun MiniRing(b: BudgetData, colors: WidgetColors, fit: TextFit, size: Dp
 private fun BarLayout(b: BudgetData, colors: WidgetColors, fit: TextFit, size: DpSize, cols: Int, density: Float) {
   val inner = size.width - EDGE * 2
   val barWidth = inner
-  val layers = remember(b.progress, b.overflow, b.elapsed, barWidth, density) {
-    Meter.bar(b.progress, b.overflow, b.elapsed, barWidth.value, BAR_HEIGHT.value, density)
+  val layers = remember(b.progress, b.overflow, barWidth, density) {
+    Meter.bar(b.progress, b.overflow, barWidth.value, BAR_HEIGHT.value, density)
   }
   val titleSp = 12
   val percent = if (b.over && cols >= 3) "$OVER_MARK ${b.percentText}" else b.percentText
@@ -269,12 +275,15 @@ private fun BarLayout(b: BudgetData, colors: WidgetColors, fit: TextFit, size: D
       val sp = 11
       val status = if (b.over) "$OVER_MARK ${b.statusText}" else b.statusText
       val statusColor = if (b.over) colors.negative else colors.muted
-      val remaining = b.remaining?.let { fit.amount(it, b.remainingCompact ?: it, sp, true, inner) }
+      // One amount here, so the decision is its own: full, else compact, else smaller.
+      val plan = b.remaining?.let { fit.plan(listOf(Amount(it, b.remainingCompact ?: it)), listOf(inner), sp) }
+      val remaining = b.remaining?.let { plan!!.text(Amount(it, b.remainingCompact ?: it)) }
+      val remainingSp = plan?.sp ?: sp
       Row(modifier = GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         if (remaining != null) {
-          val remainingWidth = fit.width(remaining, sp, true).dp
+          val remainingWidth = fit.width(remaining, remainingSp, true).dp
           if (cols >= 4) {
-            Text(remaining, modifier = GlanceModifier.defaultWeight(), style = textStyle(colors.text, sp, bold = true), maxLines = 1)
+            Text(remaining, modifier = GlanceModifier.defaultWeight(), style = textStyle(colors.text, remainingSp, bold = true), maxLines = 1)
             Spacer(modifier = GlanceModifier.width(8.dp))
             Text(
               fit.ellipsize(status, sp, b.over, inner - remainingWidth - 8.dp),
@@ -282,7 +291,7 @@ private fun BarLayout(b: BudgetData, colors: WidgetColors, fit: TextFit, size: D
               maxLines = 1,
             )
           } else {
-            Text(remaining, style = textStyle(colors.text, sp, bold = true), maxLines = 1)
+            Text(remaining, style = textStyle(colors.text, remainingSp, bold = true), maxLines = 1)
           }
         } else {
           // Amounts are hidden: the pace wording alone.
@@ -325,7 +334,7 @@ private fun RingWithDetails(b: BudgetData, colors: WidgetColors, fit: TextFit, s
   val ringSize = if (rows >= 3) 104.dp else if (cols >= 4) 84.dp else 72.dp
   val gap = 12.dp
   val textWidth = size.width - EDGE * 2 - ringSize - gap
-  val remaining = b.remaining?.let { fit.amount(it, b.remainingCompact ?: it, 14, true, textWidth) }
+  val remainingPlan = b.remaining?.let { fit.plan(listOf(Amount(it, b.remainingCompact ?: it)), listOf(textWidth), 14) }
   // "+30%" only where there is room for it beside the wording; the ring already says 130%.
   val overflow = if (cols >= 4) b.overflowText else null
 
@@ -341,7 +350,7 @@ private fun RingWithDetails(b: BudgetData, colors: WidgetColors, fit: TextFit, s
         Text(fit.ellipsize(b.period, 11, false, textWidth), style = textStyle(colors.muted, 11), maxLines = 1)
       }
       Spacer(modifier = GlanceModifier.height(4.dp))
-      remaining?.let { Text(it, style = textStyle(colors.text, 14, bold = true), maxLines = 1) }
+      remainingPlan?.let { Text(it.text(Amount(b.remaining!!, b.remainingCompact ?: b.remaining)), style = textStyle(colors.text, it.sp, bold = true), maxLines = 1) }
       // Past the limit: how far, then the wording, each with room to spare or cut by measure.
       if (b.over) {
         val mark = if (overflow != null) "$OVER_MARK $overflow" else OVER_MARK
