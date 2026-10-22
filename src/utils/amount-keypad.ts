@@ -103,9 +103,12 @@ export class ExpressionBuffer {
   private current: string;
   /** What was pushed and has not yet come back as a prop, oldest first. */
   private pending: string[] = [];
+  /** The prop the last reconcile took in; a render repeating it brings nothing new. */
+  private lastProp: string;
 
   constructor(initial: string) {
     this.current = initial;
+    this.lastProp = initial;
   }
 
   get value() {
@@ -119,6 +122,10 @@ export class ExpressionBuffer {
 
   /** Takes in the prop the keypad is rendered with. Safe to call on every render. */
   reconcile(prop: string) {
+    // A re-render with the same (possibly stale) prop: its echo was already taken in, and treating it
+    // as a change from outside would rewind the text past keys pressed since.
+    if (prop === this.lastProp) return;
+    this.lastProp = prop;
     if (prop === this.current) {
       this.pending.length = 0;
       return;

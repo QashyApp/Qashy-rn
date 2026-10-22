@@ -105,4 +105,26 @@ describe("ExpressionBuffer", () => {
     apply(buffer, digit("1"));
     expect(buffer.value).toBe("91");
   });
+
+  it("ignores a stale prop rendered more than once", () => {
+    const buffer = new ExpressionBuffer("");
+    apply(buffer, digit("1"));
+    apply(buffer, digit("2"));
+    buffer.reconcile("1");
+    buffer.reconcile("1");
+    apply(buffer, digit("3"));
+    expect(buffer.value).toBe("123");
+  });
+
+  it("keeps a backspace when the echo before it renders again", () => {
+    const buffer = new ExpressionBuffer("");
+    apply(buffer, digit("5"));
+    buffer.reconcile("5");
+    apply(buffer, { type: "backspace" });
+    buffer.reconcile("5");
+    expect(buffer.value).toBe("");
+    buffer.reconcile("");
+    apply(buffer, digit("7"));
+    expect(buffer.value).toBe("7");
+  });
 });
