@@ -1,5 +1,6 @@
 import {
   createContext,
+  useId,
   use,
   useCallback,
   useEffect,
@@ -8,7 +9,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Modal, Pressable, View } from "react-native";
+import { BackHandler, Modal, Pressable, StyleSheet, View } from "react-native";
 import Animated, {
   ReduceMotion,
   runOnJS,
@@ -24,6 +25,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
 import { motionCurves } from "@/components/ui/motion";
+import { useOverlay } from "@/components/ui/overlay-host";
 import type { CurrencyCode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
@@ -98,12 +100,19 @@ const OVERSHOOT_BLEED = 48;
  * it dims, and the form never resizes or scrolls underneath it. Because the form is covered, the
  * keypad shows the amount being typed itself. "Set amount", a tap on the dimmed screen, or back on
  * Android all finish the calculation and close it.
+ *
+ * Where the app has an overlay host (Android), the layer is drawn there, in the app's own window,
+ * and stays mounted once it has been opened. A `Modal` would be a separate window on Android that
+ * swallows every tap while it slides away and is rebuilt on each use, so the field could not be
+ * tapped again for a moment after closing. On the web the layer is a `Modal`, a DOM portal that
+ * touches pass through.
  */
 export function CalculatorHost({ children }: { children: ReactNode }) {
   const [active, setActive] = useState<{
     id: string;
     config: CalculatorFieldConfig;
   } | null>(null);
+  const layerKey = useId();
   const mountedAt = useRef(0);
   useEffect(() => {
     mountedAt.current = Date.now();
@@ -112,6 +121,33 @@ export function CalculatorHost({ children }: { children: ReactNode }) {
     undefined,
   );
   useEffect(() => () => clearTimeout(openTimer.current), []);
+
+  const closeLayer = useCallback(() => setActive(null), []);
+  const overlay = useOverlay();
+  // Once opened, the layer stays in the overlay host (hidden) until this host unmounts, so a reopen
+  // neither rebuilds nor re-measures it.
+  const [opened, setOpened] = useState(false);
+  if (active && !opened) setOpened(true);
+  const config = active?.config;
+  const layer = useMemo(
+    () => (
+      <CalculatorLayer
+        config={config}
+        onClose={closeLayer}
+        windowed={Boolean(overlay)}
+      />
+    ),
+    [config, closeLayer, overlay],
+  );
+  const modal = Boolean(config);
+  useEffect(() => {
+    if (!overlay || !opened) return;
+    overlay.set(layerKey, { node: layer, modal });
+  }, [overlay, opened, layerKey, layer, modal]);
+  useEffect(() => {
+    if (!overlay) return;
+    return () => overlay.set(layerKey, null);
+  }, [overlay, layerKey]);
 
   const api = useMemo<CalculatorHostApi>(
     () => ({
@@ -145,10 +181,7 @@ export function CalculatorHost({ children }: { children: ReactNode }) {
   return (
     <CalculatorHostContext value={api}>
       {children}
-      <CalculatorLayer
-        config={active?.config}
-        onClose={() => setActive(null)}
-      />
+      {overlay ? null : layer}
     </CalculatorHostContext>
   );
 }
@@ -156,9 +189,12 @@ export function CalculatorHost({ children }: { children: ReactNode }) {
 function CalculatorLayer({
   config,
   onClose,
+  windowed,
 }: {
   config: CalculatorFieldConfig | undefined;
   onClose: () => void;
+  /** True when the layer is drawn in the app's own window (it then outlives each use). */
+  windowed: boolean;
 }) {
   const theme = useQashyTheme();
   const { space, radius } = theme;
@@ -180,7 +216,8 @@ function CalculatorLayer({
     (show: boolean) => {
       const settled = (finished?: boolean) => {
         "worklet";
-        if (finished && !show) runOnJS(setHeld)(undefined);
+        // A windowed layer keeps its last keys and its measured height for the next use.
+        if (finished && !show && !windowed) runOnJS(setHeld)(undefined);
       };
       if (level === "off") {
         progress.set(withTiming(show ? 1 : 0, { duration: 0 }, settled));
@@ -204,7 +241,7 @@ function CalculatorLayer({
         withSpring(show ? 1 : 0, show ? openSpring : closeSpring, settled),
       );
     },
-    [level, progress],
+    [level, progress, windowed],
   );
   useEffect(() => {
     wantVisible.current = visible;
@@ -212,11 +249,11 @@ function CalculatorLayer({
     if (panelHeight.get() > 0) animate(visible);
   }, [visible, animate, panelHeight]);
   useEffect(() => {
-    if (!held) {
+    if (!held && !windowed) {
       panelHeight.set(0);
       progress.set(0);
     }
-  }, [held, panelHeight, progress]);
+  }, [held, windowed, panelHeight, progress]);
 
   const scrim = useAnimatedStyle(() => ({ opacity: progress.get() }));
   const slide = useAnimatedStyle(() => {
@@ -242,23 +279,38 @@ function CalculatorLayer({
     onClose();
   };
 
+  // Back finishes the calculation, as a `Modal`'s back request did. It registers when the keypad
+  // becomes visible, after the sheet underneath registered its own, and the latest listener is
+  // called first, so back closes the keypad before it closes the sheet.
+  const latestDone = useRef(done);
+  useEffect(() => {
+    latestDone.current = done;
+  });
+  useEffect(() => {
+    if (!windowed || !visible) return;
+    const subscription = BackHandler.addEventListener(
+      "hardwareBackPress",
+      () => {
+        latestDone.current();
+        return true;
+      },
+    );
+    return () => subscription.remove();
+  }, [windowed, visible]);
+
   if (!held) return null;
   const sheet = theme.materialControls
     ? { backgroundColor: theme.surfaceMuted }
     : materialStyle(theme, "overlay");
-  return (
-    <Modal
-      transparent
-      visible
-      animationType="none"
-      statusBarTranslucent
-      navigationBarTranslucent
-      onRequestClose={done}
+  const content = (
+    <View
+      pointerEvents={visible ? "auto" : "none"}
+      // A hidden layer is off screen and out of reach of screen readers and touches.
+      importantForAccessibility={visible ? "auto" : "no-hide-descendants"}
+      accessibilityElementsHidden={!visible}
+      style={windowed ? StyleSheet.absoluteFill : { flex: 1 }}
     >
-      <View
-        pointerEvents={visible ? "auto" : "none"}
-        style={{ flex: 1, justifyContent: "flex-end" }}
-      >
+      <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Animated.View
           style={[
             { position: "absolute", inset: 0, backgroundColor: theme.scrim },
@@ -347,6 +399,19 @@ function CalculatorLayer({
           <ActionButton title="Set amount" icon="checkmark" onPress={done} />
         </Animated.View>
       </View>
+    </View>
+  );
+  if (windowed) return content;
+  return (
+    <Modal
+      transparent
+      visible
+      animationType="none"
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={done}
+    >
+      {content}
     </Modal>
   );
 }

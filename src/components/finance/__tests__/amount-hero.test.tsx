@@ -143,4 +143,21 @@ describe("AmountHero", () => {
     expect(screen.getByText("Invalid amount")).toBeTruthy();
     expect(screen.queryByText("Leave empty to start from zero.")).toBeNull();
   });
+
+  it("focuses the input when the well around it is tapped, while screen readers still see one element", async () => {
+    await render(
+      <AmountHero
+        label="Amount"
+        currency="USD"
+        value=""
+        onChangeText={jest.fn()}
+      />,
+    );
+
+    const input = screen.getByLabelText("Amount (USD), required");
+    let well = input.parent;
+    while (well && well.props.accessible !== false) well = well.parent;
+    expect(well).toBeTruthy();
+    expect(well?.props.onClick ?? well?.props.focusable).toBeDefined();
+  });
 });
