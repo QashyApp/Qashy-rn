@@ -185,8 +185,9 @@ export function AppearanceScreen() {
           ...evaluation.warnings.map((line) => t(line)),
         ].join("\n"),
       );
-      await changeTheme(evaluation.file.id);
-      hapticSuccess();
+      // A failed apply has already buzzed an error, and a confirmed replace has already buzzed a warning.
+      const applied = await changeTheme(evaluation.file.id);
+      if (applied && !evaluation.replaces) hapticSuccess();
     } catch (reason) {
       showError("Couldn’t import theme", errorMessage(reason, "Try again."));
     } finally {

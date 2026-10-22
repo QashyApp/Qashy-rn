@@ -107,6 +107,8 @@ export function SyncScreen() {
     kind: Exclude<Busy, null>,
     work: () => Promise<unknown>,
     failure: string,
+    /** The user already confirmed a destructive dialog, which buzzed; a second buzz would stack. */
+    confirmed = false,
   ) => {
     // A ref, not `busy`: a second tap inside the same render would still see the old state.
     if (busyRef.current) return;
@@ -117,7 +119,7 @@ export function SyncScreen() {
       await work();
       acted = true;
       await refresh();
-      hapticSuccess();
+      if (!confirmed) hapticSuccess();
     } catch (reason) {
       // Only the action can claim "nothing was changed". Once it has succeeded, a failed refresh
       // leaves the change in place and the message has to say so.
@@ -155,6 +157,7 @@ export function SyncScreen() {
       "rotate",
       () => rotateVaultKey(setup),
       "Couldn’t replace the vault key",
+      true,
     );
   };
 
@@ -170,6 +173,7 @@ export function SyncScreen() {
       "leave",
       () => disableSync(setup, { forget: true }),
       "Couldn’t leave the vault",
+      true,
     );
   };
 
