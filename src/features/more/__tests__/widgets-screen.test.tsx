@@ -7,7 +7,7 @@ import {
 } from "@/features/widgets/settings";
 
 let mockAvailable = true;
-let mockPlaced: { id: number; kind: "transactions" | "summary" }[] = [];
+let mockPlaced: { id: number; kind: "quickAdd" | "budget" }[] = [];
 let mockParams: { widgetId?: string } = {};
 let mockSettings: WidgetSettings = { hideAmounts: false, widgets: {} };
 let mockReadGate: Promise<void> | null = null;
@@ -47,9 +47,10 @@ jest.mock("@/features/more/widget-transparency-slider", () => {
 });
 jest.mock("@/providers/finance-provider", () => ({
   useFinanceState: () => ({
-    accounts: [
-      { id: "a1", name: "Cash", currency: "USD", archived: false },
-      { id: "a2", name: "Old", currency: "EUR", archived: true },
+    budgets: [
+      { id: "b1", name: "Groceries", archived: false },
+      { id: "b2", name: "Old plan", archived: true },
+      { id: "b3", name: "Gone", archived: false, deletedAt: "2026-01-01" },
     ],
   }),
 }));
@@ -98,34 +99,44 @@ describe("WidgetsScreen", () => {
 
   it("numbers several widgets of one kind and edits one without touching the others", async () => {
     mockPlaced = [
-      { id: 12, kind: "summary" },
-      { id: 7, kind: "transactions" },
-      { id: 9, kind: "transactions" },
+      { id: 12, kind: "quickAdd" },
+      { id: 7, kind: "budget" },
+      { id: 9, kind: "budget" },
     ];
     await render(<WidgetsScreen />);
     await settle();
-    expect(screen.getByText("Transactions widget 1")).toBeTruthy();
-    expect(screen.getByText("Transactions widget 2")).toBeTruthy();
-    expect(screen.getByText("Summary widget")).toBeTruthy();
-    // Archived accounts are not offered.
-    expect(screen.queryByText("Old")).toBeNull();
+    expect(screen.getByText("Budget widget 1")).toBeTruthy();
+    expect(screen.getByText("Budget widget 2")).toBeTruthy();
+    expect(screen.getByText("Quick add widget")).toBeTruthy();
+    // Archived budgets are not offered.
+    expect(screen.queryByText("Old plan")).toBeNull();
 
-    await fireEvent.press(screen.getByRole("radio", { name: "6 months" }));
+    // The switch comes first; "Spent" is also an option of the small-widget choice below it.
+    await fireEvent(screen.getAllByLabelText("Spent")[0], "valueChange", false);
     await settle();
     expect(mockSettings.widgets["12"]).toMatchObject({
-      kind: "summary",
-      graphMonths: 6,
+      kind: "quickAdd",
+      showNetWorth: true,
+      showSpent: false,
+      showEarned: true,
+    });
+    // Turning a metric off leaves two to choose between for the small widget: pick Income.
+    await fireEvent.press(screen.getByRole("radio", { name: "Income" }));
+    await settle();
+    expect(mockSettings.widgets["12"]).toMatchObject({
+      primaryMetric: "earned",
     });
     expect(mockSettings.widgets["7"]).toBeUndefined();
 
     await fireEvent.press(
-      screen.getAllByRole("radio", { name: "Cash, USD" })[1],
+      screen.getAllByRole("radio", { name: "Groceries" })[1],
     );
     await settle();
     expect(mockSettings.widgets["9"]).toMatchObject({
-      kind: "transactions",
-      accountId: "a1",
+      kind: "budget",
+      budgetId: "b1",
     });
+    expect(mockSettings.widgets["7"]).toBeUndefined();
   });
 
   it("toggles hide amounts through the atomic update", async () => {
@@ -137,10 +148,10 @@ describe("WidgetsScreen", () => {
   });
 
   it("shows the transparency as the inverse of the stored opacity", async () => {
-    mockPlaced = [{ id: 3, kind: "summary" }];
+    mockPlaced = [{ id: 3, kind: "quickAdd" }];
     mockSettings = {
       hideAmounts: false,
-      widgets: { "3": { ...defaultWidgetConfig("summary"), opacity: 80 } },
+      widgets: { "3": { ...defaultWidgetConfig("quickAdd"), opacity: 80 } },
     };
     await render(<WidgetsScreen />);
     await settle();
@@ -150,19 +161,19 @@ describe("WidgetsScreen", () => {
 
   it("opens on the widget named by widgetId, with a way to see them all", async () => {
     mockPlaced = [
-      { id: 7, kind: "transactions" },
-      { id: 12, kind: "summary" },
+      { id: 7, kind: "budget" },
+      { id: 12, kind: "quickAdd" },
     ];
     mockParams = { widgetId: "12" };
     await render(<WidgetsScreen />);
     await settle();
-    expect(screen.getByText("Summary widget")).toBeTruthy();
-    expect(screen.queryByText("Transactions widget")).toBeNull();
+    expect(screen.getByText("Quick add widget")).toBeTruthy();
+    expect(screen.queryByText("Budget widget")).toBeNull();
     await fireEvent.press(
       screen.getByRole("button", { name: "Show all widgets" }),
     );
     await settle();
-    expect(screen.getByText("Transactions widget")).toBeTruthy();
+    expect(screen.getByText("Budget widget")).toBeTruthy();
     expect(
       screen.queryByRole("button", { name: "Show all widgets" }),
     ).toBeNull();
@@ -170,20 +181,20 @@ describe("WidgetsScreen", () => {
 
   it("falls back to every widget when widgetId names one that is not placed", async () => {
     mockPlaced = [
-      { id: 7, kind: "transactions" },
-      { id: 12, kind: "summary" },
+      { id: 7, kind: "budget" },
+      { id: 12, kind: "quickAdd" },
     ];
     mockParams = { widgetId: "99" };
     await render(<WidgetsScreen />);
     await settle();
-    expect(screen.getByText("Transactions widget")).toBeTruthy();
-    expect(screen.getByText("Summary widget")).toBeTruthy();
+    expect(screen.getByText("Budget widget")).toBeTruthy();
+    expect(screen.getByText("Quick add widget")).toBeTruthy();
   });
 
   it("focuses the widget of a new deep link even after Show all was pressed", async () => {
     mockPlaced = [
-      { id: 7, kind: "transactions" },
-      { id: 12, kind: "summary" },
+      { id: 7, kind: "budget" },
+      { id: 12, kind: "quickAdd" },
     ];
     mockParams = { widgetId: "12" };
     const view = await render(<WidgetsScreen />);
@@ -192,12 +203,12 @@ describe("WidgetsScreen", () => {
       screen.getByRole("button", { name: "Show all widgets" }),
     );
     await settle();
-    expect(screen.getByText("Transactions widget")).toBeTruthy();
+    expect(screen.getByText("Budget widget")).toBeTruthy();
     mockParams = { widgetId: "7" };
     await view.rerender(<WidgetsScreen />);
     await settle();
-    expect(screen.getByText("Transactions widget")).toBeTruthy();
-    expect(screen.queryByText("Summary widget")).toBeNull();
+    expect(screen.getByText("Budget widget")).toBeTruthy();
+    expect(screen.queryByText("Quick add widget")).toBeNull();
   });
 
   it("does not draw the Hide amounts switch until the stored value is read", async () => {

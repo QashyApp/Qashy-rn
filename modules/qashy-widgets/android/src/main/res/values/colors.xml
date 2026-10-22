@@ -1,0 +1,11 @@
+<resources>
+  <!-- The picker previews only: the widgets themselves take their colors from the snapshot. These
+       match the Qashy palette a widget uses before it has any data. -->
+  <color name="qashy_preview_bg">#FFFFFFFF</color>
+  <color name="qashy_preview_text">#FF1B1B1F</color>
+  <color name="qashy_preview_muted">#FF5F6169</color>
+  <color name="qashy_preview_accent">#FF5070FF</color>
+  <color name="qashy_preview_on_accent">#FFFFFFFF</color>
+  <color name="qashy_preview_positive">#FF1B7F4B</color>
+  <color name="qashy_preview_negative">#FFB3261E</color>
+</resources>

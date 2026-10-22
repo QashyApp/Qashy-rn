@@ -13,13 +13,15 @@ import {
 
 describe("widget kind registry", () => {
   it("lists the kinds the native side registers", () => {
-    expect([...WIDGET_KINDS].sort()).toEqual(["summary", "transactions"]);
+    expect([...WIDGET_KINDS].sort()).toEqual(["budget", "quickAdd"]);
   });
 
   it("recognises only registered kinds", () => {
-    expect(isWidgetKind("summary")).toBe(true);
-    expect(isWidgetKind("transactions")).toBe(true);
-    expect(isWidgetKind("budget")).toBe(false);
+    expect(isWidgetKind("quickAdd")).toBe(true);
+    expect(isWidgetKind("budget")).toBe(true);
+    // The removed kinds are no longer registered.
+    expect(isWidgetKind("summary")).toBe(false);
+    expect(isWidgetKind("transactions")).toBe(false);
     expect(isWidgetKind("toString")).toBe(false);
     expect(isWidgetKind(undefined)).toBe(false);
   });
@@ -27,13 +29,14 @@ describe("widget kind registry", () => {
   it("keeps placed widgets of known kinds and drops the rest", () => {
     expect(
       knownPlacedWidgets([
-        { id: 1, kind: "summary" },
-        { id: 2, kind: "budget" },
-        { id: 3, kind: "transactions" },
+        { id: 1, kind: "quickAdd" },
+        { id: 2, kind: "summary" },
+        { id: 3, kind: "budget" },
+        { id: 4, kind: "transactions" },
       ]),
     ).toEqual([
-      { id: 1, kind: "summary" },
-      { id: 3, kind: "transactions" },
+      { id: 1, kind: "quickAdd" },
+      { id: 3, kind: "budget" },
     ]);
   });
 
@@ -58,15 +61,13 @@ describe("widget kind registry", () => {
         placed: [],
         settings: { hideAmounts: false, widgets: {} },
         source: {
-          accounts: [],
-          categories: [],
-          queryTransactions: () => [],
+          baseCurrency: "USD",
           getDashboard: () => ({
             incomeMinor: 0,
             expenseMinor: 0,
             netWorthMinor: 0,
           }),
-          getNetWorthSeries: () => ({ baseCurrency: "USD", points: [] }),
+          getBudgetStatuses: () => [],
         },
         palettes: () => {
           throw new Error("not needed");

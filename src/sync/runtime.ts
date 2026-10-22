@@ -18,7 +18,10 @@
  *    something they were built from actually changed — see `fingerprint`.
  *
  * There are still no timers here. `reconcile()` is called from the same lifecycle seam the
- * repository's own reconcile hangs on, and the relay is contacted then and at no other moment.
+ * repository's own reconcile hangs on, and the relay is contacted then and at no other moment,
+ * with one opt-in exception: the Android-only per-device background check-in (see
+ * `sync/background.ts`), which the OS schedules about every 30 minutes and which calls
+ * `reconcile()` once per wake. It is off by default.
  */
 
 import type { StorageAdapter } from "@/data/storage-adapter";

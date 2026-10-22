@@ -387,7 +387,11 @@ function compactNotationSupported(locale: string) {
   let supported = COMPACT_SUPPORT.get(locale);
   if (supported === undefined) {
     try {
+      // Probed with the currency style the formatter really uses: a runtime can honor compact
+      // notation for plain numbers and ignore it for currencies.
       const compact = new Intl.NumberFormat(locale, {
+        style: "currency",
+        currency: "USD",
         notation: "compact",
         maximumFractionDigits: 1,
       }).format(1_500_000);

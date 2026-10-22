@@ -270,15 +270,17 @@ export function RelayCard({
 }
 
 /** A switch with its own explanation, because it is not self-evident. */
-function ToggleRow({
+export function ToggleRow({
   title,
   body,
   value,
+  disabled,
   onValueChange,
 }: {
   readonly title: string;
   readonly body: string;
   readonly value: boolean;
+  readonly disabled?: boolean;
   readonly onValueChange: (value: boolean) => void;
 }) {
   const { space } = useQashyTheme();
@@ -296,6 +298,7 @@ function ToggleRow({
       <QashySwitch
         accessibilityLabel={t(title)}
         value={value}
+        disabled={disabled}
         onValueChange={onValueChange}
       />
     </View>

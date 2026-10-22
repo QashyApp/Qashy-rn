@@ -19,8 +19,10 @@ import androidx.glance.LocalSize
 import androidx.glance.action.Action
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
+import androidx.glance.appwidget.LocalAppWidgetOptions
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.PreviewSizeMode
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
@@ -81,14 +83,10 @@ fun WidgetContainer(
 }
 
 abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
-  override val sizeMode: SizeMode = SizeMode.Responsive(
-    setOf(
-      DpSize(100.dp, 100.dp),
-      DpSize(180.dp, 100.dp),
-      DpSize(250.dp, 110.dp),
-      DpSize(250.dp, 170.dp),
-    ),
-  )
+  // One set of breakpoints for every kind, so a launcher cell count always maps to one layout.
+  override val sizeMode: SizeMode = SizeMode.Responsive(WidgetSizes.BREAKPOINTS)
+
+  override val previewSizeMode: PreviewSizeMode = SizeMode.Responsive(WidgetSizes.BREAKPOINTS)
 
   /** Where a tap anywhere on the widget goes; null when the kind has per-element targets instead. */
   protected open val rootUri: String? = null
@@ -100,7 +98,26 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
     data: WidgetData,
     colors: WidgetColors,
     size: DpSize,
+    /** [size] narrowed to what the launcher reports (see [WidgetSizes.fitSize]); text is fitted to this. */
+    fitSize: DpSize,
   )
+
+  /**
+   * The picker preview of this kind (Android 15+), drawn from fixed sample data and never from the
+   * snapshot or the user's data. A kind overrides `providePreview` and calls this with its own
+   * sample payload and sample labels, both built from string resources.
+   */
+  protected suspend fun providePreviewContent(context: Context, labels: Labels, payload: Any) {
+    val snapshot = Snapshot(hideAmounts = false, labels = labels, widgets = emptyMap())
+    val data = WidgetData(kind, WidgetTheme.DEFAULT_STYLE, payload)
+    val radius = WidgetTheme.radius(context)
+    provideContent {
+      val colors = WidgetTheme.resolve(context, data.style)
+      WidgetContainer(radius, colors.background, false, null) {
+        Content(context, snapshot, data, colors, LocalSize.current, WidgetSizes.fitSize(context, LocalSize.current, LocalAppWidgetOptions.current))
+      }
+    }
+  }
 
   override suspend fun provideGlance(context: Context, id: GlanceId) {
     val appWidgetId = GlanceAppWidgetManager(context).getAppWidgetId(id)
@@ -130,7 +147,7 @@ abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
       } else {
         val rootAction = rootUri?.let { openAction(context, it) }
         WidgetContainer(radius, colors.background, style.frosted, rootAction) {
-          Content(context, current, data, colors, LocalSize.current)
+          Content(context, current, data, colors, LocalSize.current, WidgetSizes.fitSize(context, LocalSize.current, LocalAppWidgetOptions.current))
         }
       }
     }

@@ -179,27 +179,28 @@ async function clearForgottenVaultState(tx: StorageTx): Promise<void> {
   // user who turned automatic rates off should not have that choice silently reset by an
   // interrupted pairing or a `disableSync({ forget: true })` — resetting it would turn fetching
   // back on, since absent means "on".
-  await tx
-    .table("syncMeta")
-    .delete([
-      SYNC_META.deviceId,
-      SYNC_META.deviceName,
-      SYNC_META.epoch,
-      SYNC_META.seq,
-      SYNC_META.headHash,
-      SYNC_META.hlcWall,
-      SYNC_META.hlcCounter,
-      SYNC_META.baseCurrency,
-      SYNC_META.ownerDeviceId,
-      SYNC_META.revocationMode,
-      SYNC_META.genesisAt,
-      SYNC_META.enabled,
-      SYNC_META.relayCursor,
-      SYNC_META.relayStatus,
-      SYNC_META.relayCheckedAt,
-      SYNC_META.relayDetail,
-      SYNC_META.relayFailures,
-    ]);
+  await tx.table("syncMeta").delete([
+    SYNC_META.deviceId,
+    SYNC_META.deviceName,
+    SYNC_META.epoch,
+    SYNC_META.seq,
+    SYNC_META.headHash,
+    SYNC_META.hlcWall,
+    SYNC_META.hlcCounter,
+    SYNC_META.baseCurrency,
+    SYNC_META.ownerDeviceId,
+    SYNC_META.revocationMode,
+    SYNC_META.genesisAt,
+    SYNC_META.enabled,
+    SYNC_META.relayCursor,
+    SYNC_META.relayStatus,
+    SYNC_META.relayCheckedAt,
+    SYNC_META.relayDetail,
+    SYNC_META.relayFailures,
+    // Consent to a periodic relay check-in belongs to the vault being left: joining another
+    // one must ask again rather than silently resume contacting a relay on a schedule.
+    SYNC_META.backgroundSync,
+  ]);
 }
 
 // ---------------------------------------------------------------------------

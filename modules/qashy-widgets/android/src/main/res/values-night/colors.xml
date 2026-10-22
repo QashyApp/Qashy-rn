@@ -1,0 +1,9 @@
+<resources>
+  <color name="qashy_preview_bg">#FF121221</color>
+  <color name="qashy_preview_text">#FFEDEDF4</color>
+  <color name="qashy_preview_muted">#FFA8AAB5</color>
+  <color name="qashy_preview_accent">#FF9DB0FF</color>
+  <color name="qashy_preview_on_accent">#FF121221</color>
+  <color name="qashy_preview_positive">#FF5FD39A</color>
+  <color name="qashy_preview_negative">#FFFF8A80</color>
+</resources>

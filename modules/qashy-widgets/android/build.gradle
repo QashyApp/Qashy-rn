@@ -27,6 +27,12 @@ android {
   lintOptions {
     abortOnError false
   }
+  testOptions {
+    unitTests {
+      // Robolectric needs the merged resources and manifest to render the widgets.
+      includeAndroidResources = true
+    }
+  }
 }
 
 dependencies {
@@ -36,4 +42,10 @@ dependencies {
   // Home-screen widgets (the versions expo-widgets 58 ships with).
   implementation "androidx.glance:glance-appwidget:1.2.0"
   implementation "androidx.work:work-runtime-ktx:2.10.1"
+
+  // Screenshot tests only (src/test; never part of the app and never run by `npm test`): they
+  // render each widget's Glance content to PNGs on the JVM. See src/test/README.md.
+  testImplementation 'junit:junit:4.13.2'
+  testImplementation 'org.robolectric:robolectric:4.16'
+  testImplementation 'androidx.test:core:1.6.1'
 }

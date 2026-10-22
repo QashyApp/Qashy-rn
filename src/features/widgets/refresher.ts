@@ -73,13 +73,17 @@ const refresher = createWidgetRefresher({
       placed,
       settings,
       source: {
-        accounts: state.accounts,
-        categories: state.categories,
-        queryTransactions: (query) =>
-          financeRepository.queryTransactions(query),
-        getDashboard: (from, to) => financeRepository.getDashboard(from, to),
-        getNetWorthSeries: (months, today) =>
-          financeRepository.getNetWorthSeries(months, today),
+        baseCurrency: state.settings.baseCurrency,
+        // Widgets refresh without generating recurring transactions, so the figures include the
+        // auto-post occurrences that are due but not created yet. Display only: nothing is stored.
+        getDashboard: (from, to) =>
+          financeRepository.getDashboard(from, to, {
+            includePendingAutoPosts: true,
+          }),
+        getBudgetStatuses: (onDate) =>
+          financeRepository.getBudgetStatuses(onDate, {
+            includePendingAutoPosts: true,
+          }),
       },
       palettes: (config) =>
         resolveWidgetPalettes(config, state.settings, {

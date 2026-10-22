@@ -18,9 +18,8 @@ import {
 import { oneOf } from "@/features/widgets/kinds/shared";
 
 export type {
-  GraphMonths,
-  SummaryWidgetConfig,
-  TransactionsWidgetConfig,
+  BudgetWidgetConfig,
+  QuickAddWidgetConfig,
   WidgetConfig,
   WidgetKind,
 } from "@/features/widgets/kinds";

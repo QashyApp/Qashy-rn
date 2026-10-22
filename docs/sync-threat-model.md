@@ -68,6 +68,19 @@ State these in the UI and the README. Pretending otherwise would be worse than t
   deleted when the last widget is removed or after a replace import. The "Hide amounts" setting keeps amounts
   out of it. Widget settings are device-local sync metadata and never replicate. A compromised OS or a rooted
   device sees it exactly as it sees the database, covered by the first bullet above.
+- **The cadence of the opt-in background check-in.** By default sync contacts the relay only when the
+  user opens the app or taps "Sync now", so the relay sees no schedule. On Android a user can switch on
+  **Sync in the background** for one device. While it is on, the OS (WorkManager) wakes the app about every
+  30 minutes whenever the device is online and the battery is not low, and that wake runs one ordinary sync
+  pass. The relay (and a network observer) can then see a roughly 30-minute rhythm of polls from that
+  device's IP address, which reveals that the device is on and online, when it is typically idle or
+  charging, and roughly when the user is awake, even though routing tags still rotate daily and every blob
+  is padded and sealed. It does not reveal contents. Mitigations: off by default; per device and stored
+  only in the device-local `sync_meta` table, never in the replicated settings; cleared when the device
+  leaves the vault; skipped while the app is in the foreground; no recurring transactions are generated and
+  nothing is written beyond applying remote ops and the engine's own bookkeeping; the UI states the cost
+  next to the switch. The vault key stays `WHEN_UNLOCKED_THIS_DEVICE_ONLY`: when the keystore will not
+  answer, the wake does nothing. A user who wants no cadence leaves it off, or blanks the relay address.
 - **A compromised _paired_ device.** There is no partial authorization in a single-user vault: a device you
   paired can read and write everything. Revocation limits future access only.
 - **Global passive traffic analysis** by an adversary who can observe both endpoints at once.
@@ -176,7 +189,8 @@ One tiny stateless service. Three endpoints:
 
 - `GET /health` — a static `{ ok, version }`. No bucket id, no auth, nothing correlatable. Polled only on app
   foreground and on explicit user request, never on a timer, because a scheduled ping is itself a traffic
-  pattern.
+  pattern. (The opt-in background check-in in §4 is the one scheduled contact, and it is the full sync pass,
+  not a separate ping.)
 - `GET/WS /rendezvous/:pairingId` — relays opaque pairing handshake blobs between two parties presenting the
   same single-use id. Keeps nothing.
 - `PUT/GET/DELETE /bucket/:bucketId` — an encrypted drop-box. Padded ciphertext, size- and rate-capped,

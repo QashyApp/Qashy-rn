@@ -294,7 +294,16 @@ export interface FinanceRepository {
     query?: TransactionQuery,
     snapshot?: TransactionRecord[],
   ): TransactionRecord[];
-  getDashboard(fromDate: string, toDate: string): DashboardSummary;
+  /**
+   * `includePendingAutoPosts` reads the figures as if generation had already run for `toDate`: it
+   * adds the auto-post recurring occurrences that are due but not yet created (see
+   * `getPendingAutoPosts`). Display only; nothing is stored.
+   */
+  getDashboard(
+    fromDate: string,
+    toDate: string,
+    options?: { includePendingAutoPosts?: boolean },
+  ): DashboardSummary;
   /**
    * Net worth at each of the last `months` (1..24) month-ends, then `today`, in the base
    * currency. The last point equals the dashboard headline.
@@ -302,8 +311,20 @@ export interface FinanceRepository {
   getNetWorthSeries(months: number, today?: string): NetWorthSeries;
   getBudgetStatuses(
     onDate: string,
-    options?: { includeInactiveCustom?: boolean },
+    options?: {
+      includeInactiveCustom?: boolean;
+      /** As `getDashboard`: count the due auto-post occurrences generation has not created yet. */
+      includePendingAutoPosts?: boolean;
+    },
   ): BudgetStatus[];
+  /**
+   * The auto-post recurring transactions that are due on or before `onDate` and that generation
+   * has not posted yet, as the posted transactions a generation run would write: the same
+   * amounts, currency, rate snapshot, accounts and occurrence keys. Read-only: nothing is stored,
+   * emitted or marked, occurrences that exist or were deleted are skipped, and the ids are
+   * virtual. For display (the home-screen widgets run without generating).
+   */
+  getPendingAutoPosts(onDate: string): TransactionRecord[];
   getGoalProgress(goalId: string): number;
   generateRecurring(horizonDate?: string): Promise<number>;
   confirmUpcoming(id: string): Promise<void>;

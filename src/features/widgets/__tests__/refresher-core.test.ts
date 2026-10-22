@@ -9,7 +9,7 @@ import { DEFAULT_WIDGET_SETTINGS } from "@/features/widgets/settings";
 
 const snapshot = (generatedAt: string, marker = "a"): WidgetSnapshot =>
   ({
-    version: 1,
+    version: 4,
     generatedAt,
     hideAmounts: false,
     labels: {},
@@ -17,7 +17,7 @@ const snapshot = (generatedAt: string, marker = "a"): WidgetSnapshot =>
   }) as unknown as WidgetSnapshot;
 
 function setup(overrides: Partial<RefresherDeps> = {}) {
-  let placed: PlacedWidgetRef[] = [{ id: 1, kind: "summary" }];
+  let placed: PlacedWidgetRef[] = [{ id: 1, kind: "quickAdd" }];
   let counter = 0;
   let marker = "a";
   const mocks = {
@@ -64,7 +64,7 @@ describe("widget refresher", () => {
     expect(deps.buildSnapshot).toHaveBeenCalledTimes(3);
     expect(deps.update).toHaveBeenCalledTimes(1);
     expect(JSON.parse(deps.update.mock.calls[0][0])).toMatchObject({
-      version: 1,
+      version: 4,
       generatedAt: "t1",
     });
   });
@@ -112,7 +112,7 @@ describe("widget refresher", () => {
         first = false;
         await held.promise;
       }
-      return [{ id: 1, kind: "summary" }];
+      return [{ id: 1, kind: "quickAdd" }];
     });
     const { deps, refresher } = setup({ getPlacedWidgets });
     const runs = [
@@ -164,7 +164,7 @@ describe("widget refresher", () => {
     place([]);
     await refresher.refresh();
     expect(deps.clear).toHaveBeenCalledTimes(1);
-    place([{ id: 2, kind: "transactions" }]);
+    place([{ id: 2, kind: "budget" }]);
     await refresher.refresh();
     // The same content as before is still pushed: the clear forgot the last push.
     expect(deps.update).toHaveBeenCalledTimes(2);
@@ -173,8 +173,8 @@ describe("widget refresher", () => {
   it("prunes with the ids that are placed", async () => {
     const { deps, refresher, place } = setup();
     place([
-      { id: 3, kind: "summary" },
-      { id: 8, kind: "transactions" },
+      { id: 3, kind: "quickAdd" },
+      { id: 8, kind: "budget" },
     ]);
     await refresher.refresh();
     expect(deps.pruneSettings).toHaveBeenCalledWith(new Set(["3", "8"]));

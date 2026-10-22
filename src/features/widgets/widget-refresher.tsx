@@ -3,6 +3,7 @@ import { AppState } from "react-native";
 
 import { financeRepository } from "@/data/local-finance-repository";
 import { subscribeWidgetSettings } from "@/data/widget-settings-store";
+import { requestPreviewRegistration } from "@/features/widgets/preview-registration";
 import { refreshWidgets } from "@/features/widgets/refresher";
 import { customThemesStore } from "@/theme/custom/use-custom-themes";
 import * as QashyWidgets from "../../../modules/qashy-widgets";
@@ -20,7 +21,7 @@ export const WIDGET_REFRESH_RETRY_DELAYS_MS = [2_000, 10_000, 30_000];
 /**
  * Keeps the home-screen widgets current while the app is open: refreshes on mount, whenever the
  * finance data, the widget settings or the custom themes change, and when the app returns to the
- * foreground. A pending trailing refresh is flushed when the app leaves the foreground, because
+ * foreground, and publishes the picker previews once per launch when they are out of date. A pending trailing refresh is flushed when the app leaves the foreground, because
  * the JS timer may not run again until it returns. A refresh that did not complete is retried.
  * Renders nothing, and does nothing off Android or without the native module.
  */
@@ -75,6 +76,8 @@ export function WidgetRefresher(): null {
     };
 
     trigger();
+    // Once per process; the native side only acts when the picker previews are out of date.
+    requestPreviewRegistration(() => QashyWidgets.registerPreviews());
     const unsubscribeRepository = financeRepository.subscribe(schedule);
     const unsubscribeSettings = subscribeWidgetSettings(schedule);
     const unsubscribeThemes = customThemesStore.subscribe(schedule);

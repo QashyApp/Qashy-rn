@@ -37,7 +37,7 @@ describe("widget settings store", () => {
     const next = {
       hideAmounts: true,
       widgets: {
-        "5": { ...defaultWidgetConfig("summary"), graphMonths: 3 as const },
+        "5": { ...defaultWidgetConfig("quickAdd"), showSpent: false },
       },
     };
     const pending = writeWidgetSettings(next);
@@ -54,7 +54,7 @@ describe("widget settings store", () => {
     await writeWidgetSettings({
       hideAmounts: false,
       widgets: {
-        "6": { ...defaultWidgetConfig("summary"), opacity: 900 },
+        "6": { ...defaultWidgetConfig("quickAdd"), opacity: 900 },
       },
     });
     expect(JSON.parse((await rawValue())!.value).widgets["6"].opacity).toBe(
@@ -77,7 +77,7 @@ describe("widget settings store", () => {
     const add = (id: string) =>
       updateWidgetSettings((current) => ({
         ...current,
-        widgets: { ...current.widgets, [id]: defaultWidgetConfig("summary") },
+        widgets: { ...current.widgets, [id]: defaultWidgetConfig("quickAdd") },
       }));
     await Promise.all(["1", "2", "3", "4", "5"].map(add));
     expect(Object.keys((await readWidgetSettings()).widgets).sort()).toEqual([

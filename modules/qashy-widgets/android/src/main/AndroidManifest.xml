@@ -1,27 +1,27 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-  <application>
+  <application android:supportsRtl="true">
     <receiver
-      android:name="expo.modules.qashywidgets.TransactionsWidgetReceiver"
+      android:name="expo.modules.qashywidgets.QuickAddWidgetReceiver"
       android:exported="true"
-      android:label="@string/qashy_widget_transactions_label">
+      android:label="@string/qashy_widget_quick_add_label">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
       </intent-filter>
       <meta-data
         android:name="android.appwidget.provider"
-        android:resource="@xml/qashy_transactions_widget_info" />
+        android:resource="@xml/qashy_quick_add_widget_info" />
     </receiver>
 
     <receiver
-      android:name="expo.modules.qashywidgets.SummaryWidgetReceiver"
+      android:name="expo.modules.qashywidgets.BudgetWidgetReceiver"
       android:exported="true"
-      android:label="@string/qashy_widget_summary_label">
+      android:label="@string/qashy_widget_budget_label">
       <intent-filter>
         <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
       </intent-filter>
       <meta-data
         android:name="android.appwidget.provider"
-        android:resource="@xml/qashy_summary_widget_info" />
+        android:resource="@xml/qashy_budget_widget_info" />
     </receiver>
 
     <!-- System broadcasts need exported=true. It is inert unless a widget is placed. -->

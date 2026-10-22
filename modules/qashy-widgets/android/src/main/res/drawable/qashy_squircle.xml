@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The add button's rounded square. White: the widget tints it with the accent color. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+  android:width="48dp"
+  android:height="48dp"
+  android:viewportWidth="48"
+  android:viewportHeight="48">
+  <path
+    android:fillColor="#FFFFFFFF"
+    android:pathData="M16,0 H32 A16,16 0 0 1 48,16 V32 A16,16 0 0 1 32,48 H16 A16,16 0 0 1 0,32 V16 A16,16 0 0 1 16,0 Z" />
+</vector>
