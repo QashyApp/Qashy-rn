@@ -1,41 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Picker preview for Android 11 and earlier (previewImage must be a drawable, so no text):
-     the card, three metric rows as placeholder bars, and the add button. -->
+     the card, two figures as placeholder bars, and the add button. -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
   <item android:drawable="@drawable/qashy_preview_background" />
 
-  <item
-    android:width="120dp"
-    android:height="7dp"
-    android:gravity="start|top"
-    android:start="14dp"
-    android:top="20dp">
-    <shape android:shape="rectangle">
-      <solid android:color="@color/qashy_preview_text" />
-      <corners android:radius="3dp" />
-    </shape>
+  <item android:width="44dp" android:height="6dp" android:gravity="start|top" android:start="14dp" android:top="26dp">
+    <shape android:shape="rectangle"><solid android:color="@color/qashy_preview_muted" /><corners android:radius="3dp" /></shape>
   </item>
-  <item
-    android:width="96dp"
-    android:height="7dp"
-    android:gravity="start|top"
-    android:start="14dp"
-    android:top="36dp">
-    <shape android:shape="rectangle">
-      <solid android:color="@color/qashy_preview_negative" />
-      <corners android:radius="3dp" />
-    </shape>
+  <item android:width="50dp" android:height="8dp" android:gravity="start|top" android:start="14dp" android:top="40dp">
+    <shape android:shape="rectangle"><solid android:color="@color/qashy_preview_text" /><corners android:radius="4dp" /></shape>
   </item>
-  <item
-    android:width="108dp"
-    android:height="7dp"
-    android:gravity="start|top"
-    android:start="14dp"
-    android:top="52dp">
-    <shape android:shape="rectangle">
-      <solid android:color="@color/qashy_preview_positive" />
-      <corners android:radius="3dp" />
-    </shape>
+  <item android:width="36dp" android:height="6dp" android:gravity="start|top" android:start="82dp" android:top="26dp">
+    <shape android:shape="rectangle"><solid android:color="@color/qashy_preview_muted" /><corners android:radius="3dp" /></shape>
+  </item>
+  <item android:width="42dp" android:height="8dp" android:gravity="start|top" android:start="82dp" android:top="40dp">
+    <shape android:shape="rectangle"><solid android:color="@color/qashy_preview_negative" /><corners android:radius="4dp" /></shape>
   </item>
 
   <item

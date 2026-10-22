@@ -111,13 +111,20 @@ describe("WidgetsScreen", () => {
     // Archived budgets are not offered.
     expect(screen.queryByText("Old plan")).toBeNull();
 
-    await fireEvent(screen.getByLabelText("Spent"), "valueChange", false);
+    // The switch comes first; "Spent" is also an option of the small-widget choice below it.
+    await fireEvent(screen.getAllByLabelText("Spent")[0], "valueChange", false);
     await settle();
     expect(mockSettings.widgets["12"]).toMatchObject({
       kind: "quickAdd",
       showNetWorth: true,
       showSpent: false,
       showEarned: true,
+    });
+    // Turning a metric off leaves two to choose between for the small widget: pick Income.
+    await fireEvent.press(screen.getByRole("radio", { name: "Income" }));
+    await settle();
+    expect(mockSettings.widgets["12"]).toMatchObject({
+      primaryMetric: "earned",
     });
     expect(mockSettings.widgets["7"]).toBeUndefined();
 

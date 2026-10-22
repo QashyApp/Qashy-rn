@@ -1138,6 +1138,8 @@ export const HEBREW: Record<string, string> = {
   "Show on the widget": "הצגה בווידג׳ט",
   "With none selected, the widget is just the add button.":
     "אם לא נבחר דבר, הווידג׳ט הוא כפתור ההוספה בלבד.",
+  "Shown when the widget is small": "מוצג כשהווידג׳ט קטן",
+  "A small widget has room for one figure.": "בווידג׳ט קטן יש מקום למספר אחד.",
   "Budget to show": "התקציב להצגה",
   "First active budget": "התקציב הפעיל הראשון",
   over: "מעל",

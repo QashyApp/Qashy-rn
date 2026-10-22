@@ -81,6 +81,9 @@ function buildBudget(
       spent: null,
       limit: null,
       remaining: null,
+      spentCompact: null,
+      limitCompact: null,
+      remainingCompact: null,
     };
   }
   const { budget, snapshot, spentMinor, effectiveLimitMinor } = status;
@@ -91,9 +94,13 @@ function buildBudget(
     periodEnd: snapshot.periodEnd,
     today,
   });
-  const money = (minor: number) =>
-    formatMoney(minor, source.baseCurrency, locale);
+  const money = (minor: number, compact = false) =>
+    formatMoney(minor, source.baseCurrency, locale, { compact });
   const difference = effectiveLimitMinor - spentMinor;
+  const remainingText = (compact: boolean) =>
+    difference >= 0
+      ? `${money(difference, compact)} ${t("left")}`
+      : `${money(-difference, compact)} ${t("over")}`;
   // Percentages and the pace wording are not amounts; every figure of money is.
   return {
     empty: false,
@@ -110,11 +117,10 @@ function buildBudget(
     statusText: t(PACE_TEXT[pace.status]),
     spent: hideAmounts ? null : money(spentMinor),
     limit: hideAmounts ? null : money(effectiveLimitMinor),
-    remaining: hideAmounts
-      ? null
-      : difference >= 0
-        ? `${money(difference)} ${t("left")}`
-        : `${money(-difference)} ${t("over")}`,
+    remaining: hideAmounts ? null : remainingText(false),
+    spentCompact: hideAmounts ? null : money(spentMinor, true),
+    limitCompact: hideAmounts ? null : money(effectiveLimitMinor, true),
+    remainingCompact: hideAmounts ? null : remainingText(true),
   };
 }
 

@@ -27,6 +27,7 @@ describe("widget settings", () => {
       showNetWorth: true,
       showSpent: true,
       showEarned: true,
+      primaryMetric: "netWorth",
     });
     expect(parseWidgetSettings(undefined)).toEqual({
       hideAmounts: false,
@@ -104,6 +105,14 @@ describe("widget settings", () => {
       showSpent: true,
       showEarned: true,
     });
+    // The metric for a small widget: one of the three, else net worth.
+    expect(quickAdd({ primaryMetric: "spent" })).toMatchObject({
+      primaryMetric: "spent",
+    });
+    for (const bad of ["income", "", 3, null, undefined])
+      expect(quickAdd({ primaryMetric: bad })).toMatchObject({
+        primaryMetric: "netWorth",
+      });
     expect(
       normalizeWidgetConfig({ kind: "budget", budgetId: "abc" }),
     ).toMatchObject({ budgetId: "abc" });

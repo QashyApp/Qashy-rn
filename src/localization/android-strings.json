@@ -2002,6 +2002,11 @@
       "he": "הוספת הפקדה"
     },
     {
+      "name": "q_3a561449885959b9",
+      "en": "A small widget has room for one figure.",
+      "he": "בווידג׳ט קטן יש מקום למספר אחד."
+    },
+    {
       "name": "q_3a8eaba8ea915b5f",
       "en": "The backup lists this budget more than once.",
       "he": "התקציב הזה מופיע בגיבוי יותר מפעם אחת."
@@ -3710,6 +3715,11 @@
       "name": "q_6e3a9dd9fbf1aa89",
       "en": "Budget pulse removed",
       "he": "מצב התקציב הוסר"
+    },
+    {
+      "name": "q_6e4b8af16471898e",
+      "en": "Shown when the widget is small",
+      "he": "מוצג כשהווידג׳ט קטן"
     },
     {
       "name": "q_6e4d8ed7ac684202",

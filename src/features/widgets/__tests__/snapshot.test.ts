@@ -132,16 +132,16 @@ describe("buildWidgetSnapshot", () => {
     jest.useRealTimers();
   });
 
-  it("produces the version-2 envelope with labels and per-widget style", async () => {
+  it("produces the version-3 envelope with labels and per-widget style", async () => {
     const { repository } = await setup();
     const snapshot = build(repository, {
       widgets: {
         "1": { ...defaultWidgetConfig("quickAdd"), opacity: 80 },
       },
     });
-    expect(SNAPSHOT_VERSION).toBe(2);
+    expect(SNAPSHOT_VERSION).toBe(3);
     expect(snapshot).toMatchObject({
-      version: 2,
+      version: 3,
       generatedAt: NOW.toISOString(),
       hideAmounts: false,
       labels: {
@@ -223,6 +223,11 @@ describe("buildWidgetSnapshot", () => {
         earned: "$2,500.00",
         // 1000.00 opening - 50 - 400 + 2500
         netWorth: "$3,050.00",
+        // Compact below a thousand keeps the exact figure; above it abbreviates.
+        spentCompact: "$400.00",
+        earnedCompact: "$2.5K",
+        netWorthCompact: "$3.1K",
+        primary: "netWorth",
       });
     });
 
@@ -242,6 +247,11 @@ describe("buildWidgetSnapshot", () => {
         netWorth: null,
         spent: "$400.00",
         earned: null,
+        netWorthCompact: null,
+        spentCompact: "$400.00",
+        earnedCompact: null,
+        // Net worth is the default primary but is switched off: the first enabled one takes over.
+        primary: "spent",
       });
       const json = JSON.stringify(snapshot);
       expect(json).not.toContain("3,050");
@@ -256,6 +266,9 @@ describe("buildWidgetSnapshot", () => {
         netWorth: MASKED_AMOUNT,
         spent: MASKED_AMOUNT,
         earned: MASKED_AMOUNT,
+        netWorthCompact: MASKED_AMOUNT,
+        spentCompact: MASKED_AMOUNT,
+        earnedCompact: MASKED_AMOUNT,
       });
       const json = JSON.stringify(snapshot);
       for (const amount of ["3,050", "400.00", "2,500"])
@@ -295,6 +308,33 @@ describe("buildWidgetSnapshot", () => {
     });
   });
 
+  describe("quickAdd primary metric", () => {
+    it("carries the chosen metric, or null with every metric off", async () => {
+      const { repository } = await setup();
+      const primary = (patch: Record<string, unknown>) =>
+        build(repository, {
+          widgets: {
+            "1": { ...defaultWidgetConfig("quickAdd"), ...patch } as never,
+          },
+        }).widgets["1"].quickAdd?.primary;
+      expect(primary({})).toBe("netWorth");
+      expect(primary({ primaryMetric: "earned" })).toBe("earned");
+      expect(primary({ primaryMetric: "earned", showEarned: false })).toBe(
+        "netWorth",
+      );
+      expect(
+        primary({
+          primaryMetric: "spent",
+          showSpent: false,
+          showNetWorth: false,
+        }),
+      ).toBe("earned");
+      expect(
+        primary({ showNetWorth: false, showSpent: false, showEarned: false }),
+      ).toBeNull();
+    });
+  });
+
   describe("budget", () => {
     const placed = [{ id: 1, kind: "budget" as const }];
 
@@ -309,6 +349,9 @@ describe("buildWidgetSnapshot", () => {
         spent: null,
         limit: null,
         remaining: null,
+        spentCompact: null,
+        limitCompact: null,
+        remainingCompact: null,
       });
     });
 
@@ -331,6 +374,9 @@ describe("buildWidgetSnapshot", () => {
         spent: "$125.00",
         limit: "$500.00",
         remaining: "$375.00 left",
+        spentCompact: "$125.00",
+        limitCompact: "$500.00",
+        remainingCompact: "$375.00 left",
       });
       // 15 of 31 days.
       expect(budget?.elapsed).toBeCloseTo(15 / 31);
@@ -371,6 +417,8 @@ describe("buildWidgetSnapshot", () => {
         percent: 25,
         limit: "$1,000.00",
         remaining: "$750.00 left",
+        limitCompact: "$1.0K",
+        remainingCompact: "$750.00 left",
       });
     });
 
@@ -464,6 +512,9 @@ describe("buildWidgetSnapshot", () => {
         spent: null,
         limit: null,
         remaining: null,
+        spentCompact: null,
+        limitCompact: null,
+        remainingCompact: null,
       });
       const json = JSON.stringify(snapshot);
       for (const amount of ["125", "500", "375", "$"])

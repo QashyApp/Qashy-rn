@@ -9,7 +9,7 @@ import { DEFAULT_WIDGET_SETTINGS } from "@/features/widgets/settings";
 
 const snapshot = (generatedAt: string, marker = "a"): WidgetSnapshot =>
   ({
-    version: 2,
+    version: 3,
     generatedAt,
     hideAmounts: false,
     labels: {},
@@ -64,7 +64,7 @@ describe("widget refresher", () => {
     expect(deps.buildSnapshot).toHaveBeenCalledTimes(3);
     expect(deps.update).toHaveBeenCalledTimes(1);
     expect(JSON.parse(deps.update.mock.calls[0][0])).toMatchObject({
-      version: 2,
+      version: 3,
       generatedAt: "t1",
     });
   });

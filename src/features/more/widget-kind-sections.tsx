@@ -4,6 +4,10 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { OptionRow } from "@/components/ui/option-row";
 import { QashySwitch } from "@/components/ui/qashy-switch";
+import {
+  resolvePrimaryMetric,
+  type QuickAddMetric,
+} from "@/features/widgets/kinds/quick-add";
 import type {
   BudgetWidgetConfig,
   KindFields,
@@ -34,6 +38,12 @@ const METRICS: { field: Metric; label: string }[] = [
   { field: "showSpent", label: "Spent" },
   { field: "showEarned", label: "Income" },
 ];
+
+const METRIC_FOR: Record<Metric, QuickAddMetric> = {
+  showNetWorth: "netWorth",
+  showSpent: "spent",
+  showEarned: "earned",
+};
 
 function QuickAddSection({
   config,
@@ -68,6 +78,42 @@ function QuickAddSection({
           />
         </View>
       ))}
+      <PrimaryMetricChoice config={config} change={change} />
+    </View>
+  );
+}
+
+/** Which metric a small widget (one that fits only one) shows, among the enabled ones. */
+function PrimaryMetricChoice({
+  config,
+  change,
+}: KindSectionProps<QuickAddWidgetConfig>) {
+  const { space } = useQashyTheme();
+  const { t } = useLocalization();
+  const enabled = METRICS.filter(({ field }) => config[field]);
+  // Fewer than two enabled metrics leave nothing to choose between.
+  if (enabled.length < 2) return null;
+  const selected = resolvePrimaryMetric(config);
+  return (
+    <View style={{ gap: space.sm }}>
+      <AppText variant="label">Shown when the widget is small</AppText>
+      <AppText variant="caption" muted>
+        A small widget has room for one figure.
+      </AppText>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={t("Shown when the widget is small")}
+        style={{ gap: space.sm }}
+      >
+        {enabled.map(({ field, label }) => (
+          <OptionRow
+            key={field}
+            title={label}
+            selected={selected === METRIC_FOR[field]}
+            onPress={() => change({ primaryMetric: METRIC_FOR[field] })}
+          />
+        ))}
+      </View>
     </View>
   );
 }

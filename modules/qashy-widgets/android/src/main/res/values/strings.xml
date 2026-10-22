@@ -14,6 +14,9 @@
   <string name="qashy_preview_net_worth_value">$12,480</string>
   <string name="qashy_preview_spent_value">$1,320</string>
   <string name="qashy_preview_earned_value">$3,200</string>
+  <string name="qashy_preview_net_worth_compact">$12.5K</string>
+  <string name="qashy_preview_spent_compact">$1.3K</string>
+  <string name="qashy_preview_earned_compact">$3.2K</string>
   <string name="qashy_preview_budget_name">Groceries</string>
   <string name="qashy_preview_budget_status">On track</string>
   <string name="qashy_preview_budget_spent">$310</string>

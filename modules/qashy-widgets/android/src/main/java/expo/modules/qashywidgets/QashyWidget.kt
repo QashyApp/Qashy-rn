@@ -21,6 +21,7 @@ import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetManager
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
+import androidx.glance.appwidget.PreviewSizeMode
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.actionStartActivity
 import androidx.glance.appwidget.appWidgetBackground
@@ -81,14 +82,10 @@ fun WidgetContainer(
 }
 
 abstract class QashyWidget(private val kind: String) : GlanceAppWidget() {
-  override val sizeMode: SizeMode = SizeMode.Responsive(
-    setOf(
-      DpSize(100.dp, 100.dp),
-      DpSize(180.dp, 100.dp),
-      DpSize(250.dp, 110.dp),
-      DpSize(250.dp, 170.dp),
-    ),
-  )
+  // One set of breakpoints for every kind, so a launcher cell count always maps to one layout.
+  override val sizeMode: SizeMode = SizeMode.Responsive(WidgetSizes.BREAKPOINTS)
+
+  override val previewSizeMode: PreviewSizeMode = SizeMode.Responsive(WidgetSizes.BREAKPOINTS)
 
   /** Where a tap anywhere on the widget goes; null when the kind has per-element targets instead. */
   protected open val rootUri: String? = null

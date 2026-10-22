@@ -3,7 +3,7 @@
  *
  * Pure: everything it needs arrives as arguments (the repository reads through a narrow
  * `WidgetDataSource`, the translator, the locale, the clock), so it is deterministic and can be
- * tested without a device. The wire format is version 2 and fixed; the native side only renders it.
+ * tested without a device. The wire format is version 3 and fixed; the native side only renders it.
  *
  * Everything user-visible is already formatted here: the native widgets never see an amount as a
  * number. With `hideAmounts` every amount of the quick-add widget is "•••" and the budget widget
@@ -21,7 +21,7 @@ import { configFor, type WidgetSettings } from "@/features/widgets/settings";
 
 export { MASKED_AMOUNT } from "@/features/widgets/kinds/shared";
 
-export const SNAPSHOT_VERSION = 2;
+export const SNAPSHOT_VERSION = 3;
 
 export type BudgetPaceKey = "under" | "onTrack" | "projectedOver" | "over";
 
@@ -44,13 +44,19 @@ export interface WidgetSnapshotEntry {
   style: SnapshotStyle;
   /**
    * This month at a glance. A metric the widget does not show is `null`; with hidden amounts the
-   * ones it shows are "•••".
+   * ones it shows are "•••" (in both lengths). Each amount comes in full ("$12,480.00") and
+   * compact ("$12.5K") form; the native side picks by the room it has.
    */
   quickAdd?: {
     monthLabel: string;
     netWorth: string | null;
     spent: string | null;
     earned: string | null;
+    netWorthCompact: string | null;
+    spentCompact: string | null;
+    earnedCompact: string | null;
+    /** The metric to show when only one fits; `null` when no metric is enabled. */
+    primary: "netWorth" | "spent" | "earned" | null;
   };
   /**
    * One budget's progress. `empty` means there is no active budget (then only `name`, the prompt
@@ -75,6 +81,10 @@ export interface WidgetSnapshotEntry {
     limit: string | null;
     /** "$120 left" or "$30 over". */
     remaining: string | null;
+    /** The same three amounts, abbreviated ("$1.2K left"), for narrow widgets. */
+    spentCompact: string | null;
+    limitCompact: string | null;
+    remainingCompact: string | null;
   };
 }
 
