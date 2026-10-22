@@ -1,29 +1,95 @@
-import { Decimal } from "decimal.js";
-
 import {
-  emptyImportCounts,
-  orderParentsFirst,
-  uniquifyName,
-} from "@/data/import/external-import";
+  computeDashboard,
+  computeNetWorthSeries,
+  assertDashboardRange,
+  assertNetWorthMonths,
+  calculateGoalProgress,
+} from "@/data/finance/analytics";
+import {
+  assertBudgetSetSafe,
+  assertLimitNotLowered,
+  budgetAdjustmentTotal,
+  buildBudgetSnapshots,
+  computeBudgetStatuses,
+  currentSnapshot,
+  dueBudgetSnapshots,
+  effectiveLimitFor,
+} from "@/data/finance/budgets";
+import type { FinanceContext } from "@/data/finance/context";
+import {
+  buildCsvExport,
+  buildCsvTransactions,
+  stageCsvRows,
+} from "@/data/finance/csv";
+import {
+  applyDeletion,
+  deletedOccurrenceKeysOf,
+  deletionRecords,
+  planEntityDeletion,
+} from "@/data/finance/deletion";
+import { runExternalImport } from "@/data/finance/external-import";
+import type { ExternalImportHost } from "@/data/finance/external-import-steps";
+import { assertMergedSetSafe } from "@/data/finance/merge-safety";
+import { queryTransactions } from "@/data/finance/queries";
+import {
+  normalizeFetchedRates,
+  planFetchedRates,
+  postedWithSnapshot,
+} from "@/data/finance/rates";
+import {
+  planRecurring,
+  planRecurringRuleSave,
+  type RecurringDeps,
+} from "@/data/finance/recurring";
+import {
+  ALL_ENTITY_TYPES,
+  ENTITY_TYPES,
+  active,
+  applyTransactionChanges,
+  asRecords,
+  replaceById,
+  tombstone,
+  withEntity,
+  type ListKey,
+} from "@/data/finance/records";
+import { assertTransactionSetSafe } from "@/data/finance/safety";
+import {
+  buildTransaction,
+  planCategoryAssignment,
+  redatedTransactionInput,
+  type BuildTransaction,
+} from "@/data/finance/transactions";
+import {
+  planAccountSave,
+  planCategorySave,
+  planContributionSave,
+  planExchangeRateSave,
+  planGoalSave,
+} from "@/data/finance/entity-saves";
+import { buildSettingsUpdate, planOnboarding } from "@/data/finance/settings";
+import {
+  assertColor,
+  assertDate,
+  assertExpectedRevision,
+  assertLocale,
+  assertNotArchiving,
+  assertUniqueName,
+  findExisting,
+  validateBudget,
+} from "@/data/finance/validation";
 import type {
   ExternalImportOutcome,
   ImportBundle,
   ImportMode,
 } from "@/data/import/types";
 import { PlatformStorageAdapter } from "@/data/storage";
-import { ANIMATION_LEVELS, NAV_BAR_STYLES } from "@/domain/models";
-import {
-  recordKey,
-  type StorageAdapter,
-  type StoredEntity,
-} from "@/data/storage-adapter";
+import type { StorageAdapter, StoredEntity } from "@/data/storage-adapter";
 import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";
 import type {
   Account,
   AppSettings,
   Budget,
   BudgetAdjustment,
-  BudgetFilters,
   BudgetPeriodSnapshot,
   BudgetStatus,
   Category,
@@ -33,19 +99,12 @@ import type {
   ExchangeRate,
   FinanceEntity,
   FinanceState,
-  ForeignAmount,
-  ForeignAmountInput,
   Goal,
   GoalContribution,
-  ImportResult,
   RecurringRule,
   Tag,
-  TransactionFee,
-  TransactionFeeInput,
   TransactionQuery,
-  TransactionKind,
   TransactionRecord,
-  TransactionStatus,
 } from "@/domain/models";
 import type {
   AccountInput,
@@ -53,7 +112,6 @@ import type {
   BudgetInput,
   CategoryInput,
   ContributionInput,
-  FetchedRateConflict,
   FetchedRateResult,
   FinanceRepository,
   GoalInput,
@@ -80,385 +138,53 @@ import {
   type SyncOpBody,
 } from "@/sync/oplog";
 import {
-  hasSyncHistory,
   readAllStates,
   readMeta,
   SYNC_META,
   writeMeta,
   writeStates,
 } from "@/data/sync-store";
-import { omitArchived } from "@/data/import/omit-archived";
 import { eraseEntity } from "@/domain/erasure";
 import { planMerge, type DuplicateGroup } from "@/sync/engine/duplicates";
-import { DEFAULT_THEME_ID, isValidThemeId } from "@/theme/themes/types";
-import {
-  createDefaultCategories,
-  createInitialState,
-  defaultAccountName,
-  initialSettings,
-} from "@/domain/defaults";
+import { DEFAULT_THEME_ID } from "@/theme/themes/types";
+import { createInitialState, initialSettings } from "@/domain/defaults";
 import { canActivateRecurringRule } from "@/domain/rules";
-import {
-  addRecurrence,
-  endOfMonth,
-  firstRecurrenceOnOrAfter,
-  isLocalDate,
-  moveMonth,
-  parseLocalDate,
-  startOfMonth,
-  todayLocal,
-  toLocalDate,
-} from "@/utils/date";
-import {
-  budgetPeriodId,
-  externalImportId,
-  fetchedRateId,
-  occurrenceTransactionId,
-} from "@/utils/deterministic-id";
-import {
-  planAccountDeletion,
-  type AccountDeletionPlan,
-  type TransferConversion,
-} from "@/utils/account-impact";
-import { createEntity, makeId, nowIso, updateEntity } from "@/utils/entity";
-import { isValidIconId } from "@/utils/icon-id";
-import { normalizeName } from "@/utils/naming";
-import { escapeCsv } from "@/utils/csv";
-import { validateLocale } from "@/utils/form-validation";
-import {
-  addMinor,
-  convertMinor,
-  currencyDigits,
-  isSafeMinor,
-  isSupportedCurrencyCode,
-  minorToDecimalString,
-  parseInvariantMoney,
-  subtractMinor,
-  sumMinor,
-} from "@/utils/money";
-import { resolvePeriod } from "@/utils/period";
-import {
-  feeMinorFor,
-  normalizeFeePercent,
-  principalOf,
-  totalWithFee,
-} from "@/utils/transaction-amounts";
+import { todayLocal } from "@/utils/date";
+import { createEntity, makeId, updateEntity } from "@/utils/entity";
+import { isSafeMinor, sumMinor, addMinor } from "@/utils/money";
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const ACCOUNT_TYPES = [
-  "cash",
-  "checking",
-  "savings",
-  "credit",
-  "wallet",
-] as const;
-const CATEGORY_KINDS = ["expense", "income"] as const;
-const GOAL_KINDS = ["saving", "spending"] as const;
-const TRANSACTION_TYPES = ["expense", "income", "transfer"] as const;
-const TRANSACTION_STATUSES = ["posted", "upcoming", "skipped"] as const;
-const PERIOD_UNITS = ["day", "week", "month", "year", "custom"] as const;
-const RECURRENCE_UNITS = ["day", "week", "month", "year"] as const;
-const THEME_MODES = ["system", "light", "dark"] as const;
-const ACCENT_SOURCES = ["system", "preset", "custom"] as const;
-const MAX_RECURRING_OCCURRENCES_PER_RUN = 100_000;
-// How far a manually entered rate may sit from the reciprocal of an existing
-// opposite-direction rate before the pair is treated as contradictory (2%).
-const RECIPROCAL_RATE_TOLERANCE = 0.02;
-// How far a manually entered transfer destination amount may sit from the
-// rate-derived amount before it reads as a typo rather than spread (one order
-// of magnitude either way).
-const MANUAL_TRANSFER_AMOUNT_TOLERANCE = 10;
+// Part of this module's public surface since before the rules moved to `src/data/finance/`.
+export { MissingExchangeRateError } from "@/data/finance/rates";
 
 /**
- * Thrown when no rate for a pair and date can be resolved. Callers that treat a missing rate as
- * transient (recurring generation, the dashboard, `hasRate`) match on this class, not the message.
+ * The local-first finance repository: the in-memory snapshot, the storage it persists to, and the
+ * queue that serialises every change to both.
+ *
+ * Mutations come in pairs. The public `foo()` only queues work through `enqueueMutation`, so two
+ * mutations never overlap; the private `fooNow()` is the implementation and runs when its turn
+ * comes. Validate first, then persist with a single `putMany`, then swap the snapshot and `emit()`.
+ *
+ * What this class keeps is the stateful core: the snapshot and its derived-read caches, the
+ * queue, initialization and refresh, and the sync projection. The finance rules themselves are
+ * plain functions in `src/data/finance/`, which read the live snapshot through a `FinanceContext`
+ * (or take the slices they need) and never write:
+ *
+ * - `validation.ts`: field checks, normalizers and the whole-input validators for budgets and goals
+ * - `settings.ts` and `entity-saves.ts`: what saving settings, accounts, categories, goals,
+ *   contributions and exchange rates writes, planned before anything is persisted
+ * - `records.ts`: small helpers over entity lists and `putMany` records
+ * - `rates.ts`: exchange-rate lookup, reciprocal checks and the pricing snapshots of unpriced rows
+ * - `transactions.ts`: `buildTransaction`, transfer conversion, the CSV duplicate key
+ * - `budgets.ts`: period snapshots, rollover, adjustments and budget statuses
+ * - `recurring.ts`: schedule walking, generation planning, rule validation and the save plan
+ * - `analytics.ts`: the dashboard, the net-worth series and goal progress
+ * - `queries.ts`: transaction search and filtering
+ * - `safety.ts`: the overflow gate for a local change
+ * - `merge-safety.ts`: the pure checks that gate a merged (remote) set
+ * - `deletion.ts`: what deleting an entity takes with it
+ * - `csv.ts`: CSV row parsing, import staging and export
+ * - `external-import.ts` (and `external-import-steps.ts`): importing another app's backup
  */
-export class MissingExchangeRateError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "MissingExchangeRateError";
-  }
-}
-
-/**
- * Renders a Decimal as a plain decimal string. `toString` switches to exponent form below 1e-7
- * (`8.9e-9`), which is not a decimal string the rate fields or the form input accept.
- */
-function plainDecimal(value: Decimal) {
-  return value.toSignificantDigits(20).toFixed();
-}
-
-/**
- * Engine-raised bugs (a wrong type, an undefined reference, malformed code) as opposed to the
- * domain errors the repository and money helpers throw deliberately.
- */
-function isProgrammingError(reason: Error) {
-  return (
-    reason instanceof TypeError ||
-    reason instanceof ReferenceError ||
-    reason instanceof SyntaxError
-  );
-}
-
-/** Applies written transaction rows to a list: tombstoned ids drop out, the rest replace by id. */
-function applyTransactionChanges(
-  transactions: TransactionRecord[],
-  changes: readonly TransactionRecord[],
-) {
-  const byId = new Map(changes.map((change) => [change.id, change]));
-  return transactions
-    .filter((transaction) => !byId.get(transaction.id)?.deletedAt)
-    .map((transaction) => byId.get(transaction.id) ?? transaction);
-}
-
-/** Swaps rows in `list` for the same-id rows in `changes`; an empty `changes` returns `list` as is. */
-function replaceById<T extends { id: string }>(
-  list: T[],
-  changes: readonly T[],
-) {
-  if (!changes.length) return list;
-  const byId = new Map(changes.map((change) => [change.id, change]));
-  return list.map((item) => byId.get(item.id) ?? item);
-}
-
-/** Wraps rows as `putMany` records of one entity type. */
-function asRecords(
-  type: EntityType,
-  rows: readonly FinanceEntity[],
-): StoredEntity[] {
-  return rows.map((entity) => ({ type, entity }));
-}
-
-/** The deleted form of an entity; storage erases it down to its kept fields on write. */
-function tombstone<T extends FinanceEntity>(entity: T) {
-  return updateEntity(entity, { deletedAt: nowIso() } as Partial<T>);
-}
-
-/**
- * Visits each due date of `rule` from its `nextDueDate` up to `horizonDate` (and its end date),
- * and returns the first date not visited. Throws if the schedule stalls or has too many
- * occurrences to walk in one run.
- */
-function walkRecurrence(
-  rule: RecurringRule,
-  horizonDate: string,
-  visit: (dueDate: string) => void,
-) {
-  let due = rule.nextDueDate;
-  let guard = 0;
-  while (due <= horizonDate && guard < MAX_RECURRING_OCCURRENCES_PER_RUN) {
-    guard += 1;
-    if (rule.endDate && due > rule.endDate) break;
-    visit(due);
-    const nextDue = addRecurrence(
-      due,
-      rule.unit,
-      Math.max(1, rule.interval),
-      rule.startDate,
-    );
-    if (nextDue <= due) throw new Error("Recurring schedule did not advance.");
-    due = nextDue;
-  }
-  if (guard >= MAX_RECURRING_OCCURRENCES_PER_RUN && due <= horizonDate) {
-    throw new Error(
-      "Recurring schedule has too many occurrences to generate in one run.",
-    );
-  }
-  return due;
-}
-
-/** Case- and accent-insensitive form for search, so "cafe" finds "Café". Uses no locale-sensitive collation. */
-function foldForSearch(value: string) {
-  return value.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
-
-// A transaction record is immutable once in the snapshot (edits create a new object), so its
-// folded searchable text is computed once instead of on every keystroke for every row.
-const foldedSearchText = new WeakMap<object, string>();
-function searchTextOf(transaction: { title: string; note: string }) {
-  let folded = foldedSearchText.get(transaction);
-  if (folded === undefined) {
-    folded = foldForSearch(`${transaction.title} ${transaction.note}`);
-    foldedSearchText.set(transaction, folded);
-  }
-  return folded;
-}
-// Roughly a century of daily points. A dashboard range wider than this used to
-// truncate the daily series silently and return a chart that was simply wrong.
-const MAX_DASHBOARD_DAYS = 36_600;
-const MAX_NET_WORTH_MONTHS = 24;
-const CSV_YIELD_EVERY = 250;
-const yieldToEventLoop = () =>
-  new Promise<void>((resolve) => setTimeout(resolve, 0));
-/** A CSV row after validation: every optional column present, currency upper-cased. */
-interface ParsedCsvRow {
-  rowNumber: number;
-  date: string;
-  type: TransactionKind;
-  status: TransactionStatus;
-  title: string;
-  amount: string;
-  currency: string;
-  account: string;
-  category: string;
-  tags: string;
-  note: string;
-  exchangeRate: string;
-  destinationAccount: string;
-  destinationAmount: string;
-  destinationBaseAmountMinor: string;
-  foreignAmount: string;
-  foreignCurrency: string;
-  foreignExchangeRate: string;
-  feeKind: string;
-  feeValue: string;
-}
-
-type CsvRowParse =
-  { success: true; data: ParsedCsvRow } | { success: false; reason: string };
-
-/**
- * Validates one raw CSV row. Hand-written rather than a schema library: the shape is flat, and a
- * schema library was ~12% of the web bundle for three small validators. Reports the first
- * problem in column order, like the schema it replaced.
- */
-function parseCsvRow(raw: unknown): CsvRowParse {
-  const fail = (reason: string): CsvRowParse => ({ success: false, reason });
-  if (!raw || typeof raw !== "object") return fail("Invalid row");
-  const row = raw as Record<string, unknown>;
-  const text = (key: string) => {
-    const value = row[key];
-    return typeof value === "string" ? value : undefined;
-  };
-  const required = (key: string) => {
-    const value = text(key);
-    return value !== undefined && value.length > 0 ? value : null;
-  };
-  // A missing optional column is empty; a present one must still be text.
-  const optional = (key: string): string | null =>
-    row[key] === undefined
-      ? ""
-      : typeof row[key] === "string"
-        ? (row[key] as string)
-        : null;
-
-  if (typeof row.rowNumber !== "number" || Number.isNaN(row.rowNumber))
-    return fail("Row number is missing.");
-  const date = text("date");
-  if (date === undefined || !DATE_PATTERN.test(date) || !isLocalDate(date))
-    return fail("Enter a real calendar date.");
-  const type = row.type;
-  if (!(TRANSACTION_TYPES as readonly unknown[]).includes(type))
-    return fail(`Type must be one of: ${TRANSACTION_TYPES.join(", ")}.`);
-  const status = row.status === undefined ? "posted" : row.status;
-  if (!(TRANSACTION_STATUSES as readonly unknown[]).includes(status))
-    return fail(`Status must be one of: ${TRANSACTION_STATUSES.join(", ")}.`);
-  const title = required("title");
-  if (title === null) return fail("Title is required.");
-  const amount = required("amount");
-  if (amount === null) return fail("Amount is required.");
-  const currency = text("currency");
-  if (currency === undefined || !/^[A-Za-z]{3}$/.test(currency))
-    return fail("Currency must be a three-letter code.");
-  const account = required("account");
-  if (account === null) return fail("Account is required.");
-  const category = optional("category");
-  const tags = optional("tags");
-  const note = optional("note");
-  const exchangeRate = optional("exchangeRate");
-  const destinationAccount = optional("destinationAccount");
-  const destinationAmount = optional("destinationAmount");
-  const destinationBaseAmountMinor = optional("destinationBaseAmountMinor");
-  const foreignAmount = optional("foreignAmount");
-  const foreignCurrency = optional("foreignCurrency");
-  const foreignExchangeRate = optional("foreignExchangeRate");
-  const feeKind = optional("feeKind");
-  const feeValue = optional("feeValue");
-  if (
-    category === null ||
-    tags === null ||
-    note === null ||
-    exchangeRate === null ||
-    destinationAccount === null ||
-    destinationAmount === null ||
-    destinationBaseAmountMinor === null ||
-    foreignAmount === null ||
-    foreignCurrency === null ||
-    foreignExchangeRate === null ||
-    feeKind === null ||
-    feeValue === null
-  )
-    return fail("Invalid row");
-  if (foreignCurrency && !/^[A-Za-z]{3}$/.test(foreignCurrency.trim()))
-    return fail("Foreign currency must be a three-letter code.");
-  return {
-    success: true,
-    data: {
-      rowNumber: row.rowNumber,
-      date,
-      type: type as TransactionKind,
-      status: status as TransactionStatus,
-      title,
-      amount,
-      currency: currency.toUpperCase(),
-      account,
-      category,
-      tags,
-      note,
-      exchangeRate,
-      destinationAccount,
-      destinationAmount,
-      destinationBaseAmountMinor,
-      foreignAmount: foreignAmount.trim(),
-      foreignCurrency: foreignCurrency.trim().toUpperCase(),
-      foreignExchangeRate: foreignExchangeRate.trim(),
-      feeKind: feeKind.trim().toLowerCase(),
-      feeValue: feeValue.trim(),
-    },
-  };
-}
-
-/**
- * What a replace-import deletes: every finance entity the backup stands in for. Settings and
- * exchange rates are not part of a backup's content, so they are kept.
- */
-const REPLACED_TYPES: EntityType[] = [
-  "accounts",
-  "categories",
-  "tags",
-  "transactions",
-  "budgets",
-  "budgetPeriods",
-  "budgetAdjustments",
-  "goals",
-  "contributions",
-  "recurringRules",
-];
-
-const REPLACE_NEEDS_NO_SYNC_MESSAGE =
-  "Your current data can’t be deleted for real while this device syncs: your other devices would keep it and send it back. Remove this device from sync first, or choose “Add to my current data”.";
-
-const ENTITY_TYPES: EntityType[] = [
-  "accounts",
-  "categories",
-  "tags",
-  "transactions",
-  "budgets",
-  "budgetPeriods",
-  "budgetAdjustments",
-  "goals",
-  "contributions",
-  "recurringRules",
-  "exchangeRates",
-];
-
-// `ENTITY_TYPES` is the list `hydrateFromStorage` walks, and it deliberately omits the
-// settings singleton because that one is read and seeded separately. A merge has no such
-// special case — an op can target `settings:settings` like any other row.
-const ALL_ENTITY_TYPES: EntityType[] = ["settings", ...ENTITY_TYPES];
-
-type ListKey = Exclude<EntityType, "settings">;
-
 export class LocalFinanceRepository implements FinanceRepository {
   private state = createInitialState();
   private listeners = new Set<() => void>();
@@ -493,6 +219,47 @@ export class LocalFinanceRepository implements FinanceRepository {
     netWorthSeries: Map<string, NetWorthSeries>;
     budgetStatuses: Map<string, BudgetStatus[]>;
   } | null = null;
+  /**
+   * What the rules in `src/data/finance/` read: live getters over `state` and `formatLocale`, so a
+   * rule sees what `this.state` shows at the moment it reads (including the temporary snapshot
+   * `withProspectiveState` swaps in), plus the snapshot caches above.
+   */
+  private readonly ctx: FinanceContext = Object.defineProperties(
+    {} as FinanceContext,
+    {
+      state: { get: () => this.state },
+      formatLocale: { get: () => this.formatLocale },
+      postedTransactions: {
+        value: (fromDate?: string, toDate?: string) =>
+          this.postedTransactions(fromDate, toDate),
+      },
+      transactionById: {
+        value: (transactions: TransactionRecord[]) =>
+          this.transactionById(transactions),
+      },
+    },
+  );
+
+  /**
+   * `buildTransaction` as the finance rules call it. Always goes through the method, so a rule
+   * that builds transactions reaches the one implementation the repository itself uses.
+   */
+  private readonly build: BuildTransaction = (
+    input,
+    id,
+    additionalTagIds,
+    expectedRevision,
+    newId,
+  ) =>
+    this.buildTransaction(input, id, additionalTagIds, expectedRevision, newId);
+
+  /** What recurring generation and validation need beyond the snapshot, read when asked for. */
+  private get recurringDeps(): RecurringDeps {
+    return {
+      buildTransaction: this.build,
+      deletedOccurrenceKeys: this.deletedOccurrenceKeys,
+    };
+  }
 
   constructor(private storage: StorageAdapter = new PlatformStorageAdapter()) {
     this.storage.subscribe?.((source) => {
@@ -735,7 +502,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   setDisplayLocale(locale: string): void {
-    this.assertLocale(locale);
+    assertLocale(locale);
     const changed = locale !== this.formatLocale;
     this.displayLocale = locale;
     if (changed) this.emit();
@@ -885,7 +652,7 @@ export class LocalFinanceRepository implements FinanceRepository {
           recurringRules: list<RecurringRule>("recurringRules"),
           exchangeRates: list<ExchangeRate>("exchangeRates"),
         });
-        this.assertMergedSetSafe(repaired);
+        assertMergedSetSafe(repaired, this.formatLocale);
 
         const records: StoredEntity[] = [];
         const touched = new Set<EntityType>();
@@ -949,44 +716,8 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   private async completeOnboardingNow(input: OnboardingInput) {
-    if (
-      this.state.settings.onboardingComplete ||
-      ENTITY_TYPES.some(
-        (type) => (this.state[type] as FinanceEntity[]).length > 0,
-      )
-    )
-      throw new Error("Qashy setup is already complete.");
-    this.assertLocale(input.locale);
-    const baseCurrency = this.normalizeCurrency(input.baseCurrency);
-    this.assertSafeMinor(input.openingBalanceMinor, "Opening balance");
-    this.assertColor(input.accentHex);
-    if (!ACCOUNT_TYPES.includes(input.accountType))
-      throw new Error("Choose a valid account type.");
-    const themeId = input.themeId ?? this.state.settings.themeId;
-    if (!isValidThemeId(themeId)) throw new Error("Choose a valid theme.");
-    if (!THEME_MODES.includes(input.themeMode))
-      throw new Error("Choose a valid theme mode.");
-    if (!ACCENT_SOURCES.includes(input.accentSource))
-      throw new Error("Choose a valid accent source.");
-    const settings = updateEntity(this.state.settings, {
-      onboardingComplete: true,
-      baseCurrency,
-      themeId,
-      themeMode: input.themeMode,
-      accentSource: input.accentSource,
-      accentHex: input.accentHex.toUpperCase(),
-    });
-    const account = createEntity({
-      id: makeId(),
-      name: input.accountName.trim() || defaultAccountName(input.locale),
-      type: input.accountType,
-      currency: baseCurrency,
-      openingBalanceMinor: input.openingBalanceMinor,
-      icon: "wallet.bifold",
-      color: input.accentHex.toUpperCase(),
-      archived: false,
-    });
-    const categories = createDefaultCategories(input.locale);
+    const { settings, account, categories } = planOnboarding(this.ctx, input);
+
     await this.storage.putMany(
       [
         { type: "settings", entity: settings },
@@ -1009,78 +740,12 @@ export class LocalFinanceRepository implements FinanceRepository {
     patch: SettingsInput,
     expectedRevision?: number,
   ) {
-    this.assertExpectedRevision(this.state.settings, patch, expectedRevision);
-    const locale = patch.locale ?? this.state.settings.locale;
-    const baseCurrency = this.normalizeCurrency(
-      patch.baseCurrency ?? this.state.settings.baseCurrency,
+    const settings = buildSettingsUpdate(
+      this.state.settings,
+      patch,
+      expectedRevision,
     );
-    this.assertLocale(locale);
-    this.assertColor(patch.accentHex ?? this.state.settings.accentHex);
-    const themeId = patch.themeId ?? this.state.settings.themeId;
-    if (!isValidThemeId(themeId)) throw new Error("Choose a valid theme.");
-    const themeMode = patch.themeMode ?? this.state.settings.themeMode;
-    const accentSource = patch.accentSource ?? this.state.settings.accentSource;
-    if (!THEME_MODES.includes(themeMode))
-      throw new Error("Choose a valid theme mode.");
-    if (!ACCENT_SOURCES.includes(accentSource))
-      throw new Error("Choose a valid accent source.");
-    if (
-      baseCurrency !== this.state.settings.baseCurrency &&
-      this.state.settings.onboardingComplete
-    ) {
-      throw new Error("Base currency cannot change after setup is complete.");
-    }
-    const navBarStyle =
-      patch.navBarStyle ?? this.state.settings.navBarStyle ?? "native";
-    if (!NAV_BAR_STYLES.includes(navBarStyle))
-      throw new Error("Choose a valid navigation bar style.");
-    const animationLevel =
-      patch.animationLevel ?? this.state.settings.animationLevel ?? "all";
-    if (!ANIMATION_LEVELS.includes(animationLevel))
-      throw new Error("Choose a valid animation level.");
-    const override = (
-      key:
-        | "fontTextOverride"
-        | "fontNumericOverride"
-        | "uiIconSetOverride"
-        | "categoryIconSetOverride",
-    ): string | null => {
-      // null clears, undefined keeps; an id nothing resolves is allowed and falls back at render time.
-      const next =
-        patch[key] === undefined
-          ? (this.state.settings[key] ?? null)
-          : patch[key];
-      if (next === null) return null;
-      if (typeof next !== "string" || !/^[a-z0-9-]{1,48}$/.test(next))
-        throw new Error("Choose a valid appearance override.");
-      return next;
-    };
-    const overrides = {
-      fontTextOverride: override("fontTextOverride"),
-      fontNumericOverride: override("fontNumericOverride"),
-      uiIconSetOverride: override("uiIconSetOverride"),
-      categoryIconSetOverride: override("categoryIconSetOverride"),
-    };
-    const settings = updateEntity(this.state.settings, {
-      onboardingComplete: this.state.settings.onboardingComplete,
-      locale,
-      baseCurrency,
-      themeId,
-      themeMode,
-      accentSource,
-      accentHex: (
-        patch.accentHex ?? this.state.settings.accentHex
-      ).toUpperCase(),
-      swipeBetweenMonths:
-        patch.swipeBetweenMonths ??
-        this.state.settings.swipeBetweenMonths ??
-        false,
-      navBarStyle,
-      animationLevel,
-      hapticsEnabled:
-        patch.hapticsEnabled ?? this.state.settings.hapticsEnabled ?? true,
-      ...overrides,
-    });
+
     await this.persist("settings", [settings]);
     this.state = { ...this.state, settings };
     this.emit();
@@ -1098,47 +763,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     expectedRevision?: number,
   ) {
-    const currency = this.normalizeCurrency(input.currency);
-    this.assertSafeMinor(input.openingBalanceMinor, "Opening balance");
-    this.assertColor(input.color);
-    if (!ACCOUNT_TYPES.includes(input.type))
-      throw new Error("Choose a valid account type.");
-    const name = input.name.trim() || "Account";
-    this.assertUniqueName("accounts", name, id);
-    const existing = this.findExisting(this.state.accounts, id, "account");
-    this.assertNotArchiving(input.archived, existing?.archived);
-    this.assertExpectedRevision(existing, input, expectedRevision);
-    if (existing && existing.currency !== currency) {
-      const hasTransactions = this.state.transactions.some(
-        (item) =>
-          item.accountId === existing.id ||
-          item.destinationAccountId === existing.id,
-      );
-      const hasRules = this.state.recurringRules.some(
-        (item) => item.template.accountId === existing.id,
-      );
-      if (hasTransactions || hasRules) {
-        throw new Error(
-          "Account currency cannot change after transactions or schedules reference it.",
-        );
-      }
-    }
-    const account = existing
-      ? updateEntity(existing, {
-          ...input,
-          name,
-          currency,
-          color: input.color.toUpperCase(),
-        })
-      : (createEntity({
-          id: makeId(),
-          ...input,
-          name,
-          currency,
-          color: input.color.toUpperCase(),
-        }) as Account);
-    const accounts = this.withEntity(this.state.accounts, account);
-    this.assertTransactionSetSafe(this.state.transactions, accounts);
+    const { account, existing, accounts } = planAccountSave(
+      this.ctx,
+      input,
+      id,
+      expectedRevision,
+    );
+
     await this.commitWithDependentRules(
       "accounts",
       account,
@@ -1147,12 +778,6 @@ export class LocalFinanceRepository implements FinanceRepository {
       (rule) => canActivateRecurringRule(rule, accounts, this.state.categories),
     );
     return account;
-  }
-
-  /** Nothing is archived any more. A record an older build archived may still be saved as it is. */
-  private assertNotArchiving(wantsArchived: boolean, wasArchived = false) {
-    if (wantsArchived && !wasArchived)
-      throw new Error("Nothing can be archived. Delete it instead.");
   }
 
   /**
@@ -1209,70 +834,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     expectedRevision?: number,
   ) {
-    const name = input.name.trim() || "Category";
-    this.assertUniqueName("categories", name, id);
-    this.assertColor(input.color);
-    if (!isValidIconId(input.icon)) throw new Error("Choose a valid icon.");
-    if (!CATEGORY_KINDS.includes(input.kind))
-      throw new Error("Choose a valid category kind.");
-    const existing = this.findExisting(this.state.categories, id, "category");
-    this.assertNotArchiving(input.archived, existing?.archived);
-    this.assertExpectedRevision(existing, input, expectedRevision);
-    if (existing && existing.kind !== input.kind) {
-      const isReferenced =
-        this.state.transactions.some(
-          (item) => item.categoryId === existing.id,
-        ) ||
-        this.state.recurringRules.some(
-          (item) => item.template.categoryId === existing.id,
-        ) ||
-        this.state.budgets.some((item) =>
-          item.filters.categoryIds.includes(existing.id),
-        ) ||
-        this.state.goals.some(
-          (item) => item.linkedCategoryId === existing.id,
-        ) ||
-        this.state.categories.some((item) => item.parentId === existing.id);
-      if (isReferenced)
-        throw new Error(
-          "Category kind cannot change after finance records reference it.",
-        );
-    }
-    if (input.parentId) {
-      const parent = this.state.categories.find(
-        (item) => item.id === input.parentId,
-      );
-      const preservesArchivedParent =
-        !!existing && existing.parentId === parent?.id;
-      if (
-        !parent ||
-        (!preservesArchivedParent && parent.archived) ||
-        parent.kind !== input.kind ||
-        parent.parentId ||
-        parent.id === id
-      ) {
-        throw new Error(
-          "Choose a valid top-level parent category of the same kind.",
-        );
-      }
-      if (
-        existing &&
-        this.state.categories.some((item) => item.parentId === existing.id)
-      ) {
-        throw new Error(
-          "A category with child categories cannot also have a parent.",
-        );
-      }
-    }
-    const values = {
-      ...input,
-      name,
-      color: input.color.toUpperCase(),
-    };
-    const category = existing
-      ? updateEntity(existing, values)
-      : (createEntity({ id: makeId(), ...values }) as Category);
-    const categories = this.withEntity(this.state.categories, category);
+    const { category, existing, categories } = planCategorySave(
+      this.ctx,
+      input,
+      id,
+      expectedRevision,
+    );
+
     await this.commitWithDependentRules(
       "categories",
       category,
@@ -1296,8 +864,8 @@ export class LocalFinanceRepository implements FinanceRepository {
   ) {
     const name = input.name.trim();
     if (!name) throw new Error("Tag name is required.");
-    this.assertUniqueName("tags", name, id);
-    this.assertColor(input.color);
+    assertUniqueName(this.ctx, "tags", name, id);
+    assertColor(input.color);
     return await this.saveListEntity<Tag>(
       "tags",
       { ...input, name, color: input.color.toUpperCase() },
@@ -1322,8 +890,9 @@ export class LocalFinanceRepository implements FinanceRepository {
     expectedRevision?: number,
   ) {
     const transaction = this.buildTransaction(input, id, [], expectedRevision);
-    this.assertTransactionSetSafe(
-      this.withEntity(this.state.transactions, transaction),
+    assertTransactionSetSafe(
+      this.ctx,
+      withEntity(this.state.transactions, transaction),
     );
     await this.commitOne("transactions", transaction);
     return transaction;
@@ -1340,17 +909,17 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     expectedRevision?: number,
   ) {
-    const normalized = this.validateBudget(input);
-    const existing = this.findExisting(this.state.budgets, id, "budget");
-    this.assertNotArchiving(input.archived, existing?.archived);
-    this.assertExpectedRevision(existing, input, expectedRevision);
+    const normalized = validateBudget(this.ctx, input);
+    const existing = findExisting(this.state.budgets, id, "budget");
+    assertNotArchiving(input.archived, existing?.archived);
+    assertExpectedRevision(existing, input, expectedRevision);
     const budget = existing
       ? updateEntity(existing, normalized)
       : (createEntity({ id: makeId(), ...normalized }) as Budget);
-    this.assertBudgetSetSafe(this.withEntity(this.state.budgets, budget));
-    const periods = this.buildBudgetSnapshots(budget, true);
+    assertBudgetSetSafe(withEntity(this.state.budgets, budget));
+    const periods = buildBudgetSnapshots(this.ctx, budget, true);
     // Throws if any period's effective limit would leave the safe-integer range.
-    periods.forEach((period) => this.effectiveLimitFor(budget, period));
+    periods.forEach((period) => effectiveLimitFor(this.ctx, budget, period));
     await this.storage.putMany(
       [
         { type: "budgets", entity: budget },
@@ -1369,7 +938,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   private async addBudgetAdjustmentNow(input: BudgetAdjustmentInput) {
-    const budget = this.active(this.state.budgets).find(
+    const budget = active(this.state.budgets).find(
       (item) => item.id === input.budgetId,
     );
     if (!budget || budget.archived) throw new Error("Choose a valid budget.");
@@ -1379,10 +948,10 @@ export class LocalFinanceRepository implements FinanceRepository {
     // Always today: a closed period's rollover is already baked into the next one, so an
     // adjustment dated into it would silently disagree with the number carried forward.
     const today = todayLocal();
-    const snapshot = this.currentSnapshot(budget, today);
+    const snapshot = currentSnapshot(this.ctx, budget, today);
     if (!snapshot)
       throw new Error("This budget has no active period to adjust.");
-    const before = this.effectiveLimitFor(budget, snapshot);
+    const before = effectiveLimitFor(this.ctx, budget, snapshot);
     const adjustment = createEntity({
       id: makeId(),
       budgetId: budget.id,
@@ -1404,8 +973,8 @@ export class LocalFinanceRepository implements FinanceRepository {
           statuses.map((entry) => entry.effectiveLimitMinor),
           "Budget limit total",
         );
-        const after = this.effectiveLimitFor(budget, snapshot);
-        this.assertLimitNotLowered(before, after, "This adjustment");
+        const after = effectiveLimitFor(this.ctx, budget, snapshot);
+        assertLimitNotLowered(before, after, "This adjustment");
       },
     );
     await this.commitOne("budgetAdjustments", adjustment);
@@ -1417,36 +986,32 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   private async resetBudgetRolloverNow(budgetId: string) {
-    const budget = this.active(this.state.budgets).find(
+    const budget = active(this.state.budgets).find(
       (item) => item.id === budgetId,
     );
     if (!budget || budget.archived) throw new Error("Choose a valid budget.");
     // The same lookup adjustments use: a period that rolled over while the app stayed open has
     // no stored row yet, and resetting it must still count rather than be silently dropped.
-    const snapshot = this.currentSnapshot(budget, todayLocal());
+    const snapshot = currentSnapshot(this.ctx, budget, todayLocal());
     if (!snapshot)
       throw new Error("This budget has no active period to reset.");
     if (snapshot.rolloverMinor === 0) return;
     // Zeroing the rollover must not cut the limit below zero, exactly like removing an adjustment.
-    const before = this.effectiveLimitFor(budget, snapshot);
+    const before = effectiveLimitFor(this.ctx, budget, snapshot);
     const after = addMinor(
       snapshot.limitMinor,
-      this.budgetAdjustmentTotal(
+      budgetAdjustmentTotal(
+        this.ctx,
         budget.id,
         snapshot.periodStart,
         snapshot.periodEnd,
       ),
       `${budget.name} effective limit`,
     );
-    this.assertLimitNotLowered(before, after, "Resetting the rollover");
+    assertLimitNotLowered(before, after, "Resetting the rollover");
     // Updating a transient snapshot persists it, which is what the next generation pass would do.
     const reset = updateEntity(snapshot, { rolloverMinor: 0 });
     await this.commitOne("budgetPeriods", reset);
-  }
-
-  /** The rollover that counts toward the limit: stored amounts are inert while rollover is off. */
-  private carriedRollover(budget: Budget, snapshot: BudgetPeriodSnapshot) {
-    return budget.rollover ? snapshot.rolloverMinor : 0;
   }
 
   deleteBudgetAdjustment(id: string) {
@@ -1458,11 +1023,11 @@ export class LocalFinanceRepository implements FinanceRepository {
       (item) => item.id === id,
     );
     if (!adjustment) throw new Error("Choose a valid budget adjustment.");
-    const budget = this.active(this.state.budgets).find(
+    const budget = active(this.state.budgets).find(
       (item) => item.id === adjustment.budgetId,
     );
     const snapshot = budget
-      ? this.currentSnapshot(budget, todayLocal())
+      ? currentSnapshot(this.ctx, budget, todayLocal())
       : undefined;
     if (
       !budget ||
@@ -1474,14 +1039,14 @@ export class LocalFinanceRepository implements FinanceRepository {
         "Only adjustments from the current period can be removed.",
       );
     }
-    const before = this.effectiveLimitFor(budget, snapshot);
+    const before = effectiveLimitFor(this.ctx, budget, snapshot);
     const remaining = this.state.budgetAdjustments.filter(
       (item) => item.id !== id,
     );
     this.withProspectiveState({ budgetAdjustments: remaining }, () => {
-      this.assertLimitNotLowered(
+      assertLimitNotLowered(
         before,
-        this.effectiveLimitFor(budget, snapshot),
+        effectiveLimitFor(this.ctx, budget, snapshot),
         "Removing this adjustment",
       );
     });
@@ -1489,90 +1054,6 @@ export class LocalFinanceRepository implements FinanceRepository {
     await this.persist("budgetAdjustments", [retired]);
     this.state = { ...this.state, budgetAdjustments: remaining };
     this.emit();
-  }
-
-  // A negative limit already exists as a consequence of overspending under rollover, so the
-  // rule cannot be "never below zero" — it is that a deliberate cut must not be what takes
-  // the limit there, or lowers it any further once it is already there.
-  private assertLimitNotLowered(
-    before: number,
-    after: number,
-    subject: string,
-  ) {
-    if (after < 0 && after < before)
-      throw new Error(`${subject} would reduce the budget below zero.`);
-  }
-
-  private effectiveLimitFor(budget: Budget, snapshot: BudgetPeriodSnapshot) {
-    return addMinor(
-      addMinor(
-        snapshot.limitMinor,
-        this.carriedRollover(budget, snapshot),
-        `${budget.name} effective limit`,
-      ),
-      this.budgetAdjustmentTotal(
-        budget.id,
-        snapshot.periodStart,
-        snapshot.periodEnd,
-      ),
-      `${budget.name} effective limit`,
-    );
-  }
-
-  // The stored snapshot for the window containing `onDate`, or a transient one when the
-  // period rolled over while the app stayed open; the next generateRecurring run persists it.
-  private currentSnapshot(budget: Budget, onDate: string) {
-    const bounds = resolvePeriod(budget.period, onDate);
-    if (
-      budget.period.unit === "custom" &&
-      (onDate < bounds.start || onDate > bounds.end)
-    )
-      return undefined;
-    return this.snapshotStartingAt(budget, bounds.start, onDate);
-  }
-
-  // Falls back to a transient snapshot when the period rolled over while the app stayed open;
-  // the next generateRecurring run persists it.
-  private snapshotStartingAt(
-    budget: Budget,
-    periodStart: string,
-    onDate: string,
-  ) {
-    return (
-      this.state.budgetPeriods.find(
-        (item) =>
-          item.budgetId === budget.id && item.periodStart === periodStart,
-      ) ??
-      this.buildBudgetSnapshots(budget, false, onDate, true).find(
-        (item) => item.periodStart === periodStart,
-      )
-    );
-  }
-
-  private budgetAdjustmentsInWindow(
-    budgetId: string,
-    fromDate: string,
-    toDate: string,
-  ) {
-    return this.active(this.state.budgetAdjustments).filter(
-      (item) =>
-        item.budgetId === budgetId &&
-        item.date >= fromDate &&
-        item.date <= toDate,
-    );
-  }
-
-  private budgetAdjustmentTotal(
-    budgetId: string,
-    fromDate: string,
-    toDate: string,
-  ) {
-    return sumMinor(
-      this.budgetAdjustmentsInWindow(budgetId, fromDate, toDate).map(
-        (item) => item.amountMinor,
-      ),
-      "Budget adjustment total",
-    );
   }
 
   saveGoal(input: GoalInput, id?: string, expectedRevision?: number) {
@@ -1603,37 +1084,14 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     expectedRevision?: number,
   ) {
-    const normalized = this.validateGoal(input, id);
-    const existing = this.findExisting(this.state.goals, id, "goal");
-    this.assertNotArchiving(input.archived, existing?.archived);
-    this.assertExpectedRevision(existing, input, expectedRevision);
-    const goal = existing
-      ? updateEntity(existing, normalized)
-      : (createEntity({ id: makeId(), ...normalized }) as Goal);
-    let contributionEntity: GoalContribution | undefined;
-    if (contribution) {
-      this.assertPositiveMinor(contribution.amountMinor, "Contribution");
-      this.assertDate(contribution.localDate);
-      if (
-        contribution.transactionId &&
-        !this.state.transactions.some(
-          (item) => item.id === contribution.transactionId,
-        )
-      ) {
-        throw new Error("Choose a valid transaction.");
-      }
-      contributionEntity = createEntity({
-        id: makeId(),
-        ...contribution,
-        goalId: goal.id,
-        note: contribution.note.trim(),
-      }) as GoalContribution;
-    }
-    const goals = this.withEntity(this.state.goals, goal);
-    const contributions = contributionEntity
-      ? [...this.state.contributions, contributionEntity]
-      : this.state.contributions;
-    this.assertGoalProgressSafe(goal.id, goals, contributions);
+    const { goal, contributionEntity } = planGoalSave(
+      this.ctx,
+      input,
+      contribution,
+      id,
+      expectedRevision,
+    );
+
     await this.storage.putMany(
       [
         { type: "goals", entity: goal },
@@ -1650,9 +1108,9 @@ export class LocalFinanceRepository implements FinanceRepository {
     // goal total that disagrees with the database until the next reload.
     this.state = {
       ...this.state,
-      goals: this.withEntity(this.state.goals, goal),
+      goals: withEntity(this.state.goals, goal),
       contributions: contributionEntity
-        ? this.withEntity(this.state.contributions, contributionEntity)
+        ? withEntity(this.state.contributions, contributionEntity)
         : this.state.contributions,
     };
     this.emit();
@@ -1674,34 +1132,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     expectedRevision?: number,
   ) {
-    this.assertPositiveMinor(input.amountMinor, "Contribution");
-    this.assertDate(input.localDate);
-    if (!this.state.goals.some((item) => item.id === input.goalId))
-      throw new Error("Choose a valid goal.");
-    if (
-      input.transactionId &&
-      !this.state.transactions.some((item) => item.id === input.transactionId)
-    ) {
-      throw new Error("Choose a valid transaction.");
-    }
-    const existing = this.findExisting(
-      this.state.contributions,
+    const contribution = planContributionSave(
+      this.ctx,
+      input,
       id,
-      "contribution",
+      expectedRevision,
     );
-    this.assertExpectedRevision(existing, input, expectedRevision);
-    const contribution = existing
-      ? updateEntity(existing, { ...input, note: input.note.trim() })
-      : (createEntity({
-          id: makeId(),
-          ...input,
-          note: input.note.trim(),
-        }) as GoalContribution);
-    const contributions = this.withEntity(
-      this.state.contributions,
-      contribution,
-    );
-    this.assertGoalProgressSafe(input.goalId, this.state.goals, contributions);
+
     await this.commitOne("contributions", contribution);
     return contribution;
   }
@@ -1721,138 +1158,14 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     expectedRevision?: number,
   ) {
-    const existing = this.findExisting(
-      this.state.recurringRules,
+    const { rule, transactionChanges } = planRecurringRuleSave(
+      this.ctx,
+      this.recurringDeps,
+      input,
       id,
-      "recurring rule",
+      expectedRevision,
     );
-    this.assertExpectedRevision(existing, input, expectedRevision);
-    const scheduleChanged =
-      !!existing &&
-      (existing.unit !== input.unit ||
-        existing.interval !== input.interval ||
-        existing.startDate !== input.startDate ||
-        existing.endDate !== input.endDate);
-    const templateChanged =
-      !!existing &&
-      (existing.template.kind !== input.template.kind ||
-        existing.template.title !== input.template.title ||
-        existing.template.note !== input.template.note ||
-        existing.template.accountId !== input.template.accountId ||
-        existing.template.categoryId !== input.template.categoryId ||
-        existing.template.amountMinor !== input.template.amountMinor ||
-        existing.template.currency !== input.template.currency ||
-        JSON.stringify(existing.template.tagIds) !==
-          JSON.stringify(input.template.tagIds) ||
-        JSON.stringify(existing.template.foreign ?? null) !==
-          JSON.stringify(input.template.foreign ?? null) ||
-        JSON.stringify(existing.template.fee ?? null) !==
-          JSON.stringify(input.template.fee ?? null));
-    const currentUpcoming = existing
-      ? this.state.transactions.filter(
-          (transaction) =>
-            transaction.recurringRuleId === existing.id &&
-            transaction.status === "upcoming",
-        )
-      : [];
-    const earliestUpcomingDate = currentUpcoming
-      .map((transaction) => transaction.localDate)
-      .sort()[0];
-    // Regeneration restarts where the discarded pending items began. Flooring at today dropped
-    // every overdue occurrence for good (their keys are released, nothing regenerates them). With
-    // nothing pending it restarts from the rule's next due date, never earlier than today, so an
-    // edit still cannot backfill history.
-    const baseRegenerateFrom =
-      earliestUpcomingDate ??
-      [existing?.nextDueDate ?? input.startDate, todayLocal()].sort().at(-1)!;
-    // Moving the start date earlier is an explicit request to include the missed occurrences, so
-    // regeneration begins at the new start; occurrence keys keep already-generated ones from duplicating.
-    const movedEarlier = !!existing && input.startDate < existing.startDate;
-    const regenerateFrom =
-      movedEarlier && input.startDate < baseRegenerateFrom
-        ? input.startDate
-        : baseRegenerateFrom;
-    const nextInput = scheduleChanged
-      ? {
-          ...input,
-          nextDueDate: firstRecurrenceOnOrAfter(
-            input.startDate,
-            input.unit,
-            input.interval,
-            [input.startDate, regenerateFrom].sort().at(-1)!,
-          ),
-        }
-      : input;
-    const validated = this.validateRecurring(nextInput, id);
-    // A NEW rule starts at its first occurrence on or after today: a start date in the past must
-    // not backfill every missed occurrence (edits are handled above and never backfill either).
-    const normalized = existing
-      ? validated
-      : {
-          ...validated,
-          nextDueDate: firstRecurrenceOnOrAfter(
-            validated.startDate,
-            validated.unit,
-            validated.interval,
-            [validated.startDate, todayLocal()].sort().at(-1)!,
-          ),
-        };
-    // The flag means "off because a dependency is archived", and it is what lets unarchiving bring
-    // the rule back. The form reopens a paused rule with `active: false`, so the input cannot say
-    // whether the user switched it off: keep the flag while its account or category is still
-    // archived, and clear it once nothing archived blocks the rule.
-    const dependencyArchived =
-      Boolean(
-        this.state.accounts.find(
-          (item) => item.id === normalized.template.accountId,
-        )?.archived,
-      ) ||
-      Boolean(
-        normalized.template.categoryId &&
-        this.state.categories.find(
-          (item) => item.id === normalized.template.categoryId,
-        )?.archived,
-      );
-    const pausedByDependency = Boolean(
-      existing?.pausedByDependency && dependencyArchived,
-    );
-    const rule = existing
-      ? updateEntity(existing, { ...normalized, pausedByDependency })
-      : (createEntity({
-          id: makeId(),
-          ...normalized,
-          pausedByDependency: false,
-        }) as RecurringRule);
-    const transactionChanges = scheduleChanged
-      ? currentUpcoming.map((transaction) =>
-          updateEntity(transaction, {
-            deletedAt: nowIso(),
-            occurrenceKey: null,
-          }),
-        )
-      : templateChanged
-        ? currentUpcoming.map((transaction) =>
-            this.buildTransaction(
-              {
-                ...normalized.template,
-                localDate: transaction.localDate,
-                status: transaction.status,
-                exchangeRate:
-                  transaction.accountId === normalized.template.accountId
-                    ? (transaction.exchangeRate ?? undefined)
-                    : undefined,
-                recurringRuleId: rule.id,
-                occurrenceKey: transaction.occurrenceKey,
-              },
-              transaction.id,
-            ),
-          )
-        : [];
-    this.assertRecurringRuleGenerationSafe(
-      rule,
-      applyTransactionChanges(this.state.transactions, transactionChanges),
-      todayLocal(),
-    );
+
     await this.storage.putMany(
       [
         { type: "recurringRules", entity: rule },
@@ -1862,7 +1175,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     );
     this.state = {
       ...this.state,
-      recurringRules: this.withEntity(this.state.recurringRules, rule),
+      recurringRules: withEntity(this.state.recurringRules, rule),
       transactions: applyTransactionChanges(
         this.state.transactions,
         transactionChanges,
@@ -1884,69 +1197,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     id?: string,
     expectedRevision?: number,
   ) {
-    const fromCurrency = this.normalizeCurrency(input.fromCurrency);
-    const toCurrency = this.normalizeCurrency(input.toCurrency);
-    if (fromCurrency === toCurrency)
-      throw new Error("Exchange-rate currencies must be different.");
-    this.assertDate(input.effectiveDate);
-    const rate = this.normalizeRate(input.rate);
-    const duplicate = this.state.exchangeRates.find(
-      (item) =>
-        item.id !== id &&
-        item.fromCurrency === fromCurrency &&
-        item.toCurrency === toCurrency &&
-        item.effectiveDate === input.effectiveDate,
-    );
-    if (duplicate) {
-      // A manual save landing on the exact key of a live automatic rate gets a more specific
-      // message than "a rate already exists" — the manual form is now reached only for
-      // currencies Frankfurter does not cover or for resolving a conflict, so the user is
-      // looking at a key they did not expect to be occupied.
-      if (
-        !duplicate.deletedAt &&
-        duplicate.id ===
-          fetchedRateId(fromCurrency, toCurrency, input.effectiveDate)
-      ) {
-        throw new Error("An automatic rate already exists for this date.");
-      }
-      throw new Error("A rate already exists for this currency pair and date.");
-    }
-    this.assertReciprocalRate(
-      fromCurrency,
-      toCurrency,
-      rate,
-      input.effectiveDate,
+    const exchangeRate = planExchangeRateSave(
+      this.ctx,
+      input,
       id,
+      expectedRevision,
     );
-    const existing = this.findExisting(
-      this.state.exchangeRates,
-      id,
-      "exchange rate",
-    );
-    this.assertExpectedRevision(existing, input, expectedRevision);
-    const exchangeRate = existing
-      ? updateEntity(existing, {
-          ...input,
-          fromCurrency,
-          toCurrency,
-          rate,
-        })
-      : (createEntity({
-          id: makeId(),
-          ...input,
-          fromCurrency,
-          toCurrency,
-          rate,
-        }) as ExchangeRate);
-    const exchangeRates = this.withEntity(
-      this.state.exchangeRates,
-      exchangeRate,
-    );
-    this.assertTransactionSetSafe(
-      this.state.transactions,
-      this.state.accounts,
-      exchangeRates,
-    );
+
     await this.commitOne("exchangeRates", exchangeRate);
     return exchangeRate;
   }
@@ -1958,26 +1215,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   private async saveFetchedRatesNow(
     rates: readonly RateInput[],
   ): Promise<FetchedRateResult> {
-    // Validate every input before touching any state — a caller bug (a bad currency code, a
-    // malformed date, a rate that is not a positive number, or a pair converting into
-    // something other than the base currency) fails the whole call rather than silently
-    // dropping the row later where it would look like a conflict.
-    const normalized = rates.map((input) => {
-      const fromCurrency = this.normalizeCurrency(input.fromCurrency);
-      const toCurrency = this.normalizeCurrency(input.toCurrency);
-      if (fromCurrency === toCurrency)
-        throw new Error("Exchange-rate currencies must be different.");
-      if (toCurrency !== this.state.settings.baseCurrency) {
-        throw new Error("A fetched rate must convert into the base currency.");
-      }
-      this.assertDate(input.effectiveDate);
-      return {
-        fromCurrency,
-        toCurrency,
-        effectiveDate: input.effectiveDate,
-        rate: this.normalizeRate(input.rate),
-      };
-    });
+    const normalized = normalizeFetchedRates(this.ctx, rates);
 
     // `this.state.exchangeRates` drops tombstones (see `hydrateFromStorage`), so a row this
     // device deleted is simply absent from it — indistinguishable from a row that never
@@ -1988,93 +1226,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     )) as ExchangeRate[];
     const storedById = new Map(stored.map((item) => [item.id, item]));
 
-    // Builds up the working set as rows are accepted, so two rows in the same batch — and the
-    // reciprocal check for a later row — see rows this batch already decided to write, not just
-    // what was on disk when the call started. Tombstone-free throughout, like `this.state`.
-    let exchangeRates = this.state.exchangeRates;
-    const written: ExchangeRate[] = [];
-    const conflicts: FetchedRateConflict[] = [];
-    let skippedManual = 0;
-
-    // One fetched row per pair and date. Two rows for the same key would otherwise both be
-    // counted, and the second would write a conflicting duplicate of the first. The later row
-    // wins, so the outcome does not depend on anything but the batch itself.
-    const latestByKey = new Map<string, (typeof normalized)[number]>();
-    for (const input of normalized) {
-      latestByKey.set(
-        fetchedRateId(
-          input.fromCurrency,
-          input.toCurrency,
-          input.effectiveDate,
-        ),
-        input,
-      );
-    }
-
-    for (const input of latestByKey.values()) {
-      const id = fetchedRateId(
-        input.fromCurrency,
-        input.toCurrency,
-        input.effectiveDate,
-      );
-      const liveSameKey = exchangeRates.find(
-        (item) =>
-          item.id !== id &&
-          item.fromCurrency === input.fromCurrency &&
-          item.toCurrency === input.toCurrency &&
-          item.effectiveDate === input.effectiveDate,
-      );
-      if (liveSameKey) {
-        // A manual row already holds this exact key. Writing our id alongside it would leave
-        // two live rows for the same (from, to, date), which the repair pass would then have
-        // to notice and tombstone — and it would pick one every time this refetches, forever.
-        // The manual row wins instead.
-        skippedManual += 1;
-        continue;
-      }
-      const existingById = storedById.get(id);
-      if (existingById?.deletedAt) {
-        // The user deleted this fetched rate. Resurrecting it fights both the repair pass and
-        // the user's own action.
-        continue;
-      }
-      if (
-        existingById &&
-        this.normalizeRate(existingById.rate) === input.rate
-      ) {
-        // No-op: an unattended "latest" re-fetch that did not move. Skip so it does not bump a
-        // revision or emit a sync op for a value that did not change.
-        continue;
-      }
-      const reciprocal = this.findReciprocalConflict(
-        input.fromCurrency,
-        input.toCurrency,
-        input.rate,
-        input.effectiveDate,
-        existingById?.id,
-        exchangeRates,
-      );
-      if (reciprocal) {
-        // Reported, not thrown: one stale manual row on the opposite side must not block every
-        // other currency this batch would otherwise have written.
-        conflicts.push({
-          fromCurrency: input.fromCurrency,
-          toCurrency: input.toCurrency,
-          effectiveDate: input.effectiveDate,
-          existingRate: reciprocal.rate,
-        });
-        continue;
-      }
-      const entity = existingById
-        ? updateEntity(existingById, { rate: input.rate })
-        : (createEntity({ id, ...input }) as ExchangeRate);
-      exchangeRates = this.withEntity(exchangeRates, entity);
-      written.push(entity);
-    }
+    const { exchangeRates, written, conflicts, skippedManual } =
+      planFetchedRates(this.ctx, normalized, storedById);
 
     if (!written.length) return { written: 0, skippedManual, conflicts };
 
-    this.assertTransactionSetSafe(
+    assertTransactionSetSafe(
+      this.ctx,
       this.state.transactions,
       this.state.accounts,
       exchangeRates,
@@ -2089,90 +1247,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     query: TransactionQuery = {},
     snapshot = this.state.transactions,
   ) {
-    const normalizedSearch = query.search
-      ? foldForSearch(query.search.trim())
-      : undefined;
-    const matchesCategory = query.categoryIds?.length
-      ? this.categoryMatcher(query.categoryIds)
-      : null;
-    let result = snapshot.filter((transaction) => {
-      if (transaction.deletedAt) return false;
-      if (
-        normalizedSearch &&
-        !searchTextOf(transaction).includes(normalizedSearch)
-      )
-        return false;
-      if (
-        query.accountIds?.length &&
-        !query.accountIds.includes(transaction.accountId) &&
-        !(
-          transaction.kind === "transfer" &&
-          transaction.destinationAccountId &&
-          query.accountIds.includes(transaction.destinationAccountId)
-        )
-      )
-        return false;
-      // Hierarchy-aware, matching `budgetSpend` and goal progress. Selecting a
-      // parent category used to return nothing for transactions filed under its
-      // children, so the same category could read "spent 240.00" in a budget while
-      // the transaction list filtered to it came back empty.
-      if (matchesCategory && !matchesCategory(transaction.categoryId))
-        return false;
-      if (
-        query.tagIds?.length &&
-        !query.tagIds.some((id) => transaction.tagIds.includes(id))
-      )
-        return false;
-      if (query.kinds?.length && !query.kinds.includes(transaction.kind))
-        return false;
-      if (
-        query.statuses?.length &&
-        !query.statuses.includes(transaction.status)
-      )
-        return false;
-      if (query.fromDate && transaction.localDate < query.fromDate)
-        return false;
-      if (query.toDate && transaction.localDate > query.toDate) return false;
-      // An unpriced (upcoming, no rate yet) transaction has no base amount to compare, so an amount
-      // bound excludes it rather than matching on a value that does not exist.
-      if (
-        query.minMinor !== undefined &&
-        (transaction.baseAmountMinor === null ||
-          transaction.baseAmountMinor < query.minMinor)
-      )
-        return false;
-      if (
-        query.maxMinor !== undefined &&
-        (transaction.baseAmountMinor === null ||
-          transaction.baseAmountMinor > query.maxMinor)
-      )
-        return false;
-      return true;
-    });
-    if (query.sort !== false) {
-      result = result.sort((a, b) => {
-        if (query.sort === "oldest")
-          return (
-            a.localDate.localeCompare(b.localDate) ||
-            a.createdAt.localeCompare(b.createdAt)
-          );
-        if (query.sort === "amount-desc") {
-          // Unpriced rows sort after priced ones, then by id so the order is deterministic.
-          if (a.baseAmountMinor === null || b.baseAmountMinor === null)
-            return (
-              Number(a.baseAmountMinor === null) -
-                Number(b.baseAmountMinor === null) || a.id.localeCompare(b.id)
-            );
-          return b.baseAmountMinor - a.baseAmountMinor;
-        }
-        return (
-          b.localDate.localeCompare(a.localDate) ||
-          b.createdAt.localeCompare(a.createdAt)
-        );
-      });
-    }
-    const offset = query.offset ?? 0;
-    return result.slice(offset, query.limit ? offset + query.limit : undefined);
+    return queryTransactions(this.ctx, query, snapshot);
   }
 
   getDashboard(
@@ -2181,224 +1256,22 @@ export class LocalFinanceRepository implements FinanceRepository {
     options: { includePendingAutoPosts?: boolean } = {},
   ): DashboardSummary {
     if (options.includePendingAutoPosts) {
-      this.assertDate(toDate);
+      assertDate(toDate);
       return this.withPendingRecurring(true, toDate, () =>
         this.getDashboard(fromDate, toDate),
       );
     }
-    this.assertDate(fromDate);
-    this.assertDate(toDate);
-    if (fromDate > toDate)
-      throw new Error("Dashboard start date must not be after its end date.");
-    if (this.daySpan(fromDate, toDate) > MAX_DASHBOARD_DAYS) {
-      throw new Error("Choose a dashboard range no longer than a century.");
-    }
+    assertDashboardRange(fromDate, toDate);
     const derived = this.derived();
     const dashboardKey = `${fromDate}|${toDate}`;
     const cachedDashboard = derived.dashboards.get(dashboardKey);
     if (cachedDashboard) return cachedDashboard;
-    const posted = this.postedTransactions(fromDate, toDate);
-    const allPosted = this.postedTransactions();
-    const accounts = this.active(this.state.accounts);
-    // One pass over every posted transaction keeps balances O(n + accounts)
-    // instead of O(accounts × n); a running total does not need the sort.
-    const balances = new Map(
-      accounts.map((account) => [account.id, account.openingBalanceMinor]),
+    const summary = computeDashboard(
+      this.ctx,
+      fromDate,
+      toDate,
+      (onDate, budgetOptions) => this.getBudgetStatuses(onDate, budgetOptions),
     );
-    for (const transaction of allPosted) {
-      if (transaction.kind === "expense" || transaction.kind === "transfer") {
-        const current = balances.get(transaction.accountId);
-        if (current !== undefined)
-          balances.set(
-            transaction.accountId,
-            subtractMinor(current, transaction.amountMinor, "Account balance"),
-          );
-      }
-      if (transaction.kind === "income") {
-        const current = balances.get(transaction.accountId);
-        if (current !== undefined)
-          balances.set(
-            transaction.accountId,
-            addMinor(current, transaction.amountMinor, "Account balance"),
-          );
-      }
-      if (transaction.kind === "transfer" && transaction.destinationAccountId) {
-        const current = balances.get(transaction.destinationAccountId);
-        if (current !== undefined)
-          balances.set(
-            transaction.destinationAccountId,
-            addMinor(
-              current,
-              transaction.destinationAmountMinor ?? 0,
-              "Account balance",
-            ),
-          );
-      }
-    }
-    const accountBalances = accounts
-      .map((account) => ({
-        account,
-        balanceMinor: balances.get(account.id) ?? account.openingBalanceMinor,
-      }))
-      // Nothing is archived any more; an account an older build archived is swept at startup, and
-      // until then its balance stays out of net worth.
-      .filter(({ account }) => !account.archived);
-    const expenseCategories = this.active(this.state.categories).filter(
-      (category) => category.kind === "expense",
-    );
-    const expenseCategoryIds = new Set(
-      expenseCategories.map((category) => category.id),
-    );
-    // One pass over the range for income, expense, category, uncategorized, and
-    // daily totals, tracking the 5 newest rows for recentTransactions so the
-    // whole range never needs sorting.
-    let incomeMinor = 0;
-    let expenseMinor = 0;
-    const categoryTotals = new Map<string, number>();
-    const dayTotals = new Map<string, number>();
-    const recentTransactions: TransactionRecord[] = [];
-    let uncategorizedMinor = 0;
-    for (const item of posted) {
-      if (item.kind === "income") {
-        incomeMinor = addMinor(
-          incomeMinor,
-          this.postedBaseMinor(item),
-          "Income total",
-        );
-      } else if (item.kind === "expense") {
-        const baseMinor = this.postedBaseMinor(item);
-        expenseMinor = addMinor(expenseMinor, baseMinor, "Expense total");
-        dayTotals.set(
-          item.localDate,
-          addMinor(
-            dayTotals.get(item.localDate) ?? 0,
-            baseMinor,
-            "Daily spending",
-          ),
-        );
-        if (item.categoryId && expenseCategoryIds.has(item.categoryId)) {
-          categoryTotals.set(
-            item.categoryId,
-            addMinor(
-              categoryTotals.get(item.categoryId) ?? 0,
-              baseMinor,
-              "Category spending",
-            ),
-          );
-        } else {
-          uncategorizedMinor = addMinor(
-            uncategorizedMinor,
-            baseMinor,
-            "Uncategorized spending",
-          );
-        }
-      }
-      const insertAt = recentTransactions.findIndex(
-        (existing) =>
-          item.localDate > existing.localDate ||
-          (item.localDate === existing.localDate &&
-            item.createdAt > existing.createdAt),
-      );
-      if (insertAt === -1) {
-        if (recentTransactions.length < 5) recentTransactions.push(item);
-      } else {
-        recentTransactions.splice(insertAt, 0, item);
-        if (recentTransactions.length > 5) recentTransactions.pop();
-      }
-    }
-    const categorySpend: DashboardSummary["categorySpend"] = expenseCategories
-      .map((category) => ({
-        category,
-        amountMinor: categoryTotals.get(category.id) ?? 0,
-      }))
-      .filter((item) => item.amountMinor > 0);
-    if (uncategorizedMinor > 0) {
-      categorySpend.push({ category: null, amountMinor: uncategorizedMinor });
-    }
-    categorySpend.sort((a, b) => b.amountMinor - a.amountMinor);
-    const today = todayLocal();
-    const budgetDate = today >= fromDate && today <= toDate ? today : toDate;
-    const budgetEntries = this.getBudgetStatuses(budgetDate, {
-      includeInactiveCustom: true,
-    }).filter(
-      ({ budget, snapshot }) =>
-        budget.period.unit !== "custom" ||
-        (snapshot.periodStart <= toDate && snapshot.periodEnd >= fromDate),
-    );
-    const budgetLimitMinor = sumMinor(
-      budgetEntries.map((entry) => entry.effectiveLimitMinor),
-      "Budget limit total",
-    );
-    const budgetSpentMinor = sumMinor(
-      budgetEntries.map((entry) => entry.spentMinor),
-      "Budget spending total",
-    );
-    const dailySpend: DashboardSummary["dailySpend"] = [];
-    let spendDate = fromDate;
-    let spendGuard = 0;
-    while (spendDate <= toDate && spendGuard < MAX_DASHBOARD_DAYS) {
-      dailySpend.push({
-        date: spendDate,
-        amountMinor: dayTotals.get(spendDate) ?? 0,
-      });
-      spendDate = addRecurrence(spendDate, "day", 1);
-      spendGuard += 1;
-    }
-    let netWorthMinor = 0;
-    const missingExchangeRates: DashboardSummary["missingExchangeRates"] = [];
-    const balanceDate = todayLocal();
-    for (const item of accountBalances) {
-      let rate: string;
-      try {
-        rate = this.resolveRate(
-          item.account.currency,
-          this.state.settings.baseCurrency,
-          balanceDate,
-        );
-      } catch (reason) {
-        if (!(reason instanceof MissingExchangeRateError)) throw reason;
-        if (
-          !missingExchangeRates.some(
-            (rate) => rate.fromCurrency === item.account.currency,
-          )
-        ) {
-          missingExchangeRates.push({
-            fromCurrency: item.account.currency,
-            toCurrency: this.state.settings.baseCurrency,
-          });
-        }
-        continue;
-      }
-      netWorthMinor = addMinor(
-        netWorthMinor,
-        convertMinor(
-          item.balanceMinor,
-          item.account.currency,
-          this.state.settings.baseCurrency,
-          rate,
-          this.formatLocale,
-        ),
-        "Net worth",
-      );
-    }
-    const summary: DashboardSummary = {
-      netWorthMinor,
-      incomeMinor,
-      expenseMinor,
-      netFlowMinor: subtractMinor(incomeMinor, expenseMinor, "Net flow"),
-      budgetLimitMinor,
-      budgetSpentMinor,
-      accountBalances,
-      categorySpend,
-      recentTransactions,
-      upcomingTransactions: this.queryTransactions({
-        statuses: ["upcoming"],
-        sort: "oldest",
-        limit: 5,
-      }),
-      dailySpend,
-      missingExchangeRates,
-    };
     derived.dashboards.set(dashboardKey, summary);
     return summary;
   }
@@ -2407,147 +1280,15 @@ export class LocalFinanceRepository implements FinanceRepository {
     months: number,
     today: string = todayLocal(),
   ): NetWorthSeries {
-    if (
-      !Number.isInteger(months) ||
-      months < 1 ||
-      months > MAX_NET_WORTH_MONTHS
-    ) {
-      throw new Error(
-        `Choose a whole number of months from 1 to ${MAX_NET_WORTH_MONTHS}.`,
-      );
-    }
-    this.assertDate(today);
+    assertNetWorthMonths(months);
+    assertDate(today);
     const derived = this.derived();
     const seriesKey = `${months}|${today}`;
     const cached = derived.netWorthSeries.get(seriesKey);
     if (cached) return cached;
-
-    const base = this.state.settings.baseCurrency;
-    const missingExchangeRates: NetWorthSeries["missingExchangeRates"] = [];
-    // Values never saved in the base currency convert at today's rate, as the headline does.
-    const convertAtToday = (amountMinor: number, currency: string): number => {
-      if (currency === base) return amountMinor;
-      let rate: string;
-      try {
-        rate = this.resolveRate(currency, base, today);
-      } catch (reason) {
-        if (!(reason instanceof MissingExchangeRateError)) throw reason;
-        if (
-          !missingExchangeRates.some((item) => item.fromCurrency === currency)
-        ) {
-          missingExchangeRates.push({
-            fromCurrency: currency,
-            toCurrency: base,
-          });
-        }
-        return 0;
-      }
-      return convertMinor(amountMinor, currency, base, rate, this.formatLocale);
-    };
-
-    const includedAccounts = this.active(this.state.accounts).filter(
-      (account) => !account.archived,
+    const series = computeNetWorthSeries(this.ctx, months, today, (from, to) =>
+      this.getDashboard(from, to),
     );
-    const included = new Map(includedAccounts.map((a) => [a.id, a]));
-    const everyAccount = new Map(this.state.accounts.map((a) => [a.id, a]));
-
-    let openingMinor = 0;
-    for (const account of includedAccounts) {
-      openingMinor = addMinor(
-        openingMinor,
-        convertAtToday(account.openingBalanceMinor, account.currency),
-        "Net worth",
-      );
-    }
-
-    // One signed base-currency effect per account leg, so each point is a running total.
-    const effects: { date: string; deltaMinor: number }[] = [];
-    for (const item of this.postedTransactions()) {
-      const source = included.get(item.accountId);
-      if (item.kind === "expense" || item.kind === "income") {
-        if (!source) continue;
-        const valueMinor =
-          item.baseAmountMinor ??
-          convertAtToday(item.amountMinor, item.currency);
-        effects.push({
-          date: item.localDate,
-          deltaMinor: item.kind === "expense" ? -valueMinor : valueMinor,
-        });
-        continue;
-      }
-      if (item.kind !== "transfer") continue;
-      const destination = item.destinationAccountId
-        ? included.get(item.destinationAccountId)
-        : undefined;
-      const sourceCurrency = (source ?? everyAccount.get(item.accountId))
-        ?.currency;
-      const destinationCurrency = item.destinationAccountId
-        ? everyAccount.get(item.destinationAccountId)?.currency
-        : undefined;
-      const sameCurrency =
-        sourceCurrency !== undefined && sourceCurrency === destinationCurrency;
-      if (source) {
-        const outMinor =
-          sameCurrency && item.baseAmountMinor !== null
-            ? item.baseAmountMinor
-            : convertAtToday(item.amountMinor, source.currency);
-        effects.push({ date: item.localDate, deltaMinor: -outMinor });
-      }
-      if (destination) {
-        const inMinor =
-          sameCurrency && item.destinationBaseAmountMinor !== null
-            ? item.destinationBaseAmountMinor
-            : convertAtToday(
-                item.destinationAmountMinor ?? 0,
-                destination.currency,
-              );
-        effects.push({ date: item.localDate, deltaMinor: inMinor });
-      }
-    }
-    effects.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
-
-    const dates: string[] = [];
-    for (let back = months; back >= 1; back -= 1) {
-      dates.push(endOfMonth(moveMonth(today, -back)));
-    }
-    dates.push(today);
-
-    const points: NetWorthSeries["points"] = [];
-    let runningMinor = openingMinor;
-    let cursor = 0;
-    for (const date of dates) {
-      while (cursor < effects.length && effects[cursor].date <= date) {
-        runningMinor = addMinor(
-          runningMinor,
-          effects[cursor].deltaMinor,
-          "Net worth",
-        );
-        cursor += 1;
-      }
-      points.push({ date, baseMinor: runningMinor });
-    }
-
-    // The chart must end on the headline number, so the last point is the dashboard's own value.
-    const headline = this.getDashboard(startOfMonth(today), today);
-    points[points.length - 1] = {
-      date: today,
-      baseMinor: headline.netWorthMinor,
-    };
-    for (const missing of headline.missingExchangeRates) {
-      if (
-        !missingExchangeRates.some(
-          (item) => item.fromCurrency === missing.fromCurrency,
-        )
-      ) {
-        missingExchangeRates.push(missing);
-      }
-    }
-
-    const series: NetWorthSeries = {
-      baseCurrency: base,
-      points,
-      missingExchangeRates,
-    };
     derived.netWorthSeries.set(seriesKey, series);
     return series;
   }
@@ -2559,7 +1300,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       includePendingAutoPosts?: boolean;
     } = {},
   ): BudgetStatus[] {
-    this.assertDate(onDate);
+    assertDate(onDate);
     if (options.includePendingAutoPosts) {
       return this.withPendingRecurring(true, onDate, () =>
         this.getBudgetStatuses(onDate, {
@@ -2571,77 +1312,14 @@ export class LocalFinanceRepository implements FinanceRepository {
     const statusKey = `${onDate}|${options.includeInactiveCustom === true}`;
     const cached = derived.budgetStatuses.get(statusKey);
     if (cached) return cached;
-    const statuses = this.computeBudgetStatuses(onDate, options);
+    const statuses = computeBudgetStatuses(this.ctx, onDate, options);
     derived.budgetStatuses.set(statusKey, statuses);
     return statuses;
   }
 
-  private computeBudgetStatuses(
-    onDate: string,
-    options: { includeInactiveCustom?: boolean },
-  ): BudgetStatus[] {
-    return this.active(this.state.budgets)
-      .filter((budget) => !budget.archived)
-      .flatMap((budget) => {
-        const bounds = resolvePeriod(budget.period, onDate);
-        if (
-          budget.period.unit === "custom" &&
-          !options.includeInactiveCustom &&
-          (onDate < bounds.start || onDate > bounds.end)
-        )
-          return [];
-        const snapshot = this.snapshotStartingAt(budget, bounds.start, onDate);
-        if (!snapshot) return [];
-        const adjustments = this.budgetAdjustmentsInWindow(
-          budget.id,
-          snapshot.periodStart,
-          snapshot.periodEnd,
-        ).sort(
-          (a, b) =>
-            b.date.localeCompare(a.date) ||
-            b.createdAt.localeCompare(a.createdAt),
-        );
-        const adjustmentMinor = sumMinor(
-          adjustments.map((item) => item.amountMinor),
-          "Budget adjustment total",
-        );
-        const spentMinor = this.budgetSpend(
-          snapshot.filters,
-          snapshot.periodStart,
-          snapshot.periodEnd,
-        );
-        const categorySpend = snapshot.categoryLimits.map((limit) => ({
-          ...limit,
-          amountMinor: this.budgetSpend(
-            { ...snapshot.filters, categoryIds: [limit.categoryId] },
-            snapshot.periodStart,
-            snapshot.periodEnd,
-          ),
-        }));
-        return [
-          {
-            budget,
-            snapshot,
-            spentMinor,
-            adjustmentMinor,
-            adjustments,
-            effectiveLimitMinor: addMinor(
-              addMinor(
-                snapshot.limitMinor,
-                this.carriedRollover(budget, snapshot),
-                `${budget.name} effective limit`,
-              ),
-              adjustmentMinor,
-              `${budget.name} effective limit`,
-            ),
-            categorySpend,
-          },
-        ];
-      });
-  }
-
   getGoalProgress(goalId: string) {
-    return this.calculateGoalProgress(
+    return calculateGoalProgress(
+      this.ctx,
       goalId,
       this.state.goals,
       this.state.contributions,
@@ -2649,19 +1327,12 @@ export class LocalFinanceRepository implements FinanceRepository {
     );
   }
 
-  // The base value credited by a transfer's destination leg. baseAmountMinor
-  // snapshots the source leg, which diverges from the destination whenever the
-  // manual destination amount disagrees with the source-leg conversion.
-  private transferInflowBaseMinor(item: TransactionRecord) {
-    return item.destinationBaseAmountMinor ?? this.postedBaseMinor(item);
-  }
-
   generateRecurring(horizonDate = todayLocal()) {
     return this.enqueueMutation(() => this.generateRecurringNow(horizonDate));
   }
 
   getPendingAutoPosts(onDate: string): TransactionRecord[] {
-    this.assertDate(onDate);
+    assertDate(onDate);
     return this.pendingRecurring(onDate).filter(
       (transaction) => transaction.status === "posted",
     );
@@ -2708,103 +1379,24 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   /**
    * What a generation run for `horizonDate` would write for the recurring schedules, without
-   * writing it: the transactions it would create or post, and the rules it would advance. Reads
-   * `this.state` and changes nothing, so a run commits it and a read-only preview only looks at it.
-   * `virtualIds` gives new transactions an id derived from their occurrence key instead of a
-   * random one, so a preview is deterministic.
+   * writing it. See `planRecurring` in `src/data/finance/recurring.ts`.
    */
   private planRecurring(
     horizonDate: string,
     today: string,
     options: { onlyRuleId?: string; virtualIds?: boolean } = {},
   ) {
-    const { onlyRuleId, virtualIds = false } = options;
-    let generated = 0;
-    const transactions = [...this.state.transactions];
-    const occurrenceKeys = new Set<string>();
-    for (const item of transactions)
-      if (item.occurrenceKey) occurrenceKeys.add(item.occurrenceKey);
-    const transactionChanges: TransactionRecord[] = [];
-    const ruleChanges: RecurringRule[] = [];
-    for (const rule of this.active(this.state.recurringRules).filter(
-      (item) => item.active && (!onlyRuleId || item.id === onlyRuleId),
-    )) {
-      // A rule that can no longer build its transaction (dangling reference,
-      // missing exchange rate) is skipped so one bad rule never blocks the
-      // other rules or app startup, which awaits this generation.
-      try {
-        if (rule.autoPost) {
-          transactions.forEach((transaction, index) => {
-            if (
-              transaction.recurringRuleId === rule.id &&
-              transaction.status === "upcoming" &&
-              transaction.localDate <= today
-            ) {
-              // Auto-posting an unpriced occurrence snapshots today's rate, as confirming it would.
-              // With no rate yet it stays upcoming and is retried on the next pass.
-              const updated = this.postedWithSnapshot(transaction, today);
-              if (!updated) return;
-              transactions[index] = updated;
-              transactionChanges.push(updated);
-            }
-          });
-        }
-        const due = walkRecurrence(rule, horizonDate, (occurrenceDate) => {
-          const occurrenceKey = `${rule.id}:${occurrenceDate}`;
-          if (
-            this.deletedOccurrenceKeys.has(occurrenceKey) ||
-            occurrenceKeys.has(occurrenceKey)
-          )
-            return;
-          const transaction = this.buildTransaction(
-            {
-              ...rule.template,
-              localDate: occurrenceDate,
-              status:
-                rule.autoPost && occurrenceDate <= today
-                  ? "posted"
-                  : "upcoming",
-              recurringRuleId: rule.id,
-              occurrenceKey,
-            },
-            undefined,
-            [],
-            undefined,
-            virtualIds ? `pending:${occurrenceKey}` : undefined,
-          );
-          transactions.push(transaction);
-          occurrenceKeys.add(occurrenceKey);
-          transactionChanges.push(transaction);
-          generated += 1;
-        });
-        const active = !rule.endDate || due <= rule.endDate;
-        if (due !== rule.nextDueDate || active !== rule.active) {
-          ruleChanges.push(updateEntity(rule, { nextDueDate: due, active }));
-        }
-      } catch (reason) {
-        // A missing exchange rate is transient: rates may simply not have
-        // loaded yet, and nothing would ever resume a rule paused for it. Leave
-        // the rule active and untouched so the next generation pass retries.
-        if (reason instanceof MissingExchangeRateError) continue;
-        // A programming error is not a property of the rule. Rethrow it so it surfaces
-        // rather than silently pausing every rule that happens to reach the same line.
-        if (!(reason instanceof Error) || isProgrammingError(reason))
-          throw reason;
-        // Any other domain failure (dangling reference, invalid schedule) will not fix
-        // itself. Pause the rule so it surfaces as "Paused" in the Recurring
-        // list and the user can fix the cause and re-enable it.
-        if (rule.active)
-          ruleChanges.push(
-            updateEntity(rule, { active: false, pausedByDependency: false }),
-          );
-        continue;
-      }
-    }
-    return { transactions, transactionChanges, ruleChanges, generated };
+    return planRecurring(
+      this.ctx,
+      this.recurringDeps,
+      horizonDate,
+      today,
+      options,
+    );
   }
 
   private async generateRecurringNow(horizonDate: string, onlyRuleId?: string) {
-    this.assertDate(horizonDate);
+    assertDate(horizonDate);
     const { transactions, transactionChanges, ruleChanges, generated } =
       this.planRecurring(horizonDate, todayLocal(), { onlyRuleId });
     const recurringChanged =
@@ -2830,10 +1422,10 @@ export class LocalFinanceRepository implements FinanceRepository {
     // as those transactions: a crash can then never leave one without the other.
     const budgetPeriods = this.withProspectiveState(
       { transactions: nextTransactions },
-      () => this.dueBudgetSnapshots(),
+      () => dueBudgetSnapshots(this.ctx),
     );
     if (!recurringChanged && !budgetPeriods.length) return generated;
-    if (recurringChanged) this.assertTransactionSetSafe(transactions);
+    if (recurringChanged) assertTransactionSetSafe(this.ctx, transactions);
     await this.storage.putMany(
       [
         ...asRecords("transactions", transactionChanges),
@@ -2876,10 +1468,16 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (!transaction || transaction.status !== "upcoming") return;
     // Paying an unpriced upcoming transaction snapshots the latest rate on or before today. With no
     // rate stored, MissingExchangeRateError propagates before any write and the row stays upcoming.
-    const updated = this.postedWithSnapshot(transaction, todayLocal(), true);
+    const updated = postedWithSnapshot(
+      this.ctx,
+      transaction,
+      todayLocal(),
+      true,
+    );
     if (!updated) return;
-    this.assertTransactionSetSafe(
-      this.withEntity(this.state.transactions, updated),
+    assertTransactionSetSafe(
+      this.ctx,
+      withEntity(this.state.transactions, updated),
     );
     await this.commitOne("transactions", updated);
     await this.generateNextOccurrence(updated);
@@ -2932,32 +1530,12 @@ export class LocalFinanceRepository implements FinanceRepository {
     ids: string[],
     categoryId: string | null,
   ) {
-    const selected = new Set(ids);
-    const candidates = this.state.transactions.filter((item) =>
-      selected.has(item.id),
+    const { updated, transactions } = planCategoryAssignment(
+      this.ctx,
+      ids,
+      categoryId,
     );
-    if (candidates.some((item) => item.kind === "transfer")) {
-      throw new Error("Transfers do not have categories.");
-    }
-    if (categoryId) {
-      const category = this.state.categories.find(
-        (item) => item.id === categoryId && !item.archived,
-      );
-      if (!category) throw new Error("Choose a valid category.");
-      if (candidates.some((item) => item.kind !== category.kind)) {
-        throw new Error(
-          `The ${category.name} category can only be assigned to ${category.kind} transactions.`,
-        );
-      }
-    }
-    const updated = candidates.map((item) =>
-      updateEntity(item, { categoryId }),
-    );
-    const transactions = applyTransactionChanges(
-      this.state.transactions,
-      updated,
-    );
-    this.assertTransactionSetSafe(transactions);
+
     await this.persist("transactions", updated);
     this.state = {
       ...this.state,
@@ -2973,7 +1551,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   private async updateTransactionsDateNow(ids: string[], localDate: string) {
-    this.assertDate(localDate);
+    assertDate(localDate);
     const selected = new Set(ids);
     const moving = this.state.transactions.filter(
       (item) => selected.has(item.id) && item.localDate !== localDate,
@@ -2983,42 +1561,11 @@ export class LocalFinanceRepository implements FinanceRepository {
     // priced like one the user re-dated in the form: rate snapshots that belonged to the old day
     // are left out and resolved again for the new one.
     const updated = moving.map((item) =>
-      this.buildTransaction(
-        {
-          kind: item.kind,
-          status: item.status,
-          title: item.title,
-          note: item.note,
-          localDate,
-          accountId: item.accountId,
-          destinationAccountId: item.destinationAccountId,
-          categoryId: item.categoryId,
-          tagIds: item.tagIds,
-          amountMinor:
-            item.kind === "transfer" ? item.amountMinor : principalOf(item),
-          destinationAmountMinor:
-            item.kind === "transfer" &&
-            item.destinationCurrency !== item.currency
-              ? item.destinationAmountMinor
-              : null,
-          recurringRuleId: item.recurringRuleId,
-          occurrenceKey: item.occurrenceKey,
-          foreign: item.foreign
-            ? {
-                amountMinor: item.foreign.amountMinor,
-                currency: item.foreign.currency,
-              }
-            : null,
-          fee: item.fee
-            ? item.fee.kind === "percent"
-              ? { kind: "percent", percent: item.fee.percent ?? "" }
-              : { kind: "fixed", amountMinor: item.fee.amountMinor }
-            : null,
-        },
-        item.id,
-      ),
+      this.buildTransaction(redatedTransactionInput(item, localDate), item.id),
     );
-    this.assertTransactionSetSafe(
+
+    assertTransactionSetSafe(
+      this.ctx,
       applyTransactionChanges(this.state.transactions, updated),
     );
     await this.persist("transactions", updated);
@@ -3044,378 +1591,17 @@ export class LocalFinanceRepository implements FinanceRepository {
     options: { sweep?: boolean } = {},
   ) {
     if (type === "ready" || type === "settings") return;
-    const list = this.state[type] as FinanceEntity[];
-    const deletedIds = new Set(ids);
-    let accountPlan: AccountDeletionPlan | null = null;
-
-    if (type === "accounts") {
-      const wasLive = this.state.accounts.some(
-        (account) => !account.archived && deletedIds.has(account.id),
-      );
-      const remaining = this.state.accounts.filter(
-        (account) => !account.archived && !deletedIds.has(account.id),
-      );
-      if (wasLive && !remaining.length && !options.sweep)
-        throw new Error(
-          "Keep at least one account. Add another account before deleting this one.",
-        );
-      // Deleting an account deletes what was booked on it; a transfer whose other side survives
-      // is kept there as income or expense. `planAccountDeletion` is the rule, and it is the same
-      // plan the confirmation dialog describes.
-      accountPlan = planAccountDeletion(this.state, [...deletedIds]);
-    }
-    const deleted = list
-      .filter((entity) => deletedIds.has(entity.id))
-      .map(tombstone);
-
-    const ruleChanges = this.state.recurringRules.flatMap((rule) => {
-      if (
-        type === "categories" &&
-        rule.template.categoryId &&
-        deletedIds.has(rule.template.categoryId)
-      ) {
-        const template = { ...rule.template, categoryId: null };
-        // Dropping the category removes one blocker, not necessarily every one:
-        // clearing `pausedByDependency` unconditionally used to strand a rule whose
-        // account is still archived, because both reactivation gates key off that
-        // flag. Only a rule that is paused *and* now has all of its dependencies
-        // satisfied may come back; a user-paused rule is left exactly as it is.
-        // The sweep of archived data never resumes anything: the rule becomes an ordinary
-        // paused schedule, and the user decides whether to turn it back on.
-        if (options.sweep && rule.pausedByDependency) {
-          return [
-            updateEntity(rule, {
-              template,
-              active: false,
-              pausedByDependency: false,
-            }),
-          ];
-        }
-        if (!rule.active && rule.pausedByDependency) {
-          const candidate = { ...rule, template };
-          const restored = canActivateRecurringRule(
-            candidate,
-            this.state.accounts,
-            this.state.categories,
-          );
-          return [
-            updateEntity(rule, {
-              template,
-              active: restored,
-              pausedByDependency: !restored,
-            }),
-          ];
-        }
-        return [updateEntity(rule, { template })];
-      }
-      if (
-        type === "tags" &&
-        rule.template.tagIds.some((id) => deletedIds.has(id))
-      ) {
-        return [
-          updateEntity(rule, {
-            template: {
-              ...rule.template,
-              tagIds: rule.template.tagIds.filter((id) => !deletedIds.has(id)),
-            },
-          }),
-        ];
-      }
-      return [];
-    });
-    const reactivatedRule = ruleChanges.some(
-      (rule) =>
-        rule.active &&
-        this.state.recurringRules.some(
-          (item) => item.id === rule.id && !item.active,
-        ),
+    const plan = planEntityDeletion(this.ctx, type, ids, options);
+    await this.storage.putMany(deletionRecords(plan), this);
+    deletedOccurrenceKeysOf(plan).forEach((occurrenceKey) =>
+      this.deletedOccurrenceKeys.add(occurrenceKey),
     );
-    const contributions =
-      type === "goals"
-        ? this.state.contributions
-            .filter((item) => deletedIds.has(item.goalId))
-            .map(tombstone)
-        : [];
-    const budgetPeriods =
-      type === "budgets"
-        ? this.state.budgetPeriods
-            .filter((item) => deletedIds.has(item.budgetId))
-            .map(tombstone)
-        : [];
-    const budgetAdjustments =
-      type === "budgets"
-        ? this.state.budgetAdjustments
-            .filter((item) => deletedIds.has(item.budgetId))
-            .map(tombstone)
-        : [];
-    // A manual contribution that came from a transaction goes with it.
-    const removedTransactionIds =
-      type === "transactions"
-        ? deletedIds
-        : new Set(accountPlan?.deletedTransactions.map((item) => item.id));
-    const orphanedContributions = removedTransactionIds.size
-      ? this.state.contributions
-          .filter(
-            (item) =>
-              !item.deletedAt &&
-              item.transactionId !== null &&
-              removedTransactionIds.has(item.transactionId),
-          )
-          .map(tombstone)
-      : [];
-    // Unconfirmed occurrences exist only because the rule does, so they go with it. Posted and
-    // skipped ones are history and stay, detached from the rule.
-    const ruleOccurrences =
-      type === "recurringRules"
-        ? this.state.transactions.filter(
-            (item) =>
-              !item.deletedAt &&
-              item.recurringRuleId !== null &&
-              deletedIds.has(item.recurringRuleId),
-          )
-        : [];
-    // Deleting an account removes what was booked on it along with the schedules that post to
-    // it, converts the transfers whose other side survives, and unlinks goals and budgets.
-    const discardedUpcoming = accountPlan
-      ? accountPlan.deletedTransactions.map(tombstone)
-      : ruleOccurrences
-          .filter((item) => item.status === "upcoming")
-          .map(tombstone);
-    const releasedTransactions = accountPlan
-      ? accountPlan.releasedTransactions.map((item) =>
-          updateEntity(item, { recurringRuleId: null }),
-        )
-      : ruleOccurrences
-          .filter((item) => item.status !== "upcoming")
-          .map((item) => updateEntity(item, { recurringRuleId: null }));
-    const accountRuleIds = new Set(accountPlan?.rules.map((rule) => rule.id));
-    const convertedTransactions = accountPlan
-      ? accountPlan.conversions.map((conversion) =>
-          this.convertTransferToPlain(conversion, accountRuleIds),
-        )
-      : [];
-    const deletedRules = accountPlan ? accountPlan.rules.map(tombstone) : [];
-    const untaggedTransactions =
-      type === "tags"
-        ? this.state.transactions
-            .filter(
-              (item) =>
-                !item.deletedAt &&
-                item.tagIds.some((tagId) => deletedIds.has(tagId)),
-            )
-            .map((item) =>
-              updateEntity(item, {
-                tagIds: item.tagIds.filter((tagId) => !deletedIds.has(tagId)),
-              }),
-            )
-        : [];
-    const uncategorisedTransactions =
-      type === "categories"
-        ? this.state.transactions
-            .filter(
-              (item) =>
-                !item.deletedAt &&
-                item.categoryId !== null &&
-                deletedIds.has(item.categoryId),
-            )
-            .map((item) => updateEntity(item, { categoryId: null }))
-        : [];
-    const detachedCategories =
-      type === "categories"
-        ? this.state.categories
-            .filter(
-              (item) =>
-                item.parentId !== null &&
-                deletedIds.has(item.parentId) &&
-                !deletedIds.has(item.id),
-            )
-            .map((item) => updateEntity(item, { parentId: null }))
-        : [];
-    // The current period's snapshot holds its own copy of the filters spend is measured with, and
-    // `computeBudgetStatuses` reads that copy. It must follow the budget, or the deleted
-    // category or tag keeps filtering the live total. Historical periods keep what they measured.
-    const budgetPeriodChanges: BudgetPeriodSnapshot[] = [];
-    const budgetChanges =
-      type === "categories" || type === "tags" || type === "accounts"
-        ? this.state.budgets.flatMap((budget) => {
-            const filters =
-              type === "categories"
-                ? {
-                    ...budget.filters,
-                    categoryIds: budget.filters.categoryIds.filter(
-                      (id) => !deletedIds.has(id),
-                    ),
-                  }
-                : type === "accounts"
-                  ? {
-                      ...budget.filters,
-                      accountIds: budget.filters.accountIds.filter(
-                        (id) => !deletedIds.has(id),
-                      ),
-                    }
-                  : {
-                      ...budget.filters,
-                      tagIds: budget.filters.tagIds.filter(
-                        (id) => !deletedIds.has(id),
-                      ),
-                    };
-            const categoryLimits =
-              type === "categories"
-                ? budget.categoryLimits.filter(
-                    (limit) => !deletedIds.has(limit.categoryId),
-                  )
-                : budget.categoryLimits;
-            if (
-              filters.accountIds.length === budget.filters.accountIds.length &&
-              filters.categoryIds.length ===
-                budget.filters.categoryIds.length &&
-              filters.tagIds.length === budget.filters.tagIds.length &&
-              categoryLimits.length === budget.categoryLimits.length
-            )
-              return [];
-            // An emptied-out filter list means "match everything" to `budgetSpend`. The budget
-            // is kept as it is and now covers all spending; the confirmation says so up front.
-            const currentStart = resolvePeriod(
-              budget.period,
-              todayLocal(),
-            ).start;
-            const currentPeriod = this.state.budgetPeriods.find(
-              (item) =>
-                item.budgetId === budget.id &&
-                item.periodStart === currentStart,
-            );
-            if (currentPeriod)
-              budgetPeriodChanges.push(
-                updateEntity(currentPeriod, { filters, categoryLimits }),
-              );
-            return [updateEntity(budget, { filters, categoryLimits })];
-          })
-        : [];
-    const goalChanges =
-      type === "categories"
-        ? this.state.goals
-            .filter(
-              (goal) =>
-                goal.linkedCategoryId !== null &&
-                deletedIds.has(goal.linkedCategoryId),
-            )
-            .map((goal) => updateEntity(goal, { linkedCategoryId: null }))
-        : accountPlan
-          ? accountPlan.goals.map((goal) =>
-              updateEntity(goal, { linkedAccountId: null }),
-            )
-          : [];
-    const transactionChanges = [
-      ...releasedTransactions,
-      ...untaggedTransactions,
-      ...uncategorisedTransactions,
-      ...convertedTransactions,
-    ];
-    if (type === "transactions") {
-      this.assertTransactionSetSafe(
-        this.state.transactions.filter((item) => !deletedIds.has(item.id)),
-      );
-    }
-    if (accountPlan) {
-      // The balances and totals that remain once the accounts, their transactions and the
-      // converted transfers are applied must still be representable.
-      this.assertTransactionSetSafe(
-        applyTransactionChanges(this.state.transactions, [
-          ...discardedUpcoming,
-          ...transactionChanges,
-        ]),
-        this.state.accounts.filter((account) => !deletedIds.has(account.id)),
-      );
-    }
-    await this.storage.putMany(
-      [
-        ...asRecords(type as EntityType, deleted),
-        ...asRecords("recurringRules", ruleChanges),
-        ...asRecords("recurringRules", deletedRules),
-        ...asRecords("contributions", contributions),
-        ...asRecords("contributions", orphanedContributions),
-        ...asRecords("budgetPeriods", budgetPeriods),
-        ...asRecords("budgetAdjustments", budgetAdjustments),
-        ...asRecords("transactions", transactionChanges),
-        ...asRecords("transactions", discardedUpcoming),
-        ...asRecords("categories", detachedCategories),
-        ...asRecords("budgets", budgetChanges),
-        ...asRecords("budgetPeriods", budgetPeriodChanges),
-        ...asRecords("goals", goalChanges),
-      ],
-      this,
-    );
-    if (type === "transactions") {
-      deleted.forEach((entity) => {
-        const occurrenceKey = (entity as TransactionRecord).occurrenceKey;
-        if (occurrenceKey) this.deletedOccurrenceKeys.add(occurrenceKey);
-      });
-    }
-    const nextState = {
-      ...this.state,
-      [type]: (this.state[type] as FinanceEntity[]).filter(
-        (entity) => !deletedIds.has(entity.id),
-      ),
-    } as FinanceState;
-    nextState.recurringRules = replaceById(
-      nextState.recurringRules,
-      ruleChanges,
-    );
-    if (deletedRules.length) {
-      const gone = new Set(deletedRules.map((rule) => rule.id));
-      nextState.recurringRules = nextState.recurringRules.filter(
-        (rule) => !gone.has(rule.id),
-      );
-    }
-    nextState.transactions = replaceById(
-      nextState.transactions,
-      transactionChanges,
-    );
-    if (discardedUpcoming.length) {
-      const discarded = new Set(discardedUpcoming.map((item) => item.id));
-      nextState.transactions = nextState.transactions.filter(
-        (item) => !discarded.has(item.id),
-      );
-      discardedUpcoming.forEach((item) => {
-        if (item.occurrenceKey)
-          this.deletedOccurrenceKeys.add(item.occurrenceKey);
-      });
-    }
-    if (orphanedContributions.length) {
-      const retired = new Set(orphanedContributions.map((item) => item.id));
-      nextState.contributions = nextState.contributions.filter(
-        (item) => !retired.has(item.id),
-      );
-    }
-    if (type === "goals") {
-      nextState.contributions = nextState.contributions.filter(
-        (item) => !deletedIds.has(item.goalId),
-      );
-    }
-    if (type === "budgets") {
-      nextState.budgetPeriods = nextState.budgetPeriods.filter(
-        (item) => !deletedIds.has(item.budgetId),
-      );
-      nextState.budgetAdjustments = nextState.budgetAdjustments.filter(
-        (item) => !deletedIds.has(item.budgetId),
-      );
-    }
-    nextState.categories = replaceById(
-      nextState.categories,
-      detachedCategories,
-    );
-    nextState.budgets = replaceById(nextState.budgets, budgetChanges);
-    nextState.budgetPeriods = replaceById(
-      nextState.budgetPeriods,
-      budgetPeriodChanges,
-    );
-    nextState.goals = replaceById(nextState.goals, goalChanges);
-    this.state = nextState;
+    this.state = applyDeletion(this.state, plan);
     this.emit();
     // A rule that came back off dependency-pause has to catch up on the occurrences
     // it missed while paused, exactly as it does when the blocking account or
     // category is un-archived.
-    if (reactivatedRule) {
+    if (plan.reactivatedRule) {
       await this.generateRecurringNow(todayLocal());
     }
   }
@@ -3459,7 +1645,8 @@ export class LocalFinanceRepository implements FinanceRepository {
           (row) => (projected.get(`${type}:${row.id}`) as T | undefined) ?? row,
         )
         .filter((row) => !row.deletedAt);
-    this.assertTransactionSetSafe(
+    assertTransactionSetSafe(
+      this.ctx,
       project("transactions", this.state.transactions),
       project("accounts", this.state.accounts),
     );
@@ -3481,201 +1668,15 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   private async importCsvNow(rows: CsvImportRow[], commit = false) {
-    const result: ImportResult = {
-      validRows: [],
-      rejectedRows: [],
-      duplicateRows: [],
-      warnings: [],
-      committedIds: [],
-    };
-    const staged: { input: TransactionInput; tagNames: string[] }[] = [];
-    const duplicateKeys = new Set(
-      this.state.transactions.map((item) => this.transactionDuplicateKey(item)),
-    );
-    let processed = 0;
-    for (const raw of rows) {
-      // A big file is thousands of validations on the JS thread. Handing control back every
-      // so often keeps scrolling, taps and animations responsive while it runs; small files
-      // never reach the first yield.
-      if (processed > 0 && processed % CSV_YIELD_EVERY === 0)
-        await yieldToEventLoop();
-      processed += 1;
-      const parsed = parseCsvRow(raw);
-      if (!parsed.success) {
-        result.rejectedRows.push({
-          rowNumber: raw.rowNumber,
-          reason: parsed.reason,
-        });
-        continue;
-      }
-      const row = parsed.data;
-      // Archived accounts are still matched by name so they are reported as archived
-      // (below) rather than as "Unknown account", which would read as a corrupt export.
-      const account = this.active(this.state.accounts).find(
-        (item) => item.name.toLowerCase() === row.account.toLowerCase(),
-      );
-      if (!account) {
-        result.rejectedRows.push({
-          rowNumber: row.rowNumber,
-          reason: `Unknown account: ${row.account}`,
-        });
-        continue;
-      }
-      if (account.archived) {
-        result.rejectedRows.push({
-          rowNumber: row.rowNumber,
-          reason: `Account ${account.name} is archived.`,
-        });
-        continue;
-      }
-      try {
-        if (row.currency !== account.currency) {
-          throw new Error(
-            `Currency ${row.currency} does not match ${account.name} (${account.currency}).`,
-          );
-        }
-        const amountMinor = parseInvariantMoney(
-          row.amount,
-          row.currency,
-          this.formatLocale,
-        );
-        const destination = row.destinationAccount
-          ? this.active(this.state.accounts).find(
-              (item) =>
-                item.name.toLowerCase() ===
-                row.destinationAccount.toLowerCase(),
-            )
-          : undefined;
-        if (row.type === "transfer" && !destination) {
-          result.rejectedRows.push({
-            rowNumber: row.rowNumber,
-            reason: `Unknown destination account: ${row.destinationAccount || "missing"}`,
-          });
-          continue;
-        }
-        if (destination?.archived) {
-          result.rejectedRows.push({
-            rowNumber: row.rowNumber,
-            reason: `Account ${destination.name} is archived.`,
-          });
-          continue;
-        }
-        const category = row.category
-          ? this.active(this.state.categories).find(
-              (item) => item.name.toLowerCase() === row.category.toLowerCase(),
-            )
-          : undefined;
-        if (row.category && !category)
-          throw new Error(`Unknown category: ${row.category}`);
-        if (category?.archived)
-          throw new Error(`Category ${category.name} is archived.`);
-        const tagNames = [
-          ...new Map(
-            row.tags
-              .split("|")
-              .map((item) => item.trim())
-              .filter(Boolean)
-              .map((name) => [name.toLowerCase(), name]),
-          ).values(),
-        ];
-        const { foreign, fee, principalMinor } = this.parseCsvForeignAndFee(
-          row,
-          account.currency,
-          amountMinor,
-        );
-        const input: TransactionInput = {
-          kind: row.type,
-          status: row.status,
-          title: row.title,
-          note: row.note,
-          localDate: row.date,
-          accountId: account.id,
-          destinationAccountId: destination?.id ?? null,
-          categoryId: category?.id ?? null,
-          tagIds: [],
-          amountMinor: principalMinor,
-          ...(foreign ? { foreign } : {}),
-          ...(fee ? { fee } : {}),
-          destinationAmountMinor:
-            destination && row.destinationAmount
-              ? parseInvariantMoney(
-                  row.destinationAmount,
-                  destination.currency,
-                  this.formatLocale,
-                )
-              : null,
-          destinationBaseAmountMinor: row.destinationBaseAmountMinor
-            ? this.parseMinorInteger(
-                row.destinationBaseAmountMinor,
-                "Destination base amount",
-              )
-            : null,
-          exchangeRate: row.exchangeRate || undefined,
-        };
-        // Build once during preview so rate and transfer validation errors are reported per row.
-        const previewTransaction = this.buildTransaction(input);
-        // The exported `amount` is the total. A breakdown that does not add up to it would
-        // silently change the money, so the row is refused instead.
-        if (
-          (foreign || fee) &&
-          previewTransaction.amountMinor !== amountMinor
-        ) {
-          throw new Error(
-            `Amount ${row.amount} does not match the foreign amount and fee, which total ${minorToDecimalString(
-              previewTransaction.amountMinor,
-              row.currency,
-              this.formatLocale,
-            )}.`,
-          );
-        }
-        const duplicateKey = this.transactionDuplicateKey(
-          previewTransaction,
-          tagNames,
-        );
-        if (duplicateKeys.has(duplicateKey)) {
-          result.duplicateRows.push(row.rowNumber);
-          continue;
-        }
-        duplicateKeys.add(duplicateKey);
-        result.validRows.push(row as CsvImportRow);
-        staged.push({ input, tagNames });
-      } catch (reason) {
-        result.rejectedRows.push({
-          rowNumber: row.rowNumber,
-          reason:
-            reason instanceof Error
-              ? reason.message
-              : "Invalid amount or exchange rate.",
-        });
-      }
-    }
+    const { result, staged } = await stageCsvRows(this.ctx, this.build, rows);
     if (commit && staged.length) {
-      const tags = [...this.state.tags];
-      const newTags: Tag[] = [];
-      const transactions = staged.map(({ input, tagNames }) => {
-        const tagIds = tagNames.map((name) => {
-          const existing = tags.find(
-            (item) =>
-              !item.deletedAt &&
-              normalizeName(item.name) === normalizeName(name),
-          );
-          if (existing) return existing.id;
-          const tag = createEntity({
-            id: makeId(),
-            name,
-            color: "#6D7885",
-          }) as Tag;
-          tags.push(tag);
-          newTags.push(tag);
-          return tag.id;
-        });
-        return this.buildTransaction(
-          { ...input, tagIds },
-          undefined,
-          tags.map((tag) => tag.id),
-        );
-      });
-      this.assertTransactionSetSafe([
+      const { newTags, transactions } = buildCsvTransactions(
+        this.ctx,
+        this.build,
+        staged,
+      );
+
+      assertTransactionSetSafe(this.ctx, [
         ...this.state.transactions,
         ...transactions,
       ]);
@@ -3701,101 +1702,6 @@ export class LocalFinanceRepository implements FinanceRepository {
     if (result.duplicateRows.length)
       result.warnings.push("Likely duplicates were skipped.");
     return result;
-  }
-
-  /**
-   * Reads the optional foreign-amount and fee columns of a CSV row. `amountMinor` is the row's
-   * total (what `exportCsv` writes). Without a foreign amount the principal is derived back from
-   * the total and fee; with one, `buildTransaction` derives it and the caller checks the total.
-   */
-  private parseCsvForeignAndFee(
-    row: ParsedCsvRow,
-    accountCurrency: string,
-    amountMinor: number,
-  ): {
-    foreign: ForeignAmountInput | null;
-    fee: TransactionFeeInput | null;
-    principalMinor: number;
-  } {
-    const locale = this.formatLocale;
-    let foreign: ForeignAmountInput | null = null;
-    if (row.foreignAmount || row.foreignCurrency || row.foreignExchangeRate) {
-      if (!row.foreignAmount || !row.foreignCurrency)
-        throw new Error(
-          "Foreign amount and foreign currency must be given together.",
-        );
-      foreign = {
-        amountMinor: parseInvariantMoney(
-          row.foreignAmount,
-          row.foreignCurrency,
-          locale,
-        ),
-        currency: row.foreignCurrency,
-        ...(row.foreignExchangeRate
-          ? { exchangeRate: row.foreignExchangeRate }
-          : {}),
-      };
-    }
-    let fee: TransactionFeeInput | null = null;
-    if (row.feeKind || row.feeValue) {
-      if (!row.feeKind || !row.feeValue)
-        throw new Error("Fee kind and fee value must be given together.");
-      if (row.feeKind === "percent") {
-        fee = { kind: "percent", percent: row.feeValue };
-      } else if (row.feeKind === "fixed") {
-        fee = {
-          kind: "fixed",
-          amountMinor: parseInvariantMoney(
-            row.feeValue,
-            accountCurrency,
-            locale,
-          ),
-        };
-      } else {
-        throw new Error("Fee kind must be percent or fixed.");
-      }
-    }
-    if (foreign || !fee || row.type === "transfer") {
-      return { foreign, fee, principalMinor: amountMinor };
-    }
-    // A fee without a foreign amount: the exported amount is the total, so recover the principal.
-    const kind = row.type as "expense" | "income";
-    const mismatch = () =>
-      new Error(
-        `Amount ${row.amount} does not match the fee (${row.feeKind} ${row.feeValue}).`,
-      );
-    if (fee.kind === "fixed") {
-      const principal =
-        kind === "expense"
-          ? amountMinor - fee.amountMinor
-          : amountMinor + fee.amountMinor;
-      if (!Number.isSafeInteger(principal) || principal <= 0) throw mismatch();
-      return { foreign, fee, principalMinor: principal };
-    }
-    const percent = Number(normalizeFeePercent(fee.percent));
-    const estimate =
-      kind === "expense"
-        ? amountMinor / (1 + percent / 100)
-        : amountMinor / (1 - percent / 100);
-    if (!Number.isFinite(estimate)) throw mismatch();
-    const center = Math.round(estimate);
-    for (let delta = 0; delta <= 3; delta += 1) {
-      for (const candidate of delta
-        ? [center - delta, center + delta]
-        : [center]) {
-        if (candidate <= 0 || !Number.isSafeInteger(candidate)) continue;
-        try {
-          if (
-            totalWithFee(kind, candidate, feeMinorFor(candidate, fee)) ===
-            amountMinor
-          )
-            return { foreign, fee, principalMinor: candidate };
-        } catch {
-          // Not a valid principal for this total; try the next candidate.
-        }
-      }
-    }
-    throw mismatch();
   }
 
   importExternalBundle(
@@ -3825,725 +1731,31 @@ export class LocalFinanceRepository implements FinanceRepository {
    * not undo the deletion. Accounts, categories and tags are still revived there, since
    * imported transactions depend on them.
    */
-  private async importExternalBundleNow(
+  private importExternalBundleNow(
     importedBundle: ImportBundle,
     mode: ImportMode,
     commit: boolean,
   ): Promise<ExternalImportOutcome> {
-    if (mode !== "merge" && mode !== "replace")
-      throw new Error("Choose how to import: merge or replace.");
-    // Nothing is archived here, so a bundle that still carries archived items has them left out,
-    // exactly as the reader does. A no-op for a bundle the reader already cleaned.
-    const bundle = omitArchived(importedBundle).parts;
-    // Base-currency snapshots and the settings row come from onboarding, and onboarding
-    // refuses to run once any entity exists, so importing first would strand the vault.
-    if (!this.state.settings.onboardingComplete)
-      throw new Error("Finish setting up Qashy before importing.");
+    return runExternalImport(this.importHost(), importedBundle, mode, commit);
+  }
 
-    const replacing = mode === "replace";
-    const source = bundle.source;
-    const idOf = (
-      type: Parameters<typeof externalImportId>[1],
-      externalId: string,
-    ) => externalImportId(source, type, externalId);
-    const outcome: ExternalImportOutcome = {
-      committed: false,
-      created: emptyImportCounts(),
-      reused: { accounts: 0, categories: 0, tags: 0 },
-      duplicateTransactions: 0,
-      replaced: { ...emptyImportCounts(), goals: 0 },
-      rejected: [],
-      renamed: [],
-    };
-    const reject = (externalId: string, reason: string) => {
-      outcome.rejected.push({ externalId, reason });
-    };
-    const reasonOf = (error: unknown) =>
-      error instanceof Error ? error.message : "Could not be imported.";
-    // True the first time an external id of this kind appears; later repeats are rejected.
-    const firstSighting = (kind: string) => {
-      const seen = new Set<string>();
-      return (externalId: string) => {
-        if (seen.has(externalId)) {
-          reject(externalId, `The backup lists this ${kind} more than once.`);
-          return false;
-        }
-        seen.add(externalId);
-        return true;
-      };
-    };
-
-    // Tombstones are invisible to `this.state`, and they decide whether a derived id is a
-    // revival or a fresh row, so the stored rows are read for that one purpose.
-    const readStored = async <T extends FinanceEntity>(type: EntityType) =>
-      new Map(
-        ((await this.storage.readAll(type)) as T[]).map((entity) => [
-          entity.id,
-          entity,
-        ]),
-      );
-    const stored = {
-      accounts: await readStored<Account>("accounts"),
-      categories: await readStored<Category>("categories"),
-      tags: await readStored<Tag>("tags"),
-      transactions: await readStored<TransactionRecord>("transactions"),
-      budgets: await readStored<Budget>("budgets"),
-      recurringRules: await readStored<RecurringRule>("recurringRules"),
-    };
-
-    // What `merge` may reuse. In `replace` nothing of the old vault survives, so nothing in it
-    // can be reused or collide by name, and only the imported entities compete for names.
-    const liveAccounts = replacing ? [] : this.state.accounts;
-    const liveCategories = replacing ? [] : this.state.categories;
-    const liveTags = replacing ? [] : this.state.tags;
-    const liveBudgets = replacing ? [] : this.state.budgets;
-    const liveRules = replacing ? [] : this.state.recurringRules;
-
-    // A reused entity that is archived in the vault cannot take new postings.
-    const archivedVaultAccounts = new Set(
-      liveAccounts.filter((item) => item.archived).map((item) => item.id),
-    );
-    const archivedVaultCategories = new Set(
-      liveCategories.filter((item) => item.archived).map((item) => item.id),
-    );
-
-    // ---- Accounts ------------------------------------------------------------------------
-    const accountIds = new Map<string, string>();
-    const newAccounts: Account[] = [];
-    // `buildTransaction` refuses to post to an archived account, and an imported archived
-    // account has history that must still be importable. So the *view* used to build and
-    // validate holds a non-archived copy of each new account while the entity that is written
-    // keeps the flag from the backup.
-    const buildAccounts: Account[] = [...liveAccounts];
-    const takenAccountNames = new Set(
-      liveAccounts.map((item) => normalizeName(item.name)),
-    );
-    const seenAccounts = firstSighting("account");
-    for (const item of bundle.accounts) {
-      if (!seenAccounts(item.externalId)) continue;
-      try {
-        const derivedId = idOf("account", item.externalId);
-        const currency = this.normalizeCurrency(item.currency);
-        this.assertSafeMinor(item.openingBalanceMinor, "Opening balance");
-        const color = item.color.toUpperCase();
-        this.assertColor(color);
-        if (!ACCOUNT_TYPES.includes(item.type))
-          throw new Error("Choose a valid account type.");
-        const name = item.name.trim() || "Account";
-        const sameId = liveAccounts.find((entity) => entity.id === derivedId);
-        if (sameId && sameId.currency !== currency) {
-          throw new Error(
-            "An account imported earlier has a different currency now.",
-          );
-        }
-        const reusable =
-          sameId ??
-          liveAccounts.find(
-            (entity) =>
-              normalizeName(entity.name) === normalizeName(name) &&
-              entity.currency === currency,
-          );
-        if (reusable) {
-          accountIds.set(item.externalId, reusable.id);
-          outcome.reused.accounts += 1;
-          continue;
-        }
-        const finalName = uniquifyName(source, name, takenAccountNames);
-        if (finalName !== name)
-          outcome.renamed.push({ kind: "account", from: name, to: finalName });
-        takenAccountNames.add(normalizeName(finalName));
-        const account = createEntity({
-          id: derivedId,
-          name: finalName,
-          type: item.type,
-          currency,
-          openingBalanceMinor: item.openingBalanceMinor,
-          icon: item.icon,
-          color,
-          archived: false,
-        }) as Account;
-        accountIds.set(item.externalId, account.id);
-        newAccounts.push(account);
-        buildAccounts.push({ ...account, archived: false });
-      } catch (error) {
-        reject(item.externalId, reasonOf(error));
-      }
-    }
-
-    // ---- Categories ----------------------------------------------------------------------
-    const categoryIds = new Map<string, string>();
-    const newCategories: Category[] = [];
-    const buildCategories: Category[] = [...liveCategories];
-    const takenCategoryNames = new Set(
-      liveCategories.map((item) => normalizeName(item.name)),
-    );
-    const seenCategories = firstSighting("category");
-    // Parents first: a child is validated against the parent it resolved to, and a backup's
-    // row order says nothing about which of the two comes first.
-    for (const item of orderParentsFirst(bundle.categories)) {
-      if (!seenCategories(item.externalId)) continue;
-      try {
-        const derivedId = idOf("category", item.externalId);
-        if (!CATEGORY_KINDS.includes(item.kind))
-          throw new Error("Choose a valid category kind.");
-        const color = item.color.toUpperCase();
-        this.assertColor(color);
-        const name = item.name.trim() || "Category";
-        const sameId = liveCategories.find((entity) => entity.id === derivedId);
-        if (sameId && sameId.kind !== item.kind) {
-          throw new Error(
-            "A category imported earlier has a different kind now.",
-          );
-        }
-        const reusable =
-          sameId ??
-          liveCategories.find(
-            (entity) =>
-              normalizeName(entity.name) === normalizeName(name) &&
-              entity.kind === item.kind,
-          );
-        if (reusable) {
-          categoryIds.set(item.externalId, reusable.id);
-          outcome.reused.categories += 1;
-          continue;
-        }
-        let parentId: string | null = null;
-        if (item.parentExternalId !== null) {
-          parentId = categoryIds.get(item.parentExternalId) ?? null;
-          const parent = parentId
-            ? buildCategories.find((entity) => entity.id === parentId)
-            : undefined;
-          // The rule `repairMergedState` enforces: a live, top-level parent of the same kind.
-          // An archived parent is allowed — the repair does not object, and an archived group
-          // can legitimately still own history.
-          if (!parent || parent.kind !== item.kind || parent.parentId) {
-            throw new Error(
-              "Choose a valid top-level parent category of the same kind.",
-            );
-          }
-        }
-        const finalName = uniquifyName(source, name, takenCategoryNames);
-        if (finalName !== name)
-          outcome.renamed.push({ kind: "category", from: name, to: finalName });
-        takenCategoryNames.add(normalizeName(finalName));
-        const category = createEntity({
-          id: derivedId,
-          name: finalName,
-          kind: item.kind,
-          icon: item.icon,
-          color,
-          parentId,
-          archived: false,
-        }) as Category;
-        categoryIds.set(item.externalId, category.id);
-        newCategories.push(category);
-        buildCategories.push({ ...category, archived: false });
-      } catch (error) {
-        reject(item.externalId, reasonOf(error));
-      }
-    }
-
-    // ---- Tags ----------------------------------------------------------------------------
-    const tagIds = new Map<string, string>();
-    const newTags: Tag[] = [];
-    const buildTags: Tag[] = [...liveTags];
-    const takenTagNames = new Set(
-      liveTags.map((item) => normalizeName(item.name)),
-    );
-    const seenTags = firstSighting("tag");
-    for (const item of bundle.tags) {
-      if (!seenTags(item.externalId)) continue;
-      try {
-        const derivedId = idOf("tag", item.externalId);
-        const name = item.name.trim();
-        if (!name) throw new Error("Tag name is required.");
-        const color = item.color.toUpperCase();
-        this.assertColor(color);
-        const reusable =
-          liveTags.find((entity) => entity.id === derivedId) ??
-          liveTags.find(
-            (entity) => normalizeName(entity.name) === normalizeName(name),
-          );
-        if (reusable) {
-          tagIds.set(item.externalId, reusable.id);
-          outcome.reused.tags += 1;
-          continue;
-        }
-        const finalName = uniquifyName(source, name, takenTagNames);
-        if (finalName !== name)
-          outcome.renamed.push({ kind: "tag", from: name, to: finalName });
-        takenTagNames.add(normalizeName(finalName));
-        const tag = createEntity({
-          id: derivedId,
-          name: finalName,
-          color,
-        }) as Tag;
-        tagIds.set(item.externalId, tag.id);
-        newTags.push(tag);
-        buildTags.push(tag);
-      } catch (error) {
-        reject(item.externalId, reasonOf(error));
-      }
-    }
-
-    const resolveAccount = (externalId: string) => {
-      const id = accountIds.get(externalId);
-      if (!id) throw new Error("Its account could not be imported.");
-      return id;
-    };
-    const resolveCategory = (externalId: string) => {
-      const id = categoryIds.get(externalId);
-      if (!id) throw new Error("Its category could not be imported.");
-      return id;
-    };
-    const resolveTags = (externalIds: readonly string[]) =>
-      externalIds.map((externalId) => {
-        const id = tagIds.get(externalId);
-        if (!id) throw new Error("One of its tags could not be imported.");
-        return id;
-      });
-
-    const bundleRuleIds = new Set(
-      bundle.recurringRules.map((item) => item.externalId),
-    );
-    const newRules: RecurringRule[] = [];
-    const newTransactions: TransactionRecord[] = [];
-    const newBudgets: Budget[] = [];
-
-    // Computed against the real snapshot, before any prospective one is swapped in, because
-    // the key resolves tag ids to names through `this.state.tags`.
-    const existingKeys = replacing
-      ? new Set<string>()
-      : new Set(
-          this.state.transactions.map((item) =>
-            this.transactionDuplicateKey(item),
-          ),
-        );
-    const retainedTransactions = replacing ? [] : this.state.transactions;
-
-    // ---- Recurring rules -----------------------------------------------------------------
-    // Rules are validated as though no account or category were archived, then paused if one
-    // is: that is exactly what archiving does to a rule (`saveAccountNow`), so an archived
-    // dependency must not make the whole import unimportable.
-    const unarchived = <T extends { archived: boolean }>(list: readonly T[]) =>
-      list.map((item) => ({ ...item, archived: false }));
-    const archivedAccountIds = new Set([
-      ...archivedVaultAccounts,
-      ...newAccounts.filter((item) => item.archived).map((item) => item.id),
-    ]);
-    const archivedCategoryIds = new Set([
-      ...archivedVaultCategories,
-      ...newCategories.filter((item) => item.archived).map((item) => item.id),
-    ]);
-    const replacingLedger = replacing
-      ? { recurringRules: [], transactions: [] }
-      : {};
-    const seenRules = firstSighting("schedule");
-    this.withProspectiveState(
-      {
-        accounts: unarchived(buildAccounts),
-        categories: unarchived(buildCategories),
-        tags: buildTags,
-        ...replacingLedger,
+  /** What an external import needs from this repository; see `ExternalImportHost`. */
+  private importHost(): ExternalImportHost {
+    return {
+      ctx: this.ctx,
+      storage: this.storage,
+      source: this,
+      recurringDeps: this.recurringDeps,
+      buildTransaction: this.build,
+      withProspectiveState: (patch, work) =>
+        this.withProspectiveState(patch, work),
+      hydrate: () => this.hydrateFromStorage(),
+      emit: () => this.emit(),
+      scheduleRefresh: () => {
+        this.pendingExternalRefresh = true;
       },
-      () => {
-        for (const item of bundle.recurringRules) {
-          if (!seenRules(item.externalId)) continue;
-          try {
-            const derivedId = idOf("recurringRule", item.externalId);
-            // A schedule imported earlier is already here; it is not new, and re-validating it
-            // against today's vault could reject something the user has since edited.
-            if (liveRules.some((entity) => entity.id === derivedId)) continue;
-            // A schedule the user deleted stays deleted in merge mode.
-            if (!replacing && stored.recurringRules.has(derivedId)) continue;
-            const accountId = resolveAccount(item.accountExternalId);
-            const categoryId = item.categoryExternalId
-              ? resolveCategory(item.categoryExternalId)
-              : null;
-            const normalized = this.validateRecurring({
-              template: {
-                kind: item.kind,
-                title: item.title,
-                note: item.note,
-                accountId,
-                categoryId,
-                tagIds: resolveTags(item.tagExternalIds),
-                amountMinor: item.amountMinor,
-                currency: item.currency,
-              },
-              unit: item.unit,
-              interval: item.interval,
-              startDate: item.startDate,
-              endDate: item.endDate,
-              nextDueDate: item.nextDueDate,
-              autoPost: item.autoPost,
-              active: item.active,
-            });
-            const dependencyArchived =
-              archivedAccountIds.has(accountId) ||
-              Boolean(categoryId && archivedCategoryIds.has(categoryId));
-            newRules.push(
-              createEntity({
-                id: derivedId,
-                ...normalized,
-                active: item.active && !dependencyArchived,
-                pausedByDependency: item.active && dependencyArchived,
-              }) as RecurringRule,
-            );
-          } catch (error) {
-            reject(item.externalId, reasonOf(error));
-          }
-        }
-      },
-    );
-
-    // ---- Transactions --------------------------------------------------------------------
-    const seenTransactions = firstSighting("transaction");
-    // Occurrences the vault already has an answer for, live or tombstoned. The generator makes an
-    // upcoming occurrence for a due schedule on its own, and a user may have skipped or deleted
-    // one, so an imported upcoming entry for the same schedule and date must not add a second.
-    const storedOccurrenceKeys = new Set<string>();
-    for (const record of stored.transactions.values()) {
-      if (record.occurrenceKey) storedOccurrenceKeys.add(record.occurrenceKey);
-    }
-    this.withProspectiveState(
-      {
-        accounts: buildAccounts,
-        categories: buildCategories,
-        tags: buildTags,
-        ...replacingLedger,
-      },
-      () => {
-        for (const item of bundle.transactions) {
-          if (!seenTransactions(item.externalId)) continue;
-          const derivedId = idOf("transaction", item.externalId);
-          // Live or tombstoned: either way the vault already has an answer for this record. The
-          // tombstone case is the user's deliberate deletion, which an import must not undo.
-          if (!replacing && stored.transactions.has(derivedId)) {
-            outcome.duplicateTransactions += 1;
-            continue;
-          }
-          // An upcoming entry that belongs to a schedule is that schedule's waiting occurrence, so
-          // it carries the key the generator uses for it (`<rule id>:<date>`).
-          const occurrenceRuleId =
-            item.status === "upcoming" && item.recurringRuleExternalId !== null
-              ? idOf("recurringRule", item.recurringRuleExternalId)
-              : null;
-          const occurrenceKey = occurrenceRuleId
-            ? `${occurrenceRuleId}:${item.localDate}`
-            : null;
-          if (
-            !replacing &&
-            occurrenceRuleId &&
-            occurrenceKey &&
-            (storedOccurrenceKeys.has(occurrenceKey) ||
-              stored.recurringRules.get(occurrenceRuleId)?.deletedAt)
-          ) {
-            // Either the occurrence already exists, or the user deleted the schedule: an import
-            // must not bring back an entry for something they removed.
-            outcome.duplicateTransactions += 1;
-            continue;
-          }
-          try {
-            const accountId = resolveAccount(item.accountExternalId);
-            if (archivedVaultAccounts.has(accountId))
-              throw new Error("Its account is archived in this vault.");
-            const isTransfer = item.kind === "transfer";
-            const destinationAccountId =
-              isTransfer && item.destinationAccountExternalId !== null
-                ? resolveAccount(item.destinationAccountExternalId)
-                : null;
-            if (
-              destinationAccountId &&
-              archivedVaultAccounts.has(destinationAccountId)
-            ) {
-              throw new Error(
-                "Its destination account is archived in this vault.",
-              );
-            }
-            const categoryId =
-              !isTransfer && item.categoryExternalId !== null
-                ? resolveCategory(item.categoryExternalId)
-                : null;
-            if (categoryId && archivedVaultCategories.has(categoryId)) {
-              throw new Error("Its category is archived in this vault.");
-            }
-            const resolvedTagIds = resolveTags(item.tagExternalIds);
-            if (
-              item.recurringRuleExternalId !== null &&
-              !bundleRuleIds.has(item.recurringRuleExternalId)
-            ) {
-              throw new Error(
-                "It belongs to a schedule that is not in the backup.",
-              );
-            }
-            // Rate resolution stays inside `buildTransaction`: a missing rate for the date throws
-            // here and becomes a per-record rejection rather than aborting the preview.
-            const built = this.buildTransaction(
-              {
-                kind: item.kind,
-                status: item.status,
-                title: item.title,
-                note: item.note,
-                localDate: item.localDate,
-                accountId,
-                destinationAccountId,
-                categoryId,
-                tagIds: resolvedTagIds,
-                amountMinor: item.amountMinor,
-                destinationAmountMinor: isTransfer
-                  ? item.destinationAmountMinor
-                  : null,
-                recurringRuleId:
-                  item.recurringRuleExternalId === null
-                    ? null
-                    : idOf("recurringRule", item.recurringRuleExternalId),
-                occurrenceKey,
-              },
-              undefined,
-              [],
-              undefined,
-              derivedId,
-            );
-            // `buildTransaction` mints a random group id for a transfer; derive it instead so
-            // two devices importing the same file agree on it.
-            const transaction =
-              built.kind === "transfer"
-                ? {
-                    ...built,
-                    transferGroupId: idOf("transfer-group", item.externalId),
-                  }
-                : built;
-            if (!replacing) {
-              const tagNames = resolvedTagIds.map(
-                (id) => buildTags.find((tag) => tag.id === id)?.name ?? id,
-              );
-              if (
-                existingKeys.has(
-                  this.transactionDuplicateKey(transaction, tagNames),
-                )
-              ) {
-                outcome.duplicateTransactions += 1;
-                continue;
-              }
-            }
-            newTransactions.push(transaction);
-          } catch (error) {
-            reject(item.externalId, reasonOf(error));
-          }
-        }
-      },
-    );
-
-    // ---- Budgets -------------------------------------------------------------------------
-    const seenBudgets = firstSighting("budget");
-    this.withProspectiveState(
-      {
-        accounts: buildAccounts,
-        categories: buildCategories,
-        tags: buildTags,
-      },
-      () => {
-        for (const item of bundle.budgets) {
-          if (!seenBudgets(item.externalId)) continue;
-          try {
-            const derivedId = idOf("budget", item.externalId);
-            if (liveBudgets.some((entity) => entity.id === derivedId)) continue;
-            // A budget the user deleted stays deleted in merge mode.
-            if (!replacing && stored.budgets.has(derivedId)) continue;
-            const normalized = this.validateBudget({
-              name: item.name,
-              icon: item.icon,
-              color: item.color,
-              limitMinor: item.limitMinor,
-              period: { ...item.period },
-              // An imported budget starts a fresh history here; there is no earlier Qashy period
-              // to carry an unspent balance out of.
-              rollover: false,
-              filters: {
-                accountIds: item.accountExternalIds.map(resolveAccount),
-                categoryIds: item.categoryExternalIds.map(resolveCategory),
-                tagIds: resolveTags(item.tagExternalIds),
-              },
-              categoryLimits: item.categoryLimits.map((limit) => ({
-                categoryId: resolveCategory(limit.categoryExternalId),
-                limitMinor: limit.limitMinor,
-              })),
-              archived: false,
-            });
-            newBudgets.push(
-              createEntity({ id: derivedId, ...normalized }) as Budget,
-            );
-          } catch (error) {
-            reject(item.externalId, reasonOf(error));
-          }
-        }
-      },
-    );
-
-    // ---- Whole-set safety ----------------------------------------------------------------
-    // Skipped once anything was rejected: the set is incomplete, so an overflow reported over
-    // it would describe a vault that is never going to exist.
-    if (!outcome.rejected.length) {
-      try {
-        this.withProspectiveState(
-          {
-            accounts: buildAccounts,
-            categories: buildCategories,
-            tags: buildTags,
-            ...(replacing
-              ? {
-                  transactions: [],
-                  budgets: [],
-                  budgetPeriods: [],
-                  budgetAdjustments: [],
-                  goals: [],
-                  contributions: [],
-                  recurringRules: [],
-                }
-              : {}),
-          },
-          () => {
-            const transactions = [...retainedTransactions, ...newTransactions];
-            this.assertTransactionSetSafe(transactions, buildAccounts);
-            this.assertBudgetSetSafe([...liveBudgets, ...newBudgets]);
-            for (const rule of newRules) {
-              this.assertRecurringRuleGenerationSafe(
-                rule,
-                transactions,
-                todayLocal(),
-              );
-            }
-          },
-        );
-      } catch (error) {
-        reject("import", reasonOf(error));
-      }
-    }
-
-    outcome.created = {
-      accounts: newAccounts.length,
-      categories: newCategories.length,
-      tags: newTags.length,
-      transactions: newTransactions.length,
-      recurringRules: newRules.length,
-      budgets: newBudgets.length,
+      generateAfterCommit: () => this.generateAfterCommit(),
     };
-    if (replacing) {
-      outcome.replaced = {
-        accounts: this.state.accounts.length,
-        categories: this.state.categories.length,
-        tags: this.state.tags.length,
-        transactions: this.state.transactions.length,
-        recurringRules: this.state.recurringRules.length,
-        budgets: this.state.budgets.length,
-        goals: this.state.goals.length,
-      };
-      // A replace really erases, and that is only coherent on a device that does not sync. The
-      // commit checks again inside its own transaction; this is what lets a preview say so first.
-      if (
-        await this.storage.transact((tx) => hasSyncHistory(tx), {
-          silent: true,
-        })
-      )
-        reject("replace", REPLACE_NEEDS_NO_SYNC_MESSAGE);
-    }
-
-    if (!commit) return outcome;
-    if (outcome.rejected.length) {
-      throw new Error(
-        `Import blocked: ${outcome.rejected.length} item(s) could not be imported, so nothing was imported.`,
-      );
-    }
-
-    // In `merge`, overwrites a tombstone that already holds this id, bumping the revision
-    // instead of restarting it at 1, so the op log records a revival and never a second "create"
-    // of the same entity. A `replace` erases the old rows first, so there is nothing to revive:
-    // every imported entity is simply new.
-    const settle = <T extends FinanceEntity>(
-      fresh: T,
-      previous: ReadonlyMap<string, T>,
-    ): T => {
-      const old = replacing ? undefined : previous.get(fresh.id);
-      return old
-        ? updateEntity(old, { ...fresh, deletedAt: null } as Partial<T>)
-        : fresh;
-    };
-    const records: StoredEntity[] = [
-      ...asRecords(
-        "accounts",
-        newAccounts.map((fresh) => settle(fresh, stored.accounts)),
-      ),
-      ...asRecords(
-        "categories",
-        newCategories.map((fresh) => settle(fresh, stored.categories)),
-      ),
-      ...asRecords(
-        "tags",
-        newTags.map((fresh) => settle(fresh, stored.tags)),
-      ),
-      ...asRecords(
-        "transactions",
-        newTransactions.map((fresh) => settle(fresh, stored.transactions)),
-      ),
-      ...asRecords(
-        "budgets",
-        newBudgets.map((fresh) => settle(fresh, stored.budgets)),
-      ),
-      ...asRecords(
-        "recurringRules",
-        newRules.map((fresh) => settle(fresh, stored.recurringRules)),
-      ),
-    ];
-    // Nothing new (a re-import) writes nothing and captures no ops. A replace still has the old
-    // data to erase.
-    if (!records.length && !replacing) {
-      outcome.committed = true;
-      return outcome;
-    }
-    if (replacing) {
-      // One transaction: the old rows (live and already-deleted alike) go and the backup's come
-      // in together, or nothing changes. Written through `transact`, which captures no ops, so
-      // it must never run where an op log exists for these rows; the check sits inside the
-      // transaction so nothing can pair this device between the preview and now.
-      await this.storage.transact(
-        async (tx) => {
-          if (await hasSyncHistory(tx))
-            throw new Error(REPLACE_NEEDS_NO_SYNC_MESSAGE);
-          for (const type of REPLACED_TYPES) {
-            const rows = await tx.readAll(type);
-            if (rows.length)
-              await tx.deleteKeys(rows.map((row) => recordKey(type, row.id)));
-          }
-          await tx.putMany(records);
-        },
-        { source: this },
-      );
-    } else {
-      await this.storage.putMany(records, this);
-    }
-    // Rehydrate rather than splice: an import touches up to nine entity types, revives
-    // tombstones, and (in `replace`) retires occurrence keys, all of which `hydrateFromStorage`
-    // already derives from the stored rows.
-    // The import is durable from here on, so its outcome is settled before anything below can fail.
-    outcome.committed = true;
-    let refreshed = true;
-    try {
-      await this.hydrateFromStorage();
-      this.emit();
-    } catch {
-      // A failed reload leaves the snapshot stale, not the import unsaved. Retry the reload once
-      // the queue settles, and skip the catch-up below, which would otherwise run against stale
-      // state. The next load runs it anyway.
-      refreshed = false;
-      this.pendingExternalRefresh = true;
-    }
-    if (refreshed) {
-      // Same catch-up `saveAccountNow` does, so imported schedules show their upcoming
-      // occurrences and imported budgets get their current period straight away.
-      await this.generateAfterCommit();
-    }
-    return outcome;
   }
 
   /**
@@ -4577,95 +1789,7 @@ export class LocalFinanceRepository implements FinanceRepository {
   }
 
   exportCsv() {
-    const headers = [
-      "date",
-      "type",
-      "status",
-      "title",
-      "amount",
-      "currency",
-      "account",
-      "destination_account",
-      "destination_amount",
-      "destination_base_amount_minor",
-      "category",
-      "tags",
-      "note",
-      "exchange_rate",
-      "base_amount_minor",
-      "transfer_id",
-      "foreign_amount",
-      "foreign_currency",
-      "foreign_exchange_rate",
-      "fee_kind",
-      "fee_value",
-    ];
-    const rows = this.queryTransactions({ sort: "oldest" }).map(
-      (transaction) => {
-        const account =
-          this.state.accounts.find((item) => item.id === transaction.accountId)
-            ?.name ?? "";
-        const destination = this.state.accounts.find(
-          (item) => item.id === transaction.destinationAccountId,
-        );
-        const category =
-          this.state.categories.find(
-            (item) => item.id === transaction.categoryId,
-          )?.name ?? "";
-        const tags = transaction.tagIds
-          .map((id) => this.state.tags.find((item) => item.id === id)?.name)
-          .filter(Boolean)
-          .join("|");
-        return [
-          transaction.localDate,
-          transaction.kind,
-          transaction.status,
-          transaction.title,
-          minorToDecimalString(
-            transaction.amountMinor,
-            transaction.currency,
-            this.formatLocale,
-          ),
-          transaction.currency,
-          account,
-          destination?.name ?? "",
-          transaction.destinationAmountMinor !== null && destination
-            ? minorToDecimalString(
-                transaction.destinationAmountMinor,
-                destination.currency,
-                this.formatLocale,
-              )
-            : "",
-          transaction.destinationBaseAmountMinor ?? "",
-          category,
-          tags,
-          transaction.note,
-          transaction.exchangeRate ?? "",
-          transaction.baseAmountMinor ?? "",
-          transaction.transferGroupId ?? "",
-          transaction.foreign
-            ? minorToDecimalString(
-                transaction.foreign.amountMinor,
-                transaction.foreign.currency,
-                this.formatLocale,
-              )
-            : "",
-          transaction.foreign?.currency ?? "",
-          transaction.foreign?.exchangeRate ?? "",
-          transaction.fee?.kind ?? "",
-          transaction.fee
-            ? transaction.fee.kind === "percent"
-              ? (transaction.fee.percent ?? "")
-              : minorToDecimalString(
-                  transaction.fee.amountMinor,
-                  transaction.currency,
-                  this.formatLocale,
-                )
-            : "",
-        ];
-      },
-    );
-    return `\uFEFF${[headers, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n")}`;
+    return buildCsvExport(this.ctx);
   }
 
   resetAllData() {
@@ -4792,8 +1916,8 @@ export class LocalFinanceRepository implements FinanceRepository {
     expectedRevision?: number,
   ) {
     const list = this.state[type] as T[];
-    const existing = this.findExisting(list, id, type.slice(0, -1));
-    this.assertExpectedRevision(existing, input, expectedRevision);
+    const existing = findExisting(list, id, type.slice(0, -1));
+    assertExpectedRevision(existing, input, expectedRevision);
     const entity = existing
       ? updateEntity(existing, input as Partial<T>)
       : createEntity<T>({ id: makeId(), ...input } as T);
@@ -4808,486 +1932,20 @@ export class LocalFinanceRepository implements FinanceRepository {
     expectedRevision?: number,
     newId?: string,
   ) {
-    this.assertDate(input.localDate);
-    if (!TRANSACTION_TYPES.includes(input.kind))
-      throw new Error("Choose a valid transaction type.");
-    const status = input.status ?? "posted";
-    if (!TRANSACTION_STATUSES.includes(status))
-      throw new Error("Choose a valid transaction status.");
-    const existing = this.findExisting(
-      this.state.transactions,
+    return buildTransaction(
+      this.ctx,
+      input,
       id,
-      "transaction",
+      additionalTagIds,
+      expectedRevision,
+      newId,
     );
-    this.assertExpectedRevision(existing, input, expectedRevision);
-    const account = this.active(this.state.accounts).find(
-      (item) => item.id === input.accountId,
-    );
-    if (!account || (account.archived && existing?.accountId !== account.id))
-      throw new Error("Choose a valid account.");
-    const destination =
-      input.kind === "transfer" && input.destinationAccountId
-        ? this.active(this.state.accounts).find(
-            (item) => item.id === input.destinationAccountId,
-          )
-        : null;
-    if (
-      input.kind === "transfer" &&
-      (!destination ||
-        destination.id === account.id ||
-        (destination.archived &&
-          existing?.destinationAccountId !== destination.id))
-    ) {
-      throw new Error("Choose a different destination account.");
-    }
-    const category = input.categoryId
-      ? this.active(this.state.categories).find(
-          (item) => item.id === input.categoryId,
-        )
-      : null;
-    if (
-      input.kind !== "transfer" &&
-      input.categoryId &&
-      (!category ||
-        category.kind !== input.kind ||
-        (category.archived && existing?.categoryId !== category.id))
-    ) {
-      throw new Error(`Choose a valid ${input.kind} category.`);
-    }
-    // Some callers (for example recurring generation) omit tags when editing,
-    // so omission means "leave them unchanged". Passing an explicit empty
-    // array still clears every tag.
-    const tagIds = [...new Set(input.tagIds ?? existing?.tagIds ?? [])];
-    const knownTagIds = new Set([
-      ...this.active(this.state.tags).map((tag) => tag.id),
-      ...additionalTagIds,
-    ]);
-    if (tagIds.some((tagId) => !knownTagIds.has(tagId))) {
-      throw new Error("Choose valid tags.");
-    }
-    if (input.kind === "transfer" && (input.foreign || input.fee)) {
-      throw new Error(
-        "Foreign amounts and fees apply to expenses and income only.",
-      );
-    }
-    // Foreign pricing and fees never touch a transfer — the total is exactly
-    // `input.amountMinor`, validated positive just like it always was. For an
-    // expense or income, `input.amountMinor` is the principal *unless* a
-    // foreign amount is given, in which case the principal is derived from
-    // converting the foreign amount instead and `input.amountMinor` is ignored.
-    let principalMinor: number;
-    let foreign: ForeignAmount | null = null;
-    if (input.kind !== "transfer" && input.foreign) {
-      const foreignCurrency = this.normalizeCurrency(input.foreign.currency);
-      if (foreignCurrency === account.currency) {
-        throw new Error(
-          "Choose a foreign currency different from the account’s.",
-        );
-      }
-      this.assertPositiveMinor(input.foreign.amountMinor, "Amount");
-      // The foreign rate is a transaction snapshot, exactly like the base-currency
-      // rate below: reuse it across an edit that does not touch the account,
-      // date, or foreign currency, so a since-deleted rate cannot block renaming
-      // a transaction that already carries its own snapshot.
-      const preservesForeignRateSnapshot =
-        Boolean(existing?.foreign) &&
-        existing?.accountId === account.id &&
-        existing.localDate === input.localDate &&
-        existing.foreign?.currency === foreignCurrency;
-      const foreignRate = input.foreign.exchangeRate
-        ? this.normalizeRate(input.foreign.exchangeRate)
-        : preservesForeignRateSnapshot
-          ? existing!.foreign!.exchangeRate
-          : this.resolveRate(
-              foreignCurrency,
-              account.currency,
-              input.localDate,
-            );
-      principalMinor = convertMinor(
-        input.foreign.amountMinor,
-        foreignCurrency,
-        account.currency,
-        foreignRate,
-        this.formatLocale,
-      );
-      if (principalMinor <= 0) {
-        throw new Error(
-          `This amount converts to less than the smallest unit of ${account.currency}. Enter a larger amount or check the exchange rate.`,
-        );
-      }
-      foreign = {
-        amountMinor: input.foreign.amountMinor,
-        currency: foreignCurrency,
-        exchangeRate: foreignRate,
-      };
-    } else {
-      this.assertPositiveMinor(input.amountMinor, "Amount");
-      principalMinor = input.amountMinor;
-    }
-    let fee: TransactionFee | null = null;
-    if (input.kind !== "transfer" && input.fee) {
-      if (input.fee.kind === "fixed") {
-        this.assertPositiveMinor(input.fee.amountMinor, "Fee");
-        fee = {
-          kind: "fixed",
-          percent: null,
-          amountMinor: input.fee.amountMinor,
-        };
-      } else {
-        const percent = normalizeFeePercent(input.fee.percent);
-        fee = {
-          kind: "percent",
-          percent,
-          amountMinor: feeMinorFor(principalMinor, {
-            kind: "percent",
-            percent,
-          }),
-        };
-      }
-    }
-    const amountMinor =
-      input.kind === "transfer"
-        ? input.amountMinor
-        : fee
-          ? totalWithFee(input.kind, principalMinor, fee.amountMinor)
-          : principalMinor;
-    // The applied rate is a transaction snapshot, exactly like the destination
-    // leg below. While the account and date are unchanged, re-resolving it
-    // through the live rate table let a since-deleted rate block edits to a
-    // record that already carries its own rate — renaming a transaction failed
-    // with "Missing exchange rate". Reuse the stored rate unless the caller
-    // supplies one or the currency pair or date actually moved.
-    // An unpriced row keeps no snapshot to reuse, so an edit re-resolves it.
-    const preservesRateSnapshot =
-      existing?.accountId === account.id &&
-      existing.localDate === input.localDate &&
-      existing.currency === account.currency &&
-      existing.exchangeRate !== null;
-    // A cross-currency transfer into the base currency with a typed destination amount is priced
-    // by that amount itself: the base value of the source leg *is* what arrived. Requiring a
-    // separate stored rate for it made the "Destination amount" alternative unusable.
-    const baseDestinationAmountMinor =
-      input.kind === "transfer" &&
-      destination?.currency === this.state.settings.baseCurrency &&
-      account.currency !== this.state.settings.baseCurrency &&
-      input.destinationAmountMinor !== undefined &&
-      input.destinationAmountMinor !== null
-        ? input.destinationAmountMinor
-        : null;
-    // `null` means the rate is not known yet. Only an upcoming transaction may be left unpriced;
-    // a posted one still needs its rate, so its MissingExchangeRateError propagates.
-    const rate = this.rateOrNullWhileUpcoming(status, () =>
-      account.currency === this.state.settings.baseCurrency
-        ? "1"
-        : input.exchangeRate
-          ? this.normalizeRate(input.exchangeRate)
-          : preservesRateSnapshot
-            ? existing!.exchangeRate
-            : this.resolveTransferAwareRate(
-                account.currency,
-                input.localDate,
-                amountMinor,
-                baseDestinationAmountMinor,
-              ),
-    );
-    const baseAmountMinor =
-      rate === null
-        ? null
-        : baseDestinationAmountMinor !== null &&
-            !input.exchangeRate &&
-            !preservesRateSnapshot &&
-            !this.hasRate(
-              account.currency,
-              this.state.settings.baseCurrency,
-              input.localDate,
-            )
-          ? baseDestinationAmountMinor
-          : convertMinor(
-              amountMinor,
-              account.currency,
-              this.state.settings.baseCurrency,
-              rate,
-              this.formatLocale,
-            );
-    // A positive amount that rounds to nothing in the base currency would be a free transaction
-    // that still moves an account balance. An unchanged historical record is left alone.
-    if (
-      amountMinor > 0 &&
-      baseAmountMinor !== null &&
-      baseAmountMinor <= 0 &&
-      existing?.baseAmountMinor !== baseAmountMinor
-    ) {
-      throw new Error(
-        `This amount converts to less than the smallest unit of ${this.state.settings.baseCurrency}. Enter a larger amount or check the exchange rate.`,
-      );
-    }
-    let destinationAmountMinor: number | null = null;
-    let destinationBaseAmountMinor: number | null = null;
-    if (input.kind === "transfer") {
-      if (destination!.currency === account.currency) {
-        destinationAmountMinor = input.amountMinor;
-      } else if (
-        input.destinationAmountMinor !== undefined &&
-        input.destinationAmountMinor !== null
-      ) {
-        this.assertPositiveMinor(
-          input.destinationAmountMinor,
-          "Destination amount",
-        );
-        // Re-saving a historical transfer must never be blocked by a value that
-        // is already on the record, so only a new or changed amount is checked.
-        const unchangedDestinationAmount =
-          existing?.kind === "transfer" &&
-          existing.destinationAccountId === destination!.id &&
-          existing.destinationAmountMinor === input.destinationAmountMinor;
-        if (!unchangedDestinationAmount) {
-          this.assertManualTransferAmount(
-            input.amountMinor,
-            account.currency,
-            input.destinationAmountMinor,
-            destination!.currency,
-            input.localDate,
-          );
-        }
-        destinationAmountMinor = input.destinationAmountMinor;
-      } else {
-        destinationAmountMinor = convertMinor(
-          input.amountMinor,
-          account.currency,
-          destination!.currency,
-          this.resolveRate(
-            account.currency,
-            destination!.currency,
-            input.localDate,
-          ),
-          this.formatLocale,
-        );
-      }
-      const preservesDestinationSnapshot =
-        existing?.kind === "transfer" &&
-        existing.destinationAccountId === destination!.id &&
-        existing.localDate === input.localDate &&
-        existing.destinationAmountMinor === destinationAmountMinor &&
-        existing.destinationBaseAmountMinor !== null;
-      if (
-        input.destinationBaseAmountMinor !== undefined &&
-        input.destinationBaseAmountMinor !== null &&
-        // An unpriced source leg cannot verify a same-currency destination base, so that value is
-        // derived when the transaction is paid instead of being trusted from the input.
-        !(
-          baseAmountMinor === null && destination!.currency === account.currency
-        )
-      ) {
-        this.assertPositiveMinor(
-          input.destinationBaseAmountMinor,
-          "Destination base amount",
-        );
-        // A cross-currency CSV carries this as a historical snapshot. Re-resolving today's
-        // editable destination-to-base rate would reject a valid export after that rate changed
-        // or was deleted. Same-currency and destination-base legs remain derivable, so keep
-        // their forged-value protection without making historical non-base legs unimportable.
-        if (
-          destination!.currency === this.state.settings.baseCurrency ||
-          destination!.currency === account.currency
-        ) {
-          const expectedDestinationBaseAmountMinor =
-            this.expectedDestinationBaseAmount(
-              destinationAmountMinor,
-              destination!.currency,
-              account.currency,
-              baseAmountMinor,
-              input.localDate,
-            );
-          if (
-            expectedDestinationBaseAmountMinor === null ||
-            input.destinationBaseAmountMinor !==
-              expectedDestinationBaseAmountMinor
-          ) {
-            throw new Error(
-              "Destination base amount does not match the destination amount and exchange rate.",
-            );
-          }
-        }
-        destinationBaseAmountMinor = input.destinationBaseAmountMinor;
-      } else if (preservesDestinationSnapshot) {
-        // Historical destination-leg value is a transaction snapshot. A title,
-        // note, category, or source-side edit must not revalue it through rates
-        // that may have changed (or been deleted) since the transfer occurred.
-        destinationBaseAmountMinor = existing.destinationBaseAmountMinor;
-      } else if (destination!.currency === this.state.settings.baseCurrency) {
-        destinationBaseAmountMinor = destinationAmountMinor;
-      } else if (destination!.currency === account.currency) {
-        destinationBaseAmountMinor = baseAmountMinor;
-      } else if (
-        account.currency === this.state.settings.baseCurrency &&
-        input.destinationAmountMinor !== undefined &&
-        input.destinationAmountMinor !== null &&
-        !this.hasRate(
-          destination!.currency,
-          this.state.settings.baseCurrency,
-          input.localDate,
-        )
-      ) {
-        // Base → foreign with a typed destination amount: the base value that left the source
-        // is the value that arrived, so no stored destination-to-base rate is needed.
-        destinationBaseAmountMinor = baseAmountMinor;
-      } else {
-        // An upcoming leg whose destination-to-base rate is not known yet stays unpriced.
-        const destinationRate = this.rateOrNullWhileUpcoming(status, () =>
-          this.resolveRate(
-            destination!.currency,
-            this.state.settings.baseCurrency,
-            input.localDate,
-          ),
-        );
-        destinationBaseAmountMinor =
-          destinationRate === null
-            ? null
-            : convertMinor(
-                destinationAmountMinor,
-                destination!.currency,
-                this.state.settings.baseCurrency,
-                destinationRate,
-                this.formatLocale,
-              );
-      }
-    }
-    const value = {
-      kind: input.kind,
-      status,
-      title:
-        input.title.trim() ||
-        (input.kind === "transfer" ? "Transfer" : "Untitled"),
-      note: input.note?.trim() ?? "",
-      localDate: input.localDate,
-      accountId: account.id,
-      destinationAccountId: destination?.id ?? null,
-      categoryId: input.kind === "transfer" ? null : (category?.id ?? null),
-      tagIds,
-      amountMinor,
-      destinationAmountMinor,
-      destinationBaseAmountMinor,
-      currency: account.currency,
-      destinationCurrency: destination?.currency ?? null,
-      exchangeRate: rate === null ? null : this.normalizeRate(rate),
-      baseAmountMinor,
-      transferGroupId:
-        input.kind === "transfer"
-          ? (existing?.transferGroupId ?? makeId())
-          : null,
-      recurringRuleId:
-        input.recurringRuleId ?? existing?.recurringRuleId ?? null,
-      occurrenceKey: input.occurrenceKey ?? existing?.occurrenceKey ?? null,
-      foreign,
-      fee,
-    } satisfies Omit<
-      TransactionRecord,
-      keyof import("@/domain/models").SyncEntity
-    >;
-    return existing
-      ? updateEntity(existing, value)
-      : // A generated occurrence gets an id derived from its occurrence key, so two devices
-        // that both foreground and run `generateRecurring` produce the *same* transaction
-        // rather than two that a later merge has to notice and deduplicate. Manually entered
-        // transactions have no occurrence key and stay random.
-        // `newId` lets an import supply the id it derived from the source record, so a re-import
-        // lands on the same row. It only applies to a new record; an occurrence id still wins.
-        (createEntity({
-          id: value.occurrenceKey
-            ? occurrenceTransactionId(value.occurrenceKey)
-            : (newId ?? makeId()),
-          ...value,
-        }) as TransactionRecord);
-  }
-
-  /**
-   * The plain transaction a transfer becomes when one of its two accounts is deleted, in place:
-   * same id, one coherent update.
-   *
-   * Transfer X→Y with X deleted becomes income on Y of what arrived (in Y's currency, at the
-   * destination leg's base value). Transfer Y→X becomes an expense on Y of what left (the amount
-   * already includes any fee, and keeps its own rate snapshot). Every field of the `ledger` sync
-   * group is written together, so a peer never sees a half-converted transaction; the other
-   * fields written (`categoryId`, `recurringRuleId`) are independent registers with no coupling.
-   * The balance of the surviving account does not change: the same amount lands on it as before.
-   */
-  private convertTransferToPlain(
-    conversion: TransferConversion,
-    deletedRuleIds: ReadonlySet<string>,
-  ): TransactionRecord {
-    const transaction = conversion.transaction;
-    const common = {
-      destinationAccountId: null,
-      destinationAmountMinor: null,
-      destinationBaseAmountMinor: null,
-      destinationCurrency: null,
-      transferGroupId: null,
-      categoryId: null,
-      foreign: null,
-      fee: null,
-      recurringRuleId:
-        transaction.recurringRuleId !== null &&
-        deletedRuleIds.has(transaction.recurringRuleId)
-          ? null
-          : transaction.recurringRuleId,
-    };
-    if (conversion.as === "expense")
-      return updateEntity(transaction, { ...common, kind: "expense" });
-
-    const keep = this.state.accounts.find(
-      (account) => account.id === conversion.keepAccountId,
-    );
-    if (!keep || transaction.destinationAmountMinor === null)
-      throw new Error("This transfer cannot be kept as income.");
-    const base = this.state.settings.baseCurrency;
-    const amountMinor = transaction.destinationAmountMinor;
-    const baseAmountMinor = transaction.destinationBaseAmountMinor;
-    let exchangeRate: string | null = null;
-    if (baseAmountMinor !== null) {
-      if (keep.currency === base) exchangeRate = "1";
-      else if (
-        keep.currency === transaction.currency &&
-        transaction.exchangeRate
-      )
-        exchangeRate = transaction.exchangeRate;
-      else {
-        // The rate the destination leg was valued at, implied by its own two amounts.
-        if (amountMinor <= 0 || baseAmountMinor <= 0)
-          throw new Error("This transfer cannot be kept as income.");
-        const locale = this.formatLocale;
-        exchangeRate = this.normalizeRate(
-          plainDecimal(
-            new Decimal(baseAmountMinor)
-              .div(new Decimal(10).pow(currencyDigits(base, locale)))
-              .div(
-                new Decimal(amountMinor).div(
-                  new Decimal(10).pow(currencyDigits(keep.currency, locale)),
-                ),
-              ),
-          ),
-        );
-      }
-    }
-    return updateEntity(transaction, {
-      ...common,
-      kind: "income",
-      accountId: keep.id,
-      amountMinor,
-      currency: keep.currency,
-      exchangeRate,
-      baseAmountMinor,
-      // A posted row needs its snapshot; one that never had it can only be upcoming, as the
-      // sync repair would also say.
-      ...(baseAmountMinor === null && transaction.status === "posted"
-        ? { status: "upcoming" as const }
-        : {}),
-    });
   }
 
   private replaceInList(type: ListKey, entity: FinanceEntity) {
     this.state = {
       ...this.state,
-      [type]: this.withEntity(this.state[type] as FinanceEntity[], entity),
+      [type]: withEntity(this.state[type] as FinanceEntity[], entity),
     };
   }
 
@@ -5300,406 +1958,6 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   private async persist(type: EntityType, entities: FinanceEntity[]) {
     await this.storage.putMany(asRecords(type, entities), this);
-  }
-
-  private active<T extends FinanceEntity>(entities: T[]) {
-    return entities.filter((entity) => !entity.deletedAt);
-  }
-
-  private hasRate(fromValue: string, toValue: string, localDate: string) {
-    try {
-      this.resolveRate(fromValue, toValue, localDate);
-      return true;
-    } catch (reason) {
-      // Only a genuinely missing rate reads as "no rate"; anything else is a real failure.
-      if (reason instanceof MissingExchangeRateError) return false;
-      throw reason;
-    }
-  }
-
-  /**
-   * Runs a rate lookup that may leave an upcoming transaction unpriced. Only a missing rate on
-   * an upcoming row is swallowed (returning `null`); a posted row still needs its rate.
-   */
-  private rateOrNullWhileUpcoming(
-    status: TransactionStatus,
-    lookup: () => string | null,
-  ): string | null {
-    try {
-      return lookup();
-    } catch (reason) {
-      if (status === "upcoming" && reason instanceof MissingExchangeRateError)
-        return null;
-      throw reason;
-    }
-  }
-
-  /**
-   * The snapshot an unpriced row (`exchangeRate` or `baseAmountMinor` is null, or a transfer's
-   * destination base is null) gets when it is paid. The rate is the latest stored one on or before
-   * `pricingDate`; `localDate` never changes. Returns `null` when nothing needs pricing. Throws
-   * `MissingExchangeRateError`, with nothing written, when a needed rate is not stored yet.
-   */
-  private snapshotForPricing(
-    transaction: TransactionRecord,
-    pricingDate: string,
-  ): {
-    exchangeRate: string;
-    baseAmountMinor: number;
-    destinationBaseAmountMinor: number | null;
-  } | null {
-    const base = this.state.settings.baseCurrency;
-    const locale = this.formatLocale;
-    const accountPriced =
-      transaction.exchangeRate !== null && transaction.baseAmountMinor !== null;
-    const destinationNeedsPricing =
-      transaction.kind === "transfer" &&
-      transaction.destinationCurrency !== null &&
-      transaction.destinationAmountMinor !== null &&
-      transaction.destinationBaseAmountMinor === null;
-    if (accountPriced && !destinationNeedsPricing) return null;
-    let exchangeRate = transaction.exchangeRate;
-    let baseAmountMinor = transaction.baseAmountMinor;
-    if (!accountPriced) {
-      const rate =
-        transaction.currency === base
-          ? "1"
-          : this.resolveRate(transaction.currency, base, pricingDate);
-      exchangeRate = this.normalizeRate(rate);
-      baseAmountMinor = convertMinor(
-        transaction.amountMinor,
-        transaction.currency,
-        base,
-        rate,
-        locale,
-      );
-      if (transaction.amountMinor > 0 && baseAmountMinor <= 0) {
-        throw new Error(
-          `This amount converts to less than the smallest unit of ${base}. Enter a larger amount or check the exchange rate.`,
-        );
-      }
-    }
-    let destinationBaseAmountMinor = transaction.destinationBaseAmountMinor;
-    if (destinationNeedsPricing) {
-      const destinationCurrency = transaction.destinationCurrency!;
-      const destinationAmountMinor = transaction.destinationAmountMinor!;
-      if (destinationCurrency === base) {
-        destinationBaseAmountMinor = destinationAmountMinor;
-      } else if (destinationCurrency === transaction.currency) {
-        destinationBaseAmountMinor = baseAmountMinor!;
-      } else {
-        destinationBaseAmountMinor = convertMinor(
-          destinationAmountMinor,
-          destinationCurrency,
-          base,
-          this.resolveRate(destinationCurrency, base, pricingDate),
-          locale,
-        );
-      }
-    }
-    return {
-      exchangeRate: exchangeRate!,
-      baseAmountMinor: baseAmountMinor!,
-      destinationBaseAmountMinor,
-    };
-  }
-
-  /**
-   * The base-currency amount of a posted transaction. A posted row always carries its snapshot, so
-   * a null here means corrupt state, and it fails closed rather than summing as zero.
-   */
-  private postedBaseMinor(transaction: TransactionRecord): number {
-    if (transaction.baseAmountMinor === null)
-      throw new Error("Posted transactions need an exchange rate.");
-    return transaction.baseAmountMinor;
-  }
-
-  /**
-   * The row as a posted transaction, with its snapshot filled in when it was unpriced. Returns
-   * `null` when a needed rate is not stored yet, leaving the row upcoming, unless `rethrowMissing`.
-   */
-  private postedWithSnapshot(
-    transaction: TransactionRecord,
-    pricingDate: string,
-    rethrowMissing = false,
-  ): TransactionRecord | null {
-    let snapshot: ReturnType<LocalFinanceRepository["snapshotForPricing"]>;
-    try {
-      snapshot = this.snapshotForPricing(transaction, pricingDate);
-    } catch (reason) {
-      if (!rethrowMissing && reason instanceof MissingExchangeRateError)
-        return null;
-      throw reason;
-    }
-    return updateEntity(transaction, { status: "posted", ...(snapshot ?? {}) });
-  }
-
-  /**
-   * `resolveRate` for a transfer's source leg, falling back to the rate implied by the typed
-   * destination amount when that amount is already denominated in the base currency.
-   */
-  private resolveTransferAwareRate(
-    fromCurrency: string,
-    localDate: string,
-    amountMinor: number,
-    baseAmountMinor: number | null,
-  ) {
-    try {
-      return this.resolveRate(
-        fromCurrency,
-        this.state.settings.baseCurrency,
-        localDate,
-      );
-    } catch (reason) {
-      if (baseAmountMinor === null || amountMinor <= 0 || baseAmountMinor <= 0)
-        throw reason;
-      const locale = this.formatLocale;
-      return new Decimal(baseAmountMinor)
-        .div(
-          new Decimal(10).pow(
-            currencyDigits(this.state.settings.baseCurrency, locale),
-          ),
-        )
-        .div(
-          new Decimal(amountMinor).div(
-            new Decimal(10).pow(currencyDigits(fromCurrency, locale)),
-          ),
-        )
-        .toSignificantDigits(20)
-        .toFixed();
-    }
-  }
-
-  private resolveRate(
-    fromValue: string,
-    toValue: string,
-    localDate: string,
-    exchangeRates = this.state.exchangeRates,
-  ) {
-    const fromCurrency = this.normalizeCurrency(fromValue);
-    const toCurrency = this.normalizeCurrency(toValue);
-    this.assertDate(localDate);
-    if (fromCurrency === toCurrency) return "1";
-    const direct = this.directOrInverseRate(
-      fromCurrency,
-      toCurrency,
-      localDate,
-      exchangeRates,
-    );
-    if (direct) return direct;
-    const baseCurrency = this.state.settings.baseCurrency;
-    if (fromCurrency !== baseCurrency && toCurrency !== baseCurrency) {
-      const fromBase = this.directOrInverseRate(
-        fromCurrency,
-        baseCurrency,
-        localDate,
-        exchangeRates,
-      );
-      const toBase = this.directOrInverseRate(
-        toCurrency,
-        baseCurrency,
-        localDate,
-        exchangeRates,
-      );
-      if (fromBase && toBase)
-        return plainDecimal(new Decimal(fromBase).div(toBase));
-    }
-    if (fromCurrency === baseCurrency) {
-      const toBase = this.directOrInverseRate(
-        toCurrency,
-        baseCurrency,
-        localDate,
-        exchangeRates,
-      );
-      if (toBase) return plainDecimal(new Decimal(1).div(toBase));
-    }
-    throw new MissingExchangeRateError(
-      `Missing exchange rate for ${fromCurrency} → ${toCurrency} on ${localDate}.`,
-    );
-  }
-
-  // A pair may be entered in either direction. If both directions exist and they
-  // disagree, a transfer converts out through one and back in through the other,
-  // so the two legs no longer describe the same amount and the difference is
-  // conjured into (or out of) the base-currency totals. Reject the contradiction
-  // at entry rather than letting it silently corrupt every later conversion.
-  //
-  // Split into a non-throwing checker and this throwing wrapper because
-  // `saveFetchedRatesNow` needs the same drift logic but cannot let one stale manual
-  // row on the opposite side throw an entire batch away — it reports the row as a
-  // conflict and keeps going instead.
-  private assertReciprocalRate(
-    fromCurrency: string,
-    toCurrency: string,
-    rate: string,
-    effectiveDate: string,
-    id?: string,
-  ) {
-    const reciprocal = this.findReciprocalConflict(
-      fromCurrency,
-      toCurrency,
-      rate,
-      effectiveDate,
-      id,
-    );
-    if (!reciprocal) return;
-    const implied = new Decimal(1).div(this.normalizeRate(reciprocal.rate));
-    throw new Error(
-      `This contradicts the existing ${toCurrency} → ${fromCurrency} rate of ${reciprocal.rate}, which implies ${implied.toSignificantDigits(8)}. Update or remove that rate first.`,
-    );
-  }
-
-  /** The reciprocal row that `rate` contradicts beyond tolerance, or `undefined` if none does. */
-  private findReciprocalConflict(
-    fromCurrency: string,
-    toCurrency: string,
-    rate: string,
-    effectiveDate: string,
-    id?: string,
-    exchangeRates = this.state.exchangeRates,
-  ): ExchangeRate | undefined {
-    const rates = this.active(exchangeRates).filter((item) => item.id !== id);
-    const nextDirectDate = rates
-      .filter(
-        (item) =>
-          item.fromCurrency === fromCurrency &&
-          item.toCurrency === toCurrency &&
-          item.effectiveDate > effectiveDate,
-      )
-      .sort((a, b) =>
-        a.effectiveDate.localeCompare(b.effectiveDate),
-      )[0]?.effectiveDate;
-    const opposite = rates
-      .filter(
-        (item) =>
-          item.fromCurrency === toCurrency && item.toCurrency === fromCurrency,
-      )
-      .sort(
-        (a, b) =>
-          a.effectiveDate.localeCompare(b.effectiveDate) ||
-          a.updatedAt.localeCompare(b.updatedAt),
-      );
-    const effectiveReciprocal = opposite
-      .filter((item) => item.effectiveDate <= effectiveDate)
-      .at(-1);
-    const laterReciprocals = opposite.filter(
-      (item) =>
-        item.effectiveDate > effectiveDate &&
-        (!nextDirectDate || item.effectiveDate < nextDirectDate),
-    );
-    const reciprocals = [effectiveReciprocal, ...laterReciprocals].filter(
-      (item): item is ExchangeRate => Boolean(item),
-    );
-    const entered = new Decimal(rate);
-    for (const reciprocal of reciprocals) {
-      const implied = new Decimal(1).div(this.normalizeRate(reciprocal.rate));
-      // Manually entered rates carry real spread and rounding, so compare with a
-      // tolerance instead of demanding an exact reciprocal.
-      const drift = entered.minus(implied).abs().div(implied);
-      if (drift.lessThanOrEqualTo(RECIPROCAL_RATE_TOLERANCE)) continue;
-      return reciprocal;
-    }
-    return undefined;
-  }
-
-  private directOrInverseRate(
-    fromCurrency: string,
-    toCurrency: string,
-    localDate: string,
-    exchangeRates = this.state.exchangeRates,
-  ) {
-    const direct = this.latestRate(
-      fromCurrency,
-      toCurrency,
-      localDate,
-      exchangeRates,
-    );
-    if (direct) return this.normalizeRate(direct.rate);
-    const inverse = this.latestRate(
-      toCurrency,
-      fromCurrency,
-      localDate,
-      exchangeRates,
-    );
-    if (!inverse) return null;
-    return plainDecimal(new Decimal(1).div(this.normalizeRate(inverse.rate)));
-  }
-
-  private latestRate(
-    fromCurrency: string,
-    toCurrency: string,
-    localDate: string,
-    exchangeRates = this.state.exchangeRates,
-  ) {
-    // One scan for the newest row (by date, then update time; the first wins a tie) instead of
-    // sorting every match: this runs for each row of a CSV import.
-    let latest: ExchangeRate | undefined;
-    for (const item of exchangeRates) {
-      if (
-        item.deletedAt ||
-        item.fromCurrency !== fromCurrency ||
-        item.toCurrency !== toCurrency ||
-        item.effectiveDate > localDate
-      )
-        continue;
-      if (
-        !latest ||
-        item.effectiveDate > latest.effectiveDate ||
-        (item.effectiveDate === latest.effectiveDate &&
-          item.updatedAt > latest.updatedAt)
-      )
-        latest = item;
-    }
-    return latest;
-  }
-
-  // A deficit compounds across every period it is carried through, so a few
-  // months of overspending can drive the rollover far enough negative that the
-  // effective limit turns permanently unreachable and the budget becomes
-  // useless. Cap the carried deficit at a single period's limit — one period of
-  // debt is a meaningful signal, ten is noise.
-  private clampRollover(rolloverMinor: number, limitMinor: number) {
-    const floor = -Math.abs(limitMinor);
-    const ceiling = Number.MAX_SAFE_INTEGER - limitMinor;
-    return Math.max(floor, Math.min(ceiling, rolloverMinor));
-  }
-
-  // Pre-indexes the selected ids and the category tree once so hierarchy
-  // matching is O(depth) per transaction instead of O(categories) per transaction.
-  private categoryMatcher(selectedIds: string[]) {
-    const selected = new Set(selectedIds);
-    const byId = new Map(
-      this.state.categories.map((category) => [category.id, category]),
-    );
-    return (categoryId: string | null) => {
-      if (!categoryId) return false;
-      let currentId: string | null = categoryId;
-      const visited = new Set<string>();
-      while (currentId && !visited.has(currentId)) {
-        if (selected.has(currentId)) return true;
-        visited.add(currentId);
-        currentId = byId.get(currentId)?.parentId ?? null;
-      }
-      return false;
-    };
-  }
-
-  private assertBudgetSetSafe(budgets: Budget[]) {
-    const maximumEffectiveLimits = this.active(budgets)
-      .filter((budget) => !budget.archived)
-      .map((budget) =>
-        budget.rollover
-          ? addMinor(
-              budget.limitMinor,
-              Math.min(
-                budget.limitMinor,
-                Number.MAX_SAFE_INTEGER - budget.limitMinor,
-              ),
-              `${budget.name} maximum effective limit`,
-            )
-          : budget.limitMinor,
-      );
-    sumMinor(maximumEffectiveLimits, "Budget limit total");
   }
 
   /** Posted rows, and posted rows of a date window, shared by every caller of one snapshot. */
@@ -5763,1295 +2021,6 @@ export class LocalFinanceRepository implements FinanceRepository {
       budgetStatuses: new Map(),
     };
     return this.derivedCache;
-  }
-
-  private budgetSpend(
-    filters: BudgetFilters,
-    fromDate: string,
-    toDate: string,
-  ) {
-    const matchesCategory = filters.categoryIds.length
-      ? this.categoryMatcher(filters.categoryIds)
-      : null;
-    return sumMinor(
-      this.postedTransactions(fromDate, toDate)
-        .filter((item) => item.kind === "expense")
-        .filter(
-          (item) =>
-            !filters.accountIds.length ||
-            filters.accountIds.includes(item.accountId),
-        )
-        .filter((item) => !matchesCategory || matchesCategory(item.categoryId))
-        .filter(
-          (item) =>
-            !filters.tagIds.length ||
-            filters.tagIds.some((id) => item.tagIds.includes(id)),
-        )
-        .map((item) => this.postedBaseMinor(item)),
-      "Budget spending",
-    );
-  }
-
-  /** Periods that have opened and are not yet stored. Pure: the caller persists them. */
-  private dueBudgetSnapshots() {
-    return this.active(this.state.budgets)
-      .filter((item) => !item.archived)
-      .flatMap((budget) => this.buildBudgetSnapshots(budget, false));
-  }
-
-  // A snapshot belongs to the budget's current period definition only if resolving
-  // that definition on the snapshot's own start date reproduces the same window.
-  // Snapshots do not store the definition they were built from, so this is how a
-  // stale one is recognised after the user edits unit, interval, or anchor date.
-  private matchesPeriodDefinition(
-    budget: Budget,
-    snapshot: BudgetPeriodSnapshot,
-  ) {
-    const bounds = resolvePeriod(budget.period, snapshot.periodStart);
-    return (
-      bounds.start === snapshot.periodStart && bounds.end === snapshot.periodEnd
-    );
-  }
-
-  private buildBudgetSnapshots(
-    budget: Budget,
-    updateCurrent: boolean,
-    onDate = todayLocal(),
-    transient = false,
-  ) {
-    const bounds = resolvePeriod(budget.period, onDate);
-    const existing = this.state.budgetPeriods.find(
-      (item) =>
-        item.budgetId === budget.id && item.periodStart === bounds.start,
-    );
-    if (existing) {
-      if (!updateCurrent) return [];
-      // A matching start alone is not enough: changing July monthly to a
-      // July–August window finds the same snapshot, but its rollover belongs
-      // to the old definition. Carrying it forward would grant (or charge) a
-      // period that no longer exists, so only preserve it when the complete
-      // resolved window still matches.
-      const preservesDefinition = this.matchesPeriodDefinition(
-        budget,
-        existing,
-      );
-      return [
-        updateEntity(existing, {
-          periodEnd: bounds.end,
-          limitMinor: budget.limitMinor,
-          // Kept even while rollover is switched off: the effective limit ignores it then, so
-          // switching it back on restores the same carried amount instead of silently zeroing it.
-          rolloverMinor: preservesDefinition ? existing.rolloverMinor : 0,
-          filters: budget.filters,
-          categoryLimits: budget.categoryLimits,
-        }),
-      ];
-    }
-    const history = this.state.budgetPeriods
-      // `periodEnd`, not `periodStart`: a snapshot that merely *started* earlier can
-      // still be running. Editing a budget's unit/interval/anchor moves `bounds.start`
-      // off every stored snapshot, and the old selection then rolled over from a
-      // window whose spend total was not final yet.
-      .filter(
-        (item) => item.budgetId === budget.id && item.periodEnd < bounds.start,
-      )
-      .sort((a, b) => a.periodStart.localeCompare(b.periodStart));
-    const candidate = history.at(-1);
-    // Roll over only from a window the current definition would still produce.
-    // Otherwise a budget switched from monthly to weekly inherits a whole month's
-    // unspent limit into its first week.
-    const latest =
-      candidate && this.matchesPeriodDefinition(budget, candidate)
-        ? candidate
-        : undefined;
-    const makePeriod = (
-      periodStart: string,
-      periodEnd: string,
-      previous?: BudgetPeriodSnapshot,
-    ) => {
-      const values = {
-        budgetId: budget.id,
-        periodStart,
-        periodEnd,
-        limitMinor: budget.limitMinor,
-        // A one-time adjustment is part of what the period had to spend, so an unspent bonus
-        // carries forward (and a deliberate cut is carried as a smaller remainder).
-        rolloverMinor:
-          budget.rollover && previous
-            ? this.clampRollover(
-                subtractMinor(
-                  addMinor(
-                    addMinor(
-                      previous.rolloverMinor,
-                      previous.limitMinor,
-                      `${budget.name} rollover`,
-                    ),
-                    this.budgetAdjustmentTotal(
-                      budget.id,
-                      previous.periodStart,
-                      previous.periodEnd,
-                    ),
-                    `${budget.name} rollover`,
-                  ),
-                  this.budgetSpend(
-                    previous.filters,
-                    previous.periodStart,
-                    previous.periodEnd,
-                  ),
-                  `${budget.name} rollover`,
-                ),
-                budget.limitMinor,
-              )
-            : 0,
-        filters: budget.filters,
-        categoryLimits: budget.categoryLimits,
-      };
-      // A period that has not rolled over yet is rebuilt on every read. Minting
-      // a fresh UUID and timestamps each time made the snapshot identity churn
-      // between two identical reads, so any list key or memo derived from it
-      // changed on every render. Derive a stable identity instead.
-      //
-      // The persisted path uses the same derivation, for two reasons. Two devices
-      // foregrounding on the first of a month would otherwise each mint a snapshot for the
-      // same `(budgetId, periodStart)`; the history sort then ties, `.at(-1)` picks
-      // arbitrarily, and rollover diverges between them — a wrong number on screen rather
-      // than a crash. And sharing the derivation means a transient snapshot keeps its
-      // identity when it is later persisted, instead of the list key changing underneath.
-      const id = budgetPeriodId(budget.id, periodStart);
-      if (!transient)
-        return createEntity({ id, ...values }) as BudgetPeriodSnapshot;
-      return {
-        ...values,
-        id,
-        revision: 1,
-        createdAt: budget.createdAt,
-        updatedAt: budget.updatedAt,
-        deletedAt: null,
-      } satisfies BudgetPeriodSnapshot;
-    };
-    if (!latest || updateCurrent || budget.period.unit === "custom") {
-      return [makePeriod(bounds.start, bounds.end, latest)];
-    }
-    const periods: BudgetPeriodSnapshot[] = [];
-    let previous = latest;
-    let guard = 0;
-    while (previous.periodStart < bounds.start && guard < 3660) {
-      guard += 1;
-      const nextBounds = resolvePeriod(
-        budget.period,
-        addRecurrence(previous.periodEnd, "day", 1),
-      );
-      if (
-        nextBounds.start <= previous.periodStart ||
-        nextBounds.start > bounds.start
-      )
-        break;
-      const period = makePeriod(nextBounds.start, nextBounds.end, previous);
-      periods.push(period);
-      previous = period;
-    }
-    if (!periods.some((period) => period.periodStart === bounds.start)) {
-      periods.push(makePeriod(bounds.start, bounds.end, previous));
-    }
-    return periods;
-  }
-
-  private validateBudget(input: BudgetInput): BudgetInput {
-    this.assertPositiveMinor(input.limitMinor, "Budget limit");
-    this.assertDate(input.period.anchorDate);
-    if (
-      !Number.isSafeInteger(input.period.interval) ||
-      input.period.interval < 1
-    ) {
-      throw new Error("Budget interval must be a positive whole number.");
-    }
-    if (!PERIOD_UNITS.includes(input.period.unit))
-      throw new Error("Choose a valid budget period.");
-    if (input.period.unit === "custom") {
-      if (!input.period.endDate)
-        throw new Error("Custom budgets require an end date.");
-      this.assertDate(input.period.endDate);
-      if (input.period.endDate < input.period.anchorDate)
-        throw new Error("Budget end date must not precede its start date.");
-    }
-    this.assertIdsExist(
-      input.filters.accountIds,
-      this.state.accounts,
-      "account",
-    );
-    this.assertIdsExist(input.filters.tagIds, this.state.tags, "tag");
-    this.assertIdsExist(
-      input.filters.categoryIds,
-      this.state.categories.filter((item) => item.kind === "expense"),
-      "expense category",
-    );
-    const limitedCategories = new Set<string>();
-    input.categoryLimits.forEach((limit) => {
-      this.assertPositiveMinor(limit.limitMinor, "Category limit");
-      if (limitedCategories.has(limit.categoryId))
-        throw new Error("Each category can have only one limit.");
-      limitedCategories.add(limit.categoryId);
-      if (!input.filters.categoryIds.includes(limit.categoryId)) {
-        throw new Error("Category limits must belong to the budget filters.");
-      }
-    });
-    this.assertColor(input.color);
-    return {
-      ...input,
-      name: input.name.trim() || "Budget",
-      color: input.color.toUpperCase(),
-      filters: {
-        accountIds: [...new Set(input.filters.accountIds)],
-        categoryIds: [...new Set(input.filters.categoryIds)],
-        tagIds: [...new Set(input.filters.tagIds)],
-      },
-      categoryLimits: input.categoryLimits.map((limit) => ({ ...limit })),
-      period: {
-        ...input.period,
-        endDate: input.period.unit === "custom" ? input.period.endDate : null,
-      },
-    };
-  }
-
-  private validateGoal(input: GoalInput, id?: string): GoalInput {
-    const existing = this.findExisting(this.state.goals, id, "goal");
-    if (!GOAL_KINDS.includes(input.kind))
-      throw new Error("Choose a valid goal kind.");
-    this.assertPositiveMinor(input.targetMinor, "Goal target");
-    this.assertSafeMinor(input.initialMinor, "Starting progress");
-    if (input.initialMinor < 0)
-      throw new Error("Starting progress cannot be negative.");
-    if (input.targetDate) this.assertDate(input.targetDate);
-    if (input.linkedAccountId) {
-      const account = this.state.accounts.find(
-        (item) => item.id === input.linkedAccountId,
-      );
-      if (
-        !account ||
-        (account.archived && existing?.linkedAccountId !== account.id)
-      ) {
-        throw new Error("Choose a valid linked account.");
-      }
-    }
-    if (input.linkedCategoryId) {
-      const expectedKind = input.kind === "saving" ? "income" : "expense";
-      const category = this.state.categories.find(
-        (item) => item.id === input.linkedCategoryId,
-      );
-      if (
-        !category ||
-        category.kind !== expectedKind ||
-        (category.archived && existing?.linkedCategoryId !== category.id)
-      ) {
-        throw new Error(`Choose a valid ${expectedKind} category.`);
-      }
-    }
-    this.assertColor(input.color);
-    return {
-      ...input,
-      name: input.name.trim() || "Goal",
-      color: input.color.toUpperCase(),
-    };
-  }
-
-  private validateRecurring(
-    input: RecurringInput,
-    id?: string,
-  ): RecurringInput {
-    const existing = this.findExisting(
-      this.state.recurringRules,
-      id,
-      "recurring rule",
-    );
-    if (!CATEGORY_KINDS.includes(input.template.kind))
-      throw new Error("Choose a valid recurring transaction kind.");
-    if (!RECURRENCE_UNITS.includes(input.unit))
-      throw new Error("Choose a valid recurrence period.");
-    if (!input.template.foreign)
-      this.assertPositiveMinor(input.template.amountMinor, "Recurring amount");
-    this.assertDate(input.startDate);
-    this.assertDate(input.nextDueDate);
-    if (input.endDate) {
-      this.assertDate(input.endDate);
-      if (input.endDate < input.startDate)
-        throw new Error("Schedule end date must not precede its start date.");
-    }
-    if (!Number.isSafeInteger(input.interval) || input.interval < 1)
-      throw new Error("Repeat interval must be a positive whole number.");
-    const account = this.state.accounts.find(
-      (item) => item.id === input.template.accountId,
-    );
-    if (
-      !account ||
-      (account.archived && existing?.template.accountId !== account.id)
-    ) {
-      throw new Error("Choose a valid account.");
-    }
-    if (this.normalizeCurrency(input.template.currency) !== account.currency) {
-      throw new Error("Recurring currency must match its account.");
-    }
-    // No rate is required to save a rule: an occurrence without one stays upcoming until it is paid.
-    if (input.template.categoryId) {
-      const category = this.state.categories.find(
-        (item) => item.id === input.template.categoryId,
-      );
-      if (
-        !category ||
-        category.kind !== input.template.kind ||
-        (category.archived && existing?.template.categoryId !== category.id)
-      ) {
-        throw new Error(`Choose a valid ${input.template.kind} category.`);
-      }
-    }
-    this.assertIdsExist(input.template.tagIds, this.state.tags, "tag");
-    // `amountMinor` on the returned template is a display estimate only —
-    // real occurrences are priced through `buildTransaction`, which derives
-    // the principal from `foreign` (and resolves its own rate per occurrence
-    // date when the template carries none) rather than trusting this number.
-    let estimatedAmountMinor = input.template.amountMinor;
-    let normalizedForeign: RecurringInput["template"]["foreign"] = null;
-    if (input.template.foreign) {
-      const foreignCurrency = this.normalizeCurrency(
-        input.template.foreign.currency,
-      );
-      if (foreignCurrency === account.currency) {
-        throw new Error(
-          "Choose a foreign currency different from the account’s.",
-        );
-      }
-      this.assertPositiveMinor(input.template.foreign.amountMinor, "Amount");
-      const foreignRate = input.template.foreign.exchangeRate
-        ? this.normalizeRate(input.template.foreign.exchangeRate)
-        : this.resolveRate(
-            foreignCurrency,
-            account.currency,
-            input.nextDueDate,
-          );
-      estimatedAmountMinor = convertMinor(
-        input.template.foreign.amountMinor,
-        foreignCurrency,
-        account.currency,
-        foreignRate,
-        this.formatLocale,
-      );
-      normalizedForeign = {
-        amountMinor: input.template.foreign.amountMinor,
-        currency: foreignCurrency,
-        // Keep an explicit rate only if the caller supplied one. A template
-        // with none resolves its own rate at each occurrence's date.
-        ...(input.template.foreign.exchangeRate
-          ? { exchangeRate: foreignRate }
-          : {}),
-      };
-    }
-    let normalizedFee: RecurringInput["template"]["fee"] = null;
-    if (input.template.fee) {
-      if (input.template.fee.kind === "fixed") {
-        this.assertPositiveMinor(input.template.fee.amountMinor, "Fee");
-        normalizedFee = {
-          kind: "fixed",
-          amountMinor: input.template.fee.amountMinor,
-        };
-      } else {
-        normalizedFee = {
-          kind: "percent",
-          percent: normalizeFeePercent(input.template.fee.percent),
-        };
-      }
-    }
-    const referencesArchivedEntity =
-      account.archived ||
-      Boolean(
-        input.template.categoryId &&
-        this.state.categories.find(
-          (item) => item.id === input.template.categoryId,
-        )?.archived,
-      );
-    return {
-      ...input,
-      active: input.active && !referencesArchivedEntity,
-      interval: Math.floor(input.interval),
-      template: {
-        ...input.template,
-        title: input.template.title.trim() || "Recurring transaction",
-        note: input.template.note.trim(),
-        currency: account.currency,
-        tagIds: [...new Set(input.template.tagIds)],
-        amountMinor: estimatedAmountMinor,
-        foreign: normalizedForeign,
-        fee: normalizedFee,
-      },
-    };
-  }
-
-  private withEntity<T extends FinanceEntity>(entities: T[], entity: T) {
-    return entities.some((item) => item.id === entity.id)
-      ? entities.map((item) => (item.id === entity.id ? entity : item))
-      : [...entities, entity];
-  }
-
-  private assertRecurringRuleGenerationSafe(
-    rule: RecurringRule,
-    currentTransactions: TransactionRecord[],
-    horizonDate: string,
-  ) {
-    if (!rule.active) return;
-    const today = todayLocal();
-    // Simulates generation's auto-post: an occurrence is priced as it would be when posted, and one
-    // with no rate yet stays upcoming exactly as `generateRecurringNow` leaves it.
-    const transactions = currentTransactions.map(
-      (transaction) =>
-        (rule.autoPost &&
-          transaction.recurringRuleId === rule.id &&
-          transaction.status === "upcoming" &&
-          transaction.localDate <= today &&
-          this.postedWithSnapshot(transaction, today)) ||
-        transaction,
-    );
-    walkRecurrence(rule, horizonDate, (occurrenceDate) => {
-      const occurrenceKey = `${rule.id}:${occurrenceDate}`;
-      if (
-        this.deletedOccurrenceKeys.has(occurrenceKey) ||
-        transactions.some(
-          (transaction) => transaction.occurrenceKey === occurrenceKey,
-        )
-      )
-        return;
-      transactions.push(
-        this.buildTransaction({
-          ...rule.template,
-          localDate: occurrenceDate,
-          status:
-            rule.autoPost && occurrenceDate <= today ? "posted" : "upcoming",
-          recurringRuleId: rule.id,
-          occurrenceKey,
-        }),
-      );
-    });
-    this.assertTransactionSetSafe(transactions);
-  }
-
-  private calculateGoalProgress(
-    goalId: string,
-    goals: Goal[],
-    contributions: GoalContribution[],
-    transactions: TransactionRecord[],
-  ) {
-    const goal = goals.find((item) => item.id === goalId);
-    if (!goal) throw new Error("Choose a valid goal.");
-    const progressLabel = `${goal.name} progress`;
-    const transactionsById = this.transactionById(transactions);
-    const manual = sumMinor(
-      contributions
-        .filter((item) => {
-          if (item.goalId !== goal.id || item.deletedAt) return false;
-          if (!item.transactionId) return true;
-          const transaction = transactionsById.get(item.transactionId);
-          return Boolean(
-            transaction &&
-            !transaction.deletedAt &&
-            transaction.status === "posted",
-          );
-        })
-        .map((item) => item.amountMinor),
-      `${goal.name} contributions`,
-    );
-    if (!goal.linkedAccountId && !goal.linkedCategoryId) {
-      return addMinor(goal.initialMinor, manual, progressLabel);
-    }
-    let linked = 0;
-    // Linked progress only counts activity from the goal's creation date onward.
-    const goalStart = toLocalDate(new Date(goal.createdAt));
-    const matchesCategory = goal.linkedCategoryId
-      ? this.categoryMatcher([goal.linkedCategoryId])
-      : null;
-    for (const item of transactions) {
-      if (item.deletedAt || item.status !== "posted") continue;
-      if (item.localDate < goalStart) continue;
-      if (matchesCategory && !matchesCategory(item.categoryId)) continue;
-      // A spending goal counts expenses; a saving goal tied to a category counts income there.
-      const countedKind =
-        goal.kind === "spending"
-          ? "expense"
-          : goal.linkedCategoryId
-            ? "income"
-            : null;
-      if (countedKind) {
-        if (item.kind !== countedKind) continue;
-        if (goal.linkedAccountId && item.accountId !== goal.linkedAccountId)
-          continue;
-        linked = addMinor(linked, this.postedBaseMinor(item), progressLabel);
-        continue;
-      }
-      if (!goal.linkedAccountId) continue;
-      if (item.kind === "income" && item.accountId === goal.linkedAccountId) {
-        linked = addMinor(linked, this.postedBaseMinor(item), progressLabel);
-      } else if (
-        (item.kind === "expense" || item.kind === "transfer") &&
-        item.accountId === goal.linkedAccountId
-      ) {
-        linked = subtractMinor(
-          linked,
-          this.postedBaseMinor(item),
-          progressLabel,
-        );
-      } else if (
-        item.kind === "transfer" &&
-        item.destinationAccountId === goal.linkedAccountId
-      ) {
-        linked = addMinor(
-          linked,
-          this.transferInflowBaseMinor(item),
-          progressLabel,
-        );
-      }
-    }
-    return addMinor(
-      addMinor(goal.initialMinor, manual, progressLabel),
-      linked,
-      progressLabel,
-    );
-  }
-
-  private assertGoalProgressSafe(
-    goalId: string,
-    goals: Goal[],
-    contributions: GoalContribution[],
-    transactions = this.state.transactions,
-  ) {
-    this.calculateGoalProgress(goalId, goals, contributions, transactions);
-  }
-
-  /**
-   * The overflow gate for a merged set.
-   *
-   * Deliberately *not* `assertTransactionSetSafe`. That one reads `this.state.goals` and
-   * `this.state.settings` and calls `todayLocal()` inside its net-worth pass, so it is not a
-   * pure function of its arguments — two devices in different timezones could disagree about
-   * whether the same merge is legal, and the op log would fork. This keeps only the passes
-   * that depend on nothing but the records in front of them, which is also the cheaper half:
-   * no rate resolution, no per-goal walk.
-   *
-   * Anything it rejects is a merged state no local mutation could have produced, so failing
-   * closed here is the whole point — nothing is written and the batch can be retried.
-   */
-  private assertMergedSetSafe(repaired: ReturnType<typeof repairMergedState>) {
-    const {
-      settings,
-      accounts,
-      categories,
-      tags,
-      transactions,
-      budgets,
-      budgetPeriods,
-      budgetAdjustments,
-      goals,
-      contributions,
-      recurringRules,
-      exchangeRates,
-    } = repaired;
-    // Tombstones are erased, so their content is blank by design and validating it would
-    // reject every merge that carries a delete. Accounts stay whole: an erased account keeps
-    // its type and currency, and the lookups below resolve references through it.
-    const liveOnly = <T extends FinanceEntity>(rows: readonly T[]) =>
-      rows.filter((row) => !row.deletedAt);
-    this.assertMergedDomainValues({
-      settings,
-      accounts,
-      categories: liveOnly(categories),
-      tags: liveOnly(tags),
-      transactions: liveOnly(transactions),
-      budgets: liveOnly(budgets),
-      budgetPeriods: liveOnly(budgetPeriods),
-      budgetAdjustments: liveOnly(budgetAdjustments),
-      goals: liveOnly(goals),
-      contributions: liveOnly(contributions),
-      recurringRules: liveOnly(recurringRules),
-      exchangeRates: liveOnly(exchangeRates),
-    });
-    const posted = transactions.filter(
-      (item) => !item.deletedAt && item.status === "posted",
-    );
-    for (const account of accounts.filter((item) => !item.deletedAt)) {
-      const label = `${account.name} balance`;
-      let balance = account.openingBalanceMinor;
-      this.assertSafeMinor(balance, label);
-      for (const transaction of posted) {
-        if (transaction.accountId === account.id) {
-          balance =
-            transaction.kind === "income"
-              ? addMinor(balance, transaction.amountMinor, label)
-              : subtractMinor(balance, transaction.amountMinor, label);
-        }
-        if (
-          transaction.kind === "transfer" &&
-          transaction.destinationAccountId === account.id
-        ) {
-          balance = addMinor(
-            balance,
-            transaction.destinationAmountMinor ?? 0,
-            label,
-          );
-        }
-      }
-    }
-    sumMinor(
-      posted
-        .filter((item) => item.kind === "income")
-        .map((item) => this.postedBaseMinor(item)),
-      "Income total",
-    );
-    sumMinor(
-      posted
-        .filter((item) => item.kind === "expense")
-        .map((item) => this.postedBaseMinor(item)),
-      "Expense total",
-    );
-  }
-
-  /**
-   * Remote ops are authenticated, not inherently valid finance input. This is deliberately
-   * pure and complete enough to reject every value shape that the local mutation paths refuse,
-   * before a malformed projection is allowed to poison future local saves.
-   */
-  private assertMergedDomainValues({
-    settings,
-    accounts,
-    categories,
-    tags,
-    transactions,
-    budgets,
-    budgetPeriods,
-    budgetAdjustments,
-    goals,
-    contributions,
-    recurringRules,
-    exchangeRates,
-  }: Parameters<typeof repairMergedState>[0]) {
-    const assertText = (value: unknown, label: string) => {
-      if (typeof value !== "string") throw new Error(`${label} must be text.`);
-    };
-    const assertDate = (value: unknown, label: string) => {
-      if (typeof value !== "string" || !isLocalDate(value))
-        throw new Error(`${label} must be a calendar date.`);
-    };
-    const assertMinor = (value: unknown, label: string, positive = false) => {
-      if (
-        typeof value !== "number" ||
-        !isSafeMinor(value) ||
-        (positive && value <= 0)
-      ) {
-        throw new Error(
-          `${label} must be ${positive ? "a positive " : "a "}safe minor-unit integer.`,
-        );
-      }
-    };
-    const assertCurrency = (value: unknown, label: string) => {
-      if (typeof value !== "string" || !isSupportedCurrencyCode(value)) {
-        throw new Error(`${label} must be a supported currency.`);
-      }
-    };
-    const assertEnum = (
-      value: unknown,
-      values: readonly string[],
-      label: string,
-    ) => {
-      if (typeof value !== "string" || !values.includes(value))
-        throw new Error(`${label} is invalid.`);
-    };
-    const assertRate = (value: unknown, label: string) => {
-      if (typeof value !== "string")
-        throw new Error(`${label} must be a decimal string.`);
-      let rate: Decimal;
-      try {
-        rate = new Decimal(value);
-      } catch {
-        throw new Error(`${label} must be a decimal string.`);
-      }
-      if (!rate.isFinite() || rate.lte(0))
-        throw new Error(`${label} must be positive.`);
-    };
-
-    // A freshly paired device can receive account and transaction history before its settings
-    // create reaches it. Hold the settings-specific checks until that create lands rather than
-    // rejecting otherwise well-formed history.
-    if (settings) {
-      assertCurrency(settings.baseCurrency, "Base currency");
-      if (!isValidThemeId(settings.themeId))
-        throw new Error("Theme is invalid.");
-      assertEnum(settings.themeMode, THEME_MODES, "Theme mode");
-      assertEnum(settings.accentSource, ACCENT_SOURCES, "Accent source");
-      if (validateLocale(settings.locale))
-        throw new Error("Settings locale is invalid.");
-    }
-
-    for (const account of accounts) {
-      assertEnum(account.type, ACCOUNT_TYPES, "Account type");
-      assertCurrency(account.currency, "Account currency");
-      assertMinor(account.openingBalanceMinor, "Opening balance");
-    }
-    for (const category of categories)
-      assertEnum(category.kind, CATEGORY_KINDS, "Category kind");
-    for (const tag of tags) assertText(tag.name, "Tag name");
-    for (const transaction of transactions) {
-      assertEnum(transaction.kind, TRANSACTION_TYPES, "Transaction type");
-      assertEnum(
-        transaction.status,
-        TRANSACTION_STATUSES,
-        "Transaction status",
-      );
-      assertDate(transaction.localDate, "Transaction date");
-      assertMinor(transaction.amountMinor, "Transaction amount", true);
-      assertCurrency(transaction.currency, "Transaction currency");
-      // The rate snapshot is null only while the row is unpriced (never posted). Both fields are
-      // null together; a posted row always carries its snapshot.
-      if (
-        transaction.exchangeRate === null ||
-        transaction.baseAmountMinor === null
-      ) {
-        if (
-          transaction.exchangeRate !== null ||
-          transaction.baseAmountMinor !== null
-        )
-          throw new Error(
-            "Transaction exchange rate and base amount must be set together.",
-          );
-        if (transaction.status === "posted")
-          throw new Error("Posted transactions need an exchange rate.");
-      } else {
-        assertMinor(
-          transaction.baseAmountMinor,
-          "Transaction base amount",
-          true,
-        );
-        assertRate(transaction.exchangeRate, "Transaction exchange rate");
-      }
-      const source = accounts.find(
-        (account) => account.id === transaction.accountId,
-      );
-      if (!source || source.currency !== transaction.currency)
-        throw new Error("Transaction currency must match its account.");
-      if (transaction.kind === "transfer") {
-        const destination = accounts.find(
-          (account) => account.id === transaction.destinationAccountId,
-        );
-        if (
-          !destination ||
-          transaction.destinationAmountMinor === null ||
-          (transaction.destinationBaseAmountMinor === null &&
-            transaction.status === "posted") ||
-          transaction.destinationCurrency !== destination.currency
-        ) {
-          throw new Error("Transfer destination does not match its account.");
-        }
-        assertMinor(
-          transaction.destinationAmountMinor,
-          "Transfer destination amount",
-          true,
-        );
-        // Unpriced (not yet paid) legs carry no destination base amount until they are paid.
-        if (transaction.destinationBaseAmountMinor !== null)
-          assertMinor(
-            transaction.destinationBaseAmountMinor,
-            "Transfer destination base amount",
-            true,
-          );
-      } else if (
-        transaction.destinationAccountId !== null ||
-        transaction.destinationAmountMinor !== null ||
-        transaction.destinationBaseAmountMinor !== null ||
-        transaction.destinationCurrency !== null ||
-        transaction.transferGroupId !== null
-      ) {
-        throw new Error("Non-transfer transaction has transfer fields.");
-      }
-      const foreign = transaction.foreign ?? null;
-      const fee = transaction.fee ?? null;
-      if (transaction.kind === "transfer") {
-        if (foreign || fee)
-          throw new Error(
-            "Foreign amounts and fees apply to expenses and income only.",
-          );
-      } else {
-        let principal = transaction.amountMinor;
-        if (foreign) {
-          assertCurrency(foreign.currency, "Transaction foreign currency");
-          if (foreign.currency === transaction.currency) {
-            throw new Error(
-              "Choose a foreign currency different from the account’s.",
-            );
-          }
-          assertMinor(foreign.amountMinor, "Transaction foreign amount", true);
-          assertRate(foreign.exchangeRate, "Transaction foreign exchange rate");
-          principal = convertMinor(
-            foreign.amountMinor,
-            foreign.currency,
-            transaction.currency,
-            foreign.exchangeRate,
-            this.formatLocale,
-          );
-        }
-        if (fee) {
-          assertEnum(fee.kind, ["percent", "fixed"], "Transaction fee kind");
-          if (
-            typeof fee.amountMinor !== "number" ||
-            !isSafeMinor(fee.amountMinor) ||
-            fee.amountMinor < 0
-          ) {
-            throw new Error(
-              "Transaction fee amount must be a safe minor-unit integer.",
-            );
-          }
-          if (fee.kind === "percent") {
-            if (typeof fee.percent !== "string")
-              throw new Error("Transaction fee percent is invalid.");
-            normalizeFeePercent(fee.percent);
-          } else if (fee.percent !== null) {
-            throw new Error(
-              "Transaction fee percent must be null for a fixed fee.",
-            );
-          }
-        }
-        const expectedAmountMinor = fee
-          ? totalWithFee(transaction.kind, principal, fee.amountMinor)
-          : principal;
-        if (transaction.amountMinor !== expectedAmountMinor) {
-          throw new Error(
-            "Transaction amount does not match its principal and fee.",
-          );
-        }
-      }
-    }
-    for (const budget of budgets) {
-      assertMinor(budget.limitMinor, "Budget limit", true);
-      assertEnum(budget.period.unit, PERIOD_UNITS, "Budget period");
-      assertDate(budget.period.anchorDate, "Budget anchor date");
-      if (
-        !Number.isSafeInteger(budget.period.interval) ||
-        budget.period.interval < 1
-      )
-        throw new Error("Budget interval is invalid.");
-      if (
-        budget.period.unit === "custom" &&
-        (!budget.period.endDate || !isLocalDate(budget.period.endDate))
-      )
-        throw new Error("Custom budget end date is invalid.");
-      for (const limit of budget.categoryLimits)
-        assertMinor(limit.limitMinor, "Budget category limit", true);
-    }
-    for (const period of budgetPeriods) {
-      assertDate(period.periodStart, "Budget period start");
-      assertDate(period.periodEnd, "Budget period end");
-      assertMinor(period.limitMinor, "Budget period limit", true);
-      assertMinor(period.rolloverMinor, "Budget period rollover");
-    }
-    for (const adjustment of budgetAdjustments) {
-      assertDate(adjustment.date, "Budget adjustment date");
-      assertMinor(adjustment.amountMinor, "Budget adjustment amount");
-      if (adjustment.amountMinor === 0)
-        throw new Error("Budget adjustment amount cannot be zero.");
-      assertText(adjustment.note, "Budget adjustment note");
-    }
-    for (const goal of goals) {
-      assertEnum(goal.kind, GOAL_KINDS, "Goal kind");
-      assertMinor(goal.targetMinor, "Goal target", true);
-      assertMinor(goal.initialMinor, "Goal initial progress");
-      if (goal.initialMinor < 0)
-        throw new Error("Goal initial progress cannot be negative.");
-      if (goal.targetDate !== null)
-        assertDate(goal.targetDate, "Goal target date");
-    }
-    for (const contribution of contributions) {
-      assertMinor(contribution.amountMinor, "Contribution amount", true);
-      assertDate(contribution.localDate, "Contribution date");
-    }
-    for (const rule of recurringRules) {
-      assertEnum(
-        rule.template.kind,
-        CATEGORY_KINDS,
-        "Recurring transaction type",
-      );
-      assertCurrency(rule.template.currency, "Recurring transaction currency");
-      assertMinor(
-        rule.template.amountMinor,
-        "Recurring transaction amount",
-        true,
-      );
-      assertEnum(rule.unit, RECURRENCE_UNITS, "Recurring period");
-      if (!Number.isSafeInteger(rule.interval) || rule.interval < 1)
-        throw new Error("Recurring interval is invalid.");
-      assertDate(rule.startDate, "Recurring start date");
-      assertDate(rule.nextDueDate, "Recurring next date");
-      if (rule.endDate !== null) assertDate(rule.endDate, "Recurring end date");
-      const account = accounts.find(
-        (item) => item.id === rule.template.accountId,
-      );
-      if (!account || account.currency !== rule.template.currency)
-        throw new Error("Recurring currency must match its account.");
-      const templateForeign = rule.template.foreign ?? null;
-      if (templateForeign) {
-        assertCurrency(templateForeign.currency, "Recurring foreign currency");
-        if (templateForeign.currency === rule.template.currency) {
-          throw new Error(
-            "Choose a foreign currency different from the account’s.",
-          );
-        }
-        assertMinor(
-          templateForeign.amountMinor,
-          "Recurring foreign amount",
-          true,
-        );
-        if (templateForeign.exchangeRate !== undefined)
-          assertRate(
-            templateForeign.exchangeRate,
-            "Recurring foreign exchange rate",
-          );
-      }
-      const templateFee = rule.template.fee ?? null;
-      if (templateFee) {
-        assertEnum(
-          templateFee.kind,
-          ["percent", "fixed"],
-          "Recurring fee kind",
-        );
-        if (templateFee.kind === "fixed") {
-          assertMinor(templateFee.amountMinor, "Recurring fee amount", true);
-        } else {
-          if (typeof templateFee.percent !== "string")
-            throw new Error("Recurring fee percent is invalid.");
-          normalizeFeePercent(templateFee.percent);
-        }
-      }
-    }
-    for (const rate of exchangeRates) {
-      assertCurrency(rate.fromCurrency, "Exchange-rate source currency");
-      assertCurrency(rate.toCurrency, "Exchange-rate destination currency");
-      assertDate(rate.effectiveDate, "Exchange-rate date");
-      assertRate(rate.rate, "Exchange rate");
-    }
-  }
-
-  private assertTransactionSetSafe(
-    transactions: TransactionRecord[],
-    accounts = this.state.accounts,
-    exchangeRates = this.state.exchangeRates,
-  ) {
-    // One pass over the transactions. Each account's running balance sees exactly the operations
-    // the old per-account loop applied, in the same order, so overflow is detected identically
-    // — but the cost is O(transactions + accounts) instead of O(accounts × transactions).
-    const activeAccounts = accounts.filter((item) => !item.deletedAt);
-    const balances = new Map<string, number>();
-    const names = new Map<string, string>();
-    for (const account of activeAccounts) {
-      this.assertSafeMinor(
-        account.openingBalanceMinor,
-        `${account.name} balance`,
-      );
-      balances.set(account.id, account.openingBalanceMinor);
-      names.set(account.id, account.name);
-    }
-    let incomeTotal = 0;
-    let expenseTotal = 0;
-    for (const transaction of transactions) {
-      if (transaction.deletedAt || transaction.status !== "posted") continue;
-      const source = balances.get(transaction.accountId);
-      if (source !== undefined) {
-        const label = `${names.get(transaction.accountId)} balance`;
-        balances.set(
-          transaction.accountId,
-          transaction.kind === "income"
-            ? addMinor(source, transaction.amountMinor, label)
-            : subtractMinor(source, transaction.amountMinor, label),
-        );
-      }
-      if (transaction.kind === "transfer" && transaction.destinationAccountId) {
-        const destination = balances.get(transaction.destinationAccountId);
-        if (destination !== undefined) {
-          balances.set(
-            transaction.destinationAccountId,
-            addMinor(
-              destination,
-              transaction.destinationAmountMinor ?? 0,
-              `${names.get(transaction.destinationAccountId)} balance`,
-            ),
-          );
-        }
-      }
-      if (transaction.kind === "income") {
-        incomeTotal = addMinor(
-          incomeTotal,
-          this.postedBaseMinor(transaction),
-          "Income total",
-        );
-      } else if (transaction.kind === "expense") {
-        expenseTotal = addMinor(
-          expenseTotal,
-          this.postedBaseMinor(transaction),
-          "Expense total",
-        );
-      }
-    }
-    this.state.goals.forEach((goal) => {
-      this.assertGoalProgressSafe(
-        goal.id,
-        this.state.goals,
-        this.state.contributions,
-        transactions,
-      );
-    });
-    let netWorth = 0;
-    // Archived accounts are included so this overflow guard covers exactly the
-    // set `getDashboard` now sums, rather than a narrower one.
-    for (const account of activeAccounts) {
-      let rate: string;
-      try {
-        rate = this.resolveRate(
-          account.currency,
-          this.state.settings.baseCurrency,
-          todayLocal(),
-          exchangeRates,
-        );
-      } catch {
-        continue;
-      }
-      netWorth = addMinor(
-        netWorth,
-        convertMinor(
-          balances.get(account.id) ?? account.openingBalanceMinor,
-          account.currency,
-          this.state.settings.baseCurrency,
-          rate,
-          this.formatLocale,
-        ),
-        "Net worth",
-      );
-    }
-  }
-
-  // A manual destination amount carries real spread and fees, so it is never
-  // required to agree with the stored rate. A misplaced decimal point, though,
-  // lands orders of magnitude away and silently conjures value into (or out of)
-  // every later base-currency total, with nothing on screen to show for it.
-  // Reject only that, and only when a rate for the pair is actually known.
-  private assertManualTransferAmount(
-    amountMinor: number,
-    fromCurrency: string,
-    destinationAmountMinor: number,
-    toCurrency: string,
-    localDate: string,
-  ) {
-    let expected: number;
-    try {
-      expected = convertMinor(
-        amountMinor,
-        fromCurrency,
-        toCurrency,
-        this.resolveRate(fromCurrency, toCurrency, localDate),
-        this.formatLocale,
-      );
-    } catch {
-      return;
-    }
-    if (expected <= 0) return;
-    const ratio = destinationAmountMinor / expected;
-    if (
-      ratio >= 1 / MANUAL_TRANSFER_AMOUNT_TOLERANCE &&
-      ratio <= MANUAL_TRANSFER_AMOUNT_TOLERANCE
-    )
-      return;
-    throw new Error(
-      `Destination amount is far from the known ${fromCurrency} → ${toCurrency} rate for ${localDate}. Check the amount, or update the rate first.`,
-    );
-  }
-
-  /**
-   * Reconstructs the base snapshot that a CSV row is allowed to claim.
-   *
-   * A destination-base snapshot is historical data, but a CSV is editable and the value affects
-   * linked goal progress. The source-side snapshot is enough when both legs use the same
-   * currency; otherwise the destination leg must be priced by the current effective rate. A
-   * missing rate is deliberately unverifiable rather than a reason to trust the supplied number.
-   */
-  private expectedDestinationBaseAmount(
-    destinationAmountMinor: number,
-    destinationCurrency: string,
-    sourceCurrency: string,
-    sourceBaseAmountMinor: number | null,
-    localDate: string,
-  ): number | null {
-    if (destinationCurrency === this.state.settings.baseCurrency)
-      return destinationAmountMinor;
-    if (destinationCurrency === sourceCurrency) return sourceBaseAmountMinor;
-    try {
-      return convertMinor(
-        destinationAmountMinor,
-        destinationCurrency,
-        this.state.settings.baseCurrency,
-        this.resolveRate(
-          destinationCurrency,
-          this.state.settings.baseCurrency,
-          localDate,
-        ),
-        this.formatLocale,
-      );
-    } catch {
-      return null;
-    }
-  }
-
-  // Inclusive whole-day count. Compared through UTC midnights so a daylight
-  // saving transition inside the range cannot shift the total by a day.
-  private daySpan(fromDate: string, toDate: string) {
-    const from = parseLocalDate(fromDate);
-    const to = parseLocalDate(toDate);
-    const fromUtc = Date.UTC(
-      from.getFullYear(),
-      from.getMonth(),
-      from.getDate(),
-    );
-    const toUtc = Date.UTC(to.getFullYear(), to.getMonth(), to.getDate());
-    return Math.round((toUtc - fromUtc) / 86_400_000) + 1;
-  }
-
-  private parseMinorInteger(value: string, label: string) {
-    const normalized = value.trim();
-    if (!/^-?\d+$/.test(normalized))
-      throw new Error(`${label} must be a whole number.`);
-    const parsed = Number(normalized);
-    this.assertSafeMinor(parsed, label);
-    return parsed;
-  }
-
-  private transactionDuplicateKey(
-    transaction: TransactionRecord,
-    suppliedTagNames?: string[],
-  ) {
-    const tagNames =
-      suppliedTagNames ??
-      transaction.tagIds.map(
-        (id) => this.state.tags.find((tag) => tag.id === id)?.name ?? id,
-      );
-    return JSON.stringify([
-      transaction.localDate,
-      transaction.kind,
-      transaction.status,
-      transaction.accountId,
-      transaction.destinationAccountId,
-      transaction.amountMinor,
-      transaction.destinationAmountMinor,
-      transaction.currency,
-      transaction.destinationCurrency,
-      transaction.categoryId,
-      transaction.title.trim().toLocaleLowerCase(),
-      transaction.note.trim().toLocaleLowerCase(),
-      [
-        ...new Set(tagNames.map((name) => name.trim().toLocaleLowerCase())),
-      ].sort(),
-      transaction.exchangeRate ?? "",
-    ]);
-  }
-
-  private findExisting<T extends FinanceEntity>(
-    entities: T[],
-    id: string | undefined,
-    label: string,
-  ) {
-    if (!id) return undefined;
-    const existing = entities.find((item) => item.id === id);
-    if (!existing) throw new Error(`Could not find the ${label} to update.`);
-    return existing;
-  }
-
-  private assertExpectedRevision(
-    existing: FinanceEntity | undefined,
-    _input: object,
-    expectedRevision?: number,
-  ) {
-    if (!existing) return;
-    if (
-      expectedRevision !== undefined &&
-      expectedRevision !== existing.revision
-    ) {
-      throw new Error(
-        "This record changed in another window. Reopen it and try again.",
-      );
-    }
-  }
-
-  private assertUniqueName(
-    type: "accounts" | "categories" | "tags",
-    name: string,
-    id?: string,
-  ) {
-    // `normalizeName` rather than `toLocaleLowerCase`, and the same one `disambiguateNames`
-    // uses. Case folding is locale-dependent — in a Turkish locale `'I'` folds to `'ı'` —
-    // so the two would otherwise disagree about what counts as a collision, and a set the
-    // load migration had just declared clean could still be rejected by every later save.
-    const duplicate = (this.state[type] as (Account | Category | Tag)[]).some(
-      (item) =>
-        item.id !== id && normalizeName(item.name) === normalizeName(name),
-    );
-    if (duplicate) throw new Error(`${name} is already in use.`);
-  }
-
-  private assertIdsExist<T extends FinanceEntity>(
-    ids: string[],
-    entities: T[],
-    label: string,
-  ) {
-    const known = new Set(entities.map((item) => item.id));
-    if (ids.some((id) => !known.has(id)))
-      throw new Error(`Choose valid ${label} values.`);
-  }
-
-  private normalizeCurrency(value: string) {
-    const currency = value.trim().toUpperCase();
-    if (!/^[A-Z]{3}$/.test(currency))
-      throw new Error("Use a three-letter currency code such as USD.");
-    if (!isSupportedCurrencyCode(currency))
-      throw new Error("Use a supported ISO 4217 currency code.");
-    return currency;
-  }
-
-  private normalizeRate(value: string) {
-    let rate: Decimal;
-    try {
-      rate = new Decimal(value.trim());
-    } catch {
-      throw new Error("Exchange rate must be a positive number.");
-    }
-    if (!rate.isFinite() || rate.lte(0))
-      throw new Error("Exchange rate must be a positive number.");
-    // `toFixed`, not `toString`: decimal.js switches to exponential notation below
-    // 1e-7 (`toExpNeg`), which real pairs such as IRR→BHD reach. Rates are stored as
-    // decimal strings, and `normalizeDecimalString` would reject "8.9e-9" if such a
-    // value were ever fed back through form input.
-    return rate.toSignificantDigits(20).toFixed();
-  }
-
-  private assertLocale(value: string) {
-    const error = validateLocale(value);
-    if (error) throw new Error(error);
-  }
-
-  private assertColor(value: string) {
-    if (!/^#[0-9A-Fa-f]{6}$/.test(value))
-      throw new Error("Use a six-digit hex color such as #5070FF.");
-  }
-
-  private assertDate(value: string) {
-    if (!isLocalDate(value))
-      throw new Error("Use a real date in YYYY-MM-DD format.");
-  }
-
-  private assertSafeMinor(value: number, label: string) {
-    if (!isSafeMinor(value))
-      throw new Error(`${label} is outside the supported range.`);
-  }
-
-  private assertPositiveMinor(value: number, label: string) {
-    this.assertSafeMinor(value, label);
-    if (value <= 0) throw new Error(`${label} must be greater than zero.`);
   }
 
   private emit() {
