@@ -48,6 +48,7 @@ import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import type { SpaceScale } from "@/theme/themes/types";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import { hapticSuccess } from "@/utils/haptics";
 import { relativeTime } from "@/utils/relative-time";
 import { useNow } from "@/utils/use-now";
 
@@ -116,6 +117,7 @@ export function SyncScreen() {
       await work();
       acted = true;
       await refresh();
+      hapticSuccess();
     } catch (reason) {
       // Only the action can claim "nothing was changed". Once it has succeeded, a failed refresh
       // leaves the change in place and the message has to say so.
@@ -123,6 +125,7 @@ export function SyncScreen() {
         showError(
           "This change was saved",
           errorMessage(reason, "Reopen this screen to see the current state."),
+          { quiet: true },
         );
       } else {
         showError(failure, errorMessage(reason, "Nothing was changed."));
@@ -131,6 +134,11 @@ export function SyncScreen() {
       busyRef.current = false;
       setBusy(null);
     }
+  };
+
+  /** The provider reports a failed pass on its own banner, so only a finished one buzzes here. */
+  const syncNow = async () => {
+    if (await reconcile()) hapticSuccess();
   };
 
   const rotate = async () => {
@@ -172,7 +180,7 @@ export function SyncScreen() {
       refreshControl={
         <RefreshControl
           refreshing={syncing}
-          onRefresh={() => void reconcile()}
+          onRefresh={() => void syncNow()}
           tintColor={theme.accent}
         />
       }
@@ -229,7 +237,7 @@ export function SyncScreen() {
                 icon="arrow.triangle.2.circlepath"
                 busy={syncing}
                 disabled={syncing}
-                onPress={() => void reconcile()}
+                onPress={() => void syncNow()}
               />
             ) : (
               <ActionButton

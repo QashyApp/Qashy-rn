@@ -217,6 +217,7 @@ export function BudgetFormScreen() {
     setSaving(true);
     try {
       await repository.resetBudgetRollover(existing.id);
+      hapticSuccess();
     } catch (reason) {
       showError("Couldn’t reset rollover", errorMessage(reason, "Try again."));
     } finally {

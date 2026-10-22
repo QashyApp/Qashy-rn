@@ -80,6 +80,7 @@ import type { SpaceScale } from "@/theme/themes/types";
 import { usePreventScreenCaptureWhile } from "@/features/sync/use-screen-capture-guard";
 import { errorMessage } from "@/utils/confirm";
 import { nowIso } from "@/utils/entity";
+import { hapticError, hapticSuccess, hapticWarning } from "@/utils/haptics";
 
 type Role = "host" | "join";
 type Stage = "role" | "code" | "confirm" | "done";
@@ -351,12 +352,14 @@ export function PairScreen() {
           setCode((current) =>
             current ? { ...current, unusable: true } : null,
           );
+          hapticError();
           setError(
             errorMessage(reason, "The other device did not complete pairing."),
           );
           rollbackAbandonedSetup();
         });
     } catch (reason) {
+      hapticError();
       setError(
         errorMessage(reason, "Sync could not be set up on this device."),
       );
@@ -410,6 +413,7 @@ export function PairScreen() {
           token: value.token + 1,
           keepManual: false,
         }));
+        hapticError();
         setError(
           errorMessage(
             reason,
@@ -475,6 +479,7 @@ export function PairScreen() {
         token: value.token + 1,
         keepManual: false,
       }));
+      hapticError();
       setError(
         errorMessage(
           reason,
@@ -499,11 +504,13 @@ export function PairScreen() {
       session.current = null;
       accept.current = null;
       move("done");
+      hapticSuccess();
       // Pull the vault now rather than on the next scheduled pass, so a first-run device is not
       // left on "receiving" for a timer's length. A failure here is advisory; the provider
       // retries and reports it on its own.
       if (firstRun) void reconcile().catch(() => undefined);
     } catch (reason) {
+      hapticError();
       setError(errorMessage(reason, "Pairing could not be completed."));
     } finally {
       setBusy(false);
@@ -515,6 +522,7 @@ export function PairScreen() {
     rollbackAbandonedSetup();
     setSas(null);
     setCode(null);
+    hapticWarning();
     setError(
       t(
         "Pairing was stopped and nothing was sent. Different words on the two screens can mean someone else tried to join — start again, and keep the code on screen only while the other device is scanning it.",

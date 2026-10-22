@@ -63,7 +63,7 @@ import {
   validateMoneyInput,
   validatePositiveDecimal,
 } from "@/utils/form-validation";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticError, hapticSuccess } from "@/utils/haptics";
 import {
   localizeDecimalString,
   minorToLocalizedDecimalString,
@@ -675,6 +675,7 @@ export function TransactionFormScreen() {
         ownerRoute === "/transactions" ? { month: monthKey(date) } : undefined,
       );
     } catch (reason) {
+      hapticError();
       setSaveError(errorMessage(reason, "Check the form and try again."));
     } finally {
       setBusy(false);

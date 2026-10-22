@@ -75,8 +75,11 @@ export interface SyncContextValue {
   readonly error: string | null;
   /** Re-reads everything from storage. Call after any mutation the setup layer performed. */
   readonly refresh: () => Promise<void>;
-  /** Runs a pass now. Backs the pull-to-refresh and the "Sync now" button. */
-  readonly reconcile: () => Promise<void>;
+  /**
+   * Runs a pass now. Backs the pull-to-refresh and the "Sync now" button. Resolves true only
+   * when a pass actually ran to completion, so a screen can confirm it without reading state.
+   */
+  readonly reconcile: () => Promise<boolean>;
   /** Measures the relay now, without a full pass. Backs "Check now". */
   readonly checkRelay: () => Promise<RelayHealth>;
   /** For flows that need to mutate vault state — pairing, revoking, endpoints. */
@@ -160,9 +163,10 @@ export function SyncProvider({
   );
 
   const reconcile = useCallback(async () => {
-    if (running.current) return;
+    if (running.current) return false;
     running.current = true;
     setSyncing(true);
+    let ran = false;
     try {
       // Through the process-wide pass lock, so it never overlaps an opt-in background pass that
       // Android started inside this process (see `sync/background.ts`).
@@ -170,7 +174,10 @@ export function SyncProvider({
       setPass(result);
       // Only a pass that actually ran clears the banner. A pass that returned `disabled` or
       // `unpaired` did no work, so it is no evidence that whatever failed last time is fixed.
-      if (result.reason === "ok") setError(null);
+      if (result.reason === "ok") {
+        setError(null);
+        ran = true;
+      }
     } catch (reason: unknown) {
       setError(describe(reason));
     } finally {
@@ -181,6 +188,7 @@ export function SyncProvider({
       // what happened.
       await refresh();
     }
+    return ran;
   }, [engine, refresh]);
 
   const checkRelay = useCallback(async () => {

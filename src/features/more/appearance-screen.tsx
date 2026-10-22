@@ -39,6 +39,7 @@ import { previewAccentTokens, useQashyTheme } from "@/theme/theme";
 import { getTheme, listAvailableThemes } from "@/theme/themes/registry";
 import { ACCENT_PRESETS, mixHex } from "@/theme/tokens";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import { hapticSuccess } from "@/utils/haptics";
 
 const THEME_MODE_ICONS: Record<ThemeMode, string> = {
   system: "circle.lefthalf.filled",
@@ -185,6 +186,7 @@ export function AppearanceScreen() {
         ].join("\n"),
       );
       await changeTheme(evaluation.file.id);
+      hapticSuccess();
     } catch (reason) {
       showError("Couldn’t import theme", errorMessage(reason, "Try again."));
     } finally {
@@ -199,6 +201,7 @@ export function AppearanceScreen() {
         exportCustomThemeJson(selectedCustomFile),
         t("Export theme"),
       );
+      hapticSuccess();
     } catch (reason) {
       showError("Couldn’t export theme", errorMessage(reason, "Try again."));
     }
@@ -234,6 +237,7 @@ export function AppearanceScreen() {
       );
       setExpectedRevision(updated.revision);
       setSaved(true);
+      hapticSuccess();
     } catch (reason) {
       showError("Couldn’t save appearance", errorMessage(reason, "Try again."));
     } finally {

@@ -57,6 +57,7 @@ import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import type { SpaceScale } from "@/theme/themes/types";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import { hapticSuccess } from "@/utils/haptics";
 
 /** Named things first — see the header. The array order is the on-screen order. */
 const SECTIONS: readonly {
@@ -155,6 +156,7 @@ export function MergeScreen() {
       const result = await repository.mergeDuplicates(chosen);
       setMerged(result);
       setSelected([]);
+      hapticSuccess();
     } catch (reason) {
       showError(
         "Couldn’t merge those records",

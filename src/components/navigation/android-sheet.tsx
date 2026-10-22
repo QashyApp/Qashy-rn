@@ -38,6 +38,7 @@ import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
 import { useQashyTheme } from "@/theme/theme";
+import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
 
 /**
  * Route options for a creation/editing sheet on Android.
@@ -237,6 +238,7 @@ export function AndroidSheet({
       navigation.goBack();
       return;
     }
+    hapticImpactLight();
     void exit().then(() => navigation.goBack());
   }, [exit, navigation, closingFlag, guardedShared]);
 
@@ -294,6 +296,7 @@ export function AndroidSheet({
           runOnJS(requestClose)();
           return;
         }
+        runOnJS(hapticImpactLight)();
         drag.set(
           withTiming(height, { duration: EXIT_MS, easing: exitEasing }, () => {
             runOnJS(dismissNow)();
@@ -307,6 +310,10 @@ export function AndroidSheet({
       const target =
         release.detent === "expanded" ? top : collapsedShared.get();
       detentHeight.set(withSpring(target, settleSpring));
+      // Only a change of detent ticks; settling back where it was stays silent.
+      if ((release.detent === "expanded") !== expandedFlag.get()) {
+        runOnJS(hapticSelection)();
+      }
       expandedFlag.set(release.detent === "expanded");
     });
 

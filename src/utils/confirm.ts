@@ -2,7 +2,7 @@ import { Alert } from "react-native";
 
 import { storageFailureMessage } from "@/data/storage-error";
 import { translateCurrent } from "@/localization/localization";
-import { hapticWarning } from "@/utils/haptics";
+import { hapticError, hapticWarning } from "@/utils/haptics";
 import { webDialogStore } from "@/utils/web-dialog-store";
 
 interface ConfirmOptions {
@@ -65,7 +65,16 @@ export function confirmDestructive({
   });
 }
 
-export function showError(title: string, message?: string) {
+/**
+ * `quiet` is for a notice that is not a failure (a success report, "nothing to
+ * do"): the dialog is the same but the error buzz would be wrong.
+ */
+export function showError(
+  title: string,
+  message?: string,
+  { quiet = false }: { quiet?: boolean } = {},
+) {
+  if (!quiet) hapticError();
   const translatedTitle = translateCurrent(title);
   const translatedMessage = message ? translateCurrent(message) : undefined;
   if (process.env.EXPO_OS === "web") {

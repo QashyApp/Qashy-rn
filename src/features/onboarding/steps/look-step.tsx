@@ -14,6 +14,7 @@ import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { getTheme } from "@/theme/themes/registry";
 import { ACCENT_PRESET_NAMES, ACCENT_PRESETS } from "@/theme/tokens";
+import { hapticSelection } from "@/utils/haptics";
 import { formatMoney } from "@/utils/money";
 
 const THEMES = [
@@ -91,7 +92,10 @@ export function LookStep({
               accessibilityState={{ checked: systemSelected }}
               aria-checked={systemSelected}
               active={systemSelected}
-              onPress={() => onAccent("system")}
+              onPress={() => {
+                hapticSelection();
+                onAccent("system");
+              }}
               pressedScale={0.9}
               hoverScale={1.06}
               style={{

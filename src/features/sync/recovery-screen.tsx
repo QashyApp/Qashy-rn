@@ -81,6 +81,7 @@ export function RecoveryScreen() {
         showError(
           "There is no vault on this device",
           "Set up sync first, then come back.",
+          { quiet: true },
         );
         return;
       }

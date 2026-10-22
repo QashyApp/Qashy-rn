@@ -26,6 +26,13 @@ export function hapticSuccess() {
   );
 }
 
+/** Double-knock for an action that failed or was rejected. */
+export function hapticError() {
+  trigger(() =>
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
+  );
+}
+
 /** Cautionary buzz when the user confirms a destructive action. */
 export function hapticWarning() {
   trigger(() =>
