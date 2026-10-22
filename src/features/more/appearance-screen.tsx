@@ -22,7 +22,7 @@ import {
   saveThemeFile,
   pickThemeFileText,
 } from "@/features/more/custom-theme-files";
-import type { AccentSource, AnimationLevel, ThemeMode } from "@/domain/models";
+import type { AccentSource, ThemeMode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
@@ -39,6 +39,7 @@ import { previewAccentTokens, useQashyTheme } from "@/theme/theme";
 import { getTheme, listAvailableThemes } from "@/theme/themes/registry";
 import { ACCENT_PRESETS, mixHex } from "@/theme/tokens";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import { hapticSuccess } from "@/utils/haptics";
 
 const THEME_MODE_ICONS: Record<ThemeMode, string> = {
   system: "circle.lefthalf.filled",
@@ -49,11 +50,6 @@ const THEME_MODE_OPTIONS: SegmentOption<ThemeMode>[] = [
   { value: "system", label: "System", icon: THEME_MODE_ICONS.system },
   { value: "light", label: "Light", icon: THEME_MODE_ICONS.light },
   { value: "dark", label: "Dark", icon: THEME_MODE_ICONS.dark },
-];
-const ANIMATION_LEVEL_OPTIONS: SegmentOption<AnimationLevel>[] = [
-  { value: "all", label: "All" },
-  { value: "minimal", label: "Minimal" },
-  { value: "off", label: "Off" },
 ];
 /** A representative amount for the live preview hero — never a real balance. */
 const PREVIEW_NET_WORTH_MINOR = 1284350;
@@ -119,19 +115,6 @@ export function AppearanceScreen() {
     userAccent && source === "custom" && !validHex
       ? "Use a six-digit hex color such as #5070FF."
       : undefined;
-  // The animation level applies the moment it is chosen and is its own revision.
-  const changeAnimationLevel = async (animationLevel: AnimationLevel) => {
-    if (animationLevel === (settings.animationLevel ?? "all")) return;
-    try {
-      const updated = await repository.updateSettings({ animationLevel });
-      setExpectedRevision(updated.revision);
-    } catch (reason) {
-      showError(
-        "Couldn’t apply this setting",
-        errorMessage(reason, "Try again."),
-      );
-    }
-  };
   // The theme applies immediately and adopts the new revision, so a pending
   // "Save appearance" doesn't hit a stale-revision conflict.
   const changeTheme = async (id: string): Promise<boolean> => {
@@ -184,7 +167,9 @@ export function AppearanceScreen() {
           ...evaluation.warnings.map((line) => t(line)),
         ].join("\n"),
       );
-      await changeTheme(evaluation.file.id);
+      // A failed apply has already buzzed an error, and a confirmed replace has already buzzed a warning.
+      const applied = await changeTheme(evaluation.file.id);
+      if (applied && !evaluation.replaces) hapticSuccess();
     } catch (reason) {
       showError("Couldn’t import theme", errorMessage(reason, "Try again."));
     } finally {
@@ -234,6 +219,7 @@ export function AppearanceScreen() {
       );
       setExpectedRevision(updated.revision);
       setSaved(true);
+      hapticSuccess();
     } catch (reason) {
       showError("Couldn’t save appearance", errorMessage(reason, "Try again."));
     } finally {
@@ -408,21 +394,6 @@ export function AppearanceScreen() {
           </Card>
         </MotionView>
       ) : null}
-      <MotionView>
-        <Card style={{ gap: space.md }}>
-          <AppText variant="headline">Animations</AppText>
-          <SegmentedControl
-            label="Animations"
-            options={ANIMATION_LEVEL_OPTIONS}
-            value={settings.animationLevel ?? "all"}
-            onChange={changeAnimationLevel}
-          />
-          <AppText variant="caption" muted>
-            Minimal keeps quick fades only; Off changes things instantly. Your
-            device’s reduce-motion setting always applies on top.
-          </AppText>
-        </Card>
-      </MotionView>
       <MotionView>
         <Card style={{ gap: space.lg }}>
           <AppText variant="headline">Appearance</AppText>

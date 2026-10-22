@@ -137,6 +137,7 @@ describe("registry coverage", () => {
       "swipeBetweenMonths",
       "navBarStyle",
       "animationLevel",
+      "hapticsEnabled",
       "fontTextOverride",
       "fontNumericOverride",
       "uiIconSetOverride",

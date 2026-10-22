@@ -395,6 +395,7 @@ export function CsvScreen() {
         showError(
           `Skipped ${table.rowErrors.length} unreadable ${table.rowErrors.length === 1 ? "row" : "rows"}`,
           `The rest of the file was read. Check ${table.rowErrors.length === 1 ? "line" : "lines"} ${lines} for stray quotes.`,
+          { quiet: true },
         );
       }
     } catch (reason) {
@@ -514,6 +515,7 @@ export function CsvScreen() {
       showError(
         "Import complete",
         `${result.committedIds.length} ${result.committedIds.length === 1 ? "transaction" : "transactions"} imported.`,
+        { quiet: true },
       );
     } catch (reason) {
       showError(

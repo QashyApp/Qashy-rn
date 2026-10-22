@@ -117,11 +117,13 @@ export function EditableCardFrame({
 
   const moveUp = () => {
     if (index === 0) return;
+    hapticSelection();
     onMoveUp();
     announceMove("up");
   };
   const moveDown = () => {
     if (index === total - 1) return;
+    hapticSelection();
     onMoveDown();
     announceMove("down");
   };
@@ -217,7 +219,10 @@ export function EditableCardFrame({
             label={`Change ${title} size`}
             icon="arrow.up.left.and.arrow.down.right"
             size={40}
-            onPress={onCycleSize}
+            onPress={() => {
+              hapticSelection();
+              onCycleSize?.();
+            }}
           />
         ) : null}
         {hasConfigSheet ? (

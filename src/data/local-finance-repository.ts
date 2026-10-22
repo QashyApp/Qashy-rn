@@ -1077,6 +1077,8 @@ export class LocalFinanceRepository implements FinanceRepository {
         false,
       navBarStyle,
       animationLevel,
+      hapticsEnabled:
+        patch.hapticsEnabled ?? this.state.settings.hapticsEnabled ?? true,
       ...overrides,
     });
     await this.persist("settings", [settings]);
@@ -4742,6 +4744,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? false,
       navBarStyle: storedSettings.navBarStyle ?? "native",
       animationLevel: storedSettings.animationLevel ?? "all",
+      hapticsEnabled: storedSettings.hapticsEnabled ?? true,
       fontTextOverride: storedSettings.fontTextOverride ?? null,
       fontNumericOverride: storedSettings.fontNumericOverride ?? null,
       uiIconSetOverride: storedSettings.uiIconSetOverride ?? null,

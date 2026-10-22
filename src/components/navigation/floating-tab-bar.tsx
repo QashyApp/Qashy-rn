@@ -22,7 +22,7 @@ import { useLocalization } from "@/localization/localization";
 import { FLOATING_BAR_HEIGHT } from "@/theme/layout";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticImpactLight } from "@/utils/haptics";
+import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
 
 /** How long a press must last to open the navigation bar style sheet. */
 export const LONG_PRESS_DELAY_MS = 400;
@@ -230,6 +230,7 @@ export function FloatingTabBar({
                     canPreventDefault: true,
                   });
                   if (!focused && !event.defaultPrevented) {
+                    hapticSelection();
                     navigateToTab(route.key);
                   }
                 }}

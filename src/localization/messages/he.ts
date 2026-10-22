@@ -1104,8 +1104,12 @@ export const HEBREW: Record<string, string> = {
   Insight: "תובנה",
   Trend: "מגמה",
   "Choose month": "בחירת חודש",
-  Gestures: "מחוות",
-  "Swipe between months": "החלקה בין חודשים",
+  "Gestures and Animations": "מחוות ואנימציות",
+  "Swipe, haptics and animations": "החלקה, רטט ואנימציות",
+  "Swipe and animations": "החלקה ואנימציות",
+  "Haptic feedback": "משוב רטט",
+  "Short vibrations when you tap, switch options, save or hit an error.":
+    "רטט קצר בעת הקשה, החלפת אפשרות, שמירה או שגיאה.",
   "Swipe to change month": "החלקה למעבר בין חודשים",
   "Swipe left or right on Overview and Transactions to move between months.":
     "החליקו ימינה או שמאלה במסכי הסקירה והתנועות כדי לעבור בין חודשים.",
@@ -1614,7 +1618,7 @@ export const HEBREW: Record<string, string> = {
     "תמונות המצב של תקופות קודמות יימחקו יחד איתם.",
   "Manual contributions are removed with them.":
     "ההפקדות הידניות יימחקו יחד איתם.",
-  // More → Appearance: animation level.
+  // More → Gestures and Animations: animation level.
   Animations: "אנימציות",
   Minimal: "מינימלי",
   "Minimal keeps quick fades only; Off changes things instantly. Your device’s reduce-motion setting always applies on top.":

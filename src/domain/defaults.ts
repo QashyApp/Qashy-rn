@@ -44,6 +44,7 @@ export const initialSettings = (): AppSettings => {
     swipeBetweenMonths: false,
     navBarStyle: "native",
     animationLevel: "all",
+    hapticsEnabled: true,
     fontTextOverride: null,
     fontNumericOverride: null,
     uiIconSetOverride: null,

@@ -34,7 +34,7 @@ import { resolveBottomChromeInset, useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
 import { startOfMonth } from "@/utils/date";
-import { hapticImpactLight } from "@/utils/haptics";
+import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
 
 interface UndoState {
   readonly card: OverviewCard;
@@ -108,6 +108,7 @@ export function OverviewScreen() {
   };
 
   const removeCard = (card: OverviewCard) => {
+    hapticImpactLight();
     const index = cards.findIndex((existing) => existing.id === card.id);
     void dispatchGuarded(
       { type: "remove", id: card.id },
@@ -120,6 +121,7 @@ export function OverviewScreen() {
 
   const undoRemove = () => {
     if (!undo) return;
+    hapticSelection();
     void dispatchGuarded(
       {
         type: "add",

@@ -49,6 +49,7 @@ import {
 } from "@/sync/setup";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import { hapticSuccess } from "@/utils/haptics";
 
 /** The rows are inset past a 38pt tile plus its gap, matching every other list in the app. */
 
@@ -92,6 +93,7 @@ export function DeviceCard({
       await renameDevice(setup, trimmed);
       await onChanged();
       setRenaming(false);
+      hapticSuccess();
     } catch (reason) {
       showError(
         "Couldn’t rename this device",

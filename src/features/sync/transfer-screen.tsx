@@ -94,6 +94,10 @@ const BUNDLE_REASONS: Record<Exclude<SyncPassReason, "ok">, string> = {
     "This device can’t read its stored key, so nothing can be sealed or opened.",
 };
 
+/** Paused or unpaired is nothing to act on; a locked or unreadable key is a failure worth a buzz. */
+const isPrecondition = (reason: keyof typeof BUNDLE_REASONS) =>
+  reason === "disabled" || reason === "unpaired";
+
 /** Which long-running action owns the screen, so two can never be started at once. */
 type Busy = "backup" | "open" | "restore" | "send" | "receive" | null;
 
@@ -208,7 +212,6 @@ export function TransferScreen() {
         setPassphrase("");
         setRepeated("");
         setSaved(true);
-        hapticSuccess();
       },
       "Couldn’t create the backup",
     );
@@ -289,6 +292,7 @@ export function TransferScreen() {
         showError(
           "Backup restored",
           "Your data is back on this device. Your other devices already know it, so sync continues from where the backup left off.",
+          { quiet: true },
         );
         // From onboarding the restored settings have just completed setup, so go straight in.
         router.replace(firstRun ? "/overview" : "/sync");
@@ -308,7 +312,9 @@ export function TransferScreen() {
         setSent(null);
         const bundle = await runtime.exportBundle();
         if (bundle.reason !== "ok") {
-          showError("Nothing to send", BUNDLE_REASONS[bundle.reason]);
+          showError("Nothing to send", BUNDLE_REASONS[bundle.reason], {
+            quiet: isPrecondition(bundle.reason),
+          });
           return;
         }
         setSent(bundle);
@@ -319,7 +325,6 @@ export function TransferScreen() {
           bundle.text,
           t("Send Qashy changes"),
         );
-        hapticSuccess();
       },
       "Couldn’t create the sync file",
     );
@@ -333,7 +338,9 @@ export function TransferScreen() {
         if (!file) return;
         const outcome = await runtime.importBundle(file);
         if (outcome.reason !== "ok") {
-          showError("Nothing was applied", BUNDLE_REASONS[outcome.reason]);
+          showError("Nothing was applied", BUNDLE_REASONS[outcome.reason], {
+            quiet: isPrecondition(outcome.reason),
+          });
           return;
         }
         setReceived(outcome);

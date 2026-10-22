@@ -45,6 +45,7 @@ import type { RelayHealth } from "@/sync/transport/relay-health";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
+import { hapticError, hapticSuccess } from "@/utils/haptics";
 import { relativeTime } from "@/utils/relative-time";
 
 /** The states where the raw transport error is worth more than the summary above it. */
@@ -133,6 +134,7 @@ export function RelayCard({
       normalizeEndpointUrl(relayUrl);
       setError(undefined);
     } catch (reason) {
+      hapticError();
       setError(
         reason instanceof EndpointError
           ? reason.message
@@ -147,6 +149,7 @@ export function RelayCard({
       await setEndpoints(setup, { relayUrl });
       setDraftRelay(null);
       await onChanged();
+      hapticSuccess();
     } catch (reason) {
       showError(
         "Couldn’t save these addresses",
