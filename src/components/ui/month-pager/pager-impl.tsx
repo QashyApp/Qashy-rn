@@ -6,39 +6,39 @@ import {
   useMemo,
   useRef,
   useState,
-  type ReactNode,
-  type Ref,
 } from "react";
-import { View, type LayoutChangeEvent, type ViewStyle } from "react-native";
+import { View, type LayoutChangeEvent } from "react-native";
 import {
   Gesture,
   GestureDetector,
   PointerType,
 } from "react-native-gesture-handler";
-import Animated, {
+import {
   cancelAnimation,
   runOnJS,
   runOnUI,
   useAnimatedReaction,
-  useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
-  type SharedValue,
 } from "react-native-reanimated";
 
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
-import { EntranceScope } from "@/components/ui/motion";
-import type { MonthDirection } from "@/components/ui/month-switcher";
 import { commitSpring, resolveSwipe } from "@/components/ui/resolve-swipe";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { moveMonth } from "@/utils/date";
 import { hapticSelection } from "@/services/haptics";
+import {
+  MonthPagerProps,
+  WEB,
+  monthAtIndex,
+  monthIndex,
+} from "@/components/ui/month-pager/pager-model";
+import { PagerPage } from "@/components/ui/month-pager/pager-page";
 
-const WEB = process.env.EXPO_OS === "web";
 /** Pans that start this close to a screen edge are left to the system back gesture. */
 const EDGE_GUARD = 24;
 /** Past the newest allowed month the pages barely follow the finger. */
@@ -50,120 +50,8 @@ const CROSSFADE_IN = 140;
  * on the month it shows. Generous, so a slow render is never mistaken for a refusal.
  */
 const COMMIT_TIMEOUT = 1500;
-/** How long a page that just became current waits before its own layout transitions resume. */
-const SETTLE_DELAY = 300;
 
-/**
- * Style for the scroll container inside a pager page. `touch-action` only counts up to the nearest
- * scroll container, so the pager's own `pan-y` is overridden by the page's scroller (`auto`) and
- * the browser claims horizontal drags (cancelling the pointer, or navigating history). The
- * scroller has to carry `pan-y` itself for a finger swipe to reach the gesture handler.
- */
-export const PAGER_SCROLLER_STYLE: ViewStyle | undefined = WEB
-  ? ({ touchAction: "pan-y" } as ViewStyle)
-  : undefined;
-
-/**
- * Where a pager's `dragProgress` rests on `month`. A screen seeds its shared value with this, so a
- * control placing names by the position is correct from its very first render, not only after
- * the pager's first write.
- */
-export function restingPosition(month: string, isRtl: boolean) {
-  return -monthIndex(month) * (isRtl ? -1 : 1);
-}
-
-/** A month's position on a continuous axis, so neighbouring months are exactly one apart. */
-function monthIndex(month: string) {
-  return Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7));
-}
-
-/** The first day of the month at `index` on that axis (`YYYY-MM-01`). */
-function monthAtIndex(index: number) {
-  const year = Math.floor((index - 1) / 12);
-  const month = index - year * 12;
-  return `${year}-${String(month).padStart(2, "0")}-01`;
-}
-
-export interface MonthPagerHandle {
-  /** Slide one month forward (`1`) or back (`-1`), exactly like a committed swipe. */
-  goTo(direction: 1 | -1): void;
-}
-
-export interface MonthPageInfo {
-  /** Only the current page should own scroll callbacks, scrolling and heavy content. */
-  isCurrent: boolean;
-}
-
-type ExternalGesture = Parameters<
-  ReturnType<typeof Gesture.Pan>["requireExternalGestureToFail"]
->[number];
-
-export interface MonthPagerProps {
-  /** First day of the current month (`YYYY-MM-01`). */
-  month: string;
-  /** First day of the newest allowed month. Omit to allow any future month. */
-  max?: string;
-  /** Renders only the current page and ignores the gesture. */
-  disabled?: boolean;
-  onChange: (month: string, direction: MonthDirection) => void;
-  renderPage: (month: string, info: MonthPageInfo) => ReactNode;
-  /**
-   * Gestures (for example a horizontal `Gesture.Native()` scroller inside a page) that
-   * must fail before a swipe may start, so inner horizontal scrolling wins.
-   */
-  blockedBy?: readonly ExternalGesture[];
-  /**
-   * Written with the pager's absolute position, in page widths: the drag (0 at rest, -1 once the
-   * next month has slid fully in) minus the centre month's index (plus it, right-to-left). A
-   * control outside the pager, such as the month title, places the month with index `k` at
-   * `(k * sign + dragProgress)` page widths, so it moves with the same gesture and stays correct
-   * through a month change.
-   */
-  dragProgress?: SharedValue<number>;
-  /**
-   * `false` keeps the page where it is: the swipe still tracks the finger, settles and commits
-   * exactly the same, but only `dragProgress` moves, for a screen that slides just the parts
-   * that change. No neighbouring pages are mounted and the page is not re-created per month.
-   */
-  slide?: boolean;
-  style?: ViewStyle;
-  ref?: Ref<MonthPagerHandle>;
-}
-
-/**
- * Routes a `MonthSwitcher` change through the pager so a tap on the previous or next
- * month slides exactly like a swipe, and anything farther (the picker) just jumps.
- */
-export function navigateMonth(
-  pager: MonthPagerHandle | null,
-  current: string,
-  next: string,
-  direction: MonthDirection,
-  jump: (month: string, direction: MonthDirection) => void,
-) {
-  if (pager && next === moveMonth(current, 1)) pager.goTo(1);
-  else if (pager && next === moveMonth(current, -1)) pager.goTo(-1);
-  else jump(next, direction);
-}
-
-/**
- * Previous / current / next month side by side. The drag tracks the finger 1:1, the
- * month being swiped toward slides in from its side, and release either commits
- * (a quarter of the width, or a flick), decelerating into place on a critically damped
- * spring, or springs back.
- *
- * On web only touch drags swipe (mobile browsers, the installed PWA): mouse and pen are
- * inert so desktop text selection is untouched, and `touch-action: pan-y` leaves vertical
- * scrolling to the browser. Web mounts the neighbours only once a touch drag is under way,
- * so a plain page never holds duplicate content. Pages are mirrored for right-to-left locales, the swipe is
- * gated by the device-local `swipeBetweenMonths` setting, and with reduced motion the
- * slide becomes a short crossfade.
- */
-export function MonthPager(props: MonthPagerProps) {
-  return <PagerImpl {...props} />;
-}
-
-function PagerImpl({
+export function PagerImpl({
   month,
   max,
   disabled = false,
@@ -709,94 +597,5 @@ function PagerImpl({
         ) : null}
       </View>
     </GestureDetector>
-  );
-}
-
-function PagerPage({
-  index,
-  sign,
-  baseIndex,
-  width,
-  translateX,
-  fade,
-  current,
-  initial,
-  paging,
-  children,
-}: {
-  /** This page's month on the continuous month axis; never changes for a mounted page. */
-  index: number;
-  sign: 1 | -1;
-  baseIndex: SharedValue<number>;
-  width: number;
-  translateX: SharedValue<number>;
-  fade: SharedValue<number>;
-  current: boolean;
-  /** Mounted with the pager (the screen's first paint) rather than by paging. */
-  initial: boolean;
-  paging: boolean;
-  children: ReactNode;
-}) {
-  // The slot offset is a transform, never `left`: every page keeps the same layout box, so
-  // when a neighbour becomes the current page nothing inside it changes position. A layout
-  // move there made the overview cards' layout transitions replay the slide (visibly on web).
-  // It is set in a layout effect, which runs in the same commit as the pager's own
-  // `translateX` reset, so the two land in one frame.
-  // Layout transitions inside the page stay paused while it is a neighbour and for a moment
-  // after it becomes current, so the commit re-render does not animate anything on its own.
-  // Both updates are deferred; the `current` check below covers the gap. A page
-  // that mounts already current by paging (a flick that outran its neighbour) starts unsettled
-  // too, so it arrives drawn and still instead of playing its entrances.
-  const [settled, setSettled] = useState(current && initial);
-  // What entrances read at mount: only content mounting after the page settled animates.
-  const entranceSettled = useRef(current && initial);
-  useLayoutEffect(() => {
-    entranceSettled.current = current && settled;
-  });
-  useEffect(() => {
-    if (!current) {
-      const id = requestAnimationFrame(() => setSettled(false));
-      return () => cancelAnimationFrame(id);
-    }
-    // Settling re-renders every row of the page (their layout transitions and exits read it), so
-    // it waits until swiping pauses: a run of quick swipes never pays for it between months.
-    const id = setTimeout(() => setSettled(true), SETTLE_DELAY);
-    return () => clearTimeout(id);
-  }, [current]);
-  const animated = useAnimatedStyle(() => {
-    const distance = index - baseIndex.get();
-    return {
-      // A page more than one slot from the centre is only ever a stale frame, never a real view.
-      opacity: Math.abs(distance) > 1 ? 0 : fade.get(),
-      transform: [{ translateX: distance * sign * width + translateX.get() }],
-    };
-  });
-  return (
-    <Animated.View
-      collapsable={false}
-      // Neighbours are only ever seen mid-swipe: keep them out of touch and screen readers.
-      pointerEvents={current ? "auto" : "none"}
-      accessibilityElementsHidden={!current}
-      importantForAccessibility={current ? "auto" : "no-hide-descendants"}
-      style={[
-        {
-          position: "absolute",
-          top: 0,
-          bottom: 0,
-          left: 0,
-          ...(width > 0 ? { width } : { right: 0 }),
-        },
-        animated,
-      ]}
-    >
-      <EntranceScope
-        suppressed={!current}
-        settled={entranceSettled}
-        layoutTransitions={current && settled}
-        exits={current && settled && !paging}
-      >
-        {children}
-      </EntranceScope>
-    </Animated.View>
   );
 }
