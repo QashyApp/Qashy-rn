@@ -40,6 +40,9 @@ class WidgetScreenshotTest {
     SizeCase("4x3", DpSize(WidgetSizes.WIDTHS[3], WidgetSizes.HEIGHTS[2])),
   )
 
+  private val OVER_SCENARIOS = setOf("over130", "over250", "over819")
+  private val STATUS_SIZES = setOf("3x2", "4x2", "4x3")
+
   private val outDir = File("build/outputs/widget-screenshots")
 
   private fun context(lang: Fixtures.Lang, night: Boolean): Context {
@@ -63,6 +66,13 @@ class WidgetScreenshotTest {
           WidgetRenderer.writePng(rendered.bitmap, File(outDir, "${kindName}_${scenario.id}_${case.name}_${lang.tag}_$mode.png"))
           tiles += case.name to rendered.bitmap
           rendered.problems.forEach { problems += "$kindName ${scenario.id} ${case.name} ${lang.tag} $mode: $it" }
+          // The over-budget wording is short and must show in full wherever a ring has room for it.
+          if (kindName == "budget" && scenario.id in OVER_SCENARIOS && case.name in STATUS_SIZES) {
+            val status = Fixtures.overStatus(lang)
+            if (rendered.texts.none { it == status }) {
+              problems += "$kindName ${scenario.id} ${case.name} ${lang.tag} $mode: status \"$status\" is not shown in full: ${rendered.texts}"
+            }
+          }
         }
         val bg = if (night) 0xFF17181D.toInt() else 0xFFF1F2F5.toInt()
         val sheet = WidgetRenderer.sheet("$kindName / ${scenario.id} / ${lang.tag} / $mode", tiles, columns = 3, bg = bg)

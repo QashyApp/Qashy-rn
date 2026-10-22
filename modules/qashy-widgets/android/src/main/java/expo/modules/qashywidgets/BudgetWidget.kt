@@ -351,18 +351,21 @@ private fun RingWithDetails(b: BudgetData, colors: WidgetColors, fit: TextFit, s
       }
       Spacer(modifier = GlanceModifier.height(4.dp))
       remainingPlan?.let { Text(it.text(Amount(b.remaining!!, b.remainingCompact ?: b.remaining)), style = textStyle(colors.text, it.sp, bold = true), maxLines = 1) }
-      // Past the limit: how far, then the wording, each with room to spare or cut by measure.
+      // Past the limit: how far, then the wording. Side by side when both fit; else the mark on its
+      // own line with the wording under it, which then has the whole column.
       if (b.over) {
         val mark = if (overflow != null) "$OVER_MARK $overflow" else OVER_MARK
         val markWidth = fit.width(mark, 12, true).dp
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        val statusRoom = textWidth - markWidth - 4.dp
+        if (fit.fits(b.statusText, 12, true, statusRoom)) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(mark, style = textStyle(colors.negative, 12, bold = true), maxLines = 1)
+            Spacer(modifier = GlanceModifier.width(4.dp))
+            Text(b.statusText, style = textStyle(colors.negative, 12, bold = true), maxLines = 1)
+          }
+        } else {
           Text(mark, style = textStyle(colors.negative, 12, bold = true), maxLines = 1)
-          Spacer(modifier = GlanceModifier.width(4.dp))
-          Text(
-            fit.ellipsize(b.statusText, 12, true, textWidth - markWidth - 4.dp),
-            style = textStyle(colors.negative, 12, bold = true),
-            maxLines = 1,
-          )
+          Text(fit.ellipsize(b.statusText, 12, true, textWidth), style = textStyle(colors.negative, 12, bold = true), maxLines = 1)
         }
       } else {
         Text(fit.ellipsize(b.statusText, 12, false, textWidth), style = textStyle(colors.muted, 12), maxLines = 1)

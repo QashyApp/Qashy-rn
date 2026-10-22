@@ -134,6 +134,8 @@ internal object Fixtures {
   private fun longName(lang: Lang) =
     if (lang == Lang.EN) "Groceries, household supplies and pet food" else "מכולת, ציוד לבית ואוכל לחיות המחמד"
   private fun under(lang: Lang) = if (lang == Lang.EN) "Under pace" else "מתחת לקצב"
+  fun overStatus(lang: Lang) = overText(lang)
+
   private fun overText(lang: Lang) = if (lang == Lang.EN) "Over budget" else "מעל התקציב"
   private fun left(lang: Lang, n: String) = if (lang == Lang.EN) "$$n left" else "$n ₪ נותרו"
   private fun over(lang: Lang, n: String) = if (lang == Lang.EN) "$$n over" else "$n ₪ מעל"
