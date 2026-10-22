@@ -1,13 +1,19 @@
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, type ViewStyle } from "react-native";
 
+import { KeypadPressable } from "@/components/finance/keypad-pressable";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
-import { MotionPressable, MotionView } from "@/components/ui/motion";
+import { MotionView } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { type AmountOperator } from "@/utils/amount-expression";
-import { applyKeypadKey, type KeypadKey } from "@/utils/amount-keypad";
+import {
+  applyKeypadKey,
+  ExpressionBuffer,
+  type KeypadKey,
+} from "@/utils/amount-keypad";
 import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 import { decimalSymbolFor } from "@/utils/money";
 
@@ -60,6 +66,7 @@ export function AmountKeypad({
   locale,
   result,
   resolve,
+  buffer: sharedBuffer,
 }: {
   /** The expression typed so far. */
   value: string;
@@ -69,31 +76,48 @@ export function AmountKeypad({
   result: string | null;
   /** Collapses a complete expression to its evaluated text, or null when it cannot be evaluated. */
   resolve: (expression: string) => string | null;
+  /**
+   * The buffer keys are applied to, when the caller needs the latest text itself (the keypad's host
+   * finishes the calculation from it). Without one the keypad keeps its own.
+   */
+  buffer?: ExpressionBuffer;
 }) {
   const theme = useQashyTheme();
   const { space } = theme;
   const { t } = useLocalization();
   const decimalSymbol = decimalSymbolFor(locale);
-  const rows: KeyDefinition[][] = [
-    [digit("7"), digit("8"), digit("9"), operator("÷")],
-    [digit("4"), digit("5"), digit("6"), operator("×")],
-    [digit("1"), digit("2"), digit("3"), operator("−")],
-    [
-      {
-        key: { type: "decimal" },
-        label: decimalSymbol,
-        a11y: "Decimal separator",
-      },
-      digit("0"),
-      { key: { type: "backspace" }, label: "", a11y: "Delete last character" },
-      operator("+"),
-    ],
-  ];
+  const rows = useMemo(() => keyRows(decimalSymbol), [decimalSymbol]);
 
-  const press = (key: KeypadKey) => {
-    hapticSelection();
-    onChange(applyKeypadKey(value, key, { decimalSymbol, resolve }));
-  };
+  // Every key is applied to the buffer, not to the `value` prop: the prop comes back from the field
+  // several renders after a key, and a second key pressed in between must not start from the old text.
+  const [ownBuffer] = useState(() => new ExpressionBuffer(value));
+  const buffer = sharedBuffer ?? ownBuffer;
+  buffer.reconcile(value);
+  const latest = useRef({ onChange, resolve, decimalSymbol });
+  useEffect(() => {
+    latest.current = { onChange, resolve, decimalSymbol };
+  });
+
+  const press = useCallback(
+    (key: KeypadKey) => {
+      const expression = buffer;
+      hapticSelection();
+      const { onChange, resolve, decimalSymbol } = latest.current;
+      const next = applyKeypadKey(expression.value, key, {
+        decimalSymbol,
+        resolve,
+      });
+      if (next === expression.value) return;
+      expression.push(next);
+      onChange(next);
+    },
+    [buffer],
+  );
+  const clear = useCallback(() => {
+    hapticImpactLight();
+    press({ type: "clear" });
+  }, [press]);
+  const equals = useCallback(() => press({ type: "equals" }), [press]);
 
   return (
     <View
@@ -107,26 +131,18 @@ export function AmountKeypad({
             <KeypadButton
               key={definition.a11y}
               definition={definition}
-              onPress={() => press(definition.key)}
-              onLongPress={
-                definition.key.type === "backspace"
-                  ? () => {
-                      hapticImpactLight();
-                      onChange("");
-                    }
-                  : undefined
-              }
+              onKey={press}
+              onClear={definition.key.type === "backspace" ? clear : undefined}
             />
           ))}
         </View>
       ))}
       {result !== null ? (
         <MotionView variant="up" exit animateLayout>
-          <MotionPressable
-            accessibilityRole="button"
+          <KeypadPressable
             accessibilityLabel={`${t("Calculate")}, ${result}`}
-            onPress={() => press({ type: "equals" })}
-            style={({ pressed }) => ({
+            onPress={equals}
+            style={(pressed) => ({
               minHeight: 48,
               borderRadius: theme.radius.tile,
               borderCurve: "continuous",
@@ -143,21 +159,39 @@ export function AmountKeypad({
             >
               {`= ${result}`}
             </AppText>
-          </MotionPressable>
+          </KeypadPressable>
         </MotionView>
       ) : null}
     </View>
   );
 }
 
-function KeypadButton({
+function keyRows(decimalSymbol: string): KeyDefinition[][] {
+  return [
+    [digit("7"), digit("8"), digit("9"), operator("÷")],
+    [digit("4"), digit("5"), digit("6"), operator("×")],
+    [digit("1"), digit("2"), digit("3"), operator("−")],
+    [
+      {
+        key: { type: "decimal" },
+        label: decimalSymbol,
+        a11y: "Decimal separator",
+      },
+      digit("0"),
+      { key: { type: "backspace" }, label: "", a11y: "Delete last character" },
+      operator("+"),
+    ],
+  ];
+}
+
+const KeypadButton = memo(function KeypadButton({
   definition,
-  onPress,
-  onLongPress,
+  onKey,
+  onClear,
 }: {
   definition: KeyDefinition;
-  onPress: () => void;
-  onLongPress?: () => void;
+  onKey: (key: KeypadKey) => void;
+  onClear?: () => void;
 }) {
   const theme = useQashyTheme();
   const { t } = useLocalization();
@@ -172,13 +206,11 @@ function KeypadButton({
         }
       : materialStyle(theme, pressed ? "controlPressed" : "control");
   return (
-    <MotionPressable
-      accessibilityRole="button"
+    <KeypadPressable
       accessibilityLabel={t(definition.a11y)}
-      onPress={onPress}
-      onLongPress={onLongPress}
-      pressedScale={theme.motion.pressScale}
-      style={({ pressed }) => ({
+      onPress={() => onKey(definition.key)}
+      onLongPress={onClear}
+      style={(pressed) => ({
         flex: 1,
         minHeight: 52,
         borderRadius: theme.radius.tile,
@@ -201,6 +233,6 @@ function KeypadButton({
           {definition.label}
         </AppText>
       )}
-    </MotionPressable>
+    </KeypadPressable>
   );
-}
+});

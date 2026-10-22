@@ -31,6 +31,7 @@ import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { evaluateAmountExpression } from "@/utils/amount-expression";
+import { ExpressionBuffer } from "@/utils/amount-keypad";
 
 /** What the keypad needs from the field it is typing into. */
 export interface CalculatorFieldConfig {
@@ -264,6 +265,10 @@ function CalculatorLayer({
     };
   });
 
+  // The keypad applies every key to this buffer and reconciles it with `held.value` as it renders, so
+  // it holds the latest text even in the renders before a key's change comes back as `held.value`.
+  const [buffer] = useState(() => new ExpressionBuffer(held?.value ?? ""));
+
   const resolve = (expression: string) => {
     if (!held) return null;
     const result = evaluateAmountExpression(expression, held.currency, locale);
@@ -273,8 +278,10 @@ function CalculatorLayer({
 
   const done = () => {
     if (!config) return;
-    // A calculation still showing is finished, so the form is left holding a plain amount.
-    if (result !== null) config.onChange(result);
+    // A calculation still showing is finished, so the form is left holding a plain amount. It is read
+    // from the buffer: "Set amount" tapped right after a key would otherwise finish the text before it.
+    const finished = resolve(buffer.value);
+    if (finished !== null) config.onChange(finished);
     config.blur();
     onClose();
   };
@@ -395,6 +402,7 @@ function CalculatorLayer({
             locale={locale}
             result={result}
             resolve={resolve}
+            buffer={buffer}
           />
           <ActionButton title="Set amount" icon="checkmark" onPress={done} />
         </Animated.View>

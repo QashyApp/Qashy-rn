@@ -1,4 +1,8 @@
-import { applyKeypadKey, type KeypadKey } from "@/utils/amount-keypad";
+import {
+  applyKeypadKey,
+  ExpressionBuffer,
+  type KeypadKey,
+} from "@/utils/amount-keypad";
 
 const context = {
   decimalSymbol: ".",
@@ -41,5 +45,64 @@ describe("applyKeypadKey", () => {
   it("equals collapses a complete expression and leaves others alone", () => {
     expect(press("2+3", { type: "equals" })).toBe("5");
     expect(press("2+", { type: "equals" })).toBe("2+");
+  });
+});
+
+describe("ExpressionBuffer", () => {
+  const apply = (buffer: ExpressionBuffer, key: KeypadKey) => {
+    const next = press(buffer.value, key);
+    buffer.push(next);
+    return next;
+  };
+
+  it("applies keys pressed before the prop has come back", () => {
+    const buffer = new ExpressionBuffer("");
+    apply(buffer, digit("1"));
+    apply(buffer, digit("2"));
+    apply(buffer, digit("3"));
+    expect(buffer.value).toBe("123");
+    apply(buffer, operator("+"));
+    apply(buffer, digit("4"));
+    apply(buffer, { type: "backspace" });
+    apply(buffer, { type: "backspace" });
+    apply(buffer, operator("×"));
+    expect(buffer.value).toBe("123×");
+  });
+
+  it("keeps the newest text while earlier echoes arrive late", () => {
+    const buffer = new ExpressionBuffer("");
+    apply(buffer, digit("1"));
+    apply(buffer, digit("2"));
+    apply(buffer, digit("3"));
+    buffer.reconcile("1");
+    expect(buffer.value).toBe("123");
+    buffer.reconcile("12");
+    expect(buffer.value).toBe("123");
+    buffer.reconcile("123");
+    expect(buffer.value).toBe("123");
+    apply(buffer, digit("4"));
+    expect(buffer.value).toBe("1234");
+  });
+
+  it("copes with echoes that skip a value, and with repeated values", () => {
+    const buffer = new ExpressionBuffer("");
+    apply(buffer, digit("1"));
+    apply(buffer, { type: "backspace" });
+    apply(buffer, digit("1"));
+    buffer.reconcile("1");
+    buffer.reconcile("1");
+    expect(buffer.value).toBe("1");
+    apply(buffer, digit("2"));
+    buffer.reconcile("12");
+    expect(buffer.value).toBe("12");
+  });
+
+  it("takes a value changed from outside", () => {
+    const buffer = new ExpressionBuffer("12");
+    apply(buffer, digit("3"));
+    buffer.reconcile("9");
+    expect(buffer.value).toBe("9");
+    apply(buffer, digit("1"));
+    expect(buffer.value).toBe("91");
   });
 });

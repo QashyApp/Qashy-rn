@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { TextInputInstance, TextInputProps } from "react-native";
 
 import { prefersAmountKeypad } from "@/components/finance/amount-keypad";
@@ -45,6 +45,17 @@ export function useCalculatorInput({
       ? typed.expression
       : value;
 
+  // The form value as of the last change made here. `value` lags it by the renders a change takes to
+  // come back, so a dangling expression typed in that gap must record this, not the stale prop.
+  // A render that brings a value this hook did not just push (the form changed it) takes over.
+  const pushedValue = useRef(value);
+  const renderedValue = useRef(value);
+  useEffect(() => {
+    if (renderedValue.current === value) return;
+    renderedValue.current = value;
+    pushedValue.current = value;
+  }, [value]);
+
   const change = useCallback(
     (next: string) => {
       if (mode === "expression") {
@@ -53,16 +64,18 @@ export function useCalculatorInput({
       }
       const result = evaluateAmountExpression(next, currency, locale);
       if (result.kind === "value") {
+        pushedValue.current = result.text;
         setTyped({ expression: next, pushed: result.text });
         onChangeText(result.text);
       } else if (result.kind === "plain") {
+        pushedValue.current = next;
         setTyped(undefined);
         onChangeText(next);
       } else {
-        setTyped({ expression: next, pushed: value });
+        setTyped({ expression: next, pushed: pushedValue.current });
       }
     },
-    [mode, onChangeText, currency, locale, value],
+    [mode, onChangeText, currency, locale],
   );
 
   const blur = useCallback(() => node?.blur(), [node]);
