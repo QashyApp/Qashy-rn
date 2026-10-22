@@ -8,6 +8,8 @@ private and fully open source budgeting app
 Qashy runs on Android and as an installable PWA in desktop and mobile browsers (including Safari on iPhone and iPad). A native iOS app is not currently supported.
 </div>
 
+Developing Qashy? Start with [`docs/architecture.md`](docs/architecture.md), a map of the codebase.
+
 <div align="left">
 <H3 div align="center"> Features </H3>
 It's a completely free, private and open source app with 0 in-app purchases, not now not ever I don't believe such a helpful app should cost money nor annoy about optionally buying the app, you can:

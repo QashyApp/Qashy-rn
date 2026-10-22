@@ -29,6 +29,8 @@ Sync is the one deliberate exception to "no network". It is peer-to-peer and zer
 
 ## Architecture
 
+For a guided tour of the layers, data flow and sync folders, read [`docs/architecture.md`](docs/architecture.md).
+
 - `src/domain/` defines sync-ready entities and defaults.
 - `src/data/repository.ts` is the public `FinanceRepository` contract.
 - `src/data/local-finance-repository.ts` owns finance rules, queries, aggregates, recurrence, and CSV transactions. It keeps the stateful core (snapshot, mutation queue, caches, the `foo()` → `fooNow()` mutations), while the rules themselves are plain functions split by topic across `src/data/finance/` (validation, rates, budgets, recurring, analytics, deletion, CSV, importing another app's backup in `import-bundle.ts`, merge safety). The class doc comment lists which file holds what.
