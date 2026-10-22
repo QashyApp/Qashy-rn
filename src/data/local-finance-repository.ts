@@ -1741,11 +1741,16 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   /** What an external import needs from this repository; see `ExternalImportHost`. */
   private importHost(): ExternalImportHost {
+    // `repository` keeps `this` for the getter below; the arrow functions capture it directly.
+    const repository = this;
     return {
       ctx: this.ctx,
       storage: this.storage,
       source: this,
-      recurringDeps: this.recurringDeps,
+      // A getter, so the deps (and `deletedOccurrenceKeys`) are read when the import uses them.
+      get recurringDeps() {
+        return repository.recurringDeps;
+      },
       buildTransaction: this.build,
       withProspectiveState: (patch, work) =>
         this.withProspectiveState(patch, work),
