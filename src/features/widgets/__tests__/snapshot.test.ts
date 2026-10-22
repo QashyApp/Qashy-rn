@@ -415,7 +415,8 @@ describe("buildWidgetSnapshot", () => {
         percent: 25,
         limit: "$1,000.00",
         remaining: "$750.00 left",
-        limitCompact: "$1.0K",
+        // Intl compact currency gives "$1K"; engines without it (Hermes) use the manual "$1.0K".
+        limitCompact: expect.stringMatching(/^\$1(\.0)?K$/),
         remainingCompact: "$750.00 left",
       });
     });
