@@ -11,7 +11,7 @@ import Animated, {
 import { IconButton } from "@/components/ui/icon-button";
 import { flattenViewStyle } from "@/components/ui/motion";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticImpactLight } from "@/utils/haptics";
+import { hapticImpactLight } from "@/services/haptics";
 
 export function FloatingActionButton({
   label,

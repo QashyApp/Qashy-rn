@@ -6,7 +6,7 @@
  * `src/theme/custom/` because the theme provider consumes it; it must therefore never import
  * `@/theme/theme` (that would be a cycle).
  *
- * Persistence goes through `data/custom-themes-store.ts` inside `storage.transact`, which never
+ * Persistence goes through `data/device-local/custom-themes-store.ts` inside `storage.transact`, which never
  * captures a sync op, so custom themes stay device-local. Every stored file is re-parsed on load:
  * a file that no longer parses is dropped, and nothing here ever throws into a render. Theme
  * contents are never logged.
@@ -18,7 +18,7 @@ import {
   deleteCustomThemeFile,
   loadCustomThemeFiles,
   saveCustomThemeFile,
-} from "@/data/custom-themes-store";
+} from "@/data/device-local/custom-themes-store";
 import { syncingStorage } from "@/data/local-finance-repository";
 import type { StorageAdapter, StorageTx } from "@/data/storage-adapter";
 import { parseCustomTheme, type CustomThemeFile } from "@/theme/custom/schema";

@@ -17,7 +17,7 @@ import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { fontStyle } from "@/theme/typography";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 export type ChoiceListOption = {
   value: string;
@@ -56,8 +56,8 @@ export function ChoiceListField({
   const { height } = useWindowDimensions();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  // Falling back to options[0] used to show the first option as if it were
-  // chosen while the list rendered no checkmark anywhere.
+  // No fallback to options[0]: an unmatched value shows the placeholder. Why: showing the first
+  // option as if it were chosen left the list without a checkmark anywhere.
   const selected = options.find((option) => option.value === value);
   const placeholder = t("Select an option");
   const optionText = (text: string) => (literalOptions ? text : t(text));

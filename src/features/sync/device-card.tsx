@@ -49,7 +49,7 @@ import {
 } from "@/sync/setup";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 
 /** The rows are inset past a 38pt tile plus its gap, matching every other list in the app. */
 

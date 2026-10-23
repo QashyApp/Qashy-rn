@@ -46,7 +46,7 @@ import {
 import { useFinanceState } from "@/providers/finance-provider";
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
-import { useTurnOnAutomaticRates } from "@/features/use-automatic-rates";
+import { useTurnOnAutomaticRates } from "@/features/shared/use-automatic-rates";
 import { amountTone } from "@/utils/labels";
 import { formatMoney } from "@/utils/money";
 
@@ -211,7 +211,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
       ]}
     >
       <ScreenContainer>
-        {/* Native no longer draws its own copy of this heading: the section
+        {/* Native does not draw its own copy of this heading: the section
               stack shows a real navigation header titled "Overview". Web keeps
               PageHeading, which is where the document's h1 lives. */}
         <View

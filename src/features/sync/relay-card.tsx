@@ -45,7 +45,7 @@ import type { RelayHealth } from "@/sync/transport/relay-health";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
-import { hapticError, hapticSuccess } from "@/utils/haptics";
+import { hapticError, hapticSuccess } from "@/services/haptics";
 import { relativeTime } from "@/utils/relative-time";
 
 /** The states where the raw transport error is worth more than the summary above it. */

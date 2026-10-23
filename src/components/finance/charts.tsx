@@ -51,11 +51,10 @@ const AnimatedPath = Animated.createAnimatedComponent(Path);
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // One plot rectangle, quoted by the series, the gridlines, and the zero line, so
-// they cannot drift apart. They previously used different formulas: gridlines
-// were placed as a fraction of `height - 24` while the data was scaled into
-// `height - 54` starting 32 from the bottom, which landed the "50%" rule at 44%
-// of the actual plot. Chart furniture that lies about the data is worse than
-// none, so the geometry now has a single source.
+// they cannot drift apart. Why: gridlines placed as a fraction of `height - 24` while the data
+// was scaled into `height - 54` starting 32 from the bottom landed the "50%" rule at 44% of the
+// actual plot. Chart furniture that lies about the data is worse than none, so the geometry
+// has a single source.
 const PLOT_TOP = 20;
 const PLOT_BOTTOM_INSET = 32;
 const GRID_RATIOS = [0.25, 0.5, 0.75];

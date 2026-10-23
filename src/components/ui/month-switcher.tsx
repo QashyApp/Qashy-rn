@@ -18,7 +18,7 @@ import {
   parseLocalDate,
   startOfMonth,
 } from "@/utils/date";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 export type MonthDirection = "left" | "right";
 

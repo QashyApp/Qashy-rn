@@ -6,7 +6,7 @@ import { MotionPressable } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /**
  * A large selectable row for a radio group: a source app, or an import mode. Selected reads as

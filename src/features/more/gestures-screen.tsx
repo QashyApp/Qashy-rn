@@ -15,7 +15,7 @@ import {
 } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
-import { hapticSelection, setHapticsEnabled } from "@/utils/haptics";
+import { hapticSelection, setHapticsEnabled } from "@/services/haptics";
 
 const ANIMATION_LEVEL_OPTIONS: SegmentOption<AnimationLevel>[] = [
   { value: "all", label: "All" },

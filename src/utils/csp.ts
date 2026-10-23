@@ -44,7 +44,7 @@
  * on `script-src` would give up the single most valuable directive here to accommodate 40 bytes.
  *
  * If Expo Router ever changes that line, hydration stops and the app renders a blank page —
- * loud, but at build time rather than in front of a user, which is why `e2e/qashy.spec.ts`
+ * loud, but at build time rather than in front of a user, which is why `e2e/pwa.spec.ts`
  * asserts the exported pages contain no inline script this list does not cover.
  */
 export const EXPO_HYDRATE_SCRIPT_HASH =

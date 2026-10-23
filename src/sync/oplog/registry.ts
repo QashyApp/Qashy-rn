@@ -390,8 +390,9 @@ export const deviceLocalFieldsOf = (
  * Registered fields a record may lack entirely, because it was saved before the field existed.
  *
  * The domain model reads a missing value as `null` ("none recorded"), never as unknown. A
- * `create` built from such a row used to omit the key, and `applyCreate` then refused the whole
- * register it belonged to — every ledger field of the transaction went missing on the peer.
+ * A `create` built from such a row writes `null` for the key rather than omitting it. Why: an
+ * omitted key made `applyCreate` refuse the whole register it belonged to, so every ledger field
+ * of the transaction went missing on the peer.
  * Both ends agree on the reading: the diff writes `null` for the key, and the merge reads an
  * absent key as `null` when it meets an old create op already sitting in a peer's log.
  *

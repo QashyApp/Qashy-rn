@@ -22,7 +22,7 @@ import { useLocalization } from "@/localization/localization";
 import { FLOATING_BAR_HEIGHT } from "@/theme/layout";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
+import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 
 /** How long a press must last to open the navigation bar style sheet. */
 export const LONG_PRESS_DELAY_MS = 400;

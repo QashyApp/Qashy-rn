@@ -3,7 +3,7 @@ import {
   readLanguagePreference,
   writeLanguageMigrated,
   writeLanguagePreference,
-} from "@/data/language-preference-store";
+} from "@/data/device-local/language-preference-store";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import { SYNC_META, writeMeta } from "@/data/sync-store";
 

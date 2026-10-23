@@ -1,9 +1,9 @@
 import { Alert } from "react-native";
 
 import { showError } from "@/utils/confirm";
-import { hapticError } from "@/utils/haptics";
+import { hapticError } from "@/services/haptics";
 
-jest.mock("@/utils/haptics", () => ({
+jest.mock("@/services/haptics", () => ({
   hapticError: jest.fn(),
   hapticWarning: jest.fn(),
 }));

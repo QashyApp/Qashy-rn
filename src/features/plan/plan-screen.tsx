@@ -34,8 +34,8 @@ import {
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { mediumDate, toLocalDate } from "@/utils/date";
-import { useNow } from "@/utils/use-now";
-import { hapticSuccess } from "@/utils/haptics";
+import { useNow } from "@/hooks/use-now";
+import { hapticSuccess } from "@/services/haptics";
 import { formatMoney } from "@/utils/money";
 import { budgetPace, type BudgetPaceStatus } from "@/utils/pace";
 

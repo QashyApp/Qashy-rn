@@ -2,7 +2,7 @@
  * The policy's shape, not its effect.
  *
  * Whether the exported app actually runs under it is a browser question and belongs in
- * `e2e/qashy.spec.ts`, which loads the real `dist/` and fails on a violation. What can be
+ * `e2e/pwa.spec.ts`, which loads the real `dist/` and fails on a violation. What can be
  * checked here — cheaply, on every run — is that nobody has quietly loosened it. Every
  * assertion below corresponds to a directive that would still *work* if it were relaxed, which
  * is exactly why a relaxation would survive review without a test to object.

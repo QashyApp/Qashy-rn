@@ -79,29 +79,39 @@ describe("AppearanceScreen theme selection", () => {
     ).toBeNull();
   });
 
-  it("saves the chosen theme id, and hides the accent controls for a fixed-accent theme", async () => {
+  it("selecting a theme is pending: nothing is written until Save, which writes themeId with the rest", async () => {
     await render(<AppearanceScreen />);
 
     await fireEvent.press(
       screen.getByRole("radio", { name: /^High contrast/ }),
     );
 
-    await waitFor(() =>
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
-        themeId: "high-contrast",
-      }),
-    );
-    await waitFor(() =>
-      expect(
-        screen.getByRole("radio", { name: /^High contrast/ }).props
-          .accessibilityState,
-      ).toMatchObject({ checked: true }),
-    );
+    expect(
+      screen.getByRole("radio", { name: /^High contrast/ }).props
+        .accessibilityState,
+    ).toMatchObject({ checked: true });
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+    // The pending theme drives the accent controls.
     expect(screen.queryByLabelText("Custom accent")).toBeNull();
     expect(
       screen.getByText("This theme sets its own accent color."),
     ).toBeTruthy();
     // The mode controls stay for every theme.
     expect(screen.getByRole("radio", { name: "Dark" })).toBeTruthy();
+
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Save appearance$/ }),
+    );
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({
+          themeId: "high-contrast",
+          themeMode: "light",
+          accentSource: "preset",
+        }),
+        1,
+      ),
+    );
+    expect(mockUpdateSettings).toHaveBeenCalledTimes(1);
   });
 });

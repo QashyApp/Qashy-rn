@@ -17,7 +17,7 @@ import {
   readWidgetSettings,
   subscribeWidgetSettings,
   updateWidgetSettings,
-} from "@/data/widget-settings-store";
+} from "@/data/device-local/widget-settings-store";
 import {
   knownPlacedWidgets,
   type PlacedWidgetRef,

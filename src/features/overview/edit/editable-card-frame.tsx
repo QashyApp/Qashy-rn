@@ -33,7 +33,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 import type { WidgetSize } from "@/domain/overview-layout";
 
 /** A plain three-bar grip, drawn directly rather than through a not-yet-mapped icon name. */

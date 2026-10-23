@@ -1,6 +1,6 @@
 import { AppState } from "react-native";
 
-import { readBackgroundSync } from "@/data/background-sync-store";
+import { readBackgroundSync } from "@/data/device-local/background-sync-store";
 import {
   financeRepository,
   syncingStorage,

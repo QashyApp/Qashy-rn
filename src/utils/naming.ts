@@ -8,8 +8,8 @@
  *
  * ## Why `normalize` is a parameter, and why the default is not locale-aware
  *
- * The repository used to fold case with `toLocaleLowerCase()`. That is a genuine
- * divergence bug rather than a stylistic point: Qashy ships he-IL and en-US and lets the
+ * Case folding uses `toLowerCase()`, never `toLocaleLowerCase()`. That is a correctness
+ * point rather than a stylistic one: Qashy ships he-IL and en-US and lets the
  * user pick either, and case folding is locale-dependent — in a Turkish locale
  * `'I'.toLocaleLowerCase()` is `'ı'`, not `'i'`. Two paired devices with different locales
  * would compute different collision sets, choose different names, and never agree. So the

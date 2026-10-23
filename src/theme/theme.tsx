@@ -424,10 +424,9 @@ export function paletteTokens(
 }
 
 // The appearance preview has to show the accent the provider will actually
-// apply. It used to rebuild its own swatch from a hard-coded indigo literal, so
-// Android's Material You accent previewed as plain blue no matter what the
-// wallpaper produced. Reusing the same two builders is what keeps the preview
-// and the applied theme from drifting apart again.
+// apply, so it reuses the same two builders as the provider, which keeps the preview and the
+// applied theme from drifting apart. Why: a swatch rebuilt from a hard-coded indigo literal
+// previewed Android's Material You accent as plain blue whatever the wallpaper produced.
 //
 // Android's dynamic accent is an opaque platform color with no JS-readable hex,
 // so callers must render these values directly and must not pass them through

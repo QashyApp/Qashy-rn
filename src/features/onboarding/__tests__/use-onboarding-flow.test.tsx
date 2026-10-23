@@ -33,7 +33,7 @@ jest.mock("@/utils/confirm", () => ({
   errorMessage: (reason: unknown, fallback: string) =>
     reason instanceof Error ? reason.message : fallback,
 }));
-jest.mock("@/utils/haptics", () => ({ hapticSuccess: jest.fn() }));
+jest.mock("@/services/haptics", () => ({ hapticSuccess: jest.fn() }));
 jest.mock("@/providers/finance-provider", () => ({
   useFinanceRepository: () => mockRepository,
   useFinanceSettings: () => mockSettings,

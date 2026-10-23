@@ -10,7 +10,7 @@ import {
 import type { HostInstance } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /** How close to the list's top or bottom edge the finger scrolls it, and how far per tick. */
 const EDGE_ZONE = 72;

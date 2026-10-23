@@ -39,7 +39,7 @@ import { previewAccentTokens, useQashyTheme } from "@/theme/theme";
 import { getTheme, listAvailableThemes } from "@/theme/themes/registry";
 import { ACCENT_PRESETS, mixHex } from "@/theme/tokens";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 
 const THEME_MODE_ICONS: Record<ThemeMode, string> = {
   system: "circle.lefthalf.filled",
@@ -115,24 +115,12 @@ export function AppearanceScreen() {
     userAccent && source === "custom" && !validHex
       ? "Use a six-digit hex color such as #5070FF."
       : undefined;
-  // The theme applies immediately and adopts the new revision, so a pending
-  // "Save appearance" doesn't hit a stale-revision conflict.
-  const changeTheme = async (id: string): Promise<boolean> => {
-    if (id === themeId) return true;
-    const previous = themeId;
+  // Choosing a theme only changes the pending selection (the live preview and accent controls
+  // follow it); it is written, with the mode and accent, when "Save appearance" is pressed.
+  const changeTheme = (id: string) => {
+    if (id === themeId) return;
     setThemeId(id);
-    try {
-      const updated = await repository.updateSettings({ themeId: id });
-      setExpectedRevision(updated.revision);
-      return true;
-    } catch (reason) {
-      setThemeId(previous);
-      showError(
-        "Couldn’t apply this setting",
-        errorMessage(reason, "Try again."),
-      );
-      return false;
-    }
+    setSaved(false);
   };
   // Import reads a file the user picked, validates the whole theme, and changes nothing unless it
   // is valid (and, when it would replace a stored theme, confirmed). Theme contents are never logged.
@@ -167,9 +155,11 @@ export function AppearanceScreen() {
           ...evaluation.warnings.map((line) => t(line)),
         ].join("\n"),
       );
-      // A failed apply has already buzzed an error, and a confirmed replace has already buzzed a warning.
-      const applied = await changeTheme(evaluation.file.id);
-      if (applied && !evaluation.replaces) hapticSuccess();
+      // Importing stores the file on this device but only selects it; like any other theme choice it
+      // applies on "Save appearance". (A replaced theme that is already applied does update live.)
+      changeTheme(evaluation.file.id);
+      // A confirmed replace has already buzzed a warning.
+      if (!evaluation.replaces) hapticSuccess();
     } catch (reason) {
       showError("Couldn’t import theme", errorMessage(reason, "Try again."));
     } finally {
@@ -195,9 +185,16 @@ export function AppearanceScreen() {
         "The theme is removed from this device. Export it first to keep a copy.",
     });
     if (!confirmed) return;
-    // Leave the deleted theme first, so settings never point at a theme that no longer exists.
-    if (themeId === id && !(await changeTheme("classic"))) return;
     try {
+      // Deleting is immediate, so an applied theme must be left first: settings never point at a
+      // theme that no longer exists. A theme that is only the pending selection needs no write.
+      if (settings.themeId === id) {
+        const updated = await repository.updateSettings({ themeId: "classic" });
+        setExpectedRevision(updated.revision);
+        if (themeId === id) setThemeId("classic");
+      } else if (themeId === id) {
+        setThemeId(settings.themeId);
+      }
       await removeCustomTheme(id);
       setNotice(null);
     } catch (reason) {
@@ -211,6 +208,7 @@ export function AppearanceScreen() {
     try {
       const updated = await repository.updateSettings(
         {
+          themeId,
           themeMode: mode,
           accentSource: source,
           accentHex: validHex ? hex.toUpperCase() : settings.accentHex,
@@ -313,7 +311,7 @@ export function AppearanceScreen() {
           <ThemePicker
             value={themeId}
             onChange={(id) => {
-              void changeTheme(id);
+              changeTheme(id);
             }}
             themes={listAvailableThemes(customThemes)}
             customIds={customIds}

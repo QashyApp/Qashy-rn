@@ -55,7 +55,7 @@ import {
   parseLocalDate,
   startOfMonth,
 } from "@/utils/date";
-import { hapticImpactLight, hapticSelection } from "@/utils/haptics";
+import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 
 export type KindFilter = "all" | "expense" | "income" | "transfer" | "upcoming";
 

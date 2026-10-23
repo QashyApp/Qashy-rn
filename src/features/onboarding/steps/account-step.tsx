@@ -13,7 +13,7 @@ import type { OnboardingDraft } from "@/features/onboarding/use-onboarding-flow"
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 import { ACCOUNT_TYPE_INFO } from "@/utils/labels";
 
 const ACCOUNT_TYPES: { value: AccountType; label: string; icon: string }[] = (

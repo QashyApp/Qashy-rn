@@ -23,7 +23,7 @@ import {
   validateDateInput,
   validateExchangeRate,
 } from "@/utils/form-validation";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import { localizeDecimalString, normalizeDecimalString } from "@/utils/money";
 
 export function ExchangeRateScreen() {

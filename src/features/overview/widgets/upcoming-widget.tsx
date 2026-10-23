@@ -15,7 +15,7 @@ import { useExchangeRateService } from "@/providers/exchange-rate-provider";
 import { useFinanceRepository } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
-import { hapticSelection, hapticSuccess } from "@/utils/haptics";
+import { hapticSelection, hapticSuccess } from "@/services/haptics";
 import type { WidgetProps } from "@/features/overview/widgets/types";
 import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 

@@ -189,7 +189,12 @@ export function AmountHero({
           {label}
         </AppText>
       ) : null}
-      <View
+      {/* The whole well is the tap target, not only the one line of text in it: a tap anywhere in it
+          focuses the input, which opens the keypad (or, on a desktop browser, starts typing). The
+          input stays the one element a screen reader sees. */}
+      <Pressable
+        accessible={false}
+        onPress={() => node?.focus()}
         style={{
           borderRadius: config.radius,
           borderCurve: "continuous",
@@ -274,7 +279,7 @@ export function AmountHero({
             currencyPill
           )}
         </View>
-      </View>
+      </Pressable>
       {hint !== undefined ? (
         <MotionView key={error ?? hint} variant="up" exit animateLayout>
           <AppText

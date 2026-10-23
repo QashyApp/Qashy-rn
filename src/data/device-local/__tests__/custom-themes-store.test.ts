@@ -5,7 +5,7 @@ import {
   deleteCustomThemeFile,
   loadCustomThemeFiles,
   saveCustomThemeFile,
-} from "@/data/custom-themes-store";
+} from "@/data/device-local/custom-themes-store";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import { SYNC_META, writeMeta } from "@/data/sync-store";
 import { SyncingStorageAdapter } from "@/data/syncing-storage-adapter";

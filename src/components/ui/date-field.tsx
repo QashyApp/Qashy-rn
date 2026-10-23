@@ -11,7 +11,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { parseLocalDate, todayLocal } from "@/utils/date";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 const pad = (value: number) => String(value).padStart(2, "0");
 

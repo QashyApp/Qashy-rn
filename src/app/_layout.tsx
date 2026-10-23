@@ -27,6 +27,7 @@ import {
 } from "@/components/navigation/android-sheet";
 import { NavBarStyleSheetProvider } from "@/components/navigation/nav-bar-style-sheet";
 import { AnimationLevelProvider } from "@/components/ui/animation-level";
+import { OverlayProvider } from "@/components/ui/overlay-host";
 import { HapticsPreference } from "@/components/ui/haptics-preference";
 import { PwaUpdatePrompt } from "@/components/pwa-update-prompt";
 import { WebDialogHost } from "@/components/web-dialog-host";
@@ -83,8 +84,8 @@ function useWebDocumentTitle() {
         : DOCUMENT_TITLE;
     };
     apply(navigationRef.getCurrentOptions() as { title?: string } | undefined);
-    // The core no longer emits a dedicated `options` event, so re-read the focused
-    // route's options whenever the navigation state changes.
+    // Re-read the focused route's options whenever the navigation state changes. Why: the
+    // core emits no dedicated `options` event.
     return navigationRef.addListener("state", () => {
       apply(
         navigationRef.getCurrentOptions() as { title?: string } | undefined,
@@ -438,7 +439,9 @@ export default function RootLayout() {
               <AnimationLevelProvider>
                 <NavBarStyleSheetProvider>
                   <HapticsPreference />
-                  <RootNavigator />
+                  <OverlayProvider>
+                    <RootNavigator />
+                  </OverlayProvider>
                   {/* Keeps the home-screen widgets current while the app is open. The repository
                       is ready here (FinanceProvider renders its children only once it is), and
                       widgets are an Android feature. */}

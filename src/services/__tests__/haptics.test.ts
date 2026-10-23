@@ -5,7 +5,7 @@ import {
   hapticSelection,
   hapticSuccess,
   setHapticsEnabled,
-} from "@/utils/haptics";
+} from "@/services/haptics";
 
 jest.mock("expo-haptics", () => ({
   selectionAsync: jest.fn(() => Promise.resolve()),

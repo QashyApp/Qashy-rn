@@ -48,9 +48,9 @@ import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import type { SpaceScale } from "@/theme/themes/types";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import { relativeTime } from "@/utils/relative-time";
-import { useNow } from "@/utils/use-now";
+import { useNow } from "@/hooks/use-now";
 
 /** Which long-running action owns the screen, so two cannot be started at once. */
 type Busy = "pause" | "resume" | "rotate" | "leave" | null;

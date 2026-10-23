@@ -5,7 +5,7 @@ import {
   subscribeWidgetSettings,
   updateWidgetSettings,
   writeWidgetSettings,
-} from "@/data/widget-settings-store";
+} from "@/data/device-local/widget-settings-store";
 import { defaultWidgetConfig } from "@/features/widgets/settings";
 
 // The store reads and writes through the app's one syncing storage; point it at memory.

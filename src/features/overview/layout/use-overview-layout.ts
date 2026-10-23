@@ -18,7 +18,7 @@ import { syncingStorage } from "@/data/local-finance-repository";
 import {
   readOverviewLayout,
   writeOverviewLayout,
-} from "@/data/overview-layout-store";
+} from "@/data/device-local/overview-layout-store";
 import type { StorageAdapter } from "@/data/storage-adapter";
 import {
   DEFAULT_OVERVIEW_LAYOUT,

@@ -74,7 +74,7 @@ import {
   todayLocal,
 } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
-import { hapticSelection, hapticSuccess } from "@/utils/haptics";
+import { hapticSelection, hapticSuccess } from "@/services/haptics";
 
 /** How long the month has to hold still before the URL is updated to it. */
 const PARAM_DELAY = 400;

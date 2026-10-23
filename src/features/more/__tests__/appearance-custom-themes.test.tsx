@@ -100,7 +100,7 @@ describe("AppearanceScreen custom themes", () => {
     mockFiles = [];
   });
 
-  it("imports a valid theme file, saves it and selects it", async () => {
+  it("imports a valid theme file, saves it and selects it as a pending choice", async () => {
     mockPick.mockResolvedValue(exportCustomThemeJson(MINIMAL_EXAMPLE));
     await render(<AppearanceScreen />);
 
@@ -108,12 +108,12 @@ describe("AppearanceScreen custom themes", () => {
       screen.getByRole("button", { name: /Import theme$/ }),
     );
 
+    await waitFor(() => expect(mockSave).toHaveBeenCalledWith(MINIMAL_EXAMPLE));
     await waitFor(() =>
-      expect(mockUpdateSettings).toHaveBeenCalledWith({
-        themeId: MINIMAL_EXAMPLE.id,
-      }),
+      expect(screen.getByText("Theme imported.")).toBeTruthy(),
     );
-    expect(mockSave).toHaveBeenCalledWith(MINIMAL_EXAMPLE);
+    // Selected, but not applied until "Save appearance".
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
     expect(mockShowError).not.toHaveBeenCalled();
     expect(mockConfirm).not.toHaveBeenCalled();
     expect(screen.getByText("Theme imported.")).toBeTruthy();
@@ -239,7 +239,7 @@ describe("AppearanceScreen custom themes", () => {
     ).toMatchObject({ disabled: true });
   });
 
-  it("deleting the active custom theme switches to classic first, then removes it", async () => {
+  it("deleting the applied custom theme switches to classic first, then removes it", async () => {
     mockFiles = [FULL_EXAMPLE];
     mockThemeId = FULL_EXAMPLE.id;
     await render(<AppearanceScreen />);
@@ -257,6 +257,28 @@ describe("AppearanceScreen custom themes", () => {
     expect(mockUpdateSettings.mock.invocationCallOrder[0]).toBeLessThan(
       mockRemove.mock.invocationCallOrder[0],
     );
+  });
+
+  it("deleting a custom theme that is only the pending selection writes nothing and resets to the applied theme", async () => {
+    mockFiles = [FULL_EXAMPLE];
+    await render(<AppearanceScreen />);
+    await fireEvent.press(
+      screen.getByRole("radio", { name: new RegExp(`^${FULL_EXAMPLE.name}`) }),
+    );
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+
+    await fireEvent.press(
+      screen.getByRole("button", {
+        name: `Delete theme: ${FULL_EXAMPLE.name}`,
+      }),
+    );
+    await waitFor(() =>
+      expect(mockRemove).toHaveBeenCalledWith(FULL_EXAMPLE.id),
+    );
+    expect(mockUpdateSettings).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("radio", { name: /^Classic/ }).props.accessibilityState,
+    ).toMatchObject({ checked: true });
   });
 
   it("deleting an inactive custom theme leaves the selection alone, and cancelling deletes nothing", async () => {

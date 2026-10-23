@@ -1,6 +1,6 @@
 import { act, render, screen, waitFor } from "@testing-library/react-native";
 
-import { readLanguagePreference } from "@/data/language-preference-store";
+import { readLanguagePreference } from "@/data/device-local/language-preference-store";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import { SYNC_META, writeMeta } from "@/data/sync-store";
 import {

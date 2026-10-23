@@ -427,12 +427,11 @@ export class PlatformStorageAdapter implements StorageAdapter {
   private listeners = new Set<(source?: object) => void>();
   private tail: Promise<unknown> = Promise.resolve();
 
-  // `openDatabaseAsync` has no connection cache — every call builds a fresh native
-  // handle. Re-entering this method (the error screen's "Try again", or two callers
-  // racing on first launch) therefore used to strand the previous connection, since
-  // nothing ever closed it. Opening once and sharing the in-flight promise makes the
-  // call idempotent; a failure part-way through closes the handle it opened so the
-  // retry starts clean.
+  // Idempotent: opens once and shares the in-flight promise; a failure part-way through closes
+  // the handle it opened so the retry starts clean. Why: `openDatabaseAsync` has no connection
+  // cache — every call builds a fresh native handle — so re-entering this method (the error
+  // screen's "Try again", or two callers racing on first launch) would strand the previous
+  // connection, since nothing ever closes it.
   async initialize() {
     if (this.database) return;
     if (!this.opening) {

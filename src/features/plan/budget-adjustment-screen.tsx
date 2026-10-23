@@ -24,7 +24,7 @@ import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { mediumDate, todayLocal } from "@/utils/date";
 import { validateMoneyInput } from "@/utils/form-validation";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import { formatMoney, parseMoney } from "@/utils/money";
 
 type Direction = "add" | "reduce";

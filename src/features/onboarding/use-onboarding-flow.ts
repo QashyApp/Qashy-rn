@@ -19,7 +19,7 @@ import {
   validateLocale,
   validateMoneyInput,
 } from "@/utils/form-validation";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 import { parseMoney } from "@/utils/money";
 
 /**

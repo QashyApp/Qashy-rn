@@ -21,7 +21,7 @@ export async function readRatesFlag(tx: StorageTx): Promise<RatesFlag> {
   const meta = await readMeta(tx, [SYNC_META.ratesAutoFetch]);
   return {
     // On unless this device explicitly turned it off ("0"). An absent key — a fresh install, or
-    // a vault from before this default flipped — reads as on.
+    // a vault that predates the on-by-default flag — reads as on.
     enabled: meta.get(SYNC_META.ratesAutoFetch) !== "0",
   };
 }

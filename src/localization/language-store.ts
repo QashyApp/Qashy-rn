@@ -4,7 +4,7 @@
  *
  * - Android with the `qashy-locale` module: the native per-app locale is the source of truth, so
  *   the system Settings language picker and the in-app picker always agree. Reads are synchronous.
- * - Web, and Android without the module: `sync_meta` (`data/language-preference-store.ts`),
+ * - Web, and Android without the module: `sync_meta` (`data/device-local/language-preference-store.ts`),
  *   written through `transact` so it stays device-local.
  *
  * Nothing here is ever written to `AppSettings`, which replicates to peers.
@@ -17,7 +17,7 @@ import {
   readLanguagePreference,
   writeLanguageMigrated,
   writeLanguagePreference,
-} from "@/data/language-preference-store";
+} from "@/data/device-local/language-preference-store";
 import { syncingStorage } from "@/data/local-finance-repository";
 import {
   decideLanguageMigration,

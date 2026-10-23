@@ -2,8 +2,8 @@
  * Shared dashboard-summary fetch for every screen and Overview widget.
  *
  * `repository.getDashboard` is a synchronous read over the in-memory finance snapshot, so this
- * just centralizes the `useMemo` + external-store dependency list every caller used to duplicate —
- * one copy instead of many, all reading the same state slices the repository consults internally.
+ * just centralizes the `useMemo` + external-store dependency list that every caller would
+ * otherwise duplicate — one copy instead of many, all reading the same state slices the repository consults internally.
  */
 
 import { useMemo } from "react";
@@ -13,7 +13,7 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { endOfMonth, startOfMonth, toLocalDate } from "@/utils/date";
-import { useNow } from "@/utils/use-now";
+import { useNow } from "@/hooks/use-now";
 
 export function useDashboardRange(fromDate: string, toDate: string) {
   // The React Compiler drops the `void state.x` reads below as dead code and then memoizes on

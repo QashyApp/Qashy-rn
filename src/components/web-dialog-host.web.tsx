@@ -5,7 +5,7 @@ import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
-import { webDialogStore } from "@/utils/web-dialog-store";
+import { webDialogStore } from "@/services/web-dialog-store";
 
 /** In-app replacement for window.confirm / window.alert on web. Mount once near the root. */
 export function WebDialogHost() {

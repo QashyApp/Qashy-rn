@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Platform, Text, View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
@@ -11,7 +12,7 @@ import { accentTokens, useQashyTheme } from "@/theme/theme";
 import { listAvailableThemes } from "@/theme/themes/registry";
 import type { ThemeDefinition } from "@/theme/themes/types";
 import { fontStyle } from "@/theme/typography";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /**
  * One-line descriptions of the built-in themes, keyed by `theme.id`. They are English UI copy,
@@ -24,6 +25,12 @@ const THEME_DESCRIPTIONS: Record<string, string> = {
     "Rounded Material surfaces that follow your Android system colors.",
   "high-contrast": "Maximum contrast and bold edges for easy reading.",
 };
+
+/** Lines reserved for a card's description (or Custom badge), so all cards share one height. */
+export const DESCRIPTION_LINES = 4;
+
+/** The narrowest a card may be; the picker fits as many columns of at least this width as it can. */
+const MIN_CARD_WIDTH = 150;
 
 /**
  * Whether the user's accent choice applies to `theme`. `system` only differs from `fixed` on
@@ -52,7 +59,7 @@ export function ThemePreviewCard({
   dark,
   onPress,
   custom = false,
-  stacked = false,
+  width,
 }: {
   theme: ThemeDefinition;
   selected: boolean;
@@ -60,8 +67,8 @@ export function ThemePreviewCard({
   onPress: () => void;
   /** A user-authored theme: its name is data (shown as written) and it carries a "Custom" badge. */
   custom?: boolean;
-  /** The card sits in a column wrapper (with actions beneath) instead of directly in the wrapping row. */
-  stacked?: boolean;
+  /** The card's width, set by the picker so every card in the grid is the same size. */
+  width?: number;
 }) {
   const app = useQashyTheme();
   const { t } = useLocalization();
@@ -75,6 +82,7 @@ export function ThemePreviewCard({
   ]
     .filter(Boolean)
     .join(". ");
+  const captionLine = app.type.scale.caption.lineHeight;
   return (
     <MotionPressable
       accessibilityRole="radio"
@@ -89,20 +97,38 @@ export function ThemePreviewCard({
       pressedScale={0.97}
       hoverScale={1.02}
       style={{
-        flexGrow: stacked ? 0 : 1,
-        flexBasis: stacked ? "auto" : 150,
-        minWidth: stacked ? 0 : 140,
+        ...(width === undefined
+          ? { flexGrow: 1, flexBasis: MIN_CARD_WIDTH, minWidth: 140 }
+          : { width }),
         minHeight: 44,
         padding: app.space.sm,
         gap: app.space.sm,
         borderRadius: app.radius.card,
         borderCurve: "continuous",
-        // Selection is a thicker accent border plus the checkmark below, never color alone.
-        borderWidth: selected ? 3 : 1,
+        // The border never changes width, so selecting a card cannot resize it or shift its content.
+        borderWidth: 1,
         borderColor: selected ? app.accent : app.border,
         backgroundColor: app.surface,
       }}
     >
+      {/* Selection is a thicker accent ring drawn over the border (out of layout) plus the
+          checkmark below, never color alone. */}
+      {selected ? (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: -1,
+            left: -1,
+            right: -1,
+            bottom: -1,
+            borderWidth: 3,
+            borderColor: app.accent,
+            borderRadius: app.radius.card,
+            borderCurve: "continuous",
+          }}
+        />
+      ) : null}
       <View
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
@@ -125,20 +151,24 @@ export function ThemePreviewCard({
             materialStyle(preview, "card"),
           ]}
         >
+          {/* Fixed line heights: each theme's own face has different metrics, which would
+              otherwise give every preview a different height. */}
           <Text
             selectable={false}
+            numberOfLines={1}
             style={[
               fontStyle("semibold", theme.type),
-              { fontSize: 14, color: preview.text },
+              { fontSize: 14, lineHeight: 20, color: preview.text },
             ]}
           >
             {name}
           </Text>
           <Text
             selectable={false}
+            numberOfLines={1}
             style={[
               fontStyle("regular", theme.type),
-              { fontSize: 11, color: preview.textMuted },
+              { fontSize: 11, lineHeight: 16, color: preview.textMuted },
             ]}
           >
             $1,284.35
@@ -148,7 +178,7 @@ export function ThemePreviewCard({
           style={[
             {
               alignSelf: "flex-start",
-              minHeight: 22,
+              height: 22,
               paddingHorizontal: app.space.md,
               justifyContent: "center",
               borderRadius: theme.radius.pill,
@@ -162,7 +192,7 @@ export function ThemePreviewCard({
             selectable={false}
             style={[
               fontStyle("medium", theme.type),
-              { fontSize: 11, color: preview.onAccent },
+              { fontSize: 11, lineHeight: 16, color: preview.onAccent },
             ]}
           >
             Aa
@@ -176,20 +206,10 @@ export function ThemePreviewCard({
           gap: app.space.xs,
         }}
       >
-        <View style={{ flex: 1, gap: 2 }}>
-          <AppText variant="label" literal>
+        <View style={{ flex: 1 }}>
+          <AppText variant="label" literal numberOfLines={1}>
             {name}
           </AppText>
-          {description ? (
-            <AppText variant="caption" muted>
-              {description}
-            </AppText>
-          ) : null}
-          {custom ? (
-            <View style={{ alignSelf: "flex-start" }}>
-              <StatusPill label="Custom" icon="paintbrush" />
-            </View>
-          ) : null}
         </View>
         <View
           style={{
@@ -203,6 +223,21 @@ export function ThemePreviewCard({
             <AppIcon name="checkmark" color={app.accent} size={18} />
           ) : null}
         </View>
+      </View>
+      {/* The same room for every card, so a long translation or the Custom badge never makes
+          one card taller than its neighbours. Sized for the longest built-in description in
+          English and Hebrew; the full text is always in the accessibility label. */}
+      <View style={{ minHeight: captionLine * DESCRIPTION_LINES }}>
+        {description ? (
+          <AppText variant="caption" muted numberOfLines={DESCRIPTION_LINES}>
+            {description}
+          </AppText>
+        ) : null}
+        {custom ? (
+          <View style={{ alignSelf: "flex-start" }}>
+            <StatusPill label="Custom" icon="paintbrush" />
+          </View>
+        ) : null}
       </View>
     </MotionPressable>
   );
@@ -231,48 +266,68 @@ export function ThemePicker({
   const { t } = useLocalization();
   const list = themes ?? listAvailableThemes();
   const previewDark = dark ?? app.mode === "dark";
+  const deletable = onDelete
+    ? list.filter((theme) => customIds?.includes(theme.id))
+    : [];
+  // Every card gets the same width, so a card alone on the last row does not stretch across it.
+  const [rowWidth, setRowWidth] = useState(0);
+  const gap = app.space.md;
+  const columns = Math.max(
+    1,
+    Math.floor((rowWidth + gap) / (MIN_CARD_WIDTH + gap)),
+  );
+  // Floored, so rounding can never push the last card of a row onto the next one.
+  const cardWidth =
+    rowWidth > 0
+      ? Math.floor((rowWidth - gap * (columns - 1)) / columns)
+      : undefined;
   return (
-    <View
-      accessibilityRole="radiogroup"
-      accessibilityLabel={t("Theme")}
-      style={{ flexDirection: "row", flexWrap: "wrap", gap: app.space.md }}
-    >
-      {list.map((theme) => {
-        const custom = customIds?.includes(theme.id) ?? false;
-        const card = (
+    <View style={{ gap: app.space.md }}>
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel={t("Theme")}
+        onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}
+        style={{ flexDirection: "row", flexWrap: "wrap", gap }}
+      >
+        {list.map((theme) => (
           <ThemePreviewCard
             key={theme.id}
             theme={theme}
             selected={theme.id === value}
             dark={previewDark}
-            custom={custom}
-            stacked={custom && Boolean(onDelete)}
+            custom={customIds?.includes(theme.id) ?? false}
+            width={cardWidth}
             onPress={() => onChange(theme.id)}
           />
-        );
-        if (!custom || !onDelete) return card;
-        return (
-          <View
-            key={theme.id}
-            style={{
-              flexGrow: 1,
-              flexBasis: 150,
-              minWidth: 140,
-              gap: app.space.xs,
-            }}
-          >
-            {card}
-            <TextButton
-              title="Delete theme"
-              icon="trash"
-              tone="danger"
-              accessibilityLabel={`${t("Delete theme")}: ${theme.name}`}
-              onPress={() => onDelete(theme.id)}
-              style={{ alignSelf: "flex-start" }}
-            />
-          </View>
-        );
-      })}
+        ))}
+      </View>
+      {/* Delete lives outside the cards, so a custom theme's card is the same height as the rest. */}
+      {onDelete
+        ? deletable.map((theme) => (
+            <View
+              key={theme.id}
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: app.space.md,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <AppText variant="label" literal numberOfLines={1}>
+                  {theme.name}
+                </AppText>
+              </View>
+              <TextButton
+                title="Delete theme"
+                icon="trash"
+                tone="danger"
+                accessibilityLabel={`${t("Delete theme")}: ${theme.name}`}
+                onPress={() => onDelete(theme.id)}
+              />
+            </View>
+          ))
+        : null}
     </View>
   );
 }

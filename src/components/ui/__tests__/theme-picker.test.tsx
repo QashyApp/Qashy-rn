@@ -1,4 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
+import {
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react-native";
 
 import { effectiveAccentMode, ThemePicker } from "@/components/ui/theme-picker";
 import { classicTheme } from "@/theme/themes/classic";
@@ -78,6 +84,55 @@ describe("ThemePicker", () => {
     expect(
       screen.queryAllByRole("radio", { name: /dark|light/i }),
     ).toHaveLength(0);
+  });
+});
+
+describe("ThemePreviewCard layout", () => {
+  const flat = (node: { props: { style?: unknown } }) =>
+    StyleSheet.flatten(
+      typeof node.props.style === "function"
+        ? node.props.style({ pressed: false, hovered: false })
+        : node.props.style,
+    ) as Record<string, unknown>;
+
+  it("keeps the same border width selected or not, so selection never resizes the card", async () => {
+    await render(
+      <ThemePicker
+        value="classic"
+        onChange={jest.fn()}
+        themes={[classicTheme, fixedTheme]}
+      />,
+    );
+    const widths = ["Classic", "High contrast"].map(
+      (name) =>
+        flat(screen.getByRole("radio", { name: new RegExp(`^${name}`) }))
+          .borderWidth,
+    );
+    expect(widths).toEqual([1, 1]);
+  });
+
+  it("reserves the description area for custom cards and puts Delete outside the card", async () => {
+    const onDelete = jest.fn();
+    const custom: ThemeDefinition = {
+      ...classicTheme,
+      id: "mine",
+      name: "Mine",
+    };
+    await render(
+      <ThemePicker
+        value="classic"
+        onChange={jest.fn()}
+        themes={[classicTheme, custom]}
+        customIds={["mine"]}
+        onDelete={onDelete}
+      />,
+    );
+    const card = screen.getByRole("radio", { name: /^Mine\. Custom/ });
+    expect(within(card).queryByText("Delete theme")).toBeNull();
+    await fireEvent.press(
+      screen.getByRole("button", { name: "Delete theme: Mine" }),
+    );
+    expect(onDelete).toHaveBeenCalledWith("mine");
   });
 });
 

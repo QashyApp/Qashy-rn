@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 import {
   snapTransparency,

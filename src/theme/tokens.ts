@@ -45,10 +45,9 @@ export const CATEGORY_PALETTE = [
 /**
  * The spacing scale. Every gap, padding, and inset in the app comes from here.
  *
- * Before this existed the codebase used fifteen different gap values — 1, 2, 4,
- * 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20, 22 — typed at the call site, so no two
- * screens breathed the same way and a card's internal rhythm depended on which
- * feature owned it. A 4pt scale (plus a 2pt hairline step for text stacks) is
+ * No call site types its own gap value. Why: fifteen ad hoc values (1, 2, 4, 5, 6, 7, 8, 9,
+ * 10, 12, 14, 16, 18, 20, 22) meant no two screens breathed the same way and a card's
+ * internal rhythm depended on which feature owned it. A 4pt scale (plus a 2pt hairline step for text stacks) is
  * coarse enough that neighbouring values read as deliberate steps rather than as
  * noise.
  */
@@ -166,7 +165,7 @@ export const numericFontFamilies = {
 /**
  * The type scale. Sizes step by at least ~25% at the top of the ramp so the
  * hero figure, a screen title, an inline amount and a section heading never
- * read as near-misses of each other (they used to be 34 / 30 / 28 / 20).
+ * read as near-misses of each other (a 34 / 30 / 28 / 20 ramp was too tight).
  *
  * `hero` sits above `display` for the single largest figure in the redesign
  * (the net-worth number); `figure` is a smaller numeric stat (e.g. income or
@@ -479,10 +478,10 @@ export interface ToneColors {
  * Turns a user-chosen entity color (category, budget, goal) into a container +
  * on-container pair, the same way the theme derives `accentContainer`.
  *
- * Category colors used to be painted at full saturation across 44pt tiles, so a
- * transaction list with eight categories read as eight competing signal lights
- * and the amount — the thing a ledger is actually for — lost the fight. Tinting
- * the fill toward the surface keeps every category distinguishable at a glance
+ * The fill is tinted toward the surface rather than painted at full saturation. Why: full
+ * saturation across 44pt tiles made a transaction list with eight categories read as eight
+ * competing signal lights, and the amount — the thing a ledger is actually for — lost the
+ * fight. Tinting keeps every category distinguishable at a glance
  * while leaving the strongest contrast in the row for the number.
  *
  * `surface` and `text` must be real hex. Under Android's Material You the theme

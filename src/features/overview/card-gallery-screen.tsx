@@ -18,7 +18,7 @@ import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { makeId } from "@/utils/entity";
-import { hapticSelection } from "@/utils/haptics";
+import { hapticSelection } from "@/services/haptics";
 
 /**
  * Presented as a form sheet, registered as `overview-cards` in `_layout.tsx` alongside

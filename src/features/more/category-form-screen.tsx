@@ -23,7 +23,7 @@ import { useQashyTheme } from "@/theme/theme";
 import { toneColors } from "@/theme/tokens";
 import { categoryDeletionMessage } from "@/utils/category-impact";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { hapticSuccess } from "@/utils/haptics";
+import { hapticSuccess } from "@/services/haptics";
 
 const DEFAULT_ICON: Record<CategoryKind, string> = {
   expense: "ion:cart-outline",

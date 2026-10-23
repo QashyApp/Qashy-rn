@@ -87,3 +87,55 @@ function trailingNumber(expression: string) {
   }
   return expression.slice(index);
 }
+
+/**
+ * The keypad's expression, held synchronously while it is open.
+ *
+ * The text a keypad shows travels through the field, the form and the host before it comes back as a
+ * prop, several renders later. Two keys pressed inside that round trip would both start from the old
+ * text and the second would overwrite the first. The buffer is what each key is applied to instead:
+ * `push` records the new text at once, and `reconcile` takes the prop back in as it arrives.
+ *
+ * A prop that echoes something the keypad itself pushed only advances the pending echoes. Any other
+ * prop is a change from outside (the field was edited, or another field opened), and replaces the text.
+ */
+export class ExpressionBuffer {
+  private current: string;
+  /** What was pushed and has not yet come back as a prop, oldest first. */
+  private pending: string[] = [];
+  /** The prop the last reconcile took in; a render repeating it brings nothing new. */
+  private lastProp: string;
+
+  constructor(initial: string) {
+    this.current = initial;
+    this.lastProp = initial;
+  }
+
+  get value() {
+    return this.current;
+  }
+
+  push(next: string) {
+    this.current = next;
+    this.pending.push(next);
+  }
+
+  /** Takes in the prop the keypad is rendered with. Safe to call on every render. */
+  reconcile(prop: string) {
+    // A re-render with the same (possibly stale) prop: its echo was already taken in, and treating it
+    // as a change from outside would rewind the text past keys pressed since.
+    if (prop === this.lastProp) return;
+    this.lastProp = prop;
+    if (prop === this.current) {
+      this.pending.length = 0;
+      return;
+    }
+    const echoed = this.pending.indexOf(prop);
+    if (echoed >= 0) {
+      this.pending.splice(0, echoed + 1);
+      return;
+    }
+    this.pending.length = 0;
+    this.current = prop;
+  }
+}

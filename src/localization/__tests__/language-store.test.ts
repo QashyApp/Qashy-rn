@@ -2,7 +2,7 @@ import {
   readLanguageMigrated,
   readLanguagePreference,
   writeLanguagePreference,
-} from "@/data/language-preference-store";
+} from "@/data/device-local/language-preference-store";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import {
   migrateLegacyLanguage,

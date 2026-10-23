@@ -256,10 +256,10 @@ export class PlatformStorageAdapter implements StorageAdapter {
     this.opened = true;
   }
 
-  // Dexie defaults to `autoOpen`, so reads and writes before `initialize()` used to
-  // quietly succeed against a database whose change subscription was never wired —
-  // change notifications then silently never fired. The native adapter throws for
-  // the same misuse; match it so the mistake surfaces on both platforms.
+  // Throws before `initialize()`, matching the native adapter, so the mistake surfaces on both
+  // platforms. Why: Dexie defaults to `autoOpen`, so an early read or write would quietly
+  // succeed against a database whose change subscription was never wired, and change
+  // notifications would silently never fire.
   private database() {
     if (!this.opened)
       throw new Error("Qashy database has not been initialized.");

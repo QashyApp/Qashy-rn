@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { TextInputInstance, TextInputProps } from "react-native";
 
 import { prefersAmountKeypad } from "@/components/finance/amount-keypad";
@@ -45,6 +45,29 @@ export function useCalculatorInput({
       ? typed.expression
       : value;
 
+  // The form value as of the last change made here. `value` lags it by the renders a change takes to
+  // come back, so a dangling expression typed in that gap must record this, not the stale prop.
+  // A value this hook pushed coming back late is only an echo; any other value (the form changed it)
+  // takes over.
+  const pushedValue = useRef(value);
+  const echoes = useRef<string[]>([]);
+  const renderedValue = useRef(value);
+  useEffect(() => {
+    if (renderedValue.current === value) return;
+    renderedValue.current = value;
+    const echoed = echoes.current.indexOf(value);
+    if (echoed >= 0) {
+      echoes.current.splice(0, echoed + 1);
+      return;
+    }
+    echoes.current = [];
+    pushedValue.current = value;
+  }, [value]);
+  const push = useCallback((next: string) => {
+    pushedValue.current = next;
+    echoes.current.push(next);
+  }, []);
+
   const change = useCallback(
     (next: string) => {
       if (mode === "expression") {
@@ -53,16 +76,18 @@ export function useCalculatorInput({
       }
       const result = evaluateAmountExpression(next, currency, locale);
       if (result.kind === "value") {
+        push(result.text);
         setTyped({ expression: next, pushed: result.text });
         onChangeText(result.text);
       } else if (result.kind === "plain") {
+        push(next);
         setTyped(undefined);
         onChangeText(next);
       } else {
-        setTyped({ expression: next, pushed: value });
+        setTyped({ expression: next, pushed: pushedValue.current });
       }
     },
-    [mode, onChangeText, currency, locale, value],
+    [mode, onChangeText, currency, locale, push],
   );
 
   const blur = useCallback(() => node?.blur(), [node]);

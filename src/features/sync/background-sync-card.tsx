@@ -3,7 +3,7 @@
  *
  * Shown only on a build that can schedule it, and only on a device that has a vault; it is
  * disabled (and reads as off) while sync is paused, because there is nothing to check in for.
- * The choice is stored device-locally (`data/background-sync-store.ts`), never in the synced
+ * The choice is stored device-locally (`data/device-local/background-sync-store.ts`), never in the synced
  * settings, so enabling it here never turns it on for another device.
  *
  * The copy is blunt about the two costs: battery and data, and the fact that the relay can see
@@ -19,7 +19,7 @@ import {
   setBackgroundSyncEnabled,
 } from "@/features/background-sync";
 import { ToggleRow } from "@/features/sync/relay-card";
-import { readBackgroundSync } from "@/data/background-sync-store";
+import { readBackgroundSync } from "@/data/device-local/background-sync-store";
 import type { SyncStatus } from "@/sync/setup";
 import { errorMessage, showError } from "@/utils/confirm";
 
