@@ -465,7 +465,7 @@ export function TransactionsScreen() {
                       {
                         label: "Income",
                         amountMinor: summary.incomeMinor,
-                        color: theme.positive,
+                        color: theme.positiveText,
                       },
                       {
                         label: "Spent",
@@ -477,9 +477,9 @@ export function TransactionsScreen() {
                         amountMinor: summary.netFlowMinor,
                         color:
                           summary.netFlowMinor > 0
-                            ? theme.positive
+                            ? theme.positiveText
                             : summary.netFlowMinor < 0
-                              ? theme.negative
+                              ? theme.negativeText
                               : theme.text,
                       },
                     ]}

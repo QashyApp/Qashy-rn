@@ -421,6 +421,7 @@ export const HEBREW: Record<string, string> = {
   "Delete rate": "מחיקת שער",
   "Try again.": "נסו שוב.",
   "Try again": "נסו שוב",
+  Loading: "טוען",
   "Check the form and try again.": "בדקו את הטופס ונסו שוב.",
   Target: "יעד",
   Contribution: "הפקדה",
@@ -1237,8 +1238,8 @@ export const HEBREW: Record<string, string> = {
   Purple: "סגול",
   Slate: "אפור",
   "You’re all set": "הכול מוכן",
-  "Here’s what Qashy will create. Nothing leaves this device.":
-    "זה מה ש־Qashy ייצור. שום דבר לא יוצא מהמכשיר.",
+  "Here’s what Qashy will create. Nothing leaves this device except currency codes and dates used to fetch exchange rates, which you can turn off in More → Exchange rates.":
+    "זה מה ש־Qashy ייצור. שום דבר לא יוצא מהמכשיר מלבד קודי מטבעות ותאריכים לשליפת שערי חליפין, שאפשר לכבות בעוד ← שערי חליפין.",
   "Starter categories": "קטגוריות התחלתיות",
   "Rename, recolor or remove them any time in More → Categories.":
     "אפשר לשנות שם, צבע או להסיר אותן בכל עת בעוד ← קטגוריות.",

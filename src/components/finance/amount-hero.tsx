@@ -288,7 +288,7 @@ export function AmountHero({
             selectable
             variant="caption"
             muted={!error}
-            style={error ? { color: theme.negative } : undefined}
+            style={error ? { color: theme.negativeText } : undefined}
           >
             {error ? t(error) : t(hint)}
           </AppText>
@@ -301,7 +301,7 @@ export function AmountHero({
             selectable
             literal
             variant="caption"
-            style={{ color: theme.negative, textAlign: "center" }}
+            style={{ color: theme.negativeText, textAlign: "center" }}
           >
             {t(error)}
           </AppText>

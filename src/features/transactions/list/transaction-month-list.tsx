@@ -600,6 +600,7 @@ function UpcomingHeader({
           name={collapsed ? "ion:chevron-forward" : "ion:chevron-down"}
           color={theme.textMuted}
           size={16}
+          mirrorInRtl
         />
         <AppText variant="overline" muted>
           Upcoming

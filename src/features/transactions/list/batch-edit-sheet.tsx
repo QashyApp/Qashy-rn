@@ -114,6 +114,7 @@ export function BatchEditSheet({
               <IconButton
                 label="Back"
                 icon="chevron.left"
+                mirrorIcon
                 onPress={() => setStep("menu")}
               />
             )}

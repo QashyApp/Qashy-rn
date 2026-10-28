@@ -13,6 +13,7 @@ import { useQashyTheme } from "@/theme/theme";
 export function IconButton({
   label,
   icon,
+  mirrorIcon = false,
   onPress,
   size = 44,
   iconSize = 19,
@@ -27,6 +28,8 @@ export function IconButton({
 }: Omit<PressableProps, "children"> & {
   label: string;
   icon: string;
+  /** Flip the icon in right-to-left languages; for a directional glyph such as a back chevron. */
+  mirrorIcon?: boolean;
   size?: number;
   iconSize?: number;
   /** Overrides the glyph color the variant would pick. */
@@ -100,7 +103,12 @@ export function IconButton({
         isDisabled ? { opacity: 0.4 } : null,
       ]}
     >
-      <AppIcon name={icon} color={color} size={iconSize} />
+      <AppIcon
+        name={icon}
+        color={color}
+        size={iconSize}
+        mirrorInRtl={mirrorIcon}
+      />
     </MotionPressable>
   );
 }

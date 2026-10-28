@@ -199,7 +199,12 @@ export function IconPickerField({
             Choose icon
           </AppText>
         </View>
-        <AppIcon name="chevron.right" color={theme.textMuted} size={18} />
+        <AppIcon
+          name="chevron.right"
+          color={theme.textMuted}
+          size={18}
+          mirrorInRtl
+        />
       </MotionPressable>
 
       <Modal
@@ -366,7 +371,10 @@ export function IconPickerField({
                   </View>
                 </View>
                 {emojiDraft.trim() && !emoji ? (
-                  <AppText variant="caption" style={{ color: theme.negative }}>
+                  <AppText
+                    variant="caption"
+                    style={{ color: theme.negativeText }}
+                  >
                     Enter exactly one emoji.
                   </AppText>
                 ) : null}

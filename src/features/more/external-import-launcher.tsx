@@ -21,6 +21,7 @@ export function ExternalImportLauncher() {
       <ActionButton
         title="Start import"
         icon="arrow.right"
+        mirrorIcon
         variant="secondary"
         onPress={() => router.push("/import-app")}
       />

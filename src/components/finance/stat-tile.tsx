@@ -47,19 +47,19 @@ export function StatTile({
   const { radius, space } = theme;
   const toneColor: ColorValue =
     tone === "positive"
-      ? theme.positive
+      ? theme.positiveText
       : tone === "negative"
-        ? theme.negative
+        ? theme.negativeText
         : tone === "transfer"
-          ? theme.transfer
+          ? theme.transferText
           : onTint
             ? theme.onAccentContainer
             : theme.text;
   const deltaColor: ColorValue =
     delta?.tone === "positive"
-      ? theme.positive
+      ? theme.positiveText
       : delta?.tone === "negative"
-        ? theme.negative
+        ? theme.negativeText
         : theme.textMuted;
   // `theme.textMuted` can be an opaque Android platform color, so the neutral
   // delta background stays a flat token instead of running it through `withAlpha`.

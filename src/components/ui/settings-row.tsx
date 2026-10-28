@@ -104,7 +104,7 @@ export function SettingsRow({
         <AppText
           literal={literal}
           variant="label"
-          style={destructive ? { color: theme.negative } : undefined}
+          style={destructive ? { color: theme.negativeText } : undefined}
         >
           {title}
         </AppText>
@@ -154,7 +154,12 @@ export function SettingsRow({
           ) : null}
         </View>
       ) : onPress ? (
-        <AppIcon name="chevron.right" color={theme.textMuted} size={17} />
+        <AppIcon
+          name="chevron.right"
+          color={theme.textMuted}
+          size={17}
+          mirrorInRtl
+        />
       ) : null}
     </MotionPressable>
   );

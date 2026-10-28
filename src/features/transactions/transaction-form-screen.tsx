@@ -502,7 +502,7 @@ export function TransactionFormScreen() {
         <AppText
           accessibilityRole="alert"
           variant="caption"
-          style={{ color: theme.negative }}
+          style={{ color: theme.negativeText }}
         >
           {rateMissingMessage ?? saveError}
         </AppText>

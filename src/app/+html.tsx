@@ -6,6 +6,7 @@ import type { PropsWithChildren } from "react";
 
 import { classicTheme } from "@/theme/themes/classic";
 import { CONTENT_SECURITY_POLICY } from "@/utils/csp";
+import { THEME_HINT_SCRIPT } from "@/utils/theme-hint";
 
 // Derived from the same tokens the app renders with, rather than hand-copied. Why: a separate
 // `#F7F7FB`/`#121217` pair in the static shell, against the app's `#F6F7F9`/`#0E0F13`, made first
@@ -32,8 +33,10 @@ const GLOBAL_CSS = `
   --qashy-selection: ${QASHY_INDIGO}33;
   --qashy-selection-text: inherit;
 }
-html, body {
-  background: ${LIGHT_BACKGROUND};
+html, body, #root {
+  /* --qashy-bg is the resolved page color cached by the previous session (see THEME_HINT_SCRIPT);
+     without it the system scheme picks the classic fallback. */
+  background: var(--qashy-bg, ${LIGHT_BACKGROUND});
   /* Keeps an installed PWA from rubber-banding or pull-to-refreshing the app
      shell when an inner list runs out of scroll. */
   overscroll-behavior-y: none;
@@ -50,7 +53,7 @@ input:focus-visible, textarea:focus-visible, select:focus-visible, [contentedita
   outline: none !important;
 }
 @media (prefers-color-scheme: dark) {
-  html, body { background: ${DARK_BACKGROUND}; }
+  html, body, #root { background: var(--qashy-bg, ${DARK_BACKGROUND}); }
 }
 /* Windows High Contrast / forced colors replaces every background and box-shadow with system
    colors, which erased progress fills, the selected segment of a control and card edges. Keep
@@ -136,6 +139,9 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" href="/qashy-apple-touch-icon.png" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{ __html: GLOBAL_CSS }} />
+        {/* Runs before first paint: publishes the cached page color so a dark launch never
+            flashes the light shell. Its hash is pinned in the Content Security Policy. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_HINT_SCRIPT }} />
         {headNodes}
       </head>
       <body {...bodyAttributes}>

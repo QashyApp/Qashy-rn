@@ -129,7 +129,7 @@ export function DateField({
             accessibilityLiveRegion={error ? "polite" : undefined}
             variant="caption"
             muted={!error}
-            style={error ? { color: theme.negative } : undefined}
+            style={error ? { color: theme.negativeText } : undefined}
           >
             {description}
           </AppText>

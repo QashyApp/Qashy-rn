@@ -264,7 +264,12 @@ export function AppearanceOverridesCard() {
                   : current}
               </AppText>
             </View>
-            <AppIcon name="chevron.right" color={theme.textMuted} size={16} />
+            <AppIcon
+              name="chevron.right"
+              color={theme.textMuted}
+              size={16}
+              mirrorInRtl
+            />
           </MotionPressable>
         );
       })}

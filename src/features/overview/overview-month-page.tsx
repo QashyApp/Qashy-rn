@@ -139,9 +139,9 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   const toneColor = (minor: number) => {
     const tone = amountTone(minor);
     return tone === "positive"
-      ? theme.positive
+      ? theme.positiveText
       : tone === "negative"
-        ? theme.negative
+        ? theme.negativeText
         : theme.text;
   };
 
@@ -272,7 +272,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                   <AppText
                     literal
                     variant="caption"
-                    style={{ color: theme.warning }}
+                    style={{ color: theme.warningText }}
                   >
                     {t(
                       `Excludes ${missingCurrencies.join(", ")} until an effective exchange rate is added.`,

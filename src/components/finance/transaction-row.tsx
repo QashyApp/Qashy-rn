@@ -99,9 +99,9 @@ const TransactionRowView = memo(function TransactionRowView({
   const color = selected
     ? theme.onAccentContainer
     : isTransfer
-      ? theme.transfer
+      ? theme.transferText
       : isIncome
-        ? theme.positive
+        ? theme.positiveText
         : theme.text;
   const direction = t(
     isTransfer

@@ -104,6 +104,7 @@ export function RoleStep({
       <ActionButton
         title={busy ? "Preparing…" : "Continue"}
         icon="arrow.right"
+        mirrorIcon
         size="large"
         busy={busy}
         disabled={busy || blockedHost}

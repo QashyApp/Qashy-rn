@@ -289,7 +289,7 @@ export function SyncScreen() {
       {error ? (
         <MotionView key={error} variant="up" exit animateLayout>
           <Card style={{ gap: space.xs, borderColor: theme.negative }}>
-            <AppText variant="label" style={{ color: theme.negative }}>
+            <AppText variant="label" style={{ color: theme.negativeText }}>
               The last sync didn’t finish
             </AppText>
             {/* The engine's own message, translated when the dictionary knows it and otherwise as

@@ -172,7 +172,7 @@ export function RecoveryScreen() {
         />
       ) : locked ? (
         <Card style={{ gap: space.xs, borderColor: theme.negative }}>
-          <AppText variant="label" style={{ color: theme.negative }}>
+          <AppText variant="label" style={{ color: theme.negativeText }}>
             This device’s key is locked
           </AppText>
           <AppText variant="caption" muted>

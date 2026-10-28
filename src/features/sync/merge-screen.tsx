@@ -283,7 +283,7 @@ export function MergeScreen() {
             <AppText
               accessibilityRole="alert"
               variant="caption"
-              style={{ color: theme.negative }}
+              style={{ color: theme.negativeText }}
             >
               {preview.error}
             </AppText>
@@ -454,7 +454,7 @@ function GroupRow({
           variant="caption"
           muted
           numberOfLines={2}
-          style={blocked ? { color: theme.warning } : undefined}
+          style={blocked ? { color: theme.warningText } : undefined}
         >
           {detail}
         </AppText>

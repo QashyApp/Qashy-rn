@@ -193,7 +193,7 @@ export function ExchangeRatesScreen() {
           <AppText
             accessibilityRole="alert"
             variant="caption"
-            style={{ color: theme.negative }}
+            style={{ color: theme.negativeText }}
           >
             {ERROR_MESSAGES[status.lastError]}
           </AppText>
@@ -303,6 +303,7 @@ export function ExchangeRatesScreen() {
                     name="chevron.right"
                     color={theme.textMuted}
                     size={17}
+                    mirrorInRtl
                   />
                 </MotionPressable>
               );

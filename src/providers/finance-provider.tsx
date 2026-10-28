@@ -39,6 +39,7 @@ import { lookupHebrew } from "@/localization/messages/he";
 import type { AppSettings, FinanceState } from "@/domain/models";
 import { classicTheme } from "@/theme/themes/classic";
 import { readableTextColor } from "@/theme/tokens";
+import { parseThemeHint, readThemeHintRaw } from "@/utils/theme-hint";
 
 /** Resume events within this window of a finished reload are covered by it. */
 const RECONCILE_MIN_INTERVAL_MS = 2000;
@@ -107,14 +108,29 @@ function failureMessage(reason: unknown, fallback: string) {
   return reason instanceof Error ? STORAGE_UNKNOWN_MESSAGE : fallback;
 }
 
+/** The hint is read once per launch; nothing changes it while the provider is mounted. */
+const subscribeNever = () => () => undefined;
+
 export function FinanceProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [reloadError, setReloadError] = useState<string | null>(null);
   // This component renders above QashyThemeProvider, so it themes its own
   // loading and error states from the static token sets.
-  const scheme = useColorScheme();
-  // Settings are not loaded yet, so the user's theme is unknown: classic is the only truthful choice.
-  const tokens = classicTheme.palette[scheme === "dark" ? "dark" : "light"];
+  const systemScheme = useColorScheme();
+  // Web only: the page color and accent the last session resolved. Read after mount so the first
+  // client render matches the static shell; native has no hint and the splash covers startup.
+  const hintText = useSyncExternalStore(
+    subscribeNever,
+    readThemeHintRaw,
+    () => null,
+  );
+  const hint = useMemo(() => parseThemeHint(hintText), [hintText]);
+  const scheme = hint?.scheme ?? (systemScheme === "dark" ? "dark" : "light");
+  // Settings are not loaded yet, so the user's theme is unknown: classic is the only truthful
+  // choice, tinted by the hint's accent and page color when a previous session left one.
+  const tokens = classicTheme.palette[scheme];
+  const background = hint?.background ?? tokens.background;
+  const accent = hint?.accent ?? QASHY_ACCENT;
   // Re-render the tree as a transition so a mutation (e.g. saving a budget)
   // doesn't block the UI while every mounted screen recomputes its projections.
   const subscribe = useCallback(
@@ -249,7 +265,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           justifyContent: "center",
           padding: 32,
           gap: 12,
-          backgroundColor: tokens.background,
+          backgroundColor: background,
         }}
       >
         <Text
@@ -275,7 +291,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
               );
           }}
           style={{
-            backgroundColor: QASHY_ACCENT,
+            backgroundColor: accent,
             borderRadius: 999,
             paddingHorizontal: 20,
             paddingVertical: 12,
@@ -283,7 +299,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         >
           <Text
             style={{
-              color: readableTextColor(QASHY_ACCENT),
+              color: readableTextColor(accent),
               fontWeight: "700",
             }}
           >
@@ -301,10 +317,16 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           flex: 1,
           alignItems: "center",
           justifyContent: "center",
-          backgroundColor: tokens.background,
+          // On web the static shell already painted the right page color (its cached hint or the
+          // system scheme) on html/body, so this stays clear rather than repainting the classic one.
+          backgroundColor:
+            process.env.EXPO_OS === "web" ? "transparent" : background,
         }}
       >
-        <ActivityIndicator color={QASHY_ACCENT} />
+        <ActivityIndicator
+          color={accent}
+          accessibilityLabel={startupIsHebrew() ? "טוען" : "Loading"}
+        />
       </View>
     );
   }
