@@ -42,6 +42,7 @@ export const initialSettings = (): AppSettings => {
     accentSource: "system",
     accentHex: QASHY_ACCENT,
     swipeBetweenMonths: false,
+    swipeRowActions: true,
     navBarStyle: "native",
     animationLevel: "all",
     hapticsEnabled: true,

@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import { GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import {
   memo,
   useCallback,
@@ -31,6 +31,17 @@ import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
 import { MotionView } from "@/components/ui/motion";
 import { StateLayerBoundsContext } from "@/components/ui/state-layer-bounds";
 import { TextButton } from "@/components/ui/text-button";
+import {
+  rowSwipeActions,
+  type RowSwipeActionKind,
+  type RowSwipeActions,
+} from "@/features/transactions/list/row-swipe/row-swipe-actions";
+import { SwipeableRow } from "@/features/transactions/list/row-swipe/swipeable-row";
+import {
+  useRowGeometry,
+  type RowGeometry,
+} from "@/features/transactions/list/row-swipe/use-row-geometry";
+import { useRowSwipeController } from "@/features/transactions/list/row-swipe/use-row-swipe";
 import { useDragSelect } from "@/features/transactions/list/use-drag-select";
 import { RowFlash } from "@/features/transactions/list/row-flash";
 import {
@@ -69,7 +80,8 @@ export interface TransactionMonthListProps {
   allMonths: boolean;
   selectionMode: boolean;
   selectedIds: readonly string[];
-  resolvingId: string | null;
+  /** Rows to leave out: a swiped-away row whose action is waiting on its Undo. */
+  hiddenIds: ReadonlySet<string>;
   /** Where "Go to latest" leads when this month is empty. */
   latestMonth: string | null;
   /** The list column's width and gutters, shared with the pinned toolbar. */
@@ -91,7 +103,8 @@ export interface TransactionMonthListProps {
   onLongPressItem: (id: string) => void;
   /** A held row is being dragged across others; true from the hold until the finger lifts. */
   onDragActiveChange?: (active: boolean) => void;
-  onResolveUpcoming: (id: string, action: "skip" | "confirm") => void;
+  /** A row action, from a swipe, a revealed button, an inline button or an accessibility action. */
+  onRowAction: (id: string, kind: RowSwipeActionKind) => void;
   onClearFilters: () => void;
   onGoToMonth: (month: string, direction: MonthDirection) => void;
 }
@@ -110,7 +123,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   allMonths,
   selectionMode,
   selectedIds,
-  resolvingId,
+  hiddenIds,
   latestMonth,
   content,
   onScroll,
@@ -122,7 +135,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   onSetSelection,
   onLongPressItem,
   onDragActiveChange,
-  onResolveUpcoming,
+  onRowAction,
   onClearFilters,
   onGoToMonth,
 }: TransactionMonthListProps) {
@@ -139,7 +152,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   // hierarchy-aware search; the snapshot argument alone would not re-run this
   // when a category is renamed.
   const categoriesVersion = state.categories;
-  const transactions = useMemo(() => {
+  const queried = useMemo(() => {
     void categoriesVersion;
     return repository.queryTransactions(
       {
@@ -168,6 +181,14 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     state.transactions,
     categoriesVersion,
   ]);
+  // A row waiting on its Undo is out of the list at once; its section goes with its last row.
+  const transactions = useMemo(
+    () =>
+      hiddenIds.size
+        ? queried.filter((item) => !hiddenIds.has(item.id))
+        : queried,
+    [queried, hiddenIds],
+  );
 
   const sections = useMemo(
     () =>
@@ -308,32 +329,96 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     },
     [listRef],
   );
-  const { gesture, registerRow, arm, dragging } = useDragSelect({
+  const rowSwipe = useRowSwipeController();
+
+  // What each side of a row does, read when the geometry is published.
+  const actionsById = useRef(new Map<string, RowSwipeActions>());
+  useEffect(() => {
+    actionsById.current = new Map(
+      transactions.map((item) => [item.id, rowSwipeActions(item)]),
+    );
+  }, [transactions]);
+  // One cache of where the mounted rows are, for the row swipe and the drag-select. Only the
+  // current page publishes it to the swipe: the others are inert.
+  const geometry = useRowGeometry({
+    getScrollOffset: () => scrollOffset.current,
+    onMeasured: (rects) => {
+      if (!isCurrent || !rowSwipe) return;
+      rowSwipe.publish(
+        rects.flatMap((rect) => {
+          const actions = actionsById.current.get(rect.id);
+          return actions ? [{ ...rect, actions }] : [];
+        }),
+      );
+    },
+  });
+  // Rows moved (a row left, a group folded, selection changed their layout): measure them again,
+  // and once more after the layout animation has settled.
+  useEffect(() => {
+    geometry.invalidate();
+    const timer = setTimeout(geometry.invalidate, 400);
+    return () => clearTimeout(timer);
+  }, [geometry, sections, selectionMode]);
+  useEffect(() => {
+    if (!isCurrent || !rowSwipe) return;
+    void geometry.measure();
+    return () => {
+      rowSwipe.publish([]);
+      rowSwipe.close();
+    };
+  }, [isCurrent, rowSwipe, geometry]);
+
+  const setDragArmed = useCallback(
+    (armed: boolean) => rowSwipe?.suspend("drag", armed),
+    [rowSwipe],
+  );
+  const { gesture, arm, dragging } = useDragSelect({
     enabled: isCurrent,
     orderedIds,
     selectedIds,
     onSelect: onSetSelection,
     containerRef,
     scrollBy,
+    geometry,
+    onArmedChange: setDragArmed,
   });
   useEffect(() => {
     if (isCurrent) onDragActiveChange?.(dragging);
   }, [isCurrent, dragging, onDragActiveChange]);
+  // The row swipe runs alongside the drag-select pan: they never claim the same touch, because a
+  // drag stands the swipe down (`suspend`) and the swipe only starts on a sideways move.
+  const listGesture = useMemo(
+    () =>
+      isCurrent && rowSwipe
+        ? Gesture.Simultaneous(gesture, rowSwipe.gesture)
+        : gesture,
+    [isCurrent, rowSwipe, gesture],
+  );
 
   return (
-    <GestureDetector gesture={gesture}>
-      <View ref={containerRef} collapsable={false} style={{ flex: 1 }}>
+    <GestureDetector gesture={listGesture}>
+      <View
+        ref={containerRef}
+        collapsable={false}
+        style={{ flex: 1 }}
+        onLayout={geometry.invalidate}
+      >
         <SectionList
           ref={isCurrent ? listRef : undefined}
           onScroll={
             isCurrent
               ? (event) => {
                   scrollOffset.current = event.nativeEvent.contentOffset.y;
+                  rowSwipe?.setScrollOffset(scrollOffset.current);
                   onScroll?.(event);
                 }
               : undefined
           }
           scrollEventThrottle={16}
+          // A scroll closes an open row; the rows' positions are re-measured once it rests.
+          onScrollBeginDrag={isCurrent ? () => rowSwipe?.close() : undefined}
+          onMomentumScrollEnd={isCurrent ? geometry.invalidate : undefined}
+          onScrollEndDrag={isCurrent ? geometry.invalidate : undefined}
           // A drag-select owns the finger until it lifts. The web cancels its touch scrolling
           // instead (see `useDragSelect`), and changing overflow there mid-touch would jump.
           scrollEnabled={
@@ -354,7 +439,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
             },
           ]}
           sections={sections}
-          extraData={`${selectedIds.join(",")}|${selectionMode}|${resolvingId}|${flash?.token}:${flash?.id}`}
+          extraData={`${selectedIds.join(",")}|${selectionMode}|${flash?.token}:${flash?.id}`}
           onScrollToIndexFailed={(info) => {
             // A row far off-screen has no measured height yet: jump near it, then try once more.
             listRef?.current?.getScrollResponder()?.scrollTo?.({
@@ -466,15 +551,14 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               last={index === section.data.length - 1}
               selected={selectedSet.has(item.id)}
               selectionMode={selectionMode}
-              resolving={resolvingId !== null}
               flashes={flash?.id === item.id ? flash.flashes : 0}
               flashToken={flash?.token ?? 0}
               onFlashDone={clearFlash}
               onToggleItem={onToggleItem}
               onLongPressItem={onLongPressItem}
-              registerRow={registerRow}
+              registerRow={geometry.register}
               onArmDrag={arm}
-              onResolveUpcoming={onResolveUpcoming}
+              onRowAction={onRowAction}
             />
           )}
           ListEmptyComponent={
@@ -545,7 +629,6 @@ interface DayRowProps {
   last: boolean;
   selected: boolean;
   selectionMode: boolean;
-  resolving: boolean;
   /** Non-zero while this row is the one just saved. */
   flashes: number;
   flashToken: number;
@@ -553,10 +636,10 @@ interface DayRowProps {
   onToggleItem: (id: string) => void;
   onLongPressItem: (id: string) => void;
   /** Lets the screen find this row's view while a drag-select passes over it. */
-  registerRow: (id: string, node: HostInstance | null) => void;
+  registerRow: RowGeometry["register"];
   /** A long-press just selected this row: a drag from here extends the selection. */
   onArmDrag: (id: string) => void;
-  onResolveUpcoming: (id: string, action: "skip" | "confirm") => void;
+  onRowAction: (id: string, kind: RowSwipeActionKind) => void;
 }
 
 /** The collapsible heading of the upcoming group; the day headers above and below it stay as they are. */
@@ -623,7 +706,6 @@ const DayRow = memo(function DayRow({
   last,
   selected,
   selectionMode,
-  resolving,
   flashes,
   flashToken,
   onFlashDone,
@@ -631,7 +713,7 @@ const DayRow = memo(function DayRow({
   onLongPressItem,
   registerRow,
   onArmDrag,
-  onResolveUpcoming,
+  onRowAction,
 }: DayRowProps) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
@@ -648,10 +730,25 @@ const DayRow = memo(function DayRow({
     },
     [registerRow, id],
   );
-  const handlePress = useMemo(
-    () => (selectionMode ? () => onToggleItem(id) : undefined),
-    [selectionMode, onToggleItem, id],
+  const swipe = useRowSwipeController();
+  const { kind: itemKind, status: itemStatus } = item;
+  const actions = useMemo(
+    () => rowSwipeActions({ kind: itemKind, status: itemStatus }),
+    [itemKind, itemStatus],
   );
+  const handlePress = useCallback(() => {
+    // A tap that only closes an open row, or ends a swipe, is not a press on the row.
+    if (swipe?.shouldSwallowPress(id)) {
+      swipe.close();
+      return;
+    }
+    if (selectionMode) onToggleItem(id);
+    else
+      router.push({
+        pathname: "/transaction",
+        params: { id, returnTo: "/transactions" },
+      });
+  }, [swipe, selectionMode, onToggleItem, id]);
   return (
     <MotionView entrance={false} animateLayout exit>
       <View
@@ -662,7 +759,6 @@ const DayRow = memo(function DayRow({
           ...(selected && process.env.EXPO_OS === "web"
             ? ({ touchAction: "none" } as object)
             : null),
-          paddingHorizontal: space.md,
           backgroundColor: selected ? theme.accentContainer : theme.surface,
           boxShadow: theme.shadowCard,
           borderTopLeftRadius: first ? radius.card : 0,
@@ -678,51 +774,58 @@ const DayRow = memo(function DayRow({
         {flashes > 0 ? (
           <RowFlash key={flashToken} flashes={flashes} onDone={onFlashDone} />
         ) : null}
-        {first ? null : (
-          <View
-            style={{
-              height: StyleSheet.hairlineWidth,
-              backgroundColor: theme.border,
-              marginStart: 52,
-            }}
-          />
-        )}
-        {/* The slab's own padding is what a row's wash bleeds into, so it is published around
-            the row alone: the divider and the action row below are not rows. */}
-        <StateLayerBoundsContext.Provider
-          value={{ x: space.md, top: 0, bottom: 0 }}
+        <SwipeableRow
+          id={id}
+          actions={actions}
+          background={selected ? theme.accentContainer : theme.surface}
+          paddingHorizontal={space.md}
         >
-          <TransactionRow
-            transaction={item}
-            showDate={false}
-            selectionMode={selectionMode}
-            selected={selected}
-            onLongPress={handleLongPress}
-            onPress={handlePress}
-          />
-        </StateLayerBoundsContext.Provider>
-        {item.status === "upcoming" && !selectionMode ? (
-          <View
-            style={{
-              flexDirection: "row",
-              justifyContent: "flex-end",
-              gap: space.sm,
-              paddingBottom: space.xs,
-            }}
+          {first ? null : (
+            <View
+              style={{
+                height: StyleSheet.hairlineWidth,
+                backgroundColor: theme.border,
+                marginStart: 52,
+              }}
+            />
+          )}
+          {/* The slab's own padding is what a row's wash bleeds into, so it is published around
+              the row alone: the divider and the action row below are not rows. */}
+          <StateLayerBoundsContext.Provider
+            value={{ x: space.md, top: 0, bottom: 0 }}
           >
-            <TextButton
-              title="Skip"
-              tone="muted"
-              disabled={resolving}
-              onPress={() => onResolveUpcoming(id, "skip")}
+            <TransactionRow
+              transaction={item}
+              showDate={false}
+              selectionMode={selectionMode}
+              selected={selected}
+              onLongPress={handleLongPress}
+              onPress={handlePress}
+              rowActions={actions}
+              onRowAction={onRowAction}
             />
-            <TextButton
-              title="Mark paid"
-              disabled={resolving}
-              onPress={() => onResolveUpcoming(id, "confirm")}
-            />
-          </View>
-        ) : null}
+          </StateLayerBoundsContext.Provider>
+          {item.status === "upcoming" && !selectionMode ? (
+            <View
+              style={{
+                flexDirection: "row",
+                justifyContent: "flex-end",
+                gap: space.sm,
+                paddingBottom: space.xs,
+              }}
+            >
+              <TextButton
+                title="Skip"
+                tone="muted"
+                onPress={() => onRowAction(id, "skip")}
+              />
+              <TextButton
+                title="Mark paid"
+                onPress={() => onRowAction(id, "markPaid")}
+              />
+            </View>
+          ) : null}
+        </SwipeableRow>
       </View>
     </MotionView>
   );

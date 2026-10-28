@@ -334,12 +334,14 @@ test("swipes between months with a finger but not with a mouse", async ({
   await drag([width / 2, 650], [width / 2 + 10, 350]);
   await expect(page.getByText("This month coffee")).toBeVisible();
 
+  // The horizontal drags start below the list's only row: a drag that starts on a row belongs to
+  // the row's swipe actions instead (see the row swipe tests below).
   // A short horizontal drag springs back.
-  await drag([width / 2, 500], [width / 2 + 30, 502]);
+  await drag([width / 2, 680], [width / 2 + 30, 682]);
   await expect(page.getByText("This month coffee")).toBeVisible();
 
   // A long drag toward the end edge steps back a month.
-  await drag([40, 500], [width - 40, 505]);
+  await drag([40, 680], [width - 40, 685]);
   await expect(page.getByText("Last month rent")).toBeVisible();
   await expect(page.getByText("This month coffee")).toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(`month=${lastKey}$`));
@@ -406,4 +408,89 @@ test("selects the rows between a held row and the finger while dragging", async 
   await expect(page.getByText("3 selected")).toBeVisible();
   // The list itself did not scroll under the finger.
   expect((await box("Row E")).y).toBeCloseTo(firstBefore.y, 0);
+});
+
+/** One finger dragged from `from` to `to` in even steps, through the Chrome DevTools Protocol. */
+async function dragFinger(
+  page: Page,
+  from: [number, number],
+  to: [number, number],
+  steps = 14,
+) {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchStart",
+    touchPoints: [{ x: from[0], y: from[1] }],
+  });
+  for (let i = 1; i <= steps; i += 1) {
+    await cdp.send("Input.dispatchTouchEvent", {
+      type: "touchMove",
+      touchPoints: [
+        {
+          x: from[0] + ((to[0] - from[0]) * i) / steps,
+          y: from[1] + ((to[1] - from[1]) * i) / steps,
+        },
+      ],
+    });
+    await page.waitForTimeout(16);
+  }
+  await cdp.send("Input.dispatchTouchEvent", {
+    type: "touchEnd",
+    touchPoints: [],
+  });
+  await cdp.detach();
+}
+
+/** Seeds one expense and opens the ledger with its row on screen; returns where the row is. */
+async function openLedgerWithRow(page: Page, title: string) {
+  await completeOnboarding(page);
+  await addExpense(page, title);
+  await expect(page).toHaveURL(/\/overview$/);
+  await page.goto("/transactions");
+  const row = page.getByText(title, { exact: true }).filter({ visible: true });
+  await expect(row.first()).toBeVisible();
+  // The list scrolls to and flashes a freshly saved row; wait for it to come to rest.
+  await page.waitForTimeout(1200);
+  const box = await row.first().boundingBox();
+  if (!box) throw new Error(`no row ${title}`);
+  return { row: row.first(), y: box.y + box.height / 2 };
+}
+
+test("a full swipe toward the end deletes a row, and Undo brings it back", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Drives a touch swipe.");
+  const { row, y } = await openLedgerWithRow(page, "Swipe me");
+  const width = page.viewportSize()?.width ?? 400;
+
+  await dragFinger(page, [width - 50, y], [50, y + 2]);
+  await expect(page.getByText("Swipe me", { exact: true })).toHaveCount(0);
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toBeVisible();
+  await undo.click();
+  await expect(row).toBeVisible();
+  await expect(undo).toHaveCount(0);
+  // Undone before it ran out: nothing was deleted.
+  await page.reload();
+  await expect(
+    page.getByText("Swipe me", { exact: true }).filter({ visible: true }),
+  ).toBeVisible();
+});
+
+test("a swiped-away row stays deleted once the Undo bar runs out", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "Drives a touch swipe.");
+  const { y } = await openLedgerWithRow(page, "Swipe away");
+  const width = page.viewportSize()?.width ?? 400;
+
+  await dragFinger(page, [width - 50, y], [50, y + 2]);
+  const undo = page.getByRole("button", { name: "Undo" });
+  await expect(undo).toBeVisible();
+  await expect(undo).toHaveCount(0, { timeout: 10_000 });
+  // The commit starts as the bar goes; give the IndexedDB write a moment before reloading.
+  await page.waitForTimeout(500);
+  await page.reload();
+  await expect(page.getByText("No transactions yet")).toBeVisible();
+  await expect(page.getByText("Swipe away", { exact: true })).toHaveCount(0);
 });

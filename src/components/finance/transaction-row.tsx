@@ -7,6 +7,11 @@ import { AppText } from "@/components/ui/app-text";
 import { IconBadge } from "@/components/ui/icon-badge";
 import { MotionPressable, MotionView } from "@/components/ui/motion";
 import type { Account, Category, TransactionRecord } from "@/domain/models";
+import {
+  rowSwipeActionLabel,
+  type RowSwipeActionKind,
+  type RowSwipeActions,
+} from "@/features/transactions/list/row-swipe/row-swipe-actions";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { materialStyle } from "@/theme/materials";
@@ -34,6 +39,12 @@ interface TransactionRowProps {
   showDate?: boolean;
   onPress?: () => void;
   onLongPress?: () => void;
+  /**
+   * What the row's swipe does on each side. Offered to assistive technology as custom actions,
+   * outside selection mode, so the swipe is never the only way to reach them.
+   */
+  rowActions?: RowSwipeActions;
+  onRowAction?: (id: string, kind: RowSwipeActionKind) => void;
 }
 
 // One id index per snapshot array, built lazily and dropped with the array, so a row's
@@ -81,6 +92,8 @@ const TransactionRowView = memo(function TransactionRowView({
   showDate = true,
   onPress,
   onLongPress,
+  rowActions,
+  onRowAction,
   locale,
   account,
   category,
@@ -170,13 +183,18 @@ const TransactionRowView = memo(function TransactionRowView({
   // leaving the strongest contrast in the row to the number.
   // The tile itself (tinted, filled or bare; round or squircle) is the theme's: see IconBadge.
 
+  const customActions: { name: string; label: string }[] = [];
+  if (!selectionMode && onLongPress)
+    customActions.push({ name: "longpress", label: t("Select transaction") });
+  if (!selectionMode && onRowAction && rowActions) {
+    for (const kind of [rowActions.end, rowActions.start])
+      if (kind)
+        customActions.push({ name: kind, label: t(rowSwipeActionLabel(kind)) });
+  }
+
   return (
     <MotionPressable
-      accessibilityActions={
-        !selectionMode && onLongPress
-          ? [{ name: "longpress", label: t("Select transaction") }]
-          : undefined
-      }
+      accessibilityActions={customActions.length ? customActions : undefined}
       accessibilityHint={
         !selectionMode && onLongPress
           ? t("Long press to select this transaction for batch actions.")
@@ -191,7 +209,13 @@ const TransactionRowView = memo(function TransactionRowView({
       accessibilityState={selectionMode ? { checked: selected } : undefined}
       aria-checked={selectionMode ? selected : undefined}
       onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "longpress") onLongPress?.();
+        const name = event.nativeEvent.actionName;
+        if (name === "longpress") onLongPress?.();
+        else if (
+          rowActions &&
+          (name === rowActions.start || name === rowActions.end)
+        )
+          onRowAction?.(transaction.id, name as RowSwipeActionKind);
       }}
       onPress={
         onPress ??

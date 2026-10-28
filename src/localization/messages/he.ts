@@ -1114,6 +1114,12 @@ export const HEBREW: Record<string, string> = {
   "Swipe to change month": "החלקה למעבר בין חודשים",
   "Swipe left or right on Overview and Transactions to move between months.":
     "החליקו ימינה או שמאלה במסכי הסקירה והתנועות כדי לעבור בין חודשים.",
+  "Swipe rows for actions": "החלקה על שורות לפעולות",
+  "Swipe a transaction to delete it or change its category. Upcoming payments swipe to mark paid or skip.":
+    "החליקו על תנועה כדי למחוק אותה או לשנות את הקטגוריה שלה. תשלומים קרובים מחליקים לסימון כשולם או לדילוג.",
+  "Transaction deleted": "התנועה נמחקה",
+  "Payment skipped": "התשלום דולג",
+  "Marked as paid": "סומן כשולם",
   // Home-screen widgets (More → Widgets) and the text the widgets themselves draw.
   Widgets: "ווידג׳טים",
   "Home screen widgets": "ווידג׳טים למסך הבית",

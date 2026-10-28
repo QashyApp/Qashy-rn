@@ -262,6 +262,11 @@
       "he": "השהיה"
     },
     {
+      "name": "q_0671d889b1e99566",
+      "en": "Swipe rows for actions",
+      "he": "החלקה על שורות לפעולות"
+    },
+    {
       "name": "q_068d4dd16d9106d0",
       "en": "Icon",
       "he": "סמל"
@@ -1667,6 +1672,11 @@
       "he": "יצירת גיבוי"
     },
     {
+      "name": "q_31ecf38e9c35d87f",
+      "en": "Marked as paid",
+      "he": "סומן כשולם"
+    },
+    {
       "name": "q_32051cc18c8b7613",
       "en": "With none selected, the widget is just the add button.",
       "he": "אם לא נבחר דבר, הווידג׳ט הוא כפתור ההוספה בלבד."
@@ -2395,6 +2405,11 @@
       "name": "q_476b48a2b24452e6",
       "en": "Syncing…",
       "he": "מסנכרן…"
+    },
+    {
+      "name": "q_47ac9f1663705479",
+      "en": "Payment skipped",
+      "he": "התשלום דולג"
     },
     {
       "name": "q_47d74fbec3c9a1ce",
@@ -5982,6 +5997,11 @@
       "he": "משפט השחזור הזה אינו תקין. בדקו אם יש מילה שהוקלדה בטעות או שאינה בסדר הנכון."
     },
     {
+      "name": "q_b710e60548901a8e",
+      "en": "Transaction deleted",
+      "he": "התנועה נמחקה"
+    },
+    {
       "name": "q_b718fbf789a9f5c9",
       "en": "Later",
       "he": "אחר כך"
@@ -7040,6 +7060,11 @@
       "name": "q_d6d11b8c4bd5be81",
       "en": "Choose icon",
       "he": "בחירת סמל"
+    },
+    {
+      "name": "q_d6fb6ae128834431",
+      "en": "Swipe a transaction to delete it or change its category. Upcoming payments swipe to mark paid or skip.",
+      "he": "החליקו על תנועה כדי למחוק אותה או לשנות את הקטגוריה שלה. תשלומים קרובים מחליקים לסימון כשולם או לדילוג."
     },
     {
       "name": "q_d70c585bcada1dcc",

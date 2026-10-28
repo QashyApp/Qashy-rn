@@ -103,6 +103,7 @@ export type SettingsInput = Partial<
     | "accentSource"
     | "accentHex"
     | "swipeBetweenMonths"
+    | "swipeRowActions"
     | "navBarStyle"
     | "animationLevel"
     | "hapticsEnabled"

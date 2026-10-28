@@ -14,7 +14,8 @@ import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 
-type Step = "menu" | "category" | "date";
+export type BatchEditStep = "menu" | "category" | "date";
+type Step = BatchEditStep;
 
 /**
  * What can be done to a selection besides deleting it, behind the batch bar's "Edit" button:
@@ -27,6 +28,7 @@ export function BatchEditSheet({
   categories,
   categoryBlockedReason,
   initialDate,
+  initialStep,
   busy,
   onChangeCategory,
   onChangeDate,
@@ -40,6 +42,11 @@ export function BatchEditSheet({
   categoryBlockedReason: string | null;
   /** Where the date picker starts: the selection's own date when they all share one. */
   initialDate: string;
+  /**
+   * Opens straight at this step instead of the menu (a single row's swipe action opens at
+   * "category"). Back from that step then closes the sheet, since there is no menu to go back to.
+   */
+  initialStep?: Step;
   busy: boolean;
   onChangeCategory: (categoryId: string | null) => void;
   onChangeDate: (localDate: string) => void;
@@ -49,12 +56,27 @@ export function BatchEditSheet({
   const { radius, space } = theme;
   const m3 = theme.materialControls;
   const { t } = useLocalization();
-  const [step, setStep] = useState<Step>("menu");
+  const rootStep: Step = initialStep ?? "menu";
+  const [step, setStep] = useState<Step>(rootStep);
   const [date, setDate] = useState(initialDate);
 
+  // A sheet that stays mounted while hidden must reopen at its starting step.
+  const [wasVisible, setWasVisible] = useState(visible);
+  if (visible !== wasVisible) {
+    setWasVisible(visible);
+    if (visible) {
+      setStep(rootStep);
+      setDate(initialDate);
+    }
+  }
+
   const close = () => {
-    setStep("menu");
+    setStep(rootStep);
     onClose();
+  };
+  const back = () => {
+    if (rootStep === "menu") setStep("menu");
+    else close();
   };
   const open = (next: Step) => {
     if (next === "date") setDate(initialDate);
@@ -66,7 +88,7 @@ export function BatchEditSheet({
       animationType="fade"
       transparent
       visible={visible}
-      onRequestClose={step === "menu" ? close : () => setStep("menu")}
+      onRequestClose={step === "menu" ? close : back}
     >
       <SafeAreaView
         edges={["top", "right", "bottom", "left"]}
@@ -115,7 +137,7 @@ export function BatchEditSheet({
                 label="Back"
                 icon="chevron.left"
                 mirrorIcon
-                onPress={() => setStep("menu")}
+                onPress={back}
               />
             )}
             <AppText literal variant="headline" style={{ flex: 1 }}>
