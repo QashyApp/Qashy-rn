@@ -19,6 +19,7 @@ import Animated, {
   Easing,
   ReduceMotion,
   runOnJS,
+  type SharedValue,
   useAnimatedStyle,
   useSharedValue,
   withSpring,
@@ -35,6 +36,7 @@ import {
   type SheetShell,
 } from "@/components/navigation/sheet-shell-context";
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
+import { motionCurves, useMotionPreference } from "@/components/ui/motion";
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
 import { useQashyTheme } from "@/theme/theme";
@@ -71,14 +73,16 @@ const COLLAPSED_FRACTION = 0.72;
 /** Material 3 caps a modal bottom sheet at 640dp wide. */
 const MAX_WIDTH = 640;
 
-/** Rises like a flung sheet: off the mark at once, then settling softly (about 0.56 s). */
+/** Rises like a flung sheet: off the mark at once, then settling softly (about 0.38 s). */
 const enterSpring = {
-  ...sheetSpring(0.86, 560),
+  ...sheetSpring(0.9, 380),
   reduceMotion: ReduceMotion.System,
 };
 /** Leaves by accelerating away (Material's emphasized-accelerate), faster than it arrived. */
 const EXIT_MS = 240;
 const exitEasing = Easing.bezier(0.3, 0, 0.8, 0.15);
+/** The panel following the keyboard (or the window resizing around it): a short glide, no spring. */
+const KEYBOARD_MS = 240;
 const settleSpring = {
   mass: 1,
   stiffness: 400,
@@ -112,6 +116,7 @@ export function AndroidSheet({
   const { space, radius } = theme;
   const insets = useSafeAreaInsets();
   const level = useAnimationLevel();
+  const { instant } = useMotionPreference();
 
   const [area, setArea] = useState(0);
   // The keyboard is measured against the sheet's own window frame, not by its raw height. With
@@ -163,17 +168,59 @@ export function AndroidSheet({
   const closingFlag = useSharedValue(false);
   const shownFlag = useSharedValue(false);
 
+  // How far the panel is lifted for the keyboard, and the safe-area padding under its content.
+  // Both glide to their target rather than jump when the keyboard opens or closes.
+  const keyboardLift = useSharedValue(0);
+  const bottomPadding = useSharedValue(insets.bottom);
+
+  // The panel's heights follow the keyboard (or the window resizing around it) with a short timed
+  // glide. The first measurement (nothing laid out yet) and reduced motion apply at once. A
+  // drag-settle spring in flight is simply replaced.
   useEffect(() => {
-    maxHeight.set(expandedHeight);
-    collapsedShared.set(collapsedHeight);
-    detentHeight.set(expandedFlag.get() ? expandedHeight : collapsedHeight);
+    const glide = (value: SharedValue<number>, target: number) => {
+      const immediate = instant || value.get() === 0 || !shownFlag.get();
+      value.set(
+        immediate
+          ? target
+          : withTiming(target, {
+              duration: KEYBOARD_MS,
+              easing: motionCurves.standard,
+              reduceMotion: ReduceMotion.System,
+            }),
+      );
+    };
+    glide(maxHeight, expandedHeight);
+    glide(collapsedShared, collapsedHeight);
+    glide(detentHeight, expandedFlag.get() ? expandedHeight : collapsedHeight);
   }, [
     expandedHeight,
     collapsedHeight,
+    instant,
     maxHeight,
     collapsedShared,
     detentHeight,
     expandedFlag,
+    shownFlag,
+  ]);
+  useEffect(() => {
+    const immediate = instant || !shownFlag.get();
+    const glide = (target: number) =>
+      immediate
+        ? target
+        : withTiming(target, {
+            duration: KEYBOARD_MS,
+            easing: motionCurves.standard,
+            reduceMotion: ReduceMotion.System,
+          });
+    keyboardLift.set(glide(keyboard));
+    bottomPadding.set(glide(keyboard > 0 ? 0 : insets.bottom));
+  }, [
+    keyboard,
+    insets.bottom,
+    instant,
+    keyboardLift,
+    bottomPadding,
+    shownFlag,
   ]);
 
   const animate = useCallback(
@@ -317,6 +364,13 @@ export function AndroidSheet({
       expandedFlag.set(release.detent === "expanded");
     });
 
+  const liftStyle = useAnimatedStyle(() => ({
+    paddingBottom: keyboardLift.get(),
+  }));
+  const bodyStyle = useAnimatedStyle(() => ({
+    paddingBottom: bottomPadding.get(),
+  }));
+
   const scrimStyle = useAnimatedStyle(() => {
     const height = Math.max(detentHeight.get(), 1);
     const pulled = Math.min(Math.max(drag.get() / height, 0), 1);
@@ -364,14 +418,16 @@ export function AndroidSheet({
             style={{ flex: 1 }}
           />
         </Animated.View>
-        <View
+        <Animated.View
           pointerEvents="box-none"
-          style={{
-            flex: 1,
-            justifyContent: "flex-end",
-            alignItems: "center",
-            paddingBottom: keyboard,
-          }}
+          style={[
+            {
+              flex: 1,
+              justifyContent: "flex-end",
+              alignItems: "center",
+            },
+            liftStyle,
+          ]}
         >
           <Animated.View
             role="dialog"
@@ -439,16 +495,11 @@ export function AndroidSheet({
                 </View>
               </View>
             </GestureDetector>
-            <View
-              style={{
-                flex: 1,
-                paddingBottom: keyboard > 0 ? 0 : insets.bottom,
-              }}
-            >
+            <Animated.View style={[{ flex: 1 }, bodyStyle]}>
               {children}
-            </View>
+            </Animated.View>
           </Animated.View>
-        </View>
+        </Animated.View>
       </View>
     </SheetShellContext>
   );

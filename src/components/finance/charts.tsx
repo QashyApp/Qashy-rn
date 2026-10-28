@@ -1,7 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { View, type LayoutChangeEvent } from "react-native";
 import Animated, {
-  Easing,
   ReduceMotion,
   useAnimatedProps,
   useReducedMotion,
@@ -28,6 +27,7 @@ import {
 } from "@/components/finance/slice-pattern";
 import { AppText } from "@/components/ui/app-text";
 import {
+  motionCurves,
   usePageMotionRef,
   useRevealAllowedAtMount,
 } from "@/components/ui/motion";
@@ -146,7 +146,7 @@ export function SpendLineChart({
     reveal.set(
       withTiming(1, {
         duration: 520,
-        easing: Easing.out(Easing.cubic),
+        easing: motionCurves.standard,
         reduceMotion: ReduceMotion.System,
       }),
     );
@@ -421,7 +421,7 @@ export function CategoryDonut({
     revealed.set(
       withTiming(circumference, {
         duration: 640,
-        easing: Easing.out(Easing.cubic),
+        easing: motionCurves.standard,
         reduceMotion: ReduceMotion.System,
       }),
     );

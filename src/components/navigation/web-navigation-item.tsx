@@ -6,12 +6,12 @@ import Animated, {
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
+import { usePressFeedback } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { NAV_RAIL_WIDTH } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
@@ -42,14 +42,6 @@ export const NAV_ITEMS = [
 
 /** The selected section switches to the solid glyph, as the native tabs do. */
 const activeIconName = (icon: string) => `${icon}.fill`;
-
-const pressSpring = {
-  damping: 20,
-  stiffness: 380,
-  mass: 0.7,
-  overshootClamping: true,
-  reduceMotion: ReduceMotion.System,
-} as const;
 
 // Hover affordances fade in place rather than mounting and unmounting.
 // Reanimated's web exit moves the leaving element into a clone and appends that
@@ -122,10 +114,7 @@ export function NavigationItem({
     : showTooltip
       ? theme.text
       : theme.textMuted;
-  const pressScale = useSharedValue(1);
-  const contentStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: pressScale.value }],
-  }));
+  const { style: contentStyle, setPressed } = usePressFeedback();
 
   // The selected item already carries the accent indicator, so it never shows
   // the hover background underneath it.
@@ -180,12 +169,8 @@ export function NavigationItem({
         onPress={() => {
           if (active) onActivePress(item.href);
         }}
-        onPressIn={() => {
-          if (!m3) pressScale.set(withSpring(0.95, pressSpring));
-        }}
-        onPressOut={() => {
-          if (!m3) pressScale.set(withSpring(1, pressSpring));
-        }}
+        onPressIn={() => setPressed(true)}
+        onPressOut={() => setPressed(false)}
         style={{
           minHeight: stacked ? (mobile ? 64 : 56) : m3 ? 56 : 48,
           minWidth: stacked

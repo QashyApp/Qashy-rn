@@ -14,4 +14,5 @@ export {
 } from "./entrance-scope";
 export { MotionPressable } from "./motion-pressable";
 export { MotionView } from "./motion-view";
+export { usePressFeedback } from "./press-feedback";
 export { flattenViewStyle } from "./style-helpers";

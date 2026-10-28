@@ -23,6 +23,9 @@ import { withAlpha } from "@/theme/tokens";
 /** The hero is English and left-to-right in every UI language, so its text opts out of the RTL defaults `AppText` applies. */
 const HERO_TEXT = { writingDirection: "ltr", textAlign: "left" } as const;
 
+/** A sine ease-in-out as a bezier: Reanimated's web path drops composed easings (`Easing.inOut(Easing.sin)`) to linear. Symmetric, so the reversing drift reads the same both ways. */
+const SINE_IN_OUT = Easing.bezier(0.37, 0, 0.63, 1);
+
 /**
  * A slow, gentle vertical drift (±4px) for a floating card. Disabled entirely
  * under reduced motion rather than merely skipped — a shared value that never
@@ -40,7 +43,7 @@ function useFloat(delay: number, duration: number, disabled: boolean) {
         withRepeat(
           withTiming(1, {
             duration,
-            easing: Easing.inOut(Easing.sin),
+            easing: SINE_IN_OUT,
             reduceMotion: ReduceMotion.System,
           }),
           -1,

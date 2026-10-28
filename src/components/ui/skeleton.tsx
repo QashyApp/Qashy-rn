@@ -2,7 +2,6 @@ import { useEffect } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { View } from "react-native";
 import Animated, {
-  Easing,
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
@@ -10,7 +9,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
-import { useMotionPreference } from "@/components/ui/motion";
+import { motionCurves, useMotionPreference } from "@/components/ui/motion";
 import { useQashyTheme } from "@/theme/theme";
 
 const PULSE_DURATION = 900;
@@ -52,7 +51,7 @@ export function Skeleton({
       withRepeat(
         withTiming(PULSE_MAX, {
           duration: PULSE_DURATION,
-          easing: Easing.inOut(Easing.ease),
+          easing: motionCurves.inOut,
           reduceMotion: ReduceMotion.System,
         }),
         -1,
