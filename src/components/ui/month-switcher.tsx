@@ -57,6 +57,7 @@ export function MonthSwitcher({
   max,
   disabled = false,
   dragProgress,
+  fill = false,
 }: {
   value: string;
   /**
@@ -70,6 +71,8 @@ export function MonthSwitcher({
   disabled?: boolean;
   /** A month pager's drag, in page widths: the title slides with the pages below it. */
   dragProgress?: SharedValue<number>;
+  /** Stretch to the width the parent gives it, the month name taking the room between the arrows. */
+  fill?: boolean;
 }) {
   const theme = useQashyTheme();
   const { motion, radius, space } = theme;
@@ -169,7 +172,7 @@ export function MonthSwitcher({
         pressedScale={motion.pressScale}
         style={{
           minHeight: 44,
-          minWidth: 128,
+          ...(fill ? { flex: 1, minWidth: 0 } : { minWidth: 128 }),
           justifyContent: "center",
           paddingHorizontal: space.sm,
           borderRadius: radius.pill,

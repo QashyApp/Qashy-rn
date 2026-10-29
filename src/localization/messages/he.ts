@@ -1182,6 +1182,9 @@ export const HEBREW: Record<string, string> = {
   "Clear search": "ניקוי החיפוש",
   summary: "סיכום",
   "Search this month": "חיפוש בחודש הזה",
+  "Show filters": "הצגת מסננים",
+  "Hide filters": "הסתרת מסננים",
+  "A filter is on": "מסנן פעיל",
   "Search all months": "חיפוש בכל החודשים",
   "Go to latest": "מעבר לאחרונות",
   "Add one for this month, or jump to your latest activity.":

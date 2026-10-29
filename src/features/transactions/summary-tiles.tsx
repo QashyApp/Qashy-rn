@@ -1,18 +1,18 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { View, type ColorValue } from "react-native";
-import Animated, {
-  interpolate,
-  useAnimatedStyle,
-  type SharedValue,
-} from "react-native-reanimated";
 
 import { AnimatedMoney } from "@/components/finance/animated-money";
 import { StatTile } from "@/components/finance/stat-tile";
 import { AppText } from "@/components/ui/app-text";
-import { useMotionPreference } from "@/components/ui/motion";
 import type { CurrencyCode } from "@/domain/models";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
+import {
+  MIN_CUT_LABEL,
+  planCompactRow,
+  type PillNeeds,
+} from "@/features/transactions/compact-row-plan";
+import { formatMoney } from "@/utils/money";
 
 export interface SummaryTileData {
   label: string;
@@ -20,160 +20,288 @@ export interface SummaryTileData {
   color: ColorValue;
 }
 
-/** The compact tile's height: one line of figure between the tile's own padding. */
+/** The compact tile's minimum height: one line of figure between the tile's own padding. */
 const COMPACT_HEIGHT = 36;
+/** A pill's label is drawn at this share of its size when the row is too narrow for full-size ones. */
+const SMALL_LABEL = 0.85;
+/** Room kept beyond each pill's measured content, against text that measures a hair short. */
+const SLACK = 2;
+/** Wide enough that a sizer never wraps. */
+const SIZER_WIDTH = 2000;
 
 /**
- * The month's Income / Spent / Net tiles, which fold to a single line as `collapse` goes 0 → 1.
- *
- * The full tile (label above figure) and the compact one (label beside figure) are two layers
- * of the same well, cross-fading while its height folds from the full tile's measured height
- * down to one line, so the figure and its label stay on screen the whole way. Without travel (the
- * minimal animation level) only the cross-fade runs and the height snaps at the midpoint.
+ * The month's Income / Spent / Net tiles. `compact` is the phone form: label beside figure on one
+ * line, with the figure always in its short form. Otherwise each tile stacks its label above the
+ * figure.
  */
-export function CollapsingSummaryTiles({
+export function SummaryTiles({
   tiles,
   currency,
   locale,
-  compactFigures,
-  collapse,
+  compact,
 }: {
   tiles: readonly SummaryTileData[];
   currency: CurrencyCode;
   locale: string;
-  compactFigures: boolean;
-  collapse: SharedValue<number>;
+  compact: boolean;
 }) {
   const { space } = useQashyTheme();
+  if (compact)
+    return <CompactRow tiles={tiles} currency={currency} locale={locale} />;
   return (
     <View style={{ flexDirection: "row", gap: space.sm }}>
       {tiles.map((tile) => (
         <View key={tile.label} style={{ flex: 1, minWidth: 0 }}>
-          <CollapsingTile
-            tile={tile}
-            currency={currency}
-            locale={locale}
-            compactFigures={compactFigures}
-            collapse={collapse}
-          />
+          <FullTile tile={tile} currency={currency} locale={locale} />
         </View>
       ))}
     </View>
   );
 }
 
-function CollapsingTile({
-  tile,
-  currency,
-  locale,
-  compactFigures,
-  collapse,
-}: {
+interface TileProps {
   tile: SummaryTileData;
   currency: CurrencyCode;
   locale: string;
-  compactFigures: boolean;
-  collapse: SharedValue<number>;
-}) {
+}
+
+function FullTile({ tile, currency, locale }: TileProps) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
-  const [fullHeight, setFullHeight] = useState<number | null>(null);
-  // The compact line grows with the font scale, so the well folds to its measured height rather
-  // than a fixed one (a fixed height clips the figure at large text sizes).
-  const [compactHeight, setCompactHeight] = useState<number | null>(null);
-  const foldedHeight = Math.max(COMPACT_HEIGHT, compactHeight ?? 0);
-  const { travel } = useMotionPreference();
+  return (
+    <View
+      style={{
+        ...materialStyle(theme, "sunken"),
+        borderRadius: radius.control,
+        padding: space.md,
+      }}
+    >
+      <StatTile
+        label={tile.label}
+        value={
+          <AnimatedMoney
+            minor={tile.amountMinor}
+            currency={currency}
+            locale={locale}
+            variant="label"
+            numeric
+            style={{ color: tile.color }}
+          />
+        }
+      />
+    </View>
+  );
+}
 
-  const well = useAnimatedStyle(() => {
-    if (fullHeight === null) return { height: undefined };
-    const progress = collapse.get();
-    return {
-      height: travel
-        ? interpolate(progress, [0, 1], [fullHeight, foldedHeight])
-        : progress >= 0.5
-          ? foldedHeight
-          : fullHeight,
-    };
-  });
-  const full = useAnimatedStyle(() => ({
-    opacity: interpolate(collapse.get(), [0, 0.5], [1, 0], "clamp"),
-  }));
-  const compact = useAnimatedStyle(() => ({
-    opacity: interpolate(collapse.get(), [0.5, 1], [0, 1], "clamp"),
-  }));
+/**
+ * The compact pills sized by what they hold: each takes the width its own label and figure need,
+ * and what is left over is shared out in proportion to that, so a "$0.00" pill gives room to a
+ * "$912.00" one. Only when even that does not fit the row does the label step down in size, the
+ * figures staying as they are, then get ellipsized; and when the figures alone cannot sit side by
+ * side the pills stack their label over their figure. A figure is never cut.
+ */
+function CompactRow({
+  tiles,
+  currency,
+  locale,
+}: {
+  tiles: readonly SummaryTileData[];
+  currency: CurrencyCode;
+  locale: string;
+}) {
+  const { space, type } = useQashyTheme();
+  const [rowWidth, setRowWidth] = useState(0);
+  const [needs, setNeeds] = useState<Record<string, Partial<PillNeeds>>>({});
+  const measure = (key: string, field: keyof PillNeeds) => (width: number) =>
+    setNeeds((current) =>
+      current[key]?.[field] === width
+        ? current
+        : { ...current, [key]: { ...current[key], [field]: width } },
+    );
+
+  const chrome = space.md * 2 + space.xs + SLACK;
+  const measured = tiles.map((tile) => ({ tile, ...needs[tile.label] }));
+  const complete = measured.every(isComplete);
+  const known = rowWidth > 0 && complete;
+  const form = known
+    ? planCompactRow(measured as PillNeeds[], rowWidth, chrome, space.sm)
+    : "full";
+  const labelSize = Math.round(type.scale.caption.fontSize * SMALL_LABEL);
 
   return (
-    <Animated.View
-      style={[
-        {
-          ...materialStyle(theme, "sunken"),
-          borderRadius: radius.control,
+    <View>
+      {/* Every label and figure at its natural size, off to the side, to size the pills by. */}
+      <View
+        pointerEvents="none"
+        aria-hidden
+        importantForAccessibility="no-hide-descendants"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 0,
           overflow: "hidden",
-        },
-        well,
-      ]}
-    >
-      <Animated.View
-        style={full}
-        onLayout={(event) => setFullHeight(event.nativeEvent.layout.height)}
+        }}
       >
-        <View style={{ padding: space.md }}>
-          <StatTile
-            label={tile.label}
-            value={
-              <AnimatedMoney
-                minor={tile.amountMinor}
+        <View style={{ width: SIZER_WIDTH, opacity: 0 }}>
+          {tiles.map((tile) => (
+            <View key={tile.label} style={{ alignSelf: "flex-start" }}>
+              <Measured onWidth={measure(tile.label, "label")}>
+                <AppText variant="caption" muted>
+                  {tile.label}
+                </AppText>
+              </Measured>
+              <Measured onWidth={measure(tile.label, "smallLabel")}>
+                <AppText
+                  variant="caption"
+                  muted
+                  style={{ fontSize: labelSize }}
+                >
+                  {tile.label}
+                </AppText>
+              </Measured>
+              <Measured onWidth={measure(tile.label, "amount")}>
+                <AppText literal variant="label" numeric figure>
+                  {formatMoney(tile.amountMinor, currency, locale, {
+                    compact: true,
+                  })}
+                </AppText>
+              </Measured>
+            </View>
+          ))}
+        </View>
+      </View>
+      <View
+        onLayout={(event) => setRowWidth(event.nativeEvent.layout.width)}
+        // Laid out but unseen until the sizes are known, so no frame shows equal pills first.
+        style={{
+          flexDirection: "row",
+          gap: space.sm,
+          opacity: known ? 1 : 0,
+        }}
+      >
+        {measured.map(({ tile, label, smallLabel, amount }) => {
+          const need = (form === "full" ? label : smallLabel) ?? 0;
+          return (
+            <View
+              key={tile.label}
+              style={
+                form === "stacked"
+                  ? { flex: 1, minWidth: 0 }
+                  : {
+                      // The pill's own size, and a share of what is left in proportion to it.
+                      flexBasis: "auto",
+                      flexGrow: Math.max(1, chrome + need + (amount ?? 0)),
+                      flexShrink: 1,
+                      // Whatever the row has to give up, a figure keeps its room.
+                      minWidth:
+                        amount === undefined
+                          ? 0
+                          : chrome +
+                            amount +
+                            (form === "cut"
+                              ? Math.min(smallLabel ?? 0, MIN_CUT_LABEL)
+                              : 0),
+                    }
+              }
+            >
+              <CompactTile
+                tile={tile}
                 currency={currency}
                 locale={locale}
-                compact={compactFigures}
-                variant="label"
-                numeric
-                style={{ color: tile.color }}
+                labelSize={form === "full" ? undefined : labelSize}
+                cutLabel={form === "cut"}
+                stacked={form === "stacked"}
               />
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+/** Whether every size of one pill has been measured. */
+function isComplete(item: Partial<PillNeeds>): item is PillNeeds {
+  return (
+    item.label !== undefined &&
+    item.smallLabel !== undefined &&
+    item.amount !== undefined
+  );
+}
+
+/** Reports the width its content takes when nothing constrains it. */
+function Measured({
+  onWidth,
+  children,
+}: {
+  onWidth: (width: number) => void;
+  children: ReactNode;
+}) {
+  return (
+    <View
+      style={{ alignSelf: "flex-start" }}
+      onLayout={(event) => onWidth(Math.ceil(event.nativeEvent.layout.width))}
+    >
+      {children}
+    </View>
+  );
+}
+
+function CompactTile({
+  tile,
+  currency,
+  locale,
+  labelSize,
+  cutLabel,
+  stacked,
+}: TileProps & { labelSize?: number; cutLabel: boolean; stacked: boolean }) {
+  const theme = useQashyTheme();
+  const { radius, space } = theme;
+  return (
+    <View
+      style={{
+        ...materialStyle(theme, "sunken"),
+        borderRadius: radius.control,
+        minHeight: COMPACT_HEIGHT,
+        ...(stacked
+          ? {
+              alignItems: "center",
+              justifyContent: "center",
+              paddingHorizontal: space.xs,
+              paddingVertical: space.xs,
             }
-          />
-        </View>
-      </Animated.View>
-      <Animated.View
-        pointerEvents="none"
+          : {
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: space.xs,
+              paddingHorizontal: space.md,
+            }),
+      }}
+    >
+      <AppText
+        variant="caption"
+        muted
+        numberOfLines={cutLabel || stacked ? 1 : undefined}
         style={[
-          {
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: 0,
-            minHeight: COMPACT_HEIGHT,
-            flexDirection: "row",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: space.xs,
-            paddingHorizontal: space.md,
-          },
-          compact,
+          // The label gives way before the figure does, and only in the last steps.
+          cutLabel ? { flexShrink: 1 } : { flexShrink: 0 },
+          labelSize ? { fontSize: labelSize } : null,
         ]}
-        onLayout={(event) => setCompactHeight(event.nativeEvent.layout.height)}
-        // The full layer carries the label and figure for assistive tech.
-        importantForAccessibility="no-hide-descendants"
-        aria-hidden
       >
-        <AppText
-          variant="caption"
-          muted
-          numberOfLines={1}
-          style={{ flexShrink: 1 }}
-        >
-          {tile.label}
-        </AppText>
-        <AnimatedMoney
-          minor={tile.amountMinor}
-          currency={currency}
-          locale={locale}
-          compact
-          variant="label"
-          numeric
-          style={{ color: tile.color }}
-        />
-      </Animated.View>
-    </Animated.View>
+        {tile.label}
+      </AppText>
+      <AnimatedMoney
+        minor={tile.amountMinor}
+        currency={currency}
+        locale={locale}
+        compact
+        variant="label"
+        numeric
+        style={{ color: tile.color, flexShrink: 0 }}
+      />
+    </View>
   );
 }

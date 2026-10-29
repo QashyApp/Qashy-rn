@@ -3132,6 +3132,11 @@
       "he": "קטגוריות התחלתיות"
     },
     {
+      "name": "q_5cdb53fa5a02311b",
+      "en": "A filter is on",
+      "he": "מסנן פעיל"
+    },
+    {
       "name": "q_5d05b4dbcd20e553",
       "en": "Use https:// — an http:// address would send your data unprotected.",
       "he": "השתמשו ב־https:// — כתובת http:// תשלח את הנתונים שלכם ללא הגנה."
@@ -6577,6 +6582,11 @@
       "he": "מרווח החזרה חייב להיות מספר שלם וחיובי."
     },
     {
+      "name": "q_c8d98a0c67691946",
+      "en": "Hide filters",
+      "he": "הסתרת מסננים"
+    },
+    {
       "name": "q_c9172ff9a4067441",
       "en": "That matches",
       "he": "זה תואם"
@@ -8605,6 +8615,11 @@
       "name": "q_fe09a859f5885ef3",
       "en": "Swipe and animations",
       "he": "החלקה ואנימציות"
+    },
+    {
+      "name": "q_fe1c10589edce6df",
+      "en": "Show filters",
+      "he": "הצגת מסננים"
     },
     {
       "name": "q_fe81d5d73a35a2cf",

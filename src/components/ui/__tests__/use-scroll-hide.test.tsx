@@ -4,7 +4,6 @@ import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 
 import { getFloatingBarVisibility } from "@/components/navigation/floating-bar-visibility";
 import { AnimationLevelContext } from "@/components/ui/animation-level-context";
-import { useScrollCollapse } from "@/components/ui/use-scroll-collapse";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import type { AnimationLevel } from "@/domain/models";
 
@@ -107,48 +106,5 @@ describe("useScrollHide", () => {
     const again = off.result.current.onScroll;
     await off.rerender({});
     expect(off.result.current.onScroll).toBe(again);
-  });
-});
-
-describe("useScrollCollapse", () => {
-  type Props = { enabled: boolean; locked?: boolean; forceCollapsed?: boolean };
-
-  it("keeps the same onScroll while its inputs change, and acts on the new ones", async () => {
-    const { result, rerender } = await renderHook(
-      (props: Props) => useScrollCollapse(props),
-      { initialProps: { enabled: true } as Props },
-    );
-    const first = result.current.onScroll;
-    await rerender({ enabled: true, forceCollapsed: true });
-    expect(result.current.onScroll).toBe(first);
-    // Forced shut: the collapse follows at once, and scrolling does not undo it.
-    expect(result.current.collapse.get()).toBe(1);
-    result.current.onScroll(scroll(10));
-    expect(result.current.collapse.get()).toBe(1);
-
-    await rerender({ enabled: false });
-    expect(result.current.onScroll).toBe(first);
-    expect(result.current.collapse.get()).toBe(0);
-  });
-
-  it("opens on `expand` and takes the next page's offset as its starting point", async () => {
-    const { result, rerender } = await renderHook(
-      (props: Props) => useScrollCollapse(props),
-      { initialProps: { enabled: true } as Props },
-    );
-    const { onScroll, expand, collapse } = result.current;
-    for (const y of [40, 80, 120, 160, 200]) onScroll(scroll(y));
-    expect(collapse.get()).toBe(1);
-    expand();
-    expect(collapse.get()).toBe(0);
-    // A page that sits elsewhere is not a scroll down either.
-    onScroll(scroll(900));
-    expect(collapse.get()).toBe(0);
-
-    // Folded shut for a selection, a change of month leaves it folded.
-    await rerender({ enabled: true, forceCollapsed: true });
-    expect(collapse.get()).toBe(1);
-    expand();
-    expect(collapse.get()).toBe(1);
   });
 });
