@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import { ScrollView, View, type ScrollViewProps } from "react-native";
+import {
+  ScrollView,
+  View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type ScrollViewProps,
+} from "react-native";
+import { GestureDetector } from "react-native-gesture-handler";
 
 import { CalculatorHost } from "@/components/finance/calculator-host";
+import { useSheetBody } from "@/components/navigation/sheet-body-context";
 import { ScreenTransition } from "@/components/ui/motion";
 import { useQashyTheme } from "@/theme/theme";
 
@@ -13,9 +21,20 @@ export function FormScreen({
   contentContainerStyle,
   maxWidth = 680,
   onScroll,
+  scrollEnabled = true,
   ...props
 }: ScrollViewProps & { maxWidth?: number }) {
   const theme = useQashyTheme();
+  // In the Android sheet the body can be dragged too, so the sheet needs this scroll view's offset
+  // and a gesture to run beside it (null everywhere else).
+  const sheetBody = useSheetBody();
+  const registerWithSheet = sheetBody?.register;
+  useEffect(() => registerWithSheet?.(), [registerWithSheet]);
+  const reportOffset = sheetBody?.reportOffset;
+  const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    reportOffset?.(event.nativeEvent.contentOffset.y);
+    onScroll?.(event);
+  };
   // A sheet starts sliding in only once everything in it has mounted, so a long form held
   // the slide back by however long the whole form took to build (Android's own sheet starts at
   // once, but a form that builds mid-spring drops frames from it). The form now mounts a frame
@@ -28,28 +47,41 @@ export function FormScreen({
     const frame = requestAnimationFrame(() => setBodyMounted(true));
     return () => cancelAnimationFrame(frame);
   }, [bodyMounted]);
+  const scrollView = (
+    <ScrollView
+      onScroll={handleScroll}
+      scrollEventThrottle={16}
+      scrollEnabled={scrollEnabled && (sheetBody?.scrollEnabled ?? true)}
+      keyboardShouldPersistTaps="handled"
+      // Dragging the content puts the system keyboard away (the amount keypad is not one: it is a
+      // layer over the whole screen, so the form cannot be dragged while it is open).
+      keyboardDismissMode="on-drag"
+      style={{ flex: 1, backgroundColor: theme.background }}
+      contentContainerStyle={[
+        {
+          padding: 18,
+          paddingBottom: 44,
+          gap: 18,
+          width: "100%",
+          maxWidth,
+          alignSelf: "center",
+        },
+        contentContainerStyle,
+      ]}
+      {...props}
+    >
+      {bodyMounted ? children : null}
+    </ScrollView>
+  );
   const scroll = (
     <ScreenTransition style={{ flex: 1 }}>
-      <ScrollView
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        keyboardShouldPersistTaps="handled"
-        style={{ flex: 1, backgroundColor: theme.background }}
-        contentContainerStyle={[
-          {
-            padding: 18,
-            paddingBottom: 44,
-            gap: 18,
-            width: "100%",
-            maxWidth,
-            alignSelf: "center",
-          },
-          contentContainerStyle,
-        ]}
-        {...props}
-      >
-        {bodyMounted ? children : null}
-      </ScrollView>
+      {sheetBody ? (
+        <GestureDetector gesture={sheetBody.scrollGesture}>
+          {scrollView}
+        </GestureDetector>
+      ) : (
+        scrollView
+      )}
     </ScreenTransition>
   );
   const hosted = <CalculatorHost>{scroll}</CalculatorHost>;

@@ -1,7 +1,10 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
-import type { ReactElement } from "react";
-import { Text } from "react-native";
-import { GestureHandlerRootView } from "react-native-gesture-handler";
+import { useEffect, type ReactElement } from "react";
+import { ScrollView, Text } from "react-native";
+import {
+  GestureDetector,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import {
   createGestureController,
   getByGestureTestId,
@@ -13,6 +16,7 @@ import {
   hasAndroidSheetOptions,
   sheetScreenLayout,
 } from "@/components/navigation/android-sheet";
+import { useSheetBody } from "@/components/navigation/sheet-body-context";
 import { useSheetShell } from "@/components/navigation/sheet-shell-context";
 import { AnimationLevelContext } from "@/components/ui/animation-level-context";
 
@@ -85,6 +89,10 @@ const renderSheet = async (nav: ReturnType<typeof navigation>) =>
     </GestureHandlerRootView>,
   );
 
+const handles: {
+  reportOffset?: (offsetY: number) => void;
+  guard?: (guarded: boolean) => void;
+} = {};
 describe("AndroidSheet", () => {
   it("shows the title and the screen inside it", async () => {
     await renderSheet(navigation());
@@ -144,9 +152,11 @@ describe("AndroidSheet", () => {
 
   it("goes straight to the screen's own confirmation while the form is dirty", async () => {
     const nav = navigation();
-    let guard: ((guarded: boolean) => void) | undefined;
     const Probe = () => {
-      guard = useSheetShell()?.setGuarded;
+      const shell = useSheetShell();
+      useEffect(() => {
+        handles.guard = shell?.setGuarded;
+      }, [shell?.setGuarded]);
       return null;
     };
     await render(
@@ -158,11 +168,196 @@ describe("AndroidSheet", () => {
         </AnimationLevelContext>
       </GestureHandlerRootView>,
     );
-    await act(async () => guard?.(true));
+    await act(async () => handles.guard?.(true));
     await fireEvent.press(screen.getAllByLabelText("Close").at(-1)!);
     expect(nav.goBack).toHaveBeenCalledTimes(1);
     // The sheet did not animate away before the question was asked, so it can be asked again.
     await fireEvent.press(screen.getAllByLabelText("Close").at(-1)!);
+    expect(nav.goBack).toHaveBeenCalledTimes(2);
+  });
+});
+
+// A sheet body the way `FormScreen` wires its scroll view: registered with the sheet, wrapped in the
+// scroll gesture, and reporting its offset.
+const ScrollBody = () => {
+  const body = useSheetBody();
+  const shell = useSheetShell();
+  const register = body?.register;
+  useEffect(() => register?.(), [register]);
+  useEffect(() => {
+    handles.reportOffset = body?.reportOffset;
+    handles.guard = shell?.setGuarded;
+  }, [body?.reportOffset, shell?.setGuarded]);
+  if (!body) return null;
+  return (
+    <GestureDetector gesture={body.scrollGesture}>
+      <ScrollView testID="body-scroll" scrollEnabled={body.scrollEnabled}>
+        <Text>Scrolling body</Text>
+      </ScrollView>
+    </GestureDetector>
+  );
+};
+
+const renderScrollSheet = async (
+  nav: ReturnType<typeof navigation>,
+  { measured = false, registered = true } = {},
+) => {
+  const view = await render(
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <AnimationLevelContext value="off">
+        <AndroidSheet title="Transaction" navigation={nav}>
+          {registered ? <ScrollBody /> : <Text>Plain body</Text>}
+        </AndroidSheet>
+      </AnimationLevelContext>
+    </GestureHandlerRootView>,
+  );
+  if (measured) {
+    // An 800px window: the panel opens at 72% of it and can be dragged up to its full height.
+    await fireEvent(screen.getByTestId("android-sheet-frame"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } },
+    });
+  }
+  return view;
+};
+
+const bodyPan = () =>
+  createGestureController(getByGestureTestId("android-sheet-body-pan"));
+
+describe("AndroidSheet body drag", () => {
+  beforeEach(() => {
+    handles.reportOffset = undefined;
+    handles.guard = undefined;
+  });
+
+  it("dismisses from the body when the content is at the top", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav);
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: 14 });
+      pan.update({ translationY: 220 });
+      pan.end({ velocityY: 3000 });
+    });
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves the drag to the scroll view when the content is scrolled down", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav);
+    await act(async () => handles.reportOffset?.(180));
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: 14 });
+      pan.update({ translationY: 220 });
+      pan.end({ velocityY: 3000 });
+    });
+    expect(nav.goBack).not.toHaveBeenCalled();
+  });
+
+  it("carries on into closing once the same drag has scrolled the content to the top", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav);
+    await act(async () => handles.reportOffset?.(180));
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: 14 });
+      pan.update({ translationY: 120 });
+      handles.reportOffset?.(0);
+      pan.update({ translationY: 140 });
+      pan.update({ translationY: 400 });
+      pan.end({ velocityY: 3000 });
+    });
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not read a fling that only scrolled the content as a throw at the sheet", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav);
+    await act(async () => handles.reportOffset?.(500));
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: 40 });
+      handles.reportOffset?.(0);
+      pan.end({ velocityY: 4000 });
+    });
+    expect(nav.goBack).not.toHaveBeenCalled();
+  });
+
+  it("expands from the lower detent on a drag up, then lets the content scroll", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav, { measured: true });
+    // Below the top detent an upward drag expands the sheet, so the scroll view is switched off.
+    expect(screen.getByTestId("body-scroll").props.scrollEnabled).toBe(false);
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: -14 });
+      pan.update({ translationY: -260 });
+      pan.end({ velocityY: -2000 });
+    });
+    expect(nav.goBack).not.toHaveBeenCalled();
+    expect(screen.getByTestId("body-scroll").props.scrollEnabled).toBe(true);
+  });
+
+  it("settles back on the lower detent after a short upward drag", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav, { measured: true });
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: -12 });
+      pan.update({ translationY: -40 });
+      pan.end({ velocityY: -50 });
+    });
+    expect(nav.goBack).not.toHaveBeenCalled();
+    expect(screen.getByTestId("body-scroll").props.scrollEnabled).toBe(false);
+  });
+
+  it("leaves a body that never registered a scroll view to the header", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav, { registered: false });
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: 220 });
+      pan.end({ velocityY: 3000 });
+    });
+    expect(nav.goBack).not.toHaveBeenCalled();
+  });
+
+  it("asks the screen's confirmation first when a dirty form is dragged away from the body", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav);
+    await act(async () => handles.guard?.(true));
+    const pan = bodyPan();
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: 14 });
+      pan.update({ translationY: 220 });
+      pan.end({ velocityY: 3000 });
+    });
+    // The question is asked (the route's guard answers `goBack`); the sheet has not left, so a
+    // second drag asks again.
+    expect(nav.goBack).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      pan.begin();
+      pan.activate();
+      pan.update({ translationY: 14 });
+      pan.update({ translationY: 220 });
+      pan.end({ velocityY: 3000 });
+    });
     expect(nav.goBack).toHaveBeenCalledTimes(2);
   });
 });
