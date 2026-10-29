@@ -67,10 +67,11 @@ jest.mock("@/features/overview/layout/use-overview-layout", () => {
   return { useOverviewLayout: () => state };
 });
 
-// The month page is big and has its own concerns; this stub offers the two ways into edit mode
-// the real page does (the hold and the Customize button), wired to the same `onEnterEdit`.
+// The month page is big and has its own concerns; this stub offers the hold into edit mode the
+// real page does, wired to the same `onEnterEdit`. The Customize button belongs to the screen's
+// own pinned header, so the real one is under test.
 jest.mock("@/features/overview/overview-month-page", () => {
-  const { Pressable: P, Text: T, View: V } = jest.requireActual("react-native");
+  const { Text: T, View: V } = jest.requireActual("react-native");
   const { HoldToCustomize: Hold } = jest.requireActual(
     "@/features/overview/card-stack-motion",
   );
@@ -84,7 +85,6 @@ jest.mock("@/features/overview/overview-month-page", () => {
     }) => (
       <V>
         <T testID="editing">{editing ? "yes" : "no"}</T>
-        <P accessibilityLabel="Customize" onPress={onEnterEdit} />
         <Hold onActivate={onEnterEdit}>
           <T>card</T>
         </Hold>

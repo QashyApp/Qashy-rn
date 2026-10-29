@@ -2,18 +2,15 @@ import { router } from "expo-router";
 import {
   memo,
   useCallback,
-  useEffect,
   useMemo,
-  useRef,
   useState,
   type Ref,
   type RefObject,
 } from "react";
-import Animated, { type SharedValue } from "react-native-reanimated";
+import Animated from "react-native-reanimated";
 import {
   Platform,
   View,
-  type HostInstance,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -27,31 +24,24 @@ import type { OverviewLayoutStatus } from "@/features/overview/layout/use-overvi
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
-  MonthSwitcher,
-  type MonthDirection,
-} from "@/components/ui/month-switcher";
-import { MonthContentFade } from "@/components/ui/month-content-fade";
-import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
+  MonthSlideItem,
+  PAGER_SCROLLER_STYLE,
+} from "@/components/ui/month-pager";
 import { MotionView } from "@/components/ui/motion";
-import { PageHeading } from "@/components/ui/page-heading";
 import { PageHero } from "@/components/ui/page-hero";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { Skeleton } from "@/components/ui/skeleton";
-import { TextButton } from "@/components/ui/text-button";
 import { FRANKFURTER_UNSUPPORTED } from "@/data/exchange-rates/frankfurter";
 import { AddCardWell } from "@/features/overview/card-gallery-screen";
-import {
-  HoldToCustomize,
-  MonthSwipeFollow,
-} from "@/features/overview/card-stack-motion";
+import { HoldToCustomize } from "@/features/overview/card-stack-motion";
 import { DropIndicator } from "@/features/overview/edit/drop-indicator";
 import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame";
-import { moveAccessibilityFocus } from "@/features/overview/edit/move-accessibility-focus";
 import { useCardReorder } from "@/features/overview/edit/use-card-reorder";
 import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
 import {
   GRID_BREAKPOINT,
   packOverviewRows,
+  slideOrders,
 } from "@/features/overview/widgets/grid";
 import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
 import { useDashboard } from "@/features/overview/widgets/use-dashboard";
@@ -71,21 +61,16 @@ export interface OverviewMonthPageProps {
   month: string;
   /** Only the current page scrolls and reports scroll offsets to the floating button. */
   isCurrent: boolean;
-  /** The month pager's drag, which slides the month title. */
-  dragProgress?: SharedValue<number>;
   editing: boolean;
   /**
    * `loading` shows a skeleton in the card area; `unavailable` shows the default cards as a
-   * read-only placeholder (no Customize, no hold-to-customize); `ready` is the saved layout.
+   * read-only placeholder (no hold-to-customize); `ready` is the saved layout.
    */
   layoutStatus: OverviewLayoutStatus;
   cards: readonly OverviewCard[];
   configOpenId: string | null;
   onToggleConfig: (id: string) => void;
   onEnterEdit: () => void;
-  onExitEdit: () => void;
-  /** The hero's month switcher; the screen routes it through the pager. */
-  onMonthSwitch: (month: string, direction: MonthDirection) => void;
   onScroll: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   /** Attached on the current page only, so a tab re-press scrolls the page in view. */
   scrollRef?: Ref<ScrollViewInstance>;
@@ -102,20 +87,21 @@ export interface OverviewMonthPageProps {
 
 /**
  * Everything on Overview that depends on the month, with its own ScrollView, so the pager
- * can slide the whole window and show a neighbouring month beside the current one.
+ * can slide the whole window and show a neighbouring month beside the current one. The heading,
+ * Customize and the month switcher live above the pager (see `OverviewScreen`).
+ *
+ * Memoised on props that keep their identity across a month change (the screen's handlers are
+ * stable), so a swipe renders only the pages whose `isCurrent` or data changed.
  */
 export const OverviewMonthPage = memo(function OverviewMonthPage({
   month,
   isCurrent,
-  dragProgress,
   editing,
   layoutStatus,
   cards,
   configOpenId,
   onToggleConfig,
   onEnterEdit,
-  onExitEdit,
-  onMonthSwitch,
   onScroll,
   scrollRef,
   onMoveCard,
@@ -175,20 +161,6 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
     [animatedScrollRef, outerScrollRef],
   );
 
-  // Swapping Customize for Done (and back) would leave a screen reader on a button that is gone,
-  // so focus follows the swap. Not on the first render, and only on the page in view.
-  const customizeRef = useRef<HostInstance>(null);
-  const doneRef = useRef<HostInstance>(null);
-  const wasEditing = useRef(editing);
-  useEffect(() => {
-    if (wasEditing.current === editing) return;
-    wasEditing.current = editing;
-    if (!isCurrent) return;
-    const frame = requestAnimationFrame(() =>
-      moveAccessibilityFocus(editing ? doneRef.current : customizeRef.current),
-    );
-    return () => cancelAnimationFrame(frame);
-  }, [editing, isCurrent]);
   const reorderOnScroll = scrollProps.onScroll;
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -258,16 +230,17 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   // keys and the tree never change with the measurement, so no card remounts when it arrives.
   // Cards wrap exactly where `packOverviewRows` starts a new row, because the packed widths and
   // the gap add up to the container width.
-  const cardWidths = useMemo(() => {
+  // The rows only depend on the sizes, so a card's place in the cascade is known before the
+  // container has been measured; its pixel width is not.
+  const { cardWidths, cardOrders } = useMemo(() => {
     const widths = new Map<string, number>();
+    const rows = packOverviewRows(cards, gridWidth, space.xl, { multiColumn });
     if (multiColumn && gridWidth > 0) {
-      for (const row of packOverviewRows(cards, gridWidth, space.xl, {
-        multiColumn,
-      })) {
+      for (const row of rows) {
         for (const packed of row.cards) widths.set(packed.id, packed.width);
       }
     }
-    return widths;
+    return { cardWidths: widths, cardOrders: slideOrders(rows) };
   }, [cards, gridWidth, multiColumn, space.xl]);
 
   const renderWidget = (card: OverviewCard, size = card.size) => {
@@ -299,127 +272,57 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
         PAGER_SCROLLER_STYLE,
       ]}
     >
-      <ScreenContainer>
-        {/* Native does not draw its own copy of this heading: the section
-              stack shows a real navigation header titled "Overview". Web keeps
-              PageHeading, which is where the document's h1 lives. */}
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: space.md,
-          }}
-        >
-          <View style={{ flex: 1 }}>
-            <PageHeading title="Overview" />
-          </View>
-          {editing ? (
-            <TextButton
-              title="Done"
-              icon="checkmark"
-              onPress={onExitEdit}
-              // `TextButton` forwards `ref` to its pressable (React 19 passes it as a prop) but does
-              // not declare it, so it travels in a spread.
-              {...{ ref: doneRef }}
-            />
-          ) : (
-            // While the saved layout loads the button keeps its place, invisible and inert, so
-            // the heading does not reflow when it appears. If the layout is unavailable it stays
-            // visible but disabled: the placeholder cards cannot be edited.
-            <View
-              style={{ opacity: layoutStatus === "loading" ? 0 : 1 }}
-              pointerEvents={layoutReady ? "auto" : "none"}
-              accessibilityElementsHidden={layoutStatus === "loading"}
-              importantForAccessibility={
-                layoutStatus === "loading" ? "no-hide-descendants" : "auto"
-              }
-            >
-              <TextButton
-                title="Customize"
-                icon="gear"
-                disabled={!layoutReady}
-                onPress={onEnterEdit}
-                {...{ ref: customizeRef }}
-              />
-            </View>
-          )}
-        </View>
-
-        <PageHero
-          overline="Net worth"
-          accessory={
-            <MonthSwitcher
-              value={month}
-              onChange={onMonthSwitch}
-              dragProgress={dragProgress}
-            />
-          }
-          figure={
-            <View
-              style={{ gap: space.xs }}
-              onLayout={(event: LayoutChangeEvent) => {
-                const next = Math.floor(event.nativeEvent.layout.width);
-                setNetWorthWidth((current) =>
-                  current === next ? current : next,
-                );
-              }}
-            >
-              <AnimatedMoney
-                minor={summary.netWorthMinor}
-                currency={currency}
-                locale={locale}
-                variant="display"
-                scale={netWorthScale}
-                numberOfLines={1}
-                adjustsFontSizeToFit
-                minimumFontScale={0.5}
-                style={{
-                  flexShrink: 1,
-                  ...(Platform.OS === "web"
-                    ? ({ whiteSpace: "nowrap" } as object)
-                    : null),
+      <ScreenContainer style={{ paddingTop: space.md }}>
+        <MonthSlideItem order={0}>
+          <PageHero
+            overline="Net worth"
+            figure={
+              <View
+                style={{ gap: space.xs }}
+                onLayout={(event: LayoutChangeEvent) => {
+                  const next = Math.floor(event.nativeEvent.layout.width);
+                  setNetWorthWidth((current) =>
+                    current === next ? current : next,
+                  );
                 }}
-              />
-              {missingCurrencies.length ? (
-                <View style={{ gap: space.xs }}>
-                  <AppText
-                    literal
-                    variant="caption"
-                    style={{ color: theme.warningText }}
-                  >
-                    {t(
-                      `Excludes ${missingCurrencies.join(", ")} until an effective exchange rate is added.`,
-                    )}
-                  </AppText>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      gap: space.sm,
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    {missingAllUnsupported ? (
-                      <ActionButton
-                        title="Add a manual rate"
-                        variant="secondary"
-                        onPress={() =>
-                          router.push({
-                            pathname: "/exchange-rate",
-                            params: { currency: missingCurrencies[0] },
-                          })
-                        }
-                      />
-                    ) : !rateStatus.enabled ? (
-                      <>
+              >
+                <AnimatedMoney
+                  minor={summary.netWorthMinor}
+                  currency={currency}
+                  locale={locale}
+                  variant="display"
+                  scale={netWorthScale}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.5}
+                  style={{
+                    flexShrink: 1,
+                    ...(Platform.OS === "web"
+                      ? ({ whiteSpace: "nowrap" } as object)
+                      : null),
+                  }}
+                />
+                {missingCurrencies.length ? (
+                  <View style={{ gap: space.xs }}>
+                    <AppText
+                      literal
+                      variant="caption"
+                      style={{ color: theme.warningText }}
+                    >
+                      {t(
+                        `Excludes ${missingCurrencies.join(", ")} until an effective exchange rate is added.`,
+                      )}
+                    </AppText>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        gap: space.sm,
+                        flexWrap: "wrap",
+                      }}
+                    >
+                      {missingAllUnsupported ? (
                         <ActionButton
-                          title="Turn on automatic rates"
-                          busy={togglingRates}
-                          disabled={togglingRates}
-                          onPress={turnOnAutomaticRates}
-                        />
-                        <ActionButton
-                          title="Add manually"
+                          title="Add a manual rate"
                           variant="secondary"
                           onPress={() =>
                             router.push({
@@ -428,142 +331,161 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                             })
                           }
                         />
-                      </>
-                    ) : rateStatus.lastError ? (
-                      <ActionButton
-                        title="Couldn’t fetch rates — Retry"
-                        variant="secondary"
-                        onPress={() =>
-                          exchangeRateService
-                            .ensureRatesForPending({ retry: true })
-                            .catch(() => undefined)
-                        }
-                      />
-                    ) : null}
+                      ) : !rateStatus.enabled ? (
+                        <>
+                          <ActionButton
+                            title="Turn on automatic rates"
+                            busy={togglingRates}
+                            disabled={togglingRates}
+                            onPress={turnOnAutomaticRates}
+                          />
+                          <ActionButton
+                            title="Add manually"
+                            variant="secondary"
+                            onPress={() =>
+                              router.push({
+                                pathname: "/exchange-rate",
+                                params: { currency: missingCurrencies[0] },
+                              })
+                            }
+                          />
+                        </>
+                      ) : rateStatus.lastError ? (
+                        <ActionButton
+                          title="Couldn’t fetch rates — Retry"
+                          variant="secondary"
+                          onPress={() =>
+                            exchangeRateService
+                              .ensureRatesForPending({ retry: true })
+                              .catch(() => undefined)
+                          }
+                        />
+                      ) : null}
+                    </View>
                   </View>
-                </View>
-              ) : null}
-            </View>
-          }
-          stats={(
-            [
-              ["Income", summary.incomeMinor, toneColor(summary.incomeMinor)],
-              ["Spent", summary.expenseMinor, theme.text],
+                ) : null}
+              </View>
+            }
+            stats={(
               [
-                "Net flow",
-                summary.netFlowMinor,
-                toneColor(summary.netFlowMinor),
-              ],
-            ] as const
-          ).map(([label, amount, color]) => ({
-            label,
-            value: (
-              <AnimatedMoney
-                minor={amount}
-                currency={currency}
-                locale={locale}
-                compact={contentWidth < 520}
-                variant="headline"
-                numeric
-                style={{ color }}
-              />
-            ),
-          }))}
-          footer={
-            cumulativeSpend.some((value) => value > 0) ? (
-              <View style={{ gap: space.sm }}>
-                <View
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "baseline",
-                    justifyContent: "space-between",
-                    gap: space.md,
-                  }}
-                >
-                  <AppText variant="caption" muted>
-                    Cumulative spending
-                  </AppText>
-                  <AnimatedMoney
-                    minor={cumulativeSpend[cumulativeSpend.length - 1]}
-                    currency={currency}
-                    locale={locale}
-                    compact={contentWidth < 520}
-                    variant="label"
-                    numeric
-                  />
-                </View>
-                <MonthContentFade month={month}>
+                ["Income", summary.incomeMinor, toneColor(summary.incomeMinor)],
+                ["Spent", summary.expenseMinor, theme.text],
+                [
+                  "Net flow",
+                  summary.netFlowMinor,
+                  toneColor(summary.netFlowMinor),
+                ],
+              ] as const
+            ).map(([label, amount, color]) => ({
+              label,
+              value: (
+                <AnimatedMoney
+                  minor={amount}
+                  currency={currency}
+                  locale={locale}
+                  compact={contentWidth < 520}
+                  variant="headline"
+                  numeric
+                  style={{ color }}
+                />
+              ),
+            }))}
+            footer={
+              cumulativeSpend.some((value) => value > 0) ? (
+                <View style={{ gap: space.sm }}>
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "baseline",
+                      justifyContent: "space-between",
+                      gap: space.md,
+                    }}
+                  >
+                    <AppText variant="caption" muted>
+                      Cumulative spending
+                    </AppText>
+                    <AnimatedMoney
+                      minor={cumulativeSpend[cumulativeSpend.length - 1]}
+                      currency={currency}
+                      locale={locale}
+                      compact={contentWidth < 520}
+                      variant="label"
+                      numeric
+                    />
+                  </View>
                   <Sparkline
                     values={cumulativeSpend}
                     label={t("Cumulative spending")}
                   />
-                </MonthContentFade>
-              </View>
-            ) : undefined
-          }
-        />
+                </View>
+              ) : undefined
+            }
+          />
+        </MonthSlideItem>
 
         {layoutStatus === "loading" ? (
           // The saved layout is still loading: hold the place rather than flash the defaults.
-          <View
-            style={{ gap: space.xl }}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            <Skeleton width="100%" height={176} radius={theme.radius.card} />
-            <Skeleton width="100%" height={176} radius={theme.radius.card} />
-          </View>
+          <MonthSlideItem order={1}>
+            <View
+              style={{ gap: space.xl }}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              <Skeleton width="100%" height={176} radius={theme.radius.card} />
+              <Skeleton width="100%" height={176} radius={theme.radius.card} />
+            </View>
+          </MonthSlideItem>
         ) : !editing ? (
           cards.length ? (
             <MotionView key="view" variant="fade">
-              <MonthContentFade month={month}>
-                <MonthSwipeFollow month={month} dragProgress={dragProgress}>
-                  <View
-                    onLayout={onGridLayout}
-                    style={
-                      multiColumn
-                        ? {
-                            flexDirection: "row",
-                            flexWrap: "wrap",
-                            alignItems: "flex-start",
-                            columnGap: space.xl,
-                            rowGap: space.xl,
-                          }
-                        : { gap: space.xl }
-                    }
+              <View
+                onLayout={onGridLayout}
+                style={
+                  multiColumn
+                    ? {
+                        flexDirection: "row",
+                        flexWrap: "wrap",
+                        alignItems: "flex-start",
+                        columnGap: space.xl,
+                        rowGap: space.xl,
+                      }
+                    : { gap: space.xl }
+                }
+              >
+                {cards.map((card) => (
+                  <MotionView
+                    key={card.id}
+                    animateLayout
+                    style={{ width: cardWidths.get(card.id) ?? "100%" }}
                   >
-                    {cards.map((card) => (
-                      <MotionView
-                        key={card.id}
-                        animateLayout
-                        style={{ width: cardWidths.get(card.id) ?? "100%" }}
-                      >
-                        {Platform.OS === "web" || !layoutReady ? (
-                          renderWidget(card)
-                        ) : (
-                          <HoldToCustomize onActivate={onEnterEdit}>
-                            {renderWidget(card)}
-                          </HoldToCustomize>
-                        )}
-                      </MotionView>
-                    ))}
-                  </View>
-                </MonthSwipeFollow>
-              </MonthContentFade>
+                    <MonthSlideItem order={cardOrders.get(card.id) ?? 1}>
+                      {Platform.OS === "web" || !layoutReady ? (
+                        renderWidget(card)
+                      ) : (
+                        <HoldToCustomize onActivate={onEnterEdit}>
+                          {renderWidget(card)}
+                        </HoldToCustomize>
+                      )}
+                    </MonthSlideItem>
+                  </MotionView>
+                ))}
+              </View>
             </MotionView>
           ) : (
-            <EmptyState
-              icon="plus.circle"
-              title="Your overview is empty"
-              body="Add cards to see budgets, goals and activity here."
-            >
-              <ActionButton
-                title="Add cards"
-                icon="plus"
-                disabled={!layoutReady}
-                onPress={() => router.push("/overview-cards")}
-              />
-            </EmptyState>
+            <MonthSlideItem order={1}>
+              <EmptyState
+                icon="plus.circle"
+                title="Your overview is empty"
+                body="Add cards to see budgets, goals and activity here."
+              >
+                <ActionButton
+                  title="Add cards"
+                  icon="plus"
+                  disabled={!layoutReady}
+                  onPress={() => router.push("/overview-cards")}
+                />
+              </EmptyState>
+            </MonthSlideItem>
           )
         ) : (
           <MotionView key="edit" variant="fade">

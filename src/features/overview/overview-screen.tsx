@@ -1,12 +1,26 @@
-import { CountUpSubject } from "@/components/finance/animated-money";
 import { router } from "expo-router";
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { View, type ScrollViewInstance } from "react-native";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  StyleSheet,
+  View,
+  type HostInstance,
+  type ScrollViewInstance,
+} from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
-import type { MonthDirection } from "@/components/ui/month-switcher";
+import {
+  MonthSwitcher,
+  type MonthDirection,
+} from "@/components/ui/month-switcher";
 import {
   MonthPager,
   navigateMonth,
@@ -14,11 +28,17 @@ import {
   type MonthPagerHandle,
 } from "@/components/ui/month-pager";
 import { useLocalization } from "@/localization/localization";
-import { floatingActionMetrics } from "@/components/ui/screen-container";
+import { PageHeading } from "@/components/ui/page-heading";
+import {
+  floatingActionMetrics,
+  screenContentMetrics,
+} from "@/components/ui/screen-container";
+import { TextButton } from "@/components/ui/text-button";
 import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
+import { moveAccessibilityFocus } from "@/features/overview/edit/move-accessibility-focus";
 import { useExitEditOnBack } from "@/features/overview/edit/use-exit-edit-on-back";
 import { createCardDropper } from "@/features/overview/layout/card-dropper";
 import type { LayoutStoreAction } from "@/features/overview/layout/layout-actions";
@@ -50,7 +70,11 @@ export function OverviewScreen() {
   const insets = useSafeAreaInsets();
   const { isRtl } = useLocalization();
   const [month, setMonth] = useState(startOfMonth());
-  const { visibility: fabVisibility, onScroll } = useScrollHide();
+  const {
+    visibility: fabVisibility,
+    onScroll,
+    show: showFab,
+  } = useScrollHide();
   const scrollRef = useSectionScrollToTop<ScrollViewInstance>();
   const pagerRef = useRef<MonthPagerHandle>(null);
   const dragProgress = useSharedValue(restingPosition(month, isRtl));
@@ -187,6 +211,27 @@ export function OverviewScreen() {
 
   useExitEditOnBack(editing, exitEditMode);
 
+  // Swapping Customize for Done (and back) would leave a screen reader on a button that is gone,
+  // so focus follows the swap. Not on the first render.
+  const customizeRef = useRef<HostInstance>(null);
+  const doneRef = useRef<HostInstance>(null);
+  const wasEditing = useRef(editing);
+  useEffect(() => {
+    if (wasEditing.current === editing) return;
+    wasEditing.current = editing;
+    const frame = requestAnimationFrame(() =>
+      moveAccessibilityFocus(editing ? doneRef.current : customizeRef.current),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [editing]);
+
+  // The floating button follows the current page's scrolling alone, and another month's page
+  // has its own offset: after a change of month it starts shown, and the next scroll event of
+  // the new page takes over from there.
+  useEffect(() => {
+    showFab();
+  }, [month, showFab]);
+
   const toggleConfig = useCallback(
     (id: string) => setConfigOpenId((current) => (current === id ? null : id)),
     [],
@@ -204,69 +249,139 @@ export function OverviewScreen() {
     [changeMonth],
   );
 
+  // The pinned header and the pages' content share one column, so both derive their width and
+  // gutters from the same call. The page adds the bottom room for the floating button.
+  const content = useMemo(
+    () => screenContentMetrics(metrics, insets, space),
+    [metrics, insets, space],
+  );
+  const headerStyle = {
+    width: content.width,
+    maxWidth: content.maxWidth,
+    alignSelf: content.alignSelf,
+    paddingLeft: content.paddingLeft,
+    paddingRight: content.paddingRight,
+    paddingTop: content.paddingTop,
+    paddingBottom: space.md,
+    gap: space.md,
+  } as const;
+
   return (
-    // Amounts hold their values through a swipe, then count to the new month once it settles.
-    <CountUpSubject subject={month}>
-      <View style={{ flex: 1, backgroundColor: theme.background }}>
-        {/* A swipe does not move the window: it drives `dragProgress`, which slides the month
-          title and the figures that differ, and the rest fades when the month commits. */}
-        <MonthPager
-          ref={pagerRef}
-          slide={false}
-          dragProgress={dragProgress}
-          month={month}
-          disabled={editing}
-          onChange={changeMonth}
-          style={{ flex: 1 }}
-          renderPage={(pageMonth, { isCurrent }) => (
-            <OverviewMonthPage
-              month={pageMonth}
-              isCurrent={isCurrent}
-              dragProgress={dragProgress}
-              editing={editing}
-              layoutStatus={status}
-              cards={cards}
-              configOpenId={configOpenId}
-              onToggleConfig={toggleConfig}
-              onEnterEdit={enterEditMode}
-              onExitEdit={exitEditMode}
-              onMonthSwitch={switchMonth}
-              onScroll={onScroll}
-              scrollRef={scrollRef}
-              onMoveCard={moveCard}
-              onResizeCard={resizeCard}
-              onConfigureCard={configureCard}
-              onRemoveCard={removeCard}
-              onDropCard={dropCard}
-            />
-          )}
-        />
-        {undo ? (
-          <UndoBar
-            message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
-            onAction={undoRemove}
-            onDismiss={() => setUndo(null)}
+    <View style={{ flex: 1, backgroundColor: theme.background }}>
+      {/* The heading, Customize and the month switcher stay put while the month pages slide
+          beneath them. On web the heading is the document's h1; native shows the section
+          stack's own navigation header instead. */}
+      <View
+        style={{
+          borderBottomWidth: StyleSheet.hairlineWidth,
+          borderBottomColor: theme.border,
+          backgroundColor: theme.background,
+        }}
+      >
+        <View style={headerStyle}>
+          <View
             style={{
-              position: "absolute",
-              left: space.lg,
-              right: space.lg,
-              bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
-                .stackedOverlayBottom,
+              flexDirection: "row",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: space.md,
             }}
-          />
-        ) : null}
-        <FloatingActionButton
-          label="Add transaction"
-          visibility={fabVisibility}
-          onPress={() =>
-            router.push({
-              pathname: "/transaction",
-              params: { returnTo: "/overview" },
-            })
-          }
-          style={floatingActionMetrics(metrics, insets, space)}
-        />
+          >
+            <View style={{ flex: 1 }}>
+              <PageHeading title="Overview" />
+            </View>
+            {editing ? (
+              <TextButton
+                title="Done"
+                icon="checkmark"
+                onPress={exitEditMode}
+                // `TextButton` forwards `ref` to its pressable (React 19 passes it as a prop) but
+                // does not declare it, so it travels in a spread.
+                {...{ ref: doneRef }}
+              />
+            ) : (
+              // While the saved layout loads the button keeps its place, invisible and inert, so
+              // the heading does not reflow when it appears. If the layout is unavailable it
+              // stays visible but disabled: the placeholder cards cannot be edited.
+              <View
+                style={{ opacity: status === "loading" ? 0 : 1 }}
+                pointerEvents={canEdit ? "auto" : "none"}
+                accessibilityElementsHidden={status === "loading"}
+                importantForAccessibility={
+                  status === "loading" ? "no-hide-descendants" : "auto"
+                }
+              >
+                <TextButton
+                  title="Customize"
+                  icon="gear"
+                  disabled={!canEdit}
+                  onPress={enterEditMode}
+                  {...{ ref: customizeRef }}
+                />
+              </View>
+            )}
+          </View>
+          <View style={{ alignSelf: "flex-start" }}>
+            <MonthSwitcher
+              value={month}
+              onChange={switchMonth}
+              dragProgress={dragProgress}
+            />
+          </View>
+        </View>
       </View>
-    </CountUpSubject>
+      <MonthPager
+        ref={pagerRef}
+        dragProgress={dragProgress}
+        month={month}
+        disabled={editing}
+        onChange={changeMonth}
+        style={{ flex: 1 }}
+        renderPage={(pageMonth, { isCurrent }) => (
+          <OverviewMonthPage
+            month={pageMonth}
+            isCurrent={isCurrent}
+            editing={editing}
+            layoutStatus={status}
+            cards={cards}
+            configOpenId={configOpenId}
+            onToggleConfig={toggleConfig}
+            onEnterEdit={enterEditMode}
+            onScroll={onScroll}
+            scrollRef={scrollRef}
+            onMoveCard={moveCard}
+            onResizeCard={resizeCard}
+            onConfigureCard={configureCard}
+            onRemoveCard={removeCard}
+            onDropCard={dropCard}
+          />
+        )}
+      />
+      {undo ? (
+        <UndoBar
+          message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
+          onAction={undoRemove}
+          onDismiss={() => setUndo(null)}
+          style={{
+            position: "absolute",
+            left: space.lg,
+            right: space.lg,
+            bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
+              .stackedOverlayBottom,
+          }}
+        />
+      ) : null}
+      <FloatingActionButton
+        label="Add transaction"
+        visibility={fabVisibility}
+        onPress={() =>
+          router.push({
+            pathname: "/transaction",
+            params: { returnTo: "/overview" },
+          })
+        }
+        style={floatingActionMetrics(metrics, insets, space)}
+      />
+    </View>
   );
 }

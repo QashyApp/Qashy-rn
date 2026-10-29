@@ -93,3 +93,16 @@ export function packOverviewRows(
 
   return rows;
 }
+
+/**
+ * Where each card sits in a month swipe's cascade, by visual row from the top of the page.
+ * Order 0 belongs to the net worth hero above the cards, so the first row is 1; cards that
+ * share a row (the 2-up grid) share an order and move together.
+ */
+export function slideOrders(rows: readonly PackedRow[]): Map<string, number> {
+  const orders = new Map<string, number>();
+  rows.forEach((row, index) => {
+    for (const packed of row.cards) orders.set(packed.id, index + 1);
+  });
+  return orders;
+}
