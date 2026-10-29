@@ -49,7 +49,7 @@ export interface AppSettings extends SyncEntity {
   themeMode: ThemeMode;
   accentSource: AccentSource;
   accentHex: string;
-  /** Per device (`deviceLocal`). Swipe sideways on Overview and Transactions to change month. Saves from before this existed read as off. */
+  /** Per device (`deviceLocal`). Swipe sideways on Overview and Transactions to change month. On by default; saves from before this existed read as on (a one-time device-local migration turned it on for installs that had it stored off). */
   swipeBetweenMonths?: boolean;
   /** Per device (`deviceLocal`). Swipe a transaction row for actions: delete or change category, and for upcoming payments mark paid or skip. Saves from before this existed read as on. */
   swipeRowActions?: boolean;

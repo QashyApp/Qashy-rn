@@ -326,6 +326,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       this.sweepsArchived = true;
       // Before generation, so a schedule the sweep is about to delete does not post first.
       await this.sweepArchivedNow();
+      await this.migrateSwipeDefaultNow();
       await this.generateRecurringNow(todayLocal());
     }
     // Only now is the snapshot complete enough for screens to render against.
@@ -388,8 +389,44 @@ export class LocalFinanceRepository implements FinanceRepository {
   sweepArchived() {
     return this.enqueueMutation(async () => {
       this.sweepsArchived = true;
-      if (this.state.ready) await this.sweepArchivedNow();
+      if (this.state.ready) {
+        await this.sweepArchivedNow();
+        await this.migrateSwipeDefaultNow();
+      }
     });
+  }
+
+  /**
+   * Turns month swiping on, once per device, for installs that stored it off back when off was
+   * the default. Guarded by `SYNC_META.swipeDefaultMigrated`, which is marked only after the write
+   * succeeds, so a failure retries next launch and a user who later turns swiping off keeps it off.
+   *
+   * Foreground only, like the archived sweep (`sweepsArchived` is that same gate): the headless
+   * widget refresh and background sync must stay write-free. It goes through the ordinary settings
+   * update, so the snapshot and subscribers stay consistent; the field is device-local, so no op
+   * is emitted. Before onboarding there is no settings row to update (and writing a placeholder
+   * one would pin the wrong base currency, see `initializeNow`); a new row defaults to on, so the
+   * flag is simply marked. Like the sweep, a failure is left for the next launch and never blocks
+   * startup.
+   */
+  private async migrateSwipeDefaultNow() {
+    if (!this.sweepsArchived) return;
+    try {
+      const done = await this.storage.transact(
+        (tx) => readMeta(tx, [SYNC_META.swipeDefaultMigrated]),
+        { silent: true },
+      );
+      if (done.get(SYNC_META.swipeDefaultMigrated) === "1") return;
+      const { settings } = this.state;
+      if (settings.onboardingComplete && settings.swipeBetweenMonths !== true)
+        await this.updateSettingsNow({ swipeBetweenMonths: true });
+      await this.storage.transact(
+        (tx) => writeMeta(tx, { [SYNC_META.swipeDefaultMigrated]: "1" }),
+        { silent: true },
+      );
+    } catch {
+      // Retried on the next launch; the app works either way.
+    }
   }
 
   /**
@@ -1870,10 +1907,11 @@ export class LocalFinanceRepository implements FinanceRepository {
     const settings: AppSettings = {
       ...storedSettings,
       themeId: storedSettings.themeId ?? DEFAULT_THEME_ID,
-      swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? false,
+      swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? true,
       swipeRowActions: storedSettings.swipeRowActions ?? true,
       navBarStyle: storedSettings.navBarStyle ?? "native",
       animationLevel: storedSettings.animationLevel ?? "all",
+      monthSlideStyle: storedSettings.monthSlideStyle ?? "cascade",
       hapticsEnabled: storedSettings.hapticsEnabled ?? true,
       fontTextOverride: storedSettings.fontTextOverride ?? null,
       fontNumericOverride: storedSettings.fontNumericOverride ?? null,

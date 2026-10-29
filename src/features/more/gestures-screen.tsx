@@ -2,12 +2,13 @@ import { ScrollView, View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
 import { Card } from "@/components/ui/card";
+import { OptionRow } from "@/components/ui/option-row";
 import { QashySwitch } from "@/components/ui/qashy-switch";
 import {
   SegmentedControl,
   type SegmentOption,
 } from "@/components/ui/segmented-control";
-import type { AnimationLevel } from "@/domain/models";
+import type { AnimationLevel, MonthSlideStyle } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
@@ -21,6 +22,34 @@ const ANIMATION_LEVEL_OPTIONS: SegmentOption<AnimationLevel>[] = [
   { value: "all", label: "All" },
   { value: "minimal", label: "Minimal" },
   { value: "off", label: "Off" },
+];
+
+const MONTH_SLIDE_OPTIONS: {
+  value: MonthSlideStyle;
+  title: string;
+  description: string;
+}[] = [
+  {
+    value: "cascade",
+    title: "Cascade",
+    description: "Cards ripple into place one after another.",
+  },
+  {
+    value: "page",
+    title: "Page",
+    description:
+      "The month moves as one page and settles with a little bounce.",
+  },
+  {
+    value: "deck",
+    title: "Deck",
+    description: "The new month slides over the old one like a card.",
+  },
+  {
+    value: "calm",
+    title: "Calm",
+    description: "A steady slide with no bounce.",
+  },
 ];
 
 export function GesturesScreen() {
@@ -48,6 +77,11 @@ export function GesturesScreen() {
 
   const changeSwipe = async (enabled: boolean) => {
     await apply({ swipeBetweenMonths: enabled });
+  };
+
+  const changeMonthSlideStyle = async (monthSlideStyle: MonthSlideStyle) => {
+    if (monthSlideStyle === (settings.monthSlideStyle ?? "cascade")) return;
+    await apply({ monthSlideStyle });
   };
 
   const changeSwipeRows = async (enabled: boolean) => {
@@ -100,9 +134,34 @@ export function GesturesScreen() {
           </View>
           <QashySwitch
             accessibilityLabel={t("Swipe to change month")}
-            value={settings.swipeBetweenMonths ?? false}
+            value={settings.swipeBetweenMonths ?? true}
             onValueChange={changeSwipe}
           />
+        </View>
+      </Card>
+      <Card style={{ gap: space.md }}>
+        <View style={{ gap: space.xxs }}>
+          <AppText variant="headline">Month slide</AppText>
+          <AppText variant="caption" muted>
+            How the month moves when you swipe or tap the month arrows.
+          </AppText>
+        </View>
+        <View
+          accessibilityLabel={t("Month slide")}
+          accessibilityRole="radiogroup"
+          style={{ gap: space.sm }}
+        >
+          {MONTH_SLIDE_OPTIONS.map((option) => (
+            <OptionRow
+              key={option.value}
+              title={option.title}
+              description={option.description}
+              selected={
+                (settings.monthSlideStyle ?? "cascade") === option.value
+              }
+              onPress={() => changeMonthSlideStyle(option.value)}
+            />
+          ))}
         </View>
       </Card>
       <Card style={{ gap: space.lg }}>
