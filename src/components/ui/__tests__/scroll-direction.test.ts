@@ -31,9 +31,29 @@ describe("travelDirection", () => {
     expect(travelDirection(-FLIP_DISTANCE)).toBe(-1);
   });
 
-  it("does not flip on a slow, jittery scroll", () => {
-    // Down 3 dp a frame with a 1 dp wobble back never reaches 20 dp up.
-    expect(travelDirection(run([3, 3, -1, 3, 3, -1, 3]))).toBe(0);
+  it("does not flip on a jittery scroll whose runs stay short of the threshold", () => {
+    // Runs of 16 dp with a 2 dp wobble back: close to the threshold, never at it.
+    const deltas = [8, 8, -2, 8, 8, -2, 8, 8, -2, -8, -8, 2, -8, -8, 2];
+    let travel = 0;
+    for (const delta of deltas) {
+      travel = accumulateTravel(travel, delta);
+      expect(travelDirection(travel)).toBe(0);
+    }
+  });
+
+  it("flips as soon as a run in the jitter reaches the threshold", () => {
+    // A wobble restarts the run, so only the clean run after it counts.
+    const wobble = [8, 8, -2, 10];
+    expect(travelDirection(run(wobble))).toBe(0);
+    expect(travelDirection(run([...wobble, 9]))).toBe(0);
+    expect(travelDirection(run([...wobble, 10]))).toBe(1);
+    expect(travelDirection(run([-8, -8, 2, -10, -10]))).toBe(-1);
+  });
+
+  it("does not flip back on a twitch after a long run", () => {
+    expect(travelDirection(run([40, -3]))).toBe(0);
+    expect(travelDirection(run([40, -3, -3, -3, -3, -3, -3]))).toBe(0);
+    expect(travelDirection(run([40, -3, -3, -3, -3, -3, -3, -3]))).toBe(-1);
   });
 
   it("flips on a slow but sustained scroll up", () => {

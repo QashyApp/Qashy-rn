@@ -17,9 +17,9 @@ export function useHiddenFlag(
   visibility: SharedValue<number> | undefined,
   threshold = 0.5,
 ) {
-  const [hidden, setHidden] = useState(
-    () => visibility !== undefined && visibility.get() < threshold,
-  );
+  // Not read from the shared value during render: the reaction below runs on mount and sets it.
+  // (A page that starts hidden is for one frame treated as shown.)
+  const [hidden, setHidden] = useState(false);
   useAnimatedReaction(
     () => (visibility ? visibility.get() < threshold : false),
     (next, previous) => {

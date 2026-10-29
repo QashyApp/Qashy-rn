@@ -18,8 +18,10 @@ type AndroidEffect = keyof typeof Haptics.AndroidHaptics;
 /**
  * Plays `effect` through the platform's own haptic vocabulary (`View.performHapticFeedback`, so the
  * tuned tick the system uses for its own controls and no VIBRATE permission), and falls back to
- * the `Vibrator` waveform when the constant is missing: `Confirm` and `Reject` need Android 11,
- * and a device with no activity yet rejects the call.
+ * the `Vibrator` waveform when the call rejects: `Confirm` and `Reject` need Android 11, and the
+ * module throws for them on older releases (or if the constant is missing from the JS package).
+ * With no activity yet the module resolves without playing anything, so that case is silent, not
+ * a fallback.
  */
 function trigger(effect: AndroidEffect, fallback: () => Promise<void>) {
   if (!supportsHaptics || !enabled) return;

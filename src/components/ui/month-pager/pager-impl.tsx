@@ -33,6 +33,7 @@ import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import {
   SWIPE_ACTIVE_OFFSET,
   commitSpring,
+  resolveRelease,
   resolveSwipe,
 } from "@/components/ui/resolve-swipe";
 import { useLocalization } from "@/localization/localization";
@@ -46,7 +47,16 @@ import {
   monthAtIndex,
   monthIndex,
 } from "@/components/ui/month-pager/pager-model";
+import {
+  canStep,
+  landedOffset,
+} from "@/components/ui/month-pager/pager-motion";
 import { PagerPage } from "@/components/ui/month-pager/pager-page";
+import {
+  WHEEL_QUIET,
+  wheelPixels,
+  wheelStep,
+} from "@/components/ui/month-pager/wheel-step";
 
 /** Pans that start this close to a screen edge are left to the system back gesture. */
 const EDGE_GUARD = 24;
@@ -65,14 +75,8 @@ const COMMIT_TIMEOUT = 1500;
  * mounted again between them; a page left alone holds no duplicate content.
  */
 const NEIGHBOUR_IDLE_MS = 1500;
-/** Web trackpad: horizontal wheel distance (px) that makes one step, and the quiet gap that ends a gesture. */
-const WHEEL_STEP = 40;
+/** Web trackpad: the quiet gap that ends a gesture (the distance that makes a step is in `wheel-step`). */
 const WHEEL_IDLE_MS = 140;
-
-/** The pixels a wheel event travelled, whatever unit the browser reported it in. */
-function wheelPixels(event: WheelEvent, delta: number) {
-  return delta * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 400 : 1);
-}
 
 /** Whether the wheel's target sits in something that scrolls sideways by itself. */
 function inHorizontalScroller(target: EventTarget | null, stop: Element) {
@@ -365,7 +369,8 @@ export function PagerImpl({
     busy.set(false);
     const next = baseIndex.get() + direction;
     baseIndex.set(next);
-    translateX.set(translateX.get() + direction * sign * width);
+    // Re-based, not reset: the pages keep the positions they have on screen right now.
+    translateX.set(landedOffset(translateX.get(), direction, sign, width));
     requestedIndex.set(next);
     // A crossfade brings the new month in at once; React's render only has to catch up.
     if (reduced)
@@ -493,7 +498,9 @@ export function PagerImpl({
       .onStart(() => {
         "worklet";
         // A slide in flight lands where it is, and this touch carries on from the new month: there
-        // is no dead moment between swipes. (A crossfade is landed the same way.)
+        // is no dead moment between swipes. (A crossfade is landed the same way.) The landing
+        // leaves a residual offset in `startX`; `resolveRelease` keeps the release from committing
+        // against the direction this finger then moves.
         if (busy.get()) {
           if (!landInFlight()) {
             tracking.set(false);
@@ -539,9 +546,18 @@ export function PagerImpl({
         "worklet";
         if (!tracking.get()) return;
         tracking.set(false);
-        const direction = resolveSwipe(
-          // The whole offset, not just this touch: a spring-back caught mid-way keeps its start.
-          startX.get() + event.translationX,
+        // A slide that began while this finger was already down (a tap on the arrows racing the
+        // touch) must not be left to land after the release: land it now and re-base the grab.
+        const inFlight = busy.get() ? pendingDir.get() : 0;
+        if (inFlight !== 0 && landInFlight()) {
+          startX.set(landedOffset(startX.get(), inFlight, sign, width));
+          if (reduced) fade.set(1);
+        }
+        const direction = resolveRelease(
+          // The offset the finger started from, so a spring-back caught mid-way, or a slide
+          // grabbed part-way, is judged from where it was and by the way the finger then moved.
+          startX.get(),
+          event.translationX,
           event.velocityX,
           width,
           baseIndex.get() + 1 <= maxIndex.get(),
@@ -606,7 +622,8 @@ export function PagerImpl({
     // A finger is moving the pages.
     if (tracking.get()) return false;
     const inFlight = busy.get() ? pendingDir.get() : 0;
-    if (direction > 0 && baseIndex.get() + inFlight + 1 > maxIndex.get())
+    // At the newest month there is nothing to step to: not accepted, so the caller does not tick.
+    if (!canStep(direction, baseIndex.get(), inFlight, maxIndex.get()))
       return false;
     setPaging(true);
     scheduleIdle();
@@ -615,8 +632,10 @@ export function PagerImpl({
     const jump = disabled || (slide && !neighbours);
     runOnUI((to: 1 | -1) => {
       "worklet";
+      // A finger came down after the call: it owns the pages, and the step is dropped.
+      if (tracking.get()) return;
       landInFlight();
-      if (to > 0 && baseIndex.get() + 1 > maxIndex.get()) {
+      if (!canStep(to, baseIndex.get(), 0, maxIndex.get())) {
         runOnJS(endPaging)();
         return;
       }
@@ -652,26 +671,43 @@ export function PagerImpl({
     if (!WEB || !swipeEnabled) return;
     const node = containerRef.current as unknown as HTMLElement | null;
     if (!node || typeof node.addEventListener !== "function") return;
-    let travelled = 0;
-    let latched = false;
+    let gesture = WHEEL_QUIET;
     let quiet: ReturnType<typeof setTimeout> | undefined;
+    // The two frames a step waits for the neighbours to mount; cancelled with the effect.
+    let outer = 0;
+    let inner = 0;
+    const cancelFrames = () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
     const step = (direction: 1 | -1) => {
       if (neighboursRef.current || !slide) {
         goToRef.current(direction);
         return;
       }
+      // At the newest month there is no step to take: mounting the neighbours would be for nothing.
+      if (
+        !canStep(
+          direction,
+          baseIndex.get(),
+          busy.get() ? pendingDir.get() : 0,
+          maxIndex.get(),
+        )
+      )
+        return;
       // Mount the neighbours first and slide once they are in, rather than jumping.
       markReady();
-      requestAnimationFrame(() =>
-        requestAnimationFrame(() => {
+      cancelFrames();
+      outer = requestAnimationFrame(() => {
+        inner = requestAnimationFrame(() => {
           goToRef.current(direction);
           scheduleIdle();
-        }),
-      );
+        });
+      });
     };
     const onWheel = (event: WheelEvent) => {
-      const dx = wheelPixels(event, event.deltaX);
-      const dy = wheelPixels(event, event.deltaY);
+      const dx = wheelPixels(event.deltaMode, event.deltaX);
+      const dy = wheelPixels(event.deltaMode, event.deltaY);
       // Pinch-zoom, a mostly vertical scroll, or something inside the page that scrolls sideways.
       if (event.ctrlKey || Math.abs(dx) <= Math.abs(dy)) return;
       if (inHorizontalScroller(event.target, node)) return;
@@ -680,24 +716,29 @@ export function PagerImpl({
       // gesture that already stepped, until the wheel has been quiet for a moment.
       clearTimeout(quiet);
       quiet = setTimeout(() => {
-        travelled = 0;
-        latched = false;
+        gesture = WHEEL_QUIET;
       }, WHEEL_IDLE_MS);
-      if (latched || busy.get()) return;
-      travelled += dx;
-      if (Math.abs(travelled) < WHEEL_STEP) return;
-      // Content scrolling toward the end reveals the next month, like a finger dragging that way.
-      const direction = (travelled > 0 ? 1 : -1) * sign;
-      travelled = 0;
-      latched = true;
-      step(direction as 1 | -1);
+      const next = wheelStep(gesture, dx, sign, busy.get());
+      gesture = next.gesture;
+      if (next.direction !== 0) step(next.direction);
     };
     node.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       node.removeEventListener("wheel", onWheel);
       clearTimeout(quiet);
+      cancelFrames();
     };
-  }, [swipeEnabled, slide, sign, busy, markReady, scheduleIdle]);
+  }, [
+    swipeEnabled,
+    slide,
+    sign,
+    busy,
+    baseIndex,
+    maxIndex,
+    pendingDir,
+    markReady,
+    scheduleIdle,
+  ]);
 
   const onLayout = (event: LayoutChangeEvent) => {
     const next = Math.round(event.nativeEvent.layout.width);

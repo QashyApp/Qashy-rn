@@ -1,4 +1,8 @@
-import { commitSpring, resolveSwipe } from "@/components/ui/resolve-swipe";
+import {
+  commitSpring,
+  resolveRelease,
+  resolveSwipe,
+} from "@/components/ui/resolve-swipe";
 
 const W = 400;
 
@@ -63,5 +67,83 @@ describe("commitSpring", () => {
     expect(
       committed.damping / (2 * Math.sqrt(committed.stiffness * committed.mass)),
     ).toBeCloseTo(1, 10);
+  });
+});
+
+describe("resolveRelease", () => {
+  it("is resolveSwipe for a drag that began at rest", () => {
+    for (const [dx, vx] of [
+      [-99, 0],
+      [-100, 0],
+      [100, 0],
+      [-30, -850],
+      [30, 900],
+      [-250, 900],
+    ] as const) {
+      expect(resolveRelease(0, dx, vx, W, true, false)).toBe(
+        resolveSwipe(dx, vx, W, true, false),
+      );
+      expect(resolveRelease(0, dx, vx, W, true, true)).toBe(
+        resolveSwipe(dx, vx, W, true, true),
+      );
+    }
+  });
+
+  it("settles on the landed month when a grabbed slide is dragged the same way, slowly", () => {
+    // Swiped left, grabbed ~80 ms in: the landed month sits 200 px right of centre. A slow 100 px
+    // drag left puts the pages at 100, where resolveSwipe alone would go back a month.
+    expect(resolveSwipe(200 - 100, 0, W, true, false)).toBe(-1);
+    expect(resolveRelease(200, -100, 0, W, true, false)).toBe(0);
+    // Still the same way, only a little: the same.
+    expect(resolveRelease(360, -40, -100, W, true, false)).toBe(0);
+    expect(resolveRelease(360, -150, -100, W, true, false)).toBe(0);
+  });
+
+  it("settles the same way in right-to-left locales", () => {
+    expect(resolveRelease(-200, 100, 0, W, true, true)).toBe(0);
+    expect(resolveRelease(-360, 40, 100, W, true, true)).toBe(0);
+  });
+
+  it("goes on to the next month when the drag the same way carries on past the landed one", () => {
+    expect(resolveRelease(200, -320, 0, W, true, false)).toBe(1);
+    expect(resolveRelease(200, -60, -1200, W, true, false)).toBe(1);
+  });
+
+  it("does not go on to a month that is not allowed", () => {
+    expect(resolveRelease(200, -320, 0, W, false, false)).toBe(0);
+    expect(resolveRelease(200, -60, -1200, W, false, false)).toBe(0);
+  });
+
+  it("lets a drag the other way go back, as the finger moved", () => {
+    expect(resolveRelease(200, 30, 0, W, true, false)).toBe(-1);
+    expect(resolveRelease(200, 30, 900, W, true, false)).toBe(-1);
+  });
+
+  it("never commits against a flick, whatever the offset", () => {
+    // Pages are 230 px right of centre, the flick is leftward.
+    expect(resolveRelease(200, 30, -1000, W, true, false)).toBe(1);
+  });
+
+  it("does not commit forward when a caught spring-back is nudged back toward rest", () => {
+    // The pages were 120 px toward the next month; the finger moved 20 px the other way.
+    expect(resolveSwipe(-120 + 20, 0, W, true, false)).toBe(1);
+    expect(resolveRelease(-120, 20, 0, W, true, false)).toBe(0);
+    // Nudged the same way it still commits.
+    expect(resolveRelease(-120, -20, 0, W, true, false)).toBe(1);
+  });
+
+  it("settles on the nearest page on the finger's side, not always the centre", () => {
+    // Pages 340 px right of centre (the landed month is mostly off), finger moving left 10 px:
+    // the page at the centre is the nearest one on that side.
+    expect(resolveRelease(340, -10, 0, W, true, false)).toBe(0);
+    // Past a whole page the other way, the nearest page leftward is the next month.
+    expect(resolveRelease(-380, -30, 0, W, true, false)).toBe(1);
+    // ...unless that month is not allowed, when nothing is on the finger's side but where it is.
+    expect(resolveRelease(-380, -30, 0, W, false, false)).toBe(0);
+  });
+
+  it("keeps a zero-width page and a motionless finger quiet", () => {
+    expect(resolveRelease(100, -50, 0, 0, true, false)).toBe(0);
+    expect(resolveRelease(0, 0, 0, W, true, false)).toBe(0);
   });
 });

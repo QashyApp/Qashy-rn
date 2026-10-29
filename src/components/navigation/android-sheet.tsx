@@ -86,11 +86,11 @@ const exitEasing = Easing.bezier(0.3, 0, 0.8, 0.15);
 const KEYBOARD_MS = 240;
 /** Below the full animation level the sheet only fades in and out. */
 const FADE_MS = 120;
+/** Snapping to a detent (or springing back). Animations Off is added where it is used (`settle`). */
 const settleSpring = {
   mass: 1,
   stiffness: 400,
   damping: 36,
-  reduceMotion: ReduceMotion.System,
 } as const;
 
 interface SheetNavigation {
@@ -333,6 +333,13 @@ export function AndroidSheet({
     navigation.goBack();
   }, [navigation, closingFlag]);
 
+  // Animations Off (or the system's own setting) snaps to the detent at once, like every other
+  // animation here.
+  const settle = {
+    ...settleSpring,
+    reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
+  };
+
   const pan = Gesture.Pan()
     .onUpdate((event) => {
       drag.set(event.translationY);
@@ -351,7 +358,7 @@ export function AndroidSheet({
       if (release.kind === "dismiss") {
         if (guardedShared.get()) {
           // The screen confirms first; until it says so the sheet stays where it was.
-          drag.set(withSpring(0, settleSpring));
+          drag.set(withSpring(0, settle));
           runOnJS(requestClose)();
           return;
         }
@@ -372,6 +379,8 @@ export function AndroidSheet({
         }
         // Leaves at the speed it was let go of: a throw is not slowed to the exit curve's start.
         const timing = sheetDismissTiming(visible, event.velocityY);
+        // The throw is under way: the scrim, the close button and back must not close it again.
+        closingFlag.set(true);
         drag.set(
           withTiming(
             height,
@@ -394,7 +403,7 @@ export function AndroidSheet({
       // The spring takes over at the speed the finger let go of (up is positive height).
       detentHeight.set(
         withSpring(target, {
-          ...settleSpring,
+          ...settle,
           velocity: -event.velocityY,
           overshootClamping: true,
         }),

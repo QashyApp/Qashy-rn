@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import {
   ReduceMotion,
@@ -55,25 +55,42 @@ export function useScrollCollapse({
 
   const forced = enabled && forceCollapsed;
   const held = !enabled || (locked && !forced);
+  // `onScroll` reads what changes between renders from here, so it can stay the same function for
+  // the screen's whole life (memoised pages depend on that).
+  const latest = useRef({ forced, held, level });
+  useEffect(() => {
+    latest.current = { forced, held, level };
+  }, [forced, held, level]);
 
-  const animateTo = (next: boolean) => {
-    const duration = level === "off" ? 0 : level === "minimal" ? 120 : 220;
-    collapsed.current = next;
-    changedAt.current = Date.now();
-    settleMs.current = duration + SETTLE_SLACK_MS;
-    // The direction that led here is spent; the next flip is a fresh run.
-    travel.current = 0;
-    collapse.set(
-      withTiming(next ? 1 : 0, {
-        duration,
-        easing: motionCurves.standard,
-        reduceMotion: ReduceMotion.System,
-      }),
-    );
-  };
-  const setCollapsed = (next: boolean) => {
-    if (collapsed.current !== next) animateTo(next);
-  };
+  const animateTo = useCallback(
+    (next: boolean) => {
+      const duration =
+        latest.current.level === "off"
+          ? 0
+          : latest.current.level === "minimal"
+            ? 120
+            : 220;
+      collapsed.current = next;
+      changedAt.current = Date.now();
+      settleMs.current = duration + SETTLE_SLACK_MS;
+      // The direction that led here is spent; the next flip is a fresh run.
+      travel.current = 0;
+      collapse.set(
+        withTiming(next ? 1 : 0, {
+          duration,
+          easing: motionCurves.standard,
+          reduceMotion: ReduceMotion.System,
+        }),
+      );
+    },
+    [collapse],
+  );
+  const setCollapsed = useCallback(
+    (next: boolean) => {
+      if (collapsed.current !== next) animateTo(next);
+    },
+    [animateTo],
+  );
 
   // Being held open or forced shut takes effect right away, not on the next scroll: the list may
   // not scroll at all meanwhile (drag-select), or be too short to. When a forced collapse ends
@@ -87,37 +104,40 @@ export function useScrollCollapse({
     ) {
       animateTo(false);
     }
-    // `animateTo` only touches refs and the shared value.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [forced, held]);
+  }, [forced, held, animateTo]);
 
-  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-    const offset = contentOffset.y;
-    const maxOffset = contentSize.height - layoutMeasurement.height;
-    const delta = offset - lastOffset.current;
-    lastOffset.current = offset;
-    if (forced) return;
-    if (held) {
-      setCollapsed(false);
-      return;
-    }
-    if (Date.now() - changedAt.current < settleMs.current) return;
-    travel.current = accumulateTravel(travel.current, delta);
-    const direction = travelDirection(travel.current);
-    if (collapsed.current) {
-      // Still collapsed: only a real scroll up (not the list clamping to its end) expands it.
-      const clamped = offset >= maxOffset - AT_END_SLACK;
-      if (clamped) return;
-      if (direction < 0 || (offset <= EXPANDED_UNTIL_OFFSET && delta < 0))
+  const onScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const state = latest.current;
+      const { contentOffset, contentSize, layoutMeasurement } =
+        event.nativeEvent;
+      const offset = contentOffset.y;
+      const maxOffset = contentSize.height - layoutMeasurement.height;
+      const delta = offset - lastOffset.current;
+      lastOffset.current = offset;
+      if (state.forced) return;
+      if (state.held) {
         setCollapsed(false);
-    } else if (
-      direction > 0 &&
-      offset > COLLAPSE_AFTER_OFFSET &&
-      maxOffset > MIN_SCROLL_TO_COLLAPSE
-    )
-      setCollapsed(true);
-  };
+        return;
+      }
+      if (Date.now() - changedAt.current < settleMs.current) return;
+      travel.current = accumulateTravel(travel.current, delta);
+      const direction = travelDirection(travel.current);
+      if (collapsed.current) {
+        // Still collapsed: only a real scroll up (not the list clamping to its end) expands it.
+        const clamped = offset >= maxOffset - AT_END_SLACK;
+        if (clamped) return;
+        if (direction < 0 || (offset <= EXPANDED_UNTIL_OFFSET && delta < 0))
+          setCollapsed(false);
+      } else if (
+        direction > 0 &&
+        offset > COLLAPSE_AFTER_OFFSET &&
+        maxOffset > MIN_SCROLL_TO_COLLAPSE
+      )
+        setCollapsed(true);
+    },
+    [setCollapsed],
+  );
 
   return { collapse, onScroll };
 }
