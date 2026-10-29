@@ -5,10 +5,10 @@ import Animated, {
   ReduceMotion,
 } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import {
   EASE_STANDARD,
   useMotionDurations,
+  useMotionPreference,
 } from "@/components/ui/motion/durations";
 import { splitWrapperStyle } from "@/components/ui/motion/style-helpers";
 import {
@@ -39,25 +39,25 @@ type MotionViewProps = ViewProps & {
 function useMotionViewParts(animateLayout: boolean, exit: boolean) {
   const durations = useMotionDurations();
   const exitsAllowed = useContext(ExitContext);
-  const level = useAnimationLevel();
+  const { instant, travel } = useMotionPreference();
   const exiting = useMemo(
     () =>
-      exit && exitsAllowed && level !== "off"
+      exit && exitsAllowed && !instant
         ? exitingAnimation(durations)
         : undefined,
-    [exit, exitsAllowed, level, durations],
+    [exit, exitsAllowed, instant, durations],
   );
   // Only the transition is gated, never `animateLayout` itself: that would change the tree
   // shape and remount the content.
   const layoutAllowed = useContext(LayoutTransitionContext);
   const layout = useMemo(
     () =>
-      animateLayout && layoutAllowed && level === "all"
+      animateLayout && layoutAllowed && travel
         ? LinearTransition.duration(durations.layout)
             .easing(EASE_STANDARD)
             .reduceMotion(ReduceMotion.System)
         : undefined,
-    [animateLayout, layoutAllowed, level, durations.layout],
+    [animateLayout, layoutAllowed, travel, durations.layout],
   );
   return { durations, exiting, layout };
 }

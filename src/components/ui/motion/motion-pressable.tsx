@@ -22,9 +22,9 @@ import {
 import { useQashyTheme } from "@/theme/theme";
 import {
   EASE_STANDARD,
-  springConfig,
   useMotionDurations,
   useMotionPreference,
+  usePressSpring,
 } from "@/components/ui/motion/durations";
 import {
   flattenViewStyle,
@@ -253,6 +253,8 @@ function MotionPressableBase({
   const layer = useSharedValue(0);
   const layerStyle = useAnimatedStyle(() => ({ opacity: layer.value }));
   const durations = useMotionDurations();
+  // The theme's own press spring, not a fixed one.
+  const pressSpring = usePressSpring();
   // The wash fades on the theme's quickest duration: feedback the finger can still catch.
   const layerTiming = {
     duration: durations.exit,
@@ -294,8 +296,8 @@ function MotionPressableBase({
     wasActive.current = active;
     if (!became || reduceMotion || !interactive) return;
     scale.set(1.035);
-    scale.set(withSpring(1, springConfig));
-  }, [active, interactive, reduceMotion, scale]);
+    scale.set(withSpring(1, pressSpring));
+  }, [active, interactive, reduceMotion, pressSpring, scale]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: translateY.value }, { scale: scale.value }],
@@ -523,7 +525,7 @@ function MotionPressableBase({
               layer.set(withTiming(STATE_LAYER_PRESS, layerTiming));
             if (usesJsState) setJsPressed(true);
             if (!disabled) {
-              scale.set(withSpring(interactive ? pressDepth : 1, springConfig));
+              scale.set(withSpring(interactive ? pressDepth : 1, pressSpring));
               translateY.set(
                 withTiming(
                   interactive && translatePress ? motion.pressTranslate : 0,
@@ -547,7 +549,7 @@ function MotionPressableBase({
             scale.set(
               withSpring(
                 hoveredRef.current && interactive ? hoverScale : 1,
-                springConfig,
+                pressSpring,
               ),
             );
             translateY.set(

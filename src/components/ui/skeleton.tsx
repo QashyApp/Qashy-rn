@@ -1,12 +1,14 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { View } from "react-native";
 import Animated, {
   ReduceMotion,
+  cancelAnimation,
+  makeMutable,
   useAnimatedStyle,
-  useSharedValue,
   withRepeat,
   withTiming,
+  type SharedValue,
 } from "react-native-reanimated";
 
 import { motionCurves, useMotionPreference } from "@/components/ui/motion";
@@ -16,6 +18,39 @@ const PULSE_DURATION = 900;
 const PULSE_MIN = 0.55;
 const PULSE_MAX = 1;
 const REDUCED_MOTION_OPACITY = 0.7;
+
+// One pulse for every block on screen. Blocks used to start a repeat each, so a screen with a dozen
+// of them ran a dozen infinite animations that also drifted out of phase; they now read one shared
+// value, run while at least one block is mounted, and breathe together.
+let pulse: SharedValue<number> | undefined;
+let pulseUsers = 0;
+
+function usePulse(active: boolean) {
+  const [value] = useState(() => (pulse ??= makeMutable(PULSE_MIN)));
+  useEffect(() => {
+    if (!active) return;
+    if (pulseUsers++ === 0) {
+      value.set(
+        withRepeat(
+          withTiming(PULSE_MAX, {
+            duration: PULSE_DURATION,
+            easing: motionCurves.inOut,
+            reduceMotion: ReduceMotion.System,
+          }),
+          -1,
+          true,
+        ),
+      );
+    }
+    return () => {
+      if (--pulseUsers === 0) {
+        cancelAnimation(value);
+        value.set(PULSE_MIN);
+      }
+    };
+  }, [active, value]);
+  return value;
+}
 
 /**
  * A loading placeholder: a sunken-colored block with a gentle opacity pulse.
@@ -38,29 +73,11 @@ export function Skeleton({
   const { radius } = theme;
   // The pulse is opacity only, so it survives `minimal`; it is skipped only when `instant`.
   const { instant: reduceMotion } = useMotionPreference();
-  const opacity = useSharedValue(
-    reduceMotion ? REDUCED_MOTION_OPACITY : PULSE_MIN,
-  );
+  const pulseValue = usePulse(!reduceMotion);
 
-  useEffect(() => {
-    if (reduceMotion) {
-      opacity.set(REDUCED_MOTION_OPACITY);
-      return;
-    }
-    opacity.set(
-      withRepeat(
-        withTiming(PULSE_MAX, {
-          duration: PULSE_DURATION,
-          easing: motionCurves.inOut,
-          reduceMotion: ReduceMotion.System,
-        }),
-        -1,
-        true,
-      ),
-    );
-  }, [opacity, reduceMotion]);
-
-  const animatedStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: reduceMotion ? REDUCED_MOTION_OPACITY : pulseValue.get(),
+  }));
 
   return (
     <Animated.View

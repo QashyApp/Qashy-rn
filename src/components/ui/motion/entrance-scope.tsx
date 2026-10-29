@@ -10,7 +10,7 @@ import {
 } from "react";
 import { View, type ViewProps } from "react-native";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
+import { useMotionPreference } from "@/components/ui/motion/durations";
 
 type SettledRef = { current: boolean };
 
@@ -184,7 +184,7 @@ export function ScreenTransition({ style, ...props }: ViewProps) {
  */
 export function useEntranceAllowed(enabled: boolean) {
   const settled = useContext(ScreenEntranceContext);
-  const level = useAnimationLevel();
+  const { instant } = useMotionPreference();
   const [allowedAtMount] = useState(() => settled === null || settled.current);
-  return enabled && allowedAtMount && level !== "off";
+  return enabled && allowedAtMount && !instant;
 }

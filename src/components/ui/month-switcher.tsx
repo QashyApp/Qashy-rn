@@ -1,5 +1,13 @@
-import { useRef, useState } from "react";
-import { Modal, Pressable, View, type LayoutChangeEvent } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  AccessibilityInfo,
+  Modal,
+  Platform,
+  Pressable,
+  View,
+  type LayoutChangeEvent,
+  type NativeSyntheticEvent,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   type SharedValue,
@@ -7,7 +15,11 @@ import Animated, {
 
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
-import { MotionPressable, MotionView } from "@/components/ui/motion";
+import {
+  MotionPressable,
+  MotionView,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -21,6 +33,15 @@ import {
 import { hapticSelection } from "@/services/haptics";
 
 export type MonthDirection = "left" | "right";
+
+/** A key press on the switcher; on the web `nativeEvent` is the browser's own `KeyboardEvent`. */
+type KeyDownEvent = NativeSyntheticEvent<{
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  shiftKey: boolean;
+}> & { preventDefault: () => void };
 
 /**
  * Steps through calendar months. `value` is always the first day of a month
@@ -65,6 +86,42 @@ export function MonthSwitcher({
     if (accepted !== false) hapticSelection();
   };
 
+  // A screen reader hears the month it has landed on, whichever way it got there: a swipe, a
+  // chevron, the picker or a screen that moves it. Not on first mount: the screen announces itself.
+  const announcedMonth = useRef(value);
+  useEffect(() => {
+    if (announcedMonth.current === value) return;
+    announcedMonth.current = value;
+    const message = monthLabel(value, locale);
+    if (Platform.OS === "web") {
+      if (typeof AccessibilityInfo?.announceForAccessibility === "function") {
+        AccessibilityInfo.announceForAccessibility(message);
+      }
+    } else {
+      AccessibilityInfo.announceForAccessibility(message);
+    }
+  }, [value, locale]);
+
+  // On the web the arrow keys step the month while focus is anywhere in the switcher (the picker is
+  // a portal whose events still bubble here, so it is left alone). The keys follow the chevrons: the
+  // one pointing toward the start edge steps back, which is ArrowRight in Hebrew.
+  const keyboardProps =
+    Platform.OS === "web"
+      ? {
+          onKeyDown: (event: KeyDownEvent) => {
+            const { key, altKey, ctrlKey, metaKey, shiftKey } =
+              event.nativeEvent;
+            if (altKey || ctrlKey || metaKey || shiftKey) return;
+            if (key !== "ArrowLeft" && key !== "ArrowRight") return;
+            if (disabled || pickerOpen) return;
+            const toward = (key === "ArrowRight") === !isRtl ? 1 : -1;
+            event.preventDefault();
+            if (toward > 0 && atMax) return;
+            step(toward);
+          },
+        }
+      : null;
+
   // Chevrons point along the reading direction: "previous" is always toward the
   // start edge, which is the right edge in Hebrew.
   const backIcon = isRtl ? "chevron.right" : "chevron.left";
@@ -72,6 +129,7 @@ export function MonthSwitcher({
 
   return (
     <View
+      {...keyboardProps}
       style={[
         {
           flexDirection: "row",
@@ -95,6 +153,17 @@ export function MonthSwitcher({
         delayPressIn={0}
         accessibilityRole="button"
         accessibilityLabel={`${monthLabel(value, locale)}. ${t("Choose month")}`}
+        accessibilityActions={[
+          { name: "increment", label: t("Next month") },
+          { name: "decrement", label: t("Previous month") },
+        ]}
+        onAccessibilityAction={(event) => {
+          if (disabled) return;
+          const name = event.nativeEvent.actionName;
+          if (name === "increment") {
+            if (!atMax) step(1);
+          } else if (name === "decrement") step(-1);
+        }}
         disabled={disabled}
         onPress={() => setPickerOpen(true)}
         pressedScale={motion.pressScale}
@@ -336,12 +405,13 @@ function MonthPicker({
   const thisMonth = monthKey(startOfMonth());
   const shortMonth = new Intl.DateTimeFormat(locale, { month: "short" });
   const maxYear = max ? parseLocalDate(max).getFullYear() : undefined;
+  const { instant } = useMotionPreference();
 
   return (
     <Modal
       transparent
       visible={open}
-      animationType="fade"
+      animationType={instant ? "none" : "fade"}
       onShow={() => setYear(parseLocalDate(value).getFullYear())}
       onRequestClose={onClose}
     >

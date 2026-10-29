@@ -8,8 +8,8 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import type { KeypadPressableProps } from "@/components/finance/keypad-pressable";
 import {
-  springConfig,
   useMotionPreference,
+  usePressSpring,
 } from "@/components/ui/motion/durations";
 import { useQashyTheme } from "@/theme/theme";
 
@@ -41,6 +41,7 @@ export function KeypadPressable({
 }: KeypadPressableProps) {
   const { motion } = useQashyTheme();
   const { travel } = useMotionPreference();
+  const pressSpring = usePressSpring();
   const [pressed, setPressed] = useState(false);
   const scale = useSharedValue(1);
   const animated = useAnimatedStyle(() => ({
@@ -60,7 +61,7 @@ export function KeypadPressable({
   const gesture = useMemo(() => {
     const feedback = (down: boolean) => {
       setPressed(down);
-      scale.set(withSpring(down ? pressScale : 1, springConfig));
+      scale.set(withSpring(down ? pressScale : 1, pressSpring));
     };
     const tap = Gesture.Tap()
       .runOnJS(true)
@@ -81,7 +82,7 @@ export function KeypadPressable({
       // eslint-disable-next-line react-hooks/refs
       .onStart(fireLongPress);
     return Gesture.Race(tap, hold);
-  }, [hasLongPress, pressScale, scale, firePress, fireLongPress]);
+  }, [hasLongPress, pressScale, pressSpring, scale, firePress, fireLongPress]);
 
   return (
     <GestureDetector gesture={gesture}>
