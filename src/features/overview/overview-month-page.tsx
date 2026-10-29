@@ -290,9 +290,25 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
           </View>
           {editing ? (
             <TextButton title="Done" icon="checkmark" onPress={onExitEdit} />
-          ) : layoutReady ? (
-            <TextButton title="Customize" icon="gear" onPress={onEnterEdit} />
-          ) : null}
+          ) : (
+            // Until the saved layout has loaded the button keeps its place, invisible and
+            // inert, so the heading does not reflow when it appears.
+            <View
+              style={{ opacity: layoutReady ? 1 : 0 }}
+              pointerEvents={layoutReady ? "auto" : "none"}
+              accessibilityElementsHidden={!layoutReady}
+              importantForAccessibility={
+                layoutReady ? "auto" : "no-hide-descendants"
+              }
+            >
+              <TextButton
+                title="Customize"
+                icon="gear"
+                disabled={!layoutReady}
+                onPress={onEnterEdit}
+              />
+            </View>
+          )}
         </View>
 
         <PageHero

@@ -46,15 +46,26 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
   let loadStarted = false;
   const listeners = new Set<() => void>();
 
-  // The layout each new `dispatch` call reduces from. Updated synchronously, in call order,
-  // before any write settles — so two dispatches made back to back in the same tick (without
-  // awaiting the first) still apply in the order they were called, rather than both reducing
-  // from whatever `snapshot.layout` happened to be when they were made. Rolled back if the
-  // write it led to fails and nothing has moved it further since.
-  let base: OverviewLayout = LOADING_SNAPSHOT.layout;
+  // The last layout known to be on disk. Only a successful write (or the initial read) moves it.
+  let committed: OverviewLayout = LOADING_SNAPSHOT.layout;
+  // The actions accepted but not yet settled, oldest first. Writes run one at a time in this
+  // order, so the head is the one in flight.
+  const queue: OverviewLayoutAction[] = [];
+  // What the layout will be once every queued action lands: `committed` with the queue replayed
+  // on top. Each new `dispatch` reduces from it, so two dispatches made in the same tick (without
+  // awaiting the first) still apply in call order. When a write fails the failed action leaves
+  // the queue and this is rebuilt from `committed` and what is left, so it can never describe a
+  // layout the screen never showed and storage never held.
+  let base: OverviewLayout = committed;
   // Serializes the actual writes so two rapid dispatches persist and settle on disk in the
   // order they were made, rather than racing to see which write lands last.
   let writeTail: Promise<void> = Promise.resolve();
+
+  const replay = (): OverviewLayout =>
+    queue.reduce(
+      (layout, action) => overviewLayoutReducer(layout, action),
+      committed,
+    );
 
   const notify = () => {
     for (const listener of listeners) listener();
@@ -71,14 +82,16 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     void deps.storage
       .transact((tx) => readOverviewLayout(tx))
       .then((layout) => {
-        base = layout;
+        committed = layout;
+        base = replay();
         setSnapshot({ status: "ready", layout });
       })
       .catch(() => {
         // Storage itself failed to open. Fall back to the default layout rather than leaving
         // the screen stuck on "loading" forever; a later successful dispatch will persist
         // normally.
-        base = DEFAULT_OVERVIEW_LAYOUT;
+        committed = DEFAULT_OVERVIEW_LAYOUT;
+        base = replay();
         setSnapshot({ status: "ready", layout: DEFAULT_OVERVIEW_LAYOUT });
       });
   }
@@ -93,20 +106,34 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
   }
 
   /**
-   * Computes the next layout, and — only if it actually changed — persists before updating the
-   * in-memory snapshot, per AGENTS.md ("update the in-memory snapshot only after persistence
-   * succeeds"). Returns a promise that rejects on write failure so a caller can show an error
-   * and knows the on-screen layout has not moved.
+   * Queues `action` and persists it before updating the in-memory snapshot, per AGENTS.md
+   * ("update the in-memory snapshot only after persistence succeeds"). Returns a promise that
+   * rejects on write failure so a caller can show an error and knows the on-screen layout has not
+   * moved.
+   *
+   * Writes are serialized, and each one is reduced from the layout actually on disk when its turn
+   * comes. So if an earlier write fails, the actions queued behind it are replayed on the last
+   * committed layout and still land (each succeeding or failing on its own), and `base` is
+   * rebuilt to match, rather than persisting a layout that assumed the failed change.
    */
   function dispatch(action: OverviewLayoutAction): Promise<void> {
-    const from = base;
-    const next = overviewLayoutReducer(from, action);
-    if (next === from) return Promise.resolve();
-    base = next;
+    const optimistic = overviewLayoutReducer(base, action);
+    if (optimistic === base) return Promise.resolve();
+    base = optimistic;
+    queue.push(action);
 
-    const attempt = writeTail.then(() =>
-      deps.storage.transact((tx) => writeOverviewLayout(tx, next)),
-    );
+    const settle = () => {
+      const at = queue.indexOf(action);
+      if (at >= 0) queue.splice(at, 1);
+    };
+
+    const attempt = writeTail.then(async () => {
+      const next = overviewLayoutReducer(committed, action);
+      // The action no longer changes anything (an earlier failure removed what it relied on).
+      if (next === committed) return;
+      await deps.storage.transact((tx) => writeOverviewLayout(tx, next));
+      committed = next;
+    });
     // Keep the write chain alive even on failure, so a later dispatch's write still waits for
     // this attempt to settle rather than racing ahead of a write that never happened.
     writeTail = attempt.then(
@@ -116,12 +143,12 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
 
     return attempt.then(
       () => {
-        setSnapshot({ status: "ready", layout: next });
+        settle();
+        setSnapshot({ status: "ready", layout: committed });
       },
       (error: unknown) => {
-        // Only undo the optimistic base if nothing has moved it further since — a later
-        // dispatch already reduced from `next` and must not be silently discarded.
-        if (base === next) base = from;
+        settle();
+        base = replay();
         throw error;
       },
     );

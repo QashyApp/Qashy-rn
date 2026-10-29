@@ -31,7 +31,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { MotionView } from "@/components/ui/motion";
 import {
   autoScrollStep,
-  dropTargetIndex,
+  resolveDropTarget,
 } from "@/features/overview/edit/drag-math";
 import type { CardReorder } from "@/features/overview/edit/use-card-reorder";
 import { useLocalization } from "@/localization/localization";
@@ -210,14 +210,15 @@ export function EditableCardFrame({
   // thread every frame the inputs change (so also while the page auto-scrolls under a still
   // finger) and only reaches JS when the index changes.
   useAnimatedReaction(
-    () => {
-      if (phase.get() !== 1) return -1;
-      const all = slots.get();
-      const own = all[index];
-      if (!own) return -1;
-      const travelled = panY.get() + scrollY.get() - scrollAtStart.get();
-      return dropTargetIndex(all, index, own.top + own.height / 2 + travelled);
-    },
+    () =>
+      resolveDropTarget({
+        phase: phase.get(),
+        slots: slots.get(),
+        index,
+        panY: panY.get(),
+        scrollY: scrollY.get(),
+        scrollAtStart: scrollAtStart.get(),
+      }),
     (next, previous) => {
       if (next === previous) return;
       target.set(next);

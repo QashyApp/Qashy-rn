@@ -1,6 +1,6 @@
 import { CountUpSubject } from "@/components/finance/animated-money";
 import { router } from "expo-router";
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { View, type ScrollViewInstance } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,11 +19,11 @@ import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import {
-  overviewLayoutReducer,
   WIDGET_RULES,
   type OverviewCard,
   type OverviewLayoutAction,
 } from "@/domain/overview-layout";
+import { createCardDropper } from "@/features/overview/layout/card-dropper";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
 import { applyOptimisticOrder } from "@/features/overview/layout/optimistic-order";
 import { OverviewMonthPage } from "@/features/overview/overview-month-page";
@@ -64,7 +64,11 @@ export function OverviewScreen() {
   const [pendingOrder, setPendingOrder] = useState<readonly string[] | null>(
     null,
   );
-  const cards = applyOptimisticOrder(layout.cards, pendingOrder);
+  // Memoised: a fresh array every render would re-render the memoised month pages for nothing.
+  const cards = useMemo(
+    () => applyOptimisticOrder(layout.cards, pendingOrder),
+    [layout.cards, pendingOrder],
+  );
   const [editing, setEditing] = useState(false);
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
@@ -73,7 +77,6 @@ export function OverviewScreen() {
   // its props are the whole point) yet need to read current state when they run.
   const cardsRef = useRef(cards);
   const monthRef = useRef(month);
-  const dropSequence = useRef(0);
   useLayoutEffect(() => {
     cardsRef.current = cards;
     monthRef.current = month;
@@ -166,24 +169,16 @@ export function OverviewScreen() {
 
   // A dragged card was released on `toIndex`. The new order is shown at once and saved behind
   // it; if the save fails the pending order is dropped and the card returns, with the error.
-  const dropCard = useCallback(
-    (id: string, toIndex: number): boolean => {
-      const shown = cardsRef.current;
-      const action: OverviewLayoutAction = { type: "move", id, toIndex };
-      const next = overviewLayoutReducer({ version: 1, cards: shown }, action);
-      if (next.cards.every((card, index) => card === shown[index])) {
-        return false;
-      }
-      dropSequence.current += 1;
-      const sequence = dropSequence.current;
-      setPendingOrder(next.cards.map((card) => card.id));
-      void dispatchGuarded(action, "Couldn’t update your overview").then(() => {
-        // Settled either way: the saved layout now matches, or the save failed and the card
-        // goes back. A newer drop owns the pending order from here.
-        if (dropSequence.current === sequence) setPendingOrder(null);
-      });
-      return true;
-    },
+  const dropCard = useMemo(
+    () =>
+      // `cardsRef` is read only when a card is dropped, never while rendering.
+      // eslint-disable-next-line react-hooks/refs
+      createCardDropper({
+        getCards: () => cardsRef.current,
+        setPendingOrder,
+        save: (action) =>
+          dispatchGuarded(action, "Couldn’t update your overview"),
+      }),
     [dispatchGuarded],
   );
 

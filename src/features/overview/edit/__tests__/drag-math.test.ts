@@ -5,6 +5,7 @@ import {
   clampScroll,
   dropTargetIndex,
   insertionLineY,
+  resolveDropTarget,
   slotsFromHeights,
 } from "@/features/overview/edit/drag-math";
 
@@ -131,5 +132,55 @@ describe("clampScroll", () => {
     expect(clampScroll(200, 500)).toBe(200);
     expect(clampScroll(900, 500)).toBe(500);
     expect(clampScroll(10, 0)).toBe(0);
+  });
+});
+
+describe("resolveDropTarget", () => {
+  const base = {
+    phase: 1,
+    slots,
+    index: 1,
+    panY: 0,
+    scrollY: 0,
+    scrollAtStart: 0,
+  };
+
+  it("is -1 when no drag is live or the card has no slot", () => {
+    expect(resolveDropTarget({ ...base, phase: 0 })).toBe(-1);
+    expect(resolveDropTarget({ ...base, index: 9 })).toBe(-1);
+    expect(resolveDropTarget({ ...base, slots: [] })).toBe(-1);
+  });
+
+  it("stays on its own index while held in place", () => {
+    expect(resolveDropTarget(base)).toBe(1);
+  });
+
+  it("follows the finger down and up", () => {
+    // Card 1's midpoint is 170; +130 puts it at 300, past cards 0 and 2 (50, 290).
+    expect(resolveDropTarget({ ...base, panY: 130 })).toBe(2);
+    expect(resolveDropTarget({ ...base, panY: -130 })).toBe(0);
+    expect(resolveDropTarget({ ...base, panY: 300 })).toBe(3);
+  });
+
+  it("counts the page scrolling under a still finger", () => {
+    expect(resolveDropTarget({ ...base, scrollY: 130 })).toBe(2);
+    expect(resolveDropTarget({ ...base, scrollY: -130 })).toBe(0);
+  });
+
+  it("only counts scroll since the drag began", () => {
+    // Already scrolled 500 when the drag started: no movement yet.
+    expect(
+      resolveDropTarget({ ...base, scrollY: 500, scrollAtStart: 500 }),
+    ).toBe(1);
+    expect(
+      resolveDropTarget({ ...base, scrollY: 630, scrollAtStart: 500 }),
+    ).toBe(2);
+  });
+
+  it("adds finger travel and scroll together", () => {
+    // 60 of drag plus 70 of scroll is the same 130 as either alone.
+    expect(resolveDropTarget({ ...base, panY: 60, scrollY: 70 })).toBe(2);
+    // Dragging up while the page scrolls down cancels out.
+    expect(resolveDropTarget({ ...base, panY: -130, scrollY: 130 })).toBe(1);
   });
 });

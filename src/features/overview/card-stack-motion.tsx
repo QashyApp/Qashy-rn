@@ -4,7 +4,11 @@
  */
 
 import type { ReactNode } from "react";
-import { Pressable, useWindowDimensions } from "react-native";
+import {
+  Pressable,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+} from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -25,7 +29,7 @@ import { useQashyTheme } from "@/theme/theme";
 /**
  * Moves the card stack with a month swipe. The pager does not slide this screen's page, it only
  * writes `dragProgress`; the stack leans toward the finger and dims on the UI thread as that
- * value changes. Reduced motion and the Off level keep it still, Minimal only dims.
+ * value changes, by a share of the stack's measured width. Reduced motion and the Off level keep it still, Minimal only dims.
  */
 export function MonthSwipeFollow({
   month,
@@ -37,7 +41,14 @@ export function MonthSwipeFollow({
   children: ReactNode;
 }) {
   const { isRtl } = useLocalization();
-  const { width } = useWindowDimensions();
+  // The lean is a share of the stack's own width, as the pager's drag is a share of its width, so
+  // it matches wherever the screen sits (beside the web sidebar or rail, in a narrow window).
+  // The window width stands in until the stack has been measured.
+  const { width: windowWidth } = useWindowDimensions();
+  const measuredWidth = useSharedValue(0);
+  const onLayout = (event: LayoutChangeEvent) => {
+    measuredWidth.set(event.nativeEvent.layout.width);
+  };
   const { instant, travel } = useMotionPreference();
   const idle = useSharedValue(0);
   const progress = dragProgress ?? idle;
@@ -46,6 +57,7 @@ export function MonthSwipeFollow({
   const mode: SwipeFollowMode = instant ? "none" : travel ? "travel" : "fade";
 
   const style = useAnimatedStyle(() => {
+    const width = measuredWidth.get() || windowWidth;
     const follow = monthSwipeFollow(progress.get() - rest, width, mode);
     return {
       opacity: follow.opacity,
@@ -53,7 +65,11 @@ export function MonthSwipeFollow({
     };
   });
 
-  return <Animated.View style={style}>{children}</Animated.View>;
+  return (
+    <Animated.View style={style} onLayout={onLayout}>
+      {children}
+    </Animated.View>
+  );
 }
 
 /** How long a card is held before it opens edit mode. */

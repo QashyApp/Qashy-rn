@@ -14,6 +14,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type RefObject,
@@ -83,7 +84,10 @@ export function useCardReorder({
 
   const heights = useRef(new Map<string, number>());
   const cardsRef = useRef(cards);
-  const metrics = useRef({ scrollY: 0, content: 0, viewport: 0 });
+  // `actual` is the offset the ScrollView last reported. `requested` is the offset auto-scroll
+  // has asked for; while a drag is live it leads `actual` (scroll events arrive late), and steps
+  // build on it so they do not restart from a stale reported value and stutter.
+  const metrics = useRef({ actual: 0, requested: 0, content: 0, viewport: 0 });
   const draggingRef = useRef(false);
 
   const publish = useCallback(() => {
@@ -115,11 +119,11 @@ export function useCardReorder({
     (step: number) => {
       const state = metrics.current;
       const next = clampScroll(
-        state.scrollY + step,
+        state.requested + step,
         Math.max(0, state.content - state.viewport),
       );
-      if (next === state.scrollY) return;
-      state.scrollY = next;
+      if (next === state.requested) return;
+      state.requested = next;
       // Moved here at once rather than waiting for the scroll event, so the dragged card keeps
       // pace with the content scrolling beneath the finger.
       scrollY.set(next);
@@ -146,6 +150,7 @@ export function useCardReorder({
       draggingRef.current = next;
       setDraggingState(next);
       if (next) {
+        metrics.current.requested = metrics.current.actual;
         scrollRef.current?.measureInWindow((_x, top, _width, height) => {
           viewport.set({ top, height });
         });
@@ -161,10 +166,12 @@ export function useCardReorder({
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offset = event.nativeEvent.contentOffset.y;
-      metrics.current.scrollY = offset;
-      // While dragging, `scrollBy` is the source of truth; a stale event must not pull the
-      // dragged card back.
-      if (!draggingRef.current) scrollY.set(offset);
+      metrics.current.actual = offset;
+      // While dragging, `scrollBy` is the source of truth; a late event must neither pull the
+      // dragged card back nor restart the next step from behind. Afterwards events reconcile.
+      if (draggingRef.current) return;
+      metrics.current.requested = offset;
+      scrollY.set(offset);
     },
     [scrollY],
   );
@@ -177,21 +184,35 @@ export function useCardReorder({
     metrics.current.content = height;
   }, []);
 
-  const reorder: CardReorder = {
-    slots,
-    scrollY,
-    source,
-    target,
-    autoScroll,
-    viewport,
-    gap,
-    setCardHeight,
-    setDragging,
-  };
+  // Stable, so the memoised month page and every frame only re-render for what they use.
+  const reorder = useMemo<CardReorder>(
+    () => ({
+      slots,
+      scrollY,
+      source,
+      target,
+      autoScroll,
+      viewport,
+      gap,
+      setCardHeight,
+      setDragging,
+    }),
+    [
+      slots,
+      scrollY,
+      source,
+      target,
+      autoScroll,
+      viewport,
+      gap,
+      setCardHeight,
+      setDragging,
+    ],
+  );
+  const scrollProps = useMemo(
+    () => ({ onScroll, onLayout, onContentSizeChange }),
+    [onScroll, onLayout, onContentSizeChange],
+  );
 
-  return {
-    reorder,
-    dragging,
-    scrollProps: { onScroll, onLayout, onContentSizeChange },
-  };
+  return { reorder, dragging, scrollProps };
 }

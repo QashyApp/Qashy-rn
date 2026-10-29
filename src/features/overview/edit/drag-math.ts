@@ -54,6 +54,35 @@ export function dropTargetIndex(
 }
 
 /**
+ * Where a card being dragged would land, from its own slot plus how far it has travelled: the
+ * finger's drag (`panY`) and however far the page has scrolled since the drag began
+ * (`scrollY - scrollAtStart`, since the slots move with the content). -1 when no drag is live
+ * (`phase` is not 1) or the card has no slot yet.
+ */
+export function resolveDropTarget({
+  phase,
+  slots,
+  index,
+  panY,
+  scrollY,
+  scrollAtStart,
+}: {
+  phase: number;
+  slots: readonly CardSlot[];
+  index: number;
+  panY: number;
+  scrollY: number;
+  scrollAtStart: number;
+}): number {
+  "worklet";
+  if (phase !== 1) return -1;
+  const own = slots[index];
+  if (!own) return -1;
+  const travelled = panY + scrollY - scrollAtStart;
+  return dropTargetIndex(slots, index, own.top + own.height / 2 + travelled);
+}
+
+/**
  * The y of the centre of the insertion line for a drag from `fromIndex` to `toIndex`: just above
  * the card the dragged one would move in front of, or just below the card it would move behind.
  * Null when there is nothing to show (no drag, or the card would stay where it is).
