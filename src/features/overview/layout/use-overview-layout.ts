@@ -29,8 +29,17 @@ import {
   type LayoutStoreAction,
 } from "@/features/overview/layout/layout-actions";
 
+/**
+ * - `loading`: the first read is in flight and has not yet outlasted the storage timeout.
+ * - `unavailable`: the first read failed or timed out. `layout` is the default as a read-only
+ *   placeholder; nothing may be edited, and writes are refused until a read succeeds. The store
+ *   keeps trying (a late read landing, a retry on mount) and moves to `ready` when one does.
+ * - `ready`: `layout` was read from (or written to) disk.
+ */
+export type OverviewLayoutStatus = "loading" | "unavailable" | "ready";
+
 export interface OverviewLayoutSnapshot {
-  readonly status: "loading" | "ready";
+  readonly status: OverviewLayoutStatus;
   /**
    * The last layout known to be on disk (the default while loading, or while the saved layout
    * cannot be read).
@@ -89,8 +98,10 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
   // fails. Kept beside the snapshot (not in it) so the snapshot stays "what is on disk".
   let optimistic: OverviewLayout = DEFAULT_OVERVIEW_LAYOUT;
   let loadStarted = false;
-  // The first read has settled, either way. Until then the screen shows the loading state.
-  let loaded = false;
+  // The first read has given up (failed, or outlasted the timeout) at least once. Until then the
+  // screen shows the loading skeleton; after it, and until a read succeeds, the placeholder. It
+  // never goes back to false, so a retry does not flash the skeleton again.
+  let gaveUp = false;
   const listeners = new Set<() => void>();
 
   // The last layout read from or written to disk. Only the initial read, a re-read or a
@@ -122,7 +133,10 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     const replayed = replay(shownCommitted);
     // Keep the previous object when nothing visible changed, so memoised screens skip the render.
     if (!sameCards(optimistic, replayed)) optimistic = replayed;
-    snapshot = { status: loaded ? "ready" : "loading", layout: shownCommitted };
+    snapshot = {
+      status: hasCommitted ? "ready" : gaveUp ? "unavailable" : "loading",
+      layout: shownCommitted,
+    };
     for (const listener of listeners) listener();
   };
 
@@ -132,33 +146,25 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     fresh = true;
   };
 
-  // A read that timed out is still running. Until it settles, nothing else retries the first
-  // read, and its answer is adopted when it lands.
-  let lateRead = false;
-
   async function readCommitted(): Promise<void> {
     const read = deps.storage.transact((tx) => readOverviewLayout(tx));
     try {
       adopt(await withTimeout(read, timeoutMs));
     } catch (error) {
-      if (error instanceof StorageTimeoutError && !hasCommitted && !lateRead) {
-        // Slow is not failed: the saved layout may simply be on its way. Keep waiting for it and
-        // adopt it when it lands, rather than leaving a default in place of the saved layout.
-        lateRead = true;
+      if (error instanceof StorageTimeoutError && !hasCommitted) {
+        // Slow is not failed: the saved layout may simply be on its way. The screen shows the
+        // read-only placeholder meanwhile, and the layout is adopted if the read lands. Each
+        // read has its own callback, so a retry made while an older read still hangs is not
+        // blocked by it; whichever lands first wins and the rest see `hasCommitted`.
         read.then(
           (layout) => {
-            lateRead = false;
             // A newer read or a write has established the layout since; it wins.
             if (hasCommitted) return;
             adopt(layout);
-            loaded = true;
             publish();
           },
           () => {
-            // It did fail in the end; fall back like any failed first read.
-            lateRead = false;
-            loaded = true;
-            publish();
+            // It did fail in the end; the placeholder stays.
           },
         );
       }
@@ -174,13 +180,11 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     writeTail = writeTail
       .then(() => (hasCommitted ? undefined : readCommitted()))
       .then(
+        () => undefined,
         () => {
-          loaded = true;
-        },
-        (error: unknown) => {
-          // A timeout leaves the screen loading: the read is still running and will be adopted
-          // when it lands. Any other failure falls back to the placeholder default.
-          if (!(error instanceof StorageTimeoutError)) loaded = true;
+          // Failed or timed out: show the default as a read-only placeholder. A timed-out read is
+          // still running and is adopted if it lands.
+          gaveUp = true;
         },
       )
       .then(() => {
@@ -193,13 +197,12 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
    * Starts reading the saved layout, once. The read joins the write chain, so any write made
    * before it settles waits behind it.
    *
-   * If the read fails (storage would not open) the screen falls back to the default layout so it
-   * is not stuck on "loading", but that default is a placeholder: the saved layout is unknown, so
-   * no write is allowed to replace it. Each write retries the read first and fails with the
-   * read's error if it still cannot be done, leaving whatever is on disk alone.
-   *
-   * A read that is only slow (past the timeout) is not a failure: the screen stays on "loading"
-   * and adopts the saved layout when the read lands, never showing the default as ready first.
+   * If the read fails (storage would not open) or outlasts the timeout, the status becomes
+   * "unavailable" so the screen is not stuck on "loading": it shows the default layout as a
+   * read-only placeholder. The saved layout is unknown, so no write is allowed to replace it.
+   * Each write retries the read first and fails with the read's error if it still cannot be
+   * done, leaving whatever is on disk alone. A read that was only slow is adopted when it lands,
+   * and the status goes straight to "ready" on the saved layout.
    */
   function load() {
     if (loadStarted) return;
@@ -208,12 +211,13 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
   }
 
   /**
-   * Retries the first read after it failed (not after it was merely slow). Called when a screen
-   * mounts, so reopening Overview recovers without waiting for a write.
+   * Retries the first read after it gave up (failed, or outlasted the timeout), even if the
+   * earlier read is still hanging: whichever answers first is adopted. Called when a screen
+   * mounts, so reopening Overview recovers without waiting for a write. A retry never makes the
+   * placeholder "ready"; only a successful read does.
    */
   function reload() {
-    if (!loadStarted || !loaded || hasCommitted || readQueued || lateRead)
-      return;
+    if (!loadStarted || !gaveUp || hasCommitted || readQueued) return;
     queueInitialRead();
   }
 
@@ -267,7 +271,6 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     const attempt = writeTail.then(async (): Promise<boolean> => {
       if (!fresh) {
         await readCommitted();
-        loaded = true;
         publish();
       }
       const next = reduceLayoutAction(committed, action);
@@ -330,7 +333,7 @@ export const overviewLayoutStore = createOverviewLayoutStore({
 export function useOverviewLayout(): {
   /** The layout to show: the saved one with every unsettled change already applied. */
   readonly layout: OverviewLayout;
-  readonly status: "loading" | "ready";
+  readonly status: OverviewLayoutStatus;
   /** Resolves to whether the saved layout changed; rejects if saving failed. */
   readonly dispatch: (action: LayoutStoreAction) => Promise<boolean>;
 } {

@@ -229,8 +229,8 @@ describe("overview layout store: dispatch before the saved layout loads", () => 
     store.load();
     await settled();
 
-    // The screen is not stuck loading; it shows the default as a placeholder.
-    expect(store.getSnapshot().status).toBe("ready");
+    // The screen is not stuck loading; it shows the default as a read-only placeholder.
+    expect(store.getSnapshot().status).toBe("unavailable");
     expect(ids(store)).toEqual([A, B, C, D, E]);
 
     await expect(store.dispatch({ type: "remove", id: A })).rejects.toThrow(
@@ -411,7 +411,7 @@ describe("overview layout store: a slow first read", () => {
     return { storage, inner };
   }
 
-  it("stays loading past the timeout and adopts the saved layout when the read lands", async () => {
+  it("shows the placeholder once the timeout passes and adopts the saved layout when the read lands", async () => {
     jest.useFakeTimers();
     const { storage, inner } = slowFirstRead(11_000);
     const saved = await seedSaved(inner);
@@ -421,9 +421,12 @@ describe("overview layout store: a slow first read", () => {
     store.subscribe(() => seen.push(store.getSnapshot().status));
 
     store.load();
-    await jest.advanceTimersByTimeAsync(10_000);
-    // The timeout has passed, but the read has not failed: still loading, on the placeholder.
+    await jest.advanceTimersByTimeAsync(9_999);
+    // Still within the timeout: skeleton.
     expect(store.getSnapshot().status).toBe("loading");
+    await jest.advanceTimersByTimeAsync(1);
+    // The timeout has passed: the default is shown, but as a read-only placeholder, not as ready.
+    expect(store.getSnapshot().status).toBe("unavailable");
     expect(ids(store)).toEqual([A, B, C, D, E]);
 
     await jest.advanceTimersByTimeAsync(1_000);
@@ -434,7 +437,24 @@ describe("overview layout store: a slow first read", () => {
     expect(ids(store)).toEqual(savedIds);
     // It was never ready on the default along the way.
     expect(seen.filter((status) => status === "ready")).toHaveLength(1);
-    expect(seen.lastIndexOf("loading")).toBeLessThan(seen.indexOf("ready"));
+    expect(seen.lastIndexOf("unavailable")).toBeLessThan(seen.indexOf("ready"));
+  });
+
+  it("stays on the placeholder, never loading or ready, while a read never answers", async () => {
+    jest.useFakeTimers();
+    const storage: StorageAdapter = Object.assign(
+      Object.create(new MemoryStorageAdapter()),
+      { transact: () => new Promise(() => {}) },
+    );
+    const store = createOverviewLayoutStore({ storage });
+    store.load();
+    await jest.advanceTimersByTimeAsync(0);
+    expect(store.getSnapshot().status).toBe("loading");
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(store.getSnapshot().status).toBe("unavailable");
+    expect(ids(store)).toEqual([A, B, C, D, E]);
+    await jest.advanceTimersByTimeAsync(60_000);
+    expect(store.getSnapshot().status).toBe("unavailable");
   });
 
   it("does not let a write made meanwhile persist over the saved layout", async () => {
@@ -444,7 +464,7 @@ describe("overview layout store: a slow first read", () => {
     const store = createOverviewLayoutStore({ storage });
     store.load();
     await jest.advanceTimersByTimeAsync(10_000);
-    expect(store.getSnapshot().status).toBe("loading");
+    expect(store.getSnapshot().status).toBe("unavailable");
 
     const pending = store.dispatch({ type: "remove", id: A });
     await jest.advanceTimersByTimeAsync(2_000);
@@ -466,21 +486,110 @@ describe("overview layout store: recovering from a failed first read", () => {
     const store = createOverviewLayoutStore({ storage });
     store.load();
     await settled();
-    expect(store.getSnapshot().status).toBe("ready");
+    expect(store.getSnapshot().status).toBe("unavailable");
     expect(ids(store)).toEqual([A, B, C, D, E]);
 
     // Still failing: a retry changes nothing and does not loop.
     store.reload();
     await settled();
     expect(ids(store)).toEqual([A, B, C, D, E]);
+    expect(store.getSnapshot().status).toBe("unavailable");
 
     gate.failReads = false;
     store.reload();
     await settled();
+    expect(store.getSnapshot().status).toBe("ready");
     expect(ids(store)).toEqual(saved.cards.map((card) => card.id));
     expect(store.getSnapshot().layout.cards.map((card) => card.id)).toEqual(
       saved.cards.map((card) => card.id),
     );
+  });
+
+  it("a retry that times out leaves the placeholder, not ready", async () => {
+    jest.useFakeTimers();
+    try {
+      const inner = new MemoryStorageAdapter();
+      let reads = 0;
+      const storage: StorageAdapter = Object.assign(Object.create(inner), {
+        transact: (...args: Parameters<StorageAdapter["transact"]>) => {
+          reads += 1;
+          // The first read fails; the retry never answers.
+          if (reads === 1) return Promise.reject(new Error("cannot open"));
+          return new Promise(() => {});
+        },
+      });
+      const store = createOverviewLayoutStore({ storage });
+      const seen: string[] = [];
+      store.subscribe(() => seen.push(store.getSnapshot().status));
+      store.load();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(store.getSnapshot().status).toBe("unavailable");
+
+      store.reload();
+      await jest.advanceTimersByTimeAsync(0);
+      // Retrying does not bring the skeleton back, and is not ready.
+      expect(store.getSnapshot().status).toBe("unavailable");
+      await jest.advanceTimersByTimeAsync(10_000);
+      expect(store.getSnapshot().status).toBe("unavailable");
+      expect(seen).not.toContain("ready");
+      expect(seen).not.toContain("loading");
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("reload while an older read still hangs starts a new read that can recover", async () => {
+    jest.useFakeTimers();
+    try {
+      const inner = new MemoryStorageAdapter();
+      const saved = await seedSaved(inner);
+      let reads = 0;
+      const storage: StorageAdapter = Object.assign(Object.create(inner), {
+        transact: (...args: Parameters<StorageAdapter["transact"]>) => {
+          reads += 1;
+          // The first read never answers; every later one does.
+          if (reads === 1) return new Promise(() => {});
+          return inner.transact(...args);
+        },
+      });
+      const store = createOverviewLayoutStore({ storage });
+      store.load();
+      await jest.advanceTimersByTimeAsync(10_000);
+      expect(store.getSnapshot().status).toBe("unavailable");
+
+      store.reload();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(reads).toBe(2);
+      expect(store.getSnapshot().status).toBe("ready");
+      expect(ids(store)).toEqual(saved.cards.map((card) => card.id));
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("does not start a second read while the first is still within its timeout", async () => {
+    jest.useFakeTimers();
+    try {
+      let reads = 0;
+      const storage: StorageAdapter = Object.assign(
+        Object.create(new MemoryStorageAdapter()),
+        {
+          transact: () => {
+            reads += 1;
+            return new Promise(() => {});
+          },
+        },
+      );
+      const store = createOverviewLayoutStore({ storage });
+      store.load();
+      await jest.advanceTimersByTimeAsync(5_000);
+      store.reload();
+      await jest.advanceTimersByTimeAsync(0);
+      expect(reads).toBe(1);
+      expect(store.getSnapshot().status).toBe("loading");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("leaves a loaded store alone on reload", async () => {

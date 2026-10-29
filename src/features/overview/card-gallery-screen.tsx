@@ -1,4 +1,5 @@
 import { router } from "expo-router";
+import { useLayoutEffect, useRef } from "react";
 import { ScrollView, View } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
@@ -35,23 +36,39 @@ export function CardGalleryScreen() {
   const ready = status === "ready";
   const available = availableToAdd(layout);
 
+  // The latest layout, for the add handler that outlives the render it was made in.
+  const layoutRef = useRef(layout);
+  useLayoutEffect(() => {
+    layoutRef.current = layout;
+  });
+  // An add is in flight: a second tap (on this or another row) is ignored rather than adding a
+  // second card or reporting the first one's result as a failure.
+  const adding = useRef(false);
+
   const addCard = async (type: (typeof available)[number]) => {
-    if (!ready) return;
+    if (!ready || adding.current) return;
+    adding.current = true;
     hapticSelection();
     try {
       const changed = await dispatch({
         type: "add",
         card: { id: makeId(), type },
       });
-      if (!changed) {
-        // Nothing was saved (the card is already there, say). Leaving as if it had been added
-        // would hide that, so stay on the sheet and say so.
+      if (
+        !changed &&
+        !layoutRef.current.cards.some((card) => card.type === type)
+      ) {
+        // Nothing was saved and the card is not on the overview either. Leaving as if it had
+        // been added would hide that, so stay on the sheet and say so.
         showError("Couldn’t add this card", "Try again.");
         return;
       }
+      // Saved, or already there: either way the overview has the card, so go back to it.
       router.replace("/overview");
     } catch (reason) {
       showError("Couldn’t add this card", errorMessage(reason, "Try again."));
+    } finally {
+      adding.current = false;
     }
   };
 
@@ -91,7 +108,9 @@ export function CardGalleryScreen() {
                   key={type}
                   accessibilityRole="button"
                   accessibilityLabel={`Add ${t(definition.title)} card`}
-                  onPress={() => addCard(type)}
+                  onPress={() => {
+                    void addCard(type);
+                  }}
                   stateLayerShape="container"
                   style={{
                     flexDirection: "row",

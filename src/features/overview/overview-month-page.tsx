@@ -22,6 +22,7 @@ import {
 import { AnimatedMoney } from "@/components/finance/animated-money";
 import { Sparkline } from "@/components/finance/sparkline";
 import { ActionButton } from "@/components/ui/action-button";
+import type { OverviewLayoutStatus } from "@/features/overview/layout/use-overview-layout";
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -71,8 +72,11 @@ export interface OverviewMonthPageProps {
   /** The month pager's drag, which slides the month title. */
   dragProgress?: SharedValue<number>;
   editing: boolean;
-  /** False until the saved layout has loaded; the card area shows a placeholder meanwhile. */
-  layoutReady: boolean;
+  /**
+   * `loading` shows a skeleton in the card area; `unavailable` shows the default cards as a
+   * read-only placeholder (no Customize, no hold-to-customize); `ready` is the saved layout.
+   */
+  layoutStatus: OverviewLayoutStatus;
   cards: readonly OverviewCard[];
   configOpenId: string | null;
   onToggleConfig: (id: string) => void;
@@ -103,7 +107,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   isCurrent,
   dragProgress,
   editing,
-  layoutReady,
+  layoutStatus,
   cards,
   configOpenId,
   onToggleConfig,
@@ -118,6 +122,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   onRemoveCard,
   onDropCard,
 }: OverviewMonthPageProps) {
+  const layoutReady = layoutStatus === "ready";
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
@@ -294,14 +299,15 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
           {editing ? (
             <TextButton title="Done" icon="checkmark" onPress={onExitEdit} />
           ) : (
-            // Until the saved layout has loaded the button keeps its place, invisible and
-            // inert, so the heading does not reflow when it appears.
+            // While the saved layout loads the button keeps its place, invisible and inert, so
+            // the heading does not reflow when it appears. If the layout is unavailable it stays
+            // visible but disabled: the placeholder cards cannot be edited.
             <View
-              style={{ opacity: layoutReady ? 1 : 0 }}
+              style={{ opacity: layoutStatus === "loading" ? 0 : 1 }}
               pointerEvents={layoutReady ? "auto" : "none"}
-              accessibilityElementsHidden={!layoutReady}
+              accessibilityElementsHidden={layoutStatus === "loading"}
               importantForAccessibility={
-                layoutReady ? "auto" : "no-hide-descendants"
+                layoutStatus === "loading" ? "no-hide-descendants" : "auto"
               }
             >
               <TextButton
@@ -471,7 +477,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
           }
         />
 
-        {!layoutReady ? (
+        {layoutStatus === "loading" ? (
           // The saved layout is still loading: hold the place rather than flash the defaults.
           <View
             style={{ gap: space.xl }}
@@ -506,7 +512,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                         animateLayout
                         style={{ width: cardWidths.get(card.id) ?? "100%" }}
                       >
-                        {Platform.OS === "web" ? (
+                        {Platform.OS === "web" || !layoutReady ? (
                           renderWidget(card)
                         ) : (
                           <HoldToCustomize onActivate={onEnterEdit}>
@@ -528,6 +534,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
               <ActionButton
                 title="Add cards"
                 icon="plus"
+                disabled={!layoutReady}
                 onPress={() => router.push("/overview-cards")}
               />
             </EmptyState>

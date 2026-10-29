@@ -171,10 +171,13 @@ export function OverviewScreen() {
     [dispatchGuarded],
   );
 
+  // Editing needs the saved layout; the placeholder shown while it is unavailable is read-only.
+  const canEdit = status === "ready";
   const enterEditMode = useCallback(() => {
+    if (!canEdit) return;
     hapticImpactLight();
     setEditing(true);
-  }, []);
+  }, [canEdit]);
 
   const exitEditMode = useCallback(() => {
     setEditing(false);
@@ -218,7 +221,7 @@ export function OverviewScreen() {
               isCurrent={isCurrent}
               dragProgress={dragProgress}
               editing={editing}
-              layoutReady={status === "ready"}
+              layoutStatus={status}
               cards={cards}
               configOpenId={configOpenId}
               onToggleConfig={toggleConfig}
