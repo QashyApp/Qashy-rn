@@ -39,7 +39,16 @@ export function CardGalleryScreen() {
     if (!ready) return;
     hapticSelection();
     try {
-      await dispatch({ type: "add", card: { id: makeId(), type } });
+      const changed = await dispatch({
+        type: "add",
+        card: { id: makeId(), type },
+      });
+      if (!changed) {
+        // Nothing was saved (the card is already there, say). Leaving as if it had been added
+        // would hide that, so stay on the sheet and say so.
+        showError("Couldn’t add this card", "Try again.");
+        return;
+      }
       router.replace("/overview");
     } catch (reason) {
       showError("Couldn’t add this card", errorMessage(reason, "Try again."));

@@ -73,7 +73,7 @@ describe("overview layout store: overlapping writes", () => {
     const first = store.dispatch({ type: "move", id: E, toIndex: 0 });
     const second = store.dispatch({ type: "move", id: D, toIndex: 0 });
     await expect(first).rejects.toThrow("disk full");
-    await expect(second).resolves.toBeUndefined();
+    await expect(second).resolves.toBe(true);
     // Only the second drop landed; the failed first one is not smuggled in with it.
     expect(ids(store)).toEqual([D, A, B, C, E]);
   });
@@ -82,7 +82,7 @@ describe("overview layout store: overlapping writes", () => {
     const { store } = await readyStore(2);
     const first = store.dispatch({ type: "move", id: E, toIndex: 0 });
     const second = store.dispatch({ type: "move", id: D, toIndex: 0 });
-    await expect(first).resolves.toBeUndefined();
+    await expect(first).resolves.toBe(true);
     await expect(second).rejects.toThrow("disk full");
     expect(ids(store)).toEqual([E, A, B, C, D]);
   });
@@ -106,10 +106,31 @@ describe("overview layout store: overlapping writes", () => {
     expect(ids(reloaded)).toEqual([A, C, D, E, B]);
   });
 
-  it("resolves a no-op dispatch without writing", async () => {
+  it("resolves a no-op dispatch to false without writing", async () => {
     const { store, control } = await readyStore();
-    await store.dispatch({ type: "move", id: A, toIndex: 0 });
+    await expect(
+      store.dispatch({ type: "move", id: A, toIndex: 0 }),
+    ).resolves.toBe(false);
     expect(control.writes).toBe(0);
+  });
+
+  it("resolves a real change to true", async () => {
+    const { store } = await readyStore();
+    await expect(
+      store.dispatch({ type: "move", id: E, toIndex: 0 }),
+    ).resolves.toBe(true);
+  });
+
+  it("resolves false when an earlier failure removed what the action relied on", async () => {
+    const { store } = await readyStore(1);
+    const first = store.dispatch({
+      type: "add",
+      card: { id: "extra", type: "goals" },
+    });
+    // Moving the card the failed add would have created changes nothing once it is gone.
+    const second = store.dispatch({ type: "move", id: "extra", toIndex: 0 });
+    await expect(first).rejects.toThrow("disk full");
+    await expect(second).resolves.toBe(false);
   });
 });
 
@@ -283,7 +304,7 @@ describe("overview layout store: optimistic order", () => {
       beforeId: A,
     });
     await expect(first).rejects.toThrow("disk full");
-    await expect(second).resolves.toBeUndefined();
+    await expect(second).resolves.toBe(true);
     // Before A, as dropped; an absolute index 1 would have put it after A.
     expect(ids(store)).toEqual([D, A, B, C, E]);
   });
@@ -362,9 +383,135 @@ describe("overview layout store: a write that never settles", () => {
     await jest.advanceTimersByTimeAsync(10_000);
     await firstFailed;
     await jest.advanceTimersByTimeAsync(0);
-    await expect(second).resolves.toBeUndefined();
+    await expect(second).resolves.toBe(true);
     expect(
       store.getOptimisticLayout().cards.find((c) => c.id === B)?.size,
     ).toBe("wide");
+  });
+});
+
+describe("overview layout store: a slow first read", () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  /** A store whose first read answers after `delayMs`; later transactions are immediate. */
+  function slowFirstRead(delayMs: number) {
+    const inner = new MemoryStorageAdapter();
+    let reads = 0;
+    const storage: StorageAdapter = Object.assign(Object.create(inner), {
+      transact: async (...args: Parameters<StorageAdapter["transact"]>) => {
+        reads += 1;
+        if (reads === 1) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+        return inner.transact(...args);
+      },
+    });
+    return { storage, inner };
+  }
+
+  it("stays loading past the timeout and adopts the saved layout when the read lands", async () => {
+    jest.useFakeTimers();
+    const { storage, inner } = slowFirstRead(11_000);
+    const saved = await seedSaved(inner);
+    const savedIds = saved.cards.map((card) => card.id);
+    const store = createOverviewLayoutStore({ storage });
+    const seen: string[] = [];
+    store.subscribe(() => seen.push(store.getSnapshot().status));
+
+    store.load();
+    await jest.advanceTimersByTimeAsync(10_000);
+    // The timeout has passed, but the read has not failed: still loading, on the placeholder.
+    expect(store.getSnapshot().status).toBe("loading");
+    expect(ids(store)).toEqual([A, B, C, D, E]);
+
+    await jest.advanceTimersByTimeAsync(1_000);
+    expect(store.getSnapshot().status).toBe("ready");
+    expect(store.getSnapshot().layout.cards.map((card) => card.id)).toEqual(
+      savedIds,
+    );
+    expect(ids(store)).toEqual(savedIds);
+    // It was never ready on the default along the way.
+    expect(seen.filter((status) => status === "ready")).toHaveLength(1);
+    expect(seen.lastIndexOf("loading")).toBeLessThan(seen.indexOf("ready"));
+  });
+
+  it("does not let a write made meanwhile persist over the saved layout", async () => {
+    jest.useFakeTimers();
+    const { storage, inner } = slowFirstRead(11_000);
+    const saved = await seedSaved(inner);
+    const store = createOverviewLayoutStore({ storage });
+    store.load();
+    await jest.advanceTimersByTimeAsync(10_000);
+    expect(store.getSnapshot().status).toBe("loading");
+
+    const pending = store.dispatch({ type: "remove", id: A });
+    await jest.advanceTimersByTimeAsync(2_000);
+    await expect(pending).resolves.toBe(true);
+    const onDisk = await readBack(inner);
+    expect(onDisk.cards.map((card) => card.id)).toEqual(
+      saved.cards.filter((card) => card.id !== A).map((card) => card.id),
+    );
+    expect(store.getSnapshot().status).toBe("ready");
+  });
+});
+
+describe("overview layout store: recovering from a failed first read", () => {
+  it("retries on reload and adopts the saved layout", async () => {
+    const { storage, inner, gate } = gatedStorage();
+    const saved = await seedSaved(inner);
+    gate.failReads = true;
+    gate.open();
+    const store = createOverviewLayoutStore({ storage });
+    store.load();
+    await settled();
+    expect(store.getSnapshot().status).toBe("ready");
+    expect(ids(store)).toEqual([A, B, C, D, E]);
+
+    // Still failing: a retry changes nothing and does not loop.
+    store.reload();
+    await settled();
+    expect(ids(store)).toEqual([A, B, C, D, E]);
+
+    gate.failReads = false;
+    store.reload();
+    await settled();
+    expect(ids(store)).toEqual(saved.cards.map((card) => card.id));
+    expect(store.getSnapshot().layout.cards.map((card) => card.id)).toEqual(
+      saved.cards.map((card) => card.id),
+    );
+  });
+
+  it("leaves a loaded store alone on reload", async () => {
+    const { store, control } = await readyStore();
+    store.reload();
+    await settled();
+    expect(control.writes).toBe(0);
+  });
+});
+
+describe("overview layout store: a drop before the saved layout loads", () => {
+  it("moves the card at once over the placeholder, then lands on the saved layout", async () => {
+    const { storage, inner, gate } = gatedStorage();
+    const saved = await seedSaved(inner);
+    const store = createOverviewLayoutStore({ storage });
+    store.load();
+
+    const pending = store.dispatch({ type: "move", id: B, toIndex: 0 });
+    // Not loaded yet: the screen shows the placeholder with the drop already applied.
+    expect(store.getSnapshot().status).toBe("loading");
+    expect(ids(store)).toEqual([B, A, C, D, E]);
+
+    gate.open();
+    await expect(pending).resolves.toBe(true);
+    const expected = [
+      B,
+      ...saved.cards.map((c) => c.id).filter((id) => id !== B),
+    ];
+    expect(ids(store)).toEqual(expected);
+    expect((await readBack(inner)).cards.map((card) => card.id)).toEqual(
+      expected,
+    );
   });
 });

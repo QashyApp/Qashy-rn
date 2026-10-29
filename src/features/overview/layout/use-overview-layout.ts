@@ -12,7 +12,7 @@
  * is the one default instance the app actually uses.
  */
 
-import { useCallback, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useSyncExternalStore } from "react";
 
 import { syncingStorage } from "@/data/local-finance-repository";
 import {
@@ -110,31 +110,83 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
   // default, and two rapid dispatches persist in the order they were made.
   let writeTail: Promise<void> = Promise.resolve();
 
-  const replay = (): OverviewLayout =>
-    queue.reduce(
-      (layout, action) => reduceLayoutAction(layout, action),
-      committed,
-    );
+  const replay = (base: OverviewLayout): OverviewLayout =>
+    queue.reduce((layout, action) => reduceLayoutAction(layout, action), base);
 
   /** Recomputes the snapshot from the current state and tells subscribers. */
   const publish = () => {
     const shownCommitted = hasCommitted ? committed : DEFAULT_OVERVIEW_LAYOUT;
-    // Each action is replayed on the committed layout; until that is known the queue has nothing
-    // to be replayed on.
-    const replayed = hasCommitted ? replay() : DEFAULT_OVERVIEW_LAYOUT;
+    // Each action is replayed on what is shown as committed. Before the saved layout is known
+    // that is the default placeholder, so a drop still moves its card at once; the write itself
+    // is reduced from the real saved layout when its turn comes.
+    const replayed = replay(shownCommitted);
     // Keep the previous object when nothing visible changed, so memoised screens skip the render.
     if (!sameCards(optimistic, replayed)) optimistic = replayed;
     snapshot = { status: loaded ? "ready" : "loading", layout: shownCommitted };
     for (const listener of listeners) listener();
   };
 
-  async function readCommitted(): Promise<void> {
-    committed = await withTimeout(
-      deps.storage.transact((tx) => readOverviewLayout(tx)),
-      timeoutMs,
-    );
+  const adopt = (layout: OverviewLayout) => {
+    committed = layout;
     hasCommitted = true;
     fresh = true;
+  };
+
+  // A read that timed out is still running. Until it settles, nothing else retries the first
+  // read, and its answer is adopted when it lands.
+  let lateRead = false;
+
+  async function readCommitted(): Promise<void> {
+    const read = deps.storage.transact((tx) => readOverviewLayout(tx));
+    try {
+      adopt(await withTimeout(read, timeoutMs));
+    } catch (error) {
+      if (error instanceof StorageTimeoutError && !hasCommitted && !lateRead) {
+        // Slow is not failed: the saved layout may simply be on its way. Keep waiting for it and
+        // adopt it when it lands, rather than leaving a default in place of the saved layout.
+        lateRead = true;
+        read.then(
+          (layout) => {
+            lateRead = false;
+            // A newer read or a write has established the layout since; it wins.
+            if (hasCommitted) return;
+            adopt(layout);
+            loaded = true;
+            publish();
+          },
+          () => {
+            // It did fail in the end; fall back like any failed first read.
+            lateRead = false;
+            loaded = true;
+            publish();
+          },
+        );
+      }
+      throw error;
+    }
+  }
+
+  // The first read (or a retry of it) is queued on the write chain and has not settled yet.
+  let readQueued = false;
+
+  function queueInitialRead() {
+    readQueued = true;
+    writeTail = writeTail
+      .then(() => (hasCommitted ? undefined : readCommitted()))
+      .then(
+        () => {
+          loaded = true;
+        },
+        (error: unknown) => {
+          // A timeout leaves the screen loading: the read is still running and will be adopted
+          // when it lands. Any other failure falls back to the placeholder default.
+          if (!(error instanceof StorageTimeoutError)) loaded = true;
+        },
+      )
+      .then(() => {
+        readQueued = false;
+        publish();
+      });
   }
 
   /**
@@ -145,20 +197,24 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
    * is not stuck on "loading", but that default is a placeholder: the saved layout is unknown, so
    * no write is allowed to replace it. Each write retries the read first and fails with the
    * read's error if it still cannot be done, leaving whatever is on disk alone.
+   *
+   * A read that is only slow (past the timeout) is not a failure: the screen stays on "loading"
+   * and adopts the saved layout when the read lands, never showing the default as ready first.
    */
   function load() {
     if (loadStarted) return;
     loadStarted = true;
-    writeTail = writeTail
-      .then(readCommitted)
-      .then(
-        () => undefined,
-        () => undefined,
-      )
-      .then(() => {
-        loaded = true;
-        publish();
-      });
+    queueInitialRead();
+  }
+
+  /**
+   * Retries the first read after it failed (not after it was merely slow). Called when a screen
+   * mounts, so reopening Overview recovers without waiting for a write.
+   */
+  function reload() {
+    if (!loadStarted || !loaded || hasCommitted || readQueued || lateRead)
+      return;
+    queueInitialRead();
   }
 
   function getSnapshot(): OverviewLayoutSnapshot {
@@ -179,7 +235,9 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
    * Queues `action` and persists it before it becomes the saved layout, per AGENTS.md ("update
    * the in-memory snapshot only after persistence succeeds"). It is shown at once through
    * `optimistic`, and the returned promise rejects on a write failure so a caller can show an
-   * error; the snapshot then goes back to what is on disk.
+   * error; the snapshot then goes back to what is on disk. It resolves to whether the action
+   * changed the saved layout: `false` means nothing was written (it asked for what already was),
+   * which a caller that is about to move on should not mistake for a save.
    *
    * Writes are serialized, and each one is reduced from the layout actually on disk when its
    * turn comes. So if an earlier write fails, the actions queued behind it are replayed on the
@@ -190,13 +248,13 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
    * A transaction that does not settle within the timeout fails the write. It may still land
    * later, so the next write re-reads the layout before building on it.
    */
-  function dispatch(action: LayoutStoreAction): Promise<void> {
+  function dispatch(action: LayoutStoreAction): Promise<boolean> {
     load();
     if (hasCommitted) {
       // Judged against what is shown; before the saved layout is known there is nothing to
       // compare with (a `reset` to the default may still change the saved one).
       if (reduceLayoutAction(optimistic, action) === optimistic)
-        return Promise.resolve();
+        return Promise.resolve(false);
     }
     queue.push(action);
     publish();
@@ -206,7 +264,7 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
       if (at >= 0) queue.splice(at, 1);
     };
 
-    const attempt = writeTail.then(async () => {
+    const attempt = writeTail.then(async (): Promise<boolean> => {
       if (!fresh) {
         await readCommitted();
         loaded = true;
@@ -214,7 +272,7 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
       }
       const next = reduceLayoutAction(committed, action);
       // The action no longer changes anything (an earlier failure removed what it relied on).
-      if (next === committed) return;
+      if (next === committed) return false;
       try {
         await withTimeout(
           deps.storage.transact((tx) => writeOverviewLayout(tx, next)),
@@ -226,6 +284,7 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
         throw error;
       }
       committed = next;
+      return true;
     });
     // Keep the write chain alive even on failure, so a later dispatch's write still waits for
     // this attempt to settle rather than racing ahead of a write that never happened.
@@ -235,9 +294,10 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     );
 
     return attempt.then(
-      () => {
+      (changed) => {
         settle();
         publish();
+        return changed;
       },
       (error: unknown) => {
         settle();
@@ -247,7 +307,14 @@ export function createOverviewLayoutStore(deps: OverviewLayoutStoreDeps) {
     );
   }
 
-  return { load, getSnapshot, getOptimisticLayout, subscribe, dispatch };
+  return {
+    load,
+    reload,
+    getSnapshot,
+    getOptimisticLayout,
+    subscribe,
+    dispatch,
+  };
 }
 
 export type OverviewLayoutStore = ReturnType<typeof createOverviewLayoutStore>;
@@ -264,9 +331,14 @@ export function useOverviewLayout(): {
   /** The layout to show: the saved one with every unsettled change already applied. */
   readonly layout: OverviewLayout;
   readonly status: "loading" | "ready";
-  readonly dispatch: (action: LayoutStoreAction) => Promise<void>;
+  /** Resolves to whether the saved layout changed; rejects if saving failed. */
+  readonly dispatch: (action: LayoutStoreAction) => Promise<boolean>;
 } {
   overviewLayoutStore.load();
+  // A mount retries a first read that failed.
+  useEffect(() => {
+    overviewLayoutStore.reload();
+  }, []);
   const snapshot = useSyncExternalStore(
     overviewLayoutStore.subscribe,
     overviewLayoutStore.getSnapshot,

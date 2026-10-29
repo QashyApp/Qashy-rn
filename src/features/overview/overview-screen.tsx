@@ -81,8 +81,8 @@ export function OverviewScreen() {
       failureTitle: string,
     ): Promise<boolean> => {
       try {
-        await dispatch(action);
-        return true;
+        // `false` when the action changed nothing (no failure, but nothing was saved either).
+        return await dispatch(action);
       } catch (reason) {
         showError(failureTitle, errorMessage(reason, "Try again."));
         return false;
