@@ -17,6 +17,7 @@ import {
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { usePressFeedback, useMotionPreference } from "@/components/ui/motion";
+import { useHiddenFlag } from "@/components/ui/use-hidden-flag";
 import { useLocalization } from "@/localization/localization";
 import { FLOATING_BAR_HEIGHT } from "@/theme/layout";
 import { materialStyle } from "@/theme/materials";
@@ -142,16 +143,17 @@ export function FloatingTabBar({
     transform: [
       { translateY: travel ? (1 - visibility.value) * hideDistance : 0 },
     ],
-    pointerEvents:
-      visibility.value < 0.5 ? ("none" as const) : ("auto" as const),
   }));
+  // Touch routing is a prop, not part of the animated style: a hidden bar must not take taps, and
+  // the area around the bar (not the bar) always lets touches through to the screen behind.
+  const hidden = useHiddenFlag(visibility);
   const indicatorStyle = useAnimatedStyle(() => ({
     transform: [{ translateX: indicatorX.value }],
   }));
 
   return (
     <Animated.View
-      pointerEvents="box-none"
+      pointerEvents={hidden ? "none" : "box-none"}
       style={[
         {
           position: "absolute",

@@ -29,6 +29,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   resolveSheetRelease,
+  sheetDismissTiming,
   sheetSpring,
 } from "@/components/navigation/sheet-snap";
 import {
@@ -83,6 +84,8 @@ const EXIT_MS = 240;
 const exitEasing = Easing.bezier(0.3, 0, 0.8, 0.15);
 /** The panel following the keyboard (or the window resizing around it): a short glide, no spring. */
 const KEYBOARD_MS = 240;
+/** Below the full animation level the sheet only fades in and out. */
+const FADE_MS = 120;
 const settleSpring = {
   mass: 1,
   stiffness: 400,
@@ -116,7 +119,7 @@ export function AndroidSheet({
   const { space, radius } = theme;
   const insets = useSafeAreaInsets();
   const level = useAnimationLevel();
-  const { instant } = useMotionPreference();
+  const { instant, travel } = useMotionPreference();
 
   const [area, setArea] = useState(0);
   // The keyboard is measured against the sheet's own window frame, not by its raw height. With
@@ -176,9 +179,18 @@ export function AndroidSheet({
   // The panel's heights follow the keyboard (or the window resizing around it) with a short timed
   // glide. The first measurement (nothing laid out yet) and reduced motion apply at once. A
   // drag-settle spring in flight is simply replaced.
+  //
+  // A keyboard that has just opened is the exception. `keyboardDidShow` only fires once the
+  // keyboard is fully up, so a glide started then would trail it by its whole duration; the panel
+  // lifts and shrinks at once instead. (A window that resizes around the keyboard reports no
+  // overlap at all, and keeps the glide: the OS has already moved the frame.)
+  const lastKeyboard = useRef(0);
   useEffect(() => {
+    const rising = keyboard > lastKeyboard.current;
+    lastKeyboard.current = keyboard;
     const glide = (value: SharedValue<number>, target: number) => {
-      const immediate = instant || value.get() === 0 || !shownFlag.get();
+      const immediate =
+        instant || rising || value.get() === 0 || !shownFlag.get();
       value.set(
         immediate
           ? target
@@ -192,34 +204,33 @@ export function AndroidSheet({
     glide(maxHeight, expandedHeight);
     glide(collapsedShared, collapsedHeight);
     glide(detentHeight, expandedFlag.get() ? expandedHeight : collapsedHeight);
+    // The lift and the padding under the content start from nothing, so zero is a real value.
+    const glideLift = (value: SharedValue<number>, target: number) => {
+      const immediate = instant || rising || !shownFlag.get();
+      value.set(
+        immediate
+          ? target
+          : withTiming(target, {
+              duration: KEYBOARD_MS,
+              easing: motionCurves.standard,
+              reduceMotion: ReduceMotion.System,
+            }),
+      );
+    };
+    glideLift(keyboardLift, keyboard);
+    glideLift(bottomPadding, keyboard > 0 ? 0 : insets.bottom);
   }, [
     expandedHeight,
     collapsedHeight,
+    keyboard,
+    insets.bottom,
     instant,
     maxHeight,
     collapsedShared,
     detentHeight,
-    expandedFlag,
-    shownFlag,
-  ]);
-  useEffect(() => {
-    const immediate = instant || !shownFlag.get();
-    const glide = (target: number) =>
-      immediate
-        ? target
-        : withTiming(target, {
-            duration: KEYBOARD_MS,
-            easing: motionCurves.standard,
-            reduceMotion: ReduceMotion.System,
-          });
-    keyboardLift.set(glide(keyboard));
-    bottomPadding.set(glide(keyboard > 0 ? 0 : insets.bottom));
-  }, [
-    keyboard,
-    insets.bottom,
-    instant,
     keyboardLift,
     bottomPadding,
+    expandedFlag,
     shownFlag,
   ]);
 
@@ -235,10 +246,11 @@ export function AndroidSheet({
         return;
       }
       if (level === "minimal") {
+        // The panel does not travel at this level (see `panelStyle`): progress is its opacity.
         progress.set(
           withTiming(
             show ? 1 : 0,
-            { duration: 120, reduceMotion: ReduceMotion.System },
+            { duration: FADE_MS, reduceMotion: ReduceMotion.System },
             finish,
           ),
         );
@@ -344,10 +356,33 @@ export function AndroidSheet({
           return;
         }
         runOnJS(hapticImpactLight)();
-        drag.set(
-          withTiming(height, { duration: EXIT_MS, easing: exitEasing }, () => {
+        if (!travel) {
+          // It stays where the finger left it and fades away (at once when motion is off).
+          closingFlag.set(true);
+          if (instant) {
             runOnJS(dismissNow)();
-          }),
+            return;
+          }
+          progress.set(
+            withTiming(0, { duration: FADE_MS }, (finished) => {
+              if (finished) runOnJS(dismissNow)();
+            }),
+          );
+          return;
+        }
+        // Leaves at the speed it was let go of: a throw is not slowed to the exit curve's start.
+        const timing = sheetDismissTiming(visible, event.velocityY);
+        drag.set(
+          withTiming(
+            height,
+            {
+              duration: timing.duration,
+              easing: timing.linear ? Easing.linear : exitEasing,
+            },
+            () => {
+              runOnJS(dismissNow)();
+            },
+          ),
         );
         return;
       }
@@ -356,7 +391,14 @@ export function AndroidSheet({
       drag.set(0);
       const target =
         release.detent === "expanded" ? top : collapsedShared.get();
-      detentHeight.set(withSpring(target, settleSpring));
+      // The spring takes over at the speed the finger let go of (up is positive height).
+      detentHeight.set(
+        withSpring(target, {
+          ...settleSpring,
+          velocity: -event.velocityY,
+          overshootClamping: true,
+        }),
+      );
       // Only a change of detent ticks; settling back where it was stays silent.
       if ((release.detent === "expanded") !== expandedFlag.get()) {
         runOnJS(hapticSelection)();
@@ -381,12 +423,15 @@ export function AndroidSheet({
       maxHeight.get(),
       Math.max(0, detentHeight.get() - Math.min(drag.get(), 0)),
     );
+    // Below the full level the sheet fades in place instead of travelling from the bottom edge.
     return {
       height,
-      opacity: height === 0 ? 0 : 1,
+      opacity: height === 0 ? 0 : travel ? 1 : progress.get(),
       transform: [
         {
-          translateY: Math.max(drag.get(), 0) + (1 - progress.get()) * height,
+          translateY:
+            Math.max(drag.get(), 0) +
+            (travel ? (1 - progress.get()) * height : 0),
         },
       ],
     };

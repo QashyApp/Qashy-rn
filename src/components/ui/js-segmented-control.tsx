@@ -135,6 +135,7 @@ function MaterialSegmentedControl<T extends string>({
             : theme.textMuted;
           return (
             <MotionPressable
+              delayPressIn={0}
               key={option.value}
               accessibilityRole="radio"
               accessibilityLabel={
@@ -271,6 +272,7 @@ function ThumbSegmentedControl<T extends string>({
           const selectedColor = theme.text;
           return (
             <MotionPressable
+              delayPressIn={0}
               key={option.value}
               accessibilityRole="radio"
               accessibilityLabel={

@@ -1,14 +1,21 @@
 /** Fraction of the page width a slow drag has to cover before it commits. */
 export const SWIPE_COMMIT_FRACTION = 0.25;
-/** Release speed (px/s) above which a flick commits regardless of distance. */
-export const SWIPE_COMMIT_VELOCITY = 600;
+/** Release speed (dp/s) above which a flick commits regardless of distance. */
+export const SWIPE_COMMIT_VELOCITY = 850;
+/**
+ * The least a flick must have travelled to commit. A finger that lands, jitters and lifts reports
+ * a large velocity over a few pixels; that is a tap, not a swipe.
+ */
+export const SWIPE_FLICK_MIN_TRAVEL = 28;
+/** How far a pan moves sideways before it becomes a swipe (and, vertically, a scroll). */
+export const SWIPE_ACTIVE_OFFSET = 14;
 
 /**
  * Decides what a released month swipe does: `1` to step forward a month, `-1` to
  * step back, `0` to spring back to where it started.
  *
- * A drag commits past a quarter of the page width, or at any distance when the
- * release was a flick. A flick's own direction wins over the net drag, so dragging
+ * A drag commits past a quarter of the page width, or after a few dp of travel
+ * when the release was a flick. A flick's own direction wins over the net drag, so dragging
  * one way and flicking back the other reads as "never mind". Dragging toward the
  * end edge reveals the next month (flipped in right-to-left locales); stepping
  * forward is refused when `canForward` is false, and stepping back is always allowed.
@@ -23,7 +30,9 @@ export function resolveSwipe(
   isRtl: boolean,
 ): -1 | 0 | 1 {
   "worklet";
-  const flick = Math.abs(vx) >= SWIPE_COMMIT_VELOCITY;
+  const flick =
+    Math.abs(vx) >= SWIPE_COMMIT_VELOCITY &&
+    Math.abs(dx) >= SWIPE_FLICK_MIN_TRAVEL;
   const far = width > 0 && Math.abs(dx) >= width * SWIPE_COMMIT_FRACTION;
   if (!flick && !far) return 0;
   const lead = flick ? vx : dx;

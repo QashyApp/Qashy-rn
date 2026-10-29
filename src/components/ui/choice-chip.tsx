@@ -47,6 +47,7 @@ export function ChoiceChip({
   if (m3) {
     return (
       <MotionPressable
+        delayPressIn={0}
         accessibilityLabel={literal ? label : t(label)}
         accessibilityRole={mode}
         accessibilityState={
@@ -96,6 +97,7 @@ export function ChoiceChip({
   }
   return (
     <MotionPressable
+      delayPressIn={0}
       accessibilityLabel={literal ? label : t(label)}
       accessibilityRole={mode}
       accessibilityState={

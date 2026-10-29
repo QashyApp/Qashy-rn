@@ -8,25 +8,37 @@ describe("resolveSwipe", () => {
     expect(resolveSwipe(99, 100, W, true, false)).toBe(0);
   });
 
+  it("is armed exactly at the distance threshold, which the pager ticks on", () => {
+    expect(resolveSwipe(-99.9, 0, W, true, false)).toBe(0);
+    expect(resolveSwipe(-100, 0, W, true, false)).toBe(1);
+    expect(resolveSwipe(-100, 0, W, false, false)).toBe(0);
+  });
+
   it("commits at a quarter of the width", () => {
     expect(resolveSwipe(-100, 0, W, true, false)).toBe(1);
     expect(resolveSwipe(100, 0, W, true, false)).toBe(-1);
   });
 
   it("commits a short flick", () => {
-    expect(resolveSwipe(-10, -600, W, true, false)).toBe(1);
-    expect(resolveSwipe(10, 650, W, true, false)).toBe(-1);
-    expect(resolveSwipe(-10, -599, W, true, false)).toBe(0);
+    expect(resolveSwipe(-30, -850, W, true, false)).toBe(1);
+    expect(resolveSwipe(30, 900, W, true, false)).toBe(-1);
+    expect(resolveSwipe(-30, -849, W, true, false)).toBe(0);
+  });
+
+  it("needs a flick to have travelled before it commits", () => {
+    expect(resolveSwipe(-28, -2000, W, true, false)).toBe(1);
+    expect(resolveSwipe(-27, -2000, W, true, false)).toBe(0);
+    expect(resolveSwipe(10, 2000, W, true, false)).toBe(0);
   });
 
   it("lets a flick override the drag direction", () => {
-    expect(resolveSwipe(-250, 800, W, true, false)).toBe(-1);
+    expect(resolveSwipe(-250, 900, W, true, false)).toBe(-1);
   });
 
   it("mirrors in right-to-left locales", () => {
     expect(resolveSwipe(-150, 0, W, true, true)).toBe(-1);
     expect(resolveSwipe(150, 0, W, true, true)).toBe(1);
-    expect(resolveSwipe(10, 900, W, true, true)).toBe(1);
+    expect(resolveSwipe(40, 900, W, true, true)).toBe(1);
   });
 
   it("refuses to go forward when blocked, but still goes back", () => {

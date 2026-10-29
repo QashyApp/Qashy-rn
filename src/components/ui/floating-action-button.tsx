@@ -9,7 +9,8 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { IconButton } from "@/components/ui/icon-button";
-import { flattenViewStyle } from "@/components/ui/motion";
+import { flattenViewStyle, useMotionPreference } from "@/components/ui/motion";
+import { useHiddenFlag } from "@/components/ui/use-hidden-flag";
 import { useQashyTheme } from "@/theme/theme";
 import { hapticImpactLight } from "@/services/haptics";
 
@@ -33,23 +34,36 @@ export function FloatingActionButton({
   // Per-mode in the theme: a near-black shadow vanishes on dark surfaces, so
   // the dark value is deeper and wider rather than tinting the button itself.
   const shadow = theme.shadowFab;
+  // Below the full animation level the button only fades; it does not shrink or slide.
+  const { travel } = useMotionPreference();
   const visibilityStyle = useAnimatedStyle(() => {
     if (!visibility) return {};
-    const shown = visibility.value;
-    return {
-      opacity: shown,
-      transform: [
-        { scale: 0.6 + 0.4 * shown },
-        { translateY: (1 - shown) * 12 },
-      ],
-      pointerEvents: shown < 0.5 ? ("none" as const) : ("auto" as const),
-    };
+    const shown = visibility.get();
+    return travel
+      ? {
+          opacity: shown,
+          transform: [
+            { scale: 0.6 + 0.4 * shown },
+            { translateY: (1 - shown) * 12 },
+          ],
+        }
+      : { opacity: shown };
   });
+  // A faded-out button must not take taps, nor be reachable by a screen reader. Touch routing is a
+  // prop on the view: an animated style is not guaranteed to reach hit-testing.
+  const hidden = useHiddenFlag(visibility);
 
   return (
-    <Animated.View style={[flattenViewStyle(style), visibilityStyle]}>
+    <Animated.View
+      pointerEvents={hidden ? "none" : "auto"}
+      accessibilityElementsHidden={hidden}
+      importantForAccessibility={hidden ? "no-hide-descendants" : "auto"}
+      style={[flattenViewStyle(style), visibilityStyle]}
+    >
       <IconButton
         {...props}
+        // A standalone control, not a row in a scroller: it answers the touch at once.
+        delayPressIn={0}
         disabled={isDisabled}
         onPress={(event) => {
           hapticImpactLight();

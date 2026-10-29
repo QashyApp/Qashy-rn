@@ -38,7 +38,12 @@ export function MonthSwitcher({
   dragProgress,
 }: {
   value: string;
-  onChange: (month: string, direction: MonthDirection) => void;
+  /**
+   * Called with the new month. Return `false` to say a step was refused (a pager still busy
+   * or at its limit): the haptic tick only answers a step that was taken. `navigateMonth` returns
+   * exactly that.
+   */
+  onChange: (month: string, direction: MonthDirection) => void | boolean;
   /** First day of the latest selectable month. Omit to allow any future month. */
   max?: string;
   disabled?: boolean;
@@ -52,8 +57,12 @@ export function MonthSwitcher({
   const atMax = max != null && value >= max;
 
   const step = (delta: number) => {
-    hapticSelection();
-    onChange(moveMonth(value, delta), delta > 0 ? "right" : "left");
+    const accepted = onChange(
+      moveMonth(value, delta),
+      delta > 0 ? "right" : "left",
+    );
+    // The tick lands with the press, not when the slide ends, and only if the step was taken.
+    if (accepted !== false) hapticSelection();
   };
 
   // Chevrons point along the reading direction: "previous" is always toward the
@@ -83,6 +92,7 @@ export function MonthSwitcher({
         onPress={() => step(-1)}
       />
       <MotionPressable
+        delayPressIn={0}
         accessibilityRole="button"
         accessibilityLabel={`${monthLabel(value, locale)}. ${t("Choose month")}`}
         disabled={disabled}
@@ -114,8 +124,8 @@ export function MonthSwitcher({
         onSelect={(month) => {
           setPickerOpen(false);
           if (month !== value) {
-            hapticSelection();
-            onChange(month, month > value ? "right" : "left");
+            const accepted = onChange(month, month > value ? "right" : "left");
+            if (accepted !== false) hapticSelection();
           }
         }}
       />
@@ -413,6 +423,7 @@ function MonthPicker({
                   style={{ width: "33.333%", paddingHorizontal: space.xs }}
                 >
                   <MotionPressable
+                    delayPressIn={0}
                     accessibilityRole="radio"
                     accessibilityLabel={monthLabel(first, locale)}
                     accessibilityState={{

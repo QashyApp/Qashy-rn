@@ -8,29 +8,37 @@ import {
 } from "react-native-reanimated";
 
 import { motionCurves, useMotionPreference } from "@/components/ui/motion";
+import {
+  accumulateTravel,
+  travelDirection,
+} from "@/components/ui/scroll-direction";
 
 const ALWAYS_SHOW_OFFSET = 32;
 const HIDE_AFTER_OFFSET = 80;
-const DIRECTION_THRESHOLD = 6;
 
 /**
  * Tracks scroll direction and exposes a 0–1 visibility value: scrolling down
  * hides (0), scrolling up or resting near the top shows (1). Attach `onScroll`
  * to a scrollable (with `scrollEventThrottle={16}`) and hand `visibility` to
  * `FloatingActionButton`.
+ *
+ * The direction has to hold for 20 dp before it flips (see `scroll-direction.ts`), so a slow scroll
+ * up still reveals the button and a wobbling finger does not flicker it.
  */
 export function useScrollHide() {
   const visibility = useSharedValue(1);
   const lastOffset = useRef(0);
+  const travel = useRef(0);
   const shown = useRef(true);
-  const { instant } = useMotionPreference();
+  const { instant, travel: moves } = useMotionPreference();
 
   const setShown = (next: boolean) => {
     if (shown.current === next) return;
     shown.current = next;
-    // A quick fade at every level but `off`, which changes instantly.
+    // A quick fade at every level but `off`, which changes instantly. Without travel (Minimal) the
+    // fade is the whole effect, so it is shorter still.
     const timing = {
-      duration: 200,
+      duration: moves ? 200 : 120,
       easing: motionCurves.standard,
       reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
     };
@@ -43,10 +51,10 @@ export function useScrollHide() {
     const offset = event.nativeEvent.contentOffset.y;
     const delta = offset - lastOffset.current;
     lastOffset.current = offset;
-    if (offset <= ALWAYS_SHOW_OFFSET || delta < -DIRECTION_THRESHOLD)
-      setShown(true);
-    else if (delta > DIRECTION_THRESHOLD && offset > HIDE_AFTER_OFFSET)
-      setShown(false);
+    travel.current = accumulateTravel(travel.current, delta);
+    const direction = travelDirection(travel.current);
+    if (offset <= ALWAYS_SHOW_OFFSET || direction < 0) setShown(true);
+    else if (direction > 0 && offset > HIDE_AFTER_OFFSET) setShown(false);
   };
 
   return { visibility, onScroll };

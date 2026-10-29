@@ -54,6 +54,13 @@ type MotionPressableProps = Omit<PressableProps, "children" | "style"> & {
   hoverScale?: number;
   liftOnHover?: boolean;
   active?: boolean;
+  /**
+   * How long (ms) a touch has to stay down before the control answers it visually (the press
+   * scale and the wash). `onPress` itself is never delayed, and a tap shorter than this still shows
+   * its feedback as it lifts. The default keeps rows in a scrolling list from flashing the moment
+   * a scroll starts on them; pass `0` for a control that is not inside a scroller.
+   */
+  delayPressIn?: number;
   enteringVariant?: "fade" | "zoom";
   enteringDelay?: number;
   /**
@@ -75,6 +82,9 @@ type MotionPressableProps = Omit<PressableProps, "children" | "style"> & {
    */
   stateLayerShape?: "own" | "container";
 };
+
+/** See `delayPressIn`: about a frame or four, shorter than any deliberate press. */
+const DEFAULT_PRESS_DELAY_MS = 70;
 
 const STATE_LAYER_HOVER = 0.08;
 const STATE_LAYER_PRESS = 0.1;
@@ -218,6 +228,7 @@ function MotionPressableBase({
   hoverScale = 1.008,
   liftOnHover = true,
   active = false,
+  delayPressIn = DEFAULT_PRESS_DELAY_MS,
   enteringVariant: _enteringVariant,
   enteringDelay: _enteringDelay,
   stateLayer = true,
@@ -226,9 +237,12 @@ function MotionPressableBase({
   entranceStyle,
   ...props
 }: MotionPressableProps & { entranceStyle: ReturnType<typeof useEntrance> }) {
-  // Press feedback is movement, so only the full level keeps it.
-  const { travel } = useMotionPreference();
+  // Press feedback is movement, so only the full level keeps it. Opacity (the wash) stays below it.
+  const { travel, instant } = useMotionPreference();
   const reduceMotion = !travel;
+  // How the wash and the settle-back animate: the system setting is honoured by Reanimated
+  // itself, the in-app Off level has to ask for it.
+  const motionPreference = instant ? ReduceMotion.Always : ReduceMotion.System;
   const { motion, stateLayers, text: themeText } = useQashyTheme();
   const layerEnabled = stateLayers && stateLayer && !disabled;
   const layerColor = stateLayerColor ?? themeText;
@@ -243,7 +257,7 @@ function MotionPressableBase({
   const layerTiming = {
     duration: durations.exit,
     easing: EASE_STANDARD,
-    reduceMotion: ReduceMotion.System,
+    reduceMotion: motionPreference,
   } as const;
   // A translate theme sinks a control by shifting it down instead of shrinking it, and
   // never scales on hover or on the 'active' pop either.
@@ -253,11 +267,12 @@ function MotionPressableBase({
   const staticPress = motion.press !== "scale";
   // A row whose layer bleeds to its container's edges must not move at all: a scale or a lift
   // would pull the wash off the edges it was drawn to meet. The wash alone answers there.
-  const interactive = !staticPress && bleed === null;
+  // Below the full animation level nothing scales or lifts (press, hover or the active pop).
+  const interactive = !staticPress && bleed === null && travel;
   const timingConfig = {
     duration: durations.exit,
     easing: EASE_STANDARD,
-    reduceMotion: ReduceMotion.System,
+    reduceMotion: motionPreference,
   } as const;
   const initiallyPressed = Boolean(props.testOnly_pressed);
   const scale = useSharedValue(1);
@@ -454,6 +469,11 @@ function MotionPressableBase({
   // selection-mode toggle. React's delegated pointer props survive the swap, and the element is
   // never remounted, so a touch held across the toggle (drag-select) keeps its target.
   const hoverFromWrapper = process.env.EXPO_OS === "web";
+  // react-native-web's Pressable names the delay `delayPressIn`; React Native's is still unstable_.
+  const pressDelay: PressableProps =
+    process.env.EXPO_OS === "web"
+      ? ({ delayPressIn } as PressableProps)
+      : { unstable_pressDelay: delayPressIn };
   const webHover = hoverFromWrapper
     ? {
         onPointerEnter: (event: PointerEvent) => {
@@ -479,6 +499,7 @@ function MotionPressableBase({
     >
       <Animated.View style={[animatedStyle, rippleClip]}>
         <AnimatedPressable
+          {...pressDelay}
           {...props}
           {...spaceKeyProps}
           android_ripple={

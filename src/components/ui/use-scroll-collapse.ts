@@ -8,15 +8,19 @@ import {
 
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { motionCurves } from "@/components/ui/motion";
+import {
+  accumulateTravel,
+  travelDirection,
+} from "@/components/ui/scroll-direction";
 
 const EXPANDED_UNTIL_OFFSET = 32;
 const COLLAPSE_AFTER_OFFSET = 96;
-const DIRECTION_THRESHOLD = 6;
 /**
  * Collapsing resizes the list under the finger, which can itself move the scroll offset (a short
- * list clamps). Scroll events inside this window are the resize talking, not the user.
+ * list clamps). Scroll events while the animation runs, and a frame or two after, are the resize
+ * talking, not the user.
  */
-const SETTLE_MS = 320;
+const SETTLE_SLACK_MS = 32;
 /**
  * Folding hands the list this much more room (and the same much less content to scroll). A list
  * that would be left with less than this much to scroll afterwards is not worth collapsing: the
@@ -45,17 +49,23 @@ export function useScrollCollapse({
   const level = useAnimationLevel();
   const lastOffset = useRef(0);
   const collapsed = useRef(false);
+  const travel = useRef(0);
   const changedAt = useRef(0);
+  const settleMs = useRef(0);
 
   const forced = enabled && forceCollapsed;
   const held = !enabled || (locked && !forced);
 
   const animateTo = (next: boolean) => {
+    const duration = level === "off" ? 0 : level === "minimal" ? 120 : 220;
     collapsed.current = next;
     changedAt.current = Date.now();
+    settleMs.current = duration + SETTLE_SLACK_MS;
+    // The direction that led here is spent; the next flip is a fresh run.
+    travel.current = 0;
     collapse.set(
       withTiming(next ? 1 : 0, {
-        duration: level === "off" ? 0 : level === "minimal" ? 120 : 220,
+        duration,
         easing: motionCurves.standard,
         reduceMotion: ReduceMotion.System,
       }),
@@ -92,18 +102,17 @@ export function useScrollCollapse({
       setCollapsed(false);
       return;
     }
-    if (Date.now() - changedAt.current < SETTLE_MS) return;
+    if (Date.now() - changedAt.current < settleMs.current) return;
+    travel.current = accumulateTravel(travel.current, delta);
+    const direction = travelDirection(travel.current);
     if (collapsed.current) {
       // Still collapsed: only a real scroll up (not the list clamping to its end) expands it.
       const clamped = offset >= maxOffset - AT_END_SLACK;
       if (clamped) return;
-      if (
-        delta < -DIRECTION_THRESHOLD ||
-        (offset <= EXPANDED_UNTIL_OFFSET && delta < 0)
-      )
+      if (direction < 0 || (offset <= EXPANDED_UNTIL_OFFSET && delta < 0))
         setCollapsed(false);
     } else if (
-      delta > DIRECTION_THRESHOLD &&
+      direction > 0 &&
       offset > COLLAPSE_AFTER_OFFSET &&
       maxOffset > MIN_SCROLL_TO_COLLAPSE
     )
