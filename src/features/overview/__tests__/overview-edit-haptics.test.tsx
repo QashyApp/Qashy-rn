@@ -1,6 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react-native";
+import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import type { ReactNode } from "react";
-import { Text } from "react-native";
+import { BackHandler, Text } from "react-native";
 
 import { HoldToCustomize } from "@/features/overview/card-stack-motion";
 import { OverviewScreen } from "@/features/overview/overview-screen";
@@ -9,6 +9,11 @@ import { hapticImpactLight } from "@/services/haptics";
 jest.mock("expo-router", () => ({
   router: { push: jest.fn() },
   useScrollToTop: jest.fn(),
+  // The screen is always focused here.
+  useFocusEffect: (effect: () => void | (() => void)) => {
+    const { useEffect } = jest.requireActual("react");
+    useEffect(effect, [effect]);
+  },
 }));
 
 jest.mock("react-native-safe-area-context", () => ({
@@ -103,6 +108,30 @@ describe("entering edit mode", () => {
     await fireEvent.press(screen.getByLabelText("Customize"));
     expect(screen.getByTestId("editing")).toHaveTextContent("yes");
     expect(hapticImpactLight).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("leaving edit mode with the back button", () => {
+  it("exits edit mode instead of leaving the screen", async () => {
+    const remove = jest.fn();
+    const add = jest
+      .spyOn(BackHandler, "addEventListener")
+      .mockImplementation(() => ({ remove }));
+    await render(<OverviewScreen />);
+    expect(add).not.toHaveBeenCalled();
+
+    await fireEvent.press(screen.getByLabelText("Customize"));
+    expect(screen.getByTestId("editing")).toHaveTextContent("yes");
+    const handler = add.mock.calls.at(-1)?.[1] as () => boolean;
+
+    let consumed = false;
+    await act(async () => {
+      consumed = handler();
+    });
+    expect(consumed).toBe(true);
+    expect(screen.getByTestId("editing")).toHaveTextContent("no");
+    expect(remove).toHaveBeenCalled();
+    add.mockRestore();
   });
 });
 

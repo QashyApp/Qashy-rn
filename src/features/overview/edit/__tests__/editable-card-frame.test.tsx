@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import { useLayoutEffect, type ReactElement } from "react";
-import { StyleSheet, Text } from "react-native";
+import { AccessibilityInfo, StyleSheet, Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import {
   createGestureController,
@@ -96,7 +96,6 @@ let reorderForTest: CardReorder | undefined;
 const capture = (reorder: CardReorder) => {
   reorderForTest = reorder;
 };
-const noScroll = { current: null };
 
 function Frame({
   index = 1,
@@ -108,7 +107,6 @@ function Frame({
   const { reorder } = useCardReorder({
     cards: CARDS,
     gap: 16,
-    scrollRef: noScroll,
   });
   useLayoutEffect(() => {
     capture(reorder);
@@ -190,6 +188,73 @@ describe("EditableCardFrame", () => {
     expect(grip.minHeight).toBeGreaterThanOrEqual(44);
   });
 
+  describe("accessibility", () => {
+    it("puts the role and the move/remove actions on the labelled grip", async () => {
+      await renderFrame(<Frame />);
+
+      const grip = screen.getByLabelText("Drag to reorder Budget pulse");
+      expect(grip.props.accessibilityRole).toBe("button");
+      expect(grip.props.accessible).toBe(true);
+      expect(
+        grip.props.accessibilityActions.map((a: { name: string }) => a.name),
+      ).toEqual(["moveUp", "moveDown", "remove"]);
+    });
+
+    it("runs the grip's actions", async () => {
+      const onMoveUp = jest.fn();
+      const onMoveDown = jest.fn();
+      const onRemove = jest.fn();
+      await renderFrame(
+        <Frame
+          onMoveUp={onMoveUp}
+          onMoveDown={onMoveDown}
+          onRemove={onRemove}
+        />,
+      );
+      const grip = screen.getByLabelText("Drag to reorder Budget pulse");
+
+      for (const actionName of ["moveUp", "moveDown", "remove"]) {
+        await fireEvent(grip, "accessibilityAction", {
+          nativeEvent: { actionName },
+        });
+      }
+      expect(onMoveUp).toHaveBeenCalledTimes(1);
+      expect(onMoveDown).toHaveBeenCalledTimes(1);
+      expect(onRemove).toHaveBeenCalledTimes(1);
+    });
+
+    it("moves focus to the grip after a toolbar button moved the card", async () => {
+      const sendEvent = jest.spyOn(AccessibilityInfo, "sendAccessibilityEvent");
+      const view = await renderFrame(<Frame index={1} />);
+      await fireEvent.press(screen.getByLabelText("Move Budget pulse up"));
+      // The card is now first in the stack.
+      await view.rerender(
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <Frame index={0} />
+        </GestureHandlerRootView>,
+      );
+      expect(sendEvent).toHaveBeenCalledWith(expect.anything(), "focus");
+      sendEvent.mockRestore();
+    });
+
+    it("leaves focus alone when the grip's own action moved the card", async () => {
+      const sendEvent = jest.spyOn(AccessibilityInfo, "sendAccessibilityEvent");
+      const view = await renderFrame(<Frame index={1} />);
+      await fireEvent(
+        screen.getByLabelText("Drag to reorder Budget pulse"),
+        "accessibilityAction",
+        { nativeEvent: { actionName: "moveUp" } },
+      );
+      await view.rerender(
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <Frame index={0} />
+        </GestureHandlerRootView>,
+      );
+      expect(sendEvent).not.toHaveBeenCalled();
+      sendEvent.mockRestore();
+    });
+  });
+
   describe("dragging", () => {
     const controller = () =>
       createGestureController(getByGestureTestId("overview-card-drag-b"));
@@ -217,6 +282,30 @@ describe("EditableCardFrame", () => {
       expect(hapticSuccess).toHaveBeenCalledTimes(1);
       expect(reorderForTest?.source.get()).toBe(-1);
       expect(reorderForTest?.target.get()).toBe(-1);
+    });
+
+    it("resolves the landing slot from the release, not a stale published target", async () => {
+      const onDrop = jest.fn(() => Promise.resolve(true));
+      await renderFrame(<Frame onDrop={onDrop} />);
+      const drag = controller();
+      // Three cards of 100 with a gap of 16: card b's centre is 166, the others' 50 and 282.
+      await act(async () => {
+        for (const id of ["a", "b", "c"])
+          reorderForTest?.setCardHeight(id, 100);
+      });
+
+      await act(async () => {
+        drag.begin();
+        drag.activate();
+        drag.update({ translationY: 10 });
+      });
+      // The reaction has not caught up with the finger's last, fast move: still on slot 1.
+      expect(reorderForTest?.target.get()).toBe(1);
+      await act(async () => {
+        drag.end({ translationY: 200 });
+      });
+
+      expect(onDrop).toHaveBeenCalledWith("b", 2);
     });
 
     it("does not reorder when released over its own slot", async () => {

@@ -2,17 +2,18 @@ import { router } from "expo-router";
 import {
   memo,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
   type Ref,
   type RefObject,
 } from "react";
-import type { SharedValue } from "react-native-reanimated";
+import Animated, { type SharedValue } from "react-native-reanimated";
 import {
   Platform,
-  ScrollView,
   View,
+  type HostInstance,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -45,6 +46,7 @@ import {
 } from "@/features/overview/card-stack-motion";
 import { DropIndicator } from "@/features/overview/edit/drop-indicator";
 import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame";
+import { moveAccessibilityFocus } from "@/features/overview/edit/move-accessibility-focus";
 import { useCardReorder } from "@/features/overview/edit/use-card-reorder";
 import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
 import {
@@ -152,25 +154,41 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   // Computed once here and handed to every card, instead of one repository read per widget.
   const summary = useDashboard(month);
 
-  // The page needs its own handle on the ScrollView (edge auto-scroll while dragging a card), so
-  // the screen's ref is fed from a callback ref rather than attached directly.
-  const localScrollRef = useRef<ScrollViewInstance | null>(null);
+  // The page needs its own handle on the ScrollView (the UI thread scrolls it while a card is
+  // dragged near an edge), so the screen's ref is fed from a callback ref rather than attached
+  // directly.
+  const {
+    reorder,
+    dragging,
+    scrollProps,
+    scrollRef: animatedScrollRef,
+  } = useCardReorder({ cards, gap: space.xl });
   const outerScrollRef = isCurrent ? scrollRef : undefined;
   const setScrollRef = useCallback(
     (node: ScrollViewInstance | null) => {
-      localScrollRef.current = node;
+      animatedScrollRef(node as ScrollViewInstance);
       if (typeof outerScrollRef === "function") outerScrollRef(node);
       else if (outerScrollRef) {
         (outerScrollRef as RefObject<ScrollViewInstance | null>).current = node;
       }
     },
-    [outerScrollRef],
+    [animatedScrollRef, outerScrollRef],
   );
-  const { reorder, dragging, scrollProps } = useCardReorder({
-    cards,
-    gap: space.lg,
-    scrollRef: localScrollRef,
-  });
+
+  // Swapping Customize for Done (and back) would leave a screen reader on a button that is gone,
+  // so focus follows the swap. Not on the first render, and only on the page in view.
+  const customizeRef = useRef<HostInstance>(null);
+  const doneRef = useRef<HostInstance>(null);
+  const wasEditing = useRef(editing);
+  useEffect(() => {
+    if (wasEditing.current === editing) return;
+    wasEditing.current = editing;
+    if (!isCurrent) return;
+    const frame = requestAnimationFrame(() =>
+      moveAccessibilityFocus(editing ? doneRef.current : customizeRef.current),
+    );
+    return () => cancelAnimationFrame(frame);
+  }, [editing, isCurrent]);
   const reorderOnScroll = scrollProps.onScroll;
   const handleScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -268,7 +286,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   };
 
   return (
-    <ScrollView
+    <Animated.ScrollView
       ref={setScrollRef}
       onScroll={isCurrent ? handleScroll : undefined}
       onLayout={scrollProps.onLayout}
@@ -297,7 +315,14 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
             <PageHeading title="Overview" />
           </View>
           {editing ? (
-            <TextButton title="Done" icon="checkmark" onPress={onExitEdit} />
+            <TextButton
+              title="Done"
+              icon="checkmark"
+              onPress={onExitEdit}
+              // `TextButton` forwards `ref` to its pressable (React 19 passes it as a prop) but does
+              // not declare it, so it travels in a spread.
+              {...{ ref: doneRef }}
+            />
           ) : (
             // While the saved layout loads the button keeps its place, invisible and inert, so
             // the heading does not reflow when it appears. If the layout is unavailable it stays
@@ -315,6 +340,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                 icon="gear"
                 disabled={!layoutReady}
                 onPress={onEnterEdit}
+                {...{ ref: customizeRef }}
               />
             </View>
           )}
@@ -541,7 +567,8 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
           )
         ) : (
           <MotionView key="edit" variant="fade">
-            <View style={{ gap: space.lg }}>
+            {/* The same gap as view mode, so entering edit mode does not shift the layout. */}
+            <View style={{ gap: space.xl }}>
               {cards.map((card, index) => {
                 const definition = WIDGET_REGISTRY[card.type];
                 if (!definition) return null;
@@ -588,6 +615,6 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
           </MotionView>
         )}
       </ScreenContainer>
-    </ScrollView>
+    </Animated.ScrollView>
   );
 });

@@ -4,6 +4,7 @@
  * the reorder state's shared values, so following the finger costs no React renders.
  */
 
+import { useMemo } from "react";
 import { StyleSheet } from "react-native";
 import Animated, {
   useAnimatedReaction,
@@ -19,6 +20,11 @@ import type { CardReorder } from "@/features/overview/edit/use-card-reorder";
 import { useQashyTheme } from "@/theme/theme";
 
 const THICKNESS = 3;
+/**
+ * Above the lifted card, whose wrapper sits at z-index 10. The card's lift is a `boxShadow` (no
+ * elevation), so on Android and web the z-order alone decides what is drawn on top.
+ */
+export const DROP_LINE_Z_INDEX = 20;
 
 export function DropIndicator({ reorder }: { reorder: CardReorder }) {
   const { accent, radius, motion } = useQashyTheme();
@@ -27,8 +33,11 @@ export function DropIndicator({ reorder }: { reorder: CardReorder }) {
   const lineY = useSharedValue(0);
   const shown = useSharedValue(0);
   const fade = instant ? 0 : motion.duration.fast;
-  // Not clamped on overshoot: this is a line chasing a finger, it should feel attached.
-  const spring = motion.spring.snappy;
+  // The line is not dragged by the user, so it settles without overshooting the slot.
+  const spring = useMemo(
+    () => ({ ...motion.spring.snappy, overshootClamping: true }),
+    [motion.spring.snappy],
+  );
 
   useAnimatedReaction(
     () => insertionLineY(slots.get(), source.get(), target.get(), gap),
@@ -74,5 +83,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: THICKNESS,
+    zIndex: DROP_LINE_Z_INDEX,
   },
 });

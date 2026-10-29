@@ -19,6 +19,7 @@ import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
+import { useExitEditOnBack } from "@/features/overview/edit/use-exit-edit-on-back";
 import { createCardDropper } from "@/features/overview/layout/card-dropper";
 import type { LayoutStoreAction } from "@/features/overview/layout/layout-actions";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
@@ -183,6 +184,8 @@ export function OverviewScreen() {
     setEditing(false);
     setConfigOpenId(null);
   }, []);
+
+  useExitEditOnBack(editing, exitEditMode);
 
   const toggleConfig = useCallback(
     (id: string) => setConfigOpenId((current) => (current === id ? null : id)),
