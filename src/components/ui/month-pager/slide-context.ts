@@ -6,8 +6,9 @@ import type { FollowSpec } from "@/components/ui/month-pager/slide-style";
 
 /**
  * The part of a page that its `MonthSlideItem`s follow: the page's continuous offset on screen, and
- * a clock that ticks once per frame for as long as anything may still be moving. Only a page in the
- * cascade style has one.
+ * a clock that ticks once per frame for as long as anything may still be moving. Every page has one,
+ * so a page keeps the same shape whatever the style; only in the cascade style does the clock run and
+ * do items follow.
  */
 export interface PageCascade {
   /** Where the page is on screen, in px from its resting slot (slot offset plus the drag). */
@@ -23,10 +24,9 @@ export interface PageCascade {
 }
 
 export interface PageSlide {
-  /** The style this page plays; `calm` whenever content may not travel. */
+  /** The style this page plays; `calm` whenever content may not travel. Items follow in `cascade` only. */
   style: MonthSlideStyle;
-  /** Present in the cascade style only. */
-  cascade: PageCascade | null;
+  cascade: PageCascade;
 }
 
 /** Set by a pager page; absent outside one, where a `MonthSlideItem` is a plain view. */

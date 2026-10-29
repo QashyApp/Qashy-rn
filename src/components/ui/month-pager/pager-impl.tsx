@@ -54,6 +54,7 @@ import {
   canStep,
   judgeRender,
   landedOffset,
+  planStep,
   pushLanded,
 } from "@/components/ui/month-pager/pager-motion";
 import { PagerPage } from "@/components/ui/month-pager/pager-page";
@@ -463,18 +464,17 @@ export function PagerImpl({
         return;
       }
       const back = Math.abs(translateX.get());
+      const launch = lively ? liveVelocity(velocity, back, settling) : velocity;
       translateX.set(
         withSpring(
           0,
           {
             ...settling,
-            velocity: lively
-              ? liveVelocity(velocity, back, settling)
-              : velocity,
+            velocity: launch,
             overshootClamping: !lively,
             // Done once within about a pixel: the default keeps running for ~250ms of motion too
-            // small to see, and the month waits on it.
-            energyThreshold: settleThreshold(back, velocity, settling),
+            // small to see, and the month waits on it. Judged by the velocity the spring is given.
+            energyThreshold: settleThreshold(back, launch, settling),
           },
           (finished) => {
             // Web: the neighbours go once the pages are back and nothing else touches them.
@@ -508,16 +508,15 @@ export function PagerImpl({
     }
     const target = -direction * sign * width;
     const left = Math.abs(target - translateX.get());
+    const launch = lively ? liveVelocity(velocity, left, committing) : velocity;
     translateX.set(
       withSpring(
         target,
         {
           ...committing,
-          velocity: lively
-            ? liveVelocity(velocity, left, committing)
-            : velocity,
+          velocity: launch,
           overshootClamping: !lively,
-          energyThreshold: settleThreshold(left, velocity, committing),
+          energyThreshold: settleThreshold(left, launch, committing),
         },
         (finished) => {
           // A touch that grabbed the slide has already landed it; the cut-off spring says nothing.
@@ -774,17 +773,31 @@ export function PagerImpl({
     scheduleIdle();
     // Without pages beside it there is nothing to slide; the title still follows a slide
     // when the pager only drives `dragProgress`.
-    const jump = disabled || (slide && !neighbours);
+    // A jump onto a month page that is not mounted (the neighbours are off, or the pager is
+    // disabled) must not land on the UI thread: that would re-base the pages onto a page React has
+    // not rendered, and the area would show the background until it has. React is asked instead,
+    // and the month effect re-bases the pages in the commit that mounts the page.
+    const plan = planStep(slide, disabled, neighbours);
     runOnUI((to: 1 | -1) => {
       "worklet";
       // A finger came down after the call: it owns the pages, and the step is dropped.
       if (tracking.get()) return;
       landInFlight();
-      if (!canStep(to, baseIndex.get(), 0, maxIndex.get())) {
+      // A month already asked of React and not rendered yet is where the next step starts from.
+      const centre =
+        plan === "ask" && requestedIndex.get() !== 0
+          ? requestedIndex.get()
+          : baseIndex.get();
+      if (!canStep(to, centre, 0, maxIndex.get())) {
         runOnJS(endPaging)();
         return;
       }
-      if (jump) {
+      if (plan === "ask") {
+        requestedIndex.set(centre + to);
+        runOnJS(commit)(centre + to, to);
+        return;
+      }
+      if (plan === "land") {
         // As if a slide had just reached the next month, so landing swaps in place.
         translateX.set(-to * sign * width);
         land(to);

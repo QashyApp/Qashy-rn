@@ -46,6 +46,27 @@ export function canStep(
   return direction < 0 || baseIndex + inFlight + 1 <= maxIndex;
 }
 
+/**
+ * How a step (the month switcher, a key, the wheel) is carried out. `slide`: the pages slide to the
+ * next month (or, with no pages at all, only the title does). `ask`: the next month's page is not
+ * mounted (the pager is disabled, or the neighbours are off), so a slide would run over blank space
+ * and landing on the UI thread would re-base the pages onto a page React has not rendered; React is
+ * asked for the month instead and the render that mounts the page re-bases the pages. `land`: no
+ * pages to protect (the pager only drives the title), so the step lands at once.
+ */
+export type StepPlan = "slide" | "ask" | "land";
+
+export function planStep(
+  hasPages: boolean,
+  disabled: boolean,
+  neighboursMounted: boolean,
+): StepPlan {
+  "worklet";
+  const jump = disabled || (hasPages && !neighboursMounted);
+  if (!jump) return "slide";
+  return hasPages ? "ask" : "land";
+}
+
 /** The most landed-but-not-yet-rendered months the trail remembers; older ones are forgotten. */
 export const LANDED_TRAIL_LIMIT = 32;
 

@@ -1,5 +1,5 @@
 import { act, render, screen } from "@testing-library/react-native";
-import { createRef } from "react";
+import { createRef, useEffect } from "react";
 import type { TestInstance } from "test-renderer";
 import { Text } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
@@ -57,14 +57,20 @@ const layout = async () => {
   });
 };
 
+/** How many times a page's content has mounted: a style change must not add to it. */
+const mountCount = { value: 0 };
+
 /** What a page tells its slide items: the style it plays, and whether items follow it. */
 function Probe({ month }: { month: string }) {
   const slide = usePageSlide();
+  useEffect(() => {
+    mountCount.value += 1;
+  }, []);
   return (
     <>
       <Text>{month}</Text>
       <MonthSlideItem order={0}>
-        <Text>{`${month} ${slide?.style ?? "none"} ${slide?.cascade ? "follows" : "plain"}`}</Text>
+        <Text>{`${month} ${slide?.style ?? "none"} ${slide?.style === "cascade" ? "follows" : "plain"}`}</Text>
       </MonthSlideItem>
     </>
   );
@@ -166,6 +172,83 @@ describe("PagerImpl neighbours", () => {
   });
 });
 
+describe("PagerImpl disabled", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    mockSettings.swipeBetweenMonths = false;
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const setupDisabled = async (max?: string) => {
+    const ref = createRef<MonthPagerHandle>();
+    const onChange = jest.fn();
+    const tree = (month: string) => (
+      <GestureHandlerRootView>
+        <PagerImpl
+          ref={ref}
+          month={month}
+          max={max}
+          disabled
+          onChange={onChange}
+          renderPage={(shown) => <Probe month={shown} />}
+        />
+      </GestureHandlerRootView>
+    );
+    const view = await render(tree("2026-05-01"));
+    await layout();
+    await advance(100);
+    return {
+      ref,
+      onChange,
+      rerender: (month: string) => view.rerender(tree(month)),
+    };
+  };
+
+  it("asks React for the month, with no neighbour mounted to land on", async () => {
+    const { ref, onChange, rerender } = await setupDisabled();
+    let taken = false;
+    await act(async () => {
+      taken = ref.current?.goTo(1) ?? false;
+    });
+    expect(taken).toBe(true);
+    expect(onChange).toHaveBeenCalledWith("2026-06-01", "right");
+    expect(mounted("2026-06-01")).toBe(false);
+    await rerender("2026-06-01");
+    expect(mounted("2026-06-01")).toBe(true);
+    expect(mounted("2026-05-01")).toBe(false);
+  });
+
+  it("steps on from the month it asked for when taps outrun the render", async () => {
+    const { ref, onChange } = await setupDisabled();
+    await act(async () => {
+      ref.current?.goTo(1);
+      ref.current?.goTo(1);
+      ref.current?.goTo(-1);
+    });
+    expect(onChange.mock.calls).toEqual([
+      ["2026-06-01", "right"],
+      ["2026-07-01", "right"],
+      ["2026-06-01", "left"],
+    ]);
+  });
+
+  it("keeps the newest month out of reach", async () => {
+    const { ref, onChange } = await setupDisabled("2026-05-01");
+    let taken = true;
+    await act(async () => {
+      taken = ref.current?.goTo(1) ?? true;
+    });
+    expect(taken).toBe(false);
+    expect(onChange).not.toHaveBeenCalled();
+    await act(async () => {
+      ref.current?.goTo(-1);
+    });
+    expect(onChange).toHaveBeenCalledWith("2026-04-01", "left");
+  });
+});
+
 describe("PagerImpl month slide style", () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -223,6 +306,38 @@ describe("PagerImpl month slide style", () => {
       await screen.unmount();
     }
   });
+
+  it.each([
+    ["style", "all", "cascade", "deck", "all"],
+    ["animation level", "all", "cascade", "cascade", "off"],
+  ] as const)(
+    "does not remount the page's content when the %s changes",
+    async (_what, level, style, nextStyle, nextLevel) => {
+      mockSettings.monthSlideStyle = style;
+      mountCount.value = 0;
+      const tree = (shown: AnimationLevel) => (
+        <AnimationLevelContext.Provider value={shown}>
+          <GestureHandlerRootView>
+            <PagerImpl
+              month="2026-05-01"
+              onChange={jest.fn()}
+              renderPage={(month) => <Probe month={month} />}
+            />
+          </GestureHandlerRootView>
+        </AnimationLevelContext.Provider>
+      );
+      const view = await render(tree(level));
+      await layout();
+      await advance(100);
+      expect(mountCount.value).toBe(1);
+      const before = seen();
+      mockSettings.monthSlideStyle = nextStyle;
+      await view.rerender(tree(nextLevel));
+      await advance(100);
+      expect(seen()).not.toBe(before);
+      expect(mountCount.value).toBe(1);
+    },
+  );
 
   it("treats a missing swiping setting as on", async () => {
     mockSettings.swipeBetweenMonths = undefined;

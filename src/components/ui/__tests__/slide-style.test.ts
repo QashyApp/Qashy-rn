@@ -5,6 +5,7 @@ import {
   MAX_SLIDE_ORDER,
   cappedOrder,
   deckLook,
+  deckPage,
   dampingRatio,
   followBase,
   followStep,
@@ -176,6 +177,24 @@ describe("cascade followers", () => {
     expect(maxLag(3000)).toBe(96);
   });
 
+  it("does no spring arithmetic for an item that is already at rest", () => {
+    const { omega, zeta } = followerFor(0, base);
+    const exp = jest.spyOn(Math, "exp");
+    const sin = jest.spyOn(Math, "sin");
+    try {
+      expect(followStep(0, 0, FRAME, omega, zeta, 64)).toEqual({ x: 0, v: 0 });
+      expect(exp).not.toHaveBeenCalled();
+      expect(sin).not.toHaveBeenCalled();
+      // Still solved when it is displaced, or moving.
+      expect(followStep(10, 0, FRAME, omega, zeta, 64).x).toBeLessThan(10);
+      expect(followStep(0, 50, FRAME, omega, zeta, 64).x).toBeGreaterThan(0);
+      expect(exp).toHaveBeenCalled();
+    } finally {
+      exp.mockRestore();
+      sin.mockRestore();
+    }
+  });
+
   it("trails a steadily moving page and stays inside the lag", () => {
     const { omega, zeta } = followerFor(0, base);
     let x = 0;
@@ -334,6 +353,36 @@ describe("deckLook", () => {
       expect(before(11).lead).toBeCloseTo(0.3);
       expect(before(10).covered).toBeCloseTo(0.7);
     }
+  });
+});
+
+describe("deckPage", () => {
+  it("shows the page at rest, and the one under it until it is covered", () => {
+    expect(deckPage(0, 0)).toMatchObject({ visible: true, zIndex: 1 });
+    expect(deckPage(-1, 0)).toMatchObject({ visible: false, zIndex: 0 });
+    // Dragged toward the next month, the page at rest is 40% covered; dragged back, the one
+    // behind comes out from under it.
+    expect(deckPage(0, -0.4).visible).toBe(true);
+    expect(deckPage(-1, 0.4)).toMatchObject({ visible: true, zIndex: 0 });
+  });
+
+  it("hides the next page while it is parked, so its shadow cannot bleed onto the page at rest", () => {
+    expect(deckPage(1, 0)).toMatchObject({ visible: false, zIndex: 2 });
+    // Shown as soon as it moves in, and for the rest of the slide.
+    expect(deckPage(1, -0.01).visible).toBe(true);
+    expect(deckPage(1, -0.5).visible).toBe(true);
+    expect(deckPage(1, -1)).toMatchObject({ visible: true, lead: 0 });
+  });
+
+  it("is not visible, or hittable, once covered after a landing", () => {
+    // A forward slide has just landed: the old page is one slot behind, at rest.
+    expect(deckPage(-1, 0).visible).toBe(false);
+    expect(deckPage(0, 0).visible).toBe(true);
+  });
+
+  it("hides any page more than a slot away", () => {
+    expect(deckPage(2, -1).visible).toBe(false);
+    expect(deckPage(-2, 0.5).visible).toBe(false);
   });
 });
 

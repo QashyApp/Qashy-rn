@@ -6,7 +6,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { StyleSheet } from "react-native";
+import { StyleSheet, type ColorValue } from "react-native";
 import Animated, {
   Easing,
   cancelAnimation,
@@ -27,6 +27,7 @@ import {
 import {
   FOLLOW_IDLE_MS,
   deckLook,
+  deckPage,
   maxLag,
   type FollowSpec,
 } from "@/components/ui/month-pager/slide-style";
@@ -41,12 +42,15 @@ const DECK_SHADOW_OFFSET = 8;
 const DECK_SHADOW_BLUR = 24;
 
 /**
- * Gives a cascade page's items what they follow: the page's continuous offset (the sum the page is
- * drawn at) and a clock. The clock runs (as a looping animation, so the UI thread has a frame to
- * integrate on) from the page's first move until it has been still for `FOLLOW_IDLE_MS`, then
- * stops, and every item snaps to exactly its page: nothing ticks while the pager is at rest.
+ * Gives a page's items what they follow: the page's continuous offset (the sum the page is drawn at)
+ * and a clock. It renders the same elements in every style, so changing the style never remounts the
+ * page's content. In the cascade style the clock runs (as a looping animation, so the UI thread has a
+ * frame to integrate on) from the page's first move until it has been still for `FOLLOW_IDLE_MS`, then
+ * stops, and every item snaps to exactly its page: nothing ticks while the pager is at rest. In the
+ * other styles it never starts.
  */
-function CascadeScope({
+function PageSlideScope({
+  slideStyle,
   index,
   sign,
   baseIndex,
@@ -55,6 +59,7 @@ function CascadeScope({
   follow,
   children,
 }: {
+  slideStyle: MonthSlideStyle;
   index: number;
   sign: 1 | -1;
   baseIndex: SharedValue<number>;
@@ -63,6 +68,7 @@ function CascadeScope({
   follow: FollowSpec;
   children: ReactNode;
 }) {
+  const cascading = slideStyle === "cascade";
   const offset = useDerivedValue(
     () => (index - baseIndex.get()) * sign * width + translateX.get(),
   );
@@ -72,7 +78,7 @@ function CascadeScope({
   useAnimatedReaction(
     () => offset.get(),
     (_now, previous) => {
-      if (previous === null) return;
+      if (!cascading || previous === null) return;
       moved.set(performance.now());
       if (running.get()) return;
       running.set(true);
@@ -87,23 +93,26 @@ function CascadeScope({
         ),
       );
     },
+    [cascading],
   );
   useAnimatedReaction(
     () => (running.get() ? clock.get() : -1),
     (tick) => {
       if (tick < 0) return;
-      if (performance.now() - moved.get() < FOLLOW_IDLE_MS) return;
+      // Leaving the cascade style stops a running clock at once.
+      if (cascading && performance.now() - moved.get() < FOLLOW_IDLE_MS) return;
       cancelAnimation(clock);
       running.set(false);
     },
+    [cascading],
   );
   const lag = maxLag(width);
   const slide = useMemo<PageSlide>(
     () => ({
-      style: "cascade",
+      style: slideStyle,
       cascade: { offset, clock, running, base: follow, lag },
     }),
-    [offset, clock, running, follow, lag],
+    [slideStyle, offset, clock, running, follow, lag],
   );
   return (
     <PageSlideContext.Provider value={slide}>
@@ -130,7 +139,7 @@ function DeckDim({
   baseIndex: SharedValue<number>;
   width: number;
   translateX: SharedValue<number>;
-  color: string;
+  color: ColorValue;
 }) {
   const animated = useAnimatedStyle(() => {
     const progress = width > 0 ? (translateX.get() * sign) / width : 0;
@@ -203,11 +212,6 @@ export function PagerPage({
   }, [current]);
   const { background } = useQashyTheme();
   const deck = slideStyle === "deck";
-  const cascading = slideStyle === "cascade";
-  const plain = useMemo<PageSlide>(
-    () => ({ style: slideStyle, cascade: null }),
-    [slideStyle],
-  );
   const animated = useAnimatedStyle(() => {
     const distance = index - baseIndex.get();
     // A page more than one slot from the centre is only ever a stale frame, never a real view.
@@ -216,11 +220,14 @@ export function PagerPage({
       // Pages stack in month order, later on top, and move by their position among the months
       // alone: re-basing at a landing changes nothing, and neither does the direction of travel.
       const progress = width > 0 ? (translateX.get() * sign) / width : 0;
-      const look = deckLook(distance + progress);
+      const look = deckPage(distance, progress);
       return {
-        // Fully covered is as good as gone, and costs nothing to draw.
-        opacity: hidden || look.covered >= 1 ? 0 : fade.get(),
-        zIndex: Math.max(0, Math.min(2, distance + 1)),
+        // Fully covered is as good as gone, and costs nothing to draw. A covered page is not
+        // hittable either: after a landing the page on top is not `current` until React commits,
+        // and the one under it must not catch a tap meanwhile.
+        opacity: look.visible ? fade.get() : 0,
+        pointerEvents: current && look.visible ? "auto" : "none",
+        zIndex: look.zIndex,
         transform: [
           { translateX: look.lead * sign * width },
           { scale: look.scale },
@@ -229,6 +236,7 @@ export function PagerPage({
     }
     return {
       opacity: hidden ? 0 : fade.get(),
+      pointerEvents: current ? "auto" : "none",
       transform: [{ translateX: distance * sign * width + translateX.get() }],
     };
   });
@@ -268,22 +276,17 @@ export function PagerPage({
         animated,
       ]}
     >
-      {cascading ? (
-        <CascadeScope
-          index={index}
-          sign={sign}
-          baseIndex={baseIndex}
-          width={width}
-          translateX={translateX}
-          follow={follow}
-        >
-          {content}
-        </CascadeScope>
-      ) : (
-        <PageSlideContext.Provider value={plain}>
-          {content}
-        </PageSlideContext.Provider>
-      )}
+      <PageSlideScope
+        slideStyle={slideStyle}
+        index={index}
+        sign={sign}
+        baseIndex={baseIndex}
+        width={width}
+        translateX={translateX}
+        follow={follow}
+      >
+        {content}
+      </PageSlideScope>
       {deck ? (
         <DeckDim
           index={index}
@@ -291,7 +294,7 @@ export function PagerPage({
           baseIndex={baseIndex}
           width={width}
           translateX={translateX}
-          color={String(background)}
+          color={background}
         />
       ) : null}
     </Animated.View>

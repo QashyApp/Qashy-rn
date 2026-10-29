@@ -193,6 +193,8 @@ export function followStep(
   lag: number,
 ) {
   "worklet";
+  // Already at rest in its page (the tail of a run, after every item has snapped): nothing to solve.
+  if (x === 0 && v === 0) return { x: 0, v: 0 };
   const next = stepSpring(x, v, dt, omega, zeta);
   let nextX = next.x;
   let nextV = next.v;
@@ -229,5 +231,22 @@ export function deckLook(delta: number) {
     covered,
     scale: 1 - DECK_RECEDE * covered,
     dim: DECK_DIM * covered,
+  };
+}
+
+/**
+ * What the deck draws of the page `distance` months from the pager's centre, with the pages dragged
+ * `progress` page widths (negative toward the next month). On top of `deckLook`, a page more than a
+ * slot away, a fully covered one and a fully parked one are `visible: false`: neither drawn nor hit.
+ * The covered page is invisible but would still catch a tap, and the parked page's shadow would
+ * bleed onto the page at rest. `zIndex` stacks the pages in month order.
+ */
+export function deckPage(distance: number, progress: number) {
+  "worklet";
+  const look = deckLook(distance + progress);
+  return {
+    ...look,
+    visible: Math.abs(distance) <= 1 && look.covered < 1 && look.lead < 1,
+    zIndex: Math.max(0, Math.min(2, distance + 1)),
   };
 }
