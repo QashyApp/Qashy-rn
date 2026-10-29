@@ -58,6 +58,13 @@ import {
 } from "@/components/ui/month-pager/pager-motion";
 import { PagerPage } from "@/components/ui/month-pager/pager-page";
 import {
+  followBase,
+  liveVelocity,
+  livelySpring,
+  resolveSlideStyle,
+  settleThreshold,
+} from "@/components/ui/month-pager/slide-style";
+import {
   WHEEL_QUIET,
   wheelPixels,
   wheelStep,
@@ -125,15 +132,26 @@ export function PagerImpl({
   const fadeOut = durations.exit;
   const fadeIn = durations.enter;
   const spring = motion.spring.snappy;
+  // How a month swipe moves the content (a per-device setting; cascade when missing). Without
+  // `travel` every style is the plain page, which the crossfade and the cut then replace.
+  const slideStyle = resolveSlideStyle(settings.monthSlideStyle, travel);
+  // Only the page style lets the pages themselves overshoot; in the others the page container
+  // settles critically damped (the cascade's wave comes from its items, the deck's from the cover).
+  const lively = slideStyle === "page";
   // Springing back to where the drag began is critically damped too: an underdamped spring that is
   // clamped at its target stops dead at speed.
-  const settling = useMemo(() => commitSpring(spring), [spring]);
+  const settling = useMemo(
+    () => (lively ? livelySpring(spring) : commitSpring(spring)),
+    [spring, lively],
+  );
   // A committed slide is stiffer than the theme's own spring: the next swipe cannot start until it
   // lands, so every millisecond of settling is a millisecond of apparent lag.
-  const committing = useMemo(
-    () => commitSpring({ ...spring, stiffness: spring.stiffness * 1.6 }),
-    [spring],
-  );
+  const committing = useMemo(() => {
+    const stiff = { ...spring, stiffness: spring.stiffness * 1.6 };
+    return lively ? livelySpring(stiff) : commitSpring(stiff);
+  }, [spring, lively]);
+  // The cascade's top item follows on the theme's spring, softer for each item below it.
+  const follow = useMemo(() => followBase(spring), [spring]);
 
   const sign = isRtl ? -1 : 1;
   const [width, setWidth] = useState(0);
@@ -208,12 +226,9 @@ export function PagerImpl({
   const nextMonth = useMemo(() => moveMonth(month, 1), [month]);
   const canForward = !(max != null && nextMonth > max);
   const pagesEnabled = !disabled && width > 0;
-  const swipeEnabled = pagesEnabled && Boolean(settings.swipeBetweenMonths);
+  const swipeEnabled = pagesEnabled && (settings.swipeBetweenMonths ?? true);
   const onDemand = WEB || !swipeEnabled;
   const neighbours = slide && pagesEnabled && (onDemand ? demandReady : warm);
-  // Done once within about half a pixel. The default keeps running for ~250ms of motion too small
-  // to see.
-  const energyThreshold = width > 0 ? Math.max(1e-7, (0.5 / width) ** 2) : 1e-6;
 
   // Latest props for callbacks that outlive a render (animation completions).
   const monthRef = useRef(month);
@@ -447,10 +462,20 @@ export function PagerImpl({
         if (WEB) runOnJS(scheduleIdle)();
         return;
       }
+      const back = Math.abs(translateX.get());
       translateX.set(
         withSpring(
           0,
-          { ...settling, velocity, overshootClamping: true, energyThreshold },
+          {
+            ...settling,
+            velocity: lively
+              ? liveVelocity(velocity, back, settling)
+              : velocity,
+            overshootClamping: !lively,
+            // Done once within about a pixel: the default keeps running for ~250ms of motion too
+            // small to see, and the month waits on it.
+            energyThreshold: settleThreshold(back, velocity, settling),
+          },
           (finished) => {
             // Web: the neighbours go once the pages are back and nothing else touches them.
             if (WEB && finished) runOnJS(scheduleIdle)();
@@ -481,14 +506,18 @@ export function PagerImpl({
       );
       return;
     }
+    const target = -direction * sign * width;
+    const left = Math.abs(target - translateX.get());
     translateX.set(
       withSpring(
-        -direction * sign * width,
+        target,
         {
           ...committing,
-          velocity,
-          overshootClamping: true,
-          energyThreshold,
+          velocity: lively
+            ? liveVelocity(velocity, left, committing)
+            : velocity,
+          overshootClamping: !lively,
+          energyThreshold: settleThreshold(left, velocity, committing),
         },
         (finished) => {
           // A touch that grabbed the slide has already landed it; the cut-off spring says nothing.
@@ -658,7 +687,7 @@ export function PagerImpl({
     endPaging,
     commit,
     settling,
-    energyThreshold,
+    lively,
     armed,
     touchX,
     touchY,
@@ -850,6 +879,8 @@ export function PagerImpl({
             current={false}
             initial={!booted}
             paging={paging}
+            slideStyle={slideStyle}
+            follow={follow}
           >
             {renderPage(prevMonth, { isCurrent: false })}
           </PagerPage>
@@ -866,6 +897,8 @@ export function PagerImpl({
             current
             initial={!booted}
             paging={paging}
+            slideStyle={slideStyle}
+            follow={follow}
           >
             {renderPage(month, { isCurrent: true })}
           </PagerPage>
@@ -882,6 +915,8 @@ export function PagerImpl({
             current={false}
             initial={!booted}
             paging={paging}
+            slideStyle={slideStyle}
+            follow={follow}
           >
             {renderPage(nextMonth, { isCurrent: false })}
           </PagerPage>
