@@ -10,6 +10,7 @@
 
 import type { ReactNode } from "react";
 
+import type { DashboardSummary } from "@/domain/models";
 import type {
   OverviewCard,
   OverviewWidgetType,
@@ -22,6 +23,11 @@ export interface WidgetProps {
   readonly month: string;
   readonly size: WidgetSize;
   readonly editing: boolean;
+  /**
+   * The dashboard figures for `month`, computed once by the month page and shared by every card,
+   * so a screen full of widgets does one repository read instead of one per widget.
+   */
+  readonly summary: DashboardSummary;
 }
 
 export interface WidgetConfigSheetProps {

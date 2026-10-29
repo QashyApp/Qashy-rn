@@ -22,15 +22,13 @@ import type {
   WidgetConfigSheetProps,
   WidgetProps,
 } from "@/features/overview/widgets/types";
-import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 
-export function BudgetPulseWidget({ card, month }: WidgetProps) {
+export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
   const theme = useQashyTheme();
   const { space } = theme;
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const { locale, t } = useLocalization();
-  const summary = useDashboard(month);
   const currency = state.settings.baseCurrency;
   const budgetId =
     typeof card.config.budgetId === "string" ? card.config.budgetId : undefined;

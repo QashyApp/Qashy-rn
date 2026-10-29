@@ -1,15 +1,12 @@
 import { CountUpSubject } from "@/components/finance/animated-money";
 import { router } from "expo-router";
-import { useRef, useState } from "react";
-import {
-  View,
-  type LayoutChangeEvent,
-  type ScrollViewInstance,
-} from "react-native";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { View, type ScrollViewInstance } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
+import type { MonthDirection } from "@/components/ui/month-switcher";
 import {
   MonthPager,
   navigateMonth,
@@ -22,12 +19,13 @@ import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import {
-  DEFAULT_OVERVIEW_LAYOUT,
+  overviewLayoutReducer,
   WIDGET_RULES,
   type OverviewCard,
   type OverviewLayoutAction,
 } from "@/domain/overview-layout";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
+import { applyOptimisticOrder } from "@/features/overview/layout/optimistic-order";
 import { OverviewMonthPage } from "@/features/overview/overview-month-page";
 import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
 import { resolveBottomChromeInset, useScreenMetrics } from "@/theme/layout";
@@ -61,63 +59,91 @@ export function OverviewScreen() {
   const dragProgress = useSharedValue(restingPosition(month, isRtl));
 
   const { layout, status, dispatch } = useOverviewLayout();
-  const cards =
-    status === "loading" ? DEFAULT_OVERVIEW_LAYOUT.cards : layout.cards;
+  // The order a dropped card was given, until the save settles. Applied at once so the card
+  // glides into its new slot instead of returning to the old one and jumping when the write ends.
+  const [pendingOrder, setPendingOrder] = useState<readonly string[] | null>(
+    null,
+  );
+  const cards = applyOptimisticOrder(layout.cards, pendingOrder);
   const [editing, setEditing] = useState(false);
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
-  const cardLayoutsRef = useRef(
-    new Map<string, { y: number; height: number }>(),
-  );
 
-  const changeMonth = (next: string) => setMonth(next);
+  // The latest values, for handlers that must keep one identity (the month page is memoised and
+  // its props are the whole point) yet need to read current state when they run.
+  const cardsRef = useRef(cards);
+  const monthRef = useRef(month);
+  const dropSequence = useRef(0);
+  useLayoutEffect(() => {
+    cardsRef.current = cards;
+    monthRef.current = month;
+  });
+
+  const changeMonth = useCallback((next: string) => setMonth(next), []);
 
   // Resolves to whether the change was persisted, so callers never act on a failed change.
-  const dispatchGuarded = async (
-    action: OverviewLayoutAction,
-    failureTitle: string,
-  ): Promise<boolean> => {
-    try {
-      await dispatch(action);
-      return true;
-    } catch (reason) {
-      showError(failureTitle, errorMessage(reason, "Try again."));
-      return false;
-    }
-  };
+  const dispatchGuarded = useCallback(
+    async (
+      action: OverviewLayoutAction,
+      failureTitle: string,
+    ): Promise<boolean> => {
+      try {
+        await dispatch(action);
+        return true;
+      } catch (reason) {
+        showError(failureTitle, errorMessage(reason, "Try again."));
+        return false;
+      }
+    },
+    [dispatch],
+  );
 
-  const moveCard = (id: string, delta: 1 | -1) => {
-    void dispatchGuarded(
-      { type: "moveBy", id, delta },
-      "Couldn’t update your overview",
-    );
-  };
+  const moveCard = useCallback(
+    (id: string, delta: 1 | -1) => {
+      void dispatchGuarded(
+        { type: "moveBy", id, delta },
+        "Couldn’t update your overview",
+      );
+    },
+    [dispatchGuarded],
+  );
 
-  const resizeCard = (card: OverviewCard) => {
-    void dispatchGuarded(
-      { type: "resize", id: card.id, size: nextSizeFor(card) },
-      "Couldn’t update your overview",
-    );
-  };
+  const resizeCard = useCallback(
+    (card: OverviewCard) => {
+      void dispatchGuarded(
+        { type: "resize", id: card.id, size: nextSizeFor(card) },
+        "Couldn’t update your overview",
+      );
+    },
+    [dispatchGuarded],
+  );
 
-  const configureCard = (id: string, config: Record<string, unknown>) => {
-    void dispatchGuarded(
-      { type: "configure", id, config },
-      "Couldn’t update your overview",
-    );
-  };
+  const configureCard = useCallback(
+    (id: string, config: Record<string, unknown>) => {
+      void dispatchGuarded(
+        { type: "configure", id, config },
+        "Couldn’t update your overview",
+      );
+    },
+    [dispatchGuarded],
+  );
 
-  const removeCard = (card: OverviewCard) => {
-    hapticImpactLight();
-    const index = cards.findIndex((existing) => existing.id === card.id);
-    void dispatchGuarded(
-      { type: "remove", id: card.id },
-      "Couldn’t update your overview",
-    ).then((removed) => {
-      // Offer undo only once the removal has actually been saved.
-      if (removed) setUndo({ card, index });
-    });
-  };
+  const removeCard = useCallback(
+    (card: OverviewCard) => {
+      hapticImpactLight();
+      const index = cardsRef.current.findIndex(
+        (existing) => existing.id === card.id,
+      );
+      void dispatchGuarded(
+        { type: "remove", id: card.id },
+        "Couldn’t update your overview",
+      ).then((removed) => {
+        // Offer undo only once the removal has actually been saved.
+        if (removed) setUndo({ card, index });
+      });
+    },
+    [dispatchGuarded],
+  );
 
   const undoRemove = () => {
     if (!undo) return;
@@ -138,44 +164,55 @@ export function OverviewScreen() {
     setUndo(null);
   };
 
-  const handleCardLayout = (id: string) => (event: LayoutChangeEvent) => {
-    cardLayoutsRef.current.set(id, {
-      y: event.nativeEvent.layout.y,
-      height: event.nativeEvent.layout.height,
-    });
-  };
+  // A dragged card was released on `toIndex`. The new order is shown at once and saved behind
+  // it; if the save fails the pending order is dropped and the card returns, with the error.
+  const dropCard = useCallback(
+    (id: string, toIndex: number): boolean => {
+      const shown = cardsRef.current;
+      const action: OverviewLayoutAction = { type: "move", id, toIndex };
+      const next = overviewLayoutReducer({ version: 1, cards: shown }, action);
+      if (next.cards.every((card, index) => card === shown[index])) {
+        return false;
+      }
+      dropSequence.current += 1;
+      const sequence = dropSequence.current;
+      setPendingOrder(next.cards.map((card) => card.id));
+      void dispatchGuarded(action, "Couldn’t update your overview").then(() => {
+        // Settled either way: the saved layout now matches, or the save failed and the card
+        // goes back. A newer drop owns the pending order from here.
+        if (dropSequence.current === sequence) setPendingOrder(null);
+      });
+      return true;
+    },
+    [dispatchGuarded],
+  );
 
-  const handleDragEnd = (card: OverviewCard, offsetY: number) => {
-    const fromIndex = cards.findIndex((existing) => existing.id === card.id);
-    const own = cardLayoutsRef.current.get(card.id);
-    if (fromIndex === -1 || !own) return;
-    const draggedMid = own.y + own.height / 2 + offsetY;
-    let targetIndex = 0;
-    cards.forEach((existing) => {
-      if (existing.id === card.id) return;
-      const layoutInfo = cardLayoutsRef.current.get(existing.id);
-      if (!layoutInfo) return;
-      if (layoutInfo.y + layoutInfo.height / 2 < draggedMid) targetIndex += 1;
-    });
-    if (targetIndex === fromIndex) return;
-    void dispatchGuarded(
-      { type: "move", id: card.id, toIndex: targetIndex },
-      "Couldn’t update your overview",
-    );
-  };
-
-  const enterEditMode = () => {
+  const enterEditMode = useCallback(() => {
     hapticImpactLight();
     setEditing(true);
-  };
+  }, []);
 
-  const exitEditMode = () => {
+  const exitEditMode = useCallback(() => {
     setEditing(false);
     setConfigOpenId(null);
-  };
+  }, []);
 
-  const toggleConfig = (id: string) =>
-    setConfigOpenId((current) => (current === id ? null : id));
+  const toggleConfig = useCallback(
+    (id: string) => setConfigOpenId((current) => (current === id ? null : id)),
+    [],
+  );
+
+  const switchMonth = useCallback(
+    (next: string, direction: MonthDirection) =>
+      navigateMonth(
+        pagerRef.current,
+        monthRef.current,
+        next,
+        direction,
+        changeMonth,
+      ),
+    [changeMonth],
+  );
 
   return (
     // Amounts hold their values through a swipe, then count to the new month once it settles.
@@ -197,28 +234,20 @@ export function OverviewScreen() {
               isCurrent={isCurrent}
               dragProgress={dragProgress}
               editing={editing}
+              layoutReady={status === "ready"}
               cards={cards}
               configOpenId={configOpenId}
               onToggleConfig={toggleConfig}
               onEnterEdit={enterEditMode}
               onExitEdit={exitEditMode}
-              onMonthSwitch={(next, direction) =>
-                navigateMonth(
-                  pagerRef.current,
-                  month,
-                  next,
-                  direction,
-                  changeMonth,
-                )
-              }
+              onMonthSwitch={switchMonth}
               onScroll={onScroll}
               scrollRef={scrollRef}
               onMoveCard={moveCard}
               onResizeCard={resizeCard}
               onConfigureCard={configureCard}
               onRemoveCard={removeCard}
-              onDragEnd={handleDragEnd}
-              onCardLayout={handleCardLayout}
+              onDropCard={dropCard}
             />
           )}
         />

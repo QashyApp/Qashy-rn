@@ -3,24 +3,21 @@
  * non-interactive (so a stray tap inside it never fires the card's own actions) and a toolbar
  * sits on top with reorder, resize, settings, and remove affordances.
  *
- * Dragging is handled here per-card with a `Gesture.Pan` on the drag handle. The frame does not
- * know about its siblings' positions — the owning list (`overview-screen.tsx`, in edit mode)
- * measures every card's on-screen `y`/`height` via `onCardLayout` and, on drop, turns the
- * accumulated vertical offset into a target index that it dispatches as a `move` action. This
- * frame only reports the live drag offset (for its own lift/follow animation) and the final
- * offset at release.
+ * Dragging is a `Gesture.Pan` on the grip. The frame follows the finger (plus however far the
+ * page has auto-scrolled), works out on the UI thread where the card would land and publishes
+ * that to the shared reorder state, which draws the insertion line. On a successful release it
+ * hands the target index to the owning screen, which applies the new order at once. The card is
+ * held where it was dropped until its slot moves, then springs the rest of the way in while the
+ * layout transition glides its neighbours aside, so it never returns to its old place first. A
+ * cancelled drag commits nothing and springs back.
  */
 
-import { useState, type ReactNode } from "react";
-import {
-  AccessibilityInfo,
-  Platform,
-  View,
-  type LayoutChangeEvent,
-} from "react-native";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { AccessibilityInfo, Platform, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
+  useAnimatedReaction,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
@@ -28,13 +25,29 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 
+import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
+import { MotionView } from "@/components/ui/motion";
+import {
+  autoScrollStep,
+  dropTargetIndex,
+} from "@/features/overview/edit/drag-math";
+import type { CardReorder } from "@/features/overview/edit/use-card-reorder";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { hapticSelection } from "@/services/haptics";
+import {
+  hapticImpactLight,
+  hapticSelection,
+  hapticSuccess,
+} from "@/services/haptics";
 import type { WidgetSize } from "@/domain/overview-layout";
+
+/** How much a card grows while it is held. */
+const LIFT_SCALE = 1.02;
+/** Touch targets in the toolbar. */
+const TARGET = 44;
 
 /** A plain three-bar grip, drawn directly rather than through a not-yet-mapped icon name. */
 function DragGripGlyph({ color }: { color: string }) {
@@ -57,6 +70,7 @@ function DragGripGlyph({ color }: { color: string }) {
 }
 
 export function EditableCardFrame({
+  id,
   title,
   index,
   total,
@@ -69,12 +83,12 @@ export function EditableCardFrame({
   onMoveDown,
   onCycleSize,
   onRemove,
-  onDragOffset,
-  onDragEnd,
-  onLayout,
+  reorder,
+  onDrop,
   children,
   configSheet,
 }: {
+  id: string;
   title: string;
   index: number;
   total: number;
@@ -87,21 +101,35 @@ export function EditableCardFrame({
   onMoveDown: () => void;
   onCycleSize?: () => void;
   onRemove: () => void;
-  /** Live vertical offset in pixels while a drag on this card is in progress. */
-  onDragOffset?: (offsetY: number) => void;
-  /** Final vertical offset at release, so the owning list can resolve a target index. */
-  onDragEnd?: (offsetY: number) => void;
-  onLayout?: (event: LayoutChangeEvent) => void;
+  /** Shared drag state: slot geometry, scroll offset, live drop target. */
+  reorder: CardReorder;
+  /**
+   * The card was released on `toIndex`. Returns whether the order changed, in which case the
+   * frame waits for its new slot before settling.
+   */
+  onDrop?: (id: string, toIndex: number) => boolean;
   children: ReactNode;
   configSheet?: ReactNode;
 }) {
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { radius, space, motion } = theme;
   const { t } = useLocalization();
-  const reduceMotion = useReducedMotion();
-  const [dragging, setDragging] = useState(false);
-  const translateY = useSharedValue(0);
+  const systemReduced = useReducedMotion();
+  const level = useAnimationLevel();
+  // The system setting and the in-app Animations level (Minimal, Off) both drop the lift and the
+  // springs; the card then simply follows the finger and lands in place.
+  const reduce = systemReduced || level !== "all";
+  const { slots, scrollY, source, target, autoScroll, viewport } = reorder;
+
+  const [lifted, setLifted] = useState(false);
+  // The drag offset, including any auto-scroll since the drag began once the finger is up.
+  const panY = useSharedValue(0);
   const scale = useSharedValue(1);
+  // 1 while a drag is live.
+  const phase = useSharedValue(0);
+  const scrollAtStart = useSharedValue(0);
+  // Set when a drop reordered the cards: the frame stays put until its slot actually moves.
+  const settleOnMove = useRef(false);
 
   const announceMove = (direction: "up" | "down") => {
     const nextPosition = direction === "up" ? index : index + 2;
@@ -128,131 +156,246 @@ export function EditableCardFrame({
     announceMove("down");
   };
 
+  const settle = () => {
+    settleOnMove.current = false;
+    if (reduce) {
+      panY.set(0);
+      scale.set(1);
+      setLifted(false);
+      return;
+    }
+    scale.set(withTiming(1, { duration: motion.duration.fast }));
+    panY.set(
+      withSpring(
+        0,
+        { ...motion.spring.snappy, overshootClamping: true },
+        (finished) => {
+          "worklet";
+          if (finished) runOnJS(setLifted)(false);
+        },
+      ),
+    );
+  };
+
   const beginDrag = () => {
-    setDragging(true);
-    hapticSelection();
+    setLifted(true);
+    reorder.setDragging(true);
+    hapticImpactLight();
   };
-  const endDrag = () => {
-    setDragging(false);
-    hapticSelection();
+
+  const drop = (toIndex: number) => {
+    const to = toIndex < 0 ? index : toIndex;
+    const moved = to !== index && (onDrop?.(id, to) ?? false);
+    settleOnMove.current = moved;
+    if (moved) hapticSuccess();
+    else hapticImpactLight();
   };
+
+  const finishDrag = () => {
+    reorder.setDragging(false);
+    // A reorder is being applied: settle once this frame's index changes, not before.
+    if (!settleOnMove.current) settle();
+  };
+
+  // The new order has rendered. The card is still where it was dropped, which is the same place
+  // on screen as before the swap because the layout transition starts from the old slot, so it
+  // can now spring the remaining distance to zero.
+  useLayoutEffect(() => {
+    if (settleOnMove.current) settle();
+    // Only a change of slot should run this.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+
+  // Where the card would land, from its own slot plus how far it has travelled. Runs on the UI
+  // thread every frame the inputs change (so also while the page auto-scrolls under a still
+  // finger) and only reaches JS when the index changes.
+  useAnimatedReaction(
+    () => {
+      if (phase.get() !== 1) return -1;
+      const all = slots.get();
+      const own = all[index];
+      if (!own) return -1;
+      const travelled = panY.get() + scrollY.get() - scrollAtStart.get();
+      return dropTargetIndex(all, index, own.top + own.height / 2 + travelled);
+    },
+    (next, previous) => {
+      if (next === previous) return;
+      target.set(next);
+      // A tick for each slot crossed, not for the drag starting or ending.
+      if (next >= 0 && previous !== null && previous >= 0) {
+        runOnJS(hapticSelection)();
+      }
+    },
+    [index],
+  );
 
   const pan = Gesture.Pan()
+    .withTestId(`overview-card-drag-${id}`)
     .activateAfterLongPress(Platform.OS === "web" ? 0 : 200)
     .onStart(() => {
+      "worklet";
+      phase.set(1);
+      scrollAtStart.set(scrollY.get());
+      source.set(index);
+      target.set(index);
+      if (!reduce)
+        scale.set(withTiming(LIFT_SCALE, { duration: motion.duration.fast }));
       runOnJS(beginDrag)();
-      scale.set(reduceMotion ? 1 : withTiming(1.02, { duration: 120 }));
     })
     .onUpdate((event) => {
-      translateY.set(event.translationY);
-      if (onDragOffset) runOnJS(onDragOffset)(event.translationY);
+      "worklet";
+      panY.set(event.translationY);
+      const area = viewport.get();
+      autoScroll.set(autoScrollStep(event.absoluteY, area.top, area.height));
     })
-    .onEnd((event) => {
-      if (onDragEnd) runOnJS(onDragEnd)(event.translationY);
-      runOnJS(endDrag)();
-      translateY.set(
-        reduceMotion ? 0 : withSpring(0, { damping: 18, stiffness: 220 }),
-      );
-      scale.set(reduceMotion ? 1 : withTiming(1, { duration: 120 }));
+    // Only a release that completed commits; a cancelled gesture falls through to `onFinalize`.
+    // `drop` and `finishDrag` read a ref only when the gesture ends, never in render.
+    // eslint-disable-next-line react-hooks/refs
+    .onEnd((_event, success) => {
+      "worklet";
+      if (!success) return;
+      runOnJS(drop)(target.get());
+    })
+    // eslint-disable-next-line react-hooks/refs
+    .onFinalize(() => {
+      "worklet";
+      if (phase.get() !== 1) return;
+      // Freeze the card where it is, so nothing scrolling afterwards can move it.
+      panY.set(panY.get() + scrollY.get() - scrollAtStart.get());
+      phase.set(0);
+      source.set(-1);
+      target.set(-1);
+      autoScroll.set(0);
+      runOnJS(finishDrag)();
     });
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }, { scale: scale.value }],
-    zIndex: dragging ? 10 : 0,
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    const scrolled =
+      phase.get() === 1 ? scrollY.get() - scrollAtStart.get() : 0;
+    return {
+      transform: [
+        { translateY: panY.get() + scrolled },
+        { scale: scale.get() },
+      ],
+    };
+  });
 
   return (
-    <Animated.View
-      onLayout={onLayout}
-      style={[
-        { borderRadius: radius.card, borderCurve: "continuous" },
-        dragging ? materialStyle(theme, "overlay") : null,
-        animatedStyle,
-      ]}
-      accessibilityActions={[
-        { name: "moveUp", label: t("Move up") },
-        { name: "moveDown", label: t("Move down") },
-        { name: "remove", label: t("Remove") },
-      ]}
-      onAccessibilityAction={(event) => {
-        if (event.nativeEvent.actionName === "moveUp") moveUp();
-        else if (event.nativeEvent.actionName === "moveDown") moveDown();
-        else if (event.nativeEvent.actionName === "remove") onRemove();
-      }}
+    // The wrapper takes part in layout (so neighbours glide when a card is dropped, removed or
+    // resized) and carries the z-order; the card inside it carries the drag transform.
+    <MotionView
+      animateLayout
+      entrance={false}
+      style={{ zIndex: lifted ? 10 : 0 }}
     >
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          gap: space.xs,
-          paddingHorizontal: space.sm,
-          paddingVertical: space.xs,
+      <Animated.View
+        onLayout={(event) =>
+          reorder.setCardHeight(id, event.nativeEvent.layout.height)
+        }
+        style={[
+          { borderRadius: radius.card, borderCurve: "continuous" },
+          lifted ? materialStyle(theme, "overlay") : null,
+          animatedStyle,
+        ]}
+        accessibilityActions={[
+          { name: "moveUp", label: t("Move up") },
+          { name: "moveDown", label: t("Move down") },
+          { name: "remove", label: t("Remove") },
+        ]}
+        onAccessibilityAction={(event) => {
+          if (event.nativeEvent.actionName === "moveUp") moveUp();
+          else if (event.nativeEvent.actionName === "moveDown") moveDown();
+          else if (event.nativeEvent.actionName === "remove") onRemove();
         }}
       >
-        <GestureDetector gesture={pan}>
-          <View
-            accessibilityLabel={t(`Drag to reorder ${title}`)}
-            style={{ padding: space.sm }}
+        <View
+          style={{
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: space.xs,
+            paddingHorizontal: space.sm,
+            paddingVertical: space.xs,
+          }}
+        >
+          <GestureDetector gesture={pan}>
+            <View
+              accessibilityLabel={t(`Drag to reorder ${title}`)}
+              style={{
+                minWidth: TARGET,
+                minHeight: TARGET,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <DragGripGlyph color={theme.textMuted as string} />
+            </View>
+          </GestureDetector>
+          <AppText
+            literal
+            variant="label"
+            // Wraps the buttons below the title before it squeezes it out of sight.
+            style={{ flexGrow: 1, flexShrink: 1, flexBasis: 72 }}
+            numberOfLines={1}
           >
-            <DragGripGlyph color={theme.textMuted as string} />
-          </View>
-        </GestureDetector>
-        <AppText literal variant="label" style={{ flex: 1 }} numberOfLines={1}>
-          {title}
-        </AppText>
-        <IconButton
-          label={`Move ${title} up`}
-          icon="arrow.up"
-          size={40}
-          disabled={index === 0}
-          onPress={moveUp}
-        />
-        <IconButton
-          label={`Move ${title} down`}
-          icon="arrow.down"
-          size={40}
-          disabled={index === total - 1}
-          onPress={moveDown}
-        />
-        {showSizeControl && sizes.length > 1 ? (
+            {title}
+          </AppText>
           <IconButton
-            label={`Change ${title} size`}
-            icon="arrow.up.left.and.arrow.down.right"
-            size={40}
-            onPress={() => {
-              hapticSelection();
-              onCycleSize?.();
-            }}
+            label={`Move ${title} up`}
+            icon="arrow.up"
+            size={TARGET}
+            disabled={index === 0}
+            onPress={moveUp}
           />
-        ) : null}
-        {hasConfigSheet ? (
           <IconButton
-            label={`${title} settings`}
-            icon="gear"
-            size={40}
-            accessibilityState={{ expanded: configOpen }}
-            onPress={onToggleConfig}
+            label={`Move ${title} down`}
+            icon="arrow.down"
+            size={TARGET}
+            disabled={index === total - 1}
+            onPress={moveDown}
           />
-        ) : null}
-        <IconButton
-          label={`Remove ${title}`}
-          icon="trash"
-          size={40}
-          onPress={onRemove}
-        />
-      </View>
-      {hasConfigSheet && configOpen ? (
-        <View style={{ paddingHorizontal: space.md, paddingBottom: space.md }}>
-          {configSheet}
+          {showSizeControl && sizes.length > 1 ? (
+            <IconButton
+              label={`Change ${title} size`}
+              icon="arrow.up.left.and.arrow.down.right"
+              size={TARGET}
+              onPress={() => {
+                hapticSelection();
+                onCycleSize?.();
+              }}
+            />
+          ) : null}
+          {hasConfigSheet ? (
+            <IconButton
+              label={`${title} settings`}
+              icon="gear"
+              size={TARGET}
+              accessibilityState={{ expanded: configOpen }}
+              onPress={onToggleConfig}
+            />
+          ) : null}
+          <IconButton
+            label={`Remove ${title}`}
+            icon="trash"
+            size={TARGET}
+            onPress={onRemove}
+          />
         </View>
-      ) : null}
-      <View
-        pointerEvents="none"
-        accessibilityElementsHidden
-        importantForAccessibility="no-hide-descendants"
-      >
-        {children}
-      </View>
-    </Animated.View>
+        {hasConfigSheet && configOpen ? (
+          <View
+            style={{ paddingHorizontal: space.md, paddingBottom: space.md }}
+          >
+            {configSheet}
+          </View>
+        ) : null}
+        <View
+          pointerEvents="none"
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        >
+          {children}
+        </View>
+      </Animated.View>
+    </MotionView>
   );
 }
