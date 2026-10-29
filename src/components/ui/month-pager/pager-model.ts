@@ -40,8 +40,13 @@ export function monthAtIndex(index: number) {
 }
 
 export interface MonthPagerHandle {
-  /** Slide one month forward (`1`) or back (`-1`), exactly like a committed swipe. */
-  goTo(direction: 1 | -1): void;
+  /**
+   * Slide one month forward (`1`) or back (`-1`), exactly like a committed swipe. A slide still in
+   * flight lands where it is and this one starts from there, so quick taps never wait. Returns
+   * whether the step was taken: `false` when the newest month is already reached or a finger is
+   * dragging the pages.
+   */
+  goTo(direction: 1 | -1): boolean;
 }
 
 export interface MonthPageInfo {
@@ -88,6 +93,7 @@ export interface MonthPagerProps {
 /**
  * Routes a `MonthSwitcher` change through the pager so a tap on the previous or next
  * month slides exactly like a swipe, and anything farther (the picker) just jumps.
+ * Returns whether the change was taken, which the switcher uses to decide on its haptic tick.
  */
 export function navigateMonth(
   pager: MonthPagerHandle | null,
@@ -95,8 +101,9 @@ export function navigateMonth(
   next: string,
   direction: MonthDirection,
   jump: (month: string, direction: MonthDirection) => void,
-) {
-  if (pager && next === moveMonth(current, 1)) pager.goTo(1);
-  else if (pager && next === moveMonth(current, -1)) pager.goTo(-1);
-  else jump(next, direction);
+): boolean {
+  if (pager && next === moveMonth(current, 1)) return pager.goTo(1);
+  if (pager && next === moveMonth(current, -1)) return pager.goTo(-1);
+  jump(next, direction);
+  return true;
 }

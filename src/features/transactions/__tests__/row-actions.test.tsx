@@ -2,9 +2,12 @@ import { act, renderHook } from "@testing-library/react-native";
 import { AppState } from "react-native";
 
 import {
+  MAX_PENDING_ROW_ACTIONS,
+  ROW_ACTION_UNDO_MS,
   commitRowAction,
   createRowActionQueue,
   rowActionMessage,
+  rowActionsMessage,
   usePendingRowActions,
   type RowActionKind,
 } from "@/features/transactions/row-actions";
@@ -77,6 +80,40 @@ describe("rowActionMessage", () => {
   });
 });
 
+describe("rowActionsMessage", () => {
+  it("uses the single-action message for one action", () => {
+    expect(rowActionsMessage([{ kind: "delete" }])).toBe("Transaction deleted");
+    expect(rowActionsMessage([{ kind: "skip" }])).toBe("Payment skipped");
+  });
+
+  it("counts several actions of one kind", () => {
+    const two = (kind: RowActionKind) => [{ kind }, { kind }];
+    expect(rowActionsMessage(two("delete"))).toBe("2 transactions deleted");
+    expect(rowActionsMessage(two("skip"))).toBe("2 payments skipped");
+    expect(rowActionsMessage(two("markPaid"))).toBe("2 marked as paid");
+  });
+
+  it("counts changes when the kinds differ", () => {
+    expect(
+      rowActionsMessage([
+        { kind: "delete" },
+        { kind: "skip" },
+        { kind: "delete" },
+      ]),
+    ).toBe("3 changes to undo");
+  });
+
+  it("is empty with nothing pending", () => {
+    expect(rowActionsMessage([])).toBe("");
+  });
+});
+
+describe("the undo window", () => {
+  it("is eight seconds", () => {
+    expect(ROW_ACTION_UNDO_MS).toBe(8000);
+  });
+});
+
 describe("commitRowAction", () => {
   it("deletes through deleteEntities", async () => {
     await commitRowAction(repo, rates, "delete", "a");
@@ -129,12 +166,12 @@ describe("createRowActionQueue", () => {
   it("schedule then undo never commits and unhides the row", () => {
     const { queue, commit } = setup();
     queue.schedule("a", "delete");
-    expect(queue.getState().pending).toEqual({ id: "a", kind: "delete" });
+    expect(queue.getState().pending).toEqual([{ id: "a", kind: "delete" }]);
     expect(queue.getState().hiddenIds.has("a")).toBe(true);
     queue.undo();
     queue.flush();
     expect(commit).not.toHaveBeenCalled();
-    expect(queue.getState().pending).toBeNull();
+    expect(queue.getState().pending).toEqual([]);
     expect(queue.getState().hiddenIds.size).toBe(0);
   });
 
@@ -145,7 +182,7 @@ describe("createRowActionQueue", () => {
     it("shows the Undo bar at once but hides the row only after the delay", () => {
       const { queue, commit } = setup();
       queue.schedule("a", "delete", 250);
-      expect(queue.getState().pending).toEqual({ id: "a", kind: "delete" });
+      expect(queue.getState().pending).toEqual([{ id: "a", kind: "delete" }]);
       expect(queue.getState().hiddenIds.has("a")).toBe(false);
       jest.advanceTimersByTime(249);
       expect(queue.getState().hiddenIds.has("a")).toBe(false);
@@ -161,7 +198,7 @@ describe("createRowActionQueue", () => {
       queue.schedule("a", "skip", 250);
       queue.undo();
       jest.advanceTimersByTime(1000);
-      expect(queue.getState().pending).toBeNull();
+      expect(queue.getState().pending).toEqual([]);
       expect(queue.getState().hiddenIds.size).toBe(0);
       queue.flush();
       expect(commit).not.toHaveBeenCalled();
@@ -181,17 +218,126 @@ describe("createRowActionQueue", () => {
       const { queue } = setup();
       queue.schedule("a", "markPaid", 250);
       jest.advanceTimersByTime(1000);
-      expect(queue.getState().pending).toEqual({ id: "a", kind: "markPaid" });
+      expect(queue.getState().pending).toEqual([{ id: "a", kind: "markPaid" }]);
       expect(queue.getState().hiddenIds.size).toBe(0);
     });
 
-    it("scheduling another action during the delay commits the first", () => {
+    it("scheduling another action during the delay leaves the first pending and hides both in turn", () => {
       const { queue, commit } = setup();
       queue.schedule("a", "delete", 250);
       queue.schedule("b", "delete", 250);
-      expect(commit).toHaveBeenCalledWith("a", "delete");
+      expect(commit).not.toHaveBeenCalled();
       jest.advanceTimersByTime(250);
+      expect(queue.getState().hiddenIds.has("a")).toBe(true);
       expect(queue.getState().hiddenIds.has("b")).toBe(true);
+    });
+  });
+
+  describe("undo stack", () => {
+    beforeEach(() => jest.useFakeTimers());
+    afterEach(() => jest.useRealTimers());
+
+    it("a second action does not commit the first", () => {
+      const { queue, commit } = setup();
+      queue.schedule("a", "delete");
+      queue.schedule("b", "skip");
+      expect(commit).not.toHaveBeenCalled();
+      expect(queue.getState().pending).toEqual([
+        { id: "a", kind: "delete" },
+        { id: "b", kind: "skip" },
+      ]);
+      expect([...queue.getState().hiddenIds].sort()).toEqual(["a", "b"]);
+    });
+
+    it("commits each action when its own window ends, not the others", async () => {
+      const { queue, commit } = setup();
+      queue.schedule("a", "delete");
+      jest.advanceTimersByTime(3000);
+      queue.schedule("b", "delete");
+      jest.advanceTimersByTime(ROW_ACTION_UNDO_MS - 3000);
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(commit).toHaveBeenCalledWith("a", "delete");
+      expect(queue.getState().pending).toEqual([{ id: "b", kind: "delete" }]);
+      // The first stays hidden while its commit runs.
+      expect(queue.getState().hiddenIds.has("a")).toBe(true);
+      jest.advanceTimersByTime(3000);
+      expect(commit).toHaveBeenCalledTimes(2);
+      expect(commit).toHaveBeenLastCalledWith("b", "delete");
+      expect(queue.getState().pending).toEqual([]);
+    });
+
+    it("undo restores every pending action and nothing commits later", () => {
+      const { queue, commit } = setup();
+      queue.schedule("a", "delete");
+      queue.schedule("b", "skip");
+      queue.schedule("c", "markPaid");
+      queue.undo();
+      jest.advanceTimersByTime(ROW_ACTION_UNDO_MS * 2);
+      expect(commit).not.toHaveBeenCalled();
+      expect(queue.getState().pending).toEqual([]);
+      expect(queue.getState().hiddenIds.size).toBe(0);
+      expect(queue.getState().paidIds.size).toBe(0);
+    });
+
+    it("undo after the first has committed restores only what still waits", () => {
+      const { queue, commit } = setup();
+      queue.schedule("a", "delete");
+      jest.advanceTimersByTime(ROW_ACTION_UNDO_MS);
+      queue.schedule("b", "delete");
+      queue.undo();
+      jest.advanceTimersByTime(ROW_ACTION_UNDO_MS);
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(commit).toHaveBeenCalledWith("a", "delete");
+    });
+
+    it("flush commits all of them, once each, and clears their timers", () => {
+      const { queue, commit } = setup();
+      queue.schedule("a", "delete");
+      queue.schedule("b", "skip");
+      queue.flush();
+      expect(commit).toHaveBeenCalledTimes(2);
+      jest.advanceTimersByTime(ROW_ACTION_UNDO_MS * 2);
+      expect(commit).toHaveBeenCalledTimes(2);
+    });
+
+    it("keeps at most five pending, committing the oldest to make room", () => {
+      const { queue, commit } = setup();
+      const ids = ["a", "b", "c", "d", "e", "f"];
+      expect(MAX_PENDING_ROW_ACTIONS).toBe(5);
+      for (const id of ids) queue.schedule(id, "delete");
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(commit).toHaveBeenCalledWith("a", "delete");
+      expect(queue.getState().pending.map((item) => item.id)).toEqual([
+        "b",
+        "c",
+        "d",
+        "e",
+        "f",
+      ]);
+      // An evicted action's timer must not commit it a second time.
+      jest.advanceTimersByTime(ROW_ACTION_UNDO_MS);
+      expect(commit).toHaveBeenCalledTimes(6);
+      expect(commit.mock.calls.filter(([id]) => id === "a")).toHaveLength(1);
+    });
+
+    it("prunes only the pending actions whose transactions are gone", () => {
+      const { queue, commit } = setup();
+      queue.schedule("a", "delete");
+      queue.schedule("b", "delete");
+      queue.prune(new Set(["b"]));
+      expect(queue.getState().pending).toEqual([{ id: "b", kind: "delete" }]);
+      jest.advanceTimersByTime(ROW_ACTION_UNDO_MS);
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(commit).toHaveBeenCalledWith("b", "delete");
+    });
+
+    it("lists several rows being marked paid together", () => {
+      const { queue } = setup();
+      queue.schedule("a", "markPaid");
+      queue.schedule("b", "markPaid");
+      expect([...queue.getState().paidIds].sort()).toEqual(["a", "b"]);
+      queue.undo();
+      expect(queue.getState().paidIds.size).toBe(0);
     });
   });
 
@@ -206,22 +352,12 @@ describe("createRowActionQueue", () => {
     expect(queue.getState().hiddenIds.size).toBe(0);
   });
 
-  it("scheduling B commits A and leaves B pending", () => {
-    const { queue, commit } = setup();
-    queue.schedule("a", "delete");
-    queue.schedule("b", "skip");
-    expect(commit).toHaveBeenCalledTimes(1);
-    expect(commit).toHaveBeenCalledWith("a", "delete");
-    expect(queue.getState().pending).toEqual({ id: "b", kind: "skip" });
-    expect([...queue.getState().hiddenIds].sort()).toEqual(["a", "b"]);
-  });
-
   it("keeps a row being marked paid in the list while pending and while committing", async () => {
     const { queue, commit } = setup();
     const gate = deferred();
     commit.mockReturnValueOnce(gate.promise);
     expect(queue.schedule("a", "markPaid")).toBe(true);
-    expect(queue.getState().pending).toEqual({ id: "a", kind: "markPaid" });
+    expect(queue.getState().pending).toEqual([{ id: "a", kind: "markPaid" }]);
     expect(queue.getState().hiddenIds.size).toBe(0);
     queue.flush();
     expect(commit).toHaveBeenCalledWith("a", "markPaid");
@@ -260,7 +396,7 @@ describe("createRowActionQueue", () => {
     const { queue } = setup();
     expect(queue.schedule("a", "markPaid")).toBe(true);
     expect(queue.schedule("a", "skip")).toBe(false);
-    expect(queue.getState().pending).toEqual({ id: "a", kind: "markPaid" });
+    expect(queue.getState().pending).toEqual([{ id: "a", kind: "markPaid" }]);
   });
 
   it("reports whether a schedule was accepted", () => {
@@ -277,7 +413,7 @@ describe("createRowActionQueue", () => {
     queue.schedule("a", "delete");
     queue.flush();
     queue.schedule("a", "delete");
-    expect(queue.getState().pending).toBeNull();
+    expect(queue.getState().pending).toEqual([]);
     gate.resolve();
     await flushPromises();
     expect(commit).toHaveBeenCalledTimes(1);
@@ -311,12 +447,12 @@ describe("createRowActionQueue", () => {
     const { queue, commit } = setup();
     queue.schedule("a", "delete");
     queue.prune(new Set(["b"]));
-    expect(queue.getState().pending).toBeNull();
+    expect(queue.getState().pending).toEqual([]);
     expect(queue.getState().hiddenIds.size).toBe(0);
     expect(commit).not.toHaveBeenCalled();
     queue.schedule("b", "delete");
     queue.prune(new Set(["b"]));
-    expect(queue.getState().pending).toEqual({ id: "b", kind: "delete" });
+    expect(queue.getState().pending).toEqual([{ id: "b", kind: "delete" }]);
   });
 
   it("notifies subscribers only when something visible changed", () => {
@@ -350,7 +486,7 @@ describe("usePendingRowActions", () => {
     });
     await act(flushPromises);
     expect(mockRepository.deleteEntities).toHaveBeenCalledTimes(1);
-    expect(result.current.pending).toBeNull();
+    expect(result.current.pending).toEqual([]);
     expect(result.current.hiddenIds.size).toBe(0);
   });
 
@@ -428,7 +564,7 @@ describe("usePendingRowActions", () => {
     });
     mockTransactions = [{ id: "b", currency: "EUR" }];
     await rerender({});
-    expect(result.current.pending).toBeNull();
+    expect(result.current.pending).toEqual([]);
     await act(async () => {
       result.current.expire();
     });

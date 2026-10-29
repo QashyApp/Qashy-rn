@@ -11,6 +11,7 @@ import {
   type TabSection,
 } from "@/components/navigation/tab-sections";
 import { useTabLongPress } from "@/components/navigation/use-tab-long-press";
+import { useMotionPreference } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
 import { hapticSelection } from "@/services/haptics";
@@ -92,17 +93,31 @@ function useRestoreSectionOnSwitch(floating: boolean) {
 
 function FloatingTabsLayout() {
   const { t } = useLocalization();
-  const { space } = useQashyTheme();
+  const { space, motion, background } = useQashyTheme();
   const insets = useSafeAreaInsets();
   const { open } = useNavBarStyleSheet();
+  // The indicator in the bar glides over `motion.duration.base`; the sections cross-fade over the
+  // same time so content does not hard-cut under it. `instant` folds the in-app Animations level
+  // (Off) and the system's reduce-motion setting; at Minimal a fade is the whole motion anyway.
+  const { instant } = useMotionPreference();
   return (
     <BottomBarClearanceContext
       value={floatingBarClearance(insets.bottom, space.md)}
     >
       <Tabs
         // The bar floats over the screens, so they keep their full height. Each section stack shows
-        // its own native header, hence no header here.
-        screenOptions={{ headerShown: false }}
+        // its own native header, hence no header here. Tabs are lazy (the navigator's default), so
+        // a section still mounts on its first visit; the fade only runs between mounted ones.
+        screenOptions={{
+          headerShown: false,
+          animation: instant ? "none" : "fade",
+          transitionSpec: {
+            animation: "timing",
+            config: { duration: motion.duration.base },
+          },
+          // Opaque scenes, so the window behind never shows through mid-fade.
+          sceneStyle: { backgroundColor: background },
+        }}
         tabBar={(props) => <FloatingTabBar {...props} onLongPress={open} />}
       >
         <Tabs.Screen name="overview" options={{ title: t("Overview") }} />

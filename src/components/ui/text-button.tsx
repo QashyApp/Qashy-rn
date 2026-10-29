@@ -40,6 +40,7 @@ export function TextButton({
         : theme.accentText);
   return (
     <MotionPressable
+      delayPressIn={0}
       accessibilityLabel={t(title)}
       accessibilityRole="button"
       accessibilityState={{ ...accessibilityState, disabled: isDisabled }}

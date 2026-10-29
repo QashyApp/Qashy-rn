@@ -50,3 +50,32 @@ export function sheetSpring(dampingRatio: number, durationMs: number) {
     overshootClamping: true,
   } as const;
 }
+
+/** The quickest and slowest a swiped-away sheet takes to leave, in ms. */
+const DISMISS_MIN_MS = 120;
+const DISMISS_MAX_MS = 240;
+/**
+ * Below this release speed (px/s) the sheet is not being thrown, only let go of: it leaves on the
+ * accelerating exit curve, and the duration is worked out as if it were moving at this speed.
+ */
+export const DISMISS_SLOW_SPEED = 400;
+
+/**
+ * How a sheet leaves after a swipe down: `remaining` px still to cover and the release speed
+ * `velocityY` (px/s, positive downward). A thrown sheet carries on at the speed it was released at
+ * (`linear` true: an accelerating curve would stall it for the first frames), a sheet merely let go
+ * of takes the exit curve. Either way the time is the distance over that speed, kept within
+ * [120, 240] ms so a long throw is not abrupt and a lazy drop is not sluggish.
+ */
+export function sheetDismissTiming(remaining: number, velocityY: number) {
+  // Runs on the UI thread, from the sheet's drag gesture.
+  "worklet";
+  const speed = Math.max(velocityY, DISMISS_SLOW_SPEED);
+  const ms = (Math.max(remaining, 0) / speed) * 1000;
+  return {
+    duration: Math.round(
+      Math.min(DISMISS_MAX_MS, Math.max(DISMISS_MIN_MS, ms)),
+    ),
+    linear: velocityY > DISMISS_SLOW_SPEED,
+  };
+}

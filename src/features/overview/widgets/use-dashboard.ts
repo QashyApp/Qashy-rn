@@ -1,9 +1,12 @@
 /**
- * Shared dashboard-summary fetch for every screen and Overview widget.
+ * Shared dashboard-summary fetch for the screens that show one.
  *
  * `repository.getDashboard` is a synchronous read over the in-memory finance snapshot, so this
  * just centralizes the `useMemo` + external-store dependency list that every caller would
- * otherwise duplicate — one copy instead of many, all reading the same state slices the repository consults internally.
+ * otherwise duplicate, all reading the same state slices the repository consults internally.
+ *
+ * Overview calls it once per month page and passes the result to its widgets as `summary`
+ * (see `WidgetProps`), so the cards never each run the same read themselves.
  */
 
 import { useMemo } from "react";

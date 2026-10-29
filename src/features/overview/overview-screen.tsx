@@ -1,15 +1,12 @@
 import { CountUpSubject } from "@/components/finance/animated-money";
 import { router } from "expo-router";
-import { useRef, useState } from "react";
-import {
-  View,
-  type LayoutChangeEvent,
-  type ScrollViewInstance,
-} from "react-native";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { View, type ScrollViewInstance } from "react-native";
 import { useSharedValue } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { FloatingActionButton } from "@/components/ui/floating-action-button";
+import type { MonthDirection } from "@/components/ui/month-switcher";
 import {
   MonthPager,
   navigateMonth,
@@ -21,12 +18,9 @@ import { floatingActionMetrics } from "@/components/ui/screen-container";
 import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
-import {
-  DEFAULT_OVERVIEW_LAYOUT,
-  WIDGET_RULES,
-  type OverviewCard,
-  type OverviewLayoutAction,
-} from "@/domain/overview-layout";
+import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
+import { createCardDropper } from "@/features/overview/layout/card-dropper";
+import type { LayoutStoreAction } from "@/features/overview/layout/layout-actions";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
 import { OverviewMonthPage } from "@/features/overview/overview-month-page";
 import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
@@ -60,64 +54,89 @@ export function OverviewScreen() {
   const pagerRef = useRef<MonthPagerHandle>(null);
   const dragProgress = useSharedValue(restingPosition(month, isRtl));
 
+  // `layout` is what the store shows: the saved layout with every unsettled change (a card just
+  // dropped, say) already applied, and taken back by the store if its save fails. Nothing here
+  // keeps a pending order of its own, so a remount mid-save shows the same order.
   const { layout, status, dispatch } = useOverviewLayout();
-  const cards =
-    status === "loading" ? DEFAULT_OVERVIEW_LAYOUT.cards : layout.cards;
+  const cards = layout.cards;
   const [editing, setEditing] = useState(false);
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
-  const cardLayoutsRef = useRef(
-    new Map<string, { y: number; height: number }>(),
-  );
 
-  const changeMonth = (next: string) => setMonth(next);
+  // The latest values, for handlers that must keep one identity (the month page is memoised and
+  // its props are the whole point) yet need to read current state when they run.
+  const cardsRef = useRef(cards);
+  const monthRef = useRef(month);
+  useLayoutEffect(() => {
+    cardsRef.current = cards;
+    monthRef.current = month;
+  });
+
+  const changeMonth = useCallback((next: string) => setMonth(next), []);
 
   // Resolves to whether the change was persisted, so callers never act on a failed change.
-  const dispatchGuarded = async (
-    action: OverviewLayoutAction,
-    failureTitle: string,
-  ): Promise<boolean> => {
-    try {
-      await dispatch(action);
-      return true;
-    } catch (reason) {
-      showError(failureTitle, errorMessage(reason, "Try again."));
-      return false;
-    }
-  };
+  const dispatchGuarded = useCallback(
+    async (
+      action: LayoutStoreAction,
+      failureTitle: string,
+    ): Promise<boolean> => {
+      try {
+        // `false` when the action changed nothing (no failure, but nothing was saved either).
+        return await dispatch(action);
+      } catch (reason) {
+        showError(failureTitle, errorMessage(reason, "Try again."));
+        return false;
+      }
+    },
+    [dispatch],
+  );
 
-  const moveCard = (id: string, delta: 1 | -1) => {
-    void dispatchGuarded(
-      { type: "moveBy", id, delta },
-      "Couldn’t update your overview",
-    );
-  };
+  const moveCard = useCallback(
+    (id: string, delta: 1 | -1) => {
+      void dispatchGuarded(
+        { type: "moveBy", id, delta },
+        "Couldn’t update your overview",
+      );
+    },
+    [dispatchGuarded],
+  );
 
-  const resizeCard = (card: OverviewCard) => {
-    void dispatchGuarded(
-      { type: "resize", id: card.id, size: nextSizeFor(card) },
-      "Couldn’t update your overview",
-    );
-  };
+  const resizeCard = useCallback(
+    (card: OverviewCard) => {
+      void dispatchGuarded(
+        { type: "resize", id: card.id, size: nextSizeFor(card) },
+        "Couldn’t update your overview",
+      );
+    },
+    [dispatchGuarded],
+  );
 
-  const configureCard = (id: string, config: Record<string, unknown>) => {
-    void dispatchGuarded(
-      { type: "configure", id, config },
-      "Couldn’t update your overview",
-    );
-  };
+  const configureCard = useCallback(
+    (id: string, config: Record<string, unknown>) => {
+      void dispatchGuarded(
+        { type: "configure", id, config },
+        "Couldn’t update your overview",
+      );
+    },
+    [dispatchGuarded],
+  );
 
-  const removeCard = (card: OverviewCard) => {
-    hapticImpactLight();
-    const index = cards.findIndex((existing) => existing.id === card.id);
-    void dispatchGuarded(
-      { type: "remove", id: card.id },
-      "Couldn’t update your overview",
-    ).then((removed) => {
-      // Offer undo only once the removal has actually been saved.
-      if (removed) setUndo({ card, index });
-    });
-  };
+  const removeCard = useCallback(
+    (card: OverviewCard) => {
+      hapticImpactLight();
+      const index = cardsRef.current.findIndex(
+        (existing) => existing.id === card.id,
+      );
+      void dispatchGuarded(
+        { type: "remove", id: card.id },
+        "Couldn’t update your overview",
+      ).then((removed) => {
+        // Offer undo only once the removal has actually been saved.
+        if (removed) setUndo({ card, index });
+      });
+    },
+    [dispatchGuarded],
+  );
 
   const undoRemove = () => {
     if (!undo) return;
@@ -138,44 +157,49 @@ export function OverviewScreen() {
     setUndo(null);
   };
 
-  const handleCardLayout = (id: string) => (event: LayoutChangeEvent) => {
-    cardLayoutsRef.current.set(id, {
-      y: event.nativeEvent.layout.y,
-      height: event.nativeEvent.layout.height,
-    });
-  };
+  // A dragged card was released on `toIndex`. The store shows the new order at once and saves it
+  // behind it; if the save fails the store takes it back, and the error is shown.
+  const dropCard = useMemo(
+    () =>
+      // `cardsRef` is read only when a card is dropped, never while rendering.
+      // eslint-disable-next-line react-hooks/refs
+      createCardDropper({
+        getCards: () => cardsRef.current,
+        save: (action) =>
+          dispatchGuarded(action, "Couldn’t update your overview"),
+      }),
+    [dispatchGuarded],
+  );
 
-  const handleDragEnd = (card: OverviewCard, offsetY: number) => {
-    const fromIndex = cards.findIndex((existing) => existing.id === card.id);
-    const own = cardLayoutsRef.current.get(card.id);
-    if (fromIndex === -1 || !own) return;
-    const draggedMid = own.y + own.height / 2 + offsetY;
-    let targetIndex = 0;
-    cards.forEach((existing) => {
-      if (existing.id === card.id) return;
-      const layoutInfo = cardLayoutsRef.current.get(existing.id);
-      if (!layoutInfo) return;
-      if (layoutInfo.y + layoutInfo.height / 2 < draggedMid) targetIndex += 1;
-    });
-    if (targetIndex === fromIndex) return;
-    void dispatchGuarded(
-      { type: "move", id: card.id, toIndex: targetIndex },
-      "Couldn’t update your overview",
-    );
-  };
-
-  const enterEditMode = () => {
+  // Editing needs the saved layout; the placeholder shown while it is unavailable is read-only.
+  const canEdit = status === "ready";
+  const enterEditMode = useCallback(() => {
+    if (!canEdit) return;
     hapticImpactLight();
     setEditing(true);
-  };
+  }, [canEdit]);
 
-  const exitEditMode = () => {
+  const exitEditMode = useCallback(() => {
     setEditing(false);
     setConfigOpenId(null);
-  };
+  }, []);
 
-  const toggleConfig = (id: string) =>
-    setConfigOpenId((current) => (current === id ? null : id));
+  const toggleConfig = useCallback(
+    (id: string) => setConfigOpenId((current) => (current === id ? null : id)),
+    [],
+  );
+
+  const switchMonth = useCallback(
+    (next: string, direction: MonthDirection) =>
+      navigateMonth(
+        pagerRef.current,
+        monthRef.current,
+        next,
+        direction,
+        changeMonth,
+      ),
+    [changeMonth],
+  );
 
   return (
     // Amounts hold their values through a swipe, then count to the new month once it settles.
@@ -197,28 +221,20 @@ export function OverviewScreen() {
               isCurrent={isCurrent}
               dragProgress={dragProgress}
               editing={editing}
+              layoutStatus={status}
               cards={cards}
               configOpenId={configOpenId}
               onToggleConfig={toggleConfig}
               onEnterEdit={enterEditMode}
               onExitEdit={exitEditMode}
-              onMonthSwitch={(next, direction) =>
-                navigateMonth(
-                  pagerRef.current,
-                  month,
-                  next,
-                  direction,
-                  changeMonth,
-                )
-              }
+              onMonthSwitch={switchMonth}
               onScroll={onScroll}
               scrollRef={scrollRef}
               onMoveCard={moveCard}
               onResizeCard={resizeCard}
               onConfigureCard={configureCard}
               onRemoveCard={removeCard}
-              onDragEnd={handleDragEnd}
-              onCardLayout={handleCardLayout}
+              onDropCard={dropCard}
             />
           )}
         />

@@ -17,6 +17,27 @@ export const OPEN_FRACTION = 0.6;
 export const FLING_VELOCITY = 600;
 /** The farthest a side without an action can be pulled, in dp. */
 export const RUBBER_LIMIT = 36;
+/** Past the commit line the row follows the finger at this fraction, so the commit feels held. */
+export const COMMIT_RESISTANCE = 0.35;
+/**
+ * A destructive side (Delete) commits on a fling only from at least this fraction of the row's
+ * width, and only at this release speed (dp/s). A flick that merely grazes the row can still open
+ * it, but never erases it.
+ */
+export const DESTRUCTIVE_FLING_FRACTION = 0.3;
+export const DESTRUCTIVE_FLING_VELOCITY = 1200;
+/** The icon starts at this scale at rest and reaches full size at the commit line. */
+export const ICON_REST_SCALE = 0.8;
+/**
+ * A touch moving this far sideways, and at least as far sideways as vertically, becomes a swipe;
+ * this far vertically and farther than sideways it is a scroll. Together they make a +/-45 degree
+ * cone around the horizontal.
+ */
+export const ACTIVATE_DISTANCE = 12;
+/** Touches this close to a screen edge are left to the system back gesture... */
+export const EDGE_GUARD = 24;
+/** ...except a touch on the revealed button of an open row, which may start this close. */
+export const EDGE_GUARD_OPEN_BUTTON = 16;
 
 export interface RowSwipeSides {
   /** The start side has an action. */
@@ -26,6 +47,8 @@ export interface RowSwipeSides {
 }
 
 export type RowSwipeSide = "start" | "end";
+
+export type RowSwipeMove = "activate" | "fail" | "wait";
 
 export interface RowSwipeRelease {
   /** Where the row comes to rest when nothing commits. */
@@ -60,14 +83,15 @@ function enabled(side: RowSwipeSide, sides: RowSwipeSides): boolean {
 
 /**
  * The offset the row is drawn at for a finger that has dragged it `raw` from rest. A side with an
- * action follows the finger up to the row's width; a side without one resists, so the row pulls
- * a little and gives up.
+ * action follows the finger one to one up to the commit line, then at `COMMIT_RESISTANCE` (never
+ * beyond the row's width); a side without one resists, so the row pulls a little and gives up.
  */
 export function displayOffset(
   raw: number,
   rowWidth: number,
   isRtl: boolean,
   sides: RowSwipeSides,
+  revealWidth: number = ROW_REVEAL_WIDTH,
 ): number {
   "worklet";
   const side = sideOf(raw, isRtl);
@@ -80,7 +104,80 @@ export function displayOffset(
       sign * RUBBER_LIMIT * (1 - 1 / (1 + (distance * 0.55) / RUBBER_LIMIT))
     );
   }
-  return sign * Math.min(distance, rowWidth);
+  const line = commitDistance(rowWidth, revealWidth);
+  const held =
+    distance <= line ? distance : line + (distance - line) * COMMIT_RESISTANCE;
+  return sign * Math.min(held, rowWidth);
+}
+
+/** How far toward the commit line a drawn offset is, from 0 (at rest) to 1 (at or past the line). */
+export function commitProgress(
+  offset: number,
+  rowWidth: number,
+  revealWidth: number,
+): number {
+  "worklet";
+  const line = commitDistance(rowWidth, revealWidth);
+  if (line <= 0) return 0;
+  return Math.min(1, Math.max(0, Math.abs(offset) / line));
+}
+
+/** The scale of an action icon at a drawn offset: `ICON_REST_SCALE` at rest, 1 at the commit line. */
+export function iconScale(
+  offset: number,
+  rowWidth: number,
+  revealWidth: number,
+): number {
+  "worklet";
+  return (
+    ICON_REST_SCALE +
+    (1 - ICON_REST_SCALE) * commitProgress(offset, rowWidth, revealWidth)
+  );
+}
+
+/**
+ * What a finger that has moved (`dx`, `dy`) from where it landed means for the swipe: take the
+ * touch (sideways, within 45 degrees of horizontal), give it up (a scroll) or keep waiting.
+ */
+export function classifyMove(dx: number, dy: number): RowSwipeMove {
+  "worklet";
+  const x = Math.abs(dx);
+  const y = Math.abs(dy);
+  if (x >= ACTIVATE_DISTANCE && x >= y) return "activate";
+  if (y >= ACTIVATE_DISTANCE && y > x) return "fail";
+  return "wait";
+}
+
+/**
+ * Whether a touch at window `absoluteX` is close enough to a screen edge to be the system back
+ * gesture's (native only: a browser has none, so the caller does not ask there).
+ *
+ * `openOffset` is the signed offset of the row that rests open (0 when none) and `rowLeft`/
+ * `rowWidth` that row's measured box in window x. Its revealed button is the strip of width
+ * `|openOffset|` at the row edge the card slid away from, and a touch on it may start a little
+ * closer to the screen edge, so the button can be pressed or dragged shut. The strip is placed from
+ * the row's own window x, not from 0: a row inset from the screen (a gutter, a rail, a centred
+ * column) has its button inset with it.
+ */
+export function touchStartsAtEdge(
+  absoluteX: number,
+  windowWidth: number,
+  openOffset: number,
+  rowLeft = 0,
+  rowWidth: number = windowWidth,
+): boolean {
+  "worklet";
+  const fromEdge = Math.min(absoluteX, windowWidth - absoluteX);
+  if (fromEdge >= EDGE_GUARD) return false;
+  const rowRight = rowLeft + rowWidth;
+  const onButton =
+    (openOffset > 0 &&
+      absoluteX >= rowLeft &&
+      absoluteX < rowLeft + openOffset) ||
+    (openOffset < 0 &&
+      absoluteX <= rowRight &&
+      absoluteX > rowRight + openOffset);
+  return !(onButton && fromEdge >= EDGE_GUARD_OPEN_BUTTON);
 }
 
 /** True once the offset is past the line where releasing would commit. */
@@ -104,6 +201,10 @@ export function isPastCommitLine(
  *
  * A fling beats distance in either direction: outward past the reveal commits, outward before it
  * opens, and inward closes even from beyond the commit line. Otherwise distance decides.
+ *
+ * `destructive` names the side whose action erases (Delete). A fling commits it only from at least
+ * `DESTRUCTIVE_FLING_FRACTION` of the row's width and at `DESTRUCTIVE_FLING_VELOCITY`; a slower or
+ * shorter flick opens it like any other drag. Past the commit line distance alone still commits.
  */
 export function resolveRowSwipe(input: {
   offset: number;
@@ -112,6 +213,7 @@ export function resolveRowSwipe(input: {
   revealWidth: number;
   isRtl: boolean;
   sides: RowSwipeSides;
+  destructive?: RowSwipeSide | null;
 }): RowSwipeRelease {
   "worklet";
   const { offset, velocity, rowWidth, revealWidth, isRtl, sides } = input;
@@ -128,7 +230,13 @@ export function resolveRowSwipe(input: {
   if (distance >= commitDistance(rowWidth, revealWidth))
     return { settle: "closed", commit: side };
   if (outward >= FLING_VELOCITY) {
-    return distance >= revealWidth
+    const flingCommits =
+      input.destructive === side
+        ? outward >= DESTRUCTIVE_FLING_VELOCITY &&
+          distance >=
+            Math.max(rowWidth * DESTRUCTIVE_FLING_FRACTION, revealWidth)
+        : distance >= revealWidth;
+    return flingCommits
       ? { settle: "closed", commit: side }
       : distance >= revealWidth * 0.3
         ? { settle: open, commit: null }
@@ -181,4 +289,67 @@ export function findRowAt(
     else return mid;
   }
   return -1;
+}
+
+/** The spring constants `withSpring` takes (the theme's `motion.spring` presets). */
+export interface SpringShape {
+  damping: number;
+  stiffness: number;
+  mass: number;
+}
+
+/** A spring is simulated in steps this long, in seconds. */
+const SPRING_STEP = 0.002;
+/** The longest a spring is followed, in milliseconds; a slower one is reported as this. */
+export const SPRING_MAX_MS = 1500;
+/** Reanimated also stops a spring that has come this close to its target. */
+const SPRING_REST_DISPLACEMENT = 0.01;
+
+/**
+ * How long `withSpring(…, { overshootClamping: true })` takes to arrive at its target, in
+ * milliseconds: the first moment the value is at, or has passed, the target. `from` is how far the
+ * value starts from the target (signed) and `velocity` its starting velocity in the same direction
+ * convention (a velocity away from the target lengthens the trip). Solved in closed form for the
+ * under-, critically and over-damped cases, as Reanimated does, so the screen can wait for exactly
+ * as long as the animation takes instead of guessing.
+ */
+export function springArrivalMs(
+  spring: SpringShape,
+  from: number,
+  velocity: number,
+): number {
+  "worklet";
+  if (Math.abs(from) < SPRING_REST_DISPLACEMENT) return 0;
+  const omega = Math.sqrt(spring.stiffness / spring.mass);
+  const zeta = spring.damping / (2 * Math.sqrt(spring.stiffness * spring.mass));
+  if (!Number.isFinite(omega) || !Number.isFinite(zeta) || omega <= 0)
+    return SPRING_MAX_MS;
+  const decayRate = zeta * omega;
+  const damped = omega * Math.sqrt(Math.abs(1 - zeta * zeta));
+  const sineWeight = (velocity + decayRate * from) / (damped || 1);
+  const slow = -decayRate + damped;
+  const fast = -decayRate - damped;
+  const fastWeight = (velocity - slow * from) / (fast - slow || 1);
+  for (let step = 1; step * SPRING_STEP * 1000 < SPRING_MAX_MS; step++) {
+    const t = step * SPRING_STEP;
+    let displacement: number;
+    if (zeta < 1) {
+      displacement =
+        Math.exp(-decayRate * t) *
+        (from * Math.cos(damped * t) + sineWeight * Math.sin(damped * t));
+    } else if (zeta === 1) {
+      displacement =
+        Math.exp(-omega * t) * (from + (velocity + omega * from) * t);
+    } else {
+      displacement =
+        (from - fastWeight) * Math.exp(slow * t) +
+        fastWeight * Math.exp(fast * t);
+    }
+    if (
+      displacement * from <= 0 ||
+      Math.abs(displacement) < SPRING_REST_DISPLACEMENT
+    )
+      return Math.ceil(t * 1000);
+  }
+  return SPRING_MAX_MS;
 }

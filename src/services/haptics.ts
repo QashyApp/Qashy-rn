@@ -13,38 +13,57 @@ export function setHapticsEnabled(next: boolean) {
   enabled = next;
 }
 
-function trigger(effect: () => Promise<void>) {
+type AndroidEffect = keyof typeof Haptics.AndroidHaptics;
+
+/**
+ * Plays `effect` through the platform's own haptic vocabulary (`View.performHapticFeedback`, so the
+ * tuned tick the system uses for its own controls and no VIBRATE permission), and falls back to
+ * the `Vibrator` waveform when the call rejects: `Confirm` and `Reject` need Android 11, and the
+ * module throws for them on older releases (or if the constant is missing from the JS package).
+ * With no activity yet the module resolves without playing anything, so that case is silent, not
+ * a fallback.
+ */
+function trigger(effect: AndroidEffect, fallback: () => Promise<void>) {
   if (!supportsHaptics || !enabled) return;
-  effect().catch(() => {});
+  const constant = Haptics.AndroidHaptics?.[effect];
+  const native =
+    constant !== undefined &&
+    typeof Haptics.performAndroidHapticsAsync === "function"
+      ? Haptics.performAndroidHapticsAsync(constant)
+      : Promise.reject(new Error("Android haptic constants unavailable"));
+  native.catch(() => fallback().catch(() => {}));
 }
 
 /** Small tick for picking among options: chips, steppers, toggling a selection. */
 export function hapticSelection() {
-  trigger(() => Haptics.selectionAsync());
+  trigger("Clock_Tick", () => Haptics.selectionAsync());
 }
 
 /** Light physical tap for direct actions: floating action button, entering selection mode. */
 export function hapticImpactLight() {
-  trigger(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light));
+  trigger("Context_Click", () =>
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light),
+  );
 }
 
 /** Positive confirmation after a save, import, or milestone completes. */
 export function hapticSuccess() {
-  trigger(() =>
+  trigger("Confirm", () =>
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success),
   );
 }
 
 /** Double-knock for an action that failed or was rejected. */
 export function hapticError() {
-  trigger(() =>
+  trigger("Reject", () =>
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error),
   );
 }
 
 /** Cautionary buzz when the user confirms a destructive action. */
 export function hapticWarning() {
-  trigger(() =>
+  // The platform has no "warning" constant; a long press is its heaviest single click.
+  trigger("Long_Press", () =>
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning),
   );
 }

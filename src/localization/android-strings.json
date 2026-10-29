@@ -3177,6 +3177,11 @@
       "he": "הן זהות"
     },
     {
+      "name": "q_5eaab689fc846033",
+      "en": "Release to change category",
+      "he": "שחררו כדי לשנות קטגוריה"
+    },
+    {
       "name": "q_5ee255be8b9245d8",
       "en": "proposal id",
       "he": "מזהה הצעה"
@@ -3400,6 +3405,11 @@
       "name": "q_64af6f757aedeade",
       "en": "An account imported earlier has a different currency now.",
       "he": "לחשבון שיובא קודם יש כעת מטבע אחר."
+    },
+    {
+      "name": "q_64b21ee3df5d4642",
+      "en": "Release to delete",
+      "he": "שחררו כדי למחוק"
     },
     {
       "name": "q_64ed21603a523ffc",
@@ -5087,6 +5097,11 @@
       "he": "סרקו קוד שמוצג בטלפון או במחשב שבו Qashy כבר מוגדר."
     },
     {
+      "name": "q_999b5905a36ac4ca",
+      "en": "Release to skip",
+      "he": "שחררו כדי לדלג"
+    },
+    {
       "name": "q_99a009b39dc1e397",
       "en": "Rename, recolor or remove them any time in More → Categories.",
       "he": "אפשר לשנות שם, צבע או להסיר אותן בכל עת בעוד ← קטגוריות."
@@ -5265,6 +5280,11 @@
       "name": "q_9fb8fd92f3f03726",
       "en": "Records updated",
       "he": "רשומות שעודכנו"
+    },
+    {
+      "name": "q_9fbf30c1c4ebba36",
+      "en": "Release to mark paid",
+      "he": "שחררו כדי לסמן כשולם"
     },
     {
       "name": "q_9fcf7bb375151621",
@@ -9607,6 +9627,30 @@
       "source": "^incl\\. (.+) fee$",
       "en": "incl. %1$s fee",
       "he": "כולל עמלה של %1$s"
+    },
+    {
+      "name": "q_44a60d83941849d3",
+      "source": "^(\\d+) transactions deleted$",
+      "en": "%1$s transactions deleted",
+      "he": "%1$s תנועות נמחקו"
+    },
+    {
+      "name": "q_df96e2c240092a22",
+      "source": "^(\\d+) payments skipped$",
+      "en": "%1$s payments skipped",
+      "he": "%1$s תשלומים דולגו"
+    },
+    {
+      "name": "q_e7274cb3a1071479",
+      "source": "^(\\d+) marked as paid$",
+      "en": "%1$s marked as paid",
+      "he": "%1$s סומנו כשולם"
+    },
+    {
+      "name": "q_b682f60a5fa2c31d",
+      "source": "^(\\d+) changes to undo$",
+      "en": "%1$s changes to undo",
+      "he": "%1$s שינויים לביטול"
     },
     {
       "name": "q_2e002821b92c3c8b",

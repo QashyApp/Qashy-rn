@@ -1,9 +1,16 @@
 import { router } from "expo-router";
-import { memo, useMemo, useState, type Ref } from "react";
+import {
+  memo,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type Ref,
+  type RefObject,
+} from "react";
 import type { SharedValue } from "react-native-reanimated";
 import {
   Platform,
-  Pressable,
   ScrollView,
   View,
   type LayoutChangeEvent,
@@ -15,6 +22,7 @@ import {
 import { AnimatedMoney } from "@/components/finance/animated-money";
 import { Sparkline } from "@/components/finance/sparkline";
 import { ActionButton } from "@/components/ui/action-button";
+import type { OverviewLayoutStatus } from "@/features/overview/layout/use-overview-layout";
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import {
@@ -27,10 +35,17 @@ import { MotionView } from "@/components/ui/motion";
 import { PageHeading } from "@/components/ui/page-heading";
 import { PageHero } from "@/components/ui/page-hero";
 import { ScreenContainer } from "@/components/ui/screen-container";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TextButton } from "@/components/ui/text-button";
 import { FRANKFURTER_UNSUPPORTED } from "@/data/exchange-rates/frankfurter";
 import { AddCardWell } from "@/features/overview/card-gallery-screen";
+import {
+  HoldToCustomize,
+  MonthSwipeFollow,
+} from "@/features/overview/card-stack-motion";
+import { DropIndicator } from "@/features/overview/edit/drop-indicator";
 import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame";
+import { useCardReorder } from "@/features/overview/edit/use-card-reorder";
 import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
 import {
   GRID_BREAKPOINT,
@@ -57,6 +72,11 @@ export interface OverviewMonthPageProps {
   /** The month pager's drag, which slides the month title. */
   dragProgress?: SharedValue<number>;
   editing: boolean;
+  /**
+   * `loading` shows a skeleton in the card area; `unavailable` shows the default cards as a
+   * read-only placeholder (no Customize, no hold-to-customize); `ready` is the saved layout.
+   */
+  layoutStatus: OverviewLayoutStatus;
   cards: readonly OverviewCard[];
   configOpenId: string | null;
   onToggleConfig: (id: string) => void;
@@ -71,8 +91,11 @@ export interface OverviewMonthPageProps {
   onResizeCard: (card: OverviewCard) => void;
   onConfigureCard: (id: string, config: Record<string, unknown>) => void;
   onRemoveCard: (card: OverviewCard) => void;
-  onDragEnd: (card: OverviewCard, offsetY: number) => void;
-  onCardLayout: (id: string) => (event: LayoutChangeEvent) => void;
+  /**
+   * A dragged card was released on `toIndex`. `null` when the order does not change, else a
+   * promise that settles (never rejects) when the save has, to whether it was saved.
+   */
+  onDropCard: (id: string, toIndex: number) => Promise<boolean> | null;
 }
 
 /**
@@ -84,6 +107,7 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   isCurrent,
   dragProgress,
   editing,
+  layoutStatus,
   cards,
   configOpenId,
   onToggleConfig,
@@ -96,9 +120,9 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   onResizeCard,
   onConfigureCard,
   onRemoveCard,
-  onDragEnd,
-  onCardLayout,
+  onDropCard,
 }: OverviewMonthPageProps) {
+  const layoutReady = layoutStatus === "ready";
   const state = useFinanceState();
   const theme = useQashyTheme();
   const { space } = theme;
@@ -125,7 +149,36 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   const { turningOn: togglingRates, turnOn: turnOnAutomaticRates } =
     useTurnOnAutomaticRates();
 
+  // Computed once here and handed to every card, instead of one repository read per widget.
   const summary = useDashboard(month);
+
+  // The page needs its own handle on the ScrollView (edge auto-scroll while dragging a card), so
+  // the screen's ref is fed from a callback ref rather than attached directly.
+  const localScrollRef = useRef<ScrollViewInstance | null>(null);
+  const outerScrollRef = isCurrent ? scrollRef : undefined;
+  const setScrollRef = useCallback(
+    (node: ScrollViewInstance | null) => {
+      localScrollRef.current = node;
+      if (typeof outerScrollRef === "function") outerScrollRef(node);
+      else if (outerScrollRef) {
+        (outerScrollRef as RefObject<ScrollViewInstance | null>).current = node;
+      }
+    },
+    [outerScrollRef],
+  );
+  const { reorder, dragging, scrollProps } = useCardReorder({
+    cards,
+    gap: space.lg,
+    scrollRef: localScrollRef,
+  });
+  const reorderOnScroll = scrollProps.onScroll;
+  const handleScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      reorderOnScroll(event);
+      onScroll(event);
+    },
+    [reorderOnScroll, onScroll],
+  );
 
   const currency = state.settings.baseCurrency;
   const missingCurrencies = summary.missingExchangeRates.map(
@@ -182,29 +235,47 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
   // `flexDirection` and the edit toolbar's size-cycle control follow the same `contentWidth`
   // decision so all three never disagree about whether this is a "wide" layout.
   const multiColumn = contentWidth >= GRID_BREAKPOINT;
-  const rows = useMemo(
-    () =>
-      gridWidth > 0
-        ? packOverviewRows(cards, gridWidth, space.xl, { multiColumn })
-        : [],
-    [cards, gridWidth, multiColumn, space.xl],
-  );
+  // One flat, wrapping list of cards whatever the width: a card's width is `100%` until the
+  // container has been measured (and always on a narrow screen), then its packed pixel width. The
+  // keys and the tree never change with the measurement, so no card remounts when it arrives.
+  // Cards wrap exactly where `packOverviewRows` starts a new row, because the packed widths and
+  // the gap add up to the container width.
+  const cardWidths = useMemo(() => {
+    const widths = new Map<string, number>();
+    if (multiColumn && gridWidth > 0) {
+      for (const row of packOverviewRows(cards, gridWidth, space.xl, {
+        multiColumn,
+      })) {
+        for (const packed of row.cards) widths.set(packed.id, packed.width);
+      }
+    }
+    return widths;
+  }, [cards, gridWidth, multiColumn, space.xl]);
 
   const renderWidget = (card: OverviewCard, size = card.size) => {
     const definition = WIDGET_REGISTRY[card.type];
     if (!definition) return null;
     const Component = definition.Component;
     return (
-      <Component card={card} month={month} size={size} editing={editing} />
+      <Component
+        card={card}
+        month={month}
+        size={size}
+        editing={editing}
+        summary={summary}
+      />
     );
   };
 
   return (
     <ScrollView
-      ref={isCurrent ? scrollRef : undefined}
-      onScroll={isCurrent ? onScroll : undefined}
+      ref={setScrollRef}
+      onScroll={isCurrent ? handleScroll : undefined}
+      onLayout={scrollProps.onLayout}
+      onContentSizeChange={scrollProps.onContentSizeChange}
       scrollEventThrottle={16}
-      scrollEnabled={isCurrent}
+      // A held card owns the finger: the page only moves for the auto-scroll at its edges.
+      scrollEnabled={isCurrent && !dragging}
       style={[
         { flex: 1, backgroundColor: theme.background },
         PAGER_SCROLLER_STYLE,
@@ -228,7 +299,24 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
           {editing ? (
             <TextButton title="Done" icon="checkmark" onPress={onExitEdit} />
           ) : (
-            <TextButton title="Customize" icon="gear" onPress={onEnterEdit} />
+            // While the saved layout loads the button keeps its place, invisible and inert, so
+            // the heading does not reflow when it appears. If the layout is unavailable it stays
+            // visible but disabled: the placeholder cards cannot be edited.
+            <View
+              style={{ opacity: layoutStatus === "loading" ? 0 : 1 }}
+              pointerEvents={layoutReady ? "auto" : "none"}
+              accessibilityElementsHidden={layoutStatus === "loading"}
+              importantForAccessibility={
+                layoutStatus === "loading" ? "no-hide-descendants" : "auto"
+              }
+            >
+              <TextButton
+                title="Customize"
+                icon="gear"
+                disabled={!layoutReady}
+                onPress={onEnterEdit}
+              />
+            </View>
           )}
         </View>
 
@@ -389,72 +477,54 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
           }
         />
 
-        {!editing ? (
+        {layoutStatus === "loading" ? (
+          // The saved layout is still loading: hold the place rather than flash the defaults.
+          <View
+            style={{ gap: space.xl }}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <Skeleton width="100%" height={176} radius={theme.radius.card} />
+            <Skeleton width="100%" height={176} radius={theme.radius.card} />
+          </View>
+        ) : !editing ? (
           cards.length ? (
-            <MonthContentFade month={month}>
-              <View style={{ gap: space.xl }} onLayout={onGridLayout}>
-                {gridWidth === 0
-                  ? cards.map((card) => (
+            <MotionView key="view" variant="fade">
+              <MonthContentFade month={month}>
+                <MonthSwipeFollow month={month} dragProgress={dragProgress}>
+                  <View
+                    onLayout={onGridLayout}
+                    style={
+                      multiColumn
+                        ? {
+                            flexDirection: "row",
+                            flexWrap: "wrap",
+                            alignItems: "flex-start",
+                            columnGap: space.xl,
+                            rowGap: space.xl,
+                          }
+                        : { gap: space.xl }
+                    }
+                  >
+                    {cards.map((card) => (
                       <MotionView
                         key={card.id}
                         animateLayout
-                        style={{ width: "100%" }}
+                        style={{ width: cardWidths.get(card.id) ?? "100%" }}
                       >
-                        {Platform.OS === "web" ? (
+                        {Platform.OS === "web" || !layoutReady ? (
                           renderWidget(card)
                         ) : (
-                          <Pressable
-                            // A press-and-hold affordance for sighted users only. Left accessible it
-                            // would collapse the whole card into one screen-reader element and hide
-                            // its buttons; "Customize" is the accessible way into edit mode.
-                            accessible={false}
-                            delayLongPress={450}
-                            onLongPress={onEnterEdit}
-                            style={{ width: "100%" }}
-                          >
+                          <HoldToCustomize onActivate={onEnterEdit}>
                             {renderWidget(card)}
-                          </Pressable>
+                          </HoldToCustomize>
                         )}
                       </MotionView>
-                    ))
-                  : rows.map((row, rowIndex) => (
-                      <View
-                        key={rowIndex}
-                        style={
-                          multiColumn
-                            ? {
-                                flexDirection: "row",
-                                gap: space.xl,
-                                alignItems: "flex-start",
-                                flexWrap: "wrap",
-                              }
-                            : { gap: space.xl }
-                        }
-                      >
-                        {row.cards.map(({ card, width }) => (
-                          <MotionView
-                            key={card.id}
-                            animateLayout
-                            style={{ width }}
-                          >
-                            {Platform.OS === "web" ? (
-                              renderWidget(card)
-                            ) : (
-                              <Pressable
-                                accessible={false}
-                                delayLongPress={450}
-                                onLongPress={onEnterEdit}
-                                style={{ width: "100%" }}
-                              >
-                                {renderWidget(card)}
-                              </Pressable>
-                            )}
-                          </MotionView>
-                        ))}
-                      </View>
                     ))}
-              </View>
-            </MonthContentFade>
+                  </View>
+                </MonthSwipeFollow>
+              </MonthContentFade>
+            </MotionView>
           ) : (
             <EmptyState
               icon="plus.circle"
@@ -464,53 +534,58 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
               <ActionButton
                 title="Add cards"
                 icon="plus"
+                disabled={!layoutReady}
                 onPress={() => router.push("/overview-cards")}
               />
             </EmptyState>
           )
         ) : (
-          <View style={{ gap: space.lg }}>
-            {cards.map((card, index) => {
-              const definition = WIDGET_REGISTRY[card.type];
-              if (!definition) return null;
-              const rule = WIDGET_RULES[card.type];
-              const showSizeControl = rule.sizes.length > 1 && multiColumn;
-              const hasConfigSheet = Boolean(definition.ConfigSheet);
-              const ConfigSheetComponent = definition.ConfigSheet;
-              return (
-                <EditableCardFrame
-                  key={card.id}
-                  title={t(definition.title)}
-                  index={index}
-                  total={cards.length}
-                  sizes={rule.sizes}
-                  showSizeControl={showSizeControl}
-                  hasConfigSheet={hasConfigSheet}
-                  configOpen={configOpenId === card.id}
-                  onToggleConfig={() => onToggleConfig(card.id)}
-                  onMoveUp={() => onMoveCard(card.id, -1)}
-                  onMoveDown={() => onMoveCard(card.id, 1)}
-                  onCycleSize={() => onResizeCard(card)}
-                  onRemove={() => onRemoveCard(card)}
-                  onDragEnd={(offsetY) => onDragEnd(card, offsetY)}
-                  onLayout={onCardLayout(card.id)}
-                  configSheet={
-                    ConfigSheetComponent ? (
-                      <ConfigSheetComponent
-                        card={card}
-                        onConfigure={(config) =>
-                          onConfigureCard(card.id, config)
-                        }
-                      />
-                    ) : undefined
-                  }
-                >
-                  {renderWidget(card)}
-                </EditableCardFrame>
-              );
-            })}
-            <AddCardWell onPress={() => router.push("/overview-cards")} />
-          </View>
+          <MotionView key="edit" variant="fade">
+            <View style={{ gap: space.lg }}>
+              {cards.map((card, index) => {
+                const definition = WIDGET_REGISTRY[card.type];
+                if (!definition) return null;
+                const rule = WIDGET_RULES[card.type];
+                const showSizeControl = rule.sizes.length > 1 && multiColumn;
+                const hasConfigSheet = Boolean(definition.ConfigSheet);
+                const ConfigSheetComponent = definition.ConfigSheet;
+                return (
+                  <EditableCardFrame
+                    key={card.id}
+                    id={card.id}
+                    title={t(definition.title)}
+                    index={index}
+                    total={cards.length}
+                    sizes={rule.sizes}
+                    showSizeControl={showSizeControl}
+                    hasConfigSheet={hasConfigSheet}
+                    configOpen={configOpenId === card.id}
+                    onToggleConfig={() => onToggleConfig(card.id)}
+                    onMoveUp={() => onMoveCard(card.id, -1)}
+                    onMoveDown={() => onMoveCard(card.id, 1)}
+                    onCycleSize={() => onResizeCard(card)}
+                    onRemove={() => onRemoveCard(card)}
+                    reorder={reorder}
+                    onDrop={onDropCard}
+                    configSheet={
+                      ConfigSheetComponent ? (
+                        <ConfigSheetComponent
+                          card={card}
+                          onConfigure={(config) =>
+                            onConfigureCard(card.id, config)
+                          }
+                        />
+                      ) : undefined
+                    }
+                  >
+                    {renderWidget(card)}
+                  </EditableCardFrame>
+                );
+              })}
+              <DropIndicator reorder={reorder} />
+              <AddCardWell onPress={() => router.push("/overview-cards")} />
+            </View>
+          </MotionView>
         )}
       </ScreenContainer>
     </ScrollView>

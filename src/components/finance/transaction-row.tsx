@@ -47,6 +47,9 @@ interface TransactionRowProps {
   onRowAction?: (id: string, kind: RowSwipeActionKind) => void;
 }
 
+/** How long a row is held before it enters selection mode. */
+const LONG_PRESS_DELAY_MS = 400;
+
 // One id index per snapshot array, built lazily and dropped with the array, so a row's
 // account/category lookup is O(1) instead of a scan per row per render.
 const INDEXES = new WeakMap<object, Map<string, unknown>>();
@@ -226,6 +229,9 @@ const TransactionRowView = memo(function TransactionRowView({
           }))
       }
       onLongPress={onLongPress}
+      // A little longer than the platform default, so a scroll or a swipe that starts slowly is
+      // not taken for a hold.
+      delayLongPress={LONG_PRESS_DELAY_MS}
       active={selected}
       pressedScale={0.985}
       stateLayerShape="container"

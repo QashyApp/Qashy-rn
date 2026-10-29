@@ -870,6 +870,10 @@
     "q_b710e60548901a8e",
     "q_47ac9f1663705479",
     "q_31ecf38e9c35d87f",
+    "q_5eaab689fc846033",
+    "q_64b21ee3df5d4642",
+    "q_999b5905a36ac4ca",
+    "q_9fbf30c1c4ebba36",
     "q_a3b6d53b60aaa982",
     "q_37813ce291d5a507",
     "q_027d6f2819d87200",
@@ -2442,6 +2446,22 @@
     {
       "name": "q_530e2bfc2b28ceed",
       "source": "^incl\\. (.+) fee$"
+    },
+    {
+      "name": "q_44a60d83941849d3",
+      "source": "^(\\d+) transactions deleted$"
+    },
+    {
+      "name": "q_df96e2c240092a22",
+      "source": "^(\\d+) payments skipped$"
+    },
+    {
+      "name": "q_e7274cb3a1071479",
+      "source": "^(\\d+) marked as paid$"
+    },
+    {
+      "name": "q_b682f60a5fa2c31d",
+      "source": "^(\\d+) changes to undo$"
     },
     {
       "name": "q_2e002821b92c3c8b",

@@ -95,6 +95,7 @@ export function ActionButton({
   };
   return (
     <MotionPressable
+      delayPressIn={0}
       accessibilityRole="button"
       accessibilityState={{ ...accessibilityState, busy, disabled: isDisabled }}
       {...props}

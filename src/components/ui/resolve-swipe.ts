@@ -1,14 +1,30 @@
 /** Fraction of the page width a slow drag has to cover before it commits. */
 export const SWIPE_COMMIT_FRACTION = 0.25;
-/** Release speed (px/s) above which a flick commits regardless of distance. */
-export const SWIPE_COMMIT_VELOCITY = 600;
+/** Release speed (dp/s) above which a flick commits regardless of distance. */
+export const SWIPE_COMMIT_VELOCITY = 850;
+/**
+ * The least a flick must have travelled to commit. A finger that lands, jitters and lifts reports
+ * a large velocity over a few pixels; that is a tap, not a swipe.
+ */
+export const SWIPE_FLICK_MIN_TRAVEL = 28;
+/** How far a pan moves sideways before it becomes a swipe (and, vertically, a scroll). */
+export const SWIPE_ACTIVE_OFFSET = 14;
+
+/** Whether a release is a flick: fast enough, and having travelled far enough to not be a tap. */
+function isFlick(dx: number, vx: number) {
+  "worklet";
+  return (
+    Math.abs(vx) >= SWIPE_COMMIT_VELOCITY &&
+    Math.abs(dx) >= SWIPE_FLICK_MIN_TRAVEL
+  );
+}
 
 /**
  * Decides what a released month swipe does: `1` to step forward a month, `-1` to
  * step back, `0` to spring back to where it started.
  *
- * A drag commits past a quarter of the page width, or at any distance when the
- * release was a flick. A flick's own direction wins over the net drag, so dragging
+ * A drag commits past a quarter of the page width, or after a few dp of travel
+ * when the release was a flick. A flick's own direction wins over the net drag, so dragging
  * one way and flicking back the other reads as "never mind". Dragging toward the
  * end edge reveals the next month (flipped in right-to-left locales); stepping
  * forward is refused when `canForward` is false, and stepping back is always allowed.
@@ -23,7 +39,7 @@ export function resolveSwipe(
   isRtl: boolean,
 ): -1 | 0 | 1 {
   "worklet";
-  const flick = Math.abs(vx) >= SWIPE_COMMIT_VELOCITY;
+  const flick = isFlick(dx, vx);
   const far = width > 0 && Math.abs(dx) >= width * SWIPE_COMMIT_FRACTION;
   if (!flick && !far) return 0;
   const lead = flick ? vx : dx;
@@ -32,6 +48,79 @@ export function resolveSwipe(
   const forward = lead > 0 === isRtl;
   if (forward) return canForward ? 1 : 0;
   return -1;
+}
+
+/**
+ * The page (`1` next, `0` current, `-1` previous) nearest to `position`. With a `finger` direction
+ * (`-1` or `1`) only pages at or beyond `position` in that direction count; `0` considers all. A tie
+ * goes to the current page. Stepping forward is skipped when `canForward` is false.
+ */
+function nearestPage(
+  position: number,
+  finger: number,
+  width: number,
+  sign: 1 | -1,
+  canForward: boolean,
+): -1 | 0 | 1 {
+  "worklet";
+  let best: -1 | 0 | 1 = 0;
+  let bestDistance = Infinity;
+  for (const candidate of [0, 1, -1] as const) {
+    if (candidate === 1 && !canForward) continue;
+    const at = -candidate * sign * width;
+    if ((at - position) * finger < 0) continue;
+    const distance = Math.abs(at - position);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/**
+ * Decides what a released drag does when it did not begin at rest. `start` is the pages' offset
+ * (`translateX`) when the finger landed, `dx` how far this finger travelled and `vx` its release
+ * velocity. The pages are decided at `start + dx`, as `resolveSwipe` would, with one rule on top:
+ * a release never commits against the finger. Grabbing a slide mid-way leaves a residual offset
+ * (the landed month sits partway across), and a slow drag the same way as that slide must not
+ * resolve from the absolute position into the month before it. A commit that would go against the
+ * finger's own travel (its velocity for a flick, its distance otherwise) settles on the nearest page
+ * on the finger's side instead, so the drag completes toward the month it was heading to.
+ *
+ * A flick needs the finger's own travel (`|dx|`, not the position) to reach the tap guard, and a
+ * finger that did not move at all settles on the page nearest the pages' position.
+ *
+ * With `start` at 0 this is exactly `resolveSwipe(dx, vx, ...)`. Pure and marked `worklet`.
+ */
+export function resolveRelease(
+  start: number,
+  dx: number,
+  vx: number,
+  width: number,
+  canForward: boolean,
+  isRtl: boolean,
+): -1 | 0 | 1 {
+  "worklet";
+  const raw = start + dx;
+  const sign = isRtl ? -1 : 1;
+  // Where the pages are on screen (the drag is clamped to one page either way).
+  const position = Math.max(-width, Math.min(width, raw));
+  // A finger that did not move at all (a grab and a lift) has no direction to honour: the pages
+  // settle on whichever page they are nearest, as they would have been left.
+  if (dx === 0) return nearestPage(position, 0, width, sign, canForward);
+  // A flick counts only if this finger itself travelled far enough: a grab leaves a residual
+  // offset in `start`, and a tap-and-jitter on top of it must not pass as a swipe.
+  const flickVx = Math.abs(dx) >= SWIPE_FLICK_MIN_TRAVEL ? vx : 0;
+  const decided = resolveSwipe(raw, flickVx, width, canForward, isRtl);
+  if (decided === 0) return 0;
+  const finger = Math.sign(
+    Math.abs(flickVx) >= SWIPE_COMMIT_VELOCITY ? flickVx : dx,
+  );
+  const target = -decided * sign * width;
+  if (finger === 0 || Math.sign(target - position) !== -finger) return decided;
+  // Against the finger: the nearest page that is not.
+  return nearestPage(position, finger, width, sign, canForward);
 }
 
 /**

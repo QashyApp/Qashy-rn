@@ -12,13 +12,11 @@ import { useFinanceState } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import { monthKey, monthLabel } from "@/utils/date";
 import type { WidgetProps } from "@/features/overview/widgets/types";
-import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 
-export function RecentWidget({ month }: WidgetProps) {
+export function RecentWidget({ month, summary }: WidgetProps) {
   const { space } = useQashyTheme();
   const state = useFinanceState();
   const { locale } = useLocalization();
-  const summary = useDashboard(month);
   const seeMonth = () =>
     router.push({
       pathname: "/transactions",

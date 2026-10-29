@@ -1,5 +1,6 @@
 import {
   resolveSheetRelease,
+  sheetDismissTiming,
   sheetSpring,
 } from "@/components/navigation/sheet-snap";
 
@@ -65,5 +66,32 @@ describe("sheetSpring", () => {
     expect(sheetSpring(0.86, 400).stiffness).toBeGreaterThan(
       sheetSpring(0.86, 560).stiffness,
     );
+  });
+});
+
+describe("sheetDismissTiming", () => {
+  it("carries a thrown sheet on at its release speed", () => {
+    // 400 px at 2000 px/s is 200 ms, and a throw keeps its pace instead of accelerating.
+    expect(sheetDismissTiming(400, 2000)).toEqual({
+      duration: 200,
+      linear: true,
+    });
+  });
+
+  it("keeps the duration between 120 and 240 ms", () => {
+    expect(sheetDismissTiming(100, 5000).duration).toBe(120);
+    expect(sheetDismissTiming(900, 1000).duration).toBe(240);
+  });
+
+  it("lets a slow release take the exit curve", () => {
+    expect(sheetDismissTiming(300, 0)).toEqual({
+      duration: 240,
+      linear: false,
+    });
+    expect(sheetDismissTiming(80, 200)).toEqual({
+      duration: 200,
+      linear: false,
+    });
+    expect(sheetDismissTiming(300, -50).linear).toBe(false);
   });
 });

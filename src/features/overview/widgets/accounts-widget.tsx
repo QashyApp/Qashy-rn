@@ -11,13 +11,11 @@ import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { accountTypeIcon, accountTypeLabel } from "@/utils/labels";
 import type { WidgetProps } from "@/features/overview/widgets/types";
-import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 
-export function AccountsWidget({ month }: WidgetProps) {
+export function AccountsWidget({ summary }: WidgetProps) {
   const theme = useQashyTheme();
   const { space } = theme;
   const { locale, t } = useLocalization();
-  const summary = useDashboard(month);
 
   return (
     <View style={{ gap: space.sm }}>

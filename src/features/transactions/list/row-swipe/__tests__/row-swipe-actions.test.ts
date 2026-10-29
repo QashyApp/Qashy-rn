@@ -1,5 +1,6 @@
 import {
   actionLeavesList,
+  isDestructiveAction,
   rowSwipeActionLabel,
   rowSwipeActionVisual,
   rowSwipeActions,
@@ -54,6 +55,15 @@ describe("actionLeavesList", () => {
   });
 });
 
+describe("isDestructiveAction", () => {
+  it("is true only for delete", () => {
+    expect(isDestructiveAction("delete")).toBe(true);
+    expect(isDestructiveAction("skip")).toBe(false);
+    expect(isDestructiveAction("changeCategory")).toBe(false);
+    expect(isDestructiveAction("markPaid")).toBe(false);
+  });
+});
+
 describe("sideOfAction", () => {
   it("finds the side an action sits on", () => {
     const actions = rowSwipeActions({ kind: "expense", status: "posted" });
@@ -70,6 +80,7 @@ describe("rowSwipeActionVisual", () => {
     expect(rowSwipeActionLabel("markPaid")).toBe("Mark paid");
     expect(rowSwipeActionLabel("skip")).toBe("Skip");
     const del = rowSwipeActionVisual("delete", theme);
+    expect(del.releaseLabel).toBe("Release to delete");
     expect(del.background).toBe(theme.negative);
     expect(del.foreground).toBe(theme.onNegative);
     expect(rowSwipeActionVisual("changeCategory", theme).background).toBe(

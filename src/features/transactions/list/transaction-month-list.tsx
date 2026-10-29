@@ -42,7 +42,12 @@ import {
   type RowGeometry,
 } from "@/features/transactions/list/row-swipe/use-row-geometry";
 import { useRowSwipeController } from "@/features/transactions/list/row-swipe/use-row-swipe";
-import { useDragSelect } from "@/features/transactions/list/use-drag-select";
+import { useCurrentPageSwipe } from "@/features/transactions/list/use-current-page-swipe";
+import {
+  longPressPlan,
+  maxScrollOffset,
+  useDragSelect,
+} from "@/features/transactions/list/use-drag-select";
 import { RowFlash } from "@/features/transactions/list/row-flash";
 import {
   consumeSavedTransactionSignal,
@@ -79,7 +84,8 @@ export interface TransactionMonthListProps {
   /** Searching every month: the list ignores `month`. */
   allMonths: boolean;
   selectionMode: boolean;
-  selectedIds: readonly string[];
+  /** The selected rows. A Set, so a drag across rows costs the lists a lookup, not a scan. */
+  selectedIds: ReadonlySet<string>;
   /** Rows to leave out: a swiped-away row whose action is waiting on its Undo. */
   hiddenIds: ReadonlySet<string>;
   /** Rows being marked paid: drawn as paid at once, with no swipe or inline actions. */
@@ -318,7 +324,8 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   );
 
   const filtered = search.trim().length > 0 || kind !== "all";
-  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  // What the list compares to know a selection changed (`extraData` is shallow-compared).
+  const selectionKey = useMemo(() => [...selectedIds].join(","), [selectedIds]);
 
   // Press, hold and drag across rows to select them all (see `useDragSelect`).
   const containerRef = useRef<HostInstance>(null);
@@ -327,15 +334,22 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     () => sections.flatMap((section) => section.data.map((item) => item.id)),
     [sections],
   );
-  const scrollBy = useCallback(
-    (delta: number) => {
-      const next = Math.max(0, scrollOffset.current + delta);
+  const scrollTo = useCallback(
+    (offset: number) => {
       listRef?.current?.getScrollResponder()?.scrollTo?.({
-        y: next,
+        y: Math.max(0, offset),
         animated: false,
       });
     },
     [listRef],
+  );
+  const getScrollOffset = useCallback(() => scrollOffset.current, []);
+  // How far the list can scroll, for a drag-select's edge scroll to stop at the end.
+  const contentHeight = useRef(0);
+  const viewportHeight = useRef(0);
+  const getMaxScrollOffset = useCallback(
+    () => maxScrollOffset(contentHeight.current, viewportHeight.current),
+    [],
   );
   const rowSwipe = useRowSwipeController();
 
@@ -366,18 +380,14 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   // Rows moved (a row left, a group folded, selection changed their layout): measure them again,
   // and once more after the layout animation has settled.
   useEffect(() => {
+    // Until they are measured again the published rows may not match the list, so a touch that
+    // misses them is not final (see `RowSwipeController.markStale`).
+    if (isCurrent) rowSwipe?.markStale();
     geometry.invalidate();
     const timer = setTimeout(geometry.invalidate, 400);
     return () => clearTimeout(timer);
-  }, [geometry, sections, selectionMode]);
-  useEffect(() => {
-    if (!isCurrent || !rowSwipe) return;
-    void geometry.measure();
-    return () => {
-      rowSwipe.publish([]);
-      rowSwipe.close();
-    };
-  }, [isCurrent, rowSwipe, geometry]);
+  }, [geometry, isCurrent, rowSwipe, sections, selectionMode]);
+  useCurrentPageSwipe({ isCurrent, rowSwipe, geometry, scrollOffset });
 
   const setDragArmed = useCallback(
     (armed: boolean) => rowSwipe?.suspend("drag", armed),
@@ -389,7 +399,9 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     selectedIds,
     onSelect: onSetSelection,
     containerRef,
-    scrollBy,
+    scrollTo,
+    getScrollOffset,
+    getMaxScrollOffset,
     geometry,
     onArmedChange: setDragArmed,
   });
@@ -412,25 +424,45 @@ export const TransactionMonthList = memo(function TransactionMonthList({
         ref={containerRef}
         collapsable={false}
         style={{ flex: 1 }}
-        onLayout={geometry.invalidate}
+        onLayout={(event) => {
+          viewportHeight.current = event.nativeEvent.layout.height;
+          geometry.invalidate();
+        }}
       >
         <SectionList
           ref={isCurrent ? listRef : undefined}
-          onScroll={
-            isCurrent
-              ? (event) => {
-                  scrollOffset.current = event.nativeEvent.contentOffset.y;
-                  rowSwipe?.setScrollOffset(scrollOffset.current);
-                  geometry.noteScroll();
-                  onScroll?.(event);
-                }
-              : undefined
-          }
+          onScroll={(event) => {
+            // Every page keeps its own offset, even the inert ones (a list whose content shrank
+            // moves itself): it is what the row swipe is given when the page becomes current.
+            scrollOffset.current = event.nativeEvent.contentOffset.y;
+            if (!isCurrent) return;
+            rowSwipe?.setScrollOffset(scrollOffset.current);
+            geometry.noteScroll();
+            onScroll?.(event);
+          }}
+          onContentSizeChange={(_width, height) => {
+            contentHeight.current = height;
+          }}
           scrollEventThrottle={16}
           // A scroll closes an open row; the rows' positions are re-measured once it rests.
           onScrollBeginDrag={isCurrent ? () => rowSwipe?.close() : undefined}
-          onMomentumScrollEnd={isCurrent ? geometry.invalidate : undefined}
-          onScrollEndDrag={isCurrent ? geometry.invalidate : undefined}
+          // At rest the rows are measured at once, so one that scrolled in can be swiped straight
+          // away; only a screenful mounting together waits for the settle delay.
+          onMomentumScrollEnd={
+            isCurrent
+              ? (event) => geometry.settle(event.nativeEvent.contentOffset.y)
+              : undefined
+          }
+          onScrollEndDrag={
+            isCurrent
+              ? (event) => {
+                  // A drag that ends with speed carries on as momentum, which ends with its own event.
+                  const { contentOffset, velocity } = event.nativeEvent;
+                  if (!velocity || Math.hypot(velocity.x, velocity.y) < 0.05)
+                    geometry.settle(contentOffset.y);
+                }
+              : undefined
+          }
           // A drag-select owns the finger until it lifts. The web cancels its touch scrolling
           // instead (see `useDragSelect`), and changing overflow there mid-touch would jump.
           scrollEnabled={
@@ -451,7 +483,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
             },
           ]}
           sections={sections}
-          extraData={`${selectedIds.join(",")}|${selectionMode}|${flash?.token}:${flash?.id}`}
+          extraData={`${selectionKey}|${selectionMode}|${flash?.token}:${flash?.id}`}
           onScrollToIndexFailed={(info) => {
             // A row far off-screen has no measured height yet: jump near it, then try once more.
             listRef?.current?.getScrollResponder()?.scrollTo?.({
@@ -487,7 +519,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               <AppText literal variant="caption" muted>
                 {t(
                   selectionMode
-                    ? `${selectedIds.length} selected`
+                    ? `${selectedIds.size} selected`
                     : `${transactions.length} ${transactions.length === 1 ? "transaction" : "transactions"}`,
                 )}
               </AppText>
@@ -561,7 +593,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               item={item}
               first={index === 0}
               last={index === section.data.length - 1}
-              selected={selectedSet.has(item.id)}
+              selected={selectedIds.has(item.id)}
               paying={paidIds.has(item.id)}
               selectionMode={selectionMode}
               flashes={flash?.id === item.id ? flash.flashes : 0}
@@ -738,9 +770,9 @@ const DayRow = memo(function DayRow({
   const id = item.id;
   const handleLongPress = useCallback(() => {
     if (!selectionMode) hapticImpactLight();
-    onLongPressItem(id);
-    // A row that was already selected is deselected by the press, so there is nothing to drag from.
-    if (!selected) onArmDrag(id);
+    const plan = longPressPlan(selected, process.env.EXPO_OS === "web");
+    if (plan.toggle) onLongPressItem(id);
+    if (plan.arm) onArmDrag(id);
   }, [selectionMode, selected, onLongPressItem, onArmDrag, id]);
   const rowRef = useCallback(
     (node: HostInstance | null) => {
@@ -790,10 +822,6 @@ const DayRow = memo(function DayRow({
         ref={rowRef}
         collapsable={false}
         style={{
-          // A selected row can be dragged from to extend the selection, so a browser must not scroll it.
-          ...(selected && process.env.EXPO_OS === "web"
-            ? ({ touchAction: "none" } as object)
-            : null),
           backgroundColor: selected ? theme.accentContainer : theme.surface,
           boxShadow: theme.shadowCard,
           borderTopLeftRadius: first ? radius.card : 0,

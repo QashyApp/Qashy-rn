@@ -37,6 +37,8 @@ export function IconButton({
   variant?: "plain" | "surface" | "accent";
   enteringVariant?: "fade" | "zoom";
   enteringDelay?: number;
+  /** See `MotionPressable`: icon buttons answer a touch at once unless told otherwise. */
+  delayPressIn?: number;
 }) {
   const theme = useQashyTheme();
   const { motion } = theme;
@@ -70,6 +72,7 @@ export function IconButton({
   };
   return (
     <MotionPressable
+      delayPressIn={0}
       accessibilityLabel={t(label)}
       accessibilityRole="button"
       accessibilityState={{ ...accessibilityState, disabled: isDisabled }}

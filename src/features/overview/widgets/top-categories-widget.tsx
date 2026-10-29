@@ -11,16 +11,14 @@ import { useLocalization } from "@/localization/localization";
 import { useFinanceState } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import type { WidgetProps } from "@/features/overview/widgets/types";
-import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 
 const MAX_CATEGORIES_SHOWN = 5;
 
-export function TopCategoriesWidget({ month }: WidgetProps) {
+export function TopCategoriesWidget({ summary }: WidgetProps) {
   const theme = useQashyTheme();
   const { space } = theme;
   const { locale, t } = useLocalization();
   const state = useFinanceState();
-  const summary = useDashboard(month);
   const currency = state.settings.baseCurrency;
 
   const spendItems = summary.categorySpend.filter(

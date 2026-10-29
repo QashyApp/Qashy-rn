@@ -17,13 +17,11 @@ import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
 import { hapticSelection, hapticSuccess } from "@/services/haptics";
 import type { WidgetProps } from "@/features/overview/widgets/types";
-import { useDashboard } from "@/features/overview/widgets/use-dashboard";
 
-export function UpcomingWidget({ month, editing }: WidgetProps) {
+export function UpcomingWidget({ editing, summary }: WidgetProps) {
   const { space } = useQashyTheme();
   const repository = useFinanceRepository();
   const exchangeRateService = useExchangeRateService();
-  const summary = useDashboard(month);
   const [pendingUpcomingId, setPendingUpcomingId] = useState<string | null>(
     null,
   );
