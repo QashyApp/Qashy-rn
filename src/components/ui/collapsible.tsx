@@ -2,23 +2,21 @@ import { useState, type ReactNode } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import { View } from "react-native";
 import Animated, {
-  runOnJS,
-  useAnimatedReaction,
   useAnimatedStyle,
   type SharedValue,
 } from "react-native-reanimated";
 
 import { useMotionPreference } from "@/components/ui/motion";
 
-/** Past this much of the fold the block counts as folded: inert, and (without travel) snapped shut. */
+/** Without travel, the fold snaps shut (or open) as it passes this point. */
 const FOLDED_AT = 0.5;
 
 /**
  * Content that folds away as `collapse` goes 0 → 1: its height, the parent's `gap` before it
  * (`gapBefore`) and its opacity all shrink together. The content keeps its natural size inside,
- * so it is measured once and never reflows while it folds. Once folded past the midpoint the
- * content is taken out of the accessibility tree and touch handling, and (on web) made `inert`, so
- * its inputs cannot be tabbed to while invisible.
+ * so it is measured once and never reflows while it folds. Folded content stays focusable on
+ * purpose: focusing a folded control (Tab on the web, a screen reader) is how a caller such as the
+ * Transactions toolbar knows to open it again.
  *
  * Without travel (the minimal animation level) only the opacity fades: the height and the gap snap
  * to their folded or open size as the fold passes its midpoint.
@@ -41,14 +39,6 @@ export function Collapsible({
 }) {
   const [height, setHeight] = useState<number | null>(null);
   const { travel } = useMotionPreference();
-  const [folded, setFolded] = useState(false);
-  useAnimatedReaction(
-    () => collapse.get() >= FOLDED_AT,
-    (next, previous) => {
-      if (next !== previous) runOnJS(setFolded)(next);
-    },
-    [collapse],
-  );
   const animated = useAnimatedStyle(() => {
     const progress = collapse.get();
     const layoutProgress = travel ? progress : progress >= FOLDED_AT ? 1 : 0;
@@ -59,14 +49,7 @@ export function Collapsible({
     };
   });
   return (
-    <Animated.View
-      pointerEvents={folded ? "none" : "auto"}
-      accessibilityElementsHidden={folded}
-      importantForAccessibility={folded ? "no-hide-descendants" : "auto"}
-      // `inert` is a DOM attribute react-native-web forwards but the View types do not list.
-      {...(folded && process.env.EXPO_OS === "web" ? WEB_INERT : null)}
-      style={[{ overflow: "hidden" }, animated]}
-    >
+    <Animated.View style={[{ overflow: "hidden" }, animated]}>
       <View
         style={[height === null ? null : MEASURED_STYLE, style]}
         onLayout={(event) => {
@@ -80,8 +63,6 @@ export function Collapsible({
     </Animated.View>
   );
 }
-
-const WEB_INERT = { inert: true } as const;
 
 const MEASURED_STYLE = {
   position: "absolute",
