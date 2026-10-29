@@ -23,8 +23,8 @@ import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 
 /**
- * The offset one row is drawn at: the swipe's open or dragged row, the one still sliding shut, or
- * rest. A derived value, so only the rows whose offset changes touch their native view.
+ * The offset one row is drawn at: the swipe's open or dragged row, the one still sliding shut, the
+ * one sliding out after its action, or rest. A derived value, so only the rows whose offset changes touch their native view.
  */
 function useRowOffset(controller: RowSwipeController | null, id: string) {
   const idle = useSharedValue("");
@@ -33,10 +33,13 @@ function useRowOffset(controller: RowSwipeController | null, id: string) {
   const activeX = controller?.activeX ?? zero;
   const closingId = controller?.closingId ?? idle;
   const closingX = controller?.closingX ?? zero;
+  const committingId = controller?.committingId ?? idle;
+  const committingX = controller?.committingX ?? zero;
   return useDerivedValue(() => {
     "worklet";
     if (activeId.get() === id) return activeX.get();
     if (closingId.get() === id) return closingX.get();
+    if (committingId.get() === id) return committingX.get();
     return 0;
   });
 }

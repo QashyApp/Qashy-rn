@@ -279,6 +279,38 @@ async function openLedgerWithSwipe(page: Page) {
   });
   await swipeSwitch.click();
   await expect(swipeSwitch).toBeChecked();
+  // The switch checks itself before the setting is written, so a navigation right after
+  // `toBeChecked` can abort the IndexedDB write and leave swipe off. Wait for it to land.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          new Promise<boolean>((resolve) => {
+            const open = indexedDB.open("qashy");
+            open.onerror = () => resolve(false);
+            open.onsuccess = () => {
+              const db = open.result;
+              const get = db
+                .transaction("records", "readonly")
+                .objectStore("records")
+                .get("settings:settings");
+              get.onerror = () => {
+                db.close();
+                resolve(false);
+              };
+              get.onsuccess = () => {
+                db.close();
+                resolve(
+                  JSON.stringify(get.result ?? null).includes(
+                    '"swipeBetweenMonths":true',
+                  ),
+                );
+              };
+            };
+          }),
+      ),
+    )
+    .toBe(true);
   await page.goto(`/transactions?month=${thisKey}`);
   await expect(page.getByText("This month coffee")).toBeVisible();
   return { lastKey, thisKey };

@@ -18,7 +18,7 @@ import type { AccentSource } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
 import { useCustomThemes } from "@/theme/custom/use-custom-themes";
-import { clampPaletteContrast } from "@/theme/custom/contrast";
+import { clampPaletteContrast, TEXT_SURFACES } from "@/theme/custom/contrast";
 import {
   deriveDynamicPalette,
   type SystemPalettes,
@@ -264,11 +264,12 @@ export function accentTokens(
     ? roles.primary
     : accessibleAccentColor(seed, base.surface, base.text);
   const minTextContrast = theme.id === "high-contrast" ? 7 : 4.5;
-  // A color used as small text must clear the floor on every surface it can sit on.
+  // A color used as small text must clear the floor on every surface it can sit on: cards, the
+  // page, sheets and forms (elevated), choice wells (muted) and sunken stat tiles.
   const textOnSurfaces = (color: string) =>
-    [base.surface, base.background, base.surfaceMuted].reduce(
+    TEXT_SURFACES.reduce(
       (current, surface) =>
-        ensureContrast(current, surface, base.text, minTextContrast),
+        ensureContrast(current, base[surface], base.text, minTextContrast),
       color,
     );
   const accentContainer = roles
@@ -583,7 +584,7 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
     // Cached for the next cold start, whose static shell paints before this provider exists.
     root.style.setProperty("--qashy-bg", background);
     writeThemeHint({
-      scheme: mode,
+      mode: settings.themeMode,
       background,
       accent: cssColor(tokens.accent, tokens.staticAccent),
     });

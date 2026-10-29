@@ -23,7 +23,7 @@ const MIN_TRAVEL = 24;
 const HOLD_SLOP = 10;
 const TICK_MS = 16;
 /** A finger over a gap in the cached rows measures again at most this often. */
-const REMEASURE_MS = 150;
+const REMEASURE_MS = 80;
 
 /**
  * Press a row, hold, then drag to select every row between it and the finger.
@@ -118,18 +118,20 @@ export function useDragSelect({
       apply(hit);
       return;
     }
-    // Over a gap, or a row that scrolled into view since the last pass: measure again, but not
-    // on every move.
+    // Over a gap, or a row that scrolled into view since the last pass: look again, but not on
+    // every move. The lookup is in window space (the list may be scrolling under the finger).
     if (measuring.current || throttled.current) return;
     measuring.current = true;
     throttled.current = true;
     setTimeout(() => {
       throttled.current = false;
     }, REMEASURE_MS);
-    void rows.measure().then(() => {
+    void rows.measureAt(finger.current).then((found) => {
       measuring.current = false;
-      const found = rows.find(finger.current);
-      if (found) apply(found);
+      // The finger may have moved on while the rows were measured; a row it has left is stale.
+      const y = finger.current;
+      if (found && armed.current && y >= found.top && y < found.bottom)
+        apply(found.id);
     });
   };
 

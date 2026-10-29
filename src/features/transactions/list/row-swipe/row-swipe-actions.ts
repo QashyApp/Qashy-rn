@@ -29,9 +29,13 @@ export function rowSwipeActions(
   };
 }
 
-/** Whether the action takes the row out of the list (so it slides away) or leaves it in place. */
+/**
+ * Whether the action takes the row out of the list (so it slides away) or leaves it in place.
+ * Marking paid keeps the same transaction (it only becomes posted), so its row springs back and
+ * re-renders as posted rather than sliding out and in again.
+ */
 export function actionLeavesList(kind: RowSwipeActionKind): boolean {
-  return kind !== "changeCategory";
+  return kind === "delete" || kind === "skip";
 }
 
 export interface RowSwipeActionVisual {

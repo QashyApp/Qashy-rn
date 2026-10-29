@@ -114,7 +114,12 @@ export function NavigationItem({
     : showTooltip
       ? theme.text
       : theme.textMuted;
-  const { style: contentStyle, setPressed } = usePressFeedback();
+  const {
+    style: contentStyle,
+    setPressed,
+    overlay,
+    overlayStyle,
+  } = usePressFeedback();
 
   // The selected item already carries the accent indicator, so it never shows
   // the hover background underneath it.
@@ -228,6 +233,26 @@ export function NavigationItem({
             }}
           />
         ) : null}
+        {/* An overlay theme (Material You) answers a press with a state-layer wash instead of
+            moving: on the pill when the icon sits in one, otherwise over the whole item. */}
+        {overlay && !stacked ? (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              {
+                position: "absolute",
+                top: 0,
+                right: 0,
+                bottom: 0,
+                left: 0,
+                borderRadius: m3 ? 28 : radius.nav,
+                borderCurve: "continuous",
+                backgroundColor: theme.text,
+              },
+              overlayStyle,
+            ]}
+          />
+        ) : null}
         <Animated.View
           style={[
             {
@@ -273,6 +298,23 @@ export function NavigationItem({
                       backgroundColor: theme.surfaceMuted,
                     },
                     highlightStyle,
+                  ]}
+                />
+              ) : null}
+              {overlay ? (
+                <Animated.View
+                  pointerEvents="none"
+                  style={[
+                    {
+                      position: "absolute",
+                      top: 0,
+                      right: 0,
+                      bottom: 0,
+                      left: 0,
+                      borderRadius: 16,
+                      backgroundColor: theme.text,
+                    },
+                    overlayStyle,
                   ]}
                 />
               ) : null}

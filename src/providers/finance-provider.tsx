@@ -125,11 +125,28 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     () => null,
   );
   const hint = useMemo(() => parseThemeHint(hintText), [hintText]);
-  const scheme = hint?.scheme ?? (systemScheme === "dark" ? "dark" : "light");
+  // Read from the device after hydration: the static export renders in Node with no navigator, so a
+  // render-time read would bake the English label into the HTML, and React does not patch attributes
+  // on hydration.
+  const hebrewStartup = useSyncExternalStore(
+    subscribeNever,
+    startupIsHebrew,
+    () => false,
+  );
+  // Only a forced mode's cached colors are trusted: with "system" the page color last session
+  // belongs to that session's scheme, so the live system scheme decides (as the shell's media query does).
+  const forced = hint && hint.mode !== "system" ? hint : null;
+  const scheme: "light" | "dark" =
+    forced?.mode === "light" || forced?.mode === "dark"
+      ? forced.mode
+      : systemScheme === "dark"
+        ? "dark"
+        : "light";
   // Settings are not loaded yet, so the user's theme is unknown: classic is the only truthful
   // choice, tinted by the hint's accent and page color when a previous session left one.
   const tokens = classicTheme.palette[scheme];
-  const background = hint?.background ?? tokens.background;
+  const background = forced?.background ?? tokens.background;
+  // The accent is trusted in every mode: across schemes it differs only by a contrast-driven shade.
   const accent = hint?.accent ?? QASHY_ACCENT;
   // Re-render the tree as a transition so a mutation (e.g. saving a budget)
   // doesn't block the UI while every mounted screen recomputes its projections.
@@ -325,7 +342,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       >
         <ActivityIndicator
           color={accent}
-          accessibilityLabel={startupIsHebrew() ? "טוען" : "Loading"}
+          accessibilityLabel={hebrewStartup ? "טוען" : "Loading"}
         />
       </View>
     );

@@ -34,8 +34,9 @@ const GLOBAL_CSS = `
   --qashy-selection-text: inherit;
 }
 html, body, #root {
-  /* --qashy-bg is the resolved page color cached by the previous session (see THEME_HINT_SCRIPT);
-     without it the system scheme picks the classic fallback. */
+  /* --qashy-bg is the page color cached by the previous session for a forced light or dark mode
+     (see THEME_HINT_SCRIPT); without it (mode "system", or no hint) the live system scheme picks
+     the classic fallback via the media query below. */
   background: var(--qashy-bg, ${LIGHT_BACKGROUND});
   /* Keeps an installed PWA from rubber-banding or pull-to-refreshing the app
      shell when an inner list runs out of scroll. */

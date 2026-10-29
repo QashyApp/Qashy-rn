@@ -52,12 +52,13 @@ export const EXPO_HYDRATE_SCRIPT_HASH =
 
 /**
  * `THEME_HINT_SCRIPT` (`theme-hint.ts`) — the second and last inline script, run in the head so a
- * returning user's dark or light page color paints before React instead of flashing the default.
- * It only reads one local key and sets one CSS variable. `theme-hint.test.ts` fails if the script
+ * returning user's forced dark or light page color paints before React instead of flashing the
+ * default (a "system" mode is left to `prefers-color-scheme`). It only reads one local key and sets
+ * one CSS variable. `theme-hint.test.ts` fails if the script
  * text and this hash drift apart.
  */
 export const THEME_HINT_SCRIPT_HASH =
-  "sha256-MQumcbAHtzk7NV1yO+nP+HoH1bbH65xKzJJmEofx1xU=";
+  "sha256-e4SrxtQByamYrXlTMLyplRZGfMDTN2krkImnyBFTyXA=";
 
 /**
  * Every inline script the export is allowed to run, in the bare form a hashing tool emits

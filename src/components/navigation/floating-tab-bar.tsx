@@ -34,10 +34,11 @@ function PressScale({
   pressed: boolean;
   children: ReactNode;
 }) {
-  const { space } = useQashyTheme();
+  const { space, radius, text } = useQashyTheme();
   // The same press feedback as the web bar: the theme's own, not a Material ripple, which would
-  // spill across the whole tab.
-  const { style, setPressed } = usePressFeedback();
+  // spill across the whole tab. An overlay theme (Material You) neither shrinks nor sinks, so it
+  // answers with a state-layer wash over the tab's own shape instead.
+  const { style, setPressed, overlay, overlayStyle } = usePressFeedback();
   useEffect(() => {
     setPressed(pressed);
   }, [pressed, setPressed]);
@@ -54,6 +55,24 @@ function PressScale({
         style,
       ]}
     >
+      {overlay ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              borderRadius: radius.nav,
+              borderCurve: "continuous",
+              backgroundColor: text,
+            },
+            overlayStyle,
+          ]}
+        />
+      ) : null}
       {children}
     </Animated.View>
   );

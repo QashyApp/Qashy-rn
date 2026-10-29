@@ -46,11 +46,11 @@ describe("rowSwipeActions", () => {
 });
 
 describe("actionLeavesList", () => {
-  it("is false only for changing a category", () => {
+  it("is true only for delete and skip; the same transaction stays for the rest", () => {
     expect(actionLeavesList("changeCategory")).toBe(false);
     expect(actionLeavesList("delete")).toBe(true);
     expect(actionLeavesList("skip")).toBe(true);
-    expect(actionLeavesList("markPaid")).toBe(true);
+    expect(actionLeavesList("markPaid")).toBe(false);
   });
 });
 

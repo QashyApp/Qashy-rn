@@ -46,8 +46,8 @@ const ACTIVATE_X = 16;
 const FAIL_Y = 10;
 /** After a touch that closed an open row, how long a press it produces is still swallowed. */
 const TAP_GRACE_MS = 150;
-/** A committed row that is still listed this long afterwards (the action did not remove it) comes back. */
-const RETURN_AFTER_MS = 700;
+/** How long a spring slide-out takes to be out of sight; the row is hidden from the list after it. */
+const SLIDE_OUT_MS = 260;
 
 /** One mounted row as the swipe needs to know it: where it is and what each side does. */
 export interface SwipeRow {
@@ -63,8 +63,16 @@ export interface RowSwipeOptions {
   /** The device setting, `swipeRowActions`. */
   enabled: boolean;
   isRtl: boolean;
-  /** A swipe committed (or a revealed action was pressed): do `kind` to the row. */
-  onAction: (id: string, kind: RowSwipeActionKind) => void;
+  /**
+   * A swipe committed (or a revealed action was pressed): do `kind` to the row. Returns whether it
+   * was taken; a refusal (the row already has an action) brings a row that slid away back.
+   */
+  onAction: (
+    id: string,
+    kind: RowSwipeActionKind,
+    /** A row that slides away stays listed this long before it may be hidden. */
+    hideDelayMs?: number,
+  ) => boolean;
 }
 
 /**
@@ -78,7 +86,9 @@ export interface RowSwipeOptions {
  * row, the touch becomes a swipe past 16dp sideways and fails past 10dp vertically (a scroll).
  *
  * Only one row is ever open or being dragged: `activeId`/`activeX` describe it, `closingId`/
- * `closingX` the one that is still sliding shut. A row reads its own offset from them
+ * `closingX` the one that is still sliding shut, and `committingId`/`committingX` the one that was
+ * swiped away and is still on its way out (its action has already been handed to the screen, and
+ * nothing a later touch does may pull it back). A row reads its own offset from them
  * (`useRowSwipeOffset`), so nothing re-renders mid-drag.
  */
 export interface RowSwipeController {
@@ -90,6 +100,8 @@ export interface RowSwipeController {
   activeX: SharedValue<number>;
   closingId: SharedValue<string>;
   closingX: SharedValue<number>;
+  committingId: SharedValue<string>;
+  committingX: SharedValue<number>;
   revealWidth: number;
   isRtl: boolean;
   /** Replaces the mounted rows. Call after each geometry pass or when the actions change. */
@@ -104,6 +116,8 @@ export interface RowSwipeController {
   shouldSwallowPress(id: string): boolean;
   /** A revealed action was pressed: take the action as a full swipe would. */
   commit(id: string, side: RowSwipeSide): void;
+  /** Brings a row that slid away back to rest (its action was undone or failed). */
+  release(id: string): void;
 }
 
 export function useRowSwipe({
@@ -131,6 +145,11 @@ export function useRowSwipe({
   const activeX = useSharedValue(0);
   const closingId = useSharedValue("");
   const closingX = useSharedValue(0);
+  const committingId = useSharedValue("");
+  const committingX = useSharedValue(0);
+  // The row whose action was just taken but which stays in the list (it settles shut): a second
+  // press of its still-visible button must not take the action again.
+  const lockedId = useSharedValue("");
 
   // 0 idle, 1 a finger is on a row and has not decided, 2 the swipe owns the touch.
   const phase = useSharedValue(0);
@@ -151,16 +170,7 @@ export function useRowSwipe({
   const openId = useRef<string | null>(null);
   const tapClosed = useRef(false);
   const tapTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const returnTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  useEffect(
-    () => () => {
-      clearTimeout(tapTimer.current);
-      clearTimeout(returnTimer.current);
-    },
-    [],
-  );
+  useEffect(() => () => clearTimeout(tapTimer.current), []);
 
   const controller = useMemo(() => {
     const setOpen = (id: string | null) => {
@@ -240,32 +250,53 @@ export function useRowSwipe({
             activeX.get() === 0
           )
             activeId.set("");
+          if (finished && settle === "closed" && lockedId.get() === id)
+            lockedId.set("");
         },
       );
       runOnJS(setOpen)(settle === "closed" ? null : id);
     };
 
+    /** Brings a row that slid away back to rest, and lifts the lock of a repeated press. */
+    const releaseRow = (id: string) => {
+      runOnUI(() => {
+        "worklet";
+        if (lockedId.get() === id) lockedId.set("");
+        if (committingId.get() !== id) return;
+        animate(committingX, 0, 0, () => {
+          "worklet";
+          if (committingId.get() === id) committingId.set("");
+        });
+      })();
+    };
+
     const handleCommit = (id: string, side: RowSwipeSide) => {
       const kind = rowsById.current.get(id)?.actions[side];
-      if (!kind) return;
-      latest.current.onAction(id, kind);
-      if (actionLeavesList(kind)) {
-        // The row is on its way out. If the action never removes it (it was refused), bring it back.
-        clearTimeout(returnTimer.current);
-        returnTimer.current = setTimeout(() => {
-          runOnUI(() => {
-            "worklet";
-            if (activeId.get() !== id) return;
-            animate(activeX, 0, 0, (finished) => {
-              "worklet";
-              if (finished && activeId.get() === id) activeId.set("");
-            });
-          })();
-        }, RETURN_AFTER_MS);
+      let taken = false;
+      try {
+        if (kind) {
+          // A row that slides away is hidden from the list only once it is out of sight. The
+          // screen brings it back (`release`) when its action is undone or fails.
+          const slideMs = instant ? 0 : travel ? SLIDE_OUT_MS : quick;
+          taken = latest.current.onAction(
+            id,
+            kind,
+            actionLeavesList(kind) ? slideMs : undefined,
+          );
+        }
+      } finally {
+        // Refused, gone or thrown: nothing will ever hide this row, so it must not stay slid off.
+        if (!taken) releaseRow(id);
       }
     };
 
-    /** A release (or a pressed action) that commits `side` of row `id`. */
+    /**
+     * A release (or a pressed action) that commits `side` of row `id`. The action is handed to JS
+     * right here, not when the slide finishes: a slide that a later touch interrupts reports
+     * `finished: false`, and the action must not depend on it. A row that leaves moves to its own
+     * slot for the slide, so closing the open row or touching another can neither cancel it nor
+     * leave it part-way.
+     */
     const runCommit = (
       id: string,
       side: RowSwipeSide,
@@ -274,22 +305,24 @@ export function useRowSwipe({
       velocity: number,
     ) => {
       "worklet";
-      activeId.set(id);
-      if (leaves) {
-        animate(
-          activeX,
-          commitOffset(side, width, isRtl),
-          velocity,
-          (finished) => {
-            "worklet";
-            if (finished) runOnJS(handleCommit)(id, side);
-          },
-        );
-        runOnJS(setOpen)(null);
+      if (!leaves) {
+        lockedId.set(id);
+        activeId.set(id);
+        settleTo("closed", id, velocity);
+        runOnJS(handleCommit)(id, side);
         return;
       }
+      cancelAnimation(activeX);
+      const from = activeId.get() === id ? activeX.get() : 0;
+      activeId.set("");
+      activeX.set(0);
+      cancelAnimation(committingX);
+      committingId.set(id);
+      committingX.set(from);
+      animate(committingX, commitOffset(side, width, isRtl), velocity);
+      runOnJS(setOpen)(null);
+      // Last, so a refusal that releases the row finds it already in its own slot.
       runOnJS(handleCommit)(id, side);
-      settleTo("closed", id, velocity);
     };
 
     const gesture = Gesture.Pan()
@@ -322,12 +355,18 @@ export function useRowSwipe({
           startClosing();
           runOnJS(noteTapClosed)();
         }
-        if (index < 0 || sideMasks.get()[index] === 0) {
+        if (
+          index < 0 ||
+          sideMasks.get()[index] === 0 ||
+          // A row on its way out is not a swipe target: its action has been taken.
+          committingId.get() === id
+        ) {
           phase.set(0);
           manager.fail();
           return;
         }
         // Catch a row that is still sliding, wherever it is.
+        if (lockedId.get() === id) lockedId.set("");
         let from = 0;
         if (activeId.get() === id) {
           cancelAnimation(activeX);
@@ -450,6 +489,8 @@ export function useRowSwipe({
       activeX,
       closingId,
       closingX,
+      committingId,
+      committingX,
       revealWidth: ROW_REVEAL_WIDTH,
       isRtl,
       publish(rows: readonly SwipeRow[]) {
@@ -467,6 +508,10 @@ export function useRowSwipe({
         widths.set(rows.map((row) => row.width));
         sideMasks.set(rows.map((row) => bits(row, false)));
         leaveMasks.set(rows.map((row) => bits(row, true)));
+        // A row that left the list (a filter hid it, the month changed) takes its open state with it.
+        const open = openId.current;
+        if (open !== null && !rows.some((row) => row.id === open))
+          runOnUI(startClosing)();
       },
       setScrollOffset(y: number) {
         scrollOffset.set(y);
@@ -482,14 +527,25 @@ export function useRowSwipe({
       shouldSwallowPress(id: string) {
         return tapClosed.current || openId.current === id;
       },
+      release: releaseRow,
       commit(id: string, side: RowSwipeSide) {
         const row = rowsById.current.get(id);
         const kind = row?.actions[side];
         if (!row || !kind) return;
         const width = row.width;
+        // Decided here on JS: `actionLeavesList` is not a worklet.
+        const leaves = actionLeavesList(kind);
         runOnUI(() => {
           "worklet";
-          runCommit(id, side, actionLeavesList(kind), width, 0);
+          // Only the open row has a button to press, and a row whose action is already taken
+          // (sliding away, or settling shut) takes no second one.
+          if (
+            activeId.get() !== id ||
+            committingId.get() === id ||
+            lockedId.get() === id
+          )
+            return;
+          runCommit(id, side, leaves, width, 0);
         })();
       },
     } satisfies RowSwipeController;

@@ -23,6 +23,11 @@ import {
 
 export type RowActionKind = "delete" | "skip" | "markPaid";
 
+/** Marking paid keeps the same transaction (now posted), so its row is never hidden meanwhile. */
+function hidesRow(kind: RowActionKind): boolean {
+  return kind !== "markPaid";
+}
+
 /** How long the Undo bar stays up before the action is committed. */
 export const ROW_ACTION_UNDO_MS = 5000;
 
@@ -80,12 +85,24 @@ export interface PendingRowAction {
 }
 
 export interface RowActionsState {
-  /** Rows to hide: the pending one plus any whose commit is still in flight. */
+  /**
+   * Rows to hide: the pending one (once its hide delay is over) plus any whose commit is still in
+   * flight.
+   */
   hiddenIds: ReadonlySet<string>;
+  /**
+   * Rows being marked paid (pending or committing). They stay in the list, drawn as paid, since
+   * the transaction keeps its id and only changes status.
+   */
+  paidIds: ReadonlySet<string>;
   pending: PendingRowAction | null;
 }
 
-const EMPTY_STATE: RowActionsState = { hiddenIds: new Set(), pending: null };
+const EMPTY_STATE: RowActionsState = {
+  hiddenIds: new Set(),
+  paidIds: new Set(),
+  pending: null,
+};
 
 export interface RowActionHandlers {
   commit: (id: string, kind: RowActionKind) => Promise<void>;
@@ -97,7 +114,14 @@ export interface RowActionQueue {
   /** Swaps the handlers, so a commit always uses those of the latest render. */
   configure(handlers: RowActionHandlers): void;
   subscribe(listener: () => void): () => void;
-  schedule(id: string, kind: RowActionKind): void;
+  /**
+   * Makes `id` the pending action. `hideDelayMs` holds the row in the list that long (a swipe is
+   * still sliding it away) before it is hidden; the Undo bar and the commit are not delayed.
+   * Returns false when the row already has an action pending or committing (nothing is scheduled).
+   * `markPaid` never hides its row: the same transaction stays in the list and re-renders as
+   * posted.
+   */
+  schedule(id: string, kind: RowActionKind, hideDelayMs?: number): boolean;
   undo(): void;
   /** Commits the pending action now. Also what every flush trigger (blur, unmount, background) calls. */
   flush(): void;
@@ -116,33 +140,49 @@ export function createRowActionQueue(
 ): RowActionQueue {
   let handlers = initial;
   let pending: PendingRowAction | null = null;
+  /** The pending row is hidden; false only during `schedule`'s hide delay. */
+  let pendingHidden = true;
+  let hideTimer: ReturnType<typeof setTimeout> | undefined;
   const inFlight = new Map<string, number>();
+  /** In-flight ids whose row stays in the list (see `hidesRow`). */
+  const inFlightVisible = new Set<string>();
   const listeners = new Set<() => void>();
   let state: RowActionsState = EMPTY_STATE;
 
   const publish = () => {
-    const hidden = new Set(inFlight.keys());
-    if (pending) hidden.add(pending.id);
+    const hidden = new Set(
+      [...inFlight.keys()].filter((id) => !inFlightVisible.has(id)),
+    );
+    if (pending && pendingHidden && hidesRow(pending.kind))
+      hidden.add(pending.id);
+    const paid = new Set(inFlightVisible);
+    if (pending && !hidesRow(pending.kind)) paid.add(pending.id);
     // Keep the previous object when nothing visible changed, so subscribers do not re-render.
     const same =
       state.pending?.id === pending?.id &&
       state.pending?.kind === pending?.kind &&
       state.hiddenIds.size === hidden.size &&
-      [...hidden].every((id) => state.hiddenIds.has(id));
+      [...hidden].every((id) => state.hiddenIds.has(id)) &&
+      state.paidIds.size === paid.size &&
+      [...paid].every((id) => state.paidIds.has(id));
     if (same) return;
     state =
-      hidden.size === 0 && !pending
+      hidden.size === 0 && paid.size === 0 && !pending
         ? EMPTY_STATE
-        : { hiddenIds: hidden, pending };
+        : { hiddenIds: hidden, paidIds: paid, pending };
     for (const listener of [...listeners]) listener();
   };
 
   const run = (action: PendingRowAction) => {
     inFlight.set(action.id, (inFlight.get(action.id) ?? 0) + 1);
+    if (!hidesRow(action.kind)) inFlightVisible.add(action.id);
     const settle = () => {
       const left = (inFlight.get(action.id) ?? 1) - 1;
       if (left > 0) inFlight.set(action.id, left);
-      else inFlight.delete(action.id);
+      else {
+        inFlight.delete(action.id);
+        inFlightVisible.delete(action.id);
+      }
     };
     let promise: Promise<void>;
     try {
@@ -164,10 +204,17 @@ export function createRowActionQueue(
     );
   };
 
+  const dropPending = () => {
+    clearTimeout(hideTimer);
+    hideTimer = undefined;
+    pendingHidden = true;
+    pending = null;
+  };
+
   const flush = () => {
     if (!pending) return;
     const action = pending;
-    pending = null;
+    dropPending();
     run(action);
     publish();
   };
@@ -183,26 +230,36 @@ export function createRowActionQueue(
         listeners.delete(listener);
       };
     },
-    schedule(id, kind) {
+    schedule(id, kind, hideDelayMs = 0) {
       // The row is already hidden (pending or committing), so there is nothing new to schedule.
-      if (pending?.id === id || inFlight.has(id)) return;
+      if (pending?.id === id || inFlight.has(id)) return false;
       if (pending) {
         const previous = pending;
-        pending = null;
+        dropPending();
         run(previous);
       }
       pending = { id, kind };
+      if (hideDelayMs > 0 && hidesRow(kind)) {
+        pendingHidden = false;
+        hideTimer = setTimeout(() => {
+          hideTimer = undefined;
+          if (pending?.id !== id) return;
+          pendingHidden = true;
+          publish();
+        }, hideDelayMs);
+      }
       publish();
+      return true;
     },
     undo() {
       if (!pending) return;
-      pending = null;
+      dropPending();
       publish();
     },
     flush,
     prune(existingIds) {
       if (pending && !existingIds.has(pending.id)) {
-        pending = null;
+        dropPending();
         publish();
       }
     },
@@ -219,8 +276,9 @@ export function usePendingRowActions(options: {
   onError: (kind: RowActionKind, error: unknown) => void;
 }): {
   hiddenIds: ReadonlySet<string>;
+  paidIds: ReadonlySet<string>;
   pending: PendingRowAction | null;
-  schedule(id: string, kind: RowActionKind): void;
+  schedule(id: string, kind: RowActionKind, hideDelayMs?: number): boolean;
   undo(): void;
   expire(): void;
 } {
@@ -273,6 +331,7 @@ export function usePendingRowActions(options: {
 
   return {
     hiddenIds: state.hiddenIds,
+    paidIds: state.paidIds,
     pending: state.pending,
     schedule: queue.schedule,
     undo: queue.undo,

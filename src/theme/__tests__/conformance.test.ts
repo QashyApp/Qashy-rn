@@ -100,14 +100,18 @@ describe.each(BUILT_IN_THEMES.map((theme) => [theme.id, theme] as const))(
           "transferText",
         ] as const) {
           for (const surface of [
-            palette.surface,
-            palette.background,
-            palette.surfaceMuted,
-          ]) {
+            "surface",
+            "surfaceElevated",
+            "background",
+            "surfaceMuted",
+            "surfaceSunken",
+          ] as const) {
             expect({
               key,
-              ratio: contrastRatio(tokens[key] as string, surface) >= floor,
-            }).toEqual({ key, ratio: true });
+              surface,
+              ratio:
+                contrastRatio(tokens[key] as string, palette[surface]) >= floor,
+            }).toEqual({ key, surface, ratio: true });
           }
         }
       });

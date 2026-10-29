@@ -82,6 +82,8 @@ export interface TransactionMonthListProps {
   selectedIds: readonly string[];
   /** Rows to leave out: a swiped-away row whose action is waiting on its Undo. */
   hiddenIds: ReadonlySet<string>;
+  /** Rows being marked paid: drawn as paid at once, with no swipe or inline actions. */
+  paidIds: ReadonlySet<string>;
   /** Where "Go to latest" leads when this month is empty. */
   latestMonth: string | null;
   /** The list column's width and gutters, shared with the pinned toolbar. */
@@ -124,6 +126,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   selectionMode,
   selectedIds,
   hiddenIds,
+  paidIds,
   latestMonth,
   content,
   onScroll,
@@ -182,13 +185,18 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     categoriesVersion,
   ]);
   // A row waiting on its Undo is out of the list at once; its section goes with its last row.
-  const transactions = useMemo(
-    () =>
-      hiddenIds.size
-        ? queried.filter((item) => !hiddenIds.has(item.id))
-        : queried,
-    [queried, hiddenIds],
-  );
+  // A row being marked paid shows as paid while its Undo is up (the repository only changes at the
+  // commit); the Undo restores it.
+  const transactions = useMemo(() => {
+    if (!hiddenIds.size && !paidIds.size) return queried;
+    return queried.flatMap((item) =>
+      hiddenIds.has(item.id)
+        ? []
+        : paidIds.has(item.id) && item.status === "upcoming"
+          ? [{ ...item, status: "posted" as const }]
+          : [item],
+    );
+  }, [queried, hiddenIds, paidIds]);
 
   const sections = useMemo(
     () =>
@@ -335,9 +343,12 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   const actionsById = useRef(new Map<string, RowSwipeActions>());
   useEffect(() => {
     actionsById.current = new Map(
-      transactions.map((item) => [item.id, rowSwipeActions(item)]),
+      transactions.map((item) => [
+        item.id,
+        paidIds.has(item.id) ? NO_ROW_ACTIONS : rowSwipeActions(item),
+      ]),
     );
-  }, [transactions]);
+  }, [transactions, paidIds]);
   // One cache of where the mounted rows are, for the row swipe and the drag-select. Only the
   // current page publishes it to the swipe: the others are inert.
   const geometry = useRowGeometry({
@@ -410,6 +421,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               ? (event) => {
                   scrollOffset.current = event.nativeEvent.contentOffset.y;
                   rowSwipe?.setScrollOffset(scrollOffset.current);
+                  geometry.noteScroll();
                   onScroll?.(event);
                 }
               : undefined
@@ -550,6 +562,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
               first={index === 0}
               last={index === section.data.length - 1}
               selected={selectedSet.has(item.id)}
+              paying={paidIds.has(item.id)}
               selectionMode={selectionMode}
               flashes={flash?.id === item.id ? flash.flashes : 0}
               flashToken={flash?.token ?? 0}
@@ -623,11 +636,15 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   );
 });
 
+const NO_ROW_ACTIONS: RowSwipeActions = { start: null, end: null };
+
 interface DayRowProps {
   item: TransactionRecord;
   first: boolean;
   last: boolean;
   selected: boolean;
+  /** Being marked paid: no swipe, no row actions. */
+  paying: boolean;
   selectionMode: boolean;
   /** Non-zero while this row is the one just saved. */
   flashes: number;
@@ -705,6 +722,7 @@ const DayRow = memo(function DayRow({
   first,
   last,
   selected,
+  paying,
   selectionMode,
   flashes,
   flashToken,
@@ -731,10 +749,27 @@ const DayRow = memo(function DayRow({
     [registerRow, id],
   );
   const swipe = useRowSwipeController();
+  // Skip and Mark paid under an upcoming row: a tap that only closes an open row does nothing else.
+  const handleInlineAction = useCallback(
+    (action: RowSwipeActionKind) => {
+      if (swipe?.shouldSwallowPress(id)) {
+        swipe.close();
+        return;
+      }
+      onRowAction(id, action);
+    },
+    [swipe, onRowAction, id],
+  );
   const { kind: itemKind, status: itemStatus } = item;
+  // What the row draws behind it. A row being marked paid is shown as posted but is still the
+  // upcoming row that was swiped, so its layer stays until the card has sprung back over it.
   const actions = useMemo(
-    () => rowSwipeActions({ kind: itemKind, status: itemStatus }),
-    [itemKind, itemStatus],
+    () =>
+      rowSwipeActions({
+        kind: itemKind,
+        status: paying ? "upcoming" : itemStatus,
+      }),
+    [paying, itemKind, itemStatus],
   );
   const handlePress = useCallback(() => {
     // A tap that only closes an open row, or ends a swipe, is not a press on the row.
@@ -801,7 +836,7 @@ const DayRow = memo(function DayRow({
               selected={selected}
               onLongPress={handleLongPress}
               onPress={handlePress}
-              rowActions={actions}
+              rowActions={paying ? NO_ROW_ACTIONS : actions}
               onRowAction={onRowAction}
             />
           </StateLayerBoundsContext.Provider>
@@ -817,11 +852,11 @@ const DayRow = memo(function DayRow({
               <TextButton
                 title="Skip"
                 tone="muted"
-                onPress={() => onRowAction(id, "skip")}
+                onPress={() => handleInlineAction("skip")}
               />
               <TextButton
                 title="Mark paid"
-                onPress={() => onRowAction(id, "markPaid")}
+                onPress={() => handleInlineAction("markPaid")}
               />
             </View>
           ) : null}

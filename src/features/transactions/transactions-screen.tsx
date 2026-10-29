@@ -1,5 +1,5 @@
 import { CountUpSubject } from "@/components/finance/animated-money";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import {
   useCallback,
   useDeferredValue,
@@ -373,20 +373,23 @@ export function TransactionsScreen() {
   );
   const {
     hiddenIds,
+    paidIds,
     pending: pendingRowAction,
     schedule: scheduleRowAction,
     undo: undoRowAction,
     expire: expireRowAction,
   } = usePendingRowActions({ onError: reportRowActionError });
   const handleRowAction = useCallback(
-    (id: string, action: RowSwipeActionKind) => {
+    (id: string, action: RowSwipeActionKind, hideDelayMs?: number) => {
       if (action === "changeCategory") {
         setCategoryRowId(id);
-        return;
+        return true;
       }
+      // A repeat of an action already taken on this row schedules nothing, so it buzzes nothing.
+      if (!scheduleRowAction(id, action, hideDelayMs)) return false;
       if (action === "markPaid") hapticSuccess();
       else if (action === "skip") hapticSelection();
-      scheduleRowAction(id, action);
+      return true;
     },
     [scheduleRowAction],
   );
@@ -395,6 +398,16 @@ export function TransactionsScreen() {
     isRtl,
     onAction: handleRowAction,
   });
+  // A row that slid away and is back in play (its action was undone, or failed and was unhidden)
+  // must return to rest: the swipe holds it off to the side until told otherwise.
+  const engagedRows = useRef(new Set<string>());
+  useEffect(() => {
+    const now = new Set(hiddenIds);
+    if (pendingRowAction) now.add(pendingRowAction.id);
+    for (const id of engagedRows.current)
+      if (!now.has(id)) rowSwipe.release(id);
+    engagedRows.current = now;
+  }, [hiddenIds, pendingRowAction, rowSwipe]);
   // Selecting, or choosing a category for a row, stands the swipe down and closes an open row.
   const swipeSuspended = selectionMode || categoryRowId !== null;
   useEffect(() => {
@@ -402,12 +415,22 @@ export function TransactionsScreen() {
     return () => rowSwipe.suspend("screen", false);
   }, [rowSwipe, swipeSuspended]);
   useCloseRowSwipeWhen(rowSwipe, swipeSuspended);
+  // A row left open must not outlive what shows it: a filter or search that hides it, or leaving
+  // the screen. (The list also closes a row that drops out of its measured rows.)
+  useEffect(() => {
+    rowSwipe.close();
+  }, [rowSwipe, kind, deferredSearch, searchAllMonths]);
+  useFocusEffect(useCallback(() => () => rowSwipe.close(), [rowSwipe]));
   // The month pager waits for the row swipe to fail: it fails at touch-down anywhere but on a row.
   const pagerBlockedBy = useMemo(() => [rowSwipe.gesture], [rowSwipe.gesture]);
 
   const categoryRow = categoryRowId
     ? state.transactions.find((item) => item.id === categoryRowId)
     : undefined;
+  // The row can vanish while its sheet is open (a sync deleted it): the sheet hides itself with it,
+  // so `onClose` never runs and the swipe would stay suspended for good.
+  if (categoryRowId !== null && categoryRow === undefined)
+    setCategoryRowId(null);
   const changeRowCategory = async (categoryId: string | null) => {
     if (busy || !categoryRow) return;
     setBusy(true);
@@ -673,6 +696,7 @@ export function TransactionsScreen() {
                   selectionMode={selectionMode}
                   selectedIds={selectedIds}
                   hiddenIds={hiddenIds}
+                  paidIds={paidIds}
                   latestMonth={latestMonth}
                   content={content}
                   onScroll={onScroll}

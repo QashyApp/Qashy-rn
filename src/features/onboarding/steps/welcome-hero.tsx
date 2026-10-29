@@ -163,7 +163,7 @@ export function WelcomeHero() {
             literal
             figure
             variant="label"
-            style={[HERO_TEXT, { color: theme.positive }]}
+            style={[HERO_TEXT, { color: theme.positiveText }]}
           >
             +2,480
           </AppText>
