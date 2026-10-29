@@ -1,8 +1,11 @@
 import { PointerType } from "react-native-gesture-handler";
 
 import {
+  clampScrollTarget,
   edgeScrollStep,
   grabsSelectedOnPress,
+  longPressPlan,
+  maxScrollOffset,
 } from "@/features/transactions/list/use-drag-select";
 
 const TOP = 100;
@@ -52,5 +55,56 @@ describe("grabsSelectedOnPress", () => {
 
   it("never grabs off the web", () => {
     expect(grabsSelectedOnPress(PointerType.MOUSE, false)).toBe(false);
+  });
+});
+
+describe("maxScrollOffset", () => {
+  it("is the content less the viewport", () => {
+    expect(maxScrollOffset(2000, 600)).toBe(1400);
+  });
+
+  it("is zero for content that fits", () => {
+    expect(maxScrollOffset(400, 600)).toBe(0);
+  });
+
+  it("is unlimited until both sizes are known", () => {
+    expect(maxScrollOffset(0, 600)).toBe(Infinity);
+    expect(maxScrollOffset(2000, 0)).toBe(Infinity);
+  });
+});
+
+describe("clampScrollTarget", () => {
+  it("leaves a target inside the list alone", () => {
+    expect(clampScrollTarget(300, 1400)).toBe(300);
+  });
+
+  it("stops at the end of the list, however long the finger stays at the edge", () => {
+    let target = 1392;
+    for (let tick = 0; tick < 100; tick++)
+      target = clampScrollTarget(target + 8, 1400);
+    expect(target).toBe(1400);
+  });
+
+  it("stops at the top", () => {
+    expect(clampScrollTarget(-8, 1400)).toBe(0);
+  });
+
+  it("does not limit a list whose size is not known", () => {
+    expect(clampScrollTarget(5000, Infinity)).toBe(5000);
+  });
+});
+
+describe("longPressPlan", () => {
+  it("selects a row that is not selected and arms a drag from it, everywhere", () => {
+    expect(longPressPlan(false, false)).toEqual({ toggle: true, arm: true });
+    expect(longPressPlan(false, true)).toEqual({ toggle: true, arm: true });
+  });
+
+  it("deselects a selected row on native, with nothing to drag from", () => {
+    expect(longPressPlan(true, false)).toEqual({ toggle: true, arm: false });
+  });
+
+  it("holds a selected row on the web, so a finger can drag from it", () => {
+    expect(longPressPlan(true, true)).toEqual({ toggle: false, arm: true });
   });
 });

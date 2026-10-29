@@ -51,6 +51,7 @@ import {
   usePendingRowActions,
   type RowActionKind,
 } from "@/features/transactions/row-actions";
+import { useCategorySheetRequest } from "@/features/transactions/use-category-sheet-request";
 import type { RowSwipeActionKind } from "@/features/transactions/list/row-swipe/row-swipe-actions";
 import {
   RowSwipeContext,
@@ -430,12 +431,11 @@ export function TransactionsScreen() {
     [aggregate, state.transactions, hiddenIds, paidIds, fromDate, toDate],
   );
   // Change category opens its sheet over the list, which stands the swipe down and closes the row.
-  // A swipe's row first holds on its checkmark for `holdMs`, so the sheet waits that long (none when
-  // motion is off, or when the action came from a button or an accessibility action).
-  const categoryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
-    undefined,
-  );
-  useEffect(() => () => clearTimeout(categoryTimer.current), []);
+  // A swipe's row first holds on its checkmark for `holdMs`, and so does a press of a revealed
+  // button, so the sheet waits that long. There is no hold (and no wait) when motion is off, or for
+  // an accessibility action, which does not go through the swipe.
+  const { request: requestCategorySheet, cancel: cancelPendingCategory } =
+    useCategorySheetRequest(setCategoryRowId);
   const handleRowAction = useCallback(
     (
       id: string,
@@ -444,13 +444,7 @@ export function TransactionsScreen() {
       holdMs?: number,
     ) => {
       if (action === "changeCategory") {
-        clearTimeout(categoryTimer.current);
-        if (holdMs !== undefined && holdMs > 0)
-          categoryTimer.current = setTimeout(
-            () => setCategoryRowId(id),
-            holdMs,
-          );
-        else setCategoryRowId(id);
+        requestCategorySheet(id, holdMs);
         return true;
       }
       // A repeat of an action already taken on this row schedules nothing, so it buzzes nothing.
@@ -463,7 +457,7 @@ export function TransactionsScreen() {
       else if (action === "skip") hapticSelection();
       return true;
     },
-    [scheduleRowAction],
+    [scheduleRowAction, requestCategorySheet],
   );
   const rowSwipe = useRowSwipe({
     enabled: state.settings.swipeRowActions !== false,
@@ -485,7 +479,17 @@ export function TransactionsScreen() {
   useEffect(() => {
     rowSwipe.close();
   }, [rowSwipe, kind, deferredSearch, searchAllMonths]);
-  useFocusEffect(useCallback(() => () => rowSwipe.close(), [rowSwipe]));
+  // Leaving the screen also drops a Change category sheet that was still waiting on its hold: it
+  // would otherwise open over whatever screen is there by then.
+  useFocusEffect(
+    useCallback(
+      () => () => {
+        rowSwipe.close();
+        cancelPendingCategory();
+      },
+      [rowSwipe, cancelPendingCategory],
+    ),
+  );
   // The month pager waits for the row swipe to fail: it fails at touch-down anywhere but on a row.
   const pagerBlockedBy = useMemo(() => [rowSwipe.gesture], [rowSwipe.gesture]);
 

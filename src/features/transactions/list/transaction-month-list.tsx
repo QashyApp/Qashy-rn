@@ -42,7 +42,12 @@ import {
   type RowGeometry,
 } from "@/features/transactions/list/row-swipe/use-row-geometry";
 import { useRowSwipeController } from "@/features/transactions/list/row-swipe/use-row-swipe";
-import { useDragSelect } from "@/features/transactions/list/use-drag-select";
+import { useCurrentPageSwipe } from "@/features/transactions/list/use-current-page-swipe";
+import {
+  longPressPlan,
+  maxScrollOffset,
+  useDragSelect,
+} from "@/features/transactions/list/use-drag-select";
 import { RowFlash } from "@/features/transactions/list/row-flash";
 import {
   consumeSavedTransactionSignal,
@@ -339,6 +344,13 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     [listRef],
   );
   const getScrollOffset = useCallback(() => scrollOffset.current, []);
+  // How far the list can scroll, for a drag-select's edge scroll to stop at the end.
+  const contentHeight = useRef(0);
+  const viewportHeight = useRef(0);
+  const getMaxScrollOffset = useCallback(
+    () => maxScrollOffset(contentHeight.current, viewportHeight.current),
+    [],
+  );
   const rowSwipe = useRowSwipeController();
 
   // What each side of a row does, read when the geometry is published.
@@ -375,19 +387,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     const timer = setTimeout(geometry.invalidate, 400);
     return () => clearTimeout(timer);
   }, [geometry, isCurrent, rowSwipe, sections, selectionMode]);
-  useEffect(() => {
-    if (!isCurrent || !rowSwipe) return;
-    void geometry.measure();
-    // A touch that lands where no row is published measures the mounted rows before deciding.
-    rowSwipe.setMeasurer(geometry.measure);
-    return () => {
-      rowSwipe.setMeasurer(null);
-      // Not `publish([])`: that would say an empty list is the right one, and a touch that misses
-      // the rows must stay undecided until the next page's rows are measured.
-      rowSwipe.clear();
-      rowSwipe.close();
-    };
-  }, [isCurrent, rowSwipe, geometry]);
+  useCurrentPageSwipe({ isCurrent, rowSwipe, geometry, scrollOffset });
 
   const setDragArmed = useCallback(
     (armed: boolean) => rowSwipe?.suspend("drag", armed),
@@ -401,6 +401,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     containerRef,
     scrollTo,
     getScrollOffset,
+    getMaxScrollOffset,
     geometry,
     onArmedChange: setDragArmed,
   });
@@ -423,20 +424,25 @@ export const TransactionMonthList = memo(function TransactionMonthList({
         ref={containerRef}
         collapsable={false}
         style={{ flex: 1 }}
-        onLayout={geometry.invalidate}
+        onLayout={(event) => {
+          viewportHeight.current = event.nativeEvent.layout.height;
+          geometry.invalidate();
+        }}
       >
         <SectionList
           ref={isCurrent ? listRef : undefined}
-          onScroll={
-            isCurrent
-              ? (event) => {
-                  scrollOffset.current = event.nativeEvent.contentOffset.y;
-                  rowSwipe?.setScrollOffset(scrollOffset.current);
-                  geometry.noteScroll();
-                  onScroll?.(event);
-                }
-              : undefined
-          }
+          onScroll={(event) => {
+            // Every page keeps its own offset, even the inert ones (a list whose content shrank
+            // moves itself): it is what the row swipe is given when the page becomes current.
+            scrollOffset.current = event.nativeEvent.contentOffset.y;
+            if (!isCurrent) return;
+            rowSwipe?.setScrollOffset(scrollOffset.current);
+            geometry.noteScroll();
+            onScroll?.(event);
+          }}
+          onContentSizeChange={(_width, height) => {
+            contentHeight.current = height;
+          }}
           scrollEventThrottle={16}
           // A scroll closes an open row; the rows' positions are re-measured once it rests.
           onScrollBeginDrag={isCurrent ? () => rowSwipe?.close() : undefined}
@@ -764,9 +770,9 @@ const DayRow = memo(function DayRow({
   const id = item.id;
   const handleLongPress = useCallback(() => {
     if (!selectionMode) hapticImpactLight();
-    onLongPressItem(id);
-    // A row that was already selected is deselected by the press, so there is nothing to drag from.
-    if (!selected) onArmDrag(id);
+    const plan = longPressPlan(selected, process.env.EXPO_OS === "web");
+    if (plan.toggle) onLongPressItem(id);
+    if (plan.arm) onArmDrag(id);
   }, [selectionMode, selected, onLongPressItem, onArmDrag, id]);
   const rowRef = useCallback(
     (node: HostInstance | null) => {

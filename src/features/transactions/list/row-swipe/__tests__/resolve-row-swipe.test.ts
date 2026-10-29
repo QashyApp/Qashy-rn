@@ -4,6 +4,7 @@ import {
   EDGE_GUARD,
   EDGE_GUARD_OPEN_BUTTON,
   ICON_REST_SCALE,
+  SPRING_MAX_MS,
   ROW_REVEAL_WIDTH,
   RUBBER_LIMIT,
   classifyMove,
@@ -17,6 +18,7 @@ import {
   resolveRowSwipe,
   settleOffset,
   sideOf,
+  springArrivalMs,
   touchStartsAtEdge,
 } from "@/features/transactions/list/row-swipe/resolve-row-swipe";
 
@@ -467,5 +469,92 @@ describe("touchStartsAtEdge", () => {
         inset.width,
       ),
     ).toBe(false);
+  });
+});
+
+describe("springArrivalMs", () => {
+  const SNAPPY = { damping: 20, stiffness: 420, mass: 0.72 };
+
+  /** An independent check: the same spring integrated step by step until its first arrival. */
+  function integrate(
+    spring: typeof SNAPPY,
+    from: number,
+    velocity: number,
+  ): number {
+    const dt = 0.0005;
+    let x = from;
+    let v = velocity;
+    for (let step = 1; step < 4000; step++) {
+      // Semi-implicit Euler is plenty at this step.
+      v += ((-spring.stiffness * x - spring.damping * v) / spring.mass) * dt;
+      x += v * dt;
+      if (x * from <= 0 || Math.abs(x) < 0.01) return step * dt * 1000;
+    }
+    return SPRING_MAX_MS;
+  }
+
+  it("is nothing when the value starts at its target", () => {
+    expect(springArrivalMs(SNAPPY, 0, 0)).toBe(0);
+    expect(springArrivalMs(SNAPPY, 0.005, 500)).toBe(0);
+  });
+
+  it("takes the same time from any distance when it starts at rest", () => {
+    const near = springArrivalMs(SNAPPY, 20, 0);
+    const far = springArrivalMs(SNAPPY, 300, 0);
+    expect(Math.abs(near - far)).toBeLessThanOrEqual(2);
+    // The snappy preset reaches its target in about 110ms.
+    expect(near).toBeGreaterThan(100);
+    expect(near).toBeLessThan(125);
+  });
+
+  it("agrees with a numerical integration, whichever way the value is let go", () => {
+    for (const [from, velocity] of [
+      [88, 0],
+      [-88, 0],
+      [-70, -1500],
+      [-70, 1500],
+      [60, 3000],
+      [90, -800],
+    ]) {
+      const expected = integrate(SNAPPY, from, velocity);
+      expect(
+        Math.abs(springArrivalMs(SNAPPY, from, velocity) - expected),
+      ).toBeLessThanOrEqual(6);
+    }
+  });
+
+  it("is shorter with a velocity toward the target and longer with one away from it", () => {
+    const rest = springArrivalMs(SNAPPY, 80, 0);
+    expect(springArrivalMs(SNAPPY, 80, -1500)).toBeLessThan(rest);
+    expect(springArrivalMs(SNAPPY, 80, 1500)).toBeGreaterThan(rest);
+    // A hard fling away adds a good fraction of the trip from rest: nothing may assume a fixed time.
+    expect(springArrivalMs(SNAPPY, 80, 4000)).toBeGreaterThan(rest + 20);
+  });
+
+  it("follows a softer spring and a heavily damped one", () => {
+    const gentle = { damping: 19, stiffness: 200, mass: 1 };
+    expect(springArrivalMs(gentle, 80, 0)).toBeGreaterThan(
+      springArrivalMs(SNAPPY, 80, 0),
+    );
+    expect(
+      Math.abs(springArrivalMs(gentle, 80, 0) - integrate(gentle, 80, 0)),
+    ).toBeLessThanOrEqual(6);
+    // Critically damped and over-damped springs never cross: they stop when close enough.
+    const critical = { damping: 2 * Math.sqrt(200), stiffness: 200, mass: 1 };
+    const heavy = { damping: 60, stiffness: 200, mass: 1 };
+    for (const spring of [critical, heavy]) {
+      const arrival = springArrivalMs(spring, 80, 0);
+      expect(arrival).toBeGreaterThan(0);
+      expect(arrival).toBeLessThanOrEqual(SPRING_MAX_MS);
+      expect(Math.abs(arrival - integrate(spring, 80, 0))).toBeLessThanOrEqual(
+        10,
+      );
+    }
+  });
+
+  it("gives up at its cap for a spring that cannot be solved", () => {
+    expect(springArrivalMs({ damping: 20, stiffness: 0, mass: 1 }, 80, 0)).toBe(
+      SPRING_MAX_MS,
+    );
   });
 });

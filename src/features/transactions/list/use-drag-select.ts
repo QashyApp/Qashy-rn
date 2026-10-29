@@ -48,9 +48,44 @@ export function edgeScrollStep(y: number, top: number, bottom: number): number {
 }
 
 /**
+ * How far a list can scroll: its content height less its own height. Infinity while either is not
+ * known yet, so nothing is clamped to a size that was never measured.
+ */
+export function maxScrollOffset(
+  contentHeight: number,
+  viewportHeight: number,
+): number {
+  if (!(contentHeight > 0) || !(viewportHeight > 0)) return Infinity;
+  return Math.max(0, contentHeight - viewportHeight);
+}
+
+/**
+ * The edge scroll's target kept inside the list: the list stops at its end, so a target that ran on
+ * past it would put the rows (found by that target) below where the finger really sees them.
+ */
+export function clampScrollTarget(target: number, max: number): number {
+  return Math.min(Math.max(0, target), max);
+}
+
+/**
+ * What a row's long-press does. A row that is not selected is selected and a drag may start from
+ * it. A selected row is deselected by the press on native, so there is nothing to drag from. On the
+ * web it is held instead: it stays selected and the drag arms from it, so a finger can extend or
+ * shrink the selection from a selected row as a mouse does.
+ */
+export function longPressPlan(
+  selected: boolean,
+  web: boolean,
+): { toggle: boolean; arm: boolean } {
+  if (selected && web) return { toggle: false, arm: true };
+  return { toggle: true, arm: !selected };
+}
+
+/**
  * Whether pressing an already selected row grabs it for a drag at once, without a hold. Only a mouse
  * on the web does: it has no scroll to give up. A finger scrolls the list from a selected row like
- * from any other, and drags from it after the hold arms.
+ * from any other; on the web its hold arms the drag from the row (`longPressPlan`), and on native
+ * the hold deselects it.
  */
 export function grabsSelectedOnPress(
   pointerType: PointerType | undefined,
@@ -84,6 +119,7 @@ export function useDragSelect({
   containerRef,
   scrollTo,
   getScrollOffset,
+  getMaxScrollOffset,
   geometry,
   onArmedChange,
 }: {
@@ -98,6 +134,8 @@ export function useDragSelect({
   scrollTo: (offset: number) => void;
   /** The list's last reported offset (it lags a fast scroll). */
   getScrollOffset: () => number;
+  /** The furthest the list can scroll; the edge scroll stops there. Absent: no limit. */
+  getMaxScrollOffset?: () => number;
   /** Where the mounted rows are, shared with the row swipe. */
   geometry: RowGeometry;
   /** A drag is armed or over: other gestures on the list (the row swipe) must stand aside. */
@@ -112,6 +150,7 @@ export function useDragSelect({
     onSelect,
     scrollTo,
     getScrollOffset,
+    getMaxScrollOffset,
     geometry,
     onArmedChange,
   });
@@ -122,6 +161,7 @@ export function useDragSelect({
       onSelect,
       scrollTo,
       getScrollOffset,
+      getMaxScrollOffset,
       geometry,
       onArmedChange,
     };
@@ -131,6 +171,7 @@ export function useDragSelect({
     onSelect,
     scrollTo,
     getScrollOffset,
+    getMaxScrollOffset,
     geometry,
     onArmedChange,
   ]);
@@ -204,12 +245,17 @@ export function useDragSelect({
       targetOffset.current = null;
       return;
     }
-    const { scrollTo: scroll, getScrollOffset: current } = latest.current;
+    const {
+      scrollTo: scroll,
+      getScrollOffset: current,
+      getMaxScrollOffset: limit,
+    } = latest.current;
     const reported = current();
     let target = targetOffset.current;
     if (target === null || Math.abs(target - reported) > RESYNC_DISTANCE)
       target = reported;
-    target = Math.max(0, target + step);
+    // Not past the list's end: it stops there, and the rows are found by where the list really is.
+    target = clampScrollTarget(target + step, limit?.() ?? Infinity);
     targetOffset.current = target;
     scroll(target);
     hitTest();
@@ -217,7 +263,8 @@ export function useDragSelect({
 
   // A browser scrolls a touch as soon as it moves, whatever the gesture handler does. Once the hold
   // has armed a drag, cancelling touchmove keeps the list still for it. (A finger on a selected
-  // row scrolls as normal until its hold arms; only a mouse grabs a selected row, below.)
+  // row scrolls as normal until its hold arms it, see `longPressPlan`; only a mouse grabs a
+  // selected row at the press, below.)
   useEffect(() => {
     if (process.env.EXPO_OS !== "web" || typeof document === "undefined")
       return;
@@ -243,8 +290,8 @@ export function useDragSelect({
 
   // On the web a mouse pressed on a selected row grabs it: moving from it extends or shrinks the
   // selection around it, the same drag the hold starts on an unselected row. A mouse has no scroll
-  // to give up, and no hold. A touch does not: it scrolls the list like any other, and a drag from a
-  // selected row starts with the hold, as on an unselected one.
+  // to give up, and no hold. A touch does not: it scrolls the list like any other, and on the web a
+  // drag from a selected row starts with the hold (`longPressPlan`); on native the hold deselects it.
   const grabSelected = (y: number) => {
     if (armed.current) return;
     const { selectedIds: chosen, geometry: rows } = latest.current;

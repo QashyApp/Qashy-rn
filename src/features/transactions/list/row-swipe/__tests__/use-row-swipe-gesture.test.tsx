@@ -381,6 +381,131 @@ describe("a swipe that is interrupted", () => {
   });
 });
 
+describe("rows republished under a swipe", () => {
+  const ABOVE: SwipeRow = {
+    id: "above",
+    top: 0,
+    bottom: 60,
+    width: 300,
+    actions: { start: "skip", end: "skip" },
+  };
+  // Stays in the list when its action is taken (mark paid), unlike the row below it.
+  const TRACKED: SwipeRow = {
+    id: "tracked",
+    top: 60,
+    bottom: 120,
+    width: 300,
+    actions: { start: "markPaid", end: null },
+  };
+  const BELOW: SwipeRow = {
+    id: "below",
+    top: 120,
+    bottom: 180,
+    width: 200,
+    actions: { start: "skip", end: "skip" },
+  };
+
+  async function draggingTracked() {
+    const { swipe, handlers, onAction } = await setup();
+    await act(() => {
+      swipe.publish([ABOVE, TRACKED, BELOW]);
+    });
+    const m = manager();
+    handlers.onTouchesDown(down(100, 90), m);
+    handlers.onTouchesMove(move(120, 90), m);
+    handlers.onStart();
+    await act(() => {
+      handlers.onUpdate({ translationX: 200 });
+    });
+    return { swipe, handlers, onAction };
+  }
+
+  it("keeps the dragged row's own width and actions when a row above it leaves", async () => {
+    const { swipe, handlers, onAction } = await draggingTracked();
+    expect(swipe.activeId.get()).toBe("tracked");
+    const before = swipe.activeX.get();
+    // The row above goes (a filter, a delete elsewhere): "tracked" is now the first row, and its
+    // old index is the row below, a narrower one whose actions leave the list.
+    await act(() => {
+      swipe.publish([TRACKED, BELOW]);
+    });
+    await act(() => {
+      handlers.onUpdate({ translationX: 200 });
+    });
+    expect(swipe.activeX.get()).toBe(before);
+    await act(() => {
+      handlers.onEnd({ velocityX: 0 }, true);
+    });
+    // Mark paid keeps its row: the staying path, not the neighbour's slide-away.
+    expect(onAction).toHaveBeenCalledWith(
+      "tracked",
+      "markPaid",
+      undefined,
+      undefined,
+    );
+    expect(swipe.committingId.get()).toBe("");
+  });
+
+  it("follows the dragged row when rows are added above it", async () => {
+    const { swipe, handlers, onAction } = await draggingTracked();
+    await act(() => {
+      swipe.publish([
+        { ...ABOVE, id: "new", top: 0, bottom: 30 },
+        { ...ABOVE, top: 30, bottom: 60 },
+        TRACKED,
+        BELOW,
+      ]);
+    });
+    await act(() => {
+      handlers.onEnd({ velocityX: 0 }, true);
+    });
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction.mock.calls[0][0]).toBe("tracked");
+  });
+
+  it("lets the row go shut and ends the gesture when the dragged row itself is gone", async () => {
+    const { swipe, handlers, onAction } = await draggingTracked();
+    await act(() => {
+      swipe.publish([ABOVE, BELOW]);
+    });
+    expect(GestureStateManager.fail).toHaveBeenCalledWith(TAG);
+    expect(swipe.activeX.get()).toBe(0);
+    await act(() => {
+      handlers.onUpdate({ translationX: 250 });
+      handlers.onEnd({ velocityX: -2000 }, false);
+      handlers.onFinalize();
+    });
+    expect(onAction).not.toHaveBeenCalled();
+    expect(swipe.activeX.get()).toBe(0);
+  });
+
+  it("does the same when the list is cleared under the swipe", async () => {
+    const { swipe, onAction } = await draggingTracked();
+    await act(() => {
+      swipe.clear();
+    });
+    expect(GestureStateManager.fail).toHaveBeenCalledWith(TAG);
+    expect(swipe.activeX.get()).toBe(0);
+    expect(onAction).not.toHaveBeenCalled();
+  });
+
+  it("hands the touch to the scroll when the row under a finger that has not decided yet is gone", async () => {
+    const { swipe, handlers } = await setup();
+    await act(() => {
+      swipe.publish([ABOVE, TRACKED, BELOW]);
+    });
+    const m = manager();
+    handlers.onTouchesDown(down(100, 90), m);
+    await act(() => {
+      swipe.publish([ABOVE, BELOW]);
+    });
+    expect(GestureStateManager.fail).toHaveBeenCalledWith(TAG);
+    // Its later moves find nothing to swipe.
+    handlers.onTouchesMove(move(80, 90), m);
+    expect(m.activate).not.toHaveBeenCalled();
+  });
+});
+
 describe("the edge guard on native", () => {
   it("lets a touch on an inset open row's button start where the row is, not from zero", async () => {
     const { swipe, handlers } = await setup();

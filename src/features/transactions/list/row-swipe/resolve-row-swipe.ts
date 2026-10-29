@@ -290,3 +290,66 @@ export function findRowAt(
   }
   return -1;
 }
+
+/** The spring constants `withSpring` takes (the theme's `motion.spring` presets). */
+export interface SpringShape {
+  damping: number;
+  stiffness: number;
+  mass: number;
+}
+
+/** A spring is simulated in steps this long, in seconds. */
+const SPRING_STEP = 0.002;
+/** The longest a spring is followed, in milliseconds; a slower one is reported as this. */
+export const SPRING_MAX_MS = 1500;
+/** Reanimated also stops a spring that has come this close to its target. */
+const SPRING_REST_DISPLACEMENT = 0.01;
+
+/**
+ * How long `withSpring(…, { overshootClamping: true })` takes to arrive at its target, in
+ * milliseconds: the first moment the value is at, or has passed, the target. `from` is how far the
+ * value starts from the target (signed) and `velocity` its starting velocity in the same direction
+ * convention (a velocity away from the target lengthens the trip). Solved in closed form for the
+ * under-, critically and over-damped cases, as Reanimated does, so the screen can wait for exactly
+ * as long as the animation takes instead of guessing.
+ */
+export function springArrivalMs(
+  spring: SpringShape,
+  from: number,
+  velocity: number,
+): number {
+  "worklet";
+  if (Math.abs(from) < SPRING_REST_DISPLACEMENT) return 0;
+  const omega = Math.sqrt(spring.stiffness / spring.mass);
+  const zeta = spring.damping / (2 * Math.sqrt(spring.stiffness * spring.mass));
+  if (!Number.isFinite(omega) || !Number.isFinite(zeta) || omega <= 0)
+    return SPRING_MAX_MS;
+  const decayRate = zeta * omega;
+  const damped = omega * Math.sqrt(Math.abs(1 - zeta * zeta));
+  const sineWeight = (velocity + decayRate * from) / (damped || 1);
+  const slow = -decayRate + damped;
+  const fast = -decayRate - damped;
+  const fastWeight = (velocity - slow * from) / (fast - slow || 1);
+  for (let step = 1; step * SPRING_STEP * 1000 < SPRING_MAX_MS; step++) {
+    const t = step * SPRING_STEP;
+    let displacement: number;
+    if (zeta < 1) {
+      displacement =
+        Math.exp(-decayRate * t) *
+        (from * Math.cos(damped * t) + sineWeight * Math.sin(damped * t));
+    } else if (zeta === 1) {
+      displacement =
+        Math.exp(-omega * t) * (from + (velocity + omega * from) * t);
+    } else {
+      displacement =
+        (from - fastWeight) * Math.exp(slow * t) +
+        fastWeight * Math.exp(fast * t);
+    }
+    if (
+      displacement * from <= 0 ||
+      Math.abs(displacement) < SPRING_REST_DISPLACEMENT
+    )
+      return Math.ceil(t * 1000);
+  }
+  return SPRING_MAX_MS;
+}

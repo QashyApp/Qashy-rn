@@ -41,6 +41,7 @@ import {
   isPastCommitLine,
   resolveRowSwipe,
   settleOffset,
+  springArrivalMs,
   touchStartsAtEdge,
   type RowSwipeSide,
 } from "@/features/transactions/list/row-swipe/resolve-row-swipe";
@@ -52,6 +53,8 @@ const WEB = process.env.EXPO_OS === "web";
 const TAP_GRACE_MS = 150;
 /** How long a spring slide-out takes to be out of sight; the row is hidden from the list after it. */
 const SLIDE_OUT_MS = 260;
+/** Added to the confirming hold's length so what waits for it starts just after, never during. */
+const CONFIRM_MARGIN_MS = 32;
 
 /** One mounted row as the swipe needs to know it: where it is and what each side does. */
 export interface SwipeRow {
@@ -170,10 +173,6 @@ export function useRowSwipe({
   const quick = motion.duration.fast;
   // How long a non-leaving action holds at the reveal line, checkmark showing, before it closes.
   const hold = motion.duration.base;
-  // From the commit until that hold is over: the spring (or short timing) to the line, then the hold.
-  const confirmMs = instant
-    ? undefined
-    : (travel ? SLIDE_OUT_MS : quick) + hold;
 
   const ids = useSharedValue<string[]>([]);
   const tops = useSharedValue<number[]>([]);
@@ -373,7 +372,11 @@ export function useRowSwipe({
       });
     };
 
-    const handleCommit = (id: string, side: RowSwipeSide) => {
+    /**
+     * `reachMs` is how long the row takes to get to the reveal line (measured by the commit from
+     * where it is and how fast it let go); an action that keeps its row then holds `hold` more.
+     */
+    const handleCommit = (id: string, side: RowSwipeSide, reachMs = 0) => {
       const kind = rowsById.current.get(id)?.actions[side];
       let taken = false;
       try {
@@ -386,7 +389,7 @@ export function useRowSwipe({
             id,
             kind,
             leaves ? slideMs : undefined,
-            leaves ? undefined : confirmMs,
+            leaves || instant ? undefined : reachMs + hold + CONFIRM_MARGIN_MS,
           );
         }
       } finally {
@@ -411,10 +414,21 @@ export function useRowSwipe({
     ) => {
       "worklet";
       if (!leaves) {
+        // Where the row is now and how long it takes to get to the line from there, with the speed
+        // it was let go at: the hold, and whatever waits for it, starts only then.
+        const from = activeId.get() === id ? activeX.get() : 0;
+        const line = settleOffset(
+          side === "start" ? "open-start" : "open-end",
+          ROW_REVEAL_WIDTH,
+          isRtl,
+        );
+        const reachMs = travel
+          ? springArrivalMs(spring, from - line, velocity)
+          : quick;
         lockedId.set(id);
         activeId.set(id);
         confirmThenClose(id, side, velocity);
-        runOnJS(handleCommit)(id, side);
+        runOnJS(handleCommit)(id, side, reachMs);
         return;
       }
       cancelAnimation(activeX);
@@ -730,6 +744,46 @@ export function useRowSwipe({
         runOnJS(releaseTap)();
       });
 
+    /**
+     * Puts new row arrays in place. The swipe under way is tracked by an index into them, which
+     * moves when a row above it leaves or arrives, so the index is found again by the tracked
+     * row's id: reading the neighbour's width and sides would drag the wrong row's geometry (and a
+     * commit would take the neighbour's leaving or staying path). A tracked row that is gone ends
+     * the swipe: the row settles shut and the gesture fails.
+     */
+    const adoptRows = (next: {
+      ids: string[];
+      tops: number[];
+      bottoms: number[];
+      widths: number[];
+      lefts: number[];
+      sideMasks: number[];
+      leaveMasks: number[];
+      destructiveMasks: number[];
+    }) => {
+      "worklet";
+      ids.set(next.ids);
+      tops.set(next.tops);
+      bottoms.set(next.bottoms);
+      widths.set(next.widths);
+      lefts.set(next.lefts);
+      sideMasks.set(next.sideMasks);
+      leaveMasks.set(next.leaveMasks);
+      destructiveMasks.set(next.destructiveMasks);
+      if (phase.get() !== 1 && phase.get() !== 2) return;
+      const at = next.ids.indexOf(trackId.get());
+      if (at >= 0) {
+        trackIndex.set(at);
+        return;
+      }
+      trackIndex.set(-1);
+      const owned = phase.get() === 2;
+      phase.set(0);
+      crossed.set(false);
+      if (owned) settleTo("closed", trackId.get(), 0);
+      GestureStateManager.fail(handlerTag.get());
+    };
+
     /** Swaps the published rows. `fresh` says they are known to match the list as drawn. */
     const replaceRows = (rows: readonly SwipeRow[], fresh: boolean) => {
       rowsById.current = new Map(rows.map((row) => [row.id, row]));
@@ -743,14 +797,18 @@ export function useRowSwipe({
         (row.actions.end && (!leaves || actionLeavesList(row.actions.end))
           ? 2
           : 0);
-      ids.set(rows.map((row) => row.id));
-      tops.set(rows.map((row) => row.top));
-      bottoms.set(rows.map((row) => row.bottom));
-      widths.set(rows.map((row) => row.width));
-      lefts.set(rows.map((row) => row.left ?? 0));
-      sideMasks.set(rows.map((row) => bits(row, false)));
-      leaveMasks.set(rows.map((row) => bits(row, true)));
-      destructiveMasks.set(rows.map(erases));
+      // Swapped in one go on the UI thread, so a touch callback never sees some arrays new and
+      // others old, and a swipe under way finds its row again in the new order (`adoptRows`).
+      runOnUI(adoptRows)({
+        ids: rows.map((row) => row.id),
+        tops: rows.map((row) => row.top),
+        bottoms: rows.map((row) => row.bottom),
+        widths: rows.map((row) => row.width),
+        lefts: rows.map((row) => row.left ?? 0),
+        sideMasks: rows.map((row) => bits(row, false)),
+        leaveMasks: rows.map((row) => bits(row, true)),
+        destructiveMasks: rows.map(erases),
+      });
       staleMirror.current = !fresh;
       stale.set(!fresh);
       // A row that left the list (a filter hid it, the month changed) takes its open state with it.

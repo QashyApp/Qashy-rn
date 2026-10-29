@@ -5,6 +5,10 @@ import {
   useRowSwipe,
 } from "@/features/transactions/list/row-swipe/use-row-swipe";
 import type { SwipeRow } from "@/features/transactions/list/row-swipe/use-row-swipe";
+import {
+  ROW_REVEAL_WIDTH,
+  springArrivalMs,
+} from "@/features/transactions/list/row-swipe/resolve-row-swipe";
 
 // Motion is off unless a test turns it on.
 let mockMotion = { instant: true, travel: false };
@@ -126,8 +130,37 @@ describe("useRowSwipe", () => {
       await act(() => {
         swipe.commit("a", "start");
       });
-      // The spring to the reveal line (260ms), then the 160ms hold.
-      expect(onAction).toHaveBeenCalledWith("a", "markPaid", undefined, 420);
+      // The spring from the row's place to the reveal line, as long as it really takes (it is not
+      // a fixed time), then the 160ms hold and a frame or two of margin.
+      const reach = springArrivalMs(
+        { damping: 20, stiffness: 200, mass: 1 },
+        0 - ROW_REVEAL_WIDTH,
+        0,
+      );
+      expect(reach).toBeGreaterThan(0);
+      expect(onAction).toHaveBeenCalledWith(
+        "a",
+        "markPaid",
+        undefined,
+        reach + 160 + 32,
+      );
+    });
+
+    it("measures the hold from where the row was let go, not from rest", async () => {
+      mockMotion = { instant: false, travel: true };
+      const onAction = jest.fn().mockReturnValue(true);
+      const swipe = await setup(onAction);
+      // Dragged well past the line, as a swipe that commits is.
+      swipe.activeId.set("a");
+      swipe.activeX.set(170);
+      await act(() => {
+        swipe.commit("a", "start");
+      });
+      const near = onAction.mock.calls[0][3] as number;
+      const spring = { damping: 20, stiffness: 200, mass: 1 };
+      expect(near).toBe(
+        springArrivalMs(spring, 170 - ROW_REVEAL_WIDTH, 0) + 160 + 32,
+      );
     });
 
     it("shortens the hold's lead-in under reduced motion, and has none with motion off", async () => {
@@ -138,7 +171,8 @@ describe("useRowSwipe", () => {
       await act(() => {
         first.commit("a", "start");
       });
-      expect(reduced).toHaveBeenCalledWith("a", "markPaid", undefined, 280);
+      // The short timing to the line (120ms), the 160ms hold and the margin.
+      expect(reduced).toHaveBeenCalledWith("a", "markPaid", undefined, 312);
 
       mockMotion = { instant: true, travel: false };
       const off = jest.fn().mockReturnValue(true);

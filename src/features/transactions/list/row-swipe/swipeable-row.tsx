@@ -116,7 +116,8 @@ export const SwipeableRow = memo(function SwipeableRow({
         style={[
           { backgroundColor: background, paddingHorizontal },
           // The row's own touch-action: a finger may scroll it vertically, and the swipe takes
-          // the horizontal drag. Selected rows opt out in the slab itself.
+          // the horizontal drag. (A drag-select does not need it off: it begins after a hold, and
+          // the page cancels touchmove once that hold has armed it, see `useDragSelect`.)
           process.env.EXPO_OS === "web"
             ? ({ touchAction: "pan-y" } as object)
             : null,
