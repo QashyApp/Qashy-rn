@@ -342,9 +342,14 @@ export function AndroidSheet({
 
   const pan = Gesture.Pan()
     .onUpdate((event) => {
+      // Already leaving (a throw or a fade is under way): a second finger must not move the sheet.
+      if (closingFlag.get()) return;
       drag.set(event.translationY);
     })
     .onEnd((event) => {
+      // A second release while the first is still leaving would start another exit, and a second
+      // `goBack` with it.
+      if (closingFlag.get()) return;
       const base = detentHeight.get();
       const top = maxHeight.get();
       const height = Math.min(top, Math.max(0, base - Math.min(drag.get(), 0)));
@@ -388,8 +393,16 @@ export function AndroidSheet({
               duration: timing.duration,
               easing: timing.linear ? Easing.linear : exitEasing,
             },
-            () => {
-              runOnJS(dismissNow)();
+            (finished) => {
+              if (finished) {
+                runOnJS(dismissNow)();
+                return;
+              }
+              // Cut short (nothing here does that while the sheet is mounted; an unmount does and
+              // then there is nothing to restore): never leave the sheet part-way off screen with
+              // the closing flag set and nobody left to finish the exit.
+              closingFlag.set(false);
+              drag.set(withSpring(0, settle));
             },
           ),
         );

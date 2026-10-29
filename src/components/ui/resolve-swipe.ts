@@ -51,6 +51,34 @@ export function resolveSwipe(
 }
 
 /**
+ * The page (`1` next, `0` current, `-1` previous) nearest to `position`. With a `finger` direction
+ * (`-1` or `1`) only pages at or beyond `position` in that direction count; `0` considers all. A tie
+ * goes to the current page. Stepping forward is skipped when `canForward` is false.
+ */
+function nearestPage(
+  position: number,
+  finger: number,
+  width: number,
+  sign: 1 | -1,
+  canForward: boolean,
+): -1 | 0 | 1 {
+  "worklet";
+  let best: -1 | 0 | 1 = 0;
+  let bestDistance = Infinity;
+  for (const candidate of [0, 1, -1] as const) {
+    if (candidate === 1 && !canForward) continue;
+    const at = -candidate * sign * width;
+    if ((at - position) * finger < 0) continue;
+    const distance = Math.abs(at - position);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
+/**
  * Decides what a released drag does when it did not begin at rest. `start` is the pages' offset
  * (`translateX`) when the finger landed, `dx` how far this finger travelled and `vx` its release
  * velocity. The pages are decided at `start + dx`, as `resolveSwipe` would, with one rule on top:
@@ -59,6 +87,9 @@ export function resolveSwipe(
  * resolve from the absolute position into the month before it. A commit that would go against the
  * finger's own travel (its velocity for a flick, its distance otherwise) settles on the nearest page
  * on the finger's side instead, so the drag completes toward the month it was heading to.
+ *
+ * A flick needs the finger's own travel (`|dx|`, not the position) to reach the tap guard, and a
+ * finger that did not move at all settles on the page nearest the pages' position.
  *
  * With `start` at 0 this is exactly `resolveSwipe(dx, vx, ...)`. Pure and marked `worklet`.
  */
@@ -72,29 +103,24 @@ export function resolveRelease(
 ): -1 | 0 | 1 {
   "worklet";
   const raw = start + dx;
-  const decided = resolveSwipe(raw, vx, width, canForward, isRtl);
-  if (decided === 0) return 0;
   const sign = isRtl ? -1 : 1;
-  const finger = Math.sign(Math.abs(vx) >= SWIPE_COMMIT_VELOCITY ? vx : dx);
   // Where the pages are on screen (the drag is clamped to one page either way).
   const position = Math.max(-width, Math.min(width, raw));
+  // A finger that did not move at all (a grab and a lift) has no direction to honour: the pages
+  // settle on whichever page they are nearest, as they would have been left.
+  if (dx === 0) return nearestPage(position, 0, width, sign, canForward);
+  // A flick counts only if this finger itself travelled far enough: a grab leaves a residual
+  // offset in `start`, and a tap-and-jitter on top of it must not pass as a swipe.
+  const flickVx = Math.abs(dx) >= SWIPE_FLICK_MIN_TRAVEL ? vx : 0;
+  const decided = resolveSwipe(raw, flickVx, width, canForward, isRtl);
+  if (decided === 0) return 0;
+  const finger = Math.sign(
+    Math.abs(flickVx) >= SWIPE_COMMIT_VELOCITY ? flickVx : dx,
+  );
   const target = -decided * sign * width;
   if (finger === 0 || Math.sign(target - position) !== -finger) return decided;
   // Against the finger: the nearest page that is not.
-  let best: -1 | 0 | 1 = 0;
-  let bestDistance = Infinity;
-  for (const candidate of [1, 0, -1] as const) {
-    if (candidate === 1 && !canForward) continue;
-    const at = -candidate * sign * width;
-    // Only pages at or beyond the pages' position in the direction the finger moved.
-    if ((at - position) * finger < 0) continue;
-    const distance = Math.abs(at - position);
-    if (distance < bestDistance) {
-      best = candidate;
-      bestDistance = distance;
-    }
-  }
-  return best;
+  return nearestPage(position, finger, width, sign, canForward);
 }
 
 /**

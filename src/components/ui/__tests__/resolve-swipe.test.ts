@@ -142,6 +142,31 @@ describe("resolveRelease", () => {
     expect(resolveRelease(-380, -30, 0, W, false, false)).toBe(0);
   });
 
+  it("does not let a grab's residual offset pass a jittery tap as a flick", () => {
+    // Pages 200 px left of centre, a 5 px finger movement at a high release speed: a tap.
+    expect(resolveSwipe(-200 + 5, 1200, W, true, false)).toBe(-1);
+    expect(resolveRelease(-200, 5, 1200, W, true, false)).toBe(0);
+    expect(resolveRelease(-200, 5, 1200, W, true, true)).toBe(0);
+    // The same speed with real travel still flicks.
+    expect(resolveRelease(-200, 28, 1200, W, true, false)).toBe(-1);
+    expect(resolveRelease(100, -28, -1200, W, true, false)).toBe(1);
+  });
+
+  it("settles on the nearest page, in any direction, when the finger did not move", () => {
+    // Pages 300 px right of centre: the page at +W is nearest, whichever way that is.
+    expect(resolveRelease(300, 0, 0, W, true, false)).toBe(-1);
+    expect(resolveRelease(-300, 0, 0, W, true, false)).toBe(1);
+    expect(resolveRelease(-300, 0, 0, W, false, false)).toBe(0);
+    expect(resolveRelease(100, 0, 0, W, true, false)).toBe(0);
+    expect(resolveRelease(-120, 0, 900, W, true, false)).toBe(0);
+    // Right-to-left mirrors it.
+    expect(resolveRelease(-300, 0, 0, W, true, true)).toBe(-1);
+    expect(resolveRelease(300, 0, 0, W, true, true)).toBe(1);
+    // Halfway between two pages goes to the current one.
+    expect(resolveRelease(200, 0, 0, W, true, false)).toBe(0);
+    expect(resolveRelease(-200, 0, 0, W, true, false)).toBe(0);
+  });
+
   it("keeps a zero-width page and a motionless finger quiet", () => {
     expect(resolveRelease(100, -50, 0, 0, true, false)).toBe(0);
     expect(resolveRelease(0, 0, 0, W, true, false)).toBe(0);

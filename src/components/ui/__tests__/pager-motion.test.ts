@@ -1,7 +1,10 @@
 import {
+  LANDED_TRAIL_LIMIT,
   canStep,
+  judgeRender,
   landedOffset,
   pagePosition,
+  pushLanded,
 } from "@/components/ui/month-pager/pager-motion";
 
 const W = 400;
@@ -52,5 +55,77 @@ describe("canStep", () => {
     expect(canStep(1, 99, 1, 100)).toBe(false);
     expect(canStep(1, 99, -1, 100)).toBe(true);
     expect(canStep(1, 100, 0, Infinity)).toBe(true);
+  });
+});
+
+describe("pushLanded", () => {
+  it("appends and forgets the oldest past the limit", () => {
+    expect(pushLanded([11], 10)).toEqual([11, 10]);
+    const full = Array.from({ length: LANDED_TRAIL_LIMIT }, (_, i) => i + 1);
+    const next = pushLanded(full, 999);
+    expect(next).toHaveLength(LANDED_TRAIL_LIMIT);
+    expect(next[0]).toBe(2);
+    expect(next.at(-1)).toBe(999);
+    // Does not mutate its input.
+    expect(full[0]).toBe(1);
+  });
+});
+
+describe("judgeRender", () => {
+  it("retires a render that caught up with the only slide", () => {
+    expect(judgeRender(11, [11])).toEqual({
+      external: false,
+      caughtUp: true,
+      trail: [],
+    });
+  });
+
+  it("ignores the render of an earlier slide while a newer one is landed (forward then quick back)", () => {
+    // Forward landed on 11, back landed on 10 before React rendered 11.
+    const first = judgeRender(11, [11, 10]);
+    expect(first).toEqual({ external: false, caughtUp: false, trail: [10] });
+    const second = judgeRender(10, first.trail);
+    expect(second).toEqual({ external: false, caughtUp: true, trail: [] });
+  });
+
+  it("retires every older entry when React skips straight to a later slide", () => {
+    expect(judgeRender(12, [10, 11, 12])).toEqual({
+      external: false,
+      caughtUp: true,
+      trail: [],
+    });
+    expect(judgeRender(11, [10, 11, 12])).toEqual({
+      external: false,
+      caughtUp: false,
+      trail: [12],
+    });
+  });
+
+  it("treats a month the pager never landed on as an external jump, even inside the run's range", () => {
+    // A picker jump to 5 or to 10.5-ish gaps: anything not landed on.
+    expect(judgeRender(5, [11, 10])).toEqual({
+      external: true,
+      caughtUp: true,
+      trail: [],
+    });
+    // Between two landed months, never landed on itself (the old range test accepted this).
+    expect(judgeRender(11, [10, 12])).toEqual({
+      external: true,
+      caughtUp: true,
+      trail: [],
+    });
+  });
+
+  it("treats any render with an empty trail as external", () => {
+    expect(judgeRender(7, []).external).toBe(true);
+  });
+
+  it("matches a repeated month at its oldest entry", () => {
+    // Forward, back, forward again: 11, 10, 11.
+    expect(judgeRender(11, [11, 10, 11])).toEqual({
+      external: false,
+      caughtUp: false,
+      trail: [10, 11],
+    });
   });
 });

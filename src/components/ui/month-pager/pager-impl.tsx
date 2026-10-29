@@ -49,7 +49,9 @@ import {
 } from "@/components/ui/month-pager/pager-model";
 import {
   canStep,
+  judgeRender,
   landedOffset,
+  pushLanded,
 } from "@/components/ui/month-pager/pager-motion";
 import { PagerPage } from "@/components/ui/month-pager/pager-page";
 import {
@@ -156,10 +158,12 @@ export function PagerImpl({
   // against this. It is the UI thread's own truth: a landed slide moves it at once, and React's
   // month catches up afterwards, so the next swipe never waits on a render.
   const baseIndex = useSharedValue(monthIndex(month));
-  // The month React last rendered, and the newest month a slide asked React for (0 when React has
-  // caught up). Together they tell a render this pager asked for from a jump made elsewhere.
+  // The month React last rendered, the newest month a slide asked React for (0 when React has
+  // caught up) and the trail of every month slides have landed on that React has not rendered yet,
+  // oldest first. Together they tell a render this pager asked for from a jump made elsewhere.
   const renderedIndex = useSharedValue(monthIndex(month));
   const requestedIndex = useSharedValue(0);
+  const landedTrail = useSharedValue<number[]>([]);
   const maxIndex = useSharedValue(max != null ? monthIndex(max) : Infinity);
   const fade = useSharedValue(1);
   const startX = useSharedValue(0);
@@ -257,38 +261,38 @@ export function PagerImpl({
     })();
   }, [max, maxIndex]);
 
-  // React has rendered `month`. A render this pager asked for needs nothing: the pages are already
-  // there. Anything else (the month picker, a deep link, a parent that declined) puts the pages on
-  // the new month at once. `busy` is not touched by a render this pager asked for: it belongs to
-  // the slide in flight, which may be a newer one than the month React has just caught up to.
+  // React has rendered `month`. A render of a month this pager landed on needs nothing: the pages
+  // are already there (a newer slide may be landing still, and it follows). Anything else (the
+  // month picker, a deep link, a parent that answered with another month) puts the pages on the new
+  // month at once. `busy` is not touched by a render this pager asked for: it belongs to the slide
+  // in flight, which may be a newer one than the month React has just caught up to. Only a change
+  // of month is judged: `reduced`, `fadeScale` and `sign` changing mid-slide re-run the effect
+  // without a new render, and must not be mistaken for a jump.
   useLayoutEffect(() => {
     const index = monthIndex(month);
     runOnUI(() => {
       "worklet";
-      const previous = renderedIndex.get();
-      renderedIndex.set(index);
-      const requested = requestedIndex.get();
-      if (requested !== 0) {
-        if (index === requested) {
+      if (index !== renderedIndex.get()) {
+        renderedIndex.set(index);
+        const verdict = judgeRender(index, landedTrail.get());
+        landedTrail.set(verdict.trail);
+        if (verdict.external) {
           requestedIndex.set(0);
-        } else if (
-          Math.min(previous, requested) < index &&
-          index < Math.max(previous, requested)
-        ) {
+          if (baseIndex.get() !== index) {
+            cancelAnimation(translateX);
+            tracking.set(false);
+            pendingDir.set(0);
+            busy.set(false);
+            baseIndex.set(index);
+            translateX.set(0);
+            dragProgress?.set(-index * sign);
+          }
+        } else if (!verdict.caughtUp) {
           // An earlier slide of a run that is still landing: the newest one follows.
           return;
         } else {
           requestedIndex.set(0);
         }
-      }
-      if (requested !== index && baseIndex.get() !== index) {
-        cancelAnimation(translateX);
-        tracking.set(false);
-        pendingDir.set(0);
-        busy.set(false);
-        baseIndex.set(index);
-        translateX.set(0);
-        dragProgress?.set(-index * sign);
       }
       // A crossfade in flight is fading the pages itself.
       if (pendingDir.get() !== 0) return;
@@ -303,6 +307,7 @@ export function PagerImpl({
     baseIndex,
     renderedIndex,
     requestedIndex,
+    landedTrail,
     translateX,
     dragProgress,
     sign,
@@ -327,12 +332,16 @@ export function PagerImpl({
       // A parent that declines the change must not leave the pages on a month it never shows.
       clearTimeout(commitTimer.current);
       commitTimer.current = setTimeout(() => {
-        if (monthRef.current === monthAtIndex(index)) return;
         const rendered = monthIndex(monthRef.current);
+        const shown = rendered === index;
         runOnUI(() => {
           "worklet";
           if (requestedIndex.get() !== index) return;
           requestedIndex.set(0);
+          landedTrail.set([]);
+          // React did get there (batched renders can skip the ones in between, leaving the trail
+          // unretired): the pages are right, only the bookkeeping is closed.
+          if (shown) return;
           cancelAnimation(translateX);
           tracking.set(false);
           pendingDir.set(0);
@@ -346,6 +355,7 @@ export function PagerImpl({
     },
     [
       requestedIndex,
+      landedTrail,
       translateX,
       tracking,
       pendingDir,
@@ -372,6 +382,7 @@ export function PagerImpl({
     // Re-based, not reset: the pages keep the positions they have on screen right now.
     translateX.set(landedOffset(translateX.get(), direction, sign, width));
     requestedIndex.set(next);
+    landedTrail.set(pushLanded(landedTrail.get(), next));
     // A crossfade brings the new month in at once; React's render only has to catch up.
     if (reduced)
       fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
@@ -606,6 +617,7 @@ export function PagerImpl({
     baseIndex,
     maxIndex,
     requestedIndex,
+    landedTrail,
     startX,
     busy,
     tracking,
@@ -625,6 +637,12 @@ export function PagerImpl({
     // At the newest month there is nothing to step to: not accepted, so the caller does not tick.
     if (!canStep(direction, baseIndex.get(), inFlight, maxIndex.get()))
       return false;
+    // `true` means "taken as far as JS can tell". The worklet below runs a frame or so later and
+    // drops the step when a finger came down in that window (`tracking`), or when a landing in
+    // between made it a step past the newest month; the caller has already ticked by then. There
+    // is no cheap fix: `tracking` and `baseIndex` live on the UI thread, and a synchronous read
+    // from JS is the very stale view this guards against. A dropped step is harmless (the title
+    // and pages stay on the month they were on) and the window is a single frame.
     setPaging(true);
     scheduleIdle();
     // Without pages beside it there is nothing to slide; the title still follows a slide
