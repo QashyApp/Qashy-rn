@@ -11,7 +11,8 @@ import type { Gesture } from "react-native-gesture-handler";
  *
  * 1. wraps itself in a `GestureDetector` with `scrollGesture`,
  * 2. reports its content offset through `reportOffset` on every scroll event,
- * 3. calls `register` while it is mounted (the returned function unregisters), and
+ * 3. calls `register` while it is mounted (the returned function unregisters; `register` and
+ *    `reportOffset` keep their identity, so an effect on them does not re-run on a detent change), and
  * 4. gives `scrollEnabled` to the scroll view: it is false while the sheet sits below its top
  *    detent, where an upward drag expands the sheet instead of scrolling the content.
  *

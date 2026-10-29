@@ -14,7 +14,7 @@ import {
   View,
   type HostInstance,
 } from "react-native";
-import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import { Gesture, GestureDetector, State } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   ReduceMotion,
@@ -32,6 +32,7 @@ import {
   sheetDismissTiming,
   sheetSpring,
 } from "@/components/navigation/sheet-snap";
+import { classifyBodyTouch } from "@/components/navigation/sheet-body-touch";
 import {
   SheetBodyContext,
   type SheetBody,
@@ -97,10 +98,6 @@ const settleSpring = {
   damping: 36,
 } as const;
 
-/** A body drag starts once the finger has moved this far vertically (px), like the header's pan. */
-const BODY_ACTIVE_OFFSET = 10;
-/** A mostly horizontal swipe (a chip row, a slider) is not a sheet drag: the body pan gives up. */
-const BODY_FAIL_OFFSET = 24;
 /** Within this many px of the top detent the sheet counts as fully open. */
 const DETENT_EPSILON = 1;
 
@@ -193,6 +190,13 @@ export function AndroidSheet({
   const scrollRegistered = useSharedValue(false);
   const bodyMode = useSharedValue(BODY_IDLE);
   const bodyOrigin = useSharedValue(0);
+  // Where the finger came down on the body (screen px), for the body pan's manual activation.
+  const touchStartX = useSharedValue(0);
+  const touchStartY = useSharedValue(0);
+  // The header pan has the touch (so a cancelled header pan, and only that, is put down on finalize).
+  const headerDragging = useSharedValue(false);
+  // Mirrors `scrollRegistered` for rendering: the body pan is only enabled once a body has registered.
+  const [bodyRegistered, setBodyRegistered] = useState(false);
   const scrollGesture = useMemo(() => Gesture.Native(), []);
   // Mirrors `expandedFlag` for rendering: the scroll view only scrolls once the sheet is fully open.
   const [expandedState, setExpandedState] = useState(false);
@@ -378,22 +382,28 @@ export function AndroidSheet({
   // from, as with the keyboard up); below that an upward drag expands the sheet.
   const scrollEnabled =
     expandedState || collapsedHeight >= expandedHeight - DETENT_EPSILON;
+  // `register` and `reportOffset` must keep their identity for as long as the sheet lives: the body
+  // re-registers whenever `register` changes, and unregistering forgets the scroll offset while the
+  // scroll view keeps its real one. `scrollEnabled` flips with every detent change, so it stays out
+  // of their dependencies (only the context value that carries it changes).
+  const reportOffset = useCallback(
+    (offsetY: number) => {
+      scrollY.set(offsetY);
+    },
+    [scrollY],
+  );
+  const register = useCallback(() => {
+    scrollRegistered.set(true);
+    setBodyRegistered(true);
+    return () => {
+      scrollRegistered.set(false);
+      scrollY.set(0);
+      setBodyRegistered(false);
+    };
+  }, [scrollRegistered, scrollY]);
   const body = useMemo<SheetBody>(
-    () => ({
-      scrollGesture,
-      scrollEnabled,
-      reportOffset: (offsetY) => {
-        scrollY.set(offsetY);
-      },
-      register: () => {
-        scrollRegistered.set(true);
-        return () => {
-          scrollRegistered.set(false);
-          scrollY.set(0);
-        };
-      },
-    }),
-    [scrollGesture, scrollEnabled, scrollY, scrollRegistered],
+    () => ({ scrollGesture, scrollEnabled, reportOffset, register }),
+    [scrollGesture, scrollEnabled, reportOffset, register],
   );
 
   // Leaves for good once a swipe has carried the sheet off screen.
@@ -504,13 +514,34 @@ export function AndroidSheet({
     runOnJS(setExpandedState)(release.detent === "expanded");
   };
 
+  // A pan the system or another handler cancelled (a second finger, a stolen touch) never reaches
+  // its end: put the sheet down on a detent instead of leaving it where the finger was.
+  const dragCancel = () => {
+    "worklet";
+    if (drag.get() !== 0) dragRelease(0);
+  };
+
   const headerPan = Gesture.Pan()
     .withTestId("android-sheet-pan")
+    .maxPointers(1)
+    .onStart(() => {
+      headerDragging.set(true);
+    })
     .onUpdate((event) => {
       dragMove(event.translationY);
     })
-    .onEnd((event) => {
-      dragRelease(event.velocityY);
+    .onEnd((event, success) => {
+      headerDragging.set(false);
+      // A cancelled drag (a second finger, a stolen touch) is let go of, not thrown: its last
+      // velocity says nothing about what the user meant.
+      dragRelease(success ? event.velocityY : 0);
+    })
+    .onFinalize((_event, success) => {
+      // The end path above normally ran already; this is the net under it.
+      const dragging = headerDragging.get();
+      headerDragging.set(false);
+      if (success || !dragging) return;
+      dragCancel();
     });
 
   // The body's pan runs beside the scroll view's own (`scrollGesture`), and only takes the touch
@@ -524,8 +555,35 @@ export function AndroidSheet({
   // Once it has the touch it feeds the same move/release as the header, guards included.
   const bodyPan = Gesture.Pan()
     .withTestId("android-sheet-body-pan")
-    .activeOffsetY([-BODY_ACTIVE_OFFSET, BODY_ACTIVE_OFFSET])
-    .failOffsetX([-BODY_FAIL_OFFSET, BODY_FAIL_OFFSET])
+    // Only once a body has registered a scroll view: a plain body (the card gallery's) is not ours
+    // to drag, and the pan stays in the tree so its shape does not change.
+    .enabled(bodyRegistered)
+    .maxPointers(1)
+    // Activated by hand (see `classifyBodyTouch`): a diagonal start on a horizontal scroll view (a
+    // chip row, a tab strip) goes to that scroll view, not to whichever offset it crossed first.
+    .manualActivation(true)
+    .onTouchesDown((event, manager) => {
+      if (event.numberOfTouches > 1) {
+        // A second finger before the pan has the touch: not a sheet drag.
+        if (event.state === State.BEGAN) manager.fail();
+        return;
+      }
+      const touch = event.allTouches[0];
+      if (!touch) return;
+      touchStartX.set(touch.absoluteX);
+      touchStartY.set(touch.absoluteY);
+    })
+    .onTouchesMove((event, manager) => {
+      if (event.state !== State.BEGAN) return;
+      const touch = event.allTouches[0];
+      if (!touch) return;
+      const decision = classifyBodyTouch(
+        touch.absoluteX - touchStartX.get(),
+        touch.absoluteY - touchStartY.get(),
+      );
+      if (decision === "activate") manager.activate();
+      else if (decision === "fail") manager.fail();
+    })
     .simultaneousWithExternalGesture(scrollGesture)
     .onStart(() => {
       // A body that never registered a scroll view is not ours to drag: its content may scroll
@@ -557,14 +615,14 @@ export function AndroidSheet({
       }
       dragMove(translation - bodyOrigin.get());
     })
-    .onEnd((event) => {
+    .onEnd((event, success) => {
       const mode = bodyMode.get();
       bodyMode.set(BODY_IDLE);
       if (mode === BODY_IDLE || mode === BODY_PENDING) return;
       // The sheet never left its place: this was the scroll view's gesture (a fling to the top
       // must not read as a throw at the sheet).
       if (mode === BODY_CLAMPED && drag.get() <= 0) return;
-      dragRelease(event.velocityY);
+      dragRelease(success ? event.velocityY : 0);
     })
     .onFinalize((_event, success) => {
       // Cancelled by the system or by another handler: put the sheet down where it belongs.
@@ -572,7 +630,7 @@ export function AndroidSheet({
       const mode = bodyMode.get();
       bodyMode.set(BODY_IDLE);
       if (mode === BODY_IDLE || mode === BODY_PENDING) return;
-      if (drag.get() !== 0) dragRelease(0);
+      dragCancel();
     });
 
   const liftStyle = useAnimatedStyle(() => ({

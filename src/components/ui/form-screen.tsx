@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   ScrollView,
   View,
@@ -29,10 +29,19 @@ export function FormScreen({
   // and a gesture to run beside it (null everywhere else).
   const sheetBody = useSheetBody();
   const registerWithSheet = sheetBody?.register;
-  useEffect(() => registerWithSheet?.(), [registerWithSheet]);
   const reportOffset = sheetBody?.reportOffset;
+  // The scroll view's real offset, so a (re-)registration can hand it to the sheet: unregistering
+  // forgets the offset on the sheet's side while the scroll view keeps it.
+  const offsetY = useRef(0);
+  useEffect(() => {
+    if (!registerWithSheet) return;
+    const unregister = registerWithSheet();
+    reportOffset?.(offsetY.current);
+    return unregister;
+  }, [registerWithSheet, reportOffset]);
   const handleScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    reportOffset?.(event.nativeEvent.contentOffset.y);
+    offsetY.current = event.nativeEvent.contentOffset.y;
+    reportOffset?.(offsetY.current);
     onScroll?.(event);
   };
   // A sheet starts sliding in only once everything in it has mounted, so a long form held

@@ -4,6 +4,7 @@ import { ScrollView, Text } from "react-native";
 import {
   GestureDetector,
   GestureHandlerRootView,
+  State,
 } from "react-native-gesture-handler";
 import {
   createGestureController,
@@ -220,8 +221,16 @@ const renderScrollSheet = async (
   return view;
 };
 
+// The callbacks a gesture was built with, for driving ones the gesture controller has no event for.
+type PanCallbacks = Record<string, ((...args: never[]) => void) | undefined>;
+const callbacksOf = (testId: string) =>
+  (getByGestureTestId(testId) as unknown as { handlers: PanCallbacks })
+    .handlers;
+
 const bodyPan = () =>
   createGestureController(getByGestureTestId("android-sheet-body-pan"));
+const headerPan = () =>
+  createGestureController(getByGestureTestId("android-sheet-pan"));
 
 describe("AndroidSheet body drag", () => {
   beforeEach(() => {
@@ -334,6 +343,151 @@ describe("AndroidSheet body drag", () => {
       pan.end({ velocityY: 3000 });
     });
     expect(nav.goBack).not.toHaveBeenCalled();
+  });
+
+  it("never activates the body pan for a body that did not register", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav, { registered: false });
+    expect(getByGestureTestId("android-sheet-body-pan").config.enabled).toBe(
+      false,
+    );
+  });
+
+  it("enables the body pan once a body has registered", async () => {
+    await renderScrollSheet(navigation());
+    expect(getByGestureTestId("android-sheet-body-pan").config.enabled).toBe(
+      true,
+    );
+  });
+
+  it("keeps the scroll offset across detent changes, so a pull down from a scrolled form scrolls", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav, { measured: true });
+    const body = bodyPan();
+    const header = headerPan();
+    // Expand from the body, then scroll the form well down.
+    await act(async () => {
+      body.begin();
+      body.activate();
+      body.update({ translationY: -14 });
+      body.update({ translationY: -260 });
+      body.end({ velocityY: -2000 });
+    });
+    expect(screen.getByTestId("body-scroll").props.scrollEnabled).toBe(true);
+    await act(async () => handles.reportOffset?.(400));
+    // Lower the sheet from the header (the scroll view switches off), then expand it from the body
+    // (it switches back on): every flip rebuilds the context value.
+    await act(async () => {
+      header.begin();
+      header.activate();
+      header.update({ translationY: 100 });
+      header.update({ translationY: 200 });
+      header.end({ velocityY: 0 });
+    });
+    expect(screen.getByTestId("body-scroll").props.scrollEnabled).toBe(false);
+    await act(async () => {
+      body.begin();
+      body.activate();
+      body.update({ translationY: -14 });
+      body.update({ translationY: -260 });
+      body.end({ velocityY: -2000 });
+    });
+    expect(screen.getByTestId("body-scroll").props.scrollEnabled).toBe(true);
+    // The form is still scrolled to 400: a pull down belongs to the scroll view.
+    await act(async () => {
+      body.begin();
+      body.activate();
+      body.update({ translationY: 14 });
+      body.update({ translationY: 300 });
+      body.end({ velocityY: 3000 });
+    });
+    expect(nav.goBack).not.toHaveBeenCalled();
+  });
+
+  it("keeps the register callback stable while the scroll hand-off flips", async () => {
+    const registers: unknown[] = [];
+    const Spy = () => {
+      registers.push(useSheetBody()?.register);
+      return null;
+    };
+    await render(
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AnimationLevelContext value="off">
+          <AndroidSheet title="Transaction" navigation={navigation()}>
+            <Spy />
+          </AndroidSheet>
+        </AnimationLevelContext>
+      </GestureHandlerRootView>,
+    );
+    await fireEvent(screen.getByTestId("android-sheet-frame"), "layout", {
+      nativeEvent: { layout: { x: 0, y: 0, width: 400, height: 800 } },
+    });
+    expect(registers.length).toBeGreaterThan(1);
+    expect(new Set(registers).size).toBe(1);
+  });
+
+  it("takes a single finger for both pans", async () => {
+    await renderScrollSheet(navigation());
+    expect(getByGestureTestId("android-sheet-pan").config.maxPointers).toBe(1);
+    expect(
+      getByGestureTestId("android-sheet-body-pan").config.maxPointers,
+    ).toBe(1);
+  });
+
+  it("lets go of a cancelled header drag instead of throwing the sheet", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav, { measured: true });
+    const header = headerPan();
+    await act(async () => {
+      header.begin();
+      header.activate();
+      header.update({ translationY: 100 });
+      // The cancel carries a fast downward velocity that would dismiss a real release.
+      header.cancel({ velocityY: 3000 });
+    });
+    expect(nav.goBack).not.toHaveBeenCalled();
+  });
+
+  it("puts a header drag down when it is finalized without having ended", async () => {
+    const nav = navigation();
+    await renderScrollSheet(nav, { measured: true });
+    const handlers = callbacksOf("android-sheet-pan");
+    const event = { velocityY: 0 } as never;
+    await act(async () => {
+      handlers.onStart?.(event);
+      handlers.onUpdate?.({ translationY: -200 } as never);
+      handlers.onFinalize?.(event, false as never);
+    });
+    // Released at the top detent rather than left half way: the scroll view is live again.
+    expect(screen.getByTestId("body-scroll").props.scrollEnabled).toBe(true);
+    expect(nav.goBack).not.toHaveBeenCalled();
+  });
+
+  it("activates the body pan by hand, and only on a mostly vertical move", async () => {
+    await renderScrollSheet(navigation());
+    const handlers = callbacksOf("android-sheet-body-pan");
+    const { config } = getByGestureTestId("android-sheet-body-pan");
+    expect(config.manualActivation).toBe(true);
+    const manager = { activate: jest.fn(), fail: jest.fn() };
+    const touch = (x: number, y: number) => ({
+      state: State.BEGAN,
+      numberOfTouches: 1,
+      allTouches: [{ absoluteX: x, absoluteY: y }],
+    });
+    const move = (x: number, y: number) =>
+      act(async () =>
+        handlers.onTouchesMove?.(touch(x, y) as never, manager as never),
+      );
+    await act(async () =>
+      handlers.onTouchesDown?.(touch(100, 100) as never, manager as never),
+    );
+    await move(104, 106);
+    expect(manager.activate).not.toHaveBeenCalled();
+    expect(manager.fail).not.toHaveBeenCalled();
+    await move(118, 112);
+    expect(manager.fail).toHaveBeenCalledTimes(1);
+    await move(104, 114);
+    expect(manager.activate).toHaveBeenCalledTimes(1);
   });
 
   it("asks the screen's confirmation first when a dirty form is dragged away from the body", async () => {
