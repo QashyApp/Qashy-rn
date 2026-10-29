@@ -23,7 +23,6 @@ import {
   type SwipeFollowMode,
 } from "@/features/overview/month-swipe-follow";
 import { useLocalization } from "@/localization/localization";
-import { hapticImpactLight } from "@/services/haptics";
 import { useQashyTheme } from "@/theme/theme";
 
 /**
@@ -80,8 +79,9 @@ const HOLD_DIP = 0.88;
 /**
  * A card that opens edit mode when held. While the finger is down the card slowly settles in
  * (a small scale, or a dip in opacity at the Minimal level) so the hold reads as something
- * happening; it lets go the moment the finger lifts or starts scrolling, and gives a tap when
- * the hold completes. Native only: the web has no press-and-hold.
+ * happening; it lets go the moment the finger lifts or starts scrolling. It fires no haptic of
+ * its own: `onActivate` is the one place that enters edit mode and gives the tap, so the hold and
+ * the Customize button feel the same and never double up. Native only: the web has no press-and-hold.
  */
 export function HoldToCustomize({
   onActivate,
@@ -118,7 +118,6 @@ export function HoldToCustomize({
       }}
       onPressOut={release}
       onLongPress={() => {
-        hapticImpactLight();
         release();
         onActivate();
       }}
