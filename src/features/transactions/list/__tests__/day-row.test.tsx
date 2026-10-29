@@ -50,6 +50,7 @@ function renderRow(flashes: number) {
   return render(
     <DayRow
       item={item}
+      order={0}
       first
       last
       selected={false}

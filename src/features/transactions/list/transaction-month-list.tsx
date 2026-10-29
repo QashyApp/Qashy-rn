@@ -27,7 +27,10 @@ import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { EmptyState } from "@/components/ui/empty-state";
 import type { MonthDirection } from "@/components/ui/month-switcher";
-import { PAGER_SCROLLER_STYLE } from "@/components/ui/month-pager";
+import {
+  MonthSlideItem,
+  PAGER_SCROLLER_STYLE,
+} from "@/components/ui/month-pager";
 import { MotionView, useMotionPreference } from "@/components/ui/motion";
 import { StateLayerBoundsContext } from "@/components/ui/state-layer-bounds";
 import { TextButton } from "@/components/ui/text-button";
@@ -56,6 +59,7 @@ import {
 } from "@/features/transactions/list/saved-transaction-signal";
 import {
   groupLedgerSections,
+  UPCOMING_SECTION,
   type LedgerSection,
 } from "@/features/transactions/list/sections";
 import { useLocalization } from "@/localization/localization";
@@ -213,6 +217,11 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       }),
     [transactions, kind, upcomingCollapsed],
   );
+
+  // Each section's place from the top of the month, for the month swipe's cascade: a day's header
+  // and rows share it, so the day moves as one slab. Rebuilt with the sections, and the render
+  // callbacks below depend on it, so a cell never reads an order from an older list.
+  const orderByKey = useMemo(() => sectionOrders(sections), [sections]);
 
   // A save from the transaction sheet scrolls its row into view and flashes it. Only the current
   // page reacts, and only when the row is actually in this list (a filter may hide it).
@@ -432,42 +441,53 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   // lists exactly what it draws and nothing the screen passes down fresh on every render.
   const renderSectionHeader = useCallback(
     ({ section }: { section: LedgerSection<TransactionRecord> }) => {
+      const order = orderByKey.get(sectionKey(section)) ?? 0;
       if (section.kind === "upcoming") {
         return (
-          <UpcomingHeader
-            count={section.count ?? section.data.length}
-            collapsed={upcomingCollapsed}
-            onToggle={toggleUpcoming}
-          />
+          <MonthSlideItem order={order}>
+            <UpcomingHeader
+              count={section.count ?? section.data.length}
+              collapsed={upcomingCollapsed}
+              onToggle={toggleUpcoming}
+            />
+          </MonthSlideItem>
         );
       }
+      // Opaque, because a sticky header scrolls over live content. The negative margins let the
+      // fill reach the column's gutters so rows do not slide past it in the margin. It fades out
+      // with the day's last row (sticky headers unmount the same way rows do).
       return (
-        // Opaque, because a sticky header scrolls over live content. The
-        // negative margins let the fill reach the column's gutters so rows do
-        // not slide past it in the margin. It fades out with the day's last row
-        // (sticky headers unmount the same way rows do).
-        <MotionView
-          entrance={false}
-          exit
-          style={{
-            flexDirection: "row",
-            alignItems: "baseline",
-            justifyContent: "space-between",
-            gap: space.sm,
-            backgroundColor: theme.background,
-            paddingTop: space.lg,
-            paddingBottom: space.sm,
-            marginHorizontal: -space.xs,
-            paddingHorizontal: space.xs,
-          }}
-        >
-          <AppText literal variant="overline" muted>
-            {dayFormat.format(parseLocalDate(section.title))}
-          </AppText>
-        </MotionView>
+        <MonthSlideItem order={order}>
+          <MotionView
+            entrance={false}
+            exit
+            style={{
+              flexDirection: "row",
+              alignItems: "baseline",
+              justifyContent: "space-between",
+              gap: space.sm,
+              backgroundColor: theme.background,
+              paddingTop: space.lg,
+              paddingBottom: space.sm,
+              marginHorizontal: -space.xs,
+              paddingHorizontal: space.xs,
+            }}
+          >
+            <AppText literal variant="overline" muted>
+              {dayFormat.format(parseLocalDate(section.title))}
+            </AppText>
+          </MotionView>
+        </MonthSlideItem>
       );
     },
-    [upcomingCollapsed, toggleUpcoming, space, theme.background, dayFormat],
+    [
+      orderByKey,
+      upcomingCollapsed,
+      toggleUpcoming,
+      space,
+      theme.background,
+      dayFormat,
+    ],
   );
   const renderItem = useCallback(
     ({
@@ -481,6 +501,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     }) => (
       <DayRow
         item={item}
+        order={orderByKey.get(sectionKey(section)) ?? 0}
         first={index === 0}
         last={index === section.data.length - 1}
         selected={selection.has(item.id)}
@@ -497,6 +518,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       />
     ),
     [
+      orderByKey,
       selection,
       paidIds,
       selectionMode,
@@ -732,8 +754,24 @@ function useStableCallback<Args extends unknown[], Result>(
 
 const NO_ROW_ACTIONS: RowSwipeActions = { start: null, end: null };
 
+/** A section's identity: a day's date, or the upcoming group (whose title is not a date). */
+function sectionKey(section: LedgerSection<TransactionRecord>): string {
+  return section.kind === "upcoming" ? UPCOMING_SECTION : section.title;
+}
+
+/** Each section's position from the top of the month, the upcoming group included. */
+function sectionOrders(
+  sections: readonly LedgerSection<TransactionRecord>[],
+): ReadonlyMap<string, number> {
+  return new Map(
+    sections.map((section, index) => [sectionKey(section), index]),
+  );
+}
+
 interface DayRowProps {
   item: TransactionRecord;
+  /** The day's place from the top of the month: its header and rows move together in a month swipe. */
+  order: number;
   first: boolean;
   last: boolean;
   selected: boolean;
@@ -819,6 +857,7 @@ function UpcomingHeader({
  */
 export const DayRow = memo(function DayRow({
   item,
+  order,
   first,
   last,
   selected,
@@ -885,80 +924,82 @@ export const DayRow = memo(function DayRow({
       });
   }, [swipe, selectionMode, onToggleItem, id]);
   return (
-    <MotionView entrance={false} animateLayout exit>
-      <View
-        ref={rowRef}
-        collapsable={false}
-        style={{
-          backgroundColor: selected ? theme.accentContainer : theme.surface,
-          boxShadow: theme.shadowCard,
-          borderTopLeftRadius: first ? radius.card : 0,
-          borderTopRightRadius: first ? radius.card : 0,
-          borderBottomLeftRadius: last ? radius.card : 0,
-          borderBottomRightRadius: last ? radius.card : 0,
-          borderCurve: "continuous",
-          // Always clipped: a row's state layer bleeds into this padding and takes the slab's
-          // corners from the clip, and the flash overlay needs the same shape.
-          overflow: "hidden",
-        }}
-      >
-        <SwipeableRow
-          id={id}
-          actions={actions}
-          background={selected ? theme.accentContainer : theme.surface}
-          paddingHorizontal={space.md}
+    <MonthSlideItem order={order}>
+      <MotionView entrance={false} animateLayout exit>
+        <View
+          ref={rowRef}
+          collapsable={false}
+          style={{
+            backgroundColor: selected ? theme.accentContainer : theme.surface,
+            boxShadow: theme.shadowCard,
+            borderTopLeftRadius: first ? radius.card : 0,
+            borderTopRightRadius: first ? radius.card : 0,
+            borderBottomLeftRadius: last ? radius.card : 0,
+            borderBottomRightRadius: last ? radius.card : 0,
+            borderCurve: "continuous",
+            // Always clipped: a row's state layer bleeds into this padding and takes the slab's
+            // corners from the clip, and the flash overlay needs the same shape.
+            overflow: "hidden",
+          }}
         >
-          {first ? null : (
-            <View
-              style={{
-                height: StyleSheet.hairlineWidth,
-                backgroundColor: theme.border,
-                marginStart: 52,
-              }}
-            />
-          )}
-          {/* The slab's own padding is what a row's wash bleeds into, so it is published around
-              the row alone: the divider and the action row below are not rows. */}
-          <StateLayerBoundsContext.Provider
-            value={{ x: space.md, top: 0, bottom: 0 }}
+          <SwipeableRow
+            id={id}
+            actions={actions}
+            background={selected ? theme.accentContainer : theme.surface}
+            paddingHorizontal={space.md}
           >
-            <TransactionRow
-              transaction={item}
-              showDate={false}
-              selectionMode={selectionMode}
-              selected={selected}
-              onLongPress={handleLongPress}
-              onPress={handlePress}
-              rowActions={paying ? NO_ROW_ACTIONS : actions}
-              onRowAction={onRowAction}
-            />
-          </StateLayerBoundsContext.Provider>
-          {item.status === "upcoming" && !selectionMode ? (
-            <View
-              style={{
-                flexDirection: "row",
-                justifyContent: "flex-end",
-                gap: space.sm,
-                paddingBottom: space.xs,
-              }}
+            {first ? null : (
+              <View
+                style={{
+                  height: StyleSheet.hairlineWidth,
+                  backgroundColor: theme.border,
+                  marginStart: 52,
+                }}
+              />
+            )}
+            {/* The slab's own padding is what a row's wash bleeds into, so it is published around
+              the row alone: the divider and the action row below are not rows. */}
+            <StateLayerBoundsContext.Provider
+              value={{ x: space.md, top: 0, bottom: 0 }}
             >
-              <TextButton
-                title="Skip"
-                tone="muted"
-                onPress={() => handleInlineAction("skip")}
+              <TransactionRow
+                transaction={item}
+                showDate={false}
+                selectionMode={selectionMode}
+                selected={selected}
+                onLongPress={handleLongPress}
+                onPress={handlePress}
+                rowActions={paying ? NO_ROW_ACTIONS : actions}
+                onRowAction={onRowAction}
               />
-              <TextButton
-                title="Mark paid"
-                onPress={() => handleInlineAction("markPaid")}
-              />
-            </View>
+            </StateLayerBoundsContext.Provider>
+            {item.status === "upcoming" && !selectionMode ? (
+              <View
+                style={{
+                  flexDirection: "row",
+                  justifyContent: "flex-end",
+                  gap: space.sm,
+                  paddingBottom: space.xs,
+                }}
+              >
+                <TextButton
+                  title="Skip"
+                  tone="muted"
+                  onPress={() => handleInlineAction("skip")}
+                />
+                <TextButton
+                  title="Mark paid"
+                  onPress={() => handleInlineAction("markPaid")}
+                />
+              </View>
+            ) : null}
+          </SwipeableRow>
+          {/* Last, so it paints over the row's opaque sliding content; the slab clips it. */}
+          {flashes > 0 ? (
+            <RowFlash key={flashToken} flashes={flashes} onDone={onFlashDone} />
           ) : null}
-        </SwipeableRow>
-        {/* Last, so it paints over the row's opaque sliding content; the slab clips it. */}
-        {flashes > 0 ? (
-          <RowFlash key={flashToken} flashes={flashes} onDone={onFlashDone} />
-        ) : null}
-      </View>
-    </MotionView>
+        </View>
+      </MotionView>
+    </MonthSlideItem>
   );
 });
