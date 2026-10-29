@@ -37,6 +37,7 @@ import {
   classifyMove,
   commitOffset,
   displayOffset,
+  drawnVelocity,
   findRowAt,
   isPastCommitLine,
   resolveRowSwipe,
@@ -51,9 +52,10 @@ import { useQashyTheme } from "@/theme/theme";
 const WEB = process.env.EXPO_OS === "web";
 /** After a touch that closed an open row, how long a press it produces is still swallowed. */
 const TAP_GRACE_MS = 150;
-/** How long a spring slide-out takes to be out of sight; the row is hidden from the list after it. */
-const SLIDE_OUT_MS = 260;
-/** Added to the confirming hold's length so what waits for it starts just after, never during. */
+/**
+ * Added to the time a row's own animation takes (the slide out, the confirming hold) so what waits
+ * for it starts just after, never during.
+ */
 const CONFIRM_MARGIN_MS = 32;
 
 /** One mounted row as the swipe needs to know it: where it is and what each side does. */
@@ -238,6 +240,10 @@ export function useRowSwipe({
     const setOpen = (id: string | null) => {
       openId.current = id;
     };
+    /** The row is shut again; another row may have been opened since, and keeps its state. */
+    const clearOpen = (id: string) => {
+      if (openId.current === id) openId.current = null;
+    };
     const noteTapClosed = () => {
       tapClosed.current = true;
       clearTimeout(tapTimer.current);
@@ -348,6 +354,9 @@ export function useRowSwipe({
         return;
       }
       confirmingId.set(id);
+      // The row is held open for the whole confirmation, so a tap on it closes it (and is
+      // swallowed) rather than opening the transaction under the checkmark.
+      runOnJS(setOpen)(id);
       const line = settleOffset(
         side === "start" ? "open-start" : "open-end",
         ROW_REVEAL_WIDTH,
@@ -366,6 +375,7 @@ export function useRowSwipe({
             if (activeId.get() === id && activeX.get() === 0) activeId.set("");
             if (lockedId.get() === id) lockedId.set("");
             if (confirmingId.get() === id) confirmingId.set("");
+            runOnJS(clearOpen)(id);
           },
           hold,
         );
@@ -373,17 +383,19 @@ export function useRowSwipe({
     };
 
     /**
-     * `reachMs` is how long the row takes to get to the reveal line (measured by the commit from
-     * where it is and how fast it let go); an action that keeps its row then holds `hold` more.
+     * `reachMs` is how long the row takes to get where its commit sends it (measured by the commit
+     * from where it is and how fast it let go): out of sight for an action that leaves the list, the
+     * reveal line for one that keeps its row, which then holds `hold` more.
      */
     const handleCommit = (id: string, side: RowSwipeSide, reachMs = 0) => {
       const kind = rowsById.current.get(id)?.actions[side];
       let taken = false;
       try {
         if (kind) {
-          // A row that slides away is hidden from the list only once it is out of sight. The
-          // screen brings it back (`release`) when its action is undone or fails.
-          const slideMs = instant ? 0 : travel ? SLIDE_OUT_MS : quick;
+          // A row that slides away is hidden from the list only once it is out of sight, which is
+          // when its slide has arrived. The screen brings it back (`release`) when its action is
+          // undone or fails.
+          const slideMs = instant ? 0 : reachMs + CONFIRM_MARGIN_MS;
           const leaves = actionLeavesList(kind);
           taken = latest.current.onAction(
             id,
@@ -438,10 +450,14 @@ export function useRowSwipe({
       cancelAnimation(committingX);
       committingId.set(id);
       committingX.set(from);
-      animate(committingX, commitOffset(side, width, isRtl), velocity);
+      const target = commitOffset(side, width, isRtl);
+      const slideMs = travel
+        ? springArrivalMs(spring, from - target, velocity)
+        : quick;
+      animate(committingX, target, velocity);
       runOnJS(setOpen)(null);
       // Last, so a refusal that releases the row finds it already in its own slot.
-      runOnJS(handleCommit)(id, side);
+      runOnJS(handleCommit)(id, side, slideMs);
     };
 
     /** The finger is on row `id` (the `index`th published): follow it, catching a row still sliding. */
@@ -702,6 +718,18 @@ export function useRowSwipe({
         const mask = sideMasks.get()[index] ?? 0;
         const width = widths.get()[index] ?? 0;
         const erases = destructiveMasks.get()[index] ?? 0;
+        const sides = { start: (mask & 1) !== 0, end: (mask & 2) !== 0 };
+        // What decides the release is the finger's speed; the springs that carry the row on start
+        // at the speed the row was drawn moving, which past the commit line (and on a rubber band)
+        // is a fraction of it.
+        const velocity = drawnVelocity(
+          activeX.get(),
+          event.velocityX,
+          width,
+          ROW_REVEAL_WIDTH,
+          isRtl,
+          sides,
+        );
         const release = success
           ? resolveRowSwipe({
               offset: activeX.get(),
@@ -709,7 +737,7 @@ export function useRowSwipe({
               rowWidth: width,
               revealWidth: ROW_REVEAL_WIDTH,
               isRtl,
-              sides: { start: (mask & 1) !== 0, end: (mask & 2) !== 0 },
+              sides,
               destructive:
                 (erases & 1) !== 0
                   ? "start"
@@ -725,10 +753,10 @@ export function useRowSwipe({
             release.commit,
             (leaveMasks.get()[index] & bit) !== 0,
             width,
-            event.velocityX,
+            velocity,
           );
         } else {
-          settleTo(release.settle, id, event.velocityX);
+          settleTo(release.settle, id, velocity);
         }
       })
       .onFinalize(() => {

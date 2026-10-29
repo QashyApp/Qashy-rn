@@ -12,6 +12,8 @@ import {
   commitOffset,
   commitProgress,
   displayOffset,
+  drawnSlope,
+  drawnVelocity,
   findRowAt,
   iconScale,
   isPastCommitLine,
@@ -280,6 +282,62 @@ describe("displayOffset", () => {
 
   it("is zero at rest", () => {
     expect(displayOffset(0, WIDTH, false, BOTH)).toBe(0);
+  });
+});
+
+describe("drawnSlope and drawnVelocity", () => {
+  const line = commitDistance(WIDTH, REVEAL);
+  const ONE_SIDE = { start: false, end: true };
+
+  it("is 1 up to the commit line and at rest", () => {
+    expect(drawnSlope(0, WIDTH, REVEAL, false, BOTH)).toBe(1);
+    expect(drawnSlope(60, WIDTH, REVEAL, false, BOTH)).toBe(1);
+    expect(drawnSlope(-line, WIDTH, REVEAL, false, BOTH)).toBe(1);
+  });
+
+  it("is the commit resistance past the line, and 0 once the row has reached its width", () => {
+    expect(drawnSlope(line + 10, WIDTH, REVEAL, false, BOTH)).toBe(
+      COMMIT_RESISTANCE,
+    );
+    expect(drawnSlope(-(line + 10), WIDTH, REVEAL, true, BOTH)).toBe(
+      COMMIT_RESISTANCE,
+    );
+    expect(drawnSlope(WIDTH, WIDTH, REVEAL, false, BOTH)).toBe(0);
+  });
+
+  it("is the derivative of the drawn offset, on the held stretch and on a rubber band", () => {
+    const check = (
+      raw: number,
+      isRtl: boolean,
+      sides: { start: boolean; end: boolean },
+    ) => {
+      const h = 0.001;
+      const at = (value: number) =>
+        displayOffset(value, WIDTH, isRtl, sides, REVEAL);
+      const numeric = (at(raw + h) - at(raw - h)) / (2 * h);
+      expect(drawnSlope(at(raw), WIDTH, REVEAL, isRtl, sides)).toBeCloseTo(
+        numeric,
+        3,
+      );
+    };
+    check(line + 40, false, BOTH);
+    check(-(line + 40), false, BOTH);
+    check(line + 40, true, BOTH);
+    check(20, false, ONE_SIDE);
+    check(-5, false, ONE_SIDE);
+    check(-200, false, ONE_SIDE);
+    check(-20, true, ONE_SIDE);
+  });
+
+  it("scales the release velocity by the slope and keeps its sign", () => {
+    const drawn = displayOffset(line + 80, WIDTH, false, BOTH);
+    expect(drawnVelocity(drawn, 1000, WIDTH, REVEAL, false, BOTH)).toBeCloseTo(
+      1000 * COMMIT_RESISTANCE,
+    );
+    expect(drawnVelocity(drawn, -1000, WIDTH, REVEAL, false, BOTH)).toBeCloseTo(
+      -1000 * COMMIT_RESISTANCE,
+    );
+    expect(drawnVelocity(40, 1000, WIDTH, REVEAL, false, BOTH)).toBe(1000);
   });
 });
 

@@ -17,6 +17,8 @@ export const OPEN_FRACTION = 0.6;
 export const FLING_VELOCITY = 600;
 /** The farthest a side without an action can be pulled, in dp. */
 export const RUBBER_LIMIT = 36;
+/** The rubber band's initial pull, as a fraction of the finger's travel (see `displayOffset`). */
+const RUBBER_PULL = 0.55;
 /** Past the commit line the row follows the finger at this fraction, so the commit feels held. */
 export const COMMIT_RESISTANCE = 0.35;
 /**
@@ -101,13 +103,57 @@ export function displayOffset(
   if (!enabled(side, sides)) {
     // 1 - 1/(1 + c*x/d), scaled by d: eases toward the limit and never reaches it.
     return (
-      sign * RUBBER_LIMIT * (1 - 1 / (1 + (distance * 0.55) / RUBBER_LIMIT))
+      sign *
+      RUBBER_LIMIT *
+      (1 - 1 / (1 + (distance * RUBBER_PULL) / RUBBER_LIMIT))
     );
   }
   const line = commitDistance(rowWidth, revealWidth);
   const held =
     distance <= line ? distance : line + (distance - line) * COMMIT_RESISTANCE;
   return sign * Math.min(held, rowWidth);
+}
+
+/**
+ * How many dp the row moves per dp of finger travel at a drawn offset: 1 up to the commit line,
+ * `COMMIT_RESISTANCE` past it (0 once the row has reached its own width), and for a side without
+ * an action the rubber band's slope, which falls from `RUBBER_PULL` to 0 as it nears its limit.
+ * It is the derivative of `displayOffset` at the point the row is drawn.
+ */
+export function drawnSlope(
+  offset: number,
+  rowWidth: number,
+  revealWidth: number,
+  isRtl: boolean,
+  sides: RowSwipeSides,
+): number {
+  "worklet";
+  const side = sideOf(offset, isRtl);
+  if (side === null) return 1;
+  const distance = Math.abs(offset);
+  if (!enabled(side, sides)) {
+    const left = Math.min(1, Math.max(0, 1 - distance / RUBBER_LIMIT));
+    return RUBBER_PULL * left * left;
+  }
+  if (distance <= commitDistance(rowWidth, revealWidth)) return 1;
+  return rowWidth > 0 && distance >= rowWidth ? 0 : COMMIT_RESISTANCE;
+}
+
+/**
+ * The finger's release velocity as the row is drawn moving: the row follows the finger at
+ * `drawnSlope` of its speed, so a spring started at the row's offset must start at that speed too.
+ * Unscaled, a row held back past the commit line kicks forward on release.
+ */
+export function drawnVelocity(
+  offset: number,
+  velocity: number,
+  rowWidth: number,
+  revealWidth: number,
+  isRtl: boolean,
+  sides: RowSwipeSides,
+): number {
+  "worklet";
+  return velocity * drawnSlope(offset, rowWidth, revealWidth, isRtl, sides);
 }
 
 /** How far toward the commit line a drawn offset is, from 0 (at rest) to 1 (at or past the line). */

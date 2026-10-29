@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { memo } from "react";
-import { View } from "react-native";
+import { View, type NativeSyntheticEvent } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
@@ -46,6 +46,14 @@ interface TransactionRowProps {
   rowActions?: RowSwipeActions;
   onRowAction?: (id: string, kind: RowSwipeActionKind) => void;
 }
+
+/** A key press on a focused row; on the web `nativeEvent` is the browser's own `KeyboardEvent`. */
+type KeyDownEvent = NativeSyntheticEvent<{
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+}>;
 
 /** How long a row is held before it enters selection mode. */
 const LONG_PRESS_DELAY_MS = 400;
@@ -195,8 +203,28 @@ const TransactionRowView = memo(function TransactionRowView({
         customActions.push({ name: kind, label: t(rowSwipeActionLabel(kind)) });
   }
 
+  // On the web a focused row answers Delete/Backspace like the end-side swipe does, through the
+  // same row action, so the Undo bar still applies. Only a row whose swipe deletes has it.
+  const keyboardDelete =
+    process.env.EXPO_OS === "web" &&
+    !selectionMode &&
+    onRowAction &&
+    rowActions &&
+    (rowActions.start === "delete" || rowActions.end === "delete")
+      ? {
+          onKeyDown: (event: KeyDownEvent) => {
+            const { key, altKey, ctrlKey, metaKey } = event.nativeEvent;
+            if (altKey || ctrlKey || metaKey) return;
+            if (key !== "Delete" && key !== "Backspace") return;
+            event.preventDefault();
+            onRowAction(transaction.id, "delete");
+          },
+        }
+      : null;
+
   return (
     <MotionPressable
+      {...keyboardDelete}
       accessibilityActions={customActions.length ? customActions : undefined}
       accessibilityHint={
         !selectionMode && onLongPress

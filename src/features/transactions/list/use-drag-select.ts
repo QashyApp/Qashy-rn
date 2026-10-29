@@ -15,7 +15,7 @@ import { hapticSelection } from "@/services/haptics";
 
 /** How close to the list's top or bottom edge the finger scrolls it. */
 const EDGE_ZONE = 72;
-/** The fastest scroll per tick, in dp. A step this small is one a finger can still follow. */
+/** The fastest scroll per 16ms frame, in dp. A step this small is one a finger can still follow. */
 const MAX_SCROLL_STEP = 8;
 /** The scroll eases in over this much of the zone, then holds the full step to the very edge. */
 const EASE_IN_ZONE = 24;
@@ -28,7 +28,10 @@ const RESYNC_DISTANCE = MAX_SCROLL_STEP * 3;
 const MIN_TRAVEL = 24;
 /** How far a finger may drift while held, waiting for the long-press, before it counts as a scroll. */
 const HOLD_SLOP = 12;
-const TICK_MS = 16;
+/** The frame the scroll step is sized for; a longer or shorter frame scales the step by its length. */
+const FRAME_MS = 16;
+/** A frame that took longer (the app was busy) scrolls as if it took this long, not in one leap. */
+const MAX_FRAME_MS = 48;
 /** A finger over a gap in the cached rows measures again at most this often. */
 const REMEASURE_MS = 80;
 
@@ -186,8 +189,15 @@ export function useDragSelect({
   const bounds = useRef<{ top: number; bottom: number } | null>(null);
   const measuring = useRef(false);
   const throttled = useRef(false);
-  const timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
-  useEffect(() => () => clearInterval(timer.current), []);
+  /** The pending animation frame of the edge scroll; null while the finger is away from the edges. */
+  const frame = useRef<number | null>(null);
+  const lastFrameAt = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (frame.current !== null) cancelAnimationFrame(frame.current);
+    },
+    [],
+  );
 
   const apply = (id: string) => {
     const state = armed.current;
@@ -230,20 +240,24 @@ export function useDragSelect({
     });
   };
 
-  const tick = () => {
+  /**
+   * One frame of the edge scroll, `scale` frames long. Returns whether the finger is still in an
+   * edge zone with room left to scroll, so the loop knows to ask for another frame.
+   */
+  const tick = (scale: number) => {
     const edges = bounds.current;
-    if (!edges || !armed.current) return;
+    if (!edges || !armed.current) return false;
     const y = finger.current;
     // Holding a row near an edge must not run the list away before the finger has gone anywhere.
     if (
       fingerStart.current === null ||
       Math.abs(y - fingerStart.current) < MIN_TRAVEL
     )
-      return;
-    const step = edgeScrollStep(y, edges.top, edges.bottom);
+      return false;
+    const step = edgeScrollStep(y, edges.top, edges.bottom) * scale;
     if (step === 0) {
       targetOffset.current = null;
-      return;
+      return false;
     }
     const {
       scrollTo: scroll,
@@ -251,14 +265,39 @@ export function useDragSelect({
       getMaxScrollOffset: limit,
     } = latest.current;
     const reported = current();
-    let target = targetOffset.current;
-    if (target === null || Math.abs(target - reported) > RESYNC_DISTANCE)
-      target = reported;
+    let from = targetOffset.current;
+    if (from === null || Math.abs(from - reported) > RESYNC_DISTANCE)
+      from = reported;
     // Not past the list's end: it stops there, and the rows are found by where the list really is.
-    target = clampScrollTarget(target + step, limit?.() ?? Infinity);
+    const target = clampScrollTarget(from + step, limit?.() ?? Infinity);
     targetOffset.current = target;
+    // At an end of the list there is nothing left to scroll; the next move of the finger asks again.
+    if (target === from) return false;
     scroll(target);
     hitTest();
+    return true;
+  };
+
+  /** The edge scroll's frame callback: scrolls, then asks for the next frame only while it has work. */
+  const runFrame = (now: number) => {
+    frame.current = null;
+    const last = lastFrameAt.current;
+    lastFrameAt.current = now;
+    const elapsed =
+      last === null ? FRAME_MS : Math.min(now - last, MAX_FRAME_MS);
+    if (tick(elapsed / FRAME_MS)) {
+      frame.current = requestAnimationFrame(runFrame);
+    } else {
+      lastFrameAt.current = null;
+    }
+  };
+
+  /** Starts the edge scroll when the finger is in an edge zone; it runs by itself from there. */
+  const scrollIfAtEdge = () => {
+    const edges = bounds.current;
+    if (frame.current !== null || !edges || !armed.current) return;
+    if (edgeScrollStep(finger.current, edges.top, edges.bottom) === 0) return;
+    frame.current = requestAnimationFrame(runFrame);
   };
 
   // A browser scrolls a touch as soon as it moves, whatever the gesture handler does. Once the hold
@@ -282,8 +321,9 @@ export function useDragSelect({
     targetOffset.current = null;
     tracking.current = false;
     armed.current = null;
-    clearInterval(timer.current);
-    timer.current = undefined;
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    lastFrameAt.current = null;
     setDragging(false);
     latest.current.onArmedChange?.(false);
   };
@@ -353,10 +393,11 @@ export function useDragSelect({
           if (!bounds.current) {
             containerRef.current?.measureInWindow((_x, top, _w, height) => {
               bounds.current = { top, bottom: top + height };
+              scrollIfAtEdge();
             });
           }
-          if (!timer.current) timer.current = setInterval(tick, TICK_MS);
           hitTest();
+          scrollIfAtEdge();
         })
         // The pan normally ends through onFinalize; lifting or losing the last finger also ends it,
         // so the list can never be left unable to scroll.
