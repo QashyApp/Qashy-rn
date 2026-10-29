@@ -1,4 +1,9 @@
-import { edgeScrollStep } from "@/features/transactions/list/use-drag-select";
+import { PointerType } from "react-native-gesture-handler";
+
+import {
+  edgeScrollStep,
+  grabsSelectedOnPress,
+} from "@/features/transactions/list/use-drag-select";
 
 const TOP = 100;
 const BOTTOM = 700;
@@ -31,5 +36,21 @@ describe("edgeScrollStep", () => {
   it("scrolls up near the top and down near the bottom", () => {
     expect(edgeScrollStep(TOP + 20, TOP, BOTTOM)).toBeLessThan(0);
     expect(edgeScrollStep(BOTTOM - 20, TOP, BOTTOM)).toBeGreaterThan(0);
+  });
+});
+
+describe("grabsSelectedOnPress", () => {
+  it("grabs a selected row for a mouse on the web", () => {
+    expect(grabsSelectedOnPress(PointerType.MOUSE, true)).toBe(true);
+  });
+
+  it("leaves a finger, a pen and an unknown pointer to scroll", () => {
+    expect(grabsSelectedOnPress(PointerType.TOUCH, true)).toBe(false);
+    expect(grabsSelectedOnPress(PointerType.STYLUS, true)).toBe(false);
+    expect(grabsSelectedOnPress(undefined, true)).toBe(false);
+  });
+
+  it("never grabs off the web", () => {
+    expect(grabsSelectedOnPress(PointerType.MOUSE, false)).toBe(false);
   });
 });

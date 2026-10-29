@@ -382,7 +382,9 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     rowSwipe.setMeasurer(geometry.measure);
     return () => {
       rowSwipe.setMeasurer(null);
-      rowSwipe.publish([]);
+      // Not `publish([])`: that would say an empty list is the right one, and a touch that misses
+      // the rows must stay undecided until the next page's rows are measured.
+      rowSwipe.clear();
       rowSwipe.close();
     };
   }, [isCurrent, rowSwipe, geometry]);
@@ -814,10 +816,6 @@ const DayRow = memo(function DayRow({
         ref={rowRef}
         collapsable={false}
         style={{
-          // A selected row can be dragged from to extend the selection, so a browser must not scroll it.
-          ...(selected && process.env.EXPO_OS === "web"
-            ? ({ touchAction: "none" } as object)
-            : null),
           backgroundColor: selected ? theme.accentContainer : theme.surface,
           boxShadow: theme.shadowCard,
           borderTopLeftRadius: first ? radius.card : 0,

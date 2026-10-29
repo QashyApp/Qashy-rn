@@ -55,6 +55,7 @@ import type { RowSwipeActionKind } from "@/features/transactions/list/row-swipe/
 import {
   RowSwipeContext,
   useCloseRowSwipeWhen,
+  useReleaseReturnedRows,
   useRowSwipe,
 } from "@/features/transactions/list/row-swipe/use-row-swipe";
 import { totalsWithoutHidden } from "@/features/transactions/list/summary";
@@ -414,7 +415,8 @@ export function TransactionsScreen() {
     undo: undoRowAction,
   } = usePendingRowActions({ onError: reportRowActionError });
   // A swiped-away row is out of the list at once but the repository keeps it until its Undo window
-  // ends, so the tiles leave it out too, or they would count what the list no longer shows.
+  // ends, so the tiles leave it out too, or they would count what the list no longer shows. A row
+  // being marked paid is drawn as posted at once, so the tiles count it too (when it is priced).
   const summary = useMemo(
     () =>
       totalsWithoutHidden(
@@ -423,13 +425,32 @@ export function TransactionsScreen() {
         hiddenIds,
         fromDate,
         toDate,
+        paidIds,
       ),
-    [aggregate, state.transactions, hiddenIds, fromDate, toDate],
+    [aggregate, state.transactions, hiddenIds, paidIds, fromDate, toDate],
   );
+  // Change category opens its sheet over the list, which stands the swipe down and closes the row.
+  // A swipe's row first holds on its checkmark for `holdMs`, so the sheet waits that long (none when
+  // motion is off, or when the action came from a button or an accessibility action).
+  const categoryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  useEffect(() => () => clearTimeout(categoryTimer.current), []);
   const handleRowAction = useCallback(
-    (id: string, action: RowSwipeActionKind, hideDelayMs?: number) => {
+    (
+      id: string,
+      action: RowSwipeActionKind,
+      hideDelayMs?: number,
+      holdMs?: number,
+    ) => {
       if (action === "changeCategory") {
-        setCategoryRowId(id);
+        clearTimeout(categoryTimer.current);
+        if (holdMs !== undefined && holdMs > 0)
+          categoryTimer.current = setTimeout(
+            () => setCategoryRowId(id),
+            holdMs,
+          );
+        else setCategoryRowId(id);
         return true;
       }
       // A repeat of an action already taken on this row schedules nothing, so it buzzes nothing.
@@ -451,14 +472,7 @@ export function TransactionsScreen() {
   });
   // A row that slid away and is back in play (its action was undone, or failed and was unhidden)
   // must return to rest: the swipe holds it off to the side until told otherwise.
-  const engagedRows = useRef(new Set<string>());
-  useEffect(() => {
-    const now = new Set(hiddenIds);
-    for (const action of pendingRowActions) now.add(action.id);
-    for (const id of engagedRows.current)
-      if (!now.has(id)) rowSwipe.release(id);
-    engagedRows.current = now;
-  }, [hiddenIds, pendingRowActions, rowSwipe]);
+  useReleaseReturnedRows(rowSwipe, hiddenIds, pendingRowActions);
   // Selecting, or choosing a category for a row, stands the swipe down and closes an open row.
   const swipeSuspended = selectionMode || categoryRowId !== null;
   useEffect(() => {

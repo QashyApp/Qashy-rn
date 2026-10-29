@@ -149,22 +149,34 @@ export function classifyMove(dx: number, dy: number): RowSwipeMove {
 }
 
 /**
- * Whether a touch at `absoluteX` is close enough to a screen edge to be the system back gesture's.
- * `openOffset` is the signed offset of the row that rests open (0 when none): its revealed button
- * is the strip of that width at the edge the row slid away from, and a touch on it may start a
- * little closer to the edge, so the button can be pressed or dragged shut.
+ * Whether a touch at window `absoluteX` is close enough to a screen edge to be the system back
+ * gesture's (native only: a browser has none, so the caller does not ask there).
+ *
+ * `openOffset` is the signed offset of the row that rests open (0 when none) and `rowLeft`/
+ * `rowWidth` that row's measured box in window x. Its revealed button is the strip of width
+ * `|openOffset|` at the row edge the card slid away from, and a touch on it may start a little
+ * closer to the screen edge, so the button can be pressed or dragged shut. The strip is placed from
+ * the row's own window x, not from 0: a row inset from the screen (a gutter, a rail, a centred
+ * column) has its button inset with it.
  */
 export function touchStartsAtEdge(
   absoluteX: number,
   windowWidth: number,
   openOffset: number,
+  rowLeft = 0,
+  rowWidth: number = windowWidth,
 ): boolean {
   "worklet";
   const fromEdge = Math.min(absoluteX, windowWidth - absoluteX);
   if (fromEdge >= EDGE_GUARD) return false;
+  const rowRight = rowLeft + rowWidth;
   const onButton =
-    (openOffset > 0 && absoluteX < openOffset) ||
-    (openOffset < 0 && absoluteX > windowWidth + openOffset);
+    (openOffset > 0 &&
+      absoluteX >= rowLeft &&
+      absoluteX < rowLeft + openOffset) ||
+    (openOffset < 0 &&
+      absoluteX <= rowRight &&
+      absoluteX > rowRight + openOffset);
   return !(onButton && fromEdge >= EDGE_GUARD_OPEN_BUTTON);
 }
 

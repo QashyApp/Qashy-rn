@@ -12,6 +12,8 @@ export interface RowRect {
   id: string;
   top: number;
   bottom: number;
+  /** The row's left edge in window x. Rows do not scroll sideways, so this is final as measured. */
+  left: number;
   width: number;
 }
 
@@ -43,8 +45,11 @@ export interface RowGeometry {
   settle(scrollOffset?: number): void;
   /** The list scrolled. Automatic measuring waits until scroll events have stopped for a moment. */
   noteScroll(): void;
-  /** The row under a window y coordinate, from the cache, or null in a gap. */
-  find(windowY: number): string | null;
+  /**
+   * The row under a window y coordinate, from the cache, or null in a gap. `scrollOffset` is the
+   * offset the list is drawn at (default: its last reported one, which lags a fast scroll).
+   */
+  find(windowY: number, scrollOffset?: number): string | null;
   /** The last measured rows, sorted top to bottom. */
   rects(): readonly RowRect[];
 }
@@ -115,9 +120,9 @@ export function useRowGeometry({
         };
         const giveUp = setTimeout(finish, GIVE_UP_MS);
         for (const [id, node] of entries) {
-          node.measureInWindow((_x, top, width, height) => {
-            if (height > 0 && Number.isFinite(top))
-              found.push({ id, top, bottom: top + height, width });
+          node.measureInWindow((left, top, width, height) => {
+            if (height > 0 && Number.isFinite(top) && Number.isFinite(left))
+              found.push({ id, top, bottom: top + height, left, width });
             pending -= 1;
             if (pending === 0) finish();
           });
@@ -128,24 +133,33 @@ export function useRowGeometry({
       if (inFlight) return inFlight;
       clearTimeout(settleTimer);
       settleTimer = undefined;
-      const pass = measureWindow()
-        .then((windowRects) => {
-          const offset = scrollOffset ?? latest.current.getScrollOffset();
-          return windowRects.map((rect) => ({
-            ...rect,
-            top: rect.top + offset,
-            bottom: rect.bottom + offset,
-          }));
-        })
-        .then((rects) => {
-          inFlight = null;
-          if (disposed) return rects;
-          cache = rects as RowRect[];
-          tops = cache.map((rect) => rect.top);
-          bottoms = cache.map((rect) => rect.bottom);
-          latest.current.onMeasured?.(cache);
+      // The offset is read here, as the window positions are asked for, and not when they come
+      // back: a list that scrolled in between would file every row at the wrong place.
+      const offset = scrollOffset ?? latest.current.getScrollOffset();
+      const pass = measureWindow().then((windowRects) => {
+        inFlight = null;
+        const rects = windowRects.map((rect) => ({
+          ...rect,
+          top: rect.top + offset,
+          bottom: rect.bottom + offset,
+        }));
+        if (disposed) return rects;
+        // A scroll that the list reported while the rows were being measured means those positions
+        // belong to some offset in between, which is unknown: do not keep them, measure again once
+        // the list rests. (An offset passed in is the resting one, and is trusted.)
+        if (
+          scrollOffset === undefined &&
+          latest.current.getScrollOffset() !== offset
+        ) {
+          schedule(SETTLE_MS);
           return rects;
-        });
+        }
+        cache = rects;
+        tops = cache.map((rect) => rect.top);
+        bottoms = cache.map((rect) => rect.bottom);
+        latest.current.onMeasured?.(cache);
+        return rects;
+      });
       inFlight = pass;
       return pass;
     };
@@ -202,11 +216,11 @@ export function useRowGeometry({
         noteScroll() {
           lastScrollAt = Date.now();
         },
-        find(windowY) {
+        find(windowY, scrollOffset) {
           const index = findRowAt(
             tops,
             bottoms,
-            windowY + latest.current.getScrollOffset(),
+            windowY + (scrollOffset ?? latest.current.getScrollOffset()),
           );
           return index < 0 ? null : cache[index].id;
         },

@@ -425,4 +425,47 @@ describe("touchStartsAtEdge", () => {
       touchStartsAtEdge(ROW_REVEAL_WIDTH + 1, screen, ROW_REVEAL_WIDTH),
     ).toBe(false);
   });
+
+  it("places the button from the row's own window x, not from zero", () => {
+    // A row inset 20dp: its left button is x 20..108.
+    const inset = { left: 20, width: 340 };
+    expect(
+      touchStartsAtEdge(
+        EDGE_GUARD_OPEN_BUTTON + 4,
+        screen,
+        ROW_REVEAL_WIDTH,
+        inset.left,
+        inset.width,
+      ),
+    ).toBe(false);
+    // Left of the row: not its button, so the full guard applies.
+    expect(
+      touchStartsAtEdge(
+        EDGE_GUARD_OPEN_BUTTON + 1,
+        screen,
+        ROW_REVEAL_WIDTH,
+        EDGE_GUARD_OPEN_BUTTON + 4,
+        inset.width,
+      ),
+    ).toBe(true);
+    // A right-hand button follows the row's right edge (20 + 340 = 360), not the screen's (400).
+    expect(
+      touchStartsAtEdge(
+        screen - 20,
+        screen,
+        -ROW_REVEAL_WIDTH,
+        inset.left,
+        inset.width,
+      ),
+    ).toBe(true);
+    expect(
+      touchStartsAtEdge(
+        inset.left + inset.width - 10,
+        screen,
+        -ROW_REVEAL_WIDTH,
+        inset.left,
+        inset.width,
+      ),
+    ).toBe(false);
+  });
 });

@@ -33,7 +33,7 @@ describe("useRowGeometry", () => {
     });
     expect(row.measureInWindow).toHaveBeenCalledTimes(1);
     expect(result.current.rects()).toEqual([
-      { id: "a", top: 140, bottom: 190, width: 300 },
+      { id: "a", top: 140, bottom: 190, left: 0, width: 300 },
     ]);
   });
 
@@ -80,7 +80,7 @@ describe("useRowGeometry", () => {
     });
     expect(row.measureInWindow).toHaveBeenCalledTimes(1);
     expect(result.current.rects()).toEqual([
-      { id: "a", top: 600, bottom: 650, width: 300 },
+      { id: "a", top: 600, bottom: 650, left: 0, width: 300 },
     ]);
   });
 
@@ -114,7 +114,7 @@ describe("useRowGeometry", () => {
       await Promise.resolve();
     });
     expect(result.current.rects()).toEqual([
-      { id: "a", top: 40, bottom: 90, width: 300 },
+      { id: "a", top: 40, bottom: 90, left: 0, width: 300 },
     ]);
   });
 
@@ -154,5 +154,62 @@ describe("useRowGeometry", () => {
     expect(hit!.bottom).toBeGreaterThan(120);
     expect(miss).toBeNull();
     expect(result.current.rects()).toEqual([]);
+  });
+
+  it("files rows at the offset read when they were measured, and drops a pass the list scrolled during", async () => {
+    let offset = 100;
+    const pending: ((x: number, y: number, w: number, h: number) => void)[] =
+      [];
+    const node = {
+      measureInWindow: jest.fn((callback: (typeof pending)[number]) => {
+        pending.push(callback);
+      }),
+    } as unknown as HostInstance;
+    const onMeasured = jest.fn();
+    const { result } = await renderHook(() =>
+      useRowGeometry({ getScrollOffset: () => offset, onMeasured }),
+    );
+    await act(() => {
+      result.current.register("a", node);
+    });
+    // The list moves on while the window position is on its way back.
+    await act(async () => {
+      const pass = result.current.measure();
+      offset = 260;
+      pending.shift()?.(12, 40, 300, 50);
+      await pass;
+    });
+    expect(onMeasured).not.toHaveBeenCalled();
+    expect(result.current.rects()).toEqual([]);
+    // Once the list rests it is measured again, at the offset then.
+    await act(async () => {
+      jest.advanceTimersByTime(200);
+      pending.shift()?.(12, 40, 300, 50);
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onMeasured).toHaveBeenCalledTimes(1);
+    expect(result.current.rects()).toEqual([
+      { id: "a", top: 300, bottom: 350, left: 12, width: 300 },
+    ]);
+  });
+
+  it("finds a row at the offset it is given, not the one last reported", async () => {
+    const row = fakeRow({ top: 100 });
+    let reported = 0;
+    const { result } = await renderHook(() =>
+      useRowGeometry({ getScrollOffset: () => reported }),
+    );
+    await act(() => {
+      result.current.register("a", row.node);
+    });
+    await act(async () => {
+      await result.current.measure();
+    });
+    // Filed at content y 100..150. The list is drawn at 80 while it reports 0.
+    expect(result.current.find(40)).toBeNull();
+    expect(result.current.find(40, 80)).toBe("a");
+    reported = 80;
+    expect(result.current.find(40)).toBe("a");
   });
 });

@@ -211,3 +211,90 @@ describe("totalsWithoutHidden", () => {
     ).toEqual({ incomeMinor: 0, expenseMinor: 270, netFlowMinor: -270 });
   });
 });
+
+describe("totalsWithoutHidden for rows being marked paid", () => {
+  const totals = { incomeMinor: 10000, expenseMinor: 4000, netFlowMinor: 6000 };
+  const range = ["2026-01-01", "2026-01-31"] as const;
+  const none: ReadonlySet<string> = new Set();
+  const upcoming = (overrides: Partial<TransactionRecord>) =>
+    makeTransaction({
+      status: "upcoming",
+      localDate: "2026-01-20",
+      exchangeRate: "1",
+      ...overrides,
+    });
+
+  it("counts a priced upcoming expense as spending now, as the aggregate will once it posts", () => {
+    const rows = [upcoming({ id: "rent", baseAmountMinor: 1250 })];
+    expect(
+      totalsWithoutHidden(totals, rows, none, ...range, new Set(["rent"])),
+    ).toEqual({ incomeMinor: 10000, expenseMinor: 5250, netFlowMinor: 4750 });
+  });
+
+  it("counts a priced upcoming income, in base-currency minor units", () => {
+    const rows = [
+      upcoming({
+        id: "pay",
+        kind: "income",
+        currency: "EUR",
+        amountMinor: 900,
+        baseAmountMinor: 1000,
+      }),
+    ];
+    expect(
+      totalsWithoutHidden(totals, rows, none, ...range, new Set(["pay"])),
+    ).toEqual({ incomeMinor: 11000, expenseMinor: 4000, netFlowMinor: 7000 });
+  });
+
+  it("leaves out an unpriced row, which is priced only when it is committed", () => {
+    const rows = [
+      upcoming({ id: "a", baseAmountMinor: null, exchangeRate: null }),
+      upcoming({ id: "b", baseAmountMinor: 500, exchangeRate: null }),
+    ];
+    expect(
+      totalsWithoutHidden(totals, rows, none, ...range, new Set(["a", "b"])),
+    ).toBe(totals);
+  });
+
+  it("ignores transfers, other months, deleted rows and rows that already posted", () => {
+    const rows = [
+      upcoming({ id: "move", kind: "transfer", baseAmountMinor: 900 }),
+      upcoming({ id: "later", baseAmountMinor: 900, localDate: "2026-02-01" }),
+      upcoming({
+        id: "gone",
+        baseAmountMinor: 900,
+        deletedAt: "2026-01-21T00:00:00.000Z",
+      }),
+      // Already posted: the aggregate counts it, adding it again would double it.
+      makeTransaction({
+        id: "done",
+        baseAmountMinor: 900,
+        localDate: "2026-01-20",
+      }),
+    ];
+    const paying = new Set(rows.map((item) => item.id));
+    expect(totalsWithoutHidden(totals, rows, none, ...range, paying)).toBe(
+      totals,
+    );
+  });
+
+  it("does both at once and stays exact", () => {
+    const rows = [
+      makeTransaction({
+        id: "spent",
+        baseAmountMinor: 10,
+        localDate: "2026-01-02",
+      }),
+      upcoming({ id: "due", baseAmountMinor: 20 }),
+    ];
+    expect(
+      totalsWithoutHidden(
+        { incomeMinor: 0, expenseMinor: 300, netFlowMinor: -300 },
+        rows,
+        new Set(["spent"]),
+        ...range,
+        new Set(["due"]),
+      ),
+    ).toEqual({ incomeMinor: 0, expenseMinor: 310, netFlowMinor: -310 });
+  });
+});

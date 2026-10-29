@@ -8,7 +8,7 @@ import {
   type RefObject,
 } from "react";
 import type { HostInstance } from "react-native";
-import { Gesture } from "react-native-gesture-handler";
+import { Gesture, PointerType } from "react-native-gesture-handler";
 
 import type { RowGeometry } from "@/features/transactions/list/row-swipe/use-row-geometry";
 import { hapticSelection } from "@/services/haptics";
@@ -45,6 +45,18 @@ export function edgeScrollStep(y: number, top: number, bottom: number): number {
   if (intoBottom > 0)
     return MAX_SCROLL_STEP * Math.min(1, intoBottom / EASE_IN_ZONE);
   return 0;
+}
+
+/**
+ * Whether pressing an already selected row grabs it for a drag at once, without a hold. Only a mouse
+ * on the web does: it has no scroll to give up. A finger scrolls the list from a selected row like
+ * from any other, and drags from it after the hold arms.
+ */
+export function grabsSelectedOnPress(
+  pointerType: PointerType | undefined,
+  web: boolean,
+): boolean {
+  return web && pointerType === PointerType.MOUSE;
 }
 
 /**
@@ -151,7 +163,11 @@ export function useDragSelect({
 
   const hitTest = () => {
     const rows = latest.current.geometry;
-    const hit = rows.find(finger.current);
+    // The list lags the scroll it was told to make: the rows are where that scroll puts them.
+    const hit = rows.find(
+      finger.current,
+      targetOffset.current ?? latest.current.getScrollOffset(),
+    );
     if (hit) {
       apply(hit);
       return;
@@ -200,9 +216,8 @@ export function useDragSelect({
   };
 
   // A browser scrolls a touch as soon as it moves, whatever the gesture handler does. Once the hold
-  // has armed a drag, cancelling touchmove keeps the list still for it. A browser that has already
-  // committed the touch to scrolling cancels the pointer instead, so selected rows also opt out of
-  // touch scrolling (`touchAction` in the row), which lets a drag that starts on one always work.
+  // has armed a drag, cancelling touchmove keeps the list still for it. (A finger on a selected
+  // row scrolls as normal until its hold arms; only a mouse grabs a selected row, below.)
   useEffect(() => {
     if (process.env.EXPO_OS !== "web" || typeof document === "undefined")
       return;
@@ -226,10 +241,12 @@ export function useDragSelect({
     latest.current.onArmedChange?.(false);
   };
 
-  // On the web a selected row cannot be scrolled (see above), so pressing one grabs it: moving from
-  // it extends or shrinks the selection around it, the same drag the hold starts on an unselected row.
+  // On the web a mouse pressed on a selected row grabs it: moving from it extends or shrinks the
+  // selection around it, the same drag the hold starts on an unselected row. A mouse has no scroll
+  // to give up, and no hold. A touch does not: it scrolls the list like any other, and a drag from a
+  // selected row starts with the hold, as on an unselected one.
   const grabSelected = (y: number) => {
-    if (process.env.EXPO_OS !== "web" || armed.current) return;
+    if (armed.current) return;
     const { selectedIds: chosen, geometry: rows } = latest.current;
     const id = rows.find(y);
     if (!id || !chosen.has(id)) return;
@@ -251,7 +268,14 @@ export function useDragSelect({
           touchStart.current = touch
             ? { x: touch.absoluteX, y: touch.absoluteY }
             : null;
-          if (touch) grabSelected(touch.absoluteY);
+          if (
+            touch &&
+            grabsSelectedOnPress(
+              event.pointerType,
+              process.env.EXPO_OS === "web",
+            )
+          )
+            grabSelected(touch.absoluteY);
         })
         .onTouchesMove((event, manager) => {
           if (armed.current) {
