@@ -28,12 +28,14 @@ const LONG_PRESS_MS = 450;
  * scale and the pressed surface) follows the gesture's begin and end.
  *
  * Gestures do not fire for TalkBack's double-tap, so the key also exposes an `activate` accessibility
- * action, which is what the screen reader performs.
+ * action, which is what the screen reader performs. A key with a long press adds a `clear` action
+ * for it, since a screen reader cannot hold a key down.
  */
 export function KeypadPressable({
   accessibilityLabel,
   onPress,
   onLongPress,
+  longPressLabel,
   style,
   children,
 }: KeypadPressableProps) {
@@ -87,9 +89,15 @@ export function KeypadPressable({
         accessible
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        accessibilityActions={[{ name: "activate" }]}
+        accessibilityActions={
+          hasLongPress
+            ? [{ name: "activate" }, { name: "clear", label: longPressLabel }]
+            : [{ name: "activate" }]
+        }
         onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "activate") firePress();
+          const action = event.nativeEvent.actionName;
+          if (action === "activate") firePress();
+          else if (action === "clear") fireLongPress();
         }}
         style={[style(pressed), animated]}
       >

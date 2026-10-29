@@ -10,6 +10,7 @@ import { MoneyField } from "@/components/finance/money-field";
 import { DateField } from "@/components/ui/date-field";
 import { FormField } from "@/components/ui/form-field";
 import { FormScreen } from "@/components/ui/form-screen";
+import { MotionView } from "@/components/ui/motion";
 import { SegmentedControl } from "@/components/ui/segmented-control";
 import { TextButton } from "@/components/ui/text-button";
 import type { Account } from "@/domain/models";
@@ -207,22 +208,25 @@ export function TransactionFormScreen() {
       </Card>
 
       {kind !== "transfer" ? (
-        <Card style={{ gap: space.md }}>
-          <AppText variant="label">Category</AppText>
-          <CategoryPicker
-            categories={categories}
-            categoryId={categoryId}
-            onSelect={(next) => {
-              setCategoryTouched(true);
-              setCategoryId(next);
-            }}
-          />
-          {!categoryTouched && categoryId ? (
-            <AppText variant="caption" muted>
-              Suggested from earlier transactions with this title.
-            </AppText>
-          ) : null}
-        </Card>
+        // Arrives and leaves with the kind (a transfer has no category), instead of popping.
+        <MotionView variant="up" exit>
+          <Card style={{ gap: space.md }}>
+            <AppText variant="label">Category</AppText>
+            <CategoryPicker
+              categories={categories}
+              categoryId={categoryId}
+              onSelect={(next) => {
+                setCategoryTouched(true);
+                setCategoryId(next);
+              }}
+            />
+            {!categoryTouched && categoryId ? (
+              <AppText variant="caption" muted>
+                Suggested from earlier transactions with this title.
+              </AppText>
+            ) : null}
+          </Card>
+        </MotionView>
       ) : null}
 
       <Card style={{ gap: space.md }}>

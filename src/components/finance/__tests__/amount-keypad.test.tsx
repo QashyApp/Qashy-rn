@@ -3,6 +3,7 @@ import { useState } from "react";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AmountKeypad } from "@/components/finance/amount-keypad";
+import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 
 jest.mock("@/theme/theme", () => ({
   useQashyTheme: () =>
@@ -116,5 +117,97 @@ describe("AmountKeypad", () => {
       "123+",
       "123×",
     ]);
+  });
+
+  describe("haptics", () => {
+    beforeEach(() => {
+      jest.mocked(hapticSelection).mockClear();
+      jest.mocked(hapticImpactLight).mockClear();
+    });
+    const renderKeypad = (value: string, onChange = jest.fn()) =>
+      render(
+        <GestureHandlerRootView>
+          <AmountKeypad
+            value={value}
+            onChange={onChange}
+            locale="en-US"
+            result={null}
+            resolve={resolve}
+          />
+        </GestureHandlerRootView>,
+      );
+
+    it("ticks for a key that changes the amount, and stays silent for one that does nothing", async () => {
+      await renderKeypad("");
+      await tap("Delete last character");
+      await tap("plus");
+      expect(hapticSelection).not.toHaveBeenCalled();
+      await tap("1");
+      expect(hapticSelection).toHaveBeenCalledTimes(1);
+    });
+
+    it("clears with one heavier tap and not a second tick", async () => {
+      const onChange = jest.fn();
+      await renderKeypad("12", onChange);
+      await fireEvent(key("Delete last character"), "accessibilityAction", {
+        nativeEvent: { actionName: "clear" },
+      });
+      expect(onChange).toHaveBeenCalledWith("");
+      expect(hapticImpactLight).toHaveBeenCalledTimes(1);
+      expect(hapticSelection).not.toHaveBeenCalled();
+    });
+
+    it("does not buzz clearing an empty amount", async () => {
+      await renderKeypad("");
+      await fireEvent(key("Delete last character"), "accessibilityAction", {
+        nativeEvent: { actionName: "clear" },
+      });
+      expect(hapticImpactLight).not.toHaveBeenCalled();
+    });
+  });
+
+  it("offers clearing to a screen reader on the backspace key only", async () => {
+    await render(
+      <GestureHandlerRootView>
+        <AmountKeypad
+          value="1"
+          onChange={jest.fn()}
+          locale="en-US"
+          result={null}
+          resolve={resolve}
+        />
+      </GestureHandlerRootView>,
+    );
+    const names = (label: string) =>
+      key(label).props.accessibilityActions.map(
+        (action: { name: string }) => action.name,
+      );
+    expect(names("Delete last character")).toEqual(["activate", "clear"]);
+    expect(names("7")).toEqual(["activate"]);
+  });
+
+  it("always holds the result key's place, but only offers it with a result", async () => {
+    const hidden = { includeHiddenElements: true };
+    const show = (result: string | null) => (
+      <GestureHandlerRootView>
+        <AmountKeypad
+          value="2+3"
+          onChange={jest.fn()}
+          locale="en-US"
+          result={result}
+          resolve={resolve}
+        />
+      </GestureHandlerRootView>
+    );
+    const { rerender } = await render(show(null));
+    // Present (so the panel does not grow when a result appears) but out of reach.
+    const reserved = screen.getByLabelText(/^Calculate/, hidden);
+    let node = reserved.parent;
+    while (node && node.props.pointerEvents === undefined) node = node.parent;
+    expect(node?.props.pointerEvents).toBe("none");
+    expect(screen.queryByLabelText(/^Calculate/)).toBeNull();
+
+    await rerender(show("5.00"));
+    expect(screen.getByLabelText("Calculate, 5.00")).toBeTruthy();
   });
 });

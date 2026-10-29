@@ -59,6 +59,8 @@ export function BatchEditSheet({
   const rootStep: Step = initialStep ?? "menu";
   const [step, setStep] = useState<Step>(rootStep);
   const [date, setDate] = useState(initialDate);
+  // The first step arrives with the sheet; only a change of step fades in on its own.
+  const [stepped, setStepped] = useState(false);
 
   // A sheet that stays mounted while hidden must reopen at its starting step.
   const [wasVisible, setWasVisible] = useState(visible);
@@ -67,6 +69,7 @@ export function BatchEditSheet({
     if (visible) {
       setStep(rootStep);
       setDate(initialDate);
+      setStepped(false);
     }
   }
 
@@ -75,12 +78,15 @@ export function BatchEditSheet({
     onClose();
   };
   const back = () => {
-    if (rootStep === "menu") setStep("menu");
-    else close();
+    if (rootStep === "menu") {
+      setStep("menu");
+      setStepped(true);
+    } else close();
   };
   const open = (next: Step) => {
     if (next === "date") setDate(initialDate);
     setStep(next);
+    setStepped(true);
   };
 
   return (
@@ -124,102 +130,110 @@ export function BatchEditSheet({
               : materialStyle(theme, "overlay"),
           ]}
         >
-          <View
-            style={{
-              minHeight: 44,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: space.sm,
-            }}
+          <MotionView
+            // Keyed on the step so a change of step fades in; the sheet's own arrival covers the first.
+            key={step}
+            variant="fade"
+            entrance={stepped}
+            style={{ gap: space.md, flexShrink: 1 }}
           >
-            {step === "menu" ? null : (
-              <IconButton
-                label="Back"
-                icon="chevron.left"
-                mirrorIcon
-                onPress={back}
-              />
-            )}
-            <AppText literal variant="headline" style={{ flex: 1 }}>
-              {t(
-                step === "category"
-                  ? "Change category"
-                  : step === "date"
-                    ? "Change date"
-                    : count === 1
-                      ? "Edit 1 transaction"
-                      : `Edit ${count} transactions`,
-              )}
-            </AppText>
-            <IconButton label="Close" icon="xmark" onPress={close} />
-          </View>
-
-          {step === "menu" ? (
-            <View style={{ gap: space.xs }}>
-              <SettingsRow
-                title="Change category"
-                subtitle={categoryBlockedReason ?? undefined}
-                icon="ion:pricetag-outline"
-                disabled={Boolean(categoryBlockedReason) || busy}
-                onPress={() => open("category")}
-              />
-              <SettingsRow
-                title="Change date"
-                icon="calendar"
-                disabled={busy}
-                onPress={() => open("date")}
-              />
-            </View>
-          ) : step === "category" ? (
-            <ScrollView
-              contentContainerStyle={{
+            <View
+              style={{
+                minHeight: 44,
                 flexDirection: "row",
-                flexWrap: "wrap",
+                alignItems: "center",
                 gap: space.sm,
               }}
             >
-              <ChoiceChip
-                mode="button"
-                icon="questionmark.circle"
-                label="Uncategorized"
-                selected={false}
-                disabled={busy}
-                onPress={() => onChangeCategory(null)}
-              />
-              {categories.map((category) => (
+              {step === "menu" ? null : (
+                <IconButton
+                  label="Back"
+                  icon="chevron.left"
+                  mirrorIcon
+                  onPress={back}
+                />
+              )}
+              <AppText literal variant="headline" style={{ flex: 1 }}>
+                {t(
+                  step === "category"
+                    ? "Change category"
+                    : step === "date"
+                      ? "Change date"
+                      : count === 1
+                        ? "Edit 1 transaction"
+                        : `Edit ${count} transactions`,
+                )}
+              </AppText>
+              <IconButton label="Close" icon="xmark" onPress={close} />
+            </View>
+
+            {step === "menu" ? (
+              <View style={{ gap: space.xs }}>
+                <SettingsRow
+                  title="Change category"
+                  subtitle={categoryBlockedReason ?? undefined}
+                  icon="ion:pricetag-outline"
+                  disabled={Boolean(categoryBlockedReason) || busy}
+                  onPress={() => open("category")}
+                />
+                <SettingsRow
+                  title="Change date"
+                  icon="calendar"
+                  disabled={busy}
+                  onPress={() => open("date")}
+                />
+              </View>
+            ) : step === "category" ? (
+              <ScrollView
+                contentContainerStyle={{
+                  flexDirection: "row",
+                  flexWrap: "wrap",
+                  gap: space.sm,
+                }}
+              >
                 <ChoiceChip
                   mode="button"
-                  key={category.id}
-                  literal
-                  icon={category.icon}
-                  label={category.name}
+                  icon="questionmark.circle"
+                  label="Uncategorized"
                   selected={false}
                   disabled={busy}
-                  onPress={() => onChangeCategory(category.id)}
+                  onPress={() => onChangeCategory(null)}
                 />
-              ))}
-            </ScrollView>
-          ) : (
-            <View style={{ gap: space.md }}>
-              <DateField
-                label="Date"
-                value={date}
-                onChange={setDate}
-                required
-              />
-              <ActionButton
-                title={
-                  count === 1
-                    ? "Move 1 transaction"
-                    : `Move ${count} transactions`
-                }
-                icon="calendar"
-                disabled={busy || !date}
-                busy={busy}
-                onPress={() => onChangeDate(date)}
-              />
-            </View>
-          )}
+                {categories.map((category) => (
+                  <ChoiceChip
+                    mode="button"
+                    key={category.id}
+                    literal
+                    icon={category.icon}
+                    label={category.name}
+                    selected={false}
+                    disabled={busy}
+                    onPress={() => onChangeCategory(category.id)}
+                  />
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={{ gap: space.md }}>
+                <DateField
+                  label="Date"
+                  value={date}
+                  onChange={setDate}
+                  required
+                />
+                <ActionButton
+                  title={
+                    count === 1
+                      ? "Move 1 transaction"
+                      : `Move ${count} transactions`
+                  }
+                  icon="calendar"
+                  disabled={busy || !date}
+                  busy={busy}
+                  onPress={() => onChangeDate(date)}
+                />
+              </View>
+            )}
+          </MotionView>
         </MotionView>
       </SafeAreaView>
     </Modal>

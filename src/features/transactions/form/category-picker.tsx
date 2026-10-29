@@ -87,7 +87,6 @@ export function CategoryPicker({
                 hapticSelection();
                 onSelect(id);
               }}
-              pressedScale={0.97}
               style={[
                 {
                   width: TILE_WIDTH,

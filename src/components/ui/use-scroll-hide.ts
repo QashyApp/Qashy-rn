@@ -7,7 +7,11 @@ import {
   withTiming,
 } from "react-native-reanimated";
 
-import { motionCurves, useMotionPreference } from "@/components/ui/motion";
+import {
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import {
   accumulateTravel,
   travelDirection,
@@ -30,23 +34,28 @@ export function useScrollHide() {
   const lastOffset = useRef(0);
   const travel = useRef(0);
   const shown = useRef(true);
-  const { instant, travel: moves } = useMotionPreference();
+  // Set by `show`: the next scroll event belongs to a different list, so it only re-bases the offset.
+  const rebase = useRef(false);
+  const { instant } = useMotionPreference();
+  const durations = useMotionDurations();
   // The motion preference can change while the list is on screen; `onScroll` reads it from here so
   // that it can stay the same function for the screen's whole life (memoised pages depend on that).
-  const motion = useRef({ instant, moves });
+  const motion = useRef({ instant, durations });
   useEffect(() => {
-    motion.current = { instant, moves };
-  }, [instant, moves]);
+    motion.current = { instant, durations };
+  }, [instant, durations]);
 
   const setShown = useCallback(
     (next: boolean) => {
       if (shown.current === next) return;
       shown.current = next;
-      // A quick fade at every level but `off`, which changes instantly. Without travel (Minimal) the
-      // fade is the whole effect, so it is shorter still.
+      // The theme's durations (already shortened at Minimal): arriving takes the entrance time,
+      // tucking away the faster exit time. `off` changes instantly.
       const timing = {
-        duration: motion.current.moves ? 200 : 120,
-        easing: motionCurves.standard,
+        duration: next
+          ? motion.current.durations.enter
+          : motion.current.durations.exit,
+        easing: next ? motionCurves.standard : motionCurves.exit,
         reduceMotion: motion.current.instant
           ? ReduceMotion.Always
           : ReduceMotion.System,
@@ -61,7 +70,8 @@ export function useScrollHide() {
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const offset = event.nativeEvent.contentOffset.y;
-      const delta = offset - lastOffset.current;
+      const delta = rebase.current ? 0 : offset - lastOffset.current;
+      rebase.current = false;
       lastOffset.current = offset;
       travel.current = accumulateTravel(travel.current, delta);
       const direction = travelDirection(travel.current);
@@ -71,5 +81,16 @@ export function useScrollHide() {
     [setShown],
   );
 
-  return { visibility, onScroll };
+  /**
+   * Shows the button now, whatever the last scroll was, and forgets the direction so far. For a
+   * change of list (another month's page): the old list's scrolling says nothing about the new
+   * one, and the next scroll event re-syncs from the new list's offset.
+   */
+  const show = useCallback(() => {
+    travel.current = 0;
+    rebase.current = true;
+    setShown(true);
+  }, [setShown]);
+
+  return { visibility, onScroll, show };
 }
