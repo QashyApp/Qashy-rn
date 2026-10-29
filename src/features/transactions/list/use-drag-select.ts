@@ -13,17 +13,39 @@ import { Gesture } from "react-native-gesture-handler";
 import type { RowGeometry } from "@/features/transactions/list/row-swipe/use-row-geometry";
 import { hapticSelection } from "@/services/haptics";
 
-/** How close to the list's top or bottom edge the finger scrolls it, and how far per tick. */
+/** How close to the list's top or bottom edge the finger scrolls it. */
 const EDGE_ZONE = 72;
-/** The fastest scroll per tick, reached at the very edge; it eases in from the edge of the zone. */
-const SCROLL_STEP = 14;
+/** The fastest scroll per tick, in dp. A step this small is one a finger can still follow. */
+const MAX_SCROLL_STEP = 8;
+/** The scroll eases in over this much of the zone, then holds the full step to the very edge. */
+const EASE_IN_ZONE = 24;
+/**
+ * The list reports its offset late, so the scroll keeps its own target. If the list ends up this
+ * far from it (it hit its end, or something else moved it), the target is taken from the list again.
+ */
+const RESYNC_DISTANCE = MAX_SCROLL_STEP * 3;
 /** The finger must have travelled this far from where it was held before the edges scroll. */
 const MIN_TRAVEL = 24;
 /** How far a finger may drift while held, waiting for the long-press, before it counts as a scroll. */
-const HOLD_SLOP = 10;
+const HOLD_SLOP = 12;
 const TICK_MS = 16;
 /** A finger over a gap in the cached rows measures again at most this often. */
 const REMEASURE_MS = 80;
+
+/**
+ * How far the list scrolls this tick for a finger at window `y` over a list spanning `top` to
+ * `bottom`: negative toward the top, positive toward the bottom, 0 away from the edges. It eases in
+ * over the first `EASE_IN_ZONE` of the edge zone and holds `MAX_SCROLL_STEP` from there to the edge.
+ */
+export function edgeScrollStep(y: number, top: number, bottom: number): number {
+  const intoTop = top + EDGE_ZONE - y;
+  const intoBottom = y - (bottom - EDGE_ZONE);
+  if (intoTop > 0)
+    return -MAX_SCROLL_STEP * Math.min(1, intoTop / EASE_IN_ZONE);
+  if (intoBottom > 0)
+    return MAX_SCROLL_STEP * Math.min(1, intoBottom / EASE_IN_ZONE);
+  return 0;
+}
 
 /**
  * Press a row, hold, then drag to select every row between it and the finger.
@@ -48,18 +70,22 @@ export function useDragSelect({
   selectedIds,
   onSelect,
   containerRef,
-  scrollBy,
+  scrollTo,
+  getScrollOffset,
   geometry,
   onArmedChange,
 }: {
   enabled: boolean;
   /** Every selectable row, in display order. */
   orderedIds: readonly string[];
-  selectedIds: readonly string[];
+  selectedIds: ReadonlySet<string>;
   onSelect: (ids: string[]) => void;
   /** The list's own box, for the scroll edges. */
   containerRef: RefObject<HostInstance | null>;
-  scrollBy: (delta: number) => void;
+  /** Scrolls the list to an absolute offset, without animation. */
+  scrollTo: (offset: number) => void;
+  /** The list's last reported offset (it lags a fast scroll). */
+  getScrollOffset: () => number;
   /** Where the mounted rows are, shared with the row swipe. */
   geometry: RowGeometry;
   /** A drag is armed or over: other gestures on the list (the row swipe) must stand aside. */
@@ -72,7 +98,8 @@ export function useDragSelect({
     orderedIds,
     selectedIds,
     onSelect,
-    scrollBy,
+    scrollTo,
+    getScrollOffset,
     geometry,
     onArmedChange,
   });
@@ -81,11 +108,22 @@ export function useDragSelect({
       orderedIds,
       selectedIds,
       onSelect,
-      scrollBy,
+      scrollTo,
+      getScrollOffset,
       geometry,
       onArmedChange,
     };
-  }, [orderedIds, selectedIds, onSelect, scrollBy, geometry, onArmedChange]);
+  }, [
+    orderedIds,
+    selectedIds,
+    onSelect,
+    scrollTo,
+    getScrollOffset,
+    geometry,
+    onArmedChange,
+  ]);
+  /** Where the edge scroll has taken the list to, advanced each tick; null until it first scrolls. */
+  const targetOffset = useRef<number | null>(null);
   const [dragging, setDragging] = useState(false);
   /** A finger is down on the list and this pan is still following it. */
   const tracking = useRef(false);
@@ -145,15 +183,19 @@ export function useDragSelect({
       Math.abs(y - fingerStart.current) < MIN_TRAVEL
     )
       return;
-    const intoTop = edges.top + EDGE_ZONE - y;
-    const intoBottom = y - (edges.bottom - EDGE_ZONE);
-    if (intoTop > 0)
-      latest.current.scrollBy(-SCROLL_STEP * Math.min(1, intoTop / EDGE_ZONE));
-    else if (intoBottom > 0)
-      latest.current.scrollBy(
-        SCROLL_STEP * Math.min(1, intoBottom / EDGE_ZONE),
-      );
-    else return;
+    const step = edgeScrollStep(y, edges.top, edges.bottom);
+    if (step === 0) {
+      targetOffset.current = null;
+      return;
+    }
+    const { scrollTo: scroll, getScrollOffset: current } = latest.current;
+    const reported = current();
+    let target = targetOffset.current;
+    if (target === null || Math.abs(target - reported) > RESYNC_DISTANCE)
+      target = reported;
+    target = Math.max(0, target + step);
+    targetOffset.current = target;
+    scroll(target);
     hitTest();
   };
 
@@ -175,6 +217,7 @@ export function useDragSelect({
   }, []);
 
   const stop = () => {
+    targetOffset.current = null;
     tracking.current = false;
     armed.current = null;
     clearInterval(timer.current);
@@ -189,7 +232,7 @@ export function useDragSelect({
     if (process.env.EXPO_OS !== "web" || armed.current) return;
     const { selectedIds: chosen, geometry: rows } = latest.current;
     const id = rows.find(y);
-    if (!id || !chosen.includes(id)) return;
+    if (!id || !chosen.has(id)) return;
     armed.current = { anchor: id, base: [...chosen], last: id };
     latest.current.onArmedChange?.(true);
   };
@@ -269,6 +312,7 @@ export function useDragSelect({
     latest.current.onArmedChange?.(true);
     // One pass now, so the rows the finger crosses are in the cache before it moves.
     void latest.current.geometry.measure();
+    targetOffset.current = null;
     armed.current = {
       anchor: id,
       base: [...new Set([...latest.current.selectedIds, id])],

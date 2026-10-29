@@ -47,7 +47,7 @@ import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top
 import type { TransactionRecord } from "@/domain/models";
 import {
   ROW_ACTION_UNDO_MS,
-  rowActionMessage,
+  rowActionsMessage,
   usePendingRowActions,
   type RowActionKind,
 } from "@/features/transactions/row-actions";
@@ -57,6 +57,7 @@ import {
   useCloseRowSwipeWhen,
   useRowSwipe,
 } from "@/features/transactions/list/row-swipe/use-row-swipe";
+import { totalsWithoutHidden } from "@/features/transactions/list/summary";
 import { CollapsingSummaryTiles } from "@/features/transactions/summary-tiles";
 import { BatchEditSheet } from "@/features/transactions/list/batch-edit-sheet";
 import type { LedgerSection } from "@/features/transactions/list/sections";
@@ -83,7 +84,18 @@ import {
   todayLocal,
 } from "@/utils/date";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
-import { hapticSelection, hapticSuccess } from "@/services/haptics";
+import {
+  hapticSelection,
+  hapticSuccess,
+  hapticWarning,
+} from "@/services/haptics";
+
+/** The Undo bar's timeout: each pending action commits on its own timer, not on the bar's. */
+function ignoreDismiss() {}
+
+/** The selection a page that is not the current one gets: neighbours never hold a selection. */
+const NO_SELECTION: ReadonlySet<string> = new Set();
+const NO_TRANSACTIONS: readonly TransactionRecord[] = [];
 
 /** How long the month has to hold still before the URL is updated to it. */
 const PARAM_DELAY = 400;
@@ -156,12 +168,15 @@ export function TransactionsScreen() {
     locked: searchFocused || search.length > 0,
     forceCollapsed: selectionMode && !dragActive && !searchFocused,
   });
-  const onScroll: NonNullable<
-    ComponentProps<typeof SectionList>["onScroll"]
-  > = (event) => {
-    onScrollHide(event);
-    onScrollCollapse(event);
-  };
+  const onScroll = useCallback<
+    NonNullable<ComponentProps<typeof SectionList>["onScroll"]>
+  >(
+    (event) => {
+      onScrollHide(event);
+      onScrollCollapse(event);
+    },
+    [onScrollHide, onScrollCollapse],
+  );
 
   // Follow the param when something else navigates here with one (Overview's
   // "See all", the transaction sheet returning to the month it saved into).
@@ -189,12 +204,14 @@ export function TransactionsScreen() {
     }
   }
 
-  const changeMonth = (next: string) => {
+  // Stable, like every handler handed to the month pages: a row crossed by a drag-select
+  // re-renders this screen, and a new function would rebuild the props of every page.
+  const changeMonth = useCallback((next: string) => {
     setMonth(next);
     // Kept as is when already empty: a new array re-rendered every mounted month page.
     setSelectedIds((current) => (current.length ? [] : current));
     setParamDue(true);
-  };
+  }, []);
   // The URL follows once the month stops changing. Writing it on every swipe re-rendered the
   // screen twice more per month (the write, then the router's echo), right as the next swipe began.
   useEffect(() => {
@@ -211,27 +228,42 @@ export function TransactionsScreen() {
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
-  const selectedIdSet = new Set(selectedIds);
-  const selectedTransactions = state.transactions.filter((item) =>
-    selectedIdSet.has(item.id),
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  // Only the batch edit sheet reads what the selection holds, so a drag across rows (a new
+  // selection per row crossed) does not scan every transaction until that sheet is open.
+  const selectedTransactions = useMemo(
+    () =>
+      editOpen
+        ? state.transactions.filter((item) => selectedIdSet.has(item.id))
+        : NO_TRANSACTIONS,
+    [editOpen, state.transactions, selectedIdSet],
   );
-  const hasSelectedTransfers = selectedTransactions.some(
-    (item) => item.kind === "transfer",
-  );
-  const selectedKinds = [
-    ...new Set(
-      selectedTransactions
-        .filter((item) => item.kind !== "transfer")
-        .map((item) => item.kind),
-    ),
-  ];
+  const { hasSelectedTransfers, selectedKinds, batchInitialDate } =
+    useMemo(() => {
+      const kinds = [
+        ...new Set(
+          selectedTransactions
+            .filter((item) => item.kind !== "transfer")
+            .map((item) => item.kind),
+        ),
+      ];
+      // Where the batch date picker starts: the selection's own day when every row shares one.
+      const dates = new Set(selectedTransactions.map((item) => item.localDate));
+      return {
+        hasSelectedTransfers: selectedTransactions.some(
+          (item) => item.kind === "transfer",
+        ),
+        selectedKinds: kinds,
+        batchInitialDate: dates.size === 1 ? [...dates][0] : todayLocal(),
+      };
+    }, [selectedTransactions]);
   const compatibleCategoryKind =
     selectedKinds.length === 1 ? selectedKinds[0] : null;
 
   // Totals come from the dashboard aggregate rather than from summing the rows
   // here: it already excludes transfers, uses each transaction's snapshotted
   // base-currency amount, and matches what Overview shows for the same month.
-  const summary = useDashboardRange(fromDate, toDate);
+  const aggregate = useDashboardRange(fromDate, toDate);
 
   // Where "Go to latest" leads when this month is empty.
   const latestMonth = useMemo(() => {
@@ -263,31 +295,34 @@ export function TransactionsScreen() {
     return () => subscription.remove();
   }, [selectionMode]);
 
-  // Where the batch date picker starts: the selection's own day when every row shares one.
-  const selectedDates = new Set(
-    selectedTransactions.map((item) => item.localDate),
-  );
-  const batchInitialDate =
-    selectedDates.size === 1 ? [...selectedDates][0] : todayLocal();
-
-  const toggleSelectionMode = () => {
+  const toggleSelectionMode = useCallback(() => {
     setSelectionMode((current) => !current);
     setSelectedIds([]);
-  };
+  }, []);
 
-  const enterSelection = (id: string) => {
-    setSelectionMode(true);
-    toggleSelected(id, { silent: !selectionMode });
-  };
+  const toggleSelected = useCallback(
+    (id: string, options?: { silent?: boolean }) => {
+      if (!options?.silent) hapticSelection();
+      setSelectedIds((current) =>
+        current.includes(id)
+          ? current.filter((item) => item !== id)
+          : [...current, id],
+      );
+    },
+    [],
+  );
 
-  const toggleSelected = (id: string, options?: { silent?: boolean }) => {
-    if (!options?.silent) hapticSelection();
-    setSelectedIds((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
-    );
-  };
+  const enterSelection = useCallback(
+    (id: string) => {
+      setSelectionMode(true);
+      toggleSelected(id, { silent: !selectionMode });
+    },
+    [selectionMode, toggleSelected],
+  );
+  const toggleUpcomingCollapsed = useCallback(
+    () => setUpcomingCollapsed((value) => !value),
+    [],
+  );
 
   // Guards a double-tap on a category chip or "Delete selected" from firing two
   // concurrent batch mutations, matching how every other mutating handler in the
@@ -374,11 +409,23 @@ export function TransactionsScreen() {
   const {
     hiddenIds,
     paidIds,
-    pending: pendingRowAction,
+    pending: pendingRowActions,
     schedule: scheduleRowAction,
     undo: undoRowAction,
-    expire: expireRowAction,
   } = usePendingRowActions({ onError: reportRowActionError });
+  // A swiped-away row is out of the list at once but the repository keeps it until its Undo window
+  // ends, so the tiles leave it out too, or they would count what the list no longer shows.
+  const summary = useMemo(
+    () =>
+      totalsWithoutHidden(
+        aggregate,
+        state.transactions,
+        hiddenIds,
+        fromDate,
+        toDate,
+      ),
+    [aggregate, state.transactions, hiddenIds, fromDate, toDate],
+  );
   const handleRowAction = useCallback(
     (id: string, action: RowSwipeActionKind, hideDelayMs?: number) => {
       if (action === "changeCategory") {
@@ -387,7 +434,11 @@ export function TransactionsScreen() {
       }
       // A repeat of an action already taken on this row schedules nothing, so it buzzes nothing.
       if (!scheduleRowAction(id, action, hideDelayMs)) return false;
+      // Every route to an action comes through here: a committed swipe, a pressed button, an
+      // accessibility action. Delete gets the heavier cautionary buzz; the threshold tick is the
+      // swipe's own.
       if (action === "markPaid") hapticSuccess();
+      else if (action === "delete") hapticWarning();
       else if (action === "skip") hapticSelection();
       return true;
     },
@@ -403,11 +454,11 @@ export function TransactionsScreen() {
   const engagedRows = useRef(new Set<string>());
   useEffect(() => {
     const now = new Set(hiddenIds);
-    if (pendingRowAction) now.add(pendingRowAction.id);
+    for (const action of pendingRowActions) now.add(action.id);
     for (const id of engagedRows.current)
       if (!now.has(id)) rowSwipe.release(id);
     engagedRows.current = now;
-  }, [hiddenIds, pendingRowAction, rowSwipe]);
+  }, [hiddenIds, pendingRowActions, rowSwipe]);
   // Selecting, or choosing a category for a row, stands the swipe down and closes an open row.
   const swipeSuspended = selectionMode || categoryRowId !== null;
   useEffect(() => {
@@ -448,20 +499,23 @@ export function TransactionsScreen() {
     }
   };
 
-  const clearFilters = () => {
+  const clearFilters = useCallback(() => {
     setSearch("");
     setSearchAllMonths(false);
     setKind("all");
-    clearSelection();
-  };
+    setSelectedIds([]);
+  }, []);
 
   // The list content and the pinned toolbar have to occupy the same column, so
   // both derive their width and gutters from one call.
   // A ledger is a reading column: past this width amounts drift far from their titles.
-  const content = {
-    ...screenContentMetrics(metrics, insets, space),
-    maxWidth: 860,
-  };
+  const content = useMemo(
+    () => ({
+      ...screenContentMetrics(metrics, insets, space),
+      maxWidth: 860,
+    }),
+    [metrics, insets, space],
+  );
   const toolbarStyle = {
     width: content.width,
     maxWidth: content.maxWidth,
@@ -694,7 +748,7 @@ export function TransactionsScreen() {
                     searchAllMonths && deferredSearch.trim().length > 0
                   }
                   selectionMode={selectionMode}
-                  selectedIds={selectedIds}
+                  selectedIds={isCurrent ? selectedIdSet : NO_SELECTION}
                   hiddenIds={hiddenIds}
                   paidIds={paidIds}
                   latestMonth={latestMonth}
@@ -702,9 +756,7 @@ export function TransactionsScreen() {
                   onScroll={onScroll}
                   listRef={listRef}
                   upcomingCollapsed={upcomingCollapsed}
-                  onToggleUpcoming={() =>
-                    setUpcomingCollapsed((value) => !value)
-                  }
+                  onToggleUpcoming={toggleUpcomingCollapsed}
                   onToggleSelectionMode={toggleSelectionMode}
                   onToggleItem={toggleSelected}
                   onSetSelection={setSelectedIds}
@@ -775,14 +827,16 @@ export function TransactionsScreen() {
               style={floatingActionMetrics(metrics, insets, space)}
             />
           )}
-          {pendingRowAction ? (
+          {pendingRowActions.length ? (
             <UndoBar
-              key={`${pendingRowAction.kind}:${pendingRowAction.id}`}
               literal
-              message={t(rowActionMessage(pendingRowAction.kind))}
+              message={t(rowActionsMessage(pendingRowActions))}
               actionLabel={t("Undo")}
+              // Undo restores every action still waiting. Each one commits on its own timer (see
+              // `createRowActionQueue`), and the bar goes when the last has, so its own timeout
+              // has nothing left to do.
               onAction={undoRowAction}
-              onDismiss={expireRowAction}
+              onDismiss={ignoreDismiss}
               duration={ROW_ACTION_UNDO_MS}
               style={{
                 position: "absolute",

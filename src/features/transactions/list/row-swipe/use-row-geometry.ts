@@ -31,9 +31,16 @@ export interface RowGeometry {
   ): Promise<{ id: string; top: number; bottom: number } | null>;
   /**
    * The layout may have changed (rows came, went or moved): measure again shortly, once the list
-   * has stopped scrolling.
+   * has stopped scrolling. Rows registering together (a screenful mounting) share one pass.
    */
   invalidate(): void;
+  /**
+   * The list has just come to rest (a drag ended without momentum, or momentum ended) at
+   * `scrollOffset`: measure now, without the settle delay or the wait for scroll events to stop, so
+   * a row that scrolled in can be swiped straight away. A pass already under way is followed by a
+   * fresh one, since it may have started mid-scroll.
+   */
+  settle(scrollOffset?: number): void;
   /** The list scrolled. Automatic measuring waits until scroll events have stopped for a moment. */
   noteScroll(): void;
   /** The row under a window y coordinate, from the cache, or null in a gap. */
@@ -117,13 +124,13 @@ export function useRowGeometry({
         }
       });
 
-    const measure = (): Promise<readonly RowRect[]> => {
+    const measure = (scrollOffset?: number): Promise<readonly RowRect[]> => {
       if (inFlight) return inFlight;
       clearTimeout(settleTimer);
       settleTimer = undefined;
       const pass = measureWindow()
         .then((windowRects) => {
-          const offset = latest.current.getScrollOffset();
+          const offset = scrollOffset ?? latest.current.getScrollOffset();
           return windowRects.map((rect) => ({
             ...rect,
             top: rect.top + offset,
@@ -170,7 +177,20 @@ export function useRowGeometry({
           else nodes.delete(id);
           invalidate();
         },
-        measure,
+        measure: () => measure(),
+        settle(scrollOffset) {
+          if (disposed) return;
+          lastScrollAt = Number.NEGATIVE_INFINITY;
+          if (inFlight) {
+            // That pass may have started mid-scroll; measure again once it is out of the way.
+            const running = inFlight;
+            void running.then(() => {
+              if (!disposed) void measure(scrollOffset);
+            });
+            return;
+          }
+          void measure(scrollOffset);
+        },
         async measureAt(windowY) {
           const rects = await measureWindow();
           const hit = rects.find(

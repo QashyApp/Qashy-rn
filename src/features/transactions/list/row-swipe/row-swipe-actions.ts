@@ -38,9 +38,16 @@ export function actionLeavesList(kind: RowSwipeActionKind): boolean {
   return kind === "delete" || kind === "skip";
 }
 
+/** Whether the action erases something (so a hard fling alone must not take it). */
+export function isDestructiveAction(kind: RowSwipeActionKind): boolean {
+  return kind === "delete";
+}
+
 export interface RowSwipeActionVisual {
   /** English key for `t()`; the existing label of the same action elsewhere in the app. */
   label: string;
+  /** English key for `t()`; what the label says once the drag is past the commit line. */
+  releaseLabel: string;
   icon: string;
   background: ColorValue;
   foreground: ColorValue;
@@ -51,6 +58,13 @@ const LABELS: Record<RowSwipeActionKind, string> = {
   delete: "Delete",
   skip: "Skip",
   markPaid: "Mark paid",
+};
+
+const RELEASE_LABELS: Record<RowSwipeActionKind, string> = {
+  changeCategory: "Release to change category",
+  delete: "Release to delete",
+  skip: "Release to skip",
+  markPaid: "Release to mark paid",
 };
 
 const ICONS: Record<RowSwipeActionKind, string> = {
@@ -87,6 +101,7 @@ export function rowSwipeActionVisual(
   }[kind];
   return {
     label: LABELS[kind],
+    releaseLabel: RELEASE_LABELS[kind],
     icon: ICONS[kind],
     background: colors[0],
     foreground: colors[1],

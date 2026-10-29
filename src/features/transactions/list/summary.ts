@@ -31,3 +31,63 @@ export function dayNetMinor(
   }
   return net;
 }
+
+/** The month totals the transactions screen shows as its summary tiles. */
+export interface RangeTotals {
+  incomeMinor: number;
+  expenseMinor: number;
+  netFlowMinor: number;
+}
+
+/**
+ * `totals` (the repository's dashboard aggregate for `fromDate`..`toDate`) with the rows that are
+ * pending an Undo taken out. A swiped-away row leaves the list at once but the repository keeps it
+ * until the Undo window ends, so without this the tiles would still count what the list no longer
+ * shows. Only rows the aggregate counts are subtracted, by the same rule it uses: posted, not
+ * deleted, inside the range, income or expense (never a transfer) and priced in the base currency.
+ * Amounts are integer minor units throughout.
+ */
+export function totalsWithoutHidden(
+  totals: RangeTotals,
+  transactions: readonly TransactionRecord[],
+  hiddenIds: ReadonlySet<string>,
+  fromDate: string,
+  toDate: string,
+): RangeTotals {
+  if (hiddenIds.size === 0) return totals;
+  let incomeMinor = totals.incomeMinor;
+  let expenseMinor = totals.expenseMinor;
+  let changed = false;
+  for (const transaction of transactions) {
+    if (
+      !hiddenIds.has(transaction.id) ||
+      transaction.deletedAt ||
+      transaction.status !== "posted" ||
+      transaction.localDate < fromDate ||
+      transaction.localDate > toDate ||
+      transaction.baseAmountMinor === null
+    )
+      continue;
+    if (transaction.kind === "income") {
+      incomeMinor = subtractMinor(
+        incomeMinor,
+        transaction.baseAmountMinor,
+        "Income total",
+      );
+      changed = true;
+    } else if (transaction.kind === "expense") {
+      expenseMinor = subtractMinor(
+        expenseMinor,
+        transaction.baseAmountMinor,
+        "Expense total",
+      );
+      changed = true;
+    }
+  }
+  if (!changed) return totals;
+  return {
+    incomeMinor,
+    expenseMinor,
+    netFlowMinor: subtractMinor(incomeMinor, expenseMinor, "Net flow"),
+  };
+}

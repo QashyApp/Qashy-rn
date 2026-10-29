@@ -15,10 +15,14 @@ import {
 /**
  * Row actions on the transactions list (swipe or button) that cannot be taken back once the
  * repository has them: deleting erases to a tombstone, and an upcoming payment can neither be
- * un-skipped nor un-paid. Undo therefore works by deferring the commit. The row is hidden at once,
- * an Undo bar shows for `ROW_ACTION_UNDO_MS`, and the real repository call runs only when the bar
- * expires, another action is scheduled, the screen loses focus or unmounts, or the app leaves the
- * foreground. If the app is killed inside the window the action simply never happens.
+ * un-skipped nor un-paid. Undo therefore works by deferring the commit. The row is hidden at once
+ * and the real repository call runs only when that action's own `ROW_ACTION_UNDO_MS` window ends,
+ * the screen loses focus or unmounts, or the app leaves the foreground. If the app is killed
+ * inside the window the action simply never happens.
+ *
+ * Up to `MAX_PENDING_ROW_ACTIONS` actions wait at once, each with its own timer, so a second swipe
+ * never makes the first one permanent. One Undo bar speaks for all of them ("3 transactions
+ * deleted") and Undo restores every action still waiting.
  */
 
 export type RowActionKind = "delete" | "skip" | "markPaid";
@@ -28,10 +32,13 @@ function hidesRow(kind: RowActionKind): boolean {
   return kind !== "markPaid";
 }
 
-/** How long the Undo bar stays up before the action is committed. */
-export const ROW_ACTION_UNDO_MS = 5000;
+/** How long an action waits for Undo before it is committed. */
+export const ROW_ACTION_UNDO_MS = 8000;
 
-/** English message key for the Undo bar; pass it through `t()`. */
+/** The most actions that wait on Undo together; scheduling one more commits the oldest. */
+export const MAX_PENDING_ROW_ACTIONS = 5;
+
+/** English message key for the Undo bar when one action waits; pass it through `t()`. */
 export function rowActionMessage(kind: RowActionKind): string {
   switch (kind) {
     case "delete":
@@ -40,6 +47,30 @@ export function rowActionMessage(kind: RowActionKind): string {
       return "Payment skipped";
     case "markPaid":
       return "Marked as paid";
+  }
+}
+
+/**
+ * English message key for the Undo bar over every action that waits: the single-action message for
+ * one, a count of the shared kind for several, and a count of changes when the kinds differ. Pass
+ * it through `t()`.
+ */
+export function rowActionsMessage(
+  pending: readonly Pick<PendingRowAction, "kind">[],
+): string {
+  const count = pending.length;
+  if (count === 0) return "";
+  const first = pending[0].kind;
+  if (count === 1) return rowActionMessage(first);
+  if (pending.some((item) => item.kind !== first))
+    return `${count} changes to undo`;
+  switch (first) {
+    case "delete":
+      return `${count} transactions deleted`;
+    case "skip":
+      return `${count} payments skipped`;
+    case "markPaid":
+      return `${count} marked as paid`;
   }
 }
 
@@ -86,7 +117,7 @@ export interface PendingRowAction {
 
 export interface RowActionsState {
   /**
-   * Rows to hide: the pending one (once its hide delay is over) plus any whose commit is still in
+   * Rows to hide: each pending one (once its hide delay is over) plus any whose commit is still in
    * flight.
    */
   hiddenIds: ReadonlySet<string>;
@@ -95,13 +126,14 @@ export interface RowActionsState {
    * the transaction keeps its id and only changes status.
    */
   paidIds: ReadonlySet<string>;
-  pending: PendingRowAction | null;
+  /** The actions waiting on Undo, oldest first. */
+  pending: readonly PendingRowAction[];
 }
 
 const EMPTY_STATE: RowActionsState = {
   hiddenIds: new Set(),
   paidIds: new Set(),
-  pending: null,
+  pending: [],
 };
 
 export interface RowActionHandlers {
@@ -115,34 +147,44 @@ export interface RowActionQueue {
   configure(handlers: RowActionHandlers): void;
   subscribe(listener: () => void): () => void;
   /**
-   * Makes `id` the pending action. `hideDelayMs` holds the row in the list that long (a swipe is
-   * still sliding it away) before it is hidden; the Undo bar and the commit are not delayed.
-   * Returns false when the row already has an action pending or committing (nothing is scheduled).
-   * `markPaid` never hides its row: the same transaction stays in the list and re-renders as
-   * posted.
+   * Adds `id` to the pending actions, to be committed after its own undo window. `hideDelayMs`
+   * holds the row in the list that long (a swipe is still sliding it away) before it is hidden;
+   * the Undo bar and the commit are not delayed. Returns false when the row already has an action
+   * pending or committing (nothing is scheduled). When `MAX_PENDING_ROW_ACTIONS` already wait, the
+   * oldest is committed to make room. `markPaid` never hides its row: the same transaction stays
+   * in the list and re-renders as posted.
    */
   schedule(id: string, kind: RowActionKind, hideDelayMs?: number): boolean;
+  /** Cancels every pending action, uncommitted, and brings their rows back. */
   undo(): void;
-  /** Commits the pending action now. Also what every flush trigger (blur, unmount, background) calls. */
+  /** Commits every pending action now. Also what every flush trigger (blur, unmount, background) calls. */
   flush(): void;
-  /** Drops the pending action, uncommitted, when its transaction is no longer in the data. */
+  /** Drops pending actions, uncommitted, whose transactions are no longer in the data. */
   prune(existingIds: ReadonlySet<string>): void;
 }
 
+interface PendingEntry {
+  action: PendingRowAction;
+  /** The row is hidden; false only during `schedule`'s hide delay. */
+  hidden: boolean;
+  hideTimer: ReturnType<typeof setTimeout> | undefined;
+  expireTimer: ReturnType<typeof setTimeout> | undefined;
+}
+
 /**
- * The queue behind `usePendingRowActions`, free of React so its transitions are testable. At most
- * one action is pending; scheduling another commits it first. A commit starts only after the pending
- * slot is cleared, so an action can never commit twice, and a row stays hidden while its commit is
- * in flight. A failed commit unhides the row and reports through `onError`.
+ * The queue behind `usePendingRowActions`, free of React so its transitions are testable. Each
+ * pending action has its own undo timer and commits on its own; scheduling another never commits
+ * the ones already waiting (until `MAX_PENDING_ROW_ACTIONS` is reached). A commit starts only after
+ * its entry has left the pending list, so an action can never commit twice, and a row stays hidden
+ * while its commit is in flight. A failed commit unhides the row and reports through `onError`.
  */
 export function createRowActionQueue(
   initial: RowActionHandlers,
+  options: { undoMs?: number } = {},
 ): RowActionQueue {
+  const undoMs = options.undoMs ?? ROW_ACTION_UNDO_MS;
   let handlers = initial;
-  let pending: PendingRowAction | null = null;
-  /** The pending row is hidden; false only during `schedule`'s hide delay. */
-  let pendingHidden = true;
-  let hideTimer: ReturnType<typeof setTimeout> | undefined;
+  let entries: PendingEntry[] = [];
   const inFlight = new Map<string, number>();
   /** In-flight ids whose row stays in the list (see `hidesRow`). */
   const inFlightVisible = new Set<string>();
@@ -153,23 +195,32 @@ export function createRowActionQueue(
     const hidden = new Set(
       [...inFlight.keys()].filter((id) => !inFlightVisible.has(id)),
     );
-    if (pending && pendingHidden && hidesRow(pending.kind))
-      hidden.add(pending.id);
     const paid = new Set(inFlightVisible);
-    if (pending && !hidesRow(pending.kind)) paid.add(pending.id);
+    for (const entry of entries) {
+      if (!hidesRow(entry.action.kind)) paid.add(entry.action.id);
+      else if (entry.hidden) hidden.add(entry.action.id);
+    }
     // Keep the previous object when nothing visible changed, so subscribers do not re-render.
     const same =
-      state.pending?.id === pending?.id &&
-      state.pending?.kind === pending?.kind &&
+      state.pending.length === entries.length &&
+      entries.every(
+        (entry, index) =>
+          state.pending[index].id === entry.action.id &&
+          state.pending[index].kind === entry.action.kind,
+      ) &&
       state.hiddenIds.size === hidden.size &&
       [...hidden].every((id) => state.hiddenIds.has(id)) &&
       state.paidIds.size === paid.size &&
       [...paid].every((id) => state.paidIds.has(id));
     if (same) return;
     state =
-      hidden.size === 0 && paid.size === 0 && !pending
+      hidden.size === 0 && paid.size === 0 && entries.length === 0
         ? EMPTY_STATE
-        : { hiddenIds: hidden, paidIds: paid, pending };
+        : {
+            hiddenIds: hidden,
+            paidIds: paid,
+            pending: entries.map((entry) => entry.action),
+          };
     for (const listener of [...listeners]) listener();
   };
 
@@ -204,18 +255,24 @@ export function createRowActionQueue(
     );
   };
 
-  const dropPending = () => {
-    clearTimeout(hideTimer);
-    hideTimer = undefined;
-    pendingHidden = true;
-    pending = null;
+  /** Takes `entry` off the pending list and stops its timers. */
+  const drop = (entry: PendingEntry) => {
+    clearTimeout(entry.hideTimer);
+    clearTimeout(entry.expireTimer);
+    entry.hideTimer = undefined;
+    entry.expireTimer = undefined;
+    entries = entries.filter((item) => item !== entry);
+  };
+
+  /** Commits one pending entry now. Does not publish. */
+  const commitEntry = (entry: PendingEntry) => {
+    drop(entry);
+    run(entry.action);
   };
 
   const flush = () => {
-    if (!pending) return;
-    const action = pending;
-    dropPending();
-    run(action);
+    if (entries.length === 0) return;
+    for (const entry of [...entries]) commitEntry(entry);
     publish();
   };
 
@@ -232,19 +289,29 @@ export function createRowActionQueue(
     },
     schedule(id, kind, hideDelayMs = 0) {
       // The row is already hidden (pending or committing), so there is nothing new to schedule.
-      if (pending?.id === id || inFlight.has(id)) return false;
-      if (pending) {
-        const previous = pending;
-        dropPending();
-        run(previous);
-      }
-      pending = { id, kind };
+      if (entries.some((entry) => entry.action.id === id) || inFlight.has(id))
+        return false;
+      // A full stack makes room by committing its oldest action, never the newest.
+      while (entries.length >= MAX_PENDING_ROW_ACTIONS) commitEntry(entries[0]);
+      const entry: PendingEntry = {
+        action: { id, kind },
+        hidden: true,
+        hideTimer: undefined,
+        expireTimer: undefined,
+      };
+      entries = [...entries, entry];
+      entry.expireTimer = setTimeout(() => {
+        entry.expireTimer = undefined;
+        if (!entries.includes(entry)) return;
+        commitEntry(entry);
+        publish();
+      }, undoMs);
       if (hideDelayMs > 0 && hidesRow(kind)) {
-        pendingHidden = false;
-        hideTimer = setTimeout(() => {
-          hideTimer = undefined;
-          if (pending?.id !== id) return;
-          pendingHidden = true;
+        entry.hidden = false;
+        entry.hideTimer = setTimeout(() => {
+          entry.hideTimer = undefined;
+          if (!entries.includes(entry)) return;
+          entry.hidden = true;
           publish();
         }, hideDelayMs);
       }
@@ -252,32 +319,32 @@ export function createRowActionQueue(
       return true;
     },
     undo() {
-      if (!pending) return;
-      dropPending();
+      if (entries.length === 0) return;
+      for (const entry of [...entries]) drop(entry);
       publish();
     },
     flush,
     prune(existingIds) {
-      if (pending && !existingIds.has(pending.id)) {
-        dropPending();
-        publish();
-      }
+      const gone = entries.filter((entry) => !existingIds.has(entry.action.id));
+      if (gone.length === 0) return;
+      for (const entry of gone) drop(entry);
+      publish();
     },
   };
 }
 
 /**
  * Deferred, undoable row actions for the transactions list. Reads the repository, rate service and
- * transactions from their providers. Flushes (commits) the pending action when the screen loses
- * focus or unmounts (sections stay mounted on web, so focus matters) and when the app leaves the
- * foreground. Run `expire()` from the Undo bar's dismissal.
+ * transactions from their providers. Each action commits when its own undo window ends; all of
+ * them are flushed (committed) when the screen loses focus or unmounts (sections stay mounted on
+ * web, so focus matters) and when the app leaves the foreground. `expire()` commits them now.
  */
 export function usePendingRowActions(options: {
   onError: (kind: RowActionKind, error: unknown) => void;
 }): {
   hiddenIds: ReadonlySet<string>;
   paidIds: ReadonlySet<string>;
-  pending: PendingRowAction | null;
+  pending: readonly PendingRowAction[];
   schedule(id: string, kind: RowActionKind, hideDelayMs?: number): boolean;
   undo(): void;
   expire(): void;

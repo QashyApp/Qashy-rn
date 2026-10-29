@@ -76,6 +76,18 @@ describe("useRowSwipe", () => {
     expect(swipe.committingId.get()).toBe("");
   });
 
+  it("closes a row whose action keeps it in the list, with no confirming hold when motion is off", async () => {
+    const onAction = jest.fn().mockReturnValue(true);
+    const swipe = await setup(onAction);
+    swipe.activeId.set("a");
+    await act(() => {
+      swipe.commit("a", "start");
+    });
+    expect(onAction).toHaveBeenCalledWith("a", "markPaid", undefined);
+    expect(swipe.confirmingId.get()).toBe("");
+    expect(swipe.activeX.get()).toBe(0);
+  });
+
   it("keeps a row that was taken off to the side", async () => {
     const onAction = jest.fn().mockReturnValue(true);
     const swipe = await setup(onAction);

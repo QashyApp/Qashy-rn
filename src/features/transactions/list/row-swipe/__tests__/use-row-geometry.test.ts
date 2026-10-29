@@ -64,6 +64,60 @@ describe("useRowGeometry", () => {
     expect(result.current.rects()).toHaveLength(1);
   });
 
+  it("measures straight away when the list comes to rest, at the offset it reports", async () => {
+    const row = fakeRow({ top: 100 });
+    const { result } = await renderHook(() =>
+      useRowGeometry({ getScrollOffset: () => 0 }),
+    );
+    await act(() => {
+      result.current.register("a", row.node);
+      result.current.noteScroll();
+    });
+    // No timers advance: a row that just scrolled in must not wait for the settle delay.
+    await act(async () => {
+      result.current.settle(500);
+      await Promise.resolve();
+    });
+    expect(row.measureInWindow).toHaveBeenCalledTimes(1);
+    expect(result.current.rects()).toEqual([
+      { id: "a", top: 600, bottom: 650, width: 300 },
+    ]);
+  });
+
+  it("measures again after a pass that was already under way when the list came to rest", async () => {
+    const window = { top: 100 };
+    const pending: ((x: number, y: number, w: number, h: number) => void)[] =
+      [];
+    const node = {
+      measureInWindow: jest.fn((callback: (typeof pending)[number]) => {
+        pending.push(callback);
+      }),
+    } as unknown as HostInstance;
+    const { result } = await renderHook(() =>
+      useRowGeometry({ getScrollOffset: () => 0 }),
+    );
+    await act(() => {
+      result.current.register("a", node);
+    });
+    let first: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      first = result.current.measure();
+      result.current.settle(0);
+      // The first measurement answers, with a position from before the list settled.
+      pending.shift()?.(0, window.top, 300, 50);
+      await first;
+    });
+    window.top = 40;
+    await act(async () => {
+      await Promise.resolve();
+      pending.shift()?.(0, window.top, 300, 50);
+      await Promise.resolve();
+    });
+    expect(result.current.rects()).toEqual([
+      { id: "a", top: 40, bottom: 90, width: 300 },
+    ]);
+  });
+
   it("measures on demand even while the list is scrolling", async () => {
     const row = fakeRow({ top: 10 });
     const { result } = await renderHook(() =>
