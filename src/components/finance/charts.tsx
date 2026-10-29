@@ -3,7 +3,6 @@ import { View, type LayoutChangeEvent } from "react-native";
 import Animated, {
   ReduceMotion,
   useAnimatedProps,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
@@ -28,6 +27,8 @@ import {
 import { AppText } from "@/components/ui/app-text";
 import {
   motionCurves,
+  useMotionDurations,
+  useMotionPreference,
   usePageMotionRef,
   useRevealAllowedAtMount,
 } from "@/components/ui/motion";
@@ -80,7 +81,11 @@ export function SpendLineChart({
   const areaGradientId = useId();
   const { t } = useLocalization();
   const { contentWidth } = useScreenMetrics();
-  const reduceMotion = useReducedMotion();
+  // The line draws only at the full animation level; at `minimal` it fades in, and when
+  // animations are off (or the system asks for reduced motion) it is drawn at once.
+  const { instant, travel } = useMotionPreference();
+  const fadeDuration = useMotionDurations().enter;
+  const drawDuration = theme.motion.duration.slow;
   // The SVG is laid out at 100% width, so the viewBox has to match the real
   // parent width. Guessing from the window magnified strokes and label text by
   // up to ~1.6x inside a wider column, and beside the web rail the guess was a
@@ -132,28 +137,42 @@ export function SpendLineChart({
   const denseSeries = points.length > DENSE_SERIES_POINTS;
   const peakIndex = actualMax > 0 ? amounts.indexOf(actualMax) : -1;
   const revealAllowed = useRevealAllowedAtMount();
-  const drawnAtMount = reduceMotion || !revealAllowed;
+  const drawnAtMount = instant || !revealAllowed;
   const reveal = useSharedValue(drawnAtMount ? 1 : 0);
   const pageMotion = usePageMotionRef();
+  // The reveal replays when the data changes, not when the geometry does: the measured width
+  // arriving after mount or a window resize rescales the same series and must not redraw it.
+  const dataSignature = points
+    .map((point) => `${point.date}:${point.amountMinor}`)
+    .join("|");
 
   useEffect(() => {
     // A neighbouring month arrives already drawn; only a settled page draws its line.
-    if (!pageMotion.current) {
+    if (!pageMotion.current || instant) {
       reveal.set(1);
       return;
     }
-    reveal.set(reduceMotion ? 1 : 0);
+    reveal.set(0);
     reveal.set(
       withTiming(1, {
-        duration: 520,
+        duration: travel ? drawDuration : fadeDuration,
         easing: motionCurves.standard,
-        reduceMotion: ReduceMotion.System,
+        reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
       }),
     );
-  }, [path, reduceMotion, reveal, pageMotion]);
+  }, [
+    dataSignature,
+    instant,
+    travel,
+    drawDuration,
+    fadeDuration,
+    reveal,
+    pageMotion,
+  ]);
 
   const pathProps = useAnimatedProps(() => ({
-    strokeDashoffset: pathLength * (1 - reveal.value),
+    strokeDashoffset: travel ? pathLength * (1 - reveal.value) : 0,
+    opacity: travel ? 1 : reveal.value,
   }));
   const pointProps = useAnimatedProps(() => ({
     opacity: reveal.value,
@@ -400,12 +419,15 @@ export function CategoryDonut({
         ),
     };
   });
-  const reduceMotion = useReducedMotion();
+  const { instant, travel } = useMotionPreference();
+  const fadeDuration = useMotionDurations().enter;
+  const sweepDuration = theme.motion.duration.slow;
   // Sweeps a track-colored cover arc away clockwise so the segments appear to
-  // draw themselves in sequence, mirroring the line chart's reveal.
+  // draw themselves in sequence, mirroring the line chart's reveal. Without
+  // travel (the `minimal` level) the cover fades out in place instead.
   const revealAllowed = useRevealAllowedAtMount();
-  const drawnAtMount = reduceMotion || !revealAllowed;
-  const revealed = useSharedValue(drawnAtMount ? circumference : 0);
+  const drawnAtMount = instant || !revealAllowed;
+  const revealed = useSharedValue(drawnAtMount ? 1 : 0);
   const signature = slices
     .map((slice) => `${slice.key}:${slice.amountMinor}`)
     .join("|");
@@ -413,27 +435,35 @@ export function CategoryDonut({
   const pageMotion = usePageMotionRef();
 
   useEffect(() => {
-    if (!pageMotion.current) {
-      revealed.set(circumference);
+    if (!pageMotion.current || instant) {
+      revealed.set(1);
       return;
     }
-    revealed.set(reduceMotion ? circumference : 0);
+    revealed.set(0);
     revealed.set(
-      withTiming(circumference, {
-        duration: 640,
+      withTiming(1, {
+        duration: travel ? sweepDuration : fadeDuration,
         easing: motionCurves.standard,
-        reduceMotion: ReduceMotion.System,
+        reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
       }),
     );
-  }, [circumference, reduceMotion, revealed, signature, pageMotion]);
+  }, [
+    instant,
+    travel,
+    sweepDuration,
+    fadeDuration,
+    revealed,
+    signature,
+    pageMotion,
+  ]);
 
   const coverProps = useAnimatedProps(() => ({
     // Negative offset walks the cover's gap clockwise from the top so segments
     // reveal in the same order they are stacked.
-    strokeDashoffset: -revealed.value,
-    // Hidden outright once the sweep completes so no antialiased sliver of the
+    strokeDashoffset: travel ? -revealed.value * circumference : 0,
+    // Hidden outright once the reveal completes so no antialiased sliver of the
     // cover's butt end is left at the ring's start.
-    opacity: revealed.value >= circumference ? 0 : 1,
+    opacity: revealed.value >= 1 ? 0 : travel ? 1 : 1 - revealed.value,
   }));
   const animatedTotal = useAnimatedMinorAmount(total);
   const share = (amountMinor: number) =>

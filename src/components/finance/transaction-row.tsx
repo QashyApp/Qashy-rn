@@ -1,6 +1,6 @@
 import { router } from "expo-router";
-import { memo } from "react";
-import { View } from "react-native";
+import { memo, useState } from "react";
+import { View, type NativeSyntheticEvent } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
@@ -46,6 +46,14 @@ interface TransactionRowProps {
   rowActions?: RowSwipeActions;
   onRowAction?: (id: string, kind: RowSwipeActionKind) => void;
 }
+
+/** A key press on a focused row; on the web `nativeEvent` is the browser's own `KeyboardEvent`. */
+type KeyDownEvent = NativeSyntheticEvent<{
+  key: string;
+  altKey: boolean;
+  ctrlKey: boolean;
+  metaKey: boolean;
+}>;
 
 /** How long a row is held before it enters selection mode. */
 const LONG_PRESS_DELAY_MS = 400;
@@ -195,22 +203,51 @@ const TransactionRowView = memo(function TransactionRowView({
         customActions.push({ name: kind, label: t(rowSwipeActionLabel(kind)) });
   }
 
+  // On the web a focused row answers Delete/Backspace like the end-side swipe does, through the
+  // same row action, so the Undo bar still applies. Only a row whose swipe deletes has it.
+  const keyboardDelete =
+    process.env.EXPO_OS === "web" &&
+    !selectionMode &&
+    onRowAction &&
+    rowActions &&
+    (rowActions.start === "delete" || rowActions.end === "delete")
+      ? {
+          onKeyDown: (event: KeyDownEvent) => {
+            const { key, altKey, ctrlKey, metaKey } = event.nativeEvent;
+            if (altKey || ctrlKey || metaKey) return;
+            if (key !== "Delete" && key !== "Backspace") return;
+            event.preventDefault();
+            onRowAction(transaction.id, "delete");
+          },
+        }
+      : null;
+
+  // react-native-web draws the `button` role as a <button> and `checkbox` as a <div>, so changing
+  // the role replaces the element under the finger. The browser keeps sending that touch's
+  // touchmove and touchend to the element it started on, which is gone, so the responder system
+  // never sees the touch end: the row stays pressed, and its next hold never fires (a selected
+  // row could not start a drag-select). A long-press enters selection mode mid-touch, so on the
+  // web the role keeps the mode the touch started in until the touch is over.
+  const [roleFrozenAs, setRoleFrozenAs] = useState<boolean | null>(null);
+  const roleMode = roleFrozenAs ?? selectionMode;
+
   return (
     <MotionPressable
+      {...keyboardDelete}
       accessibilityActions={customActions.length ? customActions : undefined}
       accessibilityHint={
         !selectionMode && onLongPress
           ? t("Long press to select this transaction for batch actions.")
           : undefined
       }
-      accessibilityRole={selectionMode ? "checkbox" : "button"}
+      accessibilityRole={roleMode ? "checkbox" : "button"}
       accessibilityLabel={
-        selectionMode
+        roleMode
           ? `${rowLabel}, ${t(selected ? "selected" : "not selected")}`
           : rowLabel
       }
-      accessibilityState={selectionMode ? { checked: selected } : undefined}
-      aria-checked={selectionMode ? selected : undefined}
+      accessibilityState={roleMode ? { checked: selected } : undefined}
+      aria-checked={roleMode ? selected : undefined}
       onAccessibilityAction={(event) => {
         const name = event.nativeEvent.actionName;
         if (name === "longpress") onLongPress?.();
@@ -227,6 +264,14 @@ const TransactionRowView = memo(function TransactionRowView({
             pathname: "/transaction",
             params: { id: transaction.id, returnTo },
           }))
+      }
+      onPressIn={
+        process.env.EXPO_OS === "web"
+          ? () => setRoleFrozenAs(selectionMode)
+          : undefined
+      }
+      onPressOut={
+        process.env.EXPO_OS === "web" ? () => setRoleFrozenAs(null) : undefined
       }
       onLongPress={onLongPress}
       // A little longer than the platform default, so a scroll or a swipe that starts slowly is

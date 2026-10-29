@@ -1,9 +1,21 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { View } from "react-native";
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
-import { MotionPressable, MotionView } from "@/components/ui/motion";
+import {
+  MotionPressable,
+  MotionView,
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 
@@ -27,6 +39,23 @@ export function MoreDetails({
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
+  // The chevron turns over with the section. A half turn is travel: without it (Minimal, or no
+  // motion at all) it flips at once.
+  const { instant, travel } = useMotionPreference();
+  const durations = useMotionDurations();
+  const turn = useSharedValue(expanded ? 1 : 0);
+  useEffect(() => {
+    turn.set(
+      withTiming(expanded ? 1 : 0, {
+        duration: travel ? (expanded ? durations.enter : durations.exit) : 0,
+        easing: expanded ? motionCurves.standard : motionCurves.exit,
+        reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
+      }),
+    );
+  }, [expanded, travel, instant, durations, turn]);
+  const chevron = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${turn.get() * 180}deg` }],
+  }));
   return (
     <View style={{ gap: space.md }}>
       <MotionPressable
@@ -49,9 +78,9 @@ export function MoreDetails({
             `chevron.down`), so the open state is the same glyph rotated
             rather than a different one, which also reads as a smoother
             state change than swapping icons. */}
-        <View style={{ transform: [{ rotate: expanded ? "180deg" : "0deg" }] }}>
+        <Animated.View style={chevron}>
           <AppIcon name="chevron.down" size={16} color={theme.textMuted} />
-        </View>
+        </Animated.View>
       </MotionPressable>
       {expanded ? (
         <MotionView variant="up" exit animateLayout style={{ gap: space.lg }}>

@@ -8,12 +8,12 @@ import {
   withTiming,
 } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import {
   EASE_STANDARD,
   MotionDurations,
   EASE_EXIT,
   TRAVEL,
+  useMotionPreference,
 } from "@/components/ui/motion/durations";
 
 export type MotionVariant = "fade" | "up" | "down" | "left" | "right" | "zoom";
@@ -72,9 +72,9 @@ export function useEntrance(
     );
   }, [delay, duration, enabled, progress]);
 
-  // At the minimal level everything arrives as a plain fade, with no travel or scaling.
-  const level = useAnimationLevel();
-  const start = ENTRANCE_START[level === "minimal" ? "fade" : variant];
+  // Without travel (the minimal level) everything arrives as a plain fade, with no travel or scaling.
+  const { travel } = useMotionPreference();
+  const start = ENTRANCE_START[travel ? variant : "fade"];
   const style = useAnimatedStyle(() => {
     const remaining = 1 - progress.value;
     return {

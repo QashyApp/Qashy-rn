@@ -10,9 +10,13 @@ import Animated, {
 
 import { IconButton } from "@/components/ui/icon-button";
 import { flattenViewStyle, useMotionPreference } from "@/components/ui/motion";
+import { TRAVEL } from "@/components/ui/motion/durations";
 import { useHiddenFlag } from "@/components/ui/use-hidden-flag";
 import { useQashyTheme } from "@/theme/theme";
 import { hapticImpactLight } from "@/services/haptics";
+
+/** How far the button shrinks while tucked away: the same small settle the entrance zoom uses. */
+const TUCKED_SCALE = 0.94;
 
 export function FloatingActionButton({
   label,
@@ -43,8 +47,8 @@ export function FloatingActionButton({
       ? {
           opacity: shown,
           transform: [
-            { scale: 0.6 + 0.4 * shown },
-            { translateY: (1 - shown) * 12 },
+            { scale: TUCKED_SCALE + (1 - TUCKED_SCALE) * shown },
+            { translateY: (1 - shown) * TRAVEL },
           ],
         }
       : { opacity: shown };

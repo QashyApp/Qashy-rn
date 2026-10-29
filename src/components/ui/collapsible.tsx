@@ -6,11 +6,20 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
+import { useMotionPreference } from "@/components/ui/motion";
+
+/** Without travel, the fold snaps shut (or open) as it passes this point. */
+const FOLDED_AT = 0.5;
+
 /**
  * Content that folds away as `collapse` goes 0 → 1: its height, the parent's `gap` before it
  * (`gapBefore`) and its opacity all shrink together. The content keeps its natural size inside,
- * so it is measured once and never reflows while it folds. Hidden content is taken out of the
- * accessibility tree and touch handling by the clipped height and zero opacity at rest.
+ * so it is measured once and never reflows while it folds. Folded content stays focusable on
+ * purpose: focusing a folded control (Tab on the web, a screen reader) is how a caller such as the
+ * Transactions toolbar knows to open it again.
+ *
+ * Without travel (the minimal animation level) only the opacity fades: the height and the gap snap
+ * to their folded or open size as the fold passes its midpoint.
  *
  * Once measured, the content is laid out absolutely, so the folded height can never constrain
  * it. In flow, Android could report the content at its folded size; that height of 0 was then
@@ -29,11 +38,13 @@ export function Collapsible({
   children: ReactNode;
 }) {
   const [height, setHeight] = useState<number | null>(null);
+  const { travel } = useMotionPreference();
   const animated = useAnimatedStyle(() => {
     const progress = collapse.get();
+    const layoutProgress = travel ? progress : progress >= FOLDED_AT ? 1 : 0;
     return {
-      height: height === null ? undefined : height * (1 - progress),
-      marginTop: -gapBefore * progress,
+      height: height === null ? undefined : height * (1 - layoutProgress),
+      marginTop: -gapBefore * layoutProgress,
       opacity: 1 - progress,
     };
   });

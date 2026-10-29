@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { View, type ColorValue } from "react-native";
 import Animated, {
-  Easing,
   ReduceMotion,
   interpolateColor,
   useAnimatedProps,
@@ -16,6 +15,7 @@ import Svg, { Circle } from "react-native-svg";
 import {
   motionCurves,
   usePageMotionRef,
+  useMotionDurations,
   useMotionPreference,
   useRevealAllowedAtMount,
 } from "@/components/ui/motion";
@@ -24,13 +24,6 @@ import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
 import { QASHY_INDIGO } from "@/theme/tokens";
 import { insetHighlight } from "@/theme/highlight";
-
-const fillSpring = {
-  damping: 16,
-  stiffness: 210,
-  mass: 0.8,
-  reduceMotion: ReduceMotion.System,
-} as const;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
@@ -65,6 +58,8 @@ export function ProgressBar({
   // The fill sweep and the milestone pulse travel, so they only run at the full level. The color
   // crossfade is a fade and keeps running at `minimal`.
   const { instant, travel } = useMotionPreference();
+  const durations = useMotionDurations();
+  const { motion } = theme;
   const revealAllowed = useRevealAllowedAtMount();
   const drawnAtMount = !travel || !revealAllowed;
   const progress = useSharedValue(drawnAtMount ? clamped : 0);
@@ -112,12 +107,12 @@ export function ProgressBar({
     colorMix.set(0);
     colorMix.set(
       withTiming(1, {
-        duration: 260,
+        duration: durations.enter,
         easing: motionCurves.standard,
         reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
       }),
     );
-  }, [colorMix, colorPair, pageMotion, instant]);
+  }, [colorMix, colorPair, pageMotion, instant, durations.enter]);
 
   useEffect(() => {
     const previous = previousValueRef.current;
@@ -131,14 +126,23 @@ export function ProgressBar({
       }
       progress.set(
         withTiming(clamped, {
-          duration: 420,
+          duration: motion.duration.slow,
           easing: motionCurves.standard,
           reduceMotion: ReduceMotion.System,
         }),
       );
       return;
     }
-    progress.set(travel ? withSpring(clamped, fillSpring) : clamped);
+    // A fill that is not dragged never overshoots its value, even briefly past a budget limit.
+    progress.set(
+      travel
+        ? withSpring(clamped, {
+            ...motion.spring.gentle,
+            overshootClamping: true,
+            reduceMotion: ReduceMotion.System,
+          })
+        : clamped,
+    );
     const crossed = milestoneRef.current.milestones.filter(
       (milestone) => previous < milestone && safeValue >= milestone,
     );
@@ -147,11 +151,17 @@ export function ProgressBar({
     if (!travel) return;
     pulse.set(
       withSequence(
-        withTiming(1.45, { duration: 150, easing: motionCurves.standard }),
-        withTiming(1, { duration: 240, easing: motionCurves.inOut }),
+        withTiming(1.45, {
+          duration: motion.duration.fast,
+          easing: motionCurves.standard,
+        }),
+        withTiming(1, {
+          duration: motion.duration.base,
+          easing: motionCurves.inOut,
+        }),
       ),
     );
-  }, [clamped, progress, pulse, travel, safeValue, pageMotion]);
+  }, [clamped, progress, pulse, travel, safeValue, pageMotion, motion]);
 
   const trackStyle = useAnimatedStyle(() => ({
     transform: [{ scaleY: pulse.value }],
@@ -281,6 +291,7 @@ export function ProgressRing({
   const revealAllowed = useRevealAllowedAtMount();
   const drawnAtMount = !travel || !revealAllowed;
   const progress = useSharedValue(drawnAtMount ? clamped : 0);
+  const slowDuration = theme.motion.duration.slow;
 
   const staticFallback =
     typeof theme.staticAccent === "string" && theme.staticAccent
@@ -304,12 +315,12 @@ export function ProgressRing({
       !travel || !pageMotion.current
         ? clamped
         : withTiming(clamped, {
-            duration: 420,
-            easing: Easing.bezier(0.2, 0, 0, 1),
+            duration: slowDuration,
+            easing: motionCurves.standard,
             reduceMotion: ReduceMotion.System,
           }),
     );
-  }, [clamped, progress, travel, pageMotion]);
+  }, [clamped, progress, travel, pageMotion, slowDuration]);
 
   const radiusPx = (size - strokeWidth) / 2;
   const circumference = 2 * Math.PI * radiusPx;

@@ -9,6 +9,7 @@ import Animated, {
 import { AnimatedMoney } from "@/components/finance/animated-money";
 import { StatTile } from "@/components/finance/stat-tile";
 import { AppText } from "@/components/ui/app-text";
+import { useMotionPreference } from "@/components/ui/motion";
 import type { CurrencyCode } from "@/domain/models";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -27,7 +28,8 @@ const COMPACT_HEIGHT = 36;
  *
  * The full tile (label above figure) and the compact one (label beside figure) are two layers
  * of the same well, cross-fading while its height folds from the full tile's measured height
- * down to one line, so the figure and its label stay on screen the whole way.
+ * down to one line, so the figure and its label stay on screen the whole way. Without travel (the
+ * minimal animation level) only the cross-fade runs and the height snaps at the midpoint.
  */
 export function CollapsingSummaryTiles({
   tiles,
@@ -80,13 +82,19 @@ function CollapsingTile({
   // than a fixed one (a fixed height clips the figure at large text sizes).
   const [compactHeight, setCompactHeight] = useState<number | null>(null);
   const foldedHeight = Math.max(COMPACT_HEIGHT, compactHeight ?? 0);
+  const { travel } = useMotionPreference();
 
-  const well = useAnimatedStyle(() => ({
-    height:
-      fullHeight === null
-        ? undefined
-        : interpolate(collapse.get(), [0, 1], [fullHeight, foldedHeight]),
-  }));
+  const well = useAnimatedStyle(() => {
+    if (fullHeight === null) return { height: undefined };
+    const progress = collapse.get();
+    return {
+      height: travel
+        ? interpolate(progress, [0, 1], [fullHeight, foldedHeight])
+        : progress >= 0.5
+          ? foldedHeight
+          : fullHeight,
+    };
+  });
   const full = useAnimatedStyle(() => ({
     opacity: interpolate(collapse.get(), [0, 0.5], [1, 0], "clamp"),
   }));

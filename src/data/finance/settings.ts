@@ -12,6 +12,7 @@ import {
 } from "@/data/finance/validation";
 import {
   ANIMATION_LEVELS,
+  MONTH_SLIDE_STYLES,
   NAV_BAR_STYLES,
   type AppSettings,
   type FinanceEntity,
@@ -52,6 +53,10 @@ export function buildSettingsUpdate(
     patch.animationLevel ?? current.animationLevel ?? "all";
   if (!ANIMATION_LEVELS.includes(animationLevel))
     throw new Error("Choose a valid animation level.");
+  const monthSlideStyle =
+    patch.monthSlideStyle ?? current.monthSlideStyle ?? "cascade";
+  if (!MONTH_SLIDE_STYLES.includes(monthSlideStyle))
+    throw new Error("Choose a valid month slide style.");
   const override = (
     key:
       | "fontTextOverride"
@@ -81,10 +86,11 @@ export function buildSettingsUpdate(
     accentSource,
     accentHex: (patch.accentHex ?? current.accentHex).toUpperCase(),
     swipeBetweenMonths:
-      patch.swipeBetweenMonths ?? current.swipeBetweenMonths ?? false,
+      patch.swipeBetweenMonths ?? current.swipeBetweenMonths ?? true,
     swipeRowActions: patch.swipeRowActions ?? current.swipeRowActions ?? true,
     navBarStyle,
     animationLevel,
+    monthSlideStyle,
     hapticsEnabled: patch.hapticsEnabled ?? current.hapticsEnabled ?? true,
     ...overrides,
   });

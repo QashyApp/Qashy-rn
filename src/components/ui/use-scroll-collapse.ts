@@ -6,8 +6,11 @@ import {
   withTiming,
 } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
-import { motionCurves } from "@/components/ui/motion";
+import {
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import {
   accumulateTravel,
   travelDirection,
@@ -35,6 +38,13 @@ const AT_END_SLACK = 2;
  * scrolling up or resting near the top expands (0). Attach `onScroll` to a scrollable with
  * `scrollEventThrottle={16}`. `enabled` false (or `locked`) holds it expanded; `forceCollapsed`
  * holds it collapsed (selection mode wants the room) and wins over `locked`.
+ *
+ * `expand` opens it at once and forgets the scroll so far, for a change of list (another month's
+ * page): the next scroll event re-syncs from the new list's offset.
+ *
+ * Durations come from the theme (folding is an exit, so it is the faster of the two); at the
+ * minimal level they are quick fades and at `off` the value jumps. What the value drives is up to
+ * the consumer: see `Collapsible`, which snaps its layout when content may not travel.
  */
 export function useScrollCollapse({
   enabled,
@@ -46,30 +56,29 @@ export function useScrollCollapse({
   forceCollapsed?: boolean;
 }) {
   const collapse = useSharedValue(0);
-  const level = useAnimationLevel();
+  const { instant } = useMotionPreference();
+  const durations = useMotionDurations();
   const lastOffset = useRef(0);
   const collapsed = useRef(false);
   const travel = useRef(0);
   const changedAt = useRef(0);
   const settleMs = useRef(0);
+  // Set by `expand`: the next scroll event belongs to a different list, so it only re-bases the offset.
+  const rebase = useRef(false);
 
   const forced = enabled && forceCollapsed;
   const held = !enabled || (locked && !forced);
   // `onScroll` reads what changes between renders from here, so it can stay the same function for
   // the screen's whole life (memoised pages depend on that).
-  const latest = useRef({ forced, held, level });
+  const latest = useRef({ forced, held, instant, durations });
   useEffect(() => {
-    latest.current = { forced, held, level };
-  }, [forced, held, level]);
+    latest.current = { forced, held, instant, durations };
+  }, [forced, held, instant, durations]);
 
   const animateTo = useCallback(
     (next: boolean) => {
-      const duration =
-        latest.current.level === "off"
-          ? 0
-          : latest.current.level === "minimal"
-            ? 120
-            : 220;
+      const { instant, durations } = latest.current;
+      const duration = instant ? 0 : next ? durations.exit : durations.enter;
       collapsed.current = next;
       changedAt.current = Date.now();
       settleMs.current = duration + SETTLE_SLACK_MS;
@@ -78,8 +87,8 @@ export function useScrollCollapse({
       collapse.set(
         withTiming(next ? 1 : 0, {
           duration,
-          easing: motionCurves.standard,
-          reduceMotion: ReduceMotion.System,
+          easing: next ? motionCurves.exit : motionCurves.standard,
+          reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
         }),
       );
     },
@@ -113,7 +122,8 @@ export function useScrollCollapse({
         event.nativeEvent;
       const offset = contentOffset.y;
       const maxOffset = contentSize.height - layoutMeasurement.height;
-      const delta = offset - lastOffset.current;
+      const delta = rebase.current ? 0 : offset - lastOffset.current;
+      rebase.current = false;
       lastOffset.current = offset;
       if (state.forced) return;
       if (state.held) {
@@ -139,5 +149,12 @@ export function useScrollCollapse({
     [setCollapsed],
   );
 
-  return { collapse, onScroll };
+  const expand = useCallback(() => {
+    travel.current = 0;
+    rebase.current = true;
+    // Forced shut (selecting) stays shut: that is not the list's scroll talking.
+    if (!latest.current.forced) setCollapsed(false);
+  }, [setCollapsed]);
+
+  return { collapse, onScroll, expand };
 }

@@ -1,8 +1,10 @@
 export {
   motionCurves,
   motionDurationsFor,
+  pressSpringFor,
   useMotionDurations,
   useMotionPreference,
+  usePressSpring,
   type MotionDurations,
 } from "./durations";
 export { type MotionVariant } from "./entrance";

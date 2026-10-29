@@ -68,6 +68,13 @@ export const SYNC_META = {
    * with their causal state. See `LocalFinanceRepository.eraseStoredTombstones`.
    */
   tombstonesErased: "tombstonesErased",
+  /**
+   * `'1'` once the one-time "swipe between months is on by default" migration has run on this
+   * device. It sets `AppSettings.swipeBetweenMonths` to true exactly once, on the foreground
+   * startup path only, so a user who later turns swiping off keeps it off. See
+   * `LocalFinanceRepository.migrateSwipeDefaultNow`.
+   */
+  swipeDefaultMigrated: "swipeDefaultMigrated",
   /** Written by every commit so other tabs can tell a foreign write from their own echo. */
   lastWrite: "lastWrite",
   /** `'1'` once the user has switched sync on. Absent means off, which is the default. */

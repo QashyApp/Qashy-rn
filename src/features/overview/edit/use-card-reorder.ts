@@ -4,7 +4,9 @@
  * One of these lives in the month page. It owns the geometry every dragged frame needs on the UI
  * thread (each card's slot, the page's scroll offset, the scroll viewport), the live drop target
  * the insertion indicator draws, and the edge auto-scroll: while a card is held near the top or
- * bottom of the viewport the page scrolls beneath the finger, one `scrollTo` per frame.
+ * bottom of the viewport the page scrolls beneath the finger, one `scrollTo` per frame. The
+ * scrolling runs on the UI thread, in the same frame callback that advances `scrollY`, so the
+ * held card and the content under it never skew.
  *
  * A dragging frame writes `source`, `target` and `autoScroll`; nothing here persists anything.
  * Dropping hands the final index to the screen, which reorders (optimistically) and saves.
@@ -17,7 +19,6 @@ import {
   useMemo,
   useRef,
   useState,
-  type RefObject,
 } from "react";
 import type {
   LayoutChangeEvent,
@@ -26,9 +27,11 @@ import type {
   ScrollViewInstance,
 } from "react-native";
 import {
-  runOnJS,
+  scrollTo,
+  useAnimatedRef,
   useFrameCallback,
   useSharedValue,
+  type AnimatedRef,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -48,7 +51,7 @@ export interface DragViewport {
 export interface CardReorder {
   /** Every card's slot, in the cards' current order. */
   readonly slots: SharedValue<readonly CardSlot[]>;
-  /** The page's scroll offset. Frozen while a drag is live, where `scrollBy` owns it. */
+  /** The page's scroll offset. While a drag is live the auto-scroll frame callback owns it. */
   readonly scrollY: SharedValue<number>;
   /** Index of the card being dragged, or -1. */
   readonly source: SharedValue<number>;
@@ -68,26 +71,26 @@ export interface CardReorder {
 export function useCardReorder({
   cards,
   gap,
-  scrollRef,
 }: {
   cards: readonly OverviewCard[];
   gap: number;
-  scrollRef: RefObject<ScrollViewInstance | null>;
 }) {
+  // Attach to the page's scroll view (`Animated.ScrollView`): the UI thread scrolls it by this.
+  const scrollRef: AnimatedRef<ScrollViewInstance> =
+    useAnimatedRef<ScrollViewInstance>();
   const slots = useSharedValue<readonly CardSlot[]>([]);
   const scrollY = useSharedValue(0);
   const source = useSharedValue(-1);
   const target = useSharedValue(-1);
   const autoScroll = useSharedValue(0);
   const viewport = useSharedValue<DragViewport>({ top: 0, height: 0 });
+  // The scroll view's own size and its content's, for clamping the auto-scroll on the UI thread.
+  const layoutHeight = useSharedValue(0);
+  const contentHeight = useSharedValue(0);
   const [dragging, setDraggingState] = useState(false);
 
   const heights = useRef(new Map<string, number>());
   const cardsRef = useRef(cards);
-  // `actual` is the offset the ScrollView last reported. `requested` is the offset auto-scroll
-  // has asked for; while a drag is live it leads `actual` (scroll events arrive late), and steps
-  // build on it so they do not restart from a stale reported value and stutter.
-  const metrics = useRef({ actual: 0, requested: 0, content: 0, viewport: 0 });
   const draggingRef = useRef(false);
 
   const publish = useCallback(() => {
@@ -115,30 +118,23 @@ export function useCardReorder({
     [publish],
   );
 
-  const scrollBy = useCallback(
-    (step: number) => {
-      const state = metrics.current;
-      const next = clampScroll(
-        state.requested + step,
-        Math.max(0, state.content - state.viewport),
-      );
-      if (next === state.requested) return;
-      state.requested = next;
-      // Moved here at once rather than waiting for the scroll event, so the dragged card keeps
-      // pace with the content scrolling beneath the finger.
-      scrollY.set(next);
-      scrollRef.current?.scrollTo({ y: next, animated: false });
-    },
-    [scrollRef, scrollY],
-  );
-
   const frame = useFrameCallback((info) => {
     "worklet";
+    // A step queued as the finger lifts must not scroll the page after the release.
+    if (source.get() < 0) return;
     const step = autoScroll.get();
     if (step === 0) return;
     // Steps are per 16ms; a faster display frame scrolls proportionally less.
     const elapsed = Math.min(info.timeSincePreviousFrame ?? 16, 48);
-    runOnJS(scrollBy)((step * elapsed) / 16);
+    const current = scrollY.get();
+    const next = clampScroll(
+      current + (step * elapsed) / 16,
+      Math.max(0, contentHeight.get() - layoutHeight.get()),
+    );
+    if (next === current) return;
+    // The held card reads `scrollY` in the same frame, so it keeps pace with the content.
+    scrollY.set(next);
+    scrollTo(scrollRef, 0, next, false);
   }, false);
 
   useEffect(() => {
@@ -150,7 +146,6 @@ export function useCardReorder({
       draggingRef.current = next;
       setDraggingState(next);
       if (next) {
-        metrics.current.requested = metrics.current.actual;
         scrollRef.current?.measureInWindow((_x, top, _width, height) => {
           viewport.set({ top, height });
         });
@@ -165,24 +160,27 @@ export function useCardReorder({
 
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      const offset = event.nativeEvent.contentOffset.y;
-      metrics.current.actual = offset;
-      // While dragging, `scrollBy` is the source of truth; a late event must neither pull the
-      // dragged card back nor restart the next step from behind. Afterwards events reconcile.
+      // While dragging, the auto-scroll frame callback is the source of truth; a late event must
+      // not pull the dragged card back. Afterwards events reconcile.
       if (draggingRef.current) return;
-      metrics.current.requested = offset;
-      scrollY.set(offset);
+      scrollY.set(event.nativeEvent.contentOffset.y);
     },
     [scrollY],
   );
 
-  const onLayout = useCallback((event: LayoutChangeEvent) => {
-    metrics.current.viewport = event.nativeEvent.layout.height;
-  }, []);
+  const onLayout = useCallback(
+    (event: LayoutChangeEvent) => {
+      layoutHeight.set(event.nativeEvent.layout.height);
+    },
+    [layoutHeight],
+  );
 
-  const onContentSizeChange = useCallback((_width: number, height: number) => {
-    metrics.current.content = height;
-  }, []);
+  const onContentSizeChange = useCallback(
+    (_width: number, height: number) => {
+      contentHeight.set(height);
+    },
+    [contentHeight],
+  );
 
   // Stable, so the memoised month page and every frame only re-render for what they use.
   const reorder = useMemo<CardReorder>(
@@ -214,5 +212,5 @@ export function useCardReorder({
     [onScroll, onLayout, onContentSizeChange],
   );
 
-  return { reorder, dragging, scrollProps };
+  return { reorder, dragging, scrollProps, scrollRef };
 }

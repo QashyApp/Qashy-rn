@@ -2,15 +2,17 @@ import { useLayoutEffect, useRef, type ReactNode } from "react";
 import type { StyleProp, ViewStyle } from "react-native";
 import Animated, {
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
+import {
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 
 const FADE_FROM = 0.3;
-const FADE_MS = 200;
 
 /**
  * Content that changes with the month but is not worth sliding: when `month` changes it dims
@@ -26,9 +28,10 @@ export function MonthContentFade({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const reduced = useReducedMotion();
-  const level = useAnimationLevel();
-  const enabled = !reduced && level !== "off";
+  // An opacity fade survives the minimal level; only `instant` skips it.
+  const { instant } = useMotionPreference();
+  const { enter } = useMotionDurations();
+  const enabled = !instant;
   const opacity = useSharedValue(1);
   const shownMonth = useRef(month);
   useLayoutEffect(() => {
@@ -37,9 +40,9 @@ export function MonthContentFade({
     if (!enabled) return;
     opacity.set(FADE_FROM);
     opacity.set(
-      withTiming(1, { duration: level === "minimal" ? FADE_MS / 2 : FADE_MS }),
+      withTiming(1, { duration: enter, easing: motionCurves.standard }),
     );
-  }, [month, enabled, level, opacity]);
+  }, [month, enabled, enter, opacity]);
   const animated = useAnimatedStyle(() => ({ opacity: opacity.get() }));
   return <Animated.View style={[style, animated]}>{children}</Animated.View>;
 }

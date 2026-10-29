@@ -38,8 +38,23 @@ function fakeGeometry(find: RowGeometry["find"]): RowGeometry {
 }
 
 describe("the drag-select hit test", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => {
+    jest.useFakeTimers();
+    // One 16ms frame at a time, whatever the test preset does for animation frames.
+    jest
+      .spyOn(globalThis, "requestAnimationFrame")
+      .mockImplementation(
+        (callback) =>
+          setTimeout(() => callback(Date.now()), 16) as unknown as number,
+      );
+    jest
+      .spyOn(globalThis, "cancelAnimationFrame")
+      .mockImplementation((handle) => clearTimeout(handle));
+  });
+  afterEach(() => {
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+  });
 
   it("looks for the row at the offset the edge scroll has taken the list to, not the one it last reported", async () => {
     const find = jest.fn<string | null, [number, number | undefined]>(
@@ -87,5 +102,92 @@ describe("the drag-select hit test", () => {
     expect(scrollTo).toHaveBeenLastCalledWith(192);
     // Still reporting 200, but the rows are looked for where the scroll put them.
     expect(find).toHaveBeenLastCalledWith(120, 192);
+  });
+
+  async function armedDrag(scrollTo: jest.Mock) {
+    const container = {
+      current: {
+        measureInWindow: (
+          cb: (x: number, y: number, w: number, h: number) => void,
+        ) => cb(0, 100, 300, 600),
+      } as unknown as HostInstance,
+    };
+    const { result } = await renderHook(() =>
+      useDragSelect({
+        enabled: true,
+        orderedIds: ["a", "b"],
+        selectedIds: new Set<string>(),
+        onSelect: jest.fn(),
+        containerRef: container,
+        scrollTo,
+        getScrollOffset: () => 200,
+        geometry: fakeGeometry(() => null),
+      }),
+    );
+    const handlers = handlersOf(result.current.gesture);
+    handlers.onTouchesDown({
+      allTouches: [{ absoluteX: 50, absoluteY: 400 }],
+      pointerType: 0,
+    });
+    await act(() => {
+      result.current.arm("a");
+    });
+    await act(() => {
+      handlers.onUpdate({ absoluteY: 400 });
+    });
+    return handlers;
+  }
+
+  it("asks for no animation frames while the finger is away from the edges", async () => {
+    const scrollTo = jest.fn();
+    const handlers = await armedDrag(scrollTo);
+    await act(() => {
+      handlers.onUpdate({ absoluteY: 450 });
+      handlers.onUpdate({ absoluteY: 500 });
+      jest.advanceTimersByTime(200);
+    });
+    expect(requestAnimationFrame).not.toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("scrolls once per frame in an edge zone and stops asking when the drag ends", async () => {
+    const scrollTo = jest.fn();
+    const handlers = await armedDrag(scrollTo);
+    await act(() => {
+      handlers.onUpdate({ absoluteY: 120 });
+      jest.advanceTimersByTime(50);
+    });
+    // Three 16ms frames in 50ms, 8dp each.
+    expect(scrollTo.mock.calls.map((call) => call[0])).toEqual([192, 184, 176]);
+    await act(() => {
+      handlers.onFinalize();
+    });
+    expect(cancelAnimationFrame).toHaveBeenCalled();
+    scrollTo.mockClear();
+    await act(() => {
+      jest.advanceTimersByTime(100);
+    });
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
+  it("stops the loop when the finger leaves the zone and starts it again on re-entry", async () => {
+    const scrollTo = jest.fn();
+    const handlers = await armedDrag(scrollTo);
+    await act(() => {
+      handlers.onUpdate({ absoluteY: 120 });
+      jest.advanceTimersByTime(20);
+    });
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    await act(() => {
+      handlers.onUpdate({ absoluteY: 400 });
+      jest.advanceTimersByTime(100);
+    });
+    // The frame already asked for ran and found the finger outside the zone: no more after it.
+    expect(scrollTo).toHaveBeenCalledTimes(1);
+    await act(() => {
+      handlers.onUpdate({ absoluteY: 110 });
+      jest.advanceTimersByTime(20);
+    });
+    expect(scrollTo).toHaveBeenCalledTimes(2);
   });
 });

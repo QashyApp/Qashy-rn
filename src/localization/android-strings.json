@@ -527,6 +527,11 @@
       "he": "קובץ ה־SQLite הזה נראה פגום או חלקי (שורה קצרה ממה שהכותרת שלה מציינת)."
     },
     {
+      "name": "q_0def0264b7904396",
+      "en": "A steady slide with no bounce.",
+      "he": "החלקה אחידה, בלי קפיצה."
+    },
+    {
       "name": "q_0df0e8c4f3c2eba6",
       "en": "Not set",
       "he": "לא נקבע"
@@ -685,6 +690,11 @@
       "name": "q_131bd2d630f42c96",
       "en": "Treat the file exactly like the recovery phrase: whoever can open it can read every account, transaction, and balance you have. Storing it somewhere only you can reach is the whole job.",
       "he": "התייחסו לקובץ בדיוק כמו למשפט השחזור: כל מי שיכול לפתוח אותו יכול לקרוא כל חשבון, תנועה ויתרה שיש לכם. לשמור אותו במקום שרק אתם מגיעים אליו — זו כל המשימה."
+    },
+    {
+      "name": "q_134c688d16bee2cf",
+      "en": "Choose a valid month slide style.",
+      "he": "בחרו סגנון החלקת חודש תקין."
     },
     {
       "name": "q_136526f9761a4d77",
@@ -1555,6 +1565,11 @@
       "name": "q_2ddc4e6edf21334b",
       "en": "Transaction fee amount must be a safe minor-unit integer.",
       "he": "סכום העמלה בתנועה חייב להיות מספר שלם ביחידות משנה, בטווח הנתמך."
+    },
+    {
+      "name": "q_2e192b19ed15fcf6",
+      "en": "Page",
+      "he": "עמוד"
     },
     {
       "name": "q_2e3d9ecc741a7811",
@@ -4917,6 +4932,11 @@
       "he": "שני המכשירים מחזיקים כעת באותו מפתח כספת. מכאן השינויים זורמים בשני הכיוונים."
     },
     {
+      "name": "q_93cd20f04bb05265",
+      "en": "The month moves as one page and settles with a little bounce.",
+      "he": "החודש נע כעמוד אחד ונעצר עם קפיצה קלה."
+    },
+    {
       "name": "q_93d85c9969bc1e8e",
       "en": "Get started",
       "he": "בואו נתחיל"
@@ -6217,6 +6237,11 @@
       "he": "המטבע חייב להיות קוד בן שלוש אותיות."
     },
     {
+      "name": "q_be657638b7b6b6e4",
+      "en": "Cards ripple into place one after another.",
+      "he": "הכרטיסים נכנסים למקומם בזה אחר זה, כמו אדווה."
+    },
+    {
       "name": "q_be8c1796396d23ee",
       "en": "Couldn’t add this card",
       "he": "לא ניתן היה להוסיף את הכרטיס"
@@ -6837,6 +6862,11 @@
       "he": "קצב ההוצאות"
     },
     {
+      "name": "q_d043187343bfcfe8",
+      "en": "Deck",
+      "he": "חפיסה"
+    },
+    {
       "name": "q_d06019878cbff11a",
       "en": "That vault's base currency",
       "he": "מטבע הבסיס של הכספת ההיא"
@@ -7090,6 +7120,11 @@
       "name": "q_d70c585bcada1dcc",
       "en": "Save addresses",
       "he": "שמירת הכתובות"
+    },
+    {
+      "name": "q_d732cf8c6672eb14",
+      "en": "How the month moves when you swipe or tap the month arrows.",
+      "he": "האופן שבו החודש נע כשמחליקים או לוחצים על חיצי החודש."
     },
     {
       "name": "q_d74f39e7041f088a",
@@ -7352,6 +7387,11 @@
       "he": "לא נוסף שום דבר חדש."
     },
     {
+      "name": "q_dfa47a9ce9ac16d6",
+      "en": "Calm",
+      "he": "רגוע"
+    },
+    {
       "name": "q_dfeb5d9ce9e7e832",
       "en": "Cash",
       "he": "מזומן"
@@ -7432,6 +7472,11 @@
       "he": "להפסיק לסנכרן ולשכוח את המפתח. הנתונים הפיננסיים נשארים במכשיר הזה."
     },
     {
+      "name": "q_e1f305cfa2ee5326",
+      "en": "The new month slides over the old one like a card.",
+      "he": "החודש החדש גולש מעל הקודם כמו קלף."
+    },
+    {
       "name": "q_e20f6898fe5c38c2",
       "en": "Sync in the background",
       "he": "סנכרון ברקע"
@@ -7475,6 +7520,11 @@
       "name": "q_e2fb6b6f16cf9f3f",
       "en": "It belongs to a schedule that is not in the backup.",
       "he": "התנועה שייכת לתזמון שאינו נמצא בגיבוי."
+    },
+    {
+      "name": "q_e2fd0403d217ecf5",
+      "en": "Cascade",
+      "he": "מפל"
     },
     {
       "name": "q_e34462a1e46c9db0",
@@ -8470,6 +8520,11 @@
       "name": "q_fbe8dec04f33dc78",
       "en": "Android 12 and later derive this from your wallpaper. Older versions use Qashy’s default palette.",
       "he": "ב־Android 12 ומעלה הצבע נגזר מהטפט. גרסאות ישנות משתמשות בצבעי ברירת המחדל של Qashy."
+    },
+    {
+      "name": "q_fbf6d1d37d5cb080",
+      "en": "Month slide",
+      "he": "החלקת חודש"
     },
     {
       "name": "q_fc63e31ac7c956ed",

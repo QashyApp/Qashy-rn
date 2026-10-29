@@ -4,6 +4,7 @@ import {
   judgeRender,
   landedOffset,
   pagePosition,
+  planStep,
   pushLanded,
 } from "@/components/ui/month-pager/pager-motion";
 
@@ -142,5 +143,23 @@ describe("judgeRender", () => {
       caughtUp: false,
       trail: [10, 11],
     });
+  });
+});
+
+describe("planStep", () => {
+  it("slides whenever the pages beside it are mounted and the pager is enabled", () => {
+    expect(planStep(true, false, true)).toBe("slide");
+  });
+
+  it("asks React for the month rather than landing on a page that is not mounted", () => {
+    // Disabled (neighbours are never mounted) or the neighbours are off.
+    expect(planStep(true, true, false)).toBe("ask");
+    expect(planStep(true, true, true)).toBe("ask");
+    expect(planStep(true, false, false)).toBe("ask");
+  });
+
+  it("only drives the title when there are no pages", () => {
+    expect(planStep(false, false, false)).toBe("slide");
+    expect(planStep(false, true, false)).toBe("land");
   });
 });

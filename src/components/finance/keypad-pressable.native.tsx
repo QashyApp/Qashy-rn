@@ -8,8 +8,8 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import type { KeypadPressableProps } from "@/components/finance/keypad-pressable";
 import {
-  springConfig,
   useMotionPreference,
+  usePressSpring,
 } from "@/components/ui/motion/durations";
 import { useQashyTheme } from "@/theme/theme";
 
@@ -28,17 +28,20 @@ const LONG_PRESS_MS = 450;
  * scale and the pressed surface) follows the gesture's begin and end.
  *
  * Gestures do not fire for TalkBack's double-tap, so the key also exposes an `activate` accessibility
- * action, which is what the screen reader performs.
+ * action, which is what the screen reader performs. A key with a long press adds a `clear` action
+ * for it, since a screen reader cannot hold a key down.
  */
 export function KeypadPressable({
   accessibilityLabel,
   onPress,
   onLongPress,
+  longPressLabel,
   style,
   children,
 }: KeypadPressableProps) {
   const { motion } = useQashyTheme();
   const { travel } = useMotionPreference();
+  const pressSpring = usePressSpring();
   const [pressed, setPressed] = useState(false);
   const scale = useSharedValue(1);
   const animated = useAnimatedStyle(() => ({
@@ -58,7 +61,7 @@ export function KeypadPressable({
   const gesture = useMemo(() => {
     const feedback = (down: boolean) => {
       setPressed(down);
-      scale.set(withSpring(down ? pressScale : 1, springConfig));
+      scale.set(withSpring(down ? pressScale : 1, pressSpring));
     };
     const tap = Gesture.Tap()
       .runOnJS(true)
@@ -79,7 +82,7 @@ export function KeypadPressable({
       // eslint-disable-next-line react-hooks/refs
       .onStart(fireLongPress);
     return Gesture.Race(tap, hold);
-  }, [hasLongPress, pressScale, scale, firePress, fireLongPress]);
+  }, [hasLongPress, pressScale, pressSpring, scale, firePress, fireLongPress]);
 
   return (
     <GestureDetector gesture={gesture}>
@@ -87,9 +90,15 @@ export function KeypadPressable({
         accessible
         accessibilityRole="button"
         accessibilityLabel={accessibilityLabel}
-        accessibilityActions={[{ name: "activate" }]}
+        accessibilityActions={
+          hasLongPress
+            ? [{ name: "activate" }, { name: "clear", label: longPressLabel }]
+            : [{ name: "activate" }]
+        }
         onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "activate") firePress();
+          const action = event.nativeEvent.actionName;
+          if (action === "activate") firePress();
+          else if (action === "clear") fireLongPress();
         }}
         style={[style(pressed), animated]}
       >

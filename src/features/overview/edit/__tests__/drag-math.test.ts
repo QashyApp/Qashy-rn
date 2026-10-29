@@ -7,6 +7,7 @@ import {
   insertionLineY,
   resolveDropTarget,
   slotsFromHeights,
+  stickyDropTarget,
 } from "@/features/overview/edit/drag-math";
 
 // Four cards of height 100 with a 20 gap: tops 0, 120, 240, 360; midpoints 50, 170, 290, 410.
@@ -182,5 +183,91 @@ describe("resolveDropTarget", () => {
     expect(resolveDropTarget({ ...base, panY: 60, scrollY: 70 })).toBe(2);
     // Dragging up while the page scrolls down cancels out.
     expect(resolveDropTarget({ ...base, panY: -130, scrollY: 130 })).toBe(1);
+  });
+});
+
+describe("stickyDropTarget", () => {
+  // Dragging card 1: the others' midpoints are 50, 290 and 410, and the margin is a quarter of
+  // their height (25), so the target moves down past 315 / 435 and back up below 265 / 385.
+  it("behaves like dropTargetIndex when there is no current target", () => {
+    expect(stickyDropTarget(slots, 1, 300, -1)).toBe(2);
+    expect(stickyDropTarget(slots, 1, 289, -1)).toBe(1);
+    expect(stickyDropTarget(slots, 1, 300, 99)).toBe(2);
+  });
+
+  it("holds the target until the midpoint is passed by the margin, going down", () => {
+    expect(stickyDropTarget(slots, 1, 291, 1)).toBe(1);
+    expect(stickyDropTarget(slots, 1, 315, 1)).toBe(1);
+    expect(stickyDropTarget(slots, 1, 316, 1)).toBe(2);
+  });
+
+  it("holds the target until the midpoint is passed by the margin, going up", () => {
+    expect(stickyDropTarget(slots, 1, 49, 1)).toBe(1);
+    // Card 0's midpoint is 50, so it flips back only below 25.
+    expect(stickyDropTarget(slots, 1, 26, 1)).toBe(1);
+    expect(stickyDropTarget(slots, 1, 24, 1)).toBe(0);
+  });
+
+  it("does not flicker when the card hovers around a midpoint", () => {
+    let current = 1;
+    const seen: number[] = [];
+    for (const center of [285, 295, 288, 310, 292, 314, 291]) {
+      current = stickyDropTarget(slots, 1, center, current);
+      seen.push(current);
+    }
+    expect(seen).toEqual([1, 1, 1, 1, 1, 1, 1]);
+
+    // Once clearly across, it holds the new slot over the same wobble.
+    current = stickyDropTarget(slots, 1, 330, current);
+    expect(current).toBe(2);
+    for (const center of [295, 310, 270, 300]) {
+      current = stickyDropTarget(slots, 1, center, current);
+      expect(current).toBe(2);
+    }
+    expect(stickyDropTarget(slots, 1, 264, current)).toBe(1);
+  });
+
+  it("crosses several slots at once for a fast move", () => {
+    expect(stickyDropTarget(slots, 1, 500, 1)).toBe(3);
+    expect(stickyDropTarget(slots, 1, 100, 3)).toBe(1);
+    expect(stickyDropTarget(slots, 1, -400, 3)).toBe(0);
+  });
+
+  it("scales the margin with the neighbour's height", () => {
+    const mixed = slotsFromHeights([300, 60, 60], 20);
+    // Dragging card 1 (mid 350) up past card 0 (mid 150, margin 75): flips below 75.
+    expect(stickyDropTarget(mixed, 1, 100, 1)).toBe(1);
+    expect(stickyDropTarget(mixed, 1, 74, 1)).toBe(0);
+  });
+
+  it("returns a result that is stable when fed back in", () => {
+    for (const center of [-100, 40, 200, 290, 316, 436, 700]) {
+      for (const current of [-1, 0, 1, 2, 3]) {
+        const once = stickyDropTarget(slots, 1, center, current);
+        expect(stickyDropTarget(slots, 1, center, once)).toBe(once);
+      }
+    }
+  });
+});
+
+describe("resolveDropTarget with a current target", () => {
+  const base = {
+    phase: 1,
+    slots,
+    index: 1,
+    panY: 0,
+    scrollY: 0,
+    scrollAtStart: 0,
+  };
+
+  it("sticks to the current target near a midpoint", () => {
+    expect(resolveDropTarget({ ...base, panY: 130, current: 1 })).toBe(1);
+    expect(resolveDropTarget({ ...base, panY: 150, current: 1 })).toBe(2);
+    expect(resolveDropTarget({ ...base, panY: 130, current: 2 })).toBe(2);
+    expect(resolveDropTarget({ ...base, panY: 130 })).toBe(2);
+  });
+
+  it("is still -1 without a live drag", () => {
+    expect(resolveDropTarget({ ...base, phase: 0, current: 1 })).toBe(-1);
   });
 });

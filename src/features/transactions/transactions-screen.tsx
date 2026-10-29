@@ -10,7 +10,9 @@ import {
   type ComponentProps,
 } from "react";
 import {
+  AccessibilityInfo,
   BackHandler,
+  Platform,
   ScrollView,
   SectionList,
   StyleSheet,
@@ -102,6 +104,22 @@ const NO_TRANSACTIONS: readonly TransactionRecord[] = [];
 /** How long the month has to hold still before the URL is updated to it. */
 const PARAM_DELAY = 400;
 
+/** How long the selection has to hold still before its count is read out (a drag-select changes it per row). */
+const ANNOUNCE_DELAY = 600;
+
+/** Keeps the identity of an already empty selection: a new array re-renders every mounted month page. */
+const emptied = (current: string[]) => (current.length ? [] : current);
+
+function announce(message: string) {
+  // Web has no such API on some builds; native always does.
+  if (
+    Platform.OS === "web" &&
+    typeof AccessibilityInfo?.announceForAccessibility !== "function"
+  )
+    return;
+  AccessibilityInfo.announceForAccessibility(message);
+}
+
 const KIND_OPTIONS = [
   { value: "all", label: "All", icon: "list.bullet.rectangle" },
   { value: "expense", label: "Expense", icon: "arrow.up" },
@@ -143,16 +161,24 @@ export function TransactionsScreen() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [searchAllMonths, setSearchAllMonths] = useState(false);
   const [kind, setKind] = useState<KindFilter>("all");
-  const { visibility: fabVisibility, onScroll: onScrollHide } = useScrollHide();
+  const {
+    visibility: fabVisibility,
+    onScroll: onScrollHide,
+    show: showFab,
+  } = useScrollHide();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   // The row whose "Change category" swipe action is open in the sheet.
   const [categoryRowId, setCategoryRowId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  // A drag-select in progress: the top section folds only once the finger lifts, so the rows
-  // do not slide out from under it mid-drag.
+  // A drag-select in progress: the top section does not change between folded and open until the
+  // finger lifts, so the rows do not slide from under it mid-drag (a drag that starts on an
+  // already selected row, with the section already folded, must not open it either).
   const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Whether a selection has ever started on this screen (see the add button's entrance).
+  const [hasSelected, setHasSelected] = useState(false);
+  if (selectionMode && !hasSelected) setHasSelected(true);
   const pagerRef = useRef<MonthPagerHandle>(null);
   const dragProgress = useSharedValue(restingPosition(month, isRtl));
   const listRef =
@@ -163,12 +189,20 @@ export function TransactionsScreen() {
   // On a phone the search and filters fold away while reading down the list and the month's
   // totals shrink to one line; both return on the way back up. They stay open while searching.
   const phoneWidth = metrics.contentWidth < 520;
+  const wantsFold = selectionMode && !searchFocused;
+  const [foldForSelection, setFoldForSelection] = useState(wantsFold);
+  if (!dragActive && foldForSelection !== wantsFold)
+    setFoldForSelection(wantsFold);
   // Selecting folds them too, the same way scrolling does: the batch bar takes room at the
   // bottom, so the list needs all it can get at the top. Typing in search keeps them open.
-  const { collapse, onScroll: onScrollCollapse } = useScrollCollapse({
+  const {
+    collapse,
+    onScroll: onScrollCollapse,
+    expand: expandToolbar,
+  } = useScrollCollapse({
     enabled: phoneWidth,
     locked: searchFocused || search.length > 0,
-    forceCollapsed: selectionMode && !dragActive && !searchFocused,
+    forceCollapsed: foldForSelection,
   });
   const onScroll = useCallback<
     NonNullable<ComponentProps<typeof SectionList>["onScroll"]>
@@ -179,6 +213,14 @@ export function TransactionsScreen() {
     },
     [onScrollHide, onScrollCollapse],
   );
+  // Both follow the current page's scrolling alone, and another month's page has its own offset:
+  // after a change of month the button and the toolbar start shown, and the next scroll event of
+  // the new page takes over from there. (An effect, so a month that arrives from the route param
+  // is covered too.)
+  useEffect(() => {
+    showFab();
+    expandToolbar();
+  }, [month, showFab, expandToolbar]);
 
   // Follow the param when something else navigates here with one (Overview's
   // "See all", the transaction sheet returning to the month it saved into).
@@ -201,7 +243,7 @@ export function TransactionsScreen() {
       setParamDue(false);
       if (paramMonth && paramMonth !== month) {
         setMonth(paramMonth);
-        setSelectedIds([]);
+        setSelectedIds(emptied);
       }
     }
   }
@@ -211,7 +253,7 @@ export function TransactionsScreen() {
   const changeMonth = useCallback((next: string) => {
     setMonth(next);
     // Kept as is when already empty: a new array re-rendered every mounted month page.
-    setSelectedIds((current) => (current.length ? [] : current));
+    setSelectedIds(emptied);
     setParamDue(true);
   }, []);
   // The URL follows once the month stops changing. Writing it on every swipe re-rendered the
@@ -276,10 +318,10 @@ export function TransactionsScreen() {
     return latest ? startOfMonth(latest.localDate) : null;
   }, [repository, state.transactions]);
 
-  const clearSelection = () => setSelectedIds([]);
+  const clearSelection = useCallback(() => setSelectedIds(emptied), []);
 
   const exitSelection = () => {
-    setSelectedIds([]);
+    setSelectedIds(emptied);
     setSelectionMode(false);
     setEditOpen(false);
   };
@@ -298,9 +340,35 @@ export function TransactionsScreen() {
   }, [selectionMode]);
 
   const toggleSelectionMode = useCallback(() => {
+    hapticSelection();
     setSelectionMode((current) => !current);
-    setSelectedIds([]);
+    setSelectedIds(emptied);
   }, []);
+
+  // Entering and leaving selection mode, and the count, are otherwise silent to a screen reader (the
+  // count only exists as text at the top of the list). The count waits for the selection to hold
+  // still, so a drag across rows reads out where it ended instead of every row it crossed.
+  const selectedCount = selectedIds.length;
+  const wasSelecting = useRef(false);
+  const announceRef = useRef(t);
+  useEffect(() => {
+    announceRef.current = t;
+  });
+  useEffect(() => {
+    if (!selectionMode && !wasSelecting.current) return;
+    const left = !selectionMode;
+    wasSelecting.current = selectionMode;
+    const timer = setTimeout(
+      () =>
+        announce(
+          announceRef.current(
+            left ? "Done selecting" : `${selectedCount} selected`,
+          ),
+        ),
+      left ? 0 : ANNOUNCE_DELAY,
+    );
+    return () => clearTimeout(timer);
+  }, [selectionMode, selectedCount]);
 
   const toggleSelected = useCallback(
     (id: string, options?: { silent?: boolean }) => {
@@ -521,7 +589,7 @@ export function TransactionsScreen() {
     setSearch("");
     setSearchAllMonths(false);
     setKind("all");
-    setSelectedIds([]);
+    setSelectedIds(emptied);
   }, []);
 
   // The list content and the pinned toolbar have to occupy the same column, so
@@ -833,17 +901,25 @@ export function TransactionsScreen() {
               </View>
             </MotionView>
           ) : (
-            <FloatingActionButton
-              label="Add transaction"
-              visibility={fabVisibility}
-              onPress={() =>
-                router.push({
-                  pathname: "/transaction",
-                  params: { returnTo: "/transactions" },
-                })
-              }
+            // Fades out as the batch bar arrives in its place. It fades back in only after a
+            // selection: on first mount it stays put, since it sits outside the screen transition.
+            <MotionView
+              variant="fade"
+              exit
+              entrance={hasSelected}
               style={floatingActionMetrics(metrics, insets, space)}
-            />
+            >
+              <FloatingActionButton
+                label="Add transaction"
+                visibility={fabVisibility}
+                onPress={() =>
+                  router.push({
+                    pathname: "/transaction",
+                    params: { returnTo: "/transactions" },
+                  })
+                }
+              />
+            </MotionView>
           )}
           {pendingRowActions.length ? (
             <UndoBar

@@ -15,16 +15,18 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { AmountKeypad } from "@/components/finance/amount-keypad";
 import { ActionButton } from "@/components/ui/action-button";
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
-import { motionCurves } from "@/components/ui/motion";
+import {
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useOverlay } from "@/components/ui/overlay-host";
 import type { CurrencyCode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
@@ -70,30 +72,6 @@ export function useCalculatorHost() {
 const PRESENTATION_SETTLE_MS = 550;
 
 /**
- * The keypad arrives on an underdamped spring that is left to run its course: it leaves at once,
- * rises a few percent past its place and settles back (about 0.5 s in all). A clamped spring stops
- * dead the moment it first reaches its target, still at full speed, which reads as abrupt.
- * (ω = 16 rad/s, ζ = 0.72: about 4% overshoot.)
- */
-const openSpring = {
-  mass: 1,
-  stiffness: 256,
-  damping: 23,
-  reduceMotion: ReduceMotion.System,
-} as const;
-
-/** Leaving is critically damped and quicker (ω = 24 rad/s): no bounce on the way out. */
-const closeSpring = {
-  mass: 1,
-  stiffness: 576,
-  damping: 48,
-  reduceMotion: ReduceMotion.System,
-} as const;
-
-/** The panel runs on this far below the screen's edge, so its overshoot never opens a gap. */
-const OVERSHOOT_BLEED = 48;
-
-/**
  * Gives a screen's amount fields the calculator keypad in place of the system keyboard.
  *
  * The keypad is a layer over the whole screen, not part of the screen's layout: it rises from the
@@ -118,6 +96,12 @@ export function CalculatorHost({ children }: { children: ReactNode }) {
   useEffect(() => {
     mountedAt.current = Date.now();
   }, []);
+  // With no motion there is no slide to wait for. `open` is a stable function, so it reads this.
+  const { instant } = useMotionPreference();
+  const instantRef = useRef(instant);
+  useEffect(() => {
+    instantRef.current = instant;
+  }, [instant]);
   const openTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
@@ -159,7 +143,7 @@ export function CalculatorHost({ children }: { children: ReactNode }) {
         // would open the keypad again.
         config.blur();
         const wait = mountedAt.current + PRESENTATION_SETTLE_MS - Date.now();
-        if (process.env.EXPO_OS === "web" || wait <= 0) {
+        if (process.env.EXPO_OS === "web" || instantRef.current || wait <= 0) {
           setActive({ id, config });
           return;
         }
@@ -201,7 +185,8 @@ function CalculatorLayer({
   const { space, radius } = theme;
   const insets = useSafeAreaInsets();
   const { locale, t } = useLocalization();
-  const level = useAnimationLevel();
+  const { instant, travel } = useMotionPreference();
+  const durations = useMotionDurations();
 
   // The layer keeps showing the last field's keys while it slides away.
   const [held, setHeld] = useState(config);
@@ -220,29 +205,22 @@ function CalculatorLayer({
         // A windowed layer keeps its last keys and its measured height for the next use.
         if (finished && !show && !windowed) runOnJS(setHeld)(undefined);
       };
-      if (level === "off") {
-        progress.set(withTiming(show ? 1 : 0, { duration: 0 }, settled));
-        return;
-      }
-      if (level === "minimal") {
-        progress.set(
-          withTiming(
-            show ? 1 : 0,
-            {
-              duration: 120,
-              easing: show ? motionCurves.standard : motionCurves.exit,
-              reduceMotion: ReduceMotion.System,
-            },
-            settled,
-          ),
-        );
-        return;
-      }
+      // The theme's timing, with no overshoot: the panel is not dragged, so it just settles. It
+      // arrives at the entrance time and leaves faster; at Minimal the durations are quick fades
+      // and at `off` it jumps.
       progress.set(
-        withSpring(show ? 1 : 0, show ? openSpring : closeSpring, settled),
+        withTiming(
+          show ? 1 : 0,
+          {
+            duration: instant ? 0 : show ? durations.enter : durations.exit,
+            easing: show ? motionCurves.standard : motionCurves.exit,
+            reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
+          },
+          settled,
+        ),
       );
     },
-    [level, progress, windowed],
+    [instant, durations, progress, windowed],
   );
   useEffect(() => {
     wantVisible.current = visible;
@@ -257,8 +235,11 @@ function CalculatorLayer({
   }, [held, windowed, panelHeight, progress]);
 
   const scrim = useAnimatedStyle(() => ({ opacity: progress.get() }));
+  // Without travel (Minimal) the panel stays in place and fades with the scrim instead of sliding.
   const slide = useAnimatedStyle(() => {
     const height = panelHeight.get();
+    if (!travel)
+      return { opacity: height === 0 ? 0 : progress.get(), transform: [] };
     return {
       opacity: height === 0 ? 0 : 1,
       transform: [{ translateY: height * (1 - progress.get()) }],
@@ -351,9 +332,7 @@ function CalculatorLayer({
               overflow: "hidden",
               paddingHorizontal: space.lg,
               paddingTop: space.lg,
-              paddingBottom:
-                Math.max(insets.bottom, space.md) + space.sm + OVERSHOOT_BLEED,
-              marginBottom: -OVERSHOOT_BLEED,
+              paddingBottom: Math.max(insets.bottom, space.md) + space.sm,
               gap: space.md,
             },
             sheet,

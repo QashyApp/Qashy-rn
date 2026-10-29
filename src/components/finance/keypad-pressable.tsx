@@ -9,6 +9,8 @@ export interface KeypadPressableProps {
   onPress: () => void;
   /** Held down: the backspace key clears with it. */
   onLongPress?: () => void;
+  /** What a screen reader calls the long press, offered to it as a "clear" action (the backspace key's). */
+  longPressLabel?: string;
   style: (pressed: boolean) => ViewStyle;
   children: ReactNode;
 }

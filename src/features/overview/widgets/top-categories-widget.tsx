@@ -107,6 +107,7 @@ export function TopCategoriesWidget({ summary }: WidgetProps) {
                   `${translatedName}: ${percent}% of this month's spending`,
                 )}
                 value={share}
+                milestones={[]}
                 color={category?.color}
                 size="thin"
               />

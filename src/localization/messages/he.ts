@@ -1634,6 +1634,21 @@ export const HEBREW: Record<string, string> = {
   Minimal: "מינימלי",
   "Minimal keeps quick fades only; Off changes things instantly. Your device’s reduce-motion setting always applies on top.":
     "במצב מינימלי נשארות רק דעיכות מהירות, ובמצב כבוי השינויים מתבצעים מיידית. הגדרת הפחתת התנועה של המכשיר חלה תמיד בנוסף.",
+  // More → Gestures and Animations: month slide style.
+  "Month slide": "החלקת חודש",
+  "How the month moves when you swipe or tap the month arrows.":
+    "האופן שבו החודש נע כשמחליקים או לוחצים על חיצי החודש.",
+  Cascade: "מפל",
+  "Cards ripple into place one after another.":
+    "הכרטיסים נכנסים למקומם בזה אחר זה, כמו אדווה.",
+  Page: "עמוד",
+  "The month moves as one page and settles with a little bounce.":
+    "החודש נע כעמוד אחד ונעצר עם קפיצה קלה.",
+  Deck: "חפיסה",
+  "The new month slides over the old one like a card.":
+    "החודש החדש גולש מעל הקודם כמו קלף.",
+  Calm: "רגוע",
+  "A steady slide with no bounce.": "החלקה אחידה, בלי קפיצה.",
   // More → Import from another app: what the Cashew import reads, skips and warns about.
   "Accounts (Cashew wallets) with their currencies":
     "חשבונות (הארנקים של Cashew) עם המטבעות שלהם",
@@ -1862,6 +1877,7 @@ export const HEBREW: Record<string, string> = {
   "Choose a valid theme.": "בחרו ערכת עיצוב תקינה.",
   "Choose a valid navigation bar style.": "בחרו סגנון תקין לסרגל הניווט.",
   "Choose a valid animation level.": "בחרו רמת אנימציה תקינה.",
+  "Choose a valid month slide style.": "בחרו סגנון החלקת חודש תקין.",
   "Choose a valid appearance override.": "בחרו התאמת מראה תקינה.",
   "Keep at least one account. Add another account before deleting this one.":
     "יש להשאיר לפחות חשבון אחד. הוסיפו חשבון נוסף לפני מחיקת החשבון הזה.",

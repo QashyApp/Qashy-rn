@@ -54,10 +54,67 @@ export function dropTargetIndex(
 }
 
 /**
+ * How far past a neighbour's midpoint, as a fraction of that neighbour's height, the dragged
+ * card's centre has to go before the target changes from the slot it already holds.
+ */
+export const DROP_HYSTERESIS = 0.25;
+
+/** The `position`th card of the stack with the dragged card (`from`) taken out. */
+function otherSlot(
+  slots: readonly CardSlot[],
+  from: number,
+  position: number,
+): CardSlot | undefined {
+  "worklet";
+  return slots[position < from ? position : position + 1];
+}
+
+/**
+ * Like `dropTargetIndex`, but sticky: the target stays at `current` until the dragged card's
+ * centre has gone `DROP_HYSTERESIS` of the neighbour's height past that neighbour's midpoint, in
+ * either direction. A finger resting near a midpoint therefore cannot flip the target back and
+ * forth. A `current` outside the stack (no target yet) behaves as `dropTargetIndex`. Feeding the
+ * result back in as `current` returns it unchanged.
+ */
+export function stickyDropTarget(
+  slots: readonly CardSlot[],
+  fromIndex: number,
+  draggedCenter: number,
+  current: number,
+): number {
+  "worklet";
+  const plain = dropTargetIndex(slots, fromIndex, draggedCenter);
+  if (current < 0 || current > slots.length - 1) return plain;
+  let target = current;
+  // Moving down: the card just after the insertion point has to be passed by the margin.
+  while (target < plain) {
+    const next = otherSlot(slots, fromIndex, target);
+    if (!next) break;
+    if (draggedCenter <= next.top + next.height * (0.5 + DROP_HYSTERESIS))
+      break;
+    target += 1;
+  }
+  // Moving up: likewise for the card just before it.
+  while (target > plain) {
+    const previous = otherSlot(slots, fromIndex, target - 1);
+    if (!previous) break;
+    if (
+      draggedCenter >=
+      previous.top + previous.height * (0.5 - DROP_HYSTERESIS)
+    )
+      break;
+    target -= 1;
+  }
+  return target;
+}
+
+/**
  * Where a card being dragged would land, from its own slot plus how far it has travelled: the
  * finger's drag (`panY`) and however far the page has scrolled since the drag began
- * (`scrollY - scrollAtStart`, since the slots move with the content). -1 when no drag is live
- * (`phase` is not 1) or the card has no slot yet.
+ * (`scrollY - scrollAtStart`, since the slots move with the content). `current` is the target
+ * the card holds now (-1 for none), which the result sticks to until the card is clearly past the
+ * next midpoint (see `stickyDropTarget`). -1 when no drag is live (`phase` is not 1) or the card
+ * has no slot yet.
  */
 export function resolveDropTarget({
   phase,
@@ -66,6 +123,7 @@ export function resolveDropTarget({
   panY,
   scrollY,
   scrollAtStart,
+  current = -1,
 }: {
   phase: number;
   slots: readonly CardSlot[];
@@ -73,13 +131,19 @@ export function resolveDropTarget({
   panY: number;
   scrollY: number;
   scrollAtStart: number;
+  current?: number;
 }): number {
   "worklet";
   if (phase !== 1) return -1;
   const own = slots[index];
   if (!own) return -1;
   const travelled = panY + scrollY - scrollAtStart;
-  return dropTargetIndex(slots, index, own.top + own.height / 2 + travelled);
+  return stickyDropTarget(
+    slots,
+    index,
+    own.top + own.height / 2 + travelled,
+    current,
+  );
 }
 
 /**

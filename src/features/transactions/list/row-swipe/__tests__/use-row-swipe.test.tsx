@@ -184,7 +184,7 @@ describe("useRowSwipe", () => {
       expect(off).toHaveBeenCalledWith("a", "markPaid", undefined, undefined);
     });
 
-    it("gives no hold to an action that leaves the list", async () => {
+    it("gives no hold to an action that leaves the list, and hides its row once the slide has arrived", async () => {
       mockMotion = { instant: false, travel: true };
       const onAction = jest.fn().mockReturnValue(true);
       const swipe = await setup(onAction);
@@ -192,7 +192,47 @@ describe("useRowSwipe", () => {
       await act(() => {
         swipe.commit("a", "end");
       });
-      expect(onAction).toHaveBeenCalledWith("a", "skip", 260, undefined);
+      // The spring from rest to the far edge (the row is 300 wide), as long as it really takes.
+      const slide = springArrivalMs(
+        { damping: 20, stiffness: 200, mass: 1 },
+        0 - -ROW.width,
+        0,
+      );
+      expect(slide).toBeGreaterThan(0);
+      expect(onAction).toHaveBeenCalledWith("a", "skip", slide + 32, undefined);
+    });
+
+    it("hides a leaving row after the short timing under reduced motion, and at once with motion off", async () => {
+      mockMotion = { instant: false, travel: false };
+      const reduced = jest.fn().mockReturnValue(true);
+      const first = await setup(reduced);
+      first.activeId.set("a");
+      await act(() => {
+        first.commit("a", "end");
+      });
+      expect(reduced).toHaveBeenCalledWith("a", "skip", 120 + 32, undefined);
+
+      mockMotion = { instant: true, travel: false };
+      const off = jest.fn().mockReturnValue(true);
+      const second = await setup(off);
+      second.activeId.set("a");
+      await act(() => {
+        second.commit("a", "end");
+      });
+      expect(off).toHaveBeenCalledWith("a", "skip", 0, undefined);
+    });
+
+    it("does not leave the row marked open once the hold has closed it", async () => {
+      // The test runtime finishes animations at once, so the hold is over by the time commit
+      // returns: the open state it set for the hold (which swallows a tap) must be cleared again.
+      mockMotion = { instant: false, travel: true };
+      const swipe = await setup(jest.fn().mockReturnValue(true));
+      swipe.activeId.set("a");
+      await act(() => {
+        swipe.commit("a", "start");
+      });
+      expect(swipe.confirmingId.get()).toBe("");
+      expect(swipe.shouldSwallowPress("a")).toBe(false);
     });
   });
 });

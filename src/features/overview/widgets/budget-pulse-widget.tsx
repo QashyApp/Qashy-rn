@@ -98,6 +98,7 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
         <ProgressBar
           label={t("Budget progress")}
           value={ratio}
+          milestones={[]}
           color={ratio > 1 ? (theme.negative as string) : undefined}
         />
         {ratio > 1 ? (
@@ -161,6 +162,7 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
           <ProgressBar
             label={t("Budget progress")}
             value={budgetProgress}
+            milestones={[]}
             color={budgetProgress > 1 ? (theme.negative as string) : undefined}
           />
           <AppText variant="caption" muted>

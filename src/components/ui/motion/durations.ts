@@ -7,7 +7,7 @@ import {
 
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { useQashyTheme } from "@/theme/theme";
-import type { MotionSpec } from "@/theme/themes/types";
+import type { MotionSpec, SpringSpec } from "@/theme/themes/types";
 
 // ── The motion system ───────────────────────────────────────────────────────
 // One curve family, two durations, one travel distance, no overshoot. Motion
@@ -91,13 +91,34 @@ export const motionCurves = {
   inOut: EASE_IN_OUT,
 } as const;
 
-// Dew's press spring: a touch more energy than the old soft language — higher stiffness and a
-// little less mass — so a tap lands its sink quickly. Overshoot stays clamped: a control the
-// user did not drag must never visibly bounce past its resting shape.
-export const springConfig = {
-  damping: 18,
-  stiffness: 430,
-  mass: 0.66,
-  overshootClamping: true,
-  reduceMotion: ReduceMotion.System,
-} as const;
+/**
+ * The press spring for a theme: its own `snappy` spring, clamped. Overshoot stays clamped: a control
+ * the user did not drag must never visibly bounce past its resting shape. Pure, so tests and
+ * non-hook code can call it.
+ */
+export function pressSpringFor(
+  motion: MotionSpec,
+  instant: boolean,
+): PressSpring {
+  return {
+    ...motion.spring.snappy,
+    overshootClamping: true,
+    reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
+  };
+}
+
+type PressSpring = SpringSpec & {
+  overshootClamping: true;
+  reduceMotion: ReduceMotion;
+};
+
+/**
+ * The active theme's press spring, so a theme that slows or stiffens its own springs (High
+ * contrast) reaches press feedback too. Stable between renders unless the theme or the motion
+ * preference changes.
+ */
+export function usePressSpring(): PressSpring {
+  const { motion } = useQashyTheme();
+  const { instant } = useMotionPreference();
+  return useMemo(() => pressSpringFor(motion, instant), [motion, instant]);
+}

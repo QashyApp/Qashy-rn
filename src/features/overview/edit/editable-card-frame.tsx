@@ -13,26 +13,30 @@
  */
 
 import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AccessibilityInfo, Platform, View } from "react-native";
+import {
+  AccessibilityInfo,
+  Platform,
+  View,
+  type HostInstance,
+} from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
   useAnimatedReaction,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
-import { MotionView } from "@/components/ui/motion";
+import { MotionView, useMotionPreference } from "@/components/ui/motion";
 import {
   autoScrollStep,
   resolveDropTarget,
 } from "@/features/overview/edit/drag-math";
+import { moveAccessibilityFocus } from "@/features/overview/edit/move-accessibility-focus";
 import type { CardReorder } from "@/features/overview/edit/use-card-reorder";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
@@ -115,11 +119,10 @@ export function EditableCardFrame({
   const theme = useQashyTheme();
   const { radius, space, motion } = theme;
   const { t } = useLocalization();
-  const systemReduced = useReducedMotion();
-  const level = useAnimationLevel();
-  // The system setting and the in-app Animations level (Minimal, Off) both drop the lift and the
-  // springs; the card then simply follows the finger and lands in place.
-  const reduce = systemReduced || level !== "all";
+  // Without travel (the system setting, or the in-app Animations level Minimal or Off) there is
+  // no lift and no spring; the card simply follows the finger and lands in place.
+  const { travel } = useMotionPreference();
+  const reduce = !travel;
   const { slots, scrollY, source, target, autoScroll, viewport } = reorder;
 
   const [lifted, setLifted] = useState(false);
@@ -133,6 +136,10 @@ export function EditableCardFrame({
   const settleOnMove = useRef(false);
   // Which drop `settleOnMove` belongs to, so an earlier drop's promise cannot settle a later one.
   const dropSequence = useRef(0);
+  const gripRef = useRef<HostInstance>(null);
+  // Set when a toolbar button moved the card: the slot index its grip takes the screen reader's
+  // focus at once the new order has rendered (the button it was on is disabled at an end).
+  const refocusAt = useRef<number | null>(null);
 
   const announceMove = (direction: "up" | "down") => {
     const nextPosition = direction === "up" ? index : index + 2;
@@ -146,15 +153,17 @@ export function EditableCardFrame({
     }
   };
 
-  const moveUp = () => {
+  const moveUp = (refocus = false) => {
     if (index === 0) return;
     hapticSelection();
+    refocusAt.current = refocus ? index - 1 : null;
     onMoveUp();
     announceMove("up");
   };
-  const moveDown = () => {
+  const moveDown = (refocus = false) => {
     if (index === total - 1) return;
     hapticSelection();
+    refocusAt.current = refocus ? index + 1 : null;
     onMoveDown();
     announceMove("down");
   };
@@ -181,6 +190,7 @@ export function EditableCardFrame({
   };
 
   const beginDrag = () => {
+    refocusAt.current = null;
     setLifted(true);
     reorder.setDragging(true);
     hapticImpactLight();
@@ -217,6 +227,10 @@ export function EditableCardFrame({
   // can now spring the remaining distance to zero.
   useLayoutEffect(() => {
     if (settleOnMove.current) settle();
+    if (refocusAt.current === index) {
+      refocusAt.current = null;
+      moveAccessibilityFocus(gripRef.current);
+    }
     // Only a change of slot should run this.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index]);
@@ -233,6 +247,8 @@ export function EditableCardFrame({
         panY: panY.get(),
         scrollY: scrollY.get(),
         scrollAtStart: scrollAtStart.get(),
+        // The slot held now, so a finger resting near a midpoint cannot flip it back and forth.
+        current: target.get(),
       }),
     (next, previous) => {
       if (next === previous) return;
@@ -248,6 +264,10 @@ export function EditableCardFrame({
   const pan = Gesture.Pan()
     .withTestId(`overview-card-drag-${id}`)
     .activateAfterLongPress(Platform.OS === "web" ? 0 : 200)
+    // A second finger would shift the card on web, where the pan follows the pointers' average.
+    .maxPointers(1)
+    // `beginDrag`, `drop` and `finishDrag` read refs only when the gesture runs, never in render.
+    // eslint-disable-next-line react-hooks/refs
     .onStart(() => {
       "worklet";
       phase.set(1);
@@ -265,12 +285,22 @@ export function EditableCardFrame({
       autoScroll.set(autoScrollStep(event.absoluteY, area.top, area.height));
     })
     // Only a release that completed commits; a cancelled gesture falls through to `onFinalize`.
-    // `drop` and `finishDrag` read a ref only when the gesture ends, never in render.
     // eslint-disable-next-line react-hooks/refs
-    .onEnd((_event, success) => {
+    .onEnd((event, success) => {
       "worklet";
       if (!success) return;
-      runOnJS(drop)(target.get());
+      // Resolved from the release itself rather than the last reaction's result, which can lag
+      // a fast final move by a frame. Without slots yet it falls back to the published target.
+      const landed = resolveDropTarget({
+        phase: phase.get(),
+        slots: slots.get(),
+        index,
+        panY: event.translationY,
+        scrollY: scrollY.get(),
+        scrollAtStart: scrollAtStart.get(),
+        current: target.get(),
+      });
+      runOnJS(drop)(landed >= 0 ? landed : target.get());
     })
     // eslint-disable-next-line react-hooks/refs
     .onFinalize(() => {
@@ -313,16 +343,6 @@ export function EditableCardFrame({
           lifted ? materialStyle(theme, "overlay") : null,
           animatedStyle,
         ]}
-        accessibilityActions={[
-          { name: "moveUp", label: t("Move up") },
-          { name: "moveDown", label: t("Move down") },
-          { name: "remove", label: t("Remove") },
-        ]}
-        onAccessibilityAction={(event) => {
-          if (event.nativeEvent.actionName === "moveUp") moveUp();
-          else if (event.nativeEvent.actionName === "moveDown") moveDown();
-          else if (event.nativeEvent.actionName === "remove") onRemove();
-        }}
       >
         <View
           style={{
@@ -336,7 +356,22 @@ export function EditableCardFrame({
         >
           <GestureDetector gesture={pan}>
             <View
+              ref={gripRef}
+              accessible
+              accessibilityRole="button"
               accessibilityLabel={t(`Drag to reorder ${title}`)}
+              // A screen reader cannot hold and drag, so the grip offers the same moves as actions.
+              accessibilityActions={[
+                { name: "moveUp", label: t("Move up") },
+                { name: "moveDown", label: t("Move down") },
+                { name: "remove", label: t("Remove") },
+              ]}
+              onAccessibilityAction={(event) => {
+                if (event.nativeEvent.actionName === "moveUp") moveUp();
+                else if (event.nativeEvent.actionName === "moveDown")
+                  moveDown();
+                else if (event.nativeEvent.actionName === "remove") onRemove();
+              }}
               style={{
                 minWidth: TARGET,
                 minHeight: TARGET,
@@ -361,14 +396,14 @@ export function EditableCardFrame({
             icon="arrow.up"
             size={TARGET}
             disabled={index === 0}
-            onPress={moveUp}
+            onPress={() => moveUp(true)}
           />
           <IconButton
             label={`Move ${title} down`}
             icon="arrow.down"
             size={TARGET}
             disabled={index === total - 1}
-            onPress={moveDown}
+            onPress={() => moveDown(true)}
           />
           {showSizeControl && sizes.length > 1 ? (
             <IconButton

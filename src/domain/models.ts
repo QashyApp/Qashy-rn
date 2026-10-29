@@ -11,6 +11,14 @@ export const ANIMATION_LEVELS: readonly AnimationLevel[] = [
   "minimal",
   "off",
 ];
+/** How a month swipe moves the month's content (Overview's cards, the Transactions list). */
+export type MonthSlideStyle = "cascade" | "page" | "deck" | "calm";
+export const MONTH_SLIDE_STYLES: readonly MonthSlideStyle[] = [
+  "cascade",
+  "page",
+  "deck",
+  "calm",
+];
 export type AccountType = "cash" | "checking" | "savings" | "credit" | "wallet";
 export type CategoryKind = "expense" | "income";
 export type TransactionKind = "expense" | "income" | "transfer";
@@ -41,7 +49,7 @@ export interface AppSettings extends SyncEntity {
   themeMode: ThemeMode;
   accentSource: AccentSource;
   accentHex: string;
-  /** Per device (`deviceLocal`). Swipe sideways on Overview and Transactions to change month. Saves from before this existed read as off. */
+  /** Per device (`deviceLocal`). Swipe sideways on Overview and Transactions to change month. On by default; saves from before this existed read as on (a one-time device-local migration turned it on for installs that had it stored off). */
   swipeBetweenMonths?: boolean;
   /** Per device (`deviceLocal`). Swipe a transaction row for actions: delete or change category, and for upcoming payments mark paid or skip. Saves from before this existed read as on. */
   swipeRowActions?: boolean;
@@ -49,6 +57,8 @@ export interface AppSettings extends SyncEntity {
   navBarStyle?: NavBarStyle;
   /** Per device (`deviceLocal`). `all` is the full motion system, `minimal` keeps only quick fades, `off` shows changes instantly. Saves from before this existed read as `all`. */
   animationLevel?: AnimationLevel;
+  /** Per device (`deviceLocal`). How a month swipe moves the month's content. Saves from before this existed read as `cascade`. */
+  monthSlideStyle?: MonthSlideStyle;
   /** Per device (`deviceLocal`). Android only: short vibrations on taps, selections, saves and errors. Saves from before this existed read as on. */
   hapticsEnabled?: boolean;
   /**

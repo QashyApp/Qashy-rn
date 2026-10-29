@@ -23,13 +23,16 @@ import {
   runOnJS,
   runOnUI,
   useAnimatedReaction,
-  useReducedMotion,
   useSharedValue,
   withSpring,
   withTiming,
 } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
+import {
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import {
   SWIPE_ACTIVE_OFFSET,
   commitSpring,
@@ -51,9 +54,17 @@ import {
   canStep,
   judgeRender,
   landedOffset,
+  planStep,
   pushLanded,
 } from "@/components/ui/month-pager/pager-motion";
 import { PagerPage } from "@/components/ui/month-pager/pager-page";
+import {
+  followBase,
+  liveVelocity,
+  livelySpring,
+  resolveSlideStyle,
+  settleThreshold,
+} from "@/components/ui/month-pager/slide-style";
 import {
   WHEEL_QUIET,
   wheelPixels,
@@ -64,17 +75,16 @@ import {
 const EDGE_GUARD = 24;
 /** Past the newest allowed month the pages barely follow the finger. */
 const BLOCKED_FOLLOW = 0.12;
-const CROSSFADE_OUT = 90;
-const CROSSFADE_IN = 140;
 /**
  * If the parent has not shown a requested month after this long, it declined: put the pages back
  * on the month it shows. Generous, so a slow render is never mistaken for a refusal.
  */
 const COMMIT_TIMEOUT = 1500;
 /**
- * Web only. How long the neighbouring pages stay mounted once the last touch, tap or wheel step is
- * over. A run of swipes (or taps on the arrows) is not interrupted by pages being unmounted and
- * mounted again between them; a page left alone holds no duplicate content.
+ * How long the neighbouring pages stay mounted once the last touch, tap or wheel step is over, where
+ * they are mounted on demand (always on web; on Android while swiping between months is off). A run
+ * of swipes (or taps on the arrows) is not interrupted by pages being unmounted and mounted again
+ * between them; a page left alone holds no duplicate content.
  */
 const NEIGHBOUR_IDLE_MS = 1500;
 /** Web trackpad: the quiet gap that ends a gesture (the distance that makes a step is in `wheel-step`). */
@@ -114,31 +124,45 @@ export function PagerImpl({
   const settings = useFinanceSettings();
   const { isRtl } = useLocalization();
   const { background, motion } = useQashyTheme();
-  const systemReduced = useReducedMotion();
-  const level = useAnimationLevel();
+  const { instant, travel } = useMotionPreference();
+  const durations = useMotionDurations();
   // The system's reduced-motion setting and the in-app Animations level (Minimal, Off) both turn the
-  // slide into a crossfade; Off makes it instant.
-  const reduced = systemReduced || level !== "all";
-  const fadeScale = level === "off" ? 0 : 1;
+  // slide into a crossfade; `instant` (Off, or the system setting) has no crossfade either: the
+  // month just changes.
+  const reduced = !travel;
+  const fadeOut = durations.exit;
+  const fadeIn = durations.enter;
   const spring = motion.spring.snappy;
+  // How a month swipe moves the content (a per-device setting; cascade when missing). Without
+  // `travel` every style is the plain page, which the crossfade and the cut then replace.
+  const slideStyle = resolveSlideStyle(settings.monthSlideStyle, travel);
+  // Only the page style lets the pages themselves overshoot; in the others the page container
+  // settles critically damped (the cascade's wave comes from its items, the deck's from the cover).
+  const lively = slideStyle === "page";
   // Springing back to where the drag began is critically damped too: an underdamped spring that is
   // clamped at its target stops dead at speed.
-  const settling = useMemo(() => commitSpring(spring), [spring]);
+  const settling = useMemo(
+    () => (lively ? livelySpring(spring) : commitSpring(spring)),
+    [spring, lively],
+  );
   // A committed slide is stiffer than the theme's own spring: the next swipe cannot start until it
   // lands, so every millisecond of settling is a millisecond of apparent lag.
-  const committing = useMemo(
-    () => commitSpring({ ...spring, stiffness: spring.stiffness * 1.6 }),
-    [spring],
-  );
+  const committing = useMemo(() => {
+    const stiff = { ...spring, stiffness: spring.stiffness * 1.6 };
+    return lively ? livelySpring(stiff) : commitSpring(stiff);
+  }, [spring, lively]);
+  // The cascade's top item follows on the theme's spring, softer for each item below it.
+  const follow = useMemo(() => followBase(spring), [spring]);
 
   const sign = isRtl ? -1 : 1;
   const [width, setWidth] = useState(0);
-  // Web: whether the neighbours are mounted. Not before a touch (or a wheel step) asks for them,
-  // and not for long after the last one (see `NEIGHBOUR_IDLE_MS`).
-  const [webReady, setWebReady] = useState(false);
-  // Native: once warm the neighbours stay mounted across month changes (pages are keyed by month,
-  // so a commit only mounts the one new far page). Dropping them on every change left the next
-  // swipe sliding over blank space until they came back.
+  // Neighbours on demand: mounted when a touch, a wheel step or an arrow press asks for them, and
+  // not for long after the last one (see `NEIGHBOUR_IDLE_MS`). This is how the web works, and how
+  // Android works while swiping between months is off: nothing but an arrow press needs them.
+  const [demandReady, setDemandReady] = useState(false);
+  // Android with swiping on: once warm the neighbours stay mounted across month changes (pages are
+  // keyed by month, so a commit only mounts the one new far page). Dropping them on every change
+  // left the next swipe sliding over blank space until they came back.
   const [warm, setWarm] = useState(false);
   // Pages mounted with the pager share the screen's first paint; any page mounted later (a
   // neighbour, or the new month after a flick outran its neighbour) must arrive without
@@ -166,6 +190,10 @@ export function PagerImpl({
   const landedTrail = useSharedValue<number[]>([]);
   const maxIndex = useSharedValue(max != null ? monthIndex(max) : Infinity);
   const fade = useSharedValue(1);
+  // Reduced motion: how far (in page widths) the title is already ahead of the pages. The pages
+  // fade out where they are and only then change month, but the title has nothing to fade, so it
+  // changes with the release rather than holding and then jumping.
+  const titleLead = useSharedValue(0);
   const startX = useSharedValue(0);
   // A commit slide (or crossfade) is in flight.
   const busy = useSharedValue(false);
@@ -185,7 +213,10 @@ export function PagerImpl({
   // `dragProgress` is an absolute position, not just the drag: the drag in page widths minus the
   // centre month's index (flipped for right-to-left), continuous across a landing.
   useAnimatedReaction(
-    () => (width > 0 ? translateX.get() / width : 0) - baseIndex.get() * sign,
+    () =>
+      (width > 0 ? translateX.get() / width : 0) +
+      titleLead.get() -
+      baseIndex.get() * sign,
     (position) => {
       if (dragProgress) dragProgress.set(position);
     },
@@ -196,24 +227,25 @@ export function PagerImpl({
   const nextMonth = useMemo(() => moveMonth(month, 1), [month]);
   const canForward = !(max != null && nextMonth > max);
   const pagesEnabled = !disabled && width > 0;
-  const swipeEnabled = pagesEnabled && Boolean(settings.swipeBetweenMonths);
-  const neighbours = slide && pagesEnabled && (WEB ? webReady : warm);
-  // Done once within about half a pixel. The default keeps running for ~250ms of motion too small
-  // to see.
-  const energyThreshold = width > 0 ? Math.max(1e-7, (0.5 / width) ** 2) : 1e-6;
+  const swipeEnabled = pagesEnabled && (settings.swipeBetweenMonths ?? true);
+  const onDemand = WEB || !swipeEnabled;
+  const neighbours = slide && pagesEnabled && (onDemand ? demandReady : warm);
 
   // Latest props for callbacks that outlive a render (animation completions).
   const monthRef = useRef(month);
   const onChangeRef = useRef(onChange);
+  const onDemandRef = useRef(onDemand);
   useLayoutEffect(() => {
     monthRef.current = month;
     onChangeRef.current = onChange;
+    onDemandRef.current = onDemand;
   });
 
-  // Mount the neighbours once the month swap's frames have run, or on the first touch if that is
-  // sooner. (RN 0.88 removed `InteractionManager`, so this does not use it.)
+  // Android with swiping on: mount the neighbours once the month swap's frames have run, or on the
+  // first touch if that is sooner. With swiping off nothing warms them; an arrow press mounts them
+  // first. (RN 0.88 removed `InteractionManager`, so this does not use it.)
   useEffect(() => {
-    if (WEB || width <= 0) return;
+    if (onDemand || width <= 0) return;
     let inner = 0;
     const outer = requestAnimationFrame(() => {
       inner = requestAnimationFrame(() => setWarm(true));
@@ -222,23 +254,26 @@ export function PagerImpl({
       cancelAnimationFrame(outer);
       cancelAnimationFrame(inner);
     };
-  }, [month, width]);
+  }, [month, width, onDemand]);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(
     undefined,
   );
   useEffect(() => () => clearTimeout(idleTimer.current), []);
-  // Web: starts the countdown after which the neighbours are unmounted again.
+  // On demand: starts the countdown after which the neighbours are unmounted again.
   const scheduleIdle = useCallback(() => {
-    if (!WEB) return;
+    if (!onDemandRef.current) return;
     clearTimeout(idleTimer.current);
-    idleTimer.current = setTimeout(() => setWebReady(false), NEIGHBOUR_IDLE_MS);
+    idleTimer.current = setTimeout(
+      () => setDemandReady(false),
+      NEIGHBOUR_IDLE_MS,
+    );
   }, []);
   const markReady = useCallback(() => {
     setPaging(true);
-    setWarm(true);
     // A finger is on the pages: they stay for as long as it is.
     clearTimeout(idleTimer.current);
-    if (WEB) setWebReady(true);
+    if (onDemandRef.current) setDemandReady(true);
+    else setWarm(true);
   }, []);
   const endPaging = useCallback(() => setPaging(false), []);
   // Two frames after the swap, like the pages themselves: the old page is gone by then.
@@ -266,7 +301,7 @@ export function PagerImpl({
   // month picker, a deep link, a parent that answered with another month) puts the pages on the new
   // month at once. `busy` is not touched by a render this pager asked for: it belongs to the slide
   // in flight, which may be a newer one than the month React has just caught up to. Only a change
-  // of month is judged: `reduced`, `fadeScale` and `sign` changing mid-slide re-run the effect
+  // of month is judged: `reduced`, `instant` and `sign` changing mid-slide re-run the effect
   // without a new render, and must not be mistaken for a jump.
   useLayoutEffect(() => {
     const index = monthIndex(month);
@@ -285,6 +320,7 @@ export function PagerImpl({
             busy.set(false);
             baseIndex.set(index);
             translateX.set(0);
+            titleLead.set(0);
             dragProgress?.set(-index * sign);
           }
         } else if (!verdict.caughtUp) {
@@ -296,19 +332,23 @@ export function PagerImpl({
       }
       // A crossfade in flight is fading the pages itself.
       if (pendingDir.get() !== 0) return;
-      if (reduced)
-        fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
+      if (reduced && !instant)
+        fade.set(
+          withTiming(1, { duration: fadeIn, easing: motionCurves.standard }),
+        );
       else fade.set(1);
     })();
   }, [
     month,
     reduced,
-    fadeScale,
+    instant,
+    fadeIn,
     baseIndex,
     renderedIndex,
     requestedIndex,
     landedTrail,
     translateX,
+    titleLead,
     dragProgress,
     sign,
     busy,
@@ -348,6 +388,7 @@ export function PagerImpl({
           busy.set(false);
           baseIndex.set(rendered);
           translateX.set(0);
+          titleLead.set(0);
           fade.set(1);
         })();
         setPaging(false);
@@ -357,6 +398,7 @@ export function PagerImpl({
       requestedIndex,
       landedTrail,
       translateX,
+      titleLead,
       tracking,
       pendingDir,
       busy,
@@ -384,9 +426,19 @@ export function PagerImpl({
     requestedIndex.set(next);
     landedTrail.set(pushLanded(landedTrail.get(), next));
     // A crossfade brings the new month in at once; React's render only has to catch up.
-    if (reduced)
-      fade.set(withTiming(1, { duration: CROSSFADE_IN * fadeScale }));
+    if (reduced && !instant)
+      fade.set(
+        withTiming(1, { duration: fadeIn, easing: motionCurves.standard }),
+      );
     runOnJS(commit)(next, direction);
+  };
+
+  /** The pages go to the new month in one step (a crossfade's middle, or no crossfade at all). */
+  const cut = (direction: 1 | -1) => {
+    "worklet";
+    titleLead.set(0);
+    translateX.set(-direction * sign * width);
+    land(direction);
   };
 
   /** Lands the slide (or crossfade) in flight, if any, wherever it has got to. */
@@ -396,7 +448,9 @@ export function PagerImpl({
     if (!busy.get() || direction === 0) return false;
     cancelAnimation(translateX);
     cancelAnimation(fade);
-    land(direction);
+    // A crossfade grabbed part-way finishes its change of month: the title is there already.
+    if (reduced) cut(direction);
+    else land(direction);
     return true;
   };
 
@@ -409,10 +463,19 @@ export function PagerImpl({
         if (WEB) runOnJS(scheduleIdle)();
         return;
       }
+      const back = Math.abs(translateX.get());
+      const launch = lively ? liveVelocity(velocity, back, settling) : velocity;
       translateX.set(
         withSpring(
           0,
-          { ...settling, velocity, overshootClamping: true, energyThreshold },
+          {
+            ...settling,
+            velocity: launch,
+            overshootClamping: !lively,
+            // Done once within about a pixel: the default keeps running for ~250ms of motion too
+            // small to see, and the month waits on it. Judged by the velocity the spring is given.
+            energyThreshold: settleThreshold(back, launch, settling),
+          },
           (finished) => {
             // Web: the neighbours go once the pages are back and nothing else touches them.
             if (WEB && finished) runOnJS(scheduleIdle)();
@@ -424,24 +487,36 @@ export function PagerImpl({
     busy.set(true);
     pendingDir.set(direction);
     if (reduced) {
+      if (instant) {
+        cut(direction);
+        return;
+      }
+      // The title does not wait for the fade: it is where the pages will be.
+      titleLead.set(
+        width > 0 ? -direction * sign - translateX.get() / width : 0,
+      );
       fade.set(
-        withTiming(0, { duration: CROSSFADE_OUT * fadeScale }, (finished) => {
-          if (finished && pendingDir.get() === direction) {
-            translateX.set(-direction * sign * width);
-            land(direction);
-          }
-        }),
+        withTiming(
+          0,
+          { duration: fadeOut, easing: motionCurves.exit },
+          (finished) => {
+            if (finished && pendingDir.get() === direction) cut(direction);
+          },
+        ),
       );
       return;
     }
+    const target = -direction * sign * width;
+    const left = Math.abs(target - translateX.get());
+    const launch = lively ? liveVelocity(velocity, left, committing) : velocity;
     translateX.set(
       withSpring(
-        -direction * sign * width,
+        target,
         {
           ...committing,
-          velocity,
-          overshootClamping: true,
-          energyThreshold,
+          velocity: launch,
+          overshootClamping: !lively,
+          energyThreshold: settleThreshold(left, launch, committing),
         },
         (finished) => {
           // A touch that grabbed the slide has already landed it; the cut-off spring says nothing.
@@ -561,8 +636,9 @@ export function PagerImpl({
         // touch) must not be left to land after the release: land it now and re-base the grab.
         const inFlight = busy.get() ? pendingDir.get() : 0;
         if (inFlight !== 0 && landInFlight()) {
-          startX.set(landedOffset(startX.get(), inFlight, sign, width));
+          // A crossfade lands on the new month's centre, with no residual to carry over.
           if (reduced) fade.set(1);
+          else startX.set(landedOffset(startX.get(), inFlight, sign, width));
         }
         const direction = resolveRelease(
           // The offset the finger started from, so a spring-back caught mid-way, or a slide
@@ -598,7 +674,9 @@ export function PagerImpl({
     isRtl,
     sign,
     reduced,
-    fadeScale,
+    instant,
+    fadeIn,
+    fadeOut,
     spring,
     committing,
     blockedBy,
@@ -608,12 +686,13 @@ export function PagerImpl({
     endPaging,
     commit,
     settling,
-    energyThreshold,
+    lively,
     armed,
     touchX,
     touchY,
     touchOk,
     translateX,
+    titleLead,
     baseIndex,
     maxIndex,
     requestedIndex,
@@ -625,18 +704,65 @@ export function PagerImpl({
     pendingDir,
   ]);
 
+  const goToRef = useRef<
+    ((direction: 1 | -1, mounted?: boolean) => boolean) | null
+  >(null);
+  // Steps that asked for the neighbours before they were mounted, and the two frames they wait: the
+  // frame that renders them and the one that lays them out. Taps in between are all kept.
+  const waiting = useRef({
+    steps: [] as (1 | -1)[],
+    outer: 0,
+    inner: 0,
+    scheduled: false,
+  });
+  const stepWhenMounted = (direction: 1 | -1) => {
+    const wait = waiting.current;
+    wait.steps.push(direction);
+    markReady();
+    if (wait.scheduled) return;
+    wait.scheduled = true;
+    wait.outer = requestAnimationFrame(() => {
+      wait.inner = requestAnimationFrame(() => {
+        wait.scheduled = false;
+        const taken = wait.steps
+          .splice(0)
+          .map((step) => goToRef.current?.(step, true) ?? false);
+        // Nothing went ahead (a finger came down): the paging `markReady` began has no slide to end it.
+        if (!taken.some(Boolean)) setPaging(false);
+        scheduleIdle();
+      });
+    });
+  };
+  useEffect(() => {
+    const wait = waiting.current;
+    return () => {
+      wait.scheduled = false;
+      wait.steps.length = 0;
+      cancelAnimationFrame(wait.outer);
+      cancelAnimationFrame(wait.inner);
+    };
+  }, []);
   /**
    * One step from the month switcher, a key or the trackpad. Everything but the answer happens on
    * the UI thread, in the order a swipe would have it: a slide in flight lands where it is, and
    * this one starts from there.
    */
-  const goTo = (direction: 1 | -1): boolean => {
+  const goTo = (direction: 1 | -1, mounted = false): boolean => {
     // A finger is moving the pages.
     if (tracking.get()) return false;
     const inFlight = busy.get() ? pendingDir.get() : 0;
     // At the newest month there is nothing to step to: not accepted, so the caller does not tick.
     if (!canStep(direction, baseIndex.get(), inFlight, maxIndex.get()))
       return false;
+    // The neighbours are not mounted (they come on a touch, or while swiping is on): a slide would
+    // run over blank space and a jump would be a hard cut. Mount them and slide once they are in,
+    // as a swipe or a wheel step does. `mounted` is that second call; it never defers again. With
+    // motion off too: an instant step lands on the new page at once, so it has to be mounted
+    // already or the list shows blank until React renders it.
+    if (!mounted && slide && pagesEnabled && !neighbours) {
+      stepWhenMounted(direction);
+      return true;
+    }
     // `true` means "taken as far as JS can tell". The worklet below runs a frame or so later and
     // drops the step when a finger came down in that window (`tracking`), or when a landing in
     // between made it a step past the newest month; the caller has already ticked by then. There
@@ -647,17 +773,31 @@ export function PagerImpl({
     scheduleIdle();
     // Without pages beside it there is nothing to slide; the title still follows a slide
     // when the pager only drives `dragProgress`.
-    const jump = disabled || (slide && !neighbours);
+    // A jump onto a month page that is not mounted (the neighbours are off, or the pager is
+    // disabled) must not land on the UI thread: that would re-base the pages onto a page React has
+    // not rendered, and the area would show the background until it has. React is asked instead,
+    // and the month effect re-bases the pages in the commit that mounts the page.
+    const plan = planStep(slide, disabled, neighbours);
     runOnUI((to: 1 | -1) => {
       "worklet";
       // A finger came down after the call: it owns the pages, and the step is dropped.
       if (tracking.get()) return;
       landInFlight();
-      if (!canStep(to, baseIndex.get(), 0, maxIndex.get())) {
+      // A month already asked of React and not rendered yet is where the next step starts from.
+      const centre =
+        plan === "ask" && requestedIndex.get() !== 0
+          ? requestedIndex.get()
+          : baseIndex.get();
+      if (!canStep(to, centre, 0, maxIndex.get())) {
         runOnJS(endPaging)();
         return;
       }
-      if (jump) {
+      if (plan === "ask") {
+        requestedIndex.set(centre + to);
+        runOnJS(commit)(centre + to, to);
+        return;
+      }
+      if (plan === "land") {
         // As if a slide had just reached the next month, so landing swaps in place.
         translateX.set(-to * sign * width);
         land(to);
@@ -667,12 +807,13 @@ export function PagerImpl({
     })(direction);
     return true;
   };
-  const goToRef = useRef(goTo);
   useLayoutEffect(() => {
     goToRef.current = goTo;
   });
   const handle = useMemo(
-    () => ({ goTo: (direction: 1 | -1) => goToRef.current(direction) }),
+    () => ({
+      goTo: (direction: 1 | -1) => goToRef.current?.(direction) ?? false,
+    }),
     [],
   );
   useImperativeHandle(ref, () => handle, [handle]);
@@ -681,48 +822,12 @@ export function PagerImpl({
   // native and not passive so the browser's own sideways overscroll (history navigation) can be
   // refused while the pager has the gesture.
   const containerRef = useRef<HostInstance>(null);
-  const neighboursRef = useRef(neighbours);
-  useLayoutEffect(() => {
-    neighboursRef.current = neighbours;
-  });
   useEffect(() => {
     if (!WEB || !swipeEnabled) return;
     const node = containerRef.current as unknown as HTMLElement | null;
     if (!node || typeof node.addEventListener !== "function") return;
     let gesture = WHEEL_QUIET;
     let quiet: ReturnType<typeof setTimeout> | undefined;
-    // The two frames a step waits for the neighbours to mount; cancelled with the effect.
-    let outer = 0;
-    let inner = 0;
-    const cancelFrames = () => {
-      cancelAnimationFrame(outer);
-      cancelAnimationFrame(inner);
-    };
-    const step = (direction: 1 | -1) => {
-      if (neighboursRef.current || !slide) {
-        goToRef.current(direction);
-        return;
-      }
-      // At the newest month there is no step to take: mounting the neighbours would be for nothing.
-      if (
-        !canStep(
-          direction,
-          baseIndex.get(),
-          busy.get() ? pendingDir.get() : 0,
-          maxIndex.get(),
-        )
-      )
-        return;
-      // Mount the neighbours first and slide once they are in, rather than jumping.
-      markReady();
-      cancelFrames();
-      outer = requestAnimationFrame(() => {
-        inner = requestAnimationFrame(() => {
-          goToRef.current(direction);
-          scheduleIdle();
-        });
-      });
-    };
     const onWheel = (event: WheelEvent) => {
       const dx = wheelPixels(event.deltaMode, event.deltaX);
       const dy = wheelPixels(event.deltaMode, event.deltaY);
@@ -738,25 +843,15 @@ export function PagerImpl({
       }, WHEEL_IDLE_MS);
       const next = wheelStep(gesture, dx, sign, busy.get());
       gesture = next.gesture;
-      if (next.direction !== 0) step(next.direction);
+      // `goTo` mounts the neighbours first when they are not there yet.
+      if (next.direction !== 0) goToRef.current?.(next.direction);
     };
     node.addEventListener("wheel", onWheel, { passive: false });
     return () => {
       node.removeEventListener("wheel", onWheel);
       clearTimeout(quiet);
-      cancelFrames();
     };
-  }, [
-    swipeEnabled,
-    slide,
-    sign,
-    busy,
-    baseIndex,
-    maxIndex,
-    pendingDir,
-    markReady,
-    scheduleIdle,
-  ]);
+  }, [swipeEnabled, sign, busy]);
 
   const onLayout = (event: LayoutChangeEvent) => {
     const next = Math.round(event.nativeEvent.layout.width);
@@ -797,6 +892,8 @@ export function PagerImpl({
             current={false}
             initial={!booted}
             paging={paging}
+            slideStyle={slideStyle}
+            follow={follow}
           >
             {renderPage(prevMonth, { isCurrent: false })}
           </PagerPage>
@@ -813,6 +910,8 @@ export function PagerImpl({
             current
             initial={!booted}
             paging={paging}
+            slideStyle={slideStyle}
+            follow={follow}
           >
             {renderPage(month, { isCurrent: true })}
           </PagerPage>
@@ -829,6 +928,8 @@ export function PagerImpl({
             current={false}
             initial={!booted}
             paging={paging}
+            slideStyle={slideStyle}
+            follow={follow}
           >
             {renderPage(nextMonth, { isCurrent: false })}
           </PagerPage>

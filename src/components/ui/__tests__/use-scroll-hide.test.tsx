@@ -8,6 +8,13 @@ import { useScrollCollapse } from "@/components/ui/use-scroll-collapse";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import type { AnimationLevel } from "@/domain/models";
 
+// The hooks take their durations from the theme.
+jest.mock("@/theme/theme", () => ({
+  useQashyTheme: () => ({
+    motion: jest.requireActual("@/theme/themes/classic").classicTheme.motion,
+  }),
+}));
+
 // The bundled mock makes a new shared value on every render; the real one is stable, and the hooks
 // under test depend on that. This keeps the rest of the mock and fixes only that.
 jest.mock("react-native-reanimated", () => {
@@ -69,6 +76,23 @@ describe("useScrollHide", () => {
     expect(visibility.get()).toBe(1);
   });
 
+  it("shows again on `show` and takes the next page's offset as its starting point", async () => {
+    const { result } = await renderHook(() => useScrollHide());
+    const { onScroll, show, visibility } = result.current;
+    for (const y of [20, 60, 100, 140, 180]) onScroll(scroll(y));
+    expect(visibility.get()).toBe(0);
+    expect(getFloatingBarVisibility().get()).toBe(0);
+    show();
+    expect(visibility.get()).toBe(1);
+    expect(getFloatingBarVisibility().get()).toBe(1);
+    // Another month's page reports an offset far from the last page's: that is not a scroll down.
+    onScroll(scroll(500));
+    expect(visibility.get()).toBe(1);
+    // Its own scrolling still hides it.
+    for (const y of [540, 580, 620]) onScroll(scroll(y));
+    expect(visibility.get()).toBe(0);
+  });
+
   it("keeps the same onScroll across renders and a change of animation level", async () => {
     const { result, rerender } = await renderHook(() => useScrollHide(), {
       wrapper: withLevel("all"),
@@ -105,5 +129,26 @@ describe("useScrollCollapse", () => {
     await rerender({ enabled: false });
     expect(result.current.onScroll).toBe(first);
     expect(result.current.collapse.get()).toBe(0);
+  });
+
+  it("opens on `expand` and takes the next page's offset as its starting point", async () => {
+    const { result, rerender } = await renderHook(
+      (props: Props) => useScrollCollapse(props),
+      { initialProps: { enabled: true } as Props },
+    );
+    const { onScroll, expand, collapse } = result.current;
+    for (const y of [40, 80, 120, 160, 200]) onScroll(scroll(y));
+    expect(collapse.get()).toBe(1);
+    expand();
+    expect(collapse.get()).toBe(0);
+    // A page that sits elsewhere is not a scroll down either.
+    onScroll(scroll(900));
+    expect(collapse.get()).toBe(0);
+
+    // Folded shut for a selection, a change of month leaves it folded.
+    await rerender({ enabled: true, forceCollapsed: true });
+    expect(collapse.get()).toBe(1);
+    expand();
+    expect(collapse.get()).toBe(1);
   });
 });

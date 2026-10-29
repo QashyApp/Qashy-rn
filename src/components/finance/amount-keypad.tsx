@@ -1,10 +1,20 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, type ViewStyle } from "react-native";
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 
 import { KeypadPressable } from "@/components/finance/keypad-pressable";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
-import { MotionView } from "@/components/ui/motion";
+import {
+  motionCurves,
+  useMotionDurations,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -98,25 +108,31 @@ export function AmountKeypad({
     latest.current = { onChange, resolve, decimalSymbol };
   });
 
-  const press = useCallback(
-    (key: KeypadKey) => {
+  // A key that changes nothing (a second decimal point, delete on an empty field) buzzes nothing.
+  const apply = useCallback(
+    (key: KeypadKey, buzz: () => void) => {
       const expression = buffer;
-      hapticSelection();
       const { onChange, resolve, decimalSymbol } = latest.current;
       const next = applyKeypadKey(expression.value, key, {
         decimalSymbol,
         resolve,
       });
       if (next === expression.value) return;
+      buzz();
       expression.push(next);
       onChange(next);
     },
     [buffer],
   );
-  const clear = useCallback(() => {
-    hapticImpactLight();
-    press({ type: "clear" });
-  }, [press]);
+  const press = useCallback(
+    (key: KeypadKey) => apply(key, hapticSelection),
+    [apply],
+  );
+  // Clearing is one heavier tap, not that tap and the key's own tick on top of it.
+  const clear = useCallback(
+    () => apply({ type: "clear" }, hapticImpactLight),
+    [apply],
+  );
   const equals = useCallback(() => press({ type: "equals" }), [press]);
 
   return (
@@ -137,34 +153,78 @@ export function AmountKeypad({
           ))}
         </View>
       ))}
-      {result !== null ? (
-        <MotionView variant="up" exit animateLayout>
-          <KeypadPressable
-            accessibilityLabel={`${t("Calculate")}, ${result}`}
-            onPress={equals}
-            style={(pressed) => ({
-              minHeight: 48,
-              borderRadius: theme.radius.tile,
-              borderCurve: "continuous",
-              alignItems: "center",
-              justifyContent: "center",
-              ...materialStyle(theme, pressed ? "accentPressed" : "accent"),
-            })}
-          >
-            <AppText
-              literal
-              figure
-              variant="label"
-              style={{ color: theme.onAccent }}
-            >
-              {`= ${result}`}
-            </AppText>
-          </KeypadPressable>
-        </MotionView>
-      ) : null}
+      <ResultKey result={result} onPress={equals} />
     </View>
   );
 }
+
+/**
+ * The "= result" key. It always takes its place, so the panel (which is anchored to the bottom of
+ * the screen) does not grow by a row, and push the keys up under the finger, the moment an
+ * expression becomes complete. Without a result it is invisible, cannot be touched or focused, and
+ * is hidden from screen readers.
+ */
+function ResultKey({
+  result,
+  onPress,
+}: {
+  result: string | null;
+  onPress: () => void;
+}) {
+  const theme = useQashyTheme();
+  const { t } = useLocalization();
+  const { instant } = useMotionPreference();
+  const durations = useMotionDurations();
+  // The last result stays drawn while the key fades out.
+  const [shown, setShown] = useState(result ?? "");
+  if (result !== null && result !== shown) setShown(result);
+  const visible = result !== null;
+  const opacity = useSharedValue(visible ? 1 : 0);
+  useEffect(() => {
+    opacity.set(
+      withTiming(visible ? 1 : 0, {
+        duration: visible ? durations.enter : durations.exit,
+        easing: visible ? motionCurves.standard : motionCurves.exit,
+        reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
+      }),
+    );
+  }, [visible, durations, instant, opacity]);
+  const fade = useAnimatedStyle(() => ({ opacity: opacity.get() }));
+  return (
+    <Animated.View
+      pointerEvents={visible ? "auto" : "none"}
+      accessibilityElementsHidden={!visible}
+      importantForAccessibility={visible ? "auto" : "no-hide-descendants"}
+      {...(!visible && process.env.EXPO_OS === "web" ? WEB_INERT : null)}
+      style={fade}
+    >
+      <KeypadPressable
+        accessibilityLabel={`${t("Calculate")}, ${shown}`}
+        onPress={onPress}
+        style={(pressed) => ({
+          minHeight: 48,
+          borderRadius: theme.radius.tile,
+          borderCurve: "continuous",
+          alignItems: "center",
+          justifyContent: "center",
+          ...materialStyle(theme, pressed ? "accentPressed" : "accent"),
+        })}
+      >
+        <AppText
+          literal
+          figure
+          variant="label"
+          style={{ color: theme.onAccent }}
+        >
+          {`= ${shown}`}
+        </AppText>
+      </KeypadPressable>
+    </Animated.View>
+  );
+}
+
+// `inert` is a DOM attribute react-native-web forwards but the View types do not list.
+const WEB_INERT = { inert: true } as const;
 
 function keyRows(decimalSymbol: string): KeyDefinition[][] {
   return [
@@ -210,6 +270,7 @@ const KeypadButton = memo(function KeypadButton({
       accessibilityLabel={t(definition.a11y)}
       onPress={() => onKey(definition.key)}
       onLongPress={onClear}
+      longPressLabel={t("Clear")}
       style={(pressed) => ({
         flex: 1,
         minHeight: 52,

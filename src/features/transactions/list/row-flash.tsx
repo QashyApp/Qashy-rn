@@ -3,29 +3,30 @@ import { StyleSheet } from "react-native";
 import Animated, {
   cancelAnimation,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
-  withDelay,
   withRepeat,
   withSequence,
   withTiming,
 } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
-import { motionCurves } from "@/components/ui/motion";
+import { motionCurves, useMotionPreference } from "@/components/ui/motion";
 import { useQashyTheme } from "@/theme/theme";
 
 const PEAK = 0.22;
-const PULSE_UP_MS = 140;
-const PULSE_DOWN_MS = 260;
-const REDUCED_HOLD_MS = 900;
+/** With no motion the highlight holds still for this many of the theme's slow durations. */
+const STILL_HOLD_SLOWS = 3;
+/** Slack after the last frame before the row is told the flash is over. */
+const DONE_MARGIN_MS = 50;
 
 /**
- * A highlight laid over a row to say "this is the one you just saved".
+ * A highlight laid over a row to say "this is the one you just saved". It is the last child of the
+ * row's clipped slab, because the sliding row content paints an opaque fill that would hide
+ * anything beneath it.
  *
- * It pulses `flashes` times and then disappears. With reduced motion it does not pulse: it shows
- * one still highlight for under a second and fades out, so the cue survives without movement.
- * Pointer events are off, so the row underneath stays tappable throughout.
+ * Full motion pulses `flashes` times and then disappears. Minimal motion is a single quick fade in
+ * and out instead of pulses. With no motion at all it shows one still highlight and removes it
+ * after a hold, so the cue survives without movement. Durations come from the theme. Pointer events
+ * are off, so the row underneath stays tappable throughout.
  */
 export function RowFlash({
   flashes,
@@ -35,41 +36,40 @@ export function RowFlash({
   onDone?: () => void;
 }) {
   const theme = useQashyTheme();
-  // The cue itself is kept at every level; only the pulsing goes.
-  const systemReduced = useReducedMotion();
-  const level = useAnimationLevel();
-  const reduced = systemReduced || level === "off";
+  const { duration } = theme.motion;
+  const { instant, travel } = useMotionPreference();
   const opacity = useSharedValue(0);
 
   useEffect(() => {
     if (flashes <= 0) return;
-    if (reduced) {
-      opacity.value = withSequence(
-        withTiming(PEAK, { duration: 0 }),
-        withDelay(REDUCED_HOLD_MS, withTiming(0, { duration: 120 })),
-      );
+    let total: number;
+    let hide: ReturnType<typeof setTimeout> | undefined;
+    if (instant) {
+      // Nothing animates: the highlight appears at once and is taken away at once.
+      total = duration.slow * STILL_HOLD_SLOWS;
+      opacity.value = PEAK;
+      hide = setTimeout(() => {
+        opacity.value = 0;
+      }, total);
     } else {
+      // Minimal motion fades a single time; pulsing is a full-motion cue.
+      const pulses = travel ? flashes : 1;
+      const up = travel ? duration.base : duration.fast;
+      const down = travel ? duration.slow : duration.base;
+      total = pulses * (up + down);
       opacity.value = withRepeat(
         withSequence(
-          withTiming(PEAK, {
-            duration: PULSE_UP_MS,
-            easing: motionCurves.inOut,
-          }),
-          withTiming(0, {
-            duration: PULSE_DOWN_MS,
-            easing: motionCurves.inOut,
-          }),
+          withTiming(PEAK, { duration: up, easing: motionCurves.inOut }),
+          withTiming(0, { duration: down, easing: motionCurves.inOut }),
         ),
-        flashes,
+        pulses,
         false,
       );
     }
-    const total = reduced
-      ? REDUCED_HOLD_MS + 120
-      : flashes * (PULSE_UP_MS + PULSE_DOWN_MS);
-    const timer = setTimeout(() => onDone?.(), total + 50);
+    const timer = setTimeout(() => onDone?.(), total + DONE_MARGIN_MS);
     return () => {
       clearTimeout(timer);
+      clearTimeout(hide);
       cancelAnimation(opacity);
     };
     // The flash is a one-shot keyed by the row's signal; re-running on a new parent render would restart it.
@@ -80,6 +80,7 @@ export function RowFlash({
 
   return (
     <Animated.View
+      testID="row-flash"
       pointerEvents="none"
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"

@@ -9,9 +9,9 @@ import {
 
 import {
   EASE_STANDARD,
-  springConfig,
   useMotionDurations,
   useMotionPreference,
+  usePressSpring,
 } from "@/components/ui/motion/durations";
 import { useQashyTheme } from "@/theme/theme";
 
@@ -36,6 +36,7 @@ export function usePressFeedback() {
   const { motion } = useQashyTheme();
   const { travel, instant } = useMotionPreference();
   const durations = useMotionDurations();
+  const spring = usePressSpring();
   const scale = useSharedValue(1);
   const translateY = useSharedValue(0);
   const wash = useSharedValue(0);
@@ -51,8 +52,8 @@ export function usePressFeedback() {
   const overlayStyle = useAnimatedStyle(() => ({ opacity: wash.get() }));
   const setPressed = useCallback(
     (pressed: boolean) => {
-      scale.set(withSpring(pressed ? depth : 1, springConfig));
-      translateY.set(withSpring(pressed ? sink : 0, springConfig));
+      scale.set(withSpring(pressed ? depth : 1, spring));
+      translateY.set(withSpring(pressed ? sink : 0, spring));
       if (overlay)
         wash.set(
           withTiming(pressed ? OVERLAY_PRESS : 0, {
@@ -62,7 +63,17 @@ export function usePressFeedback() {
           }),
         );
     },
-    [depth, sink, overlay, washDuration, instant, scale, translateY, wash],
+    [
+      depth,
+      sink,
+      overlay,
+      washDuration,
+      instant,
+      spring,
+      scale,
+      translateY,
+      wash,
+    ],
   );
 
   return { style, setPressed, overlay, overlayStyle };

@@ -1,4 +1,7 @@
-import { packOverviewRows } from "@/features/overview/widgets/grid";
+import {
+  packOverviewRows,
+  slideOrders,
+} from "@/features/overview/widgets/grid";
 import type { OverviewCard } from "@/domain/overview-layout";
 
 const card = (id: string, size: OverviewCard["size"]): OverviewCard => ({
@@ -109,5 +112,43 @@ describe("packOverviewRows", () => {
     const rows = packOverviewRows(cards, 1200, 20, { multiColumn: false });
     expect(rows).toHaveLength(2);
     expect(rows[0].cards[0].width).toBe(1200);
+  });
+});
+
+describe("slideOrders", () => {
+  it("numbers single-column cards from the top, leaving 0 for the hero", () => {
+    const cards = [
+      card("a", "wide"),
+      card("b", "regular"),
+      card("c", "compact"),
+    ];
+    const orders = slideOrders(packOverviewRows(cards, 600, 20));
+    expect([...orders]).toEqual([
+      ["a", 1],
+      ["b", 2],
+      ["c", 3],
+    ]);
+  });
+
+  it("gives cards side by side in the grid the same order", () => {
+    const cards = [
+      card("a", "wide"),
+      card("b", "regular"),
+      card("c", "regular"),
+      card("d", "wide"),
+    ];
+    const orders = slideOrders(packOverviewRows(cards, 1200, 20));
+    expect(orders.get("a")).toBe(1);
+    expect(orders.get("b")).toBe(2);
+    expect(orders.get("c")).toBe(2);
+    expect(orders.get("d")).toBe(3);
+  });
+
+  it("is known before the grid has been measured", () => {
+    const cards = [card("a", "regular"), card("b", "regular")];
+    const orders = slideOrders(
+      packOverviewRows(cards, 0, 20, { multiColumn: true }),
+    );
+    expect([...orders.values()]).toEqual([1, 1]);
   });
 });

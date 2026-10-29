@@ -116,6 +116,14 @@ describe("CalculatorHost in the overlay host", () => {
     expect(node?.props.importantForAccessibility).toBe("no-hide-descendants");
   });
 
+  it("opens at once when nothing animates, instead of waiting out the sheet's presentation", async () => {
+    await setup();
+    await act(async () => {
+      captured.host?.open("a", config());
+    });
+    expect(screen.getByText("Set amount", hidden)).toBeTruthy();
+  });
+
   it("takes touches again as soon as it reopens", async () => {
     await setup();
     await open(config());

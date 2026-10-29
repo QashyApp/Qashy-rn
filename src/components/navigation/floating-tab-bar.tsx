@@ -16,7 +16,11 @@ import {
 } from "@/components/navigation/tab-sections";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
-import { usePressFeedback, useMotionPreference } from "@/components/ui/motion";
+import {
+  motionCurves,
+  usePressFeedback,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useHiddenFlag } from "@/components/ui/use-hidden-flag";
 import { useLocalization } from "@/localization/localization";
 import { FLOATING_BAR_HEIGHT } from "@/theme/layout";
@@ -130,6 +134,7 @@ export function FloatingTabBar({
     visibility.set(
       withTiming(1, {
         duration: motion.duration.fast,
+        easing: motionCurves.standard,
         reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
       }),
     );
