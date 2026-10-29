@@ -260,7 +260,7 @@ test("pages the ledger by month and deep-links to one", async ({ page }) => {
   await expect(page.getByText("Last month rent")).toBeVisible();
 });
 
-/** Seeds one expense this month and one last month, then opens this month's ledger with swipe on. */
+/** Seeds one expense this month and one last month, then opens this month's ledger (swipe is on by default). */
 async function openLedgerWithSwipe(page: Page) {
   await completeOnboarding(page);
   const now = new Date();
@@ -274,13 +274,10 @@ async function openLedgerWithSwipe(page: Page) {
   await addExpense(page, "Last month rent", `${lastKey}-15`);
   await expect(page).toHaveURL(/\/overview$/);
   await page.goto("/gestures");
-  const swipeSwitch = page.getByRole("switch", {
-    name: "Swipe to change month",
-  });
-  await swipeSwitch.click();
-  await expect(swipeSwitch).toBeChecked();
-  // The switch checks itself before the setting is written, so a navigation right after
-  // `toBeChecked` can abort the IndexedDB write and leave swipe off. Wait for it to land.
+  // Swiping between months is on by default, and onboarding saves it that way.
+  await expect(
+    page.getByRole("switch", { name: "Swipe to change month" }),
+  ).toBeChecked();
   await expect
     .poll(() =>
       page.evaluate(
