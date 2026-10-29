@@ -137,12 +137,15 @@ describe("PagerImpl neighbours", () => {
     expect(mounted("2026-04-01")).toBe(false);
   });
 
-  it("changes month at once, with no neighbours to wait for, when animations are off", async () => {
+  it("mounts the new month before changing to it when animations are off", async () => {
     const { ref, onChange } = await setup(jest.fn(), "off");
     await act(async () => {
       ref.current?.goTo(-1);
     });
+    // Landing on a page that is not rendered yet would show a blank list for a frame or more.
+    expect(mounted("2026-04-01")).toBe(true);
+    expect(onChange).not.toHaveBeenCalled();
+    await advance(100);
     expect(onChange).toHaveBeenCalledWith("2026-04-01", "left");
-    expect(mounted("2026-06-01")).toBe(false);
   });
 });

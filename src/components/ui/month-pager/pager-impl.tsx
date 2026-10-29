@@ -728,8 +728,10 @@ export function PagerImpl({
       return false;
     // The neighbours are not mounted (they come on a touch, or while swiping is on): a slide would
     // run over blank space and a jump would be a hard cut. Mount them and slide once they are in,
-    // as a swipe or a wheel step does. `mounted` is that second call; it never defers again.
-    if (!mounted && slide && pagesEnabled && !instant && !neighbours) {
+    // as a swipe or a wheel step does. `mounted` is that second call; it never defers again. With
+    // motion off too: an instant step lands on the new page at once, so it has to be mounted
+    // already or the list shows blank until React renders it.
+    if (!mounted && slide && pagesEnabled && !neighbours) {
       stepWhenMounted(direction);
       return true;
     }
