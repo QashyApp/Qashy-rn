@@ -1,42 +1,41 @@
 import {
   overviewLayoutReducer,
   type OverviewCard,
-  type OverviewLayoutAction,
 } from "@/domain/overview-layout";
+import type { PlaceCardAction } from "@/features/overview/layout/layout-actions";
 
 /**
- * Applies a dropped card's new order at once and saves it behind the scenes.
+ * Turns a dropped card into a save.
  *
- * `getCards` returns the cards as shown (including any order still pending), `setPendingOrder`
- * shows an order before it is saved, and `save` persists an action and resolves to whether it
- * was saved (it reports its own errors). The returned function takes the dropped card and its
- * target index and returns whether the order changed at all.
+ * `getCards` returns the cards as shown (the store's optimistic order, which already includes
+ * every drop still being saved), and `save` persists an action and resolves to whether it was
+ * saved (it reports its own errors and never rejects). The returned function takes the dropped
+ * card and its target index and returns `null` when the drop would not change the order, else
+ * the save's promise.
  *
- * The pending order is dropped when the save settles, either way: on success the saved layout
- * has caught up, on failure the card goes back. Only the newest drop clears it, so a slow earlier
- * save settling never pulls a later drop back.
+ * Nothing is held here: the shown order comes from the store, which shows a drop at once, keeps
+ * it until the save settles and takes it back if the save fails.
  */
 export function createCardDropper({
   getCards,
-  setPendingOrder,
   save,
 }: {
   getCards: () => readonly OverviewCard[];
-  setPendingOrder: (order: readonly string[] | null) => void;
-  save: (action: OverviewLayoutAction) => Promise<boolean>;
-}): (id: string, toIndex: number) => boolean {
-  let sequence = 0;
+  save: (action: PlaceCardAction) => Promise<boolean>;
+}): (id: string, toIndex: number) => Promise<boolean> | null {
   return (id, toIndex) => {
     const shown = getCards();
-    const action: OverviewLayoutAction = { type: "move", id, toIndex };
-    const next = overviewLayoutReducer({ version: 1, cards: shown }, action);
-    if (next.cards.every((card, index) => card === shown[index])) return false;
-    sequence += 1;
-    const mine = sequence;
-    setPendingOrder(next.cards.map((card) => card.id));
-    void save(action).then(() => {
-      if (sequence === mine) setPendingOrder(null);
+    const next = overviewLayoutReducer(
+      { version: 1, cards: shown },
+      { type: "move", id, toIndex },
+    );
+    if (next.cards.every((card, index) => card === shown[index])) return null;
+    const at = next.cards.findIndex((card) => card.id === id);
+    return save({
+      type: "place",
+      id,
+      toIndex: at,
+      beforeId: next.cards[at + 1]?.id ?? null,
     });
-    return true;
   };
 }

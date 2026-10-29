@@ -18,14 +18,10 @@ import { floatingActionMetrics } from "@/components/ui/screen-container";
 import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
-import {
-  WIDGET_RULES,
-  type OverviewCard,
-  type OverviewLayoutAction,
-} from "@/domain/overview-layout";
+import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
 import { createCardDropper } from "@/features/overview/layout/card-dropper";
+import type { LayoutStoreAction } from "@/features/overview/layout/layout-actions";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
-import { applyOptimisticOrder } from "@/features/overview/layout/optimistic-order";
 import { OverviewMonthPage } from "@/features/overview/overview-month-page";
 import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
 import { resolveBottomChromeInset, useScreenMetrics } from "@/theme/layout";
@@ -58,17 +54,11 @@ export function OverviewScreen() {
   const pagerRef = useRef<MonthPagerHandle>(null);
   const dragProgress = useSharedValue(restingPosition(month, isRtl));
 
+  // `layout` is what the store shows: the saved layout with every unsettled change (a card just
+  // dropped, say) already applied, and taken back by the store if its save fails. Nothing here
+  // keeps a pending order of its own, so a remount mid-save shows the same order.
   const { layout, status, dispatch } = useOverviewLayout();
-  // The order a dropped card was given, until the save settles. Applied at once so the card
-  // glides into its new slot instead of returning to the old one and jumping when the write ends.
-  const [pendingOrder, setPendingOrder] = useState<readonly string[] | null>(
-    null,
-  );
-  // Memoised: a fresh array every render would re-render the memoised month pages for nothing.
-  const cards = useMemo(
-    () => applyOptimisticOrder(layout.cards, pendingOrder),
-    [layout.cards, pendingOrder],
-  );
+  const cards = layout.cards;
   const [editing, setEditing] = useState(false);
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
@@ -87,7 +77,7 @@ export function OverviewScreen() {
   // Resolves to whether the change was persisted, so callers never act on a failed change.
   const dispatchGuarded = useCallback(
     async (
-      action: OverviewLayoutAction,
+      action: LayoutStoreAction,
       failureTitle: string,
     ): Promise<boolean> => {
       try {
@@ -167,15 +157,14 @@ export function OverviewScreen() {
     setUndo(null);
   };
 
-  // A dragged card was released on `toIndex`. The new order is shown at once and saved behind
-  // it; if the save fails the pending order is dropped and the card returns, with the error.
+  // A dragged card was released on `toIndex`. The store shows the new order at once and saves it
+  // behind it; if the save fails the store takes it back, and the error is shown.
   const dropCard = useMemo(
     () =>
       // `cardsRef` is read only when a card is dropped, never while rendering.
       // eslint-disable-next-line react-hooks/refs
       createCardDropper({
         getCards: () => cardsRef.current,
-        setPendingOrder,
         save: (action) =>
           dispatchGuarded(action, "Couldn’t update your overview"),
       }),

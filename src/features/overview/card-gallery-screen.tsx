@@ -29,10 +29,14 @@ export function CardGalleryScreen() {
   const theme = useQashyTheme();
   const { radius, space } = theme;
   const { t } = useLocalization();
-  const { layout, dispatch } = useOverviewLayout();
+  const { layout, status, dispatch } = useOverviewLayout();
+  // Nothing is offered or changed until the saved layout has loaded: the list would be built
+  // from the default, and a write made before then must not stand in for the saved layout.
+  const ready = status === "ready";
   const available = availableToAdd(layout);
 
   const addCard = async (type: (typeof available)[number]) => {
+    if (!ready) return;
     hapticSelection();
     try {
       await dispatch({ type: "add", card: { id: makeId(), type } });
@@ -43,6 +47,7 @@ export function CardGalleryScreen() {
   };
 
   const resetLayout = async () => {
+    if (!ready) return;
     const confirmed = await confirmDestructive({
       title: "Reset to default layout?",
       message:
@@ -68,7 +73,7 @@ export function CardGalleryScreen() {
           title="Add cards"
           subtitle="Choose what shows up on your overview."
         />
-        {available.length ? (
+        {!ready ? null : available.length ? (
           <Card variant="list" dividerInset={theme.tile.size + space.md}>
             {available.map((type) => {
               const definition = WIDGET_REGISTRY[type];
@@ -123,11 +128,13 @@ export function CardGalleryScreen() {
             />
           </Card>
         )}
-        <TextButton
-          title="Reset to default layout"
-          tone="muted"
-          onPress={resetLayout}
-        />
+        {ready ? (
+          <TextButton
+            title="Reset to default layout"
+            tone="muted"
+            onPress={resetLayout}
+          />
+        ) : null}
       </ScreenContainer>
     </ScrollView>
   );

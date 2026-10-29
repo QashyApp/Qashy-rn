@@ -87,8 +87,11 @@ export interface OverviewMonthPageProps {
   onResizeCard: (card: OverviewCard) => void;
   onConfigureCard: (id: string, config: Record<string, unknown>) => void;
   onRemoveCard: (card: OverviewCard) => void;
-  /** A dragged card was released on `toIndex`; resolves to whether the order changed. */
-  onDropCard: (id: string, toIndex: number) => boolean;
+  /**
+   * A dragged card was released on `toIndex`. `null` when the order does not change, else a
+   * promise that settles (never rejects) when the save has, to whether it was saved.
+   */
+  onDropCard: (id: string, toIndex: number) => Promise<boolean> | null;
 }
 
 /**

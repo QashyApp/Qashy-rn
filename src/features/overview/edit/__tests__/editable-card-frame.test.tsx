@@ -103,7 +103,7 @@ function Frame({
   onDrop,
   ...rest
 }: Partial<Parameters<typeof EditableCardFrame>[0]> & {
-  onDrop?: (id: string, toIndex: number) => boolean;
+  onDrop?: (id: string, toIndex: number) => Promise<unknown> | null;
 }) {
   const { reorder } = useCardReorder({
     cards: CARDS,
@@ -195,7 +195,7 @@ describe("EditableCardFrame", () => {
       createGestureController(getByGestureTestId("overview-card-drag-b"));
 
     it("lifts with a light tap and commits the live target on release", async () => {
-      const onDrop = jest.fn(() => true);
+      const onDrop = jest.fn(() => Promise.resolve(true));
       await renderFrame(<Frame onDrop={onDrop} />);
       const drag = controller();
 
@@ -220,7 +220,7 @@ describe("EditableCardFrame", () => {
     });
 
     it("does not reorder when released over its own slot", async () => {
-      const onDrop = jest.fn(() => true);
+      const onDrop = jest.fn(() => Promise.resolve(true));
       await renderFrame(<Frame onDrop={onDrop} />);
       const drag = controller();
 
@@ -234,8 +234,86 @@ describe("EditableCardFrame", () => {
       expect(hapticSuccess).not.toHaveBeenCalled();
     });
 
+    // The wrapper that carries the z-order: lifted above its neighbours while held.
+    const zIndexAbove = () => {
+      let node = screen.getByText("Card content", {
+        includeHiddenElements: true,
+      }).parent;
+      while (node) {
+        const z = StyleSheet.flatten(node.props.style)?.zIndex;
+        if (z !== undefined) return z;
+        node = node.parent;
+      }
+      return undefined;
+    };
+
+    it("lets go of the card when the drop settles and its slot never moved", async () => {
+      let resolveSave: (saved: boolean) => void = () => {};
+      const onDrop = jest.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveSave = resolve;
+          }),
+      );
+      await renderFrame(<Frame onDrop={onDrop} />);
+      const drag = controller();
+
+      await act(async () => {
+        drag.begin();
+        drag.activate();
+        drag.update({ translationY: 160 });
+      });
+      reorderForTest?.target.set(2);
+      await act(async () => {
+        drag.end();
+      });
+      // The save is still running and the slot has not moved: held where it was dropped.
+      expect(zIndexAbove()).toBe(10);
+
+      // The save failed, so the order never changed and `index` stays 1.
+      await act(async () => {
+        resolveSave(false);
+      });
+      expect(zIndexAbove()).toBe(0);
+    });
+
+    it("does not let an earlier drop's outcome release a later drag", async () => {
+      const saves: ((saved: boolean) => void)[] = [];
+      const onDrop = jest.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            saves.push(resolve);
+          }),
+      );
+      await renderFrame(<Frame onDrop={onDrop} />);
+      const drag = controller();
+
+      for (let round = 0; round < 2; round += 1) {
+        await act(async () => {
+          drag.begin();
+          drag.activate();
+          drag.update({ translationY: 160 });
+        });
+        reorderForTest?.target.set(2);
+        await act(async () => {
+          drag.end();
+        });
+      }
+      expect(saves).toHaveLength(2);
+
+      // The first drop's save settling must not release the frame held for the second.
+      await act(async () => {
+        saves[0](true);
+      });
+      expect(zIndexAbove()).toBe(10);
+      await act(async () => {
+        saves[1](true);
+      });
+      expect(zIndexAbove()).toBe(0);
+    });
+
     it("commits nothing when the gesture is cancelled", async () => {
-      const onDrop = jest.fn(() => true);
+      const onDrop = jest.fn(() => Promise.resolve(true));
       await renderFrame(<Frame onDrop={onDrop} />);
       const drag = controller();
 

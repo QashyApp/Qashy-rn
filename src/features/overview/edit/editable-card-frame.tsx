@@ -104,10 +104,11 @@ export function EditableCardFrame({
   /** Shared drag state: slot geometry, scroll offset, live drop target. */
   reorder: CardReorder;
   /**
-   * The card was released on `toIndex`. Returns whether the order changed, in which case the
-   * frame waits for its new slot before settling.
+   * The card was released on `toIndex`. Returns `null` when the order does not change. Otherwise
+   * the frame waits for its new slot before settling, and settles anyway when the returned
+   * promise settles without the slot having moved (the save failed or changed nothing).
    */
-  onDrop?: (id: string, toIndex: number) => boolean;
+  onDrop?: (id: string, toIndex: number) => Promise<unknown> | null;
   children: ReactNode;
   configSheet?: ReactNode;
 }) {
@@ -130,6 +131,8 @@ export function EditableCardFrame({
   const scrollAtStart = useSharedValue(0);
   // Set when a drop reordered the cards: the frame stays put until its slot actually moves.
   const settleOnMove = useRef(false);
+  // Which drop `settleOnMove` belongs to, so an earlier drop's promise cannot settle a later one.
+  const dropSequence = useRef(0);
 
   const announceMove = (direction: "up" | "down") => {
     const nextPosition = direction === "up" ? index : index + 2;
@@ -185,10 +188,22 @@ export function EditableCardFrame({
 
   const drop = (toIndex: number) => {
     const to = toIndex < 0 ? index : toIndex;
-    const moved = to !== index && (onDrop?.(id, to) ?? false);
-    settleOnMove.current = moved;
-    if (moved) hapticSuccess();
-    else hapticImpactLight();
+    const pending = to !== index ? (onDrop?.(id, to) ?? null) : null;
+    dropSequence.current += 1;
+    const mine = dropSequence.current;
+    settleOnMove.current = pending !== null;
+    if (pending) {
+      hapticSuccess();
+      // The slot normally moves first (the store shows the new order at once) and settles the
+      // card. If the drop's outcome arrives with the slot unmoved, nothing else would ever
+      // release the card, so settle it here rather than leave it lifted and offset.
+      const release = () => {
+        if (dropSequence.current === mine && settleOnMove.current) settle();
+      };
+      pending.then(release, release);
+    } else {
+      hapticImpactLight();
+    }
   };
 
   const finishDrag = () => {
