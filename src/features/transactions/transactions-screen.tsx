@@ -171,8 +171,9 @@ export function TransactionsScreen() {
   const [categoryRowId, setCategoryRowId] = useState<string | null>(null);
   const [selectionMode, setSelectionMode] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
-  // A drag-select in progress: the top section folds only once the finger lifts, so the rows
-  // do not slide out from under it mid-drag.
+  // A drag-select in progress: the top section does not change between folded and open until the
+  // finger lifts, so the rows do not slide from under it mid-drag (a drag that starts on an
+  // already selected row, with the section already folded, must not open it either).
   const [dragActive, setDragActive] = useState(false);
   const [busy, setBusy] = useState(false);
   // Whether a selection has ever started on this screen (see the add button's entrance).
@@ -188,6 +189,10 @@ export function TransactionsScreen() {
   // On a phone the search and filters fold away while reading down the list and the month's
   // totals shrink to one line; both return on the way back up. They stay open while searching.
   const phoneWidth = metrics.contentWidth < 520;
+  const wantsFold = selectionMode && !searchFocused;
+  const [foldForSelection, setFoldForSelection] = useState(wantsFold);
+  if (!dragActive && foldForSelection !== wantsFold)
+    setFoldForSelection(wantsFold);
   // Selecting folds them too, the same way scrolling does: the batch bar takes room at the
   // bottom, so the list needs all it can get at the top. Typing in search keeps them open.
   const {
@@ -197,7 +202,7 @@ export function TransactionsScreen() {
   } = useScrollCollapse({
     enabled: phoneWidth,
     locked: searchFocused || search.length > 0,
-    forceCollapsed: selectionMode && !dragActive && !searchFocused,
+    forceCollapsed: foldForSelection,
   });
   const onScroll = useCallback<
     NonNullable<ComponentProps<typeof SectionList>["onScroll"]>

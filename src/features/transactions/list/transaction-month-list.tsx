@@ -409,8 +409,14 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   useCurrentPageSwipe({ isCurrent, rowSwipe, geometry, scrollOffset });
 
   const setDragArmed = useCallback(
-    (armed: boolean) => rowSwipe?.suspend("drag", armed),
-    [rowSwipe],
+    (armed: boolean) => {
+      rowSwipe?.suspend("drag", armed);
+      // Told here, with the press that arms it, and not only from the effect below: a hold that
+      // enters selection mode and arms the drag has to reach the screen as one change, or the
+      // screen sees the selection a render before the drag and moves the layout under the finger.
+      if (isCurrent) onDragActiveChange?.(armed);
+    },
+    [rowSwipe, isCurrent, onDragActiveChange],
   );
   const { gesture, arm, dragging } = useDragSelect({
     enabled: isCurrent,

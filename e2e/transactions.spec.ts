@@ -417,8 +417,7 @@ test("selects the rows between a held row and the finger while dragging", async 
     await touch("touchMove", startY + (i % 2));
   }
   await expect(page.getByText("1 selected")).toBeVisible();
-  // A browser has committed the held touch to scrolling by now; a drag from a selected row (which
-  // opts out of touch scrolling) is the one that always works.
+  // A browser has committed the held touch to scrolling by now, so lift and start a new touch.
   await touch("touchEnd", null);
   // Lifting the finger folds the top section away for selection mode, which moves the rows up.
   await page.waitForTimeout(600);
@@ -426,8 +425,12 @@ test("selects the rows between a held row and the finger while dragging", async 
   const grabY = await centre("Row D");
   const targetY = await centre("Row B");
   await touch("touchStart", grabY);
-  await touch("touchMove", grabY + 1);
-  await page.waitForTimeout(50);
+  // A finger on a selected row scrolls like on any other; its hold arms the drag from the row
+  // (the web keeps it selected), so hold it the same way as the first press.
+  for (let i = 0; i < 8; i++) {
+    await page.waitForTimeout(100);
+    await touch("touchMove", grabY + (i % 2));
+  }
   for (let step = 1; step <= 12; step++) {
     await touch("touchMove", grabY + ((targetY - grabY) * step) / 12);
     await page.waitForTimeout(16);

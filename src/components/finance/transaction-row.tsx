@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { View, type NativeSyntheticEvent } from "react-native";
 
 import { AppIcon } from "@/components/ui/app-icon";
@@ -222,6 +222,15 @@ const TransactionRowView = memo(function TransactionRowView({
         }
       : null;
 
+  // react-native-web draws the `button` role as a <button> and `checkbox` as a <div>, so changing
+  // the role replaces the element under the finger. The browser keeps sending that touch's
+  // touchmove and touchend to the element it started on, which is gone, so the responder system
+  // never sees the touch end: the row stays pressed, and its next hold never fires (a selected
+  // row could not start a drag-select). A long-press enters selection mode mid-touch, so on the
+  // web the role keeps the mode the touch started in until the touch is over.
+  const [roleFrozenAs, setRoleFrozenAs] = useState<boolean | null>(null);
+  const roleMode = roleFrozenAs ?? selectionMode;
+
   return (
     <MotionPressable
       {...keyboardDelete}
@@ -231,14 +240,14 @@ const TransactionRowView = memo(function TransactionRowView({
           ? t("Long press to select this transaction for batch actions.")
           : undefined
       }
-      accessibilityRole={selectionMode ? "checkbox" : "button"}
+      accessibilityRole={roleMode ? "checkbox" : "button"}
       accessibilityLabel={
-        selectionMode
+        roleMode
           ? `${rowLabel}, ${t(selected ? "selected" : "not selected")}`
           : rowLabel
       }
-      accessibilityState={selectionMode ? { checked: selected } : undefined}
-      aria-checked={selectionMode ? selected : undefined}
+      accessibilityState={roleMode ? { checked: selected } : undefined}
+      aria-checked={roleMode ? selected : undefined}
       onAccessibilityAction={(event) => {
         const name = event.nativeEvent.actionName;
         if (name === "longpress") onLongPress?.();
@@ -255,6 +264,14 @@ const TransactionRowView = memo(function TransactionRowView({
             pathname: "/transaction",
             params: { id: transaction.id, returnTo },
           }))
+      }
+      onPressIn={
+        process.env.EXPO_OS === "web"
+          ? () => setRoleFrozenAs(selectionMode)
+          : undefined
+      }
+      onPressOut={
+        process.env.EXPO_OS === "web" ? () => setRoleFrozenAs(null) : undefined
       }
       onLongPress={onLongPress}
       // A little longer than the platform default, so a scroll or a swipe that starts slowly is
