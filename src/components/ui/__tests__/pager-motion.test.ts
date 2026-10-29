@@ -120,6 +120,21 @@ describe("judgeRender", () => {
     expect(judgeRender(7, []).external).toBe(true);
   });
 
+  it("cannot tell a jump to a month still in the trail from the pager's own render (documented limit)", () => {
+    // Forward then back were coalesced into no render, leaving [11, 10]. A picker jump to 10 within
+    // the commit timeout is absorbed as the pager's own; the timeout reconciles the pages later.
+    expect(judgeRender(10, [11, 10])).toEqual({
+      external: false,
+      caughtUp: true,
+      trail: [],
+    });
+    expect(judgeRender(11, [11, 10])).toEqual({
+      external: false,
+      caughtUp: false,
+      trail: [10],
+    });
+  });
+
   it("matches a repeated month at its oldest entry", () => {
     // Forward, back, forward again: 11, 10, 11.
     expect(judgeRender(11, [11, 10, 11])).toEqual({

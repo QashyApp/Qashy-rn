@@ -281,17 +281,33 @@ export function AndroidSheet({
     }
   }, [area, animate, shownFlag]);
 
+  // Set on the JS thread the moment the sheet starts leaving by any path. `closingFlag` is written
+  // on the UI thread by a throw, and a JS-side read of it can lag a frame, so a back press, a scrim
+  // or close tap in that frame would start a second exit and a second `goBack`. Every path that
+  // leaves checks and sets this one. A closure cell rather than a ref: the gesture below captures
+  // the callbacks that use it, which a ref may not be.
+  const [departing] = useState(() => {
+    let left = false;
+    return {
+      has: () => left,
+      set: () => {
+        left = true;
+      },
+    };
+  });
+
   const exit = useCallback(
     () =>
       new Promise<void>((resolve) => {
+        departing.set();
         closingFlag.set(true);
         animate(false, resolve);
       }),
-    [animate, closingFlag],
+    [animate, closingFlag, departing],
   );
 
   const requestClose = useCallback(() => {
-    if (closingFlag.get()) return;
+    if (departing.has() || closingFlag.get()) return;
     // Unsaved work: the screen asks first, and leaves through `exit` if the answer is to discard.
     if (guardedShared.get()) {
       navigation.goBack();
@@ -299,7 +315,7 @@ export function AndroidSheet({
     }
     hapticImpactLight();
     void exit().then(() => navigation.goBack());
-  }, [exit, navigation, closingFlag, guardedShared]);
+  }, [exit, navigation, closingFlag, guardedShared, departing]);
 
   const latestClose = useRef(requestClose);
   useEffect(() => {
@@ -329,9 +345,11 @@ export function AndroidSheet({
 
   // Leaves for good once a swipe has carried the sheet off screen.
   const dismissNow = useCallback(() => {
+    if (departing.has()) return;
+    departing.set();
     closingFlag.set(true);
     navigation.goBack();
-  }, [navigation, closingFlag]);
+  }, [navigation, closingFlag, departing]);
 
   // Animations Off (or the system's own setting) snaps to the detent at once, like every other
   // animation here.
@@ -341,6 +359,7 @@ export function AndroidSheet({
   };
 
   const pan = Gesture.Pan()
+    .withTestId("android-sheet-pan")
     .onUpdate((event) => {
       // Already leaving (a throw or a fade is under way): a second finger must not move the sheet.
       if (closingFlag.get()) return;

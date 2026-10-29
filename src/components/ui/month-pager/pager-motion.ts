@@ -79,6 +79,14 @@ export interface RenderVerdict {
  * pages). A render that is not in the trail is an outside jump, wherever it falls relative to the
  * slides in flight, and clears the trail. A month that appears twice (forward, back, forward) is
  * matched at its oldest entry, the render that comes first.
+ *
+ * Known limit: the verdict is by month alone, so an outside jump to a month that is still in the
+ * trail cannot be told from this pager's own render. This happens only when React coalesces a run
+ * (forward then back, 11 then 10) into no visible render, the trail is left at [11, 10], and a
+ * picker jump to 11 or 10 arrives before the commit timeout (`COMMIT_TIMEOUT`) clears the trail.
+ * That jump is taken as the pager's own and does not move the pages; the timeout then puts them
+ * on the month React shows. There is no safe small fix: the render carries no origin, and the
+ * pager's props give the parent no way to mark a change as external.
  */
 export function judgeRender(
   index: number,
