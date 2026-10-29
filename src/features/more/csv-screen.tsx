@@ -115,7 +115,7 @@ export function CsvScreen() {
                     <AppText
                       accessibilityRole="alert"
                       variant="caption"
-                      style={{ color: theme.negative }}
+                      style={{ color: theme.negativeText }}
                     >
                       Required
                     </AppText>
@@ -209,7 +209,7 @@ export function CsvScreen() {
               <AppText
                 accessibilityRole="alert"
                 variant="caption"
-                style={{ color: theme.negative }}
+                style={{ color: theme.negativeText }}
               >
                 {`Map required fields: ${missingRequiredFields.map((field) => field.label).join(", ")}.`}
               </AppText>

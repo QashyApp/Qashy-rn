@@ -9,6 +9,7 @@ import { useQashyTheme } from "@/theme/theme";
 export function TextButton({
   title,
   icon,
+  mirrorIcon = false,
   tone = "accent",
   color: colorOverride,
   onPress,
@@ -19,6 +20,8 @@ export function TextButton({
 }: Omit<PressableProps, "children"> & {
   title: string;
   icon?: string;
+  /** Flip the icon in right-to-left languages; for a directional glyph such as a forward chevron. */
+  mirrorIcon?: boolean;
   tone?: "accent" | "muted" | "danger";
   /** A specific content color, for a button sitting on a non-standard surface (a snackbar). */
   color?: ColorValue;
@@ -31,7 +34,7 @@ export function TextButton({
   const color =
     colorOverride ??
     (tone === "danger"
-      ? theme.negative
+      ? theme.negativeText
       : tone === "muted"
         ? theme.textMuted
         : theme.accentText);
@@ -66,7 +69,9 @@ export function TextButton({
         typeof style === "function" ? style(state) : style,
       ]}
     >
-      {icon ? <AppIcon name={icon} color={color} size={16} /> : null}
+      {icon ? (
+        <AppIcon name={icon} color={color} size={16} mirrorInRtl={mirrorIcon} />
+      ) : null}
       <AppText selectable={false} variant="label" style={{ color }}>
         {title}
       </AppText>

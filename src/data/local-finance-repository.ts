@@ -1871,6 +1871,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       ...storedSettings,
       themeId: storedSettings.themeId ?? DEFAULT_THEME_ID,
       swipeBetweenMonths: storedSettings.swipeBetweenMonths ?? false,
+      swipeRowActions: storedSettings.swipeRowActions ?? true,
       navBarStyle: storedSettings.navBarStyle ?? "native",
       animationLevel: storedSettings.animationLevel ?? "all",
       hapticsEnabled: storedSettings.hapticsEnabled ?? true,

@@ -127,7 +127,7 @@ export function PairScreen() {
             <AppText
               accessibilityRole="alert"
               variant="label"
-              style={{ color: theme.negative }}
+              style={{ color: theme.negativeText }}
             >
               Pairing stopped
             </AppText>

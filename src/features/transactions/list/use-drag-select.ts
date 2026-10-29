@@ -10,6 +10,7 @@ import {
 import type { HostInstance } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
 
+import type { RowGeometry } from "@/features/transactions/list/row-swipe/use-row-geometry";
 import { hapticSelection } from "@/services/haptics";
 
 /** How close to the list's top or bottom edge the finger scrolls it, and how far per tick. */
@@ -21,6 +22,8 @@ const MIN_TRAVEL = 24;
 /** How far a finger may drift while held, waiting for the long-press, before it counts as a scroll. */
 const HOLD_SLOP = 10;
 const TICK_MS = 16;
+/** A finger over a gap in the cached rows measures again at most this often. */
+const REMEASURE_MS = 80;
 
 /**
  * Press a row, hold, then drag to select every row between it and the finger.
@@ -31,7 +34,9 @@ const TICK_MS = 16;
  * range from it to the row under the finger, so dragging back shrinks it again. Near the top or
  * bottom of the list it scrolls itself, to reach rows that are not on screen.
  *
- * The list is virtualised, so rows are found by measuring the ones that are mounted (`registerRow`).
+ * The list is virtualised, so rows are found in the shared `RowGeometry` cache of the ones that are
+ * mounted. It is measured when the hold arms the drag, and again (throttled) only when the finger
+ * is over a row the cache has not seen yet; never on every move or tick.
  *
  * `dragging` is true from the hold until the finger lifts. A native list must stop scrolling for
  * that span (`scrollEnabled`): this pan only activates once JS has seen the move, and by then the
@@ -44,6 +49,8 @@ export function useDragSelect({
   onSelect,
   containerRef,
   scrollBy,
+  geometry,
+  onArmedChange,
 }: {
   enabled: boolean;
   /** Every selectable row, in display order. */
@@ -53,15 +60,32 @@ export function useDragSelect({
   /** The list's own box, for the scroll edges. */
   containerRef: RefObject<HostInstance | null>;
   scrollBy: (delta: number) => void;
+  /** Where the mounted rows are, shared with the row swipe. */
+  geometry: RowGeometry;
+  /** A drag is armed or over: other gestures on the list (the row swipe) must stand aside. */
+  onArmedChange?: (armed: boolean) => void;
 }) {
-  const rows = useRef(new Map<string, HostInstance>());
   const armed = useRef<{ anchor: string; base: string[]; last: string } | null>(
     null,
   );
-  const latest = useRef({ orderedIds, selectedIds, onSelect, scrollBy });
+  const latest = useRef({
+    orderedIds,
+    selectedIds,
+    onSelect,
+    scrollBy,
+    geometry,
+    onArmedChange,
+  });
   useEffect(() => {
-    latest.current = { orderedIds, selectedIds, onSelect, scrollBy };
-  }, [orderedIds, selectedIds, onSelect, scrollBy]);
+    latest.current = {
+      orderedIds,
+      selectedIds,
+      onSelect,
+      scrollBy,
+      geometry,
+      onArmedChange,
+    };
+  }, [orderedIds, selectedIds, onSelect, scrollBy, geometry, onArmedChange]);
   const [dragging, setDragging] = useState(false);
   /** A finger is down on the list and this pan is still following it. */
   const tracking = useRef(false);
@@ -70,6 +94,7 @@ export function useDragSelect({
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const bounds = useRef<{ top: number; bottom: number } | null>(null);
   const measuring = useRef(false);
+  const throttled = useRef(false);
   const timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   useEffect(() => () => clearInterval(timer.current), []);
 
@@ -87,20 +112,26 @@ export function useDragSelect({
   };
 
   const hitTest = () => {
-    if (measuring.current || rows.current.size === 0) return;
+    const rows = latest.current.geometry;
+    const hit = rows.find(finger.current);
+    if (hit) {
+      apply(hit);
+      return;
+    }
+    // Over a gap, or a row that scrolled into view since the last pass: look again, but not on
+    // every move. The lookup is in window space (the list may be scrolling under the finger).
+    if (measuring.current || throttled.current) return;
     measuring.current = true;
-    const y = finger.current;
-    let pending = rows.current.size;
-    let hit: string | null = null;
-    rows.current.forEach((node, id) => {
-      node.measureInWindow((_x, top, _width, height) => {
-        if (y >= top && y <= top + height) hit = id;
-        pending -= 1;
-        if (pending === 0) {
-          measuring.current = false;
-          if (hit) apply(hit);
-        }
-      });
+    throttled.current = true;
+    setTimeout(() => {
+      throttled.current = false;
+    }, REMEASURE_MS);
+    void rows.measureAt(finger.current).then((found) => {
+      measuring.current = false;
+      // The finger may have moved on while the rows were measured; a row it has left is stale.
+      const y = finger.current;
+      if (found && armed.current && y >= found.top && y < found.bottom)
+        apply(found.id);
     });
   };
 
@@ -149,20 +180,18 @@ export function useDragSelect({
     clearInterval(timer.current);
     timer.current = undefined;
     setDragging(false);
+    latest.current.onArmedChange?.(false);
   };
 
   // On the web a selected row cannot be scrolled (see above), so pressing one grabs it: moving from
   // it extends or shrinks the selection around it, the same drag the hold starts on an unselected row.
   const grabSelected = (y: number) => {
     if (process.env.EXPO_OS !== "web" || armed.current) return;
-    const { selectedIds: chosen } = latest.current;
-    rows.current.forEach((node, id) => {
-      if (!chosen.includes(id)) return;
-      node.measureInWindow((_x, top, _width, height) => {
-        if (tracking.current && !armed.current && y >= top && y <= top + height)
-          armed.current = { anchor: id, base: [...chosen], last: id };
-      });
-    });
+    const { selectedIds: chosen, geometry: rows } = latest.current;
+    const id = rows.find(y);
+    if (!id || !chosen.includes(id)) return;
+    armed.current = { anchor: id, base: [...chosen], last: id };
+    latest.current.onArmedChange?.(true);
   };
 
   const gesture = useMemo(
@@ -231,16 +260,15 @@ export function useDragSelect({
     [enabled, containerRef],
   );
 
-  const registerRow = useCallback((id: string, node: HostInstance | null) => {
-    if (node) rows.current.set(id, node);
-    else rows.current.delete(id);
-  }, []);
   const arm = useCallback((id: string) => {
     // The long-press can still fire after this pan has given the touch up (the finger drifted
     // past HOLD_SLOP, or the list started scrolling). Arming then would leave a drag waiting for
     // the next, unrelated touch, which would select rows instead of scrolling.
     if (!tracking.current) return;
     setDragging(true);
+    latest.current.onArmedChange?.(true);
+    // One pass now, so the rows the finger crosses are in the cache before it moves.
+    void latest.current.geometry.measure();
     armed.current = {
       anchor: id,
       base: [...new Set([...latest.current.selectedIds, id])],
@@ -248,6 +276,6 @@ export function useDragSelect({
     };
   }, []);
 
-  /** `registerRow` is for each row's view; `arm` is called when a row's long-press fires. */
-  return { gesture, registerRow, arm, dragging };
+  /** `arm` is called when a row's long-press fires. */
+  return { gesture, arm, dragging };
 }

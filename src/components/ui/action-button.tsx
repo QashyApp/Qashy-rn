@@ -37,6 +37,7 @@ function dangerMaterial(
 export function ActionButton({
   title,
   icon,
+  mirrorIcon = false,
   variant = "primary",
   size = "regular",
   onPress,
@@ -48,6 +49,8 @@ export function ActionButton({
 }: PressableProps & {
   title: string;
   icon?: string;
+  /** Flip the icon in right-to-left languages; for a directional glyph such as a forward arrow. */
+  mirrorIcon?: boolean;
   variant?: "primary" | "secondary" | "danger";
   /** `large` is for a single hero action: taller and set in `headline` type. */
   size?: "regular" | "large";
@@ -136,7 +139,14 @@ export function ActionButton({
           gap: space.sm,
         }}
       >
-        {icon ? <AppIcon name={icon} color={foreground} size={18} /> : null}
+        {icon ? (
+          <AppIcon
+            name={icon}
+            color={foreground}
+            size={18}
+            mirrorInRtl={mirrorIcon}
+          />
+        ) : null}
         <AppText
           selectable={false}
           variant={textVariant}

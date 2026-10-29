@@ -239,6 +239,7 @@ export function RelayCard({
         <TextButton
           title={advanced ? "Hide addresses" : "Change addresses"}
           icon={advanced ? "chevron.down" : "chevron.right"}
+          mirrorIcon
           tone="muted"
           accessibilityState={{ expanded: advanced }}
           style={{ alignSelf: "flex-start" }}

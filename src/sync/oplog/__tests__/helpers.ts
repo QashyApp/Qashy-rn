@@ -61,6 +61,7 @@ export const settings = (over: Partial<AppSettings> = {}): AppSettings => ({
   accentSource: "system",
   accentHex: "#5966E9",
   swipeBetweenMonths: false,
+  swipeRowActions: true,
   navBarStyle: "native",
   animationLevel: "all",
   hapticsEnabled: true,

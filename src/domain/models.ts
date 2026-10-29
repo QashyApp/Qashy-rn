@@ -43,6 +43,8 @@ export interface AppSettings extends SyncEntity {
   accentHex: string;
   /** Per device (`deviceLocal`). Swipe sideways on Overview and Transactions to change month. Saves from before this existed read as off. */
   swipeBetweenMonths?: boolean;
+  /** Per device (`deviceLocal`). Swipe a transaction row for actions: delete or change category, and for upcoming payments mark paid or skip. Saves from before this existed read as on. */
+  swipeRowActions?: boolean;
   /** Per device (`deviceLocal`). Android only: the platform bar or an inset floating pill. Saves from before this existed read as native. */
   navBarStyle?: NavBarStyle;
   /** Per device (`deviceLocal`). `all` is the full motion system, `minimal` keeps only quick fades, `off` shows changes instantly. Saves from before this existed read as `all`. */

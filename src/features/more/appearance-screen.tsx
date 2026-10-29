@@ -387,7 +387,12 @@ export function AppearanceScreen() {
                   {settings.navBarStyle === "floating" ? "Floating" : "Native"}
                 </AppText>
               </View>
-              <AppIcon name="chevron.right" color={theme.textMuted} size={16} />
+              <AppIcon
+                name="chevron.right"
+                color={theme.textMuted}
+                size={16}
+                mirrorInRtl
+              />
             </Pressable>
           </Card>
         </MotionView>

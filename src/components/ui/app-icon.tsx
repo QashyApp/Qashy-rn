@@ -6,24 +6,15 @@ import MaterialIcons from "@expo/vector-icons/MaterialIcons";
 import { Text, View, type ColorValue } from "react-native";
 import Svg, { Circle, Ellipse, Path, Rect } from "react-native-svg";
 
+import { useLocalization } from "@/localization/localization";
 import { resolveIconRenderById } from "@/theme/icon-sets";
 import { useQashyTheme } from "@/theme/theme";
 
 // Not in react-native-svg's Path typings; the web shim forwards it as the SVG attribute, native ignores it.
 const CRISP = { shapeRendering: "crispEdges" } as object;
+const MIRROR = { transform: [{ scaleX: -1 }] } as const;
 
-/**
- * The stored icon id (`ion:<glyph>`, `emoji:<char>`, a legacy name) is replicated data and never
- * changes. Which glyph set DRAWS it is a per-device theme choice: `emoji:` ids always render the
- * emoji, and any glyph the active set does not cover falls back to Ionicons.
- */
-export function AppIcon({
-  name,
-  color,
-  size = 20,
-  role = "ui",
-  iconSetId,
-}: {
+type AppIconProps = {
   name: string;
   color: ColorValue;
   size?: number;
@@ -34,8 +25,43 @@ export function AppIcon({
   role?: "ui" | "category";
   /** Draw with this registered set instead of the theme's (the appearance pickers' previews). */
   iconSetId?: string;
-}) {
+  /**
+   * Flip the glyph horizontally in a right-to-left language. Set it on a *directional* icon that
+   * is drawn in a fixed pointing direction (a forward chevron or arrow); leave it off for
+   * symmetric icons and for icons whose name is already swapped by direction.
+   */
+  mirrorInRtl?: boolean;
+};
+
+/**
+ * The stored icon id (`ion:<glyph>`, `emoji:<char>`, a legacy name) is replicated data and never
+ * changes. Which glyph set DRAWS it is a per-device theme choice: `emoji:` ids always render the
+ * emoji, and any glyph the active set does not cover falls back to Ionicons.
+ */
+export function AppIcon({ mirrorInRtl = false, ...props }: AppIconProps) {
+  // Only a directional icon reads the language, so the many symmetric icons stay context-free.
+  return mirrorInRtl ? (
+    <RtlMirroredIcon {...props} />
+  ) : (
+    <GlyphIcon {...props} />
+  );
+}
+
+function RtlMirroredIcon(props: Omit<AppIconProps, "mirrorInRtl">) {
+  const { isRtl } = useLocalization();
+  return <GlyphIcon {...props} mirror={isRtl} />;
+}
+
+function GlyphIcon({
+  name,
+  color,
+  size = 20,
+  role = "ui",
+  iconSetId,
+  mirror: flip = false,
+}: Omit<AppIconProps, "mirrorInRtl"> & { mirror?: boolean }) {
   const { iconSet, categoryIconSet } = useQashyTheme();
+  const mirror = flip ? MIRROR : undefined;
   const render = resolveIconRenderById(
     name,
     iconSetId ? iconSetId : role === "category" ? categoryIconSet : iconSet,
@@ -51,6 +77,7 @@ export function AppIcon({
           height: size,
           alignItems: "center",
           justifyContent: "center",
+          ...mirror,
         }}
       >
         <Text
@@ -75,6 +102,7 @@ export function AppIcon({
         height: size,
         alignItems: "center",
         justifyContent: "center",
+        ...mirror,
       }}
     >
       {render.kind === "svg" ? (

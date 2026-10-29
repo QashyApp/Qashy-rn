@@ -135,6 +135,7 @@ describe("registry coverage", () => {
       "accentSource",
       "accentHex",
       "swipeBetweenMonths",
+      "swipeRowActions",
       "navBarStyle",
       "animationLevel",
       "hapticsEnabled",

@@ -2,13 +2,12 @@ import { useRef } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { getFloatingBarVisibility } from "@/components/navigation/floating-bar-visibility";
 import {
-  Easing,
   ReduceMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
 
-import { useMotionPreference } from "@/components/ui/motion";
+import { motionCurves, useMotionPreference } from "@/components/ui/motion";
 
 const ALWAYS_SHOW_OFFSET = 32;
 const HIDE_AFTER_OFFSET = 80;
@@ -32,7 +31,7 @@ export function useScrollHide() {
     // A quick fade at every level but `off`, which changes instantly.
     const timing = {
       duration: 200,
-      easing: Easing.out(Easing.cubic),
+      easing: motionCurves.standard,
       reduceMotion: instant ? ReduceMotion.Always : ReduceMotion.System,
     };
     visibility.set(withTiming(next ? 1 : 0, timing));

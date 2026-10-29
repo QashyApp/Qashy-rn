@@ -69,7 +69,7 @@ export function ReadyStep({ draft }: { draft: OnboardingDraft }) {
       </View>
       <StepHeading
         title="You’re all set"
-        body="Here’s what Qashy will create. Nothing leaves this device."
+        body="Here’s what Qashy will create. Nothing leaves this device except currency codes and dates used to fetch exchange rates, which you can turn off in More → Exchange rates."
       />
       <Card variant="list">
         {rows.map(([label, value]) => (

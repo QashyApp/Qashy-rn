@@ -82,6 +82,7 @@ export function buildSettingsUpdate(
     accentHex: (patch.accentHex ?? current.accentHex).toUpperCase(),
     swipeBetweenMonths:
       patch.swipeBetweenMonths ?? current.swipeBetweenMonths ?? false,
+    swipeRowActions: patch.swipeRowActions ?? current.swipeRowActions ?? true,
     navBarStyle,
     animationLevel,
     hapticsEnabled: patch.hapticsEnabled ?? current.hapticsEnabled ?? true,

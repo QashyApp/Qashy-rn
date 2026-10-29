@@ -1,13 +1,13 @@
 import { useEffect, useRef } from "react";
 import type { NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import {
-  Easing,
   ReduceMotion,
   useSharedValue,
   withTiming,
 } from "react-native-reanimated";
 
 import { useAnimationLevel } from "@/components/ui/animation-level-context";
+import { motionCurves } from "@/components/ui/motion";
 
 const EXPANDED_UNTIL_OFFSET = 32;
 const COLLAPSE_AFTER_OFFSET = 96;
@@ -56,7 +56,7 @@ export function useScrollCollapse({
     collapse.set(
       withTiming(next ? 1 : 0, {
         duration: level === "off" ? 0 : level === "minimal" ? 120 : 220,
-        easing: Easing.out(Easing.cubic),
+        easing: motionCurves.standard,
         reduceMotion: ReduceMotion.System,
       }),
     );

@@ -6,7 +6,6 @@ import Animated, {
   ReduceMotion,
   useAnimatedStyle,
   useSharedValue,
-  withSpring,
   withTiming,
 } from "react-native-reanimated";
 
@@ -17,7 +16,7 @@ import {
 } from "@/components/navigation/tab-sections";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
-import { useMotionPreference } from "@/components/ui/motion";
+import { usePressFeedback, useMotionPreference } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { FLOATING_BAR_HEIGHT } from "@/theme/layout";
 import { materialStyle } from "@/theme/materials";
@@ -28,16 +27,6 @@ import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 export const LONG_PRESS_DELAY_MS = 400;
 const MAX_BAR_WIDTH = 520;
 
-// The same press feedback as the web bar: the icon and label dip with a quick spring rather than a
-// Material ripple, which would spill across the whole tab.
-const pressSpring = {
-  damping: 20,
-  stiffness: 380,
-  mass: 0.7,
-  overshootClamping: true,
-  reduceMotion: ReduceMotion.System,
-} as const;
-
 function PressScale({
   pressed,
   children,
@@ -45,20 +34,14 @@ function PressScale({
   pressed: boolean;
   children: ReactNode;
 }) {
-  const { space } = useQashyTheme();
-  const { travel } = useMotionPreference();
-  const scale = useSharedValue(1);
+  const { space, radius, text } = useQashyTheme();
+  // The same press feedback as the web bar: the theme's own, not a Material ripple, which would
+  // spill across the whole tab. An overlay theme (Material You) neither shrinks nor sinks, so it
+  // answers with a state-layer wash over the tab's own shape instead.
+  const { style, setPressed, overlay, overlayStyle } = usePressFeedback();
   useEffect(() => {
-    // Press feedback is a scale, so only the full animation level keeps it.
-    if (!travel) {
-      scale.set(1);
-      return;
-    }
-    scale.set(withSpring(pressed ? 0.95 : 1, pressSpring));
-  }, [pressed, scale, travel]);
-  const style = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+    setPressed(pressed);
+  }, [pressed, setPressed]);
   return (
     <Animated.View
       style={[
@@ -72,6 +55,24 @@ function PressScale({
         style,
       ]}
     >
+      {overlay ? (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              top: 0,
+              right: 0,
+              bottom: 0,
+              left: 0,
+              borderRadius: radius.nav,
+              borderCurve: "continuous",
+              backgroundColor: text,
+            },
+            overlayStyle,
+          ]}
+        />
+      ) : null}
       {children}
     </Animated.View>
   );

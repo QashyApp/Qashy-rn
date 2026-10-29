@@ -3,6 +3,8 @@ import {
   isSystemPalettes,
   type SystemPalettes,
 } from "@/theme/dynamic-palette";
+import { paletteTokens } from "@/theme/theme";
+import { materialYouTheme } from "@/theme/themes/material-you";
 import { contrastRatio, darkTokens, lightTokens } from "@/theme/tokens";
 
 const TONES = [0, 10, 50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 1000];
@@ -110,5 +112,36 @@ describe("isSystemPalettes", () => {
         neutral1: { ...violet.neutral1, "500": "red" },
       }),
     ).toBe(false);
+  });
+});
+
+describe("paletteTokens", () => {
+  it("clamps the status text colors against the wallpaper's own surfaces", () => {
+    for (const dark of [false, true]) {
+      const tokens = paletteTokens(violet, dark, materialYouTheme);
+      for (const key of [
+        "positiveText",
+        "negativeText",
+        "warningText",
+        "transferText",
+      ] as const) {
+        for (const surface of [
+          "surface",
+          "surfaceElevated",
+          "background",
+          "surfaceMuted",
+          "surfaceSunken",
+        ] as const) {
+          expect({
+            dark,
+            key,
+            surface,
+            ok:
+              contrastRatio(tokens[key] as string, tokens[surface] as string) >=
+              4.5,
+          }).toEqual({ dark, key, surface, ok: true });
+        }
+      }
+    }
   });
 });

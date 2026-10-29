@@ -188,7 +188,7 @@ export function StatTile({
             tone === "accent"
               ? theme.accentText
               : tone === "negative" && value
-                ? theme.negative
+                ? theme.negativeText
                 : theme.text,
         }}
       >

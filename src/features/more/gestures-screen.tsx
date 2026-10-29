@@ -50,6 +50,10 @@ export function GesturesScreen() {
     await apply({ swipeBetweenMonths: enabled });
   };
 
+  const changeSwipeRows = async (enabled: boolean) => {
+    await apply({ swipeRowActions: enabled });
+  };
+
   const changeHaptics = async (enabled: boolean) => {
     if (!(await apply({ hapticsEnabled: enabled }))) return;
     // The switch's own tick fires before the preference lands, so turning haptics on would be
@@ -98,6 +102,30 @@ export function GesturesScreen() {
             accessibilityLabel={t("Swipe to change month")}
             value={settings.swipeBetweenMonths ?? false}
             onValueChange={changeSwipe}
+          />
+        </View>
+      </Card>
+      <Card style={{ gap: space.lg }}>
+        <View
+          style={{
+            minHeight: 48,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 14,
+          }}
+        >
+          <View style={{ flex: 1, gap: space.xxs }}>
+            <AppText variant="label">Swipe rows for actions</AppText>
+            <AppText variant="caption" muted>
+              Swipe a transaction to delete it or change its category. Upcoming
+              payments swipe to mark paid or skip.
+            </AppText>
+          </View>
+          <QashySwitch
+            accessibilityLabel={t("Swipe rows for actions")}
+            value={settings.swipeRowActions ?? true}
+            onValueChange={changeSwipeRows}
           />
         </View>
       </Card>

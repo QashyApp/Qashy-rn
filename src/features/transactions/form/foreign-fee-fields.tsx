@@ -162,7 +162,7 @@ export function ForeignFeeFields({
             <AppText
               accessibilityRole="alert"
               variant="caption"
-              style={{ color: theme.negative }}
+              style={{ color: theme.negativeText }}
             >
               {errors.foreignCurrency}
             </AppText>

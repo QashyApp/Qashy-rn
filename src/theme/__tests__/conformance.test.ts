@@ -90,6 +90,32 @@ describe.each(BUILT_IN_THEMES.map((theme) => [theme.id, theme] as const))(
         }
       });
 
+      it("status text colors clear the text floor on every surface", () => {
+        const tokens = accentTokens(theme.accent.default, dark, theme);
+        const floor = theme.id === "high-contrast" ? 7 : 4.5;
+        for (const key of [
+          "positiveText",
+          "negativeText",
+          "warningText",
+          "transferText",
+        ] as const) {
+          for (const surface of [
+            "surface",
+            "surfaceElevated",
+            "background",
+            "surfaceMuted",
+            "surfaceSunken",
+          ] as const) {
+            expect({
+              key,
+              surface,
+              ratio:
+                contrastRatio(tokens[key] as string, palette[surface]) >= floor,
+            }).toEqual({ key, surface, ratio: true });
+          }
+        }
+      });
+
       it("the resolved accent carries readable on-accent text", () => {
         const tokens = accentTokens(theme.accent.default, dark, theme);
         // A tonal scheme supplies its own on-primary role; every other theme picks black or white.

@@ -103,7 +103,7 @@ export function BudgetPulseWidget({ card, month }: WidgetProps) {
           color={ratio > 1 ? (theme.negative as string) : undefined}
         />
         {ratio > 1 ? (
-          <AppText variant="caption" style={{ color: theme.negative }}>
+          <AppText variant="caption" style={{ color: theme.negativeText }}>
             Over budget
           </AppText>
         ) : null}

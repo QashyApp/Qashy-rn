@@ -262,6 +262,11 @@
       "he": "השהיה"
     },
     {
+      "name": "q_0671d889b1e99566",
+      "en": "Swipe rows for actions",
+      "he": "החלקה על שורות לפעולות"
+    },
+    {
       "name": "q_068d4dd16d9106d0",
       "en": "Icon",
       "he": "סמל"
@@ -285,11 +290,6 @@
       "name": "q_07392726f27cc92b",
       "en": "signing key",
       "he": "מפתח החתימה"
-    },
-    {
-      "name": "q_07911cab1a7fffcc",
-      "en": "Here’s what Qashy will create. Nothing leaves this device.",
-      "he": "זה מה ש־Qashy ייצור. שום דבר לא יוצא מהמכשיר."
     },
     {
       "name": "q_079a052719914d71",
@@ -1672,6 +1672,11 @@
       "he": "יצירת גיבוי"
     },
     {
+      "name": "q_31ecf38e9c35d87f",
+      "en": "Marked as paid",
+      "he": "סומן כשולם"
+    },
+    {
       "name": "q_32051cc18c8b7613",
       "en": "With none selected, the widget is just the add button.",
       "he": "אם לא נבחר דבר, הווידג׳ט הוא כפתור ההוספה בלבד."
@@ -2400,6 +2405,11 @@
       "name": "q_476b48a2b24452e6",
       "en": "Syncing…",
       "he": "מסנכרן…"
+    },
+    {
+      "name": "q_47ac9f1663705479",
+      "en": "Payment skipped",
+      "he": "התשלום דולג"
     },
     {
       "name": "q_47d74fbec3c9a1ce",
@@ -5937,6 +5947,11 @@
       "he": "נקודת המפגש לחיבור שלחה יותר מדי הודעות בתור."
     },
     {
+      "name": "q_b59d68ed12d46377",
+      "en": "Loading",
+      "he": "טוען"
+    },
+    {
       "name": "q_b5c02ab5c4407912",
       "en": "Delete 1 transaction?",
       "he": "למחוק תנועה אחת?"
@@ -5980,6 +5995,11 @@
       "name": "q_b6f5ce701a91ada2",
       "en": "That recovery phrase is not valid. Check for a mistyped or out-of-order word.",
       "he": "משפט השחזור הזה אינו תקין. בדקו אם יש מילה שהוקלדה בטעות או שאינה בסדר הנכון."
+    },
+    {
+      "name": "q_b710e60548901a8e",
+      "en": "Transaction deleted",
+      "he": "התנועה נמחקה"
     },
     {
       "name": "q_b718fbf789a9f5c9",
@@ -6500,6 +6520,11 @@
       "name": "q_c869072f330c5fb2",
       "en": "Past period snapshots are removed with it.",
       "he": "תמונות המצב של תקופות קודמות יימחקו יחד איתו."
+    },
+    {
+      "name": "q_c86ed82a94099e8c",
+      "en": "Here’s what Qashy will create. Nothing leaves this device except currency codes and dates used to fetch exchange rates, which you can turn off in More → Exchange rates.",
+      "he": "זה מה ש־Qashy ייצור. שום דבר לא יוצא מהמכשיר מלבד קודי מטבעות ותאריכים לשליפת שערי חליפין, שאפשר לכבות בעוד ← שערי חליפין."
     },
     {
       "name": "q_c87abc5100c9e27b",
@@ -7035,6 +7060,11 @@
       "name": "q_d6d11b8c4bd5be81",
       "en": "Choose icon",
       "he": "בחירת סמל"
+    },
+    {
+      "name": "q_d6fb6ae128834431",
+      "en": "Swipe a transaction to delete it or change its category. Upcoming payments swipe to mark paid or skip.",
+      "he": "החליקו על תנועה כדי למחוק אותה או לשנות את הקטגוריה שלה. תשלומים קרובים מחליקים לסימון כשולם או לדילוג."
     },
     {
       "name": "q_d70c585bcada1dcc",

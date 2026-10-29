@@ -87,7 +87,10 @@ export function PreviewVerdict({
               color={theme.negative}
               size={18}
             />
-            <AppText variant="label" style={{ color: theme.negative, flex: 1 }}>
+            <AppText
+              variant="label"
+              style={{ color: theme.negativeText, flex: 1 }}
+            >
               Your current data will be permanently deleted
             </AppText>
           </View>
@@ -109,7 +112,10 @@ export function PreviewVerdict({
               color={theme.negative}
               size={18}
             />
-            <AppText variant="label" style={{ color: theme.negative, flex: 1 }}>
+            <AppText
+              variant="label"
+              style={{ color: theme.negativeText, flex: 1 }}
+            >
               Can’t import yet
             </AppText>
           </View>

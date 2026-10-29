@@ -18,7 +18,7 @@ import type { AccentSource } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceSettings } from "@/providers/finance-provider";
 import { useCustomThemes } from "@/theme/custom/use-custom-themes";
-import { clampPaletteContrast } from "@/theme/custom/contrast";
+import { clampPaletteContrast, TEXT_SURFACES } from "@/theme/custom/contrast";
 import {
   deriveDynamicPalette,
   type SystemPalettes,
@@ -28,6 +28,7 @@ import { useIconSets } from "@/theme/icon-sets";
 import { applyAppearanceOverrides } from "@/theme/overrides";
 import { NO_SHADOW, bevelAccentShadow, flatShadowSet } from "@/theme/shadow";
 import { useSystemPalettes } from "@/theme/use-system-palettes";
+import { writeThemeHint } from "@/utils/theme-hint";
 import { classicTheme } from "@/theme/themes/classic";
 import { getTheme } from "@/theme/themes/registry";
 import type {
@@ -120,6 +121,15 @@ export interface ThemeTokens {
   onWarning: ColorValue;
   /** Semantic color for transfers — neither an income nor an expense. */
   transfer: ColorValue;
+  /**
+   * The status colors as *text or glyph* colors. The raw colors above only clear 3:1 (they are
+   * fills, chart marks and icons); these are nudged to 4.5:1 (7:1 in High contrast) against
+   * surface, background and muted surface, like `accentText`. Use them for any status-colored text.
+   */
+  positiveText: ColorValue;
+  negativeText: ColorValue;
+  warningText: ColorValue;
+  transferText: ColorValue;
   /** Tonal secondary and tertiary containers (chips, selected rows, highlights) and their content colors. */
   secondaryContainer: ColorValue;
   onSecondaryContainer: ColorValue;
@@ -253,6 +263,15 @@ export function accentTokens(
   const accent = roles
     ? roles.primary
     : accessibleAccentColor(seed, base.surface, base.text);
+  const minTextContrast = theme.id === "high-contrast" ? 7 : 4.5;
+  // A color used as small text must clear the floor on every surface it can sit on: cards, the
+  // page, sheets and forms (elevated), choice wells (muted) and sunken stat tiles.
+  const textOnSurfaces = (color: string) =>
+    TEXT_SURFACES.reduce(
+      (current, surface) =>
+        ensureContrast(current, base[surface], base.text, minTextContrast),
+      color,
+    );
   const accentContainer = roles
     ? roles.primaryContainer
     : mixHex(accent, base.surface, dark ? 0.78 : 0.86);
@@ -296,16 +315,7 @@ export function accentTokens(
     charts: theme.charts,
     gradients: theme.material.gradients,
     accent,
-    accentText: [base.surface, base.background, base.surfaceMuted].reduce(
-      (color, surface) =>
-        ensureContrast(
-          color,
-          surface,
-          base.text,
-          theme.id === "high-contrast" ? 7 : 4.5,
-        ),
-      accent,
-    ),
+    accentText: textOnSurfaces(accent),
     onAccent: roles ? roles.onPrimary : readableTextColor(accent),
     accentContainer,
     onAccentContainer: roles
@@ -330,6 +340,10 @@ export function accentTokens(
     warning: base.warning,
     onWarning: readableTextColor(base.warning),
     transfer: base.transfer,
+    positiveText: textOnSurfaces(base.positive),
+    negativeText: textOnSurfaces(base.negative),
+    warningText: textOnSurfaces(base.warning),
+    transferText: textOnSurfaces(base.transfer),
     secondaryContainer: base.secondaryContainer,
     onSecondaryContainer: base.onSecondaryContainer,
     tertiaryContainer: base.tertiaryContainer,
@@ -567,6 +581,13 @@ export function QashyThemeProvider({ children }: { children: ReactNode }) {
       tokens.background,
       theme.palette[mode].background,
     );
+    // Cached for the next cold start, whose static shell paints before this provider exists.
+    root.style.setProperty("--qashy-bg", background);
+    writeThemeHint({
+      mode: settings.themeMode,
+      background,
+      accent: cssColor(tokens.accent, tokens.staticAccent),
+    });
     const light = document.getElementById("qashy-theme-color-light");
     const dark = document.getElementById("qashy-theme-color-dark");
     light?.setAttribute(

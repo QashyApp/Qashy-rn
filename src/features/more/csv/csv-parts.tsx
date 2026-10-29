@@ -148,7 +148,7 @@ export function PreviewTile({
             tone === "accent"
               ? theme.accentText
               : tone === "negative"
-                ? theme.negative
+                ? theme.negativeText
                 : theme.text,
         }}
       >

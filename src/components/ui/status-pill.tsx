@@ -68,9 +68,9 @@ export function StatusPill({
       ? (transferTone?.onContainer ?? theme.onAccentContainer)
       : {
           neutral: theme.textMuted,
-          positive: theme.positive,
-          warning: theme.warning,
-          negative: theme.negative,
+          positive: theme.positiveText,
+          warning: theme.warningText,
+          negative: theme.negativeText,
         }[tone];
   const backgroundColor =
     tone === "transfer"

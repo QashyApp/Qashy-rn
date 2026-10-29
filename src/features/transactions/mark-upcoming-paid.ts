@@ -28,6 +28,9 @@ export async function markUpcomingPaid(
   await rates
     .ensureRatesFor(
       currencies.map((currency) => ({ currency, localDate: today })),
+      // The user asked for this payment, so a pair a recent failure put in the negative cache is
+      // tried again rather than failing for the next few minutes without a request.
+      { retry: true },
     )
     .catch(() => undefined);
   await repository.confirmUpcoming(id);

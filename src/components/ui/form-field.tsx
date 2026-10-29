@@ -119,7 +119,7 @@ function MaterialFormField({
   }));
 
   const labelColor = error
-    ? theme.negative
+    ? theme.negativeText
     : focused
       ? theme.accentText
       : theme.textMuted;
@@ -232,7 +232,7 @@ function MaterialFormField({
             muted={!error}
             style={{
               paddingHorizontal: space.lg,
-              ...(error ? { color: theme.negative } : null),
+              ...(error ? { color: theme.negativeText } : null),
             }}
           >
             {translatedDescription}
@@ -359,7 +359,7 @@ function ClassicFormField({
             literal
             variant="caption"
             muted={!error}
-            style={error ? { color: theme.negative } : undefined}
+            style={error ? { color: theme.negativeText } : undefined}
           >
             {translatedDescription}
           </AppText>

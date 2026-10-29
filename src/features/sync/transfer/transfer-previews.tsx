@@ -70,7 +70,7 @@ export function Preview({
         disabled={Boolean(busy)}
         onPress={onRestore}
       />
-      <AppText variant="caption" style={{ color: theme.negative }}>
+      <AppText variant="caption" style={{ color: theme.negativeText }}>
         This cannot be undone from inside Qashy.
       </AppText>
     </MotionView>
@@ -135,7 +135,7 @@ export function Tally({
             tone === "accent"
               ? theme.onAccentContainer
               : tone === "negative"
-                ? theme.negative
+                ? theme.negativeText
                 : theme.text,
         }}
       >

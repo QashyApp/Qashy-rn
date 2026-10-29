@@ -150,6 +150,7 @@ export function ExternalImportScreen() {
             <ActionButton
               title="Continue"
               icon="arrow.right"
+              mirrorIcon
               size="large"
               onPress={() => move("file")}
             />
@@ -211,6 +212,7 @@ export function ExternalImportScreen() {
               <ActionButton
                 title={busy ? "Checking…" : "Continue"}
                 icon="arrow.right"
+                mirrorIcon
                 size="large"
                 onPress={continueToReview}
                 disabled={busy}
