@@ -7,7 +7,11 @@ import {
 } from "@/components/finance/animated-money";
 import { AnimationLevelContext } from "@/components/ui/animation-level-context";
 
-jest.mock("@/theme/theme", () => ({ useQashyTheme: () => ({}) }));
+jest.mock("@/theme/theme", () => ({
+  useQashyTheme: () => ({
+    motion: jest.requireActual("@/theme/themes/classic").classicTheme.motion,
+  }),
+}));
 
 // The subject comes from a mutable holder so a rerender can change it.
 const current = { subject: "2026-01-01" };
@@ -100,6 +104,49 @@ describe("useAnimatedMinorAmount", () => {
     expect(hook.result.current).toBe(mid);
     await advance(800);
     expect(hook.result.current).toBe(100);
+  });
+
+  it("advances every counting figure from one shared frame callback", async () => {
+    const raf = jest.spyOn(globalThis, "requestAnimationFrame");
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <AnimationLevelContext.Provider value="all">
+        {children}
+      </AnimationLevelContext.Provider>
+    );
+    const framesFor = async (figures: number) => {
+      const hook = await renderHook(
+        ({ target }: { target: number }) =>
+          Array.from({ length: figures }, (_, index) =>
+            useAnimatedMinorAmount(target * (index + 1)),
+          ),
+        { initialProps: { target: 1000 }, wrapper },
+      );
+      await hook.rerender({ target: 2000 });
+      raf.mockClear();
+      await advance(100);
+      const frames = raf.mock.calls.length;
+      const mid = hook.result.current;
+      await advance(800);
+      expect(hook.result.current).toEqual(
+        Array.from({ length: figures }, (_, index) => 2000 * (index + 1)),
+      );
+      mid.forEach((value, index) => {
+        expect(value).toBeGreaterThan(1000 * (index + 1));
+        expect(value).toBeLessThan(2000 * (index + 1));
+      });
+      await hook.unmount();
+      return frames;
+    };
+    const single = await framesFor(1);
+    const many = await framesFor(5);
+    // Five figures counting request no more frames than one: they share the loop.
+    expect(single).toBeGreaterThan(0);
+    expect(many).toBe(single);
+    // Once every figure has landed the loop stops asking for frames.
+    raf.mockClear();
+    await advance(100);
+    expect(raf).not.toHaveBeenCalled();
+    raf.mockRestore();
   });
 
   it("snaps when animations are off", async () => {

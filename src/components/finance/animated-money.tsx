@@ -7,17 +7,13 @@ import {
   type ReactNode,
 } from "react";
 import { StyleSheet, Text, type TextProps, type TextStyle } from "react-native";
-import { useReducedMotion } from "react-native-reanimated";
 
-import { useAnimationLevel } from "@/components/ui/animation-level-context";
+import { motionCurves, useMotionPreference } from "@/components/ui/motion";
 import { AppText } from "@/components/ui/app-text";
 import { useQashyTheme } from "@/theme/theme";
 import type { CurrencyCode } from "@/domain/models";
 import { formatMoney, formatMoneyParts } from "@/utils/money";
 
-const COUNT_DURATION = 420;
-/** A month change counts up more briefly, so it stays out of the way of the next swipe. */
-const MONTH_COUNT_DURATION = 250;
 /**
  * How long a new subject must hold still before its amounts start to count. The pager commits a
  * month only once the swipe has landed, so this only has to coalesce a run of quick swipes: each
@@ -27,8 +23,57 @@ const SUBJECT_SETTLE_DELAY = 60;
 /** The month count re-renders the figure at most this often (about 30 per second). */
 const MONTH_FRAME_INTERVAL = 33;
 
-function easeOutCubic(t: number) {
-  return 1 - Math.pow(1 - t, 3);
+/**
+ * The theme-wide standard curve as a plain function. `Easing.bezier` returns a factory (so it can
+ * run on the UI thread), and the count runs on the JS thread, so it is unwrapped once here. Falls
+ * back to linear where the factory yields nothing, as in Reanimated's Jest mock.
+ */
+let countEasing: ((t: number) => number) | null = null;
+function ease(progress: number) {
+  if (!countEasing) {
+    const resolved = motionCurves.standard.factory() as unknown;
+    countEasing =
+      typeof resolved === "function"
+        ? (resolved as (t: number) => number)
+        : (t) => t;
+  }
+  return countEasing(progress);
+}
+
+/**
+ * One frame loop for every counting figure. A month change starts about ten at once; each running
+ * its own `requestAnimationFrame` chain meant ten callbacks and ten separate renders per frame.
+ * Here they share a single callback and one timestamp, so they all advance in the same frame and
+ * React batches their updates into one render. A subscriber returns true when it has finished.
+ */
+type FrameSubscriber = (now: number) => boolean;
+const frameSubscribers = new Set<FrameSubscriber>();
+let sharedFrame: number | null = null;
+
+function runSharedFrame() {
+  sharedFrame = null;
+  const now = Date.now();
+  // A snapshot, so a subscriber added by one of these steps waits for the next frame.
+  for (const subscriber of [...frameSubscribers]) {
+    if (frameSubscribers.has(subscriber) && subscriber(now)) {
+      frameSubscribers.delete(subscriber);
+    }
+  }
+  if (frameSubscribers.size && sharedFrame === null) {
+    sharedFrame = requestAnimationFrame(runSharedFrame);
+  }
+}
+
+function subscribeToFrames(subscriber: FrameSubscriber) {
+  frameSubscribers.add(subscriber);
+  if (sharedFrame === null) sharedFrame = requestAnimationFrame(runSharedFrame);
+  return () => {
+    frameSubscribers.delete(subscriber);
+    if (!frameSubscribers.size && sharedFrame !== null) {
+      cancelAnimationFrame(sharedFrame);
+      sharedFrame = null;
+    }
+  };
 }
 
 /**
@@ -59,14 +104,17 @@ export function CountUpSubject({
  */
 export function useAnimatedMinorAmount(target: number) {
   // A count-up is movement: it runs only at the full animation level.
-  const systemReduced = useReducedMotion();
-  const level = useAnimationLevel();
-  const reduceMotion = systemReduced || level !== "all";
+  const { travel } = useMotionPreference();
+  const reduceMotion = !travel;
+  const { duration } = useQashyTheme().motion;
+  // A month change counts up more briefly, so it stays out of the way of the next swipe.
+  const countDuration = duration.slow;
+  const monthCountDuration = duration.base;
   const subject = useContext(CountUpSubjectContext);
   const subjectRef = useRef(subject);
   const [display, setDisplay] = useState(target);
   const displayRef = useRef(target);
-  const frameRef = useRef<number | null>(null);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const mountedRef = useRef(false);
   // Set when the subject changes; cleared once the month count has started.
@@ -75,9 +123,9 @@ export function useAnimatedMinorAmount(target: number) {
 
   useEffect(() => {
     const cancel = () => {
-      if (frameRef.current !== null) {
-        cancelAnimationFrame(frameRef.current);
-        frameRef.current = null;
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+        unsubscribeRef.current = null;
       }
       if (timerRef.current !== null) {
         clearTimeout(timerRef.current);
@@ -102,31 +150,29 @@ export function useAnimatedMinorAmount(target: number) {
       timerRef.current = null;
       const monthChange = subjectChangedRef.current;
       subjectChangedRef.current = false;
-      const duration = monthChange ? MONTH_COUNT_DURATION : COUNT_DURATION;
+      const length = monthChange ? monthCountDuration : countDuration;
       const start = Date.now();
       let lastPaint = start;
-      const step = () => {
-        const now = Date.now();
-        const progress = Math.min(1, (now - start) / duration);
+      unsubscribeRef.current = subscribeToFrames((now) => {
+        const progress = Math.min(1, (now - start) / length);
         if (
           progress < 1 &&
           monthChange &&
           now - lastPaint < MONTH_FRAME_INTERVAL
         ) {
-          frameRef.current = requestAnimationFrame(step);
-          return;
+          return false;
         }
         lastPaint = now;
         const value =
           progress >= 1
             ? target
-            : Math.round(from + (target - from) * easeOutCubic(progress));
+            : Math.round(from + (target - from) * ease(progress));
         displayRef.current = value;
         setDisplay(value);
-        if (progress < 1) frameRef.current = requestAnimationFrame(step);
-        else frameRef.current = null;
-      };
-      frameRef.current = requestAnimationFrame(step);
+        if (progress < 1) return false;
+        unsubscribeRef.current = null;
+        return true;
+      });
     };
     const wait = subjectChangedRef.current
       ? Math.max(0, settleAtRef.current - Date.now())
@@ -134,7 +180,7 @@ export function useAnimatedMinorAmount(target: number) {
     if (wait > 0) timerRef.current = setTimeout(run, wait);
     else run();
     return cancel;
-  }, [reduceMotion, target, subject]);
+  }, [reduceMotion, target, subject, countDuration, monthCountDuration]);
 
   // Reduced motion never shows an in-between value, not even for the frame before the effect.
   return reduceMotion ? target : display;

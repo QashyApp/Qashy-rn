@@ -451,6 +451,8 @@ function BudgetCard({
           label={`${budget.name}: ${t("Budget progress")}`}
           value={pace.spentRatio}
           color={barColor}
+          // Reaching the limit is a warning, not the celebratory milestone pulse.
+          milestones={[]}
         />
 
         <View
@@ -505,6 +507,7 @@ function BudgetCard({
                   <ProgressBar
                     size="thin"
                     label={`${category.name}: ${t("Category budget progress")}`}
+                    milestones={[]}
                     value={
                       limit.limitMinor > 0
                         ? limit.amountMinor / limit.limitMinor

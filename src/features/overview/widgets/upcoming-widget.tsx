@@ -11,6 +11,7 @@ import {
   markUpcomingPaid,
   upcomingCurrencies,
 } from "@/features/transactions/mark-upcoming-paid";
+import { useLocalization } from "@/localization/localization";
 import { useExchangeRateService } from "@/providers/exchange-rate-provider";
 import { useFinanceRepository } from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
@@ -20,6 +21,7 @@ import type { WidgetProps } from "@/features/overview/widgets/types";
 
 export function UpcomingWidget({ editing, summary }: WidgetProps) {
   const { space } = useQashyTheme();
+  const { t } = useLocalization();
   const repository = useFinanceRepository();
   const exchangeRateService = useExchangeRateService();
   const [pendingUpcomingId, setPendingUpcomingId] = useState<string | null>(
@@ -79,6 +81,8 @@ export function UpcomingWidget({ editing, summary }: WidgetProps) {
           <MotionView
             key={transaction.id}
             variant="fade"
+            animateLayout
+            exit
             style={{ gap: space.xxs, paddingVertical: space.xs }}
           >
             <TransactionRow
@@ -95,12 +99,14 @@ export function UpcomingWidget({ editing, summary }: WidgetProps) {
             >
               <TextButton
                 title="Skip"
+                accessibilityLabel={`${t("Skip")}: ${transaction.title}`}
                 tone="muted"
                 disabled={editing || pendingUpcomingId !== null}
                 onPress={() => resolveUpcoming(transaction.id, "skip")}
               />
               <TextButton
                 title="Mark paid"
+                accessibilityLabel={`${t("Mark paid")}: ${transaction.title}`}
                 disabled={editing || pendingUpcomingId !== null}
                 onPress={() => resolveUpcoming(transaction.id, "confirm")}
               />

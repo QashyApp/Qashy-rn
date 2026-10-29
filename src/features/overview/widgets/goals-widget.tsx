@@ -40,9 +40,13 @@ export function GoalsWidget({ card }: WidgetProps) {
   const goals = useActiveGoals();
   const goalId =
     typeof card.config.goalId === "string" ? card.config.goalId : undefined;
-  const shown = goalId
-    ? goals.filter((goal) => goal.id === goalId)
-    : goals.slice(0, MAX_GOALS_SHOWN);
+  const shown = useMemo(
+    () =>
+      goalId
+        ? goals.filter((goal) => goal.id === goalId)
+        : goals.slice(0, MAX_GOALS_SHOWN),
+    [goals, goalId],
+  );
 
   const progressById = useMemo(() => {
     const progress = new Map<string, number>();
