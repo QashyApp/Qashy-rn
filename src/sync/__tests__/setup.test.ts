@@ -486,6 +486,47 @@ describe("joining a vault someone else holds", () => {
     ).toEqual(["disk full", "keystore unavailable"]);
   });
 
+  it("leaves a stray key the status reports and leaving the vault erases", async () => {
+    const target = await rig();
+    const unreliable = new Proxy(target.keystore, {
+      get: (object, property) => {
+        if (property === "erase")
+          return () => Promise.reject(new Error("keystore unavailable"));
+        const value = Reflect.get(object, property, object);
+        return typeof value === "function" ? value.bind(object) : value;
+      },
+    });
+    const input = joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+      peerNamed("Phone"),
+    ]);
+
+    await adoptVault(
+      {
+        ...target.deps,
+        keystore: unreliable,
+        storage: failingJoinTransaction(target.storage, { commit: false }),
+      },
+      input,
+    ).catch(() => undefined);
+
+    // The sync screen shows "Leave this vault" and the pair screen disables joining only
+    // because the status takes the device id from the key, with no enrolment behind it.
+    const stray = await readSyncStatus(target.deps);
+    expect(stray.keystore).toBe("unlocked");
+    expect(stray.deviceId).toBe(input.identity.deviceId);
+    expect(stray.enabled).toBe(false);
+    await expect(adoptVault(target.deps, input)).rejects.toThrow(
+      /already part of a vault/,
+    );
+
+    await disableSync(target.deps, { forget: true });
+
+    expect(await target.keystore.status()).toBe("empty");
+    expect((await readSyncStatus(target.deps)).deviceId).toBe("");
+    await adoptVault(target.deps, input);
+    expect(await target.keystore.status()).toBe("unlocked");
+  });
+
   it("records one pairing line per peer it was handed", async () => {
     const target = await rig();
     const peers = [peerNamed("Phone"), peerNamed("Tablet")];

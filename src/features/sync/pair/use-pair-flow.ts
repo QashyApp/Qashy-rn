@@ -548,8 +548,11 @@ export function usePairFlow() {
       // `adoptVault` erases what it stored when the join does not land, so the first sentence is
       // true and nothing is left here. Only its own AggregateError says the key may still be
       // present or the outcome unknown, and its message already says so. In that case the key stays
-      // in the keystore, which refuses a new join (and disables the join role) until this device
-      // leaves the vault, so removing it from the other device is not enough to pair again.
+      // in the keystore, which refuses a new join until it is erased. `readSyncStatus` takes the
+      // device id from that key, so the sync screen counts the device as paired: it shows the
+      // Danger zone's "Leave this vault" (`disableSync` with `forget`, which erases the key) and
+      // the pair screen disables the join role. Removing the device from the other device is not
+      // enough to pair again; leaving here is.
       setError(
         sentKey
           ? reason instanceof AggregateError
