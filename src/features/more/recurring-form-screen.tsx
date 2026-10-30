@@ -326,7 +326,8 @@ export function RecurringFormScreen() {
           <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Post automatically</AppText>
             <AppText variant="caption" muted>
-              Off by default. Upcoming items wait for your review.
+              Off: due items wait for your review. On: they post by themselves
+              when due, including any already overdue.
             </AppText>
           </View>
           <QashySwitch

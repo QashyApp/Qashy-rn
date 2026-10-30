@@ -52,7 +52,10 @@ export function BudgetAdjustmentScreen() {
   const status = useMemo(
     () =>
       repository
-        .getBudgetStatuses(today, { includeInactiveCustom: true })
+        .getBudgetStatuses(today, {
+          includeInactiveCustom: true,
+          includePendingAutoPosts: true,
+        })
         .find((item) => item.budget.id === budgetId),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
     [
@@ -63,6 +66,8 @@ export function BudgetAdjustmentScreen() {
       state.budgetPeriods,
       state.budgetAdjustments,
       state.transactions,
+      state.recurringRules,
+      state.exchangeRates,
     ],
   );
   const [direction, setDirection] = useState<Direction>("add");

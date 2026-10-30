@@ -1,5 +1,5 @@
 import { Redirect, router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
@@ -103,26 +103,40 @@ export function ExchangeRateScreen() {
       setSaving(false);
     }
   };
+  // True while this screen is deleting its own record. The delete drops `existing` from the
+  // snapshot before `finish` runs; without this the "gone" redirect below would leave at once,
+  // ahead of `finish` (and its return to the list the user came from).
+  const [deleting, setDeleting] = useState(false);
+  // A second tap while the confirmation is still open must not open another.
+  const confirming = useRef(false);
   const remove = async () => {
-    if (!existing || saving) return;
-    if (
-      !(await confirmDestructive({
+    if (!existing || saving || confirming.current) return;
+    confirming.current = true;
+    let confirmed: boolean;
+    try {
+      confirmed = await confirmDestructive({
         title: `Delete the ${existing.fromCurrency} rate?`,
         message: "Transactions that need this rate will report it as missing.",
-      }))
-    )
-      return;
+      });
+    } finally {
+      confirming.current = false;
+    }
+    if (!confirmed) return;
     setSaving(true);
+    setDeleting(true);
     try {
       await repository.deleteEntities("exchangeRates", [existing.id]);
+      // The form is done: leaving after a delete must never ask to discard changes.
+      allowLeave();
       finish();
     } catch (reason) {
-      showError("Couldn’t delete rate", errorMessage(reason, "Try again."));
-    } finally {
+      // Only a failed delete frees the form again; after a success it stays locked while it exits.
+      setDeleting(false);
       setSaving(false);
+      showError("Couldn’t delete rate", errorMessage(reason, "Try again."));
     }
   };
-  if (id && !existing)
+  if (id && !existing && !deleting)
     return (
       <Redirect
         href={returnTo === "/exchange-rates" ? "/exchange-rates" : "/more"}

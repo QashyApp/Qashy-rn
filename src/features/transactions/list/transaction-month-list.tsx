@@ -74,6 +74,7 @@ import {
   monthLabel,
   parseLocalDate,
   startOfMonth,
+  todayLocal,
 } from "@/utils/date";
 import { hapticImpactLight, hapticSelection } from "@/services/haptics";
 
@@ -159,12 +160,17 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
-  // `state.categories` is listed because the repository reads it internally for
-  // hierarchy-aware search; the snapshot argument alone would not re-run this
-  // when a category is renamed.
-  const categoriesVersion = state.categories;
+  // Upcoming is everything ahead, whatever month is showing, so it spans months like a search
+  // across all of them does.
+  const spansMonths = allMonths || kind === "upcoming";
+
+  // Search also reads category, account and tag names, which the repository takes from its own
+  // state; the snapshot argument alone would not re-run this when one of them is renamed.
+  const { categories, accounts, tags } = state;
   const queried = useMemo(() => {
-    void categoriesVersion;
+    void categories;
+    void accounts;
+    void tags;
     return repository.queryTransactions(
       {
         search,
@@ -175,8 +181,8 @@ export const TransactionMonthList = memo(function TransactionMonthList({
             : kind === "all"
               ? ["posted", "upcoming"]
               : ["posted"],
-        fromDate: allMonths || kind === "upcoming" ? undefined : fromDate,
-        toDate: allMonths || kind === "upcoming" ? undefined : toDate,
+        fromDate: spansMonths ? undefined : fromDate,
+        toDate: spansMonths ? undefined : toDate,
         // Soonest due first: the next thing to deal with belongs at the top of an Upcoming list.
         sort: kind === "upcoming" ? "oldest" : undefined,
       },
@@ -186,11 +192,13 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     repository,
     search,
     kind,
-    allMonths,
+    spansMonths,
     fromDate,
     toDate,
     state.transactions,
-    categoriesVersion,
+    categories,
+    accounts,
+    tags,
   ]);
   // A row waiting on its Undo is out of the list at once; its section goes with its last row.
   // A row being marked paid shows as paid while its Undo is up (the repository only changes at the
@@ -262,7 +270,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   );
   const savedMonthMatches =
     savedSignal !== null &&
-    (allMonths || savedSignal.month === monthKey(month));
+    (spansMonths || savedSignal.month === monthKey(month));
   const savedId = savedSignal?.id ?? null;
   const savedToken = savedSignal?.token ?? null;
   const savedFlashes = savedSignal?.flashes ?? 0;
@@ -314,20 +322,25 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   }, [isCurrent, savedMonthMatches, savedId, savedToken]);
   const clearFlash = useCallback(() => setFlash(null), []);
 
-  const dayFormat = useMemo(
-    () =>
-      new Intl.DateTimeFormat(
-        locale,
-        allMonths
-          ? {
-              weekday: "short",
-              month: "short",
-              day: "numeric",
-              year: "numeric",
-            }
-          : { weekday: "long", month: "short", day: "numeric" },
-      ),
-    [allMonths, locale],
+  // A list that spans months uses the short weekday. A header carries its year when the search
+  // spans every month, or when the day is not in the current year (last December seen in January).
+  const dayFormats = useMemo(() => {
+    const day = spansMonths
+      ? ({ weekday: "short", month: "short", day: "numeric" } as const)
+      : ({ weekday: "long", month: "short", day: "numeric" } as const);
+    return {
+      plain: new Intl.DateTimeFormat(locale, day),
+      withYear: new Intl.DateTimeFormat(locale, { ...day, year: "numeric" }),
+      thisYear: todayLocal().slice(0, 4),
+    };
+  }, [spansMonths, locale]);
+  const formatDay = useCallback(
+    (localDate: string) =>
+      (allMonths || localDate.slice(0, 4) !== dayFormats.thisYear
+        ? dayFormats.withYear
+        : dayFormats.plain
+      ).format(parseLocalDate(localDate)),
+    [allMonths, dayFormats],
   );
 
   const filtered = search.trim().length > 0 || kind !== "all";
@@ -470,7 +483,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
             }}
           >
             <AppText literal variant="overline" muted>
-              {dayFormat.format(parseLocalDate(section.title))}
+              {formatDay(section.title)}
             </AppText>
           </MotionView>
         </MonthSlideItem>
@@ -482,7 +495,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
       toggleUpcoming,
       space,
       theme.background,
-      dayFormat,
+      formatDay,
     ],
   );
   const renderItem = useCallback(
@@ -679,7 +692,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
                   icon="magnifyingglass"
                   title="Nothing matches"
                   body={
-                    allMonths
+                    spansMonths
                       ? "Try another search or filter."
                       : `Nothing in ${monthLabel(month, locale)} matches. Try another filter, or search all months.`
                   }

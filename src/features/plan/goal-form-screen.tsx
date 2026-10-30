@@ -81,6 +81,11 @@ export function GoalFormScreen() {
       targetDate,
       linkedAccountId,
       linkedCategoryId,
+      // The contribution card is part of this form: a typed amount is saved with the goal, so
+      // leaving with one typed must ask before discarding it.
+      contribution,
+      contributionDate,
+      contributionNote,
     },
   });
   const targetError = validateMoneyInput(
@@ -126,7 +131,13 @@ export function GoalFormScreen() {
   const contributionDateError = validateDateInput(contributionDate, {
     label: "Contribution date",
   });
-  const canSave = !targetError && !initialError && !targetDateError;
+  const hasTypedContribution = Boolean(existing && contribution.trim());
+  // A typed contribution is saved with the goal, so an invalid one blocks Save (its fields show
+  // the error) rather than saving the goal alone and silently dropping the amount.
+  const contributionInvalid =
+    hasTypedContribution && Boolean(contributionError || contributionDateError);
+  const canSave =
+    !targetError && !initialError && !targetDateError && !contributionInvalid;
   const canSaveContribution =
     Boolean(contribution.trim()) &&
     !contributionError &&
@@ -155,7 +166,9 @@ export function GoalFormScreen() {
     if (saving || !canSave) return;
     setSaving(true);
     try {
-      await repository.saveGoal(
+      // One atomic write: the goal and a typed contribution (a new one, or the one being edited)
+      // are validated together and persisted together, or nothing is.
+      await repository.saveGoalAndContribution(
         {
           name: name.trim() || defaultGoalName,
           kind,
@@ -172,8 +185,26 @@ export function GoalFormScreen() {
           linkedCategoryId: linkedCategoryId || null,
           archived: false,
         },
+        hasTypedContribution
+          ? {
+              amountMinor: parseMoney(
+                contribution,
+                state.settings.baseCurrency,
+                locale,
+              ),
+              localDate: contributionDate,
+              transactionId: null,
+              note: contributionNote,
+            }
+          : undefined,
         existing?.id,
         expectedRevision,
+        hasTypedContribution && editingContributionId
+          ? {
+              id: editingContributionId,
+              expectedRevision: editingContributionRevision,
+            }
+          : undefined,
       );
       hapticSuccess();
       closeToOwner();

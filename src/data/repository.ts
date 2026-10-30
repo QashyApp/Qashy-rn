@@ -265,6 +265,8 @@ export interface FinanceRepository {
     contribution?: GoalContributionInput,
     id?: string,
     expectedRevision?: number,
+    /** Saves `contribution` over this existing one (an edit) instead of adding a new one. */
+    editContribution?: { id: string; expectedRevision?: number },
   ): Promise<Goal>;
   saveContribution(
     input: ContributionInput,

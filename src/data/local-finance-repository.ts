@@ -954,7 +954,15 @@ export class LocalFinanceRepository implements FinanceRepository {
       ? updateEntity(existing, normalized)
       : (createEntity({ id: makeId(), ...normalized }) as Budget);
     assertBudgetSetSafe(withEntity(this.state.budgets, budget));
-    const periods = buildBudgetSnapshots(this.ctx, budget, true);
+    const periods = buildBudgetSnapshots(
+      this.ctx,
+      budget,
+      true,
+      todayLocal(),
+      false,
+      // Turning rollover on partway through a period brings the previous period's carry in.
+      Boolean(existing && !existing.rollover && budget.rollover),
+    );
     // Throws if any period's effective limit would leave the safe-integer range.
     periods.forEach((period) => effectiveLimitFor(this.ctx, budget, period));
     await this.storage.putMany(
@@ -1104,6 +1112,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     contribution?: GoalContributionInput,
     id?: string,
     expectedRevision?: number,
+    editContribution?: { id: string; expectedRevision?: number },
   ) {
     return this.enqueueMutation(() =>
       this.saveGoalAndContributionNow(
@@ -1111,6 +1120,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         contribution,
         id,
         expectedRevision,
+        editContribution,
       ),
     );
   }
@@ -1120,6 +1130,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     contribution?: GoalContributionInput,
     id?: string,
     expectedRevision?: number,
+    editContribution?: { id: string; expectedRevision?: number },
   ) {
     const { goal, contributionEntity } = planGoalSave(
       this.ctx,
@@ -1127,6 +1138,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       contribution,
       id,
       expectedRevision,
+      editContribution,
     );
 
     await this.storage.putMany(

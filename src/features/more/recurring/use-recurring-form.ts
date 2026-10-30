@@ -44,6 +44,10 @@ import {
 } from "@/utils/money";
 import { appliedCrossRateFor } from "@/utils/rates";
 import {
+  overduePostedBySave,
+  pendingOccurrences,
+} from "@/utils/recurring-impact";
+import {
   MAX_OCCURRENCE_COUNT,
   nthOccurrenceDate,
   occurrenceCountUntil,
@@ -340,6 +344,26 @@ export function useRecurringForm() {
 
   const save = async () => {
     if (!account || busy || !canSave) return;
+    // Saving an active rule runs generation at once, and generation posts every due occurrence of
+    // an auto-post rule, including ones that were waiting for review. Say so before it happens.
+    const overdue = overduePostedBySave(
+      existing,
+      { autoPost, active },
+      state.transactions,
+      todayLocal(),
+    );
+    if (
+      overdue > 0 &&
+      !(await confirmDestructive({
+        title: "Post overdue payments?",
+        message:
+          overdue === 1
+            ? "1 overdue payment will be posted now."
+            : `${overdue} overdue payments will be posted now.`,
+        confirmLabel: "Post them",
+      }))
+    )
+      return;
     setBusy(true);
     try {
       const normalizedInterval = Math.max(1, Math.floor(Number(interval) || 1));
@@ -411,10 +435,20 @@ export function useRecurringForm() {
 
   const remove = async () => {
     if (!existing || busy) return;
+    const pending = pendingOccurrences(state.transactions, existing.id).length;
     if (
       !(await confirmDestructive({
         title: "Delete this schedule?",
-        message: "Already generated transactions stay in your ledger.",
+        message: [
+          "Transactions already posted stay in your ledger.",
+          ...(pending === 0
+            ? []
+            : [
+                pending === 1
+                  ? "1 upcoming payment that hasn’t been posted yet is removed."
+                  : `${pending} upcoming payments that haven’t been posted yet are removed.`,
+              ]),
+        ],
       }))
     )
       return;

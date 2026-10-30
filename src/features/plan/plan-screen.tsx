@@ -40,6 +40,8 @@ import { formatMoney } from "@/utils/money";
 import { budgetPace, type BudgetPaceStatus } from "@/utils/pace";
 
 const GOAL_MILESTONES = [0.25, 0.5, 0.75, 1];
+/** Reaching a spending goal's target is not a celebration, so it has no pulse at 100%. */
+const SPENDING_GOAL_MILESTONES = [0.25, 0.5, 0.75];
 /** Below this content width, budget and goal cards always stack one per row;
  * a two-up card is too cramped under it to read as anything but squeezed. */
 const WIDE_GRID_BREAKPOINT = 900;
@@ -101,7 +103,11 @@ export function PlanScreen() {
   // The repository reads these state slices internally, so they must stay in
   // the deps even though the callback does not reference them directly.
   const budgets = useMemo(
-    () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
+    () =>
+      repository.getBudgetStatuses(today, {
+        includeInactiveCustom: true,
+        includePendingAutoPosts: true,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
     [
       repository,
@@ -111,6 +117,8 @@ export function PlanScreen() {
       state.budgetAdjustments,
       state.transactions,
       state.categories,
+      state.recurringRules,
+      state.exchangeRates,
     ],
   );
   const goals = useMemo(
@@ -566,14 +574,25 @@ function GoalCard({
   progress: number;
   fill: boolean;
 }) {
-  const { space } = useQashyTheme();
+  const theme = useQashyTheme();
+  const { space } = theme;
   const state = useFinanceState();
   const { locale, t, isRtl } = useLocalization();
   const displayProgress = Math.max(0, progress);
   const ratio = goal.targetMinor > 0 ? displayProgress / goal.targetMinor : 0;
-  const percent = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+  // A spending goal is a ceiling: past it the card says by how much, and shows the real percent.
+  const over = goal.kind === "spending" && displayProgress > goal.targetMinor;
+  const percent = Math.max(
+    0,
+    Math.min(over ? 999 : 100, Math.round(ratio * 100)),
+  );
   const remainingMinor = Math.max(0, goal.targetMinor - displayProgress);
-  useMilestoneHaptics(ratio, GOAL_MILESTONES, hapticSuccess);
+  const overMinor = Math.max(0, displayProgress - goal.targetMinor);
+  useMilestoneHaptics(
+    ratio,
+    goal.kind === "spending" ? SPENDING_GOAL_MILESTONES : GOAL_MILESTONES,
+    hapticSuccess,
+  );
   const money = (minor: number) =>
     formatMoney(minor, state.settings.baseCurrency, locale);
   const byDate = goal.targetDate
@@ -592,8 +611,8 @@ function GoalCard({
           <ProgressRing
             value={ratio}
             size={72}
-            color={goal.color}
-            label={`${goal.name}: ${t("Goal progress")}`}
+            color={over ? (theme.negative as string) : goal.color}
+            label={`${goal.name}: ${t("Goal progress")}${over ? ` · ${t("Over target")}` : ""}`}
           >
             <AppText literal numeric variant="label">{`${percent}%`}</AppText>
           </ProgressRing>
@@ -630,13 +649,25 @@ function GoalCard({
             muted
           >{`${t("of")} ${money(goal.targetMinor)}`}</AppText>
         </View>
-        <AppText literal variant="caption" muted numeric>
+        <AppText
+          literal
+          variant="caption"
+          muted={!over}
+          numeric
+          style={over ? { color: theme.negativeText } : undefined}
+        >
           {/* Hebrew puts the "remaining" verb before the amount ("נותרו $X"), the reverse
               of the English "$X remaining" order, so the fragments are composed per
-              direction rather than concatenated in a single fixed order. */}
-          {isRtl
-            ? `${t("remaining")} ${money(remainingMinor)}${byDate}`
-            : `${money(remainingMinor)} ${t("remaining")}${byDate}`}
+              direction rather than concatenated in a single fixed order. "over target" follows
+              the same rule ("חריגה של $X"). A spending goal past its target says so in
+              words, in the danger text color. */}
+          {over
+            ? isRtl
+              ? `${t("over target")} ${money(overMinor)}${byDate}`
+              : `${money(overMinor)} ${t("over target")}${byDate}`
+            : isRtl
+              ? `${t("remaining")} ${money(remainingMinor)}${byDate}`
+              : `${money(remainingMinor)} ${t("remaining")}${byDate}`}
         </AppText>
 
         <ActionButton

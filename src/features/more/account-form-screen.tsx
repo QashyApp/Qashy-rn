@@ -32,7 +32,7 @@ import {
 import { useQashyTheme } from "@/theme/theme";
 import { ACCENT_PRESETS } from "@/theme/tokens";
 import { accountDeletionMessage } from "@/utils/account-impact";
-import { accountTypeLabel } from "@/utils/labels";
+import { accountTypeIcon, accountTypeLabel } from "@/utils/labels";
 import { useTurnOnAutomaticRates } from "@/features/shared/use-automatic-rates";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import {
@@ -47,14 +47,6 @@ import {
 } from "@/utils/money";
 
 const COLORS = ACCENT_PRESETS.slice(0, 7);
-const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = {
-  checking: "building.columns",
-  cash: "banknote",
-  savings: "leaf",
-  credit: "creditcard",
-  wallet: "wallet",
-};
-
 export function AccountFormScreen() {
   const { id, returnTo } = useLocalSearchParams<{
     id?: string;
@@ -160,7 +152,12 @@ export function AccountFormScreen() {
           type,
           currency: currency.toUpperCase(),
           openingBalanceMinor: parseMoney(opening, currency, locale),
-          icon: "wallet.bifold",
+          // The icon every list draws for the type; an existing account keeps what it has
+          // until its type changes.
+          icon:
+            existing && existing.type === type
+              ? existing.icon
+              : accountTypeIcon(type),
           color,
           archived: false,
         },
@@ -227,7 +224,7 @@ export function AccountFormScreen() {
         }}
       >
         <IconBadge
-          icon={ACCOUNT_TYPE_ICONS[type]}
+          icon={accountTypeIcon(type)}
           color={color}
           fallback={{
             container: theme.accentContainer,
@@ -261,7 +258,7 @@ export function AccountFormScreen() {
           ).map((item) => (
             <ChoiceChip
               key={item}
-              icon={ACCOUNT_TYPE_ICONS[item]}
+              icon={accountTypeIcon(item)}
               label={accountTypeLabel(item)}
               selected={type === item}
               onPress={() => setType(item)}

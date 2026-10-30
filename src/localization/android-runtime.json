@@ -317,7 +317,10 @@
     "q_b34dd6bc86e8d506",
     "q_17e8165847ea7f20",
     "q_9275097ec3d27ff2",
-    "q_247f523abf16ce65",
+    "q_bbcb986134f77bea",
+    "q_ea8dc390a7cd89e7",
+    "q_af2fbd066c57a0d4",
+    "q_8870b0c42c1938a3",
     "q_a45a194b58837e4f",
     "q_95bc8722b2708f8b",
     "q_f113fa256db9617b",
@@ -341,7 +344,11 @@
     "q_8b409dc1f261b173",
     "q_33805c8e60313ae5",
     "q_f17bc6a3820498ac",
-    "q_3162ede1e055f9a2",
+    "q_cb8a95d5d5bea584",
+    "q_7fa771f57a865644",
+    "q_db73788b3c975f16",
+    "q_b39e59ad5cc90e2d",
+    "q_45816b09f7c7377f",
     "q_2b8bf002959a8198",
     "q_eca00fe1d318d0a5",
     "q_ae5d87e99fe081e0",
@@ -467,7 +474,8 @@
     "q_bf04ae12a2d9a1dd",
     "q_b5c02ab5c4407912",
     "q_400df6483e640e03",
-    "q_e7f7188343b7a2a7",
+    "q_382af23c8ec3ee5b",
+    "q_4ba375c4ca1a0353",
     "q_0ef75562f3aa0280",
     "q_cf8ca1bcf1a886e7",
     "q_c869072f330c5fb2",
@@ -855,6 +863,7 @@
     "q_60906961d6b6d3d8",
     "q_0de23d073b73f44b",
     "q_74b69cad98917c30",
+    "q_e5a997a84ba2e32f",
     "q_8f0d261eb13209eb",
     "q_bf9d150d494dd1b0",
     "q_814c125b3f50422e",
@@ -925,6 +934,8 @@
     "q_c8d98a0c67691946",
     "q_5cdb53fa5a02311b",
     "q_d452da249c1ed7ad",
+    "q_3335848d4b82a01e",
+    "q_007dfd9865733e55",
     "q_759468057c6108bb",
     "q_d3fd34d3c95d54c0",
     "q_93d85c9969bc1e8e",
@@ -1038,6 +1049,8 @@
     "q_f8c76ca1fdcb6fd7",
     "q_84d6ffdba02984e2",
     "q_4544daa3d7348b00",
+    "q_7c8200c13ad08840",
+    "q_25fc5e06beac62e0",
     "q_710b85a924d7a85f",
     "q_343f0419454a4243",
     "q_41d271f0d995ab6e",
@@ -1405,7 +1418,6 @@
     "q_4386c69254d311ed",
     "q_3523303f28888dd0",
     "q_43d61a6cb113be7e",
-    "q_e56045d182e9e762",
     "q_bdba230059fad1a7",
     "q_14883e180a3ae033",
     "q_c87abc5100c9e27b",
@@ -2550,6 +2562,10 @@
       "source": "^No transactions in (.+)$"
     },
     {
+      "name": "q_5f07a48e3a478a03",
+      "source": "^Totals for (.+)$"
+    },
+    {
       "name": "q_3047e16e8b851a5d",
       "source": "^Nothing in (.+) matches\\. Try another filter, or search all months\\.$"
     },
@@ -2684,6 +2700,10 @@
     {
       "name": "q_44d40a1402849454",
       "source": "^Currency (.+) does not match (.+) \\((.+)\\)\\.$"
+    },
+    {
+      "name": "q_40612fb91cee5e51",
+      "source": "^Enter a real calendar date in the (.+) format\\.$"
     },
     {
       "name": "q_23330291146a2e42",
@@ -3116,6 +3136,14 @@
     {
       "name": "q_207fd8673528475a",
       "source": "^Deletes (\\d+) transactions\\.$"
+    },
+    {
+      "name": "q_bdbdef8e85336780",
+      "source": "^(\\d+) overdue payments will be posted now\\.$"
+    },
+    {
+      "name": "q_8b564387697a467d",
+      "source": "^(\\d+) upcoming payments that haven’t been posted yet are removed\\.$"
     },
     {
       "name": "q_d86652d9031308bc",

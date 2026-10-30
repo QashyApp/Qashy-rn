@@ -39,6 +39,7 @@ import { useQashyTheme } from "@/theme/theme";
 import { fontStyle, numericFontStyle } from "@/theme/typography";
 import { mediumDate, shortDate, todayLocal } from "@/utils/date";
 import { formatMoney } from "@/utils/money";
+import { percentShares } from "@/utils/percent";
 
 // SVG text does not inherit the app face, so charts name the theme's face explicitly
 // (`fontStyle(..., theme.type)`). Axis labels that render dates use the text face (a
@@ -466,15 +467,16 @@ export function CategoryDonut({
     opacity: revealed.value >= 1 ? 0 : travel ? 1 : 1 - revealed.value,
   }));
   const animatedTotal = useAnimatedMinorAmount(total);
-  const share = (amountMinor: number) =>
-    total ? Math.round((amountMinor / total) * 100) : 0;
+  // Whole-number shares that add up to 100 (largest remainder), so the legend never reads 99% or
+  // 101% in total.
+  const shares = percentShares(slices.map((slice) => slice.amountMinor));
   // The ring and the legend are matched by an ordinal as well as a color, so
   // the pairing survives color blindness and monochrome rendering.
   const label = slices.length
     ? `Spending by category. Total ${formatMoney(total, currency, locale)}. ${slices
         .map(
           (slice, index) =>
-            `${index + 1}. ${slice.name}, ${share(slice.amountMinor)} percent`,
+            `${index + 1}. ${slice.name}, ${shares[index]} percent`,
         )
         .join(". ")}.`
     : "Spending by category. No spending yet.";
@@ -640,7 +642,7 @@ export function CategoryDonut({
               variant="caption"
               muted
               numeric
-            >{`${share(slice.amountMinor)}%`}</AppText>
+            >{`${shares[index]}%`}</AppText>
           </View>
         ))}
         {!items.length ? <AppText muted>No spending yet</AppText> : null}

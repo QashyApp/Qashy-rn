@@ -370,8 +370,11 @@ export const HEBREW: Record<string, string> = {
   "Schedule active": "תזמון פעיל",
   "Pause without deleting this schedule.": "השהו מבלי למחוק את התזמון.",
   "Post automatically": "רישום אוטומטי",
-  "Off by default. Upcoming items wait for your review.":
-    "כבוי כברירת מחדל. תנועות עתידיות ממתינות לבדיקה שלכם.",
+  "Off: due items wait for your review. On: they post by themselves when due, including any already overdue.":
+    "כבוי: פריטים שהגיע מועדם ממתינים לבדיקה שלכם. פעיל: הם נרשמים מעצמם במועדם, כולל כאלה שמועדם כבר עבר.",
+  "Post overdue payments?": "לרשום תשלומים שעבר מועדם?",
+  "1 overdue payment will be posted now.": "תשלום אחד שעבר מועדו יירשם עכשיו.",
+  "Post them": "לרשום אותם",
   Active: "פעיל",
   Paused: "מושהה",
   Ended: "הסתיים",
@@ -399,8 +402,13 @@ export const HEBREW: Record<string, string> = {
   "Import transactions": "ייבוא תנועות",
   "Creates a UTF-8 CSV of your transactions with accounts, categories, tags, notes and exchange rates. Not a full backup: budgets, goals and schedules are not included.":
     "יוצר קובץ CSV בקידוד UTF-8 של התנועות, כולל חשבונות, קטגוריות, תגיות, הערות ושערי חליפין. זהו לא גיבוי מלא: תקציבים, יעדים ותזמונים אינם נכללים.",
-  "Headers are matched automatically. Required columns are date, type, title, amount, currency, and account. Nothing is committed until after preview.":
-    "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, סוג, כותרת, סכום, מטבע וחשבון. דבר לא נשמר לפני התצוגה המקדימה.",
+  "Headers are matched automatically. Required columns are date, title, amount, and account. Type and currency are optional and default to expense and your base currency. Nothing is committed until after preview.":
+    "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, כותרת, סכום וחשבון. סוג ומטבע הם אופציונליים וברירת המחדל שלהם היא הוצאה ומטבע הבסיס שלכם. דבר לא נשמר לפני התצוגה המקדימה.",
+  "Date format": "פורמט תאריך",
+  Auto: "אוטומטי",
+  "Negative amounts import as expenses, positive as income.":
+    "סכומים שליליים מיובאים כהוצאות, וסכומים חיוביים כהכנסות.",
+  "Fix these and try again.": "תקנו אותם ונסו שוב.",
   "Choose CSV": "בחירת CSV",
   "Column mapping": "מיפוי עמודות",
   Required: "חובה",
@@ -554,8 +562,10 @@ export const HEBREW: Record<string, string> = {
   "Delete this contribution?": "למחוק את ההפקדה הזו?",
   "Delete 1 transaction?": "למחוק תנועה אחת?",
   "Delete 1 recurring transaction?": "למחוק תנועה מחזורית אחת?",
-  "Already generated transactions stay in your ledger.":
-    "תנועות שכבר נוצרו יישארו ביומן.",
+  "Transactions already posted stay in your ledger.":
+    "תנועות שכבר נרשמו יישארו ביומן.",
+  "1 upcoming payment that hasn’t been posted yet is removed.":
+    "תשלום קרוב אחד שטרם נרשם יוסר.",
   "They will be removed from your ledger.": "הן יוסרו מהיומן.",
   "Manual contributions are removed with it.":
     "ההפקדות הידניות יימחקו יחד איתו.",
@@ -1102,6 +1112,7 @@ export const HEBREW: Record<string, string> = {
     "אין קובץ גיבוי? מכשיר שהנתונים שלכם עדיין נמצאים בו יכול להוסיף את המכשיר הזה דרך סנכרון ← הוספת מכשיר, מה שמעתיק את הכספת ללא קובץ כלל.",
   // UI refresh: month pager, onboarding, existing-user paths.
   "Net worth": "שווי נקי",
+  "As of today": "נכון להיום",
   Insight: "תובנה",
   Trend: "מגמה",
   "Choose month": "בחירת חודש",
@@ -1186,6 +1197,8 @@ export const HEBREW: Record<string, string> = {
   "Hide filters": "הסתרת מסננים",
   "A filter is on": "מסנן פעיל",
   "Search all months": "חיפוש בכל החודשים",
+  "All upcoming": "כל מה שבקרוב",
+  "Totals are for the whole month": "הסכומים הם לכל החודש",
   "Go to latest": "מעבר לאחרונות",
   "Add one for this month, or jump to your latest activity.":
     "הוסיפו תנועה לחודש הזה, או קפצו לפעילות האחרונה.",
@@ -1332,6 +1345,8 @@ export const HEBREW: Record<string, string> = {
   "On track": "בקצב",
   "Over pace": "מעל הקצב",
   "Over budget": "חריגה מהתקציב",
+  "Over target": "מעל היעד",
+  "over target": "חריגה של",
   Projected: "צפי",
   remaining: "נותרו",
 
@@ -1917,7 +1932,6 @@ export const HEBREW: Record<string, string> = {
     "הרשומה הזו השתנתה בחלון אחר. פתחו אותה מחדש ונסו שוב.",
   // CSV row checks.
   "Row number is missing.": "מספר השורה חסר.",
-  "Enter a real calendar date.": "הזינו תאריך אמיתי בלוח השנה.",
   "Currency must be a three-letter code.":
     "המטבע חייב להיות קוד בן שלוש אותיות.",
   "Foreign currency must be a three-letter code.":
@@ -3202,6 +3216,7 @@ export function createDynamicPatterns(
     [/^Next (.+)$/, (date) => `הבא: ${date}`],
     [/^Effective (.+)$/, (date) => `בתוקף מ־${date}`],
     [/^No transactions in (.+)$/, (month) => `אין תנועות ב${month}`],
+    [/^Totals for (.+)$/, (month) => `סכומים עבור ${month}`],
     [
       /^Nothing in (.+) matches\. Try another filter, or search all months\.$/,
       (month) => `אין התאמות ב${month}. נסו מסנן אחר, או חפשו בכל החודשים.`,
@@ -3340,6 +3355,10 @@ export function createDynamicPatterns(
       /^Currency (.+) does not match (.+) \((.+)\)\.$/,
       (currency, account, expected) =>
         `המטבע ${currency} אינו תואם לחשבון ${account} (${expected}).`,
+    ],
+    [
+      /^Enter a real calendar date in the (.+) format\.$/,
+      (format) => `הזינו תאריך אמיתי בלוח השנה בפורמט ${format}.`,
     ],
     [/^Unknown account: (.+)$/, (account) => `חשבון לא מוכר: ${account}`],
     [
@@ -3653,6 +3672,14 @@ export function createDynamicPatterns(
     // Account and category deletion confirmations. Each sentence is its own message, so a name
     // or a count never multiplies the combinations.
     [/^Deletes (\d+) transactions\.$/, (count) => `מוחק ${count} תנועות.`],
+    [
+      /^(\d+) overdue payments will be posted now\.$/,
+      (count) => `${count} תשלומים שעבר מועדם יירשמו עכשיו.`,
+    ],
+    [
+      /^(\d+) upcoming payments that haven’t been posted yet are removed\.$/,
+      (count) => `${count} תשלומים קרובים שטרם נרשמו יוסרו.`,
+    ],
     [
       /^Deletes (\d+) recurring schedules\.$/,
       (count) => `מוחק ${count} תזמונים חוזרים.`,

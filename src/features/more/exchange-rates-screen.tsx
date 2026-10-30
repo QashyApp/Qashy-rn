@@ -164,16 +164,31 @@ export function ExchangeRatesScreen() {
               can see your IP address.
             </AppText>
           </View>
-          {toggling ? (
-            <ActivityIndicator color={theme.accent} />
-          ) : (
+          {/* The switch stays put while it saves; the spinner has a slot of its own beside it, so
+              nothing shifts when it appears. */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.sm,
+            }}
+          >
+            <View
+              style={{ width: 20, height: 20 }}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              {toggling ? (
+                <ActivityIndicator size="small" color={theme.accent} />
+              ) : null}
+            </View>
             <QashySwitch
               accessibilityLabel={t("Fetch rates automatically")}
               value={status.enabled}
               onValueChange={toggle}
               disabled={toggling}
             />
-          )}
+          </View>
         </View>
         {status.fetching ? (
           <View

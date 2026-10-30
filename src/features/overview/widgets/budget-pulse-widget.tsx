@@ -41,7 +41,12 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
       : endOfMonth(month);
   const budgetStatuses = useMemo(
     () =>
-      repository.getBudgetStatuses(budgetDate, { includeInactiveCustom: true }),
+      repository.getBudgetStatuses(budgetDate, {
+        includeInactiveCustom: true,
+        // Count the auto-post occurrences that are due but not generated yet, so the figures do
+        // not lag after midnight until the app next generates them.
+        includePendingAutoPosts: true,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
     [
       repository,
@@ -195,7 +200,11 @@ export function BudgetPulseConfigSheet({
   const state = useFinanceState();
   const today = toLocalDate(new Date(useNow()));
   const budgetStatuses = useMemo(
-    () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
+    () =>
+      repository.getBudgetStatuses(today, {
+        includeInactiveCustom: true,
+        includePendingAutoPosts: true,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
     [
       repository,

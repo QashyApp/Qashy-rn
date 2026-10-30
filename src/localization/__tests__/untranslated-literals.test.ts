@@ -78,6 +78,12 @@ const ALLOWED: Record<string, string> = {
     "Search keywords of the `body` icon, matched against typed text and never displayed; the key only looks like the `body` text prop.",
   disabled: "A relay health status code compared in code, never shown.",
   ok: "A relay health status code compared in code, never shown.",
+  "YYYY-MM-DD":
+    "A CSV date-format notation, shown as written in every language (the date format picker and its error).",
+  "DD/MM/YYYY":
+    "A CSV date-format notation, shown as written in every language (the date format picker and its error).",
+  "MM/DD/YYYY":
+    "A CSV date-format notation, shown as written in every language (the date format picker and its error).",
   "Unsupported import source: ${…}":
     "The exhaustiveness guard of a `never` switch over the import source ids.",
 };

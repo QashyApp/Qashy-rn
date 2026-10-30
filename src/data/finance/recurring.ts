@@ -203,26 +203,32 @@ export function assertRecurringRuleGenerationSafe(
         postedWithSnapshot(ctx, transaction, today)) ||
       transaction,
   );
-  walkRecurrence(rule, horizonDate, (occurrenceDate) => {
-    const occurrenceKey = `${rule.id}:${occurrenceDate}`;
-    if (
-      deps.deletedOccurrenceKeys.has(occurrenceKey) ||
-      transactions.some(
-        (transaction) => transaction.occurrenceKey === occurrenceKey,
+  try {
+    walkRecurrence(rule, horizonDate, (occurrenceDate) => {
+      const occurrenceKey = `${rule.id}:${occurrenceDate}`;
+      if (
+        deps.deletedOccurrenceKeys.has(occurrenceKey) ||
+        transactions.some(
+          (transaction) => transaction.occurrenceKey === occurrenceKey,
+        )
       )
-    )
-      return;
-    transactions.push(
-      deps.buildTransaction({
-        ...rule.template,
-        localDate: occurrenceDate,
-        status:
-          rule.autoPost && occurrenceDate <= today ? "posted" : "upcoming",
-        recurringRuleId: rule.id,
-        occurrenceKey,
-      }),
-    );
-  });
+        return;
+      transactions.push(
+        deps.buildTransaction({
+          ...rule.template,
+          localDate: occurrenceDate,
+          status:
+            rule.autoPost && occurrenceDate <= today ? "posted" : "upcoming",
+          recurringRuleId: rule.id,
+          occurrenceKey,
+        }),
+      );
+    });
+  } catch (reason) {
+    // Generation leaves a rule untouched while a rate it needs is missing (see `planRecurring`),
+    // so nothing past this occurrence would be written either: check what was built before it.
+    if (!(reason instanceof MissingExchangeRateError)) throw reason;
+  }
   assertTransactionSetSafe(ctx, transactions);
 }
 
@@ -287,22 +293,43 @@ export function validateRecurring(
       );
     }
     assertPositiveMinor(input.template.foreign.amountMinor, "Amount");
-    const foreignRate = input.template.foreign.exchangeRate
-      ? normalizeRate(input.template.foreign.exchangeRate)
-      : resolveRate(ctx, foreignCurrency, account.currency, input.nextDueDate);
-    estimatedAmountMinor = convertMinor(
-      input.template.foreign.amountMinor,
-      foreignCurrency,
-      account.currency,
-      foreignRate,
-      ctx.formatLocale,
-    );
+    // No rate is required to save: with none typed and none stored, the rule is saved with the
+    // typed amount as its display estimate, and each occurrence waits until a rate exists.
+    let foreignRate: string | null = null;
+    if (input.template.foreign.exchangeRate) {
+      foreignRate = normalizeRate(input.template.foreign.exchangeRate);
+    } else {
+      try {
+        foreignRate = resolveRate(
+          ctx,
+          foreignCurrency,
+          account.currency,
+          input.nextDueDate,
+        );
+      } catch (reason) {
+        if (!(reason instanceof MissingExchangeRateError)) throw reason;
+      }
+    }
+    if (foreignRate) {
+      estimatedAmountMinor = convertMinor(
+        input.template.foreign.amountMinor,
+        foreignCurrency,
+        account.currency,
+        foreignRate,
+        ctx.formatLocale,
+      );
+    } else if (
+      !Number.isSafeInteger(estimatedAmountMinor) ||
+      estimatedAmountMinor <= 0
+    ) {
+      estimatedAmountMinor = input.template.foreign.amountMinor;
+    }
     normalizedForeign = {
       amountMinor: input.template.foreign.amountMinor,
       currency: foreignCurrency,
       // Keep an explicit rate only if the caller supplied one. A template
       // with none resolves its own rate at each occurrence's date.
-      ...(input.template.foreign.exchangeRate
+      ...(input.template.foreign.exchangeRate && foreignRate
         ? { exchangeRate: foreignRate }
         : {}),
     };
@@ -449,38 +476,51 @@ export function planRecurringRuleSave(
   const pausedByDependency = Boolean(
     existing?.pausedByDependency && dependencyArchived,
   );
+  const ruleId = existing?.id ?? makeId();
+  // A pending occurrence that cannot be priced for the new template (a foreign amount with no rate
+  // stored yet) is discarded and its key released, like a schedule change does; the rule is wound
+  // back to the earliest one so it is generated again once a rate exists.
+  const unpriced: string[] = [];
+  const discardPending = (transaction: TransactionRecord) =>
+    updateEntity(transaction, { deletedAt: nowIso(), occurrenceKey: null });
+  const transactionChanges = scheduleChanged
+    ? currentUpcoming.map(discardPending)
+    : templateChanged
+      ? currentUpcoming.map((transaction) => {
+          try {
+            return deps.buildTransaction(
+              {
+                ...normalized.template,
+                localDate: transaction.localDate,
+                status: transaction.status,
+                exchangeRate:
+                  transaction.accountId === normalized.template.accountId
+                    ? (transaction.exchangeRate ?? undefined)
+                    : undefined,
+                recurringRuleId: ruleId,
+                occurrenceKey: transaction.occurrenceKey,
+              },
+              transaction.id,
+            );
+          } catch (reason) {
+            if (!(reason instanceof MissingExchangeRateError)) throw reason;
+            unpriced.push(transaction.localDate);
+            return discardPending(transaction);
+          }
+        })
+      : [];
+  const rewindTo = unpriced.sort()[0];
+  const rewound =
+    rewindTo && rewindTo < normalized.nextDueDate
+      ? { ...normalized, nextDueDate: rewindTo }
+      : normalized;
   const rule = existing
-    ? updateEntity(existing, { ...normalized, pausedByDependency })
+    ? updateEntity(existing, { ...rewound, pausedByDependency })
     : (createEntity({
-        id: makeId(),
-        ...normalized,
+        id: ruleId,
+        ...rewound,
         pausedByDependency: false,
       }) as RecurringRule);
-  const transactionChanges = scheduleChanged
-    ? currentUpcoming.map((transaction) =>
-        updateEntity(transaction, {
-          deletedAt: nowIso(),
-          occurrenceKey: null,
-        }),
-      )
-    : templateChanged
-      ? currentUpcoming.map((transaction) =>
-          deps.buildTransaction(
-            {
-              ...normalized.template,
-              localDate: transaction.localDate,
-              status: transaction.status,
-              exchangeRate:
-                transaction.accountId === normalized.template.accountId
-                  ? (transaction.exchangeRate ?? undefined)
-                  : undefined,
-              recurringRuleId: rule.id,
-              occurrenceKey: transaction.occurrenceKey,
-            },
-            transaction.id,
-          ),
-        )
-      : [];
   assertRecurringRuleGenerationSafe(
     ctx,
     deps,

@@ -90,7 +90,7 @@ function parseCsvRow(raw: unknown): CsvRowParse {
     return fail("Row number is missing.");
   const date = text("date");
   if (date === undefined || !DATE_PATTERN.test(date) || !isLocalDate(date))
-    return fail("Enter a real calendar date.");
+    return fail("Enter a real calendar date in the YYYY-MM-DD format.");
   const type = row.type;
   if (!(TRANSACTION_TYPES as readonly unknown[]).includes(type))
     return fail(`Type must be one of: ${TRANSACTION_TYPES.join(", ")}.`);
@@ -277,9 +277,15 @@ export async function stageCsvRows(
     committedIds: [],
   };
   const staged: StagedCsvRow[] = [];
-  const duplicateKeys = new Set(
-    ctx.state.transactions.map((item) => transactionDuplicateKey(ctx, item)),
-  );
+  // A multiset, not a set: two genuine identical purchases in one file are two rows. The k-th
+  // occurrence of a key in the file is a duplicate only when the ledger already holds at least k
+  // of that key, so re-importing a file adds nothing while a repeat inside it is kept.
+  const ledgerCounts = new Map<string, number>();
+  for (const item of ctx.state.transactions) {
+    const key = transactionDuplicateKey(ctx, item);
+    ledgerCounts.set(key, (ledgerCounts.get(key) ?? 0) + 1);
+  }
+  const fileCounts = new Map<string, number>();
   let processed = 0;
   for (const raw of rows) {
     // A big file is thousands of validations on the JS thread. Handing control back every
@@ -418,11 +424,12 @@ export async function stageCsvRows(
         previewTransaction,
         tagNames,
       );
-      if (duplicateKeys.has(duplicateKey)) {
+      const occurrence = (fileCounts.get(duplicateKey) ?? 0) + 1;
+      fileCounts.set(duplicateKey, occurrence);
+      if ((ledgerCounts.get(duplicateKey) ?? 0) >= occurrence) {
         result.duplicateRows.push(row.rowNumber);
         continue;
       }
-      duplicateKeys.add(duplicateKey);
       result.validRows.push(row as CsvImportRow);
       staged.push({ input, tagNames });
     } catch (reason) {

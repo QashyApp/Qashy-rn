@@ -58,6 +58,7 @@ export function MonthSwitcher({
   disabled = false,
   dragProgress,
   fill = false,
+  label,
 }: {
   value: string;
   /**
@@ -73,6 +74,11 @@ export function MonthSwitcher({
   dragProgress?: SharedValue<number>;
   /** Stretch to the width the parent gives it, the month name taking the room between the arrows. */
   fill?: boolean;
+  /**
+   * Shown in place of the month name, for a screen whose list does not follow the month (it
+   * reads "All upcoming"). The bar is then disabled by the caller; the month is still `value`.
+   */
+  label?: string;
 }) {
   const theme = useQashyTheme();
   const { motion, radius, space } = theme;
@@ -155,7 +161,11 @@ export function MonthSwitcher({
       <MotionPressable
         delayPressIn={0}
         accessibilityRole="button"
-        accessibilityLabel={`${monthLabel(value, locale)}. ${t("Choose month")}`}
+        accessibilityLabel={
+          label
+            ? t(label)
+            : `${monthLabel(value, locale)}. ${t("Choose month")}`
+        }
         accessibilityActions={[
           { name: "increment", label: t("Next month") },
           { name: "decrement", label: t("Previous month") },
@@ -179,7 +189,11 @@ export function MonthSwitcher({
           overflow: "hidden",
         }}
       >
-        <MonthTitle value={value} dragProgress={dragProgress} />
+        {label ? (
+          <TitleText>{t(label)}</TitleText>
+        ) : (
+          <MonthTitle value={value} dragProgress={dragProgress} />
+        )}
       </MotionPressable>
       <IconButton
         label="Next month"

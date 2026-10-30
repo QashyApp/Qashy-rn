@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/month-pager";
 import { MotionView, ScreenTransition } from "@/components/ui/motion";
 import { UndoBar } from "@/components/ui/undo-bar";
+import { AppText } from "@/components/ui/app-text";
 import { PageHeading } from "@/components/ui/page-heading";
 import {
   floatingActionMetrics,
@@ -248,6 +249,10 @@ export function TransactionsScreen() {
   }, [paramDue, month]);
 
   const allMonths = searchAllMonths && search.trim().length > 0;
+  // Upcoming is everything ahead, so like a search across all months it does not follow the month
+  // bar: the bar is dimmed and out of reach while it is on.
+  const upcomingOnly = kind === "upcoming";
+  const spansMonths = allMonths || upcomingOnly;
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
@@ -604,8 +609,19 @@ export function TransactionsScreen() {
   const toolbarGap = toolbarStyle.gap;
   // A filter that is on but may be out of sight: a kind other than All, or a search across months.
   const filterActive = kind !== "all" || allMonths;
+  // The tiles ignore the kind and the search on purpose (they are the month's totals, as on
+  // Overview), so say so whenever something narrows the list.
+  const tilesScoped = kind !== "all" || search.trim().length > 0;
+  // Clearing the search closes "Search all months" with it: its chip goes, and a widening that
+  // outlived it would apply silently to the next search.
   const resetSearch = () => {
     setSearch("");
+    setSearchAllMonths(false);
+    clearSelection();
+  };
+  const changeSearch = (value: string) => {
+    setSearch(value);
+    if (!value) setSearchAllMonths(false);
     clearSelection();
   };
 
@@ -615,45 +631,57 @@ export function TransactionsScreen() {
       onChange={(next, direction) =>
         navigateMonth(pagerRef.current, month, next, direction, changeMonth)
       }
-      disabled={allMonths}
+      disabled={spansMonths}
+      label={upcomingOnly ? "All upcoming" : undefined}
       dragProgress={dragProgress}
       fill={phoneWidth}
     />
   );
   const summaryTiles = (
-    <View
-      accessibilityLabel={
-        allMonths ? undefined : `${monthLabel(month, locale)} ${t("summary")}`
-      }
-      style={{ opacity: allMonths ? 0.45 : 1 }}
-    >
-      <SummaryTiles
-        currency={currency}
-        locale={locale}
-        compact={phoneWidth}
-        tiles={[
-          {
-            label: "Income",
-            amountMinor: summary.incomeMinor,
-            color: theme.positiveText,
-          },
-          {
-            label: "Spent",
-            amountMinor: summary.expenseMinor,
-            color: theme.text,
-          },
-          {
-            label: "Net",
-            amountMinor: summary.netFlowMinor,
-            color:
-              summary.netFlowMinor > 0
-                ? theme.positiveText
-                : summary.netFlowMinor < 0
-                  ? theme.negativeText
-                  : theme.text,
-          },
-        ]}
-      />
+    <View style={{ gap: space.xs }}>
+      <View
+        accessibilityLabel={
+          spansMonths
+            ? undefined
+            : `${monthLabel(month, locale)} ${t("summary")}`
+        }
+        style={{ opacity: spansMonths ? 0.45 : 1 }}
+      >
+        <SummaryTiles
+          currency={currency}
+          locale={locale}
+          compact={phoneWidth}
+          tiles={[
+            {
+              label: "Income",
+              amountMinor: summary.incomeMinor,
+              color: theme.positiveText,
+            },
+            {
+              label: "Spent",
+              amountMinor: summary.expenseMinor,
+              color: theme.text,
+            },
+            {
+              label: "Net",
+              amountMinor: summary.netFlowMinor,
+              color:
+                summary.netFlowMinor > 0
+                  ? theme.positiveText
+                  : summary.netFlowMinor < 0
+                    ? theme.negativeText
+                    : theme.text,
+            },
+          ]}
+        />
+      </View>
+      {tilesScoped ? (
+        <AppText variant="caption" muted>
+          {spansMonths
+            ? `Totals for ${monthLabel(month, locale)}`
+            : "Totals are for the whole month"}
+        </AppText>
+      ) : null}
     </View>
   );
   const searchAllMonthsChip = search ? (
@@ -741,11 +769,8 @@ export function TransactionsScreen() {
                       <SearchPillRow
                         switcher={monthSwitcher}
                         value={search}
-                        allMonths={searchAllMonths}
-                        onChangeText={(value) => {
-                          setSearch(value);
-                          clearSelection();
-                        }}
+                        allMonths={spansMonths}
+                        onChangeText={changeSearch}
                         onClear={resetSearch}
                       />
                       {summaryTiles}
@@ -806,7 +831,7 @@ export function TransactionsScreen() {
                           <TextInput
                             accessibilityLabel={t("Search transactions")}
                             placeholder={t(
-                              searchAllMonths
+                              spansMonths
                                 ? "Search all months"
                                 : "Search this month",
                             )}
@@ -814,10 +839,7 @@ export function TransactionsScreen() {
                             value={search}
                             onFocus={() => setSearchFocused(true)}
                             onBlur={() => setSearchFocused(false)}
-                            onChangeText={(value) => {
-                              setSearch(value);
-                              clearSelection();
-                            }}
+                            onChangeText={changeSearch}
                             style={{
                               flex: 1,
                               minHeight: 44,
@@ -858,7 +880,7 @@ export function TransactionsScreen() {
               ref={pagerRef}
               dragProgress={dragProgress}
               month={month}
-              disabled={allMonths || selectionMode}
+              disabled={spansMonths || selectionMode}
               blockedBy={pagerBlockedBy}
               onChange={changeMonth}
               style={{ flex: 1 }}

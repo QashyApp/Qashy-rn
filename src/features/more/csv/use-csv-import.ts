@@ -1,11 +1,6 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
-import type {
-  CsvImportRow,
-  ImportResult,
-  TransactionKind,
-  TransactionStatus,
-} from "@/domain/models";
+import type { CsvImportRow, ImportResult } from "@/domain/models";
 import {
   useFinanceRepository,
   useFinanceState,
@@ -18,11 +13,11 @@ import {
 import { saveFile } from "@/features/shared/save-file";
 import { useLocalization } from "@/localization/localization";
 import { errorMessage, showError } from "@/utils/confirm";
+import { extractCsvRatePairs, parseCsvTable } from "@/utils/csv";
 import {
-  csvCategoryForRow,
-  extractCsvRatePairs,
-  parseCsvTable,
-} from "@/utils/csv";
+  type CsvDateChoice,
+  resolveCsvDateFormat,
+} from "@/utils/csv-import-values";
 import { todayLocal } from "@/utils/date";
 import { hapticSuccess } from "@/services/haptics";
 import { MAX_CSV_IMPORT_BYTES } from "@/utils/file-size";
@@ -33,15 +28,23 @@ import {
   CsvField,
   inferMapping,
 } from "@/features/more/csv/csv-model";
+import {
+  amountSignDecidesType,
+  buildCsvRows,
+  type CsvDateRejection,
+} from "@/features/more/csv/csv-rows";
 
 export function useCsvImport() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
-  const { t } = useLocalization();
+  const { t, locale } = useLocalization();
   const [sourceRows, setSourceRows] = useState<
     Record<string, string | number>[]
   >([]);
   const [headers, setHeaders] = useState<string[]>([]);
+  // The header text as the file wrote it, parallel to `headers` (the normalized keys).
+  const [headerLabels, setHeaderLabels] = useState<string[]>([]);
+  const [dateChoice, setDateChoice] = useState<CsvDateChoice>("auto");
   const [mapping, setMapping] = useState<Record<CsvField, string>>(() =>
     inferMapping([]),
   );
@@ -50,6 +53,9 @@ export function useCsvImport() {
   );
   const [defaultCategoryId, setDefaultCategoryId] = useState("");
   const [rows, setRows] = useState<CsvImportRow[]>([]);
+  // Rows whose date the chosen format could not read. They are refused here, before the
+  // repository, so their reason can name the format; kept to merge back into a commit's result.
+  const dateRejections = useRef<CsvDateRejection[]>([]);
   const [preview, setPreview] = useState<ImportResult | null>(null);
   const [busy, setBusy] = useState(false);
   // The in-flight guard. State lags a render behind a double tap, so every check reads this ref;
@@ -73,6 +79,25 @@ export function useCsvImport() {
   // covers an unmapped account column, so none of those block the preview.
   const isOptionalField = (field: (typeof CSV_FIELDS)[number]) =>
     field.optional || (field.key === "account" && Boolean(defaultAccountId));
+  // What "Auto" resolves to for this file's date column. Shown in the picker and used to read it.
+  const dateColumn = mapping.date;
+  const detectedDateFormat = useMemo(
+    () =>
+      resolveCsvDateFormat(
+        "auto",
+        dateColumn
+          ? sourceRows.map((row) => String(row[dateColumn] ?? ""))
+          : [],
+        locale,
+      ),
+    [sourceRows, dateColumn, locale],
+  );
+  const dateFormat = dateChoice === "auto" ? detectedDateFormat : dateChoice;
+  // Whether the amounts' signs will decide each row's type, for the line under the mapping.
+  const signDecidesType = useMemo(
+    () => amountSignDecidesType(sourceRows, mapping),
+    [sourceRows, mapping],
+  );
   const missingRequiredFields = CSV_FIELDS.filter(
     (field) => !isOptionalField(field) && !mapping[field.key],
   );
@@ -88,8 +113,11 @@ export function useCsvImport() {
       invalidatePreview();
       setSourceRows([]);
       setHeaders([]);
+      setHeaderLabels([]);
+      setDateChoice("auto");
       setMapping(inferMapping([]));
       setRows([]);
+      dateRejections.current = [];
       if (!CSV_EXTENSIONS.includes(fileExtension(asset.name))) {
         showError("Wrong file type", "Choose a .csv file.");
         return;
@@ -105,6 +133,7 @@ export function useCsvImport() {
       }
       setSourceRows(table.rows);
       setHeaders(table.headers);
+      setHeaderLabels(table.headerLabels);
       setMapping(inferMapping(table.headers));
       // Malformed rows are skipped rather than aborting the file, and they must not disappear
       // quietly — the user needs to know what was left behind.
@@ -143,49 +172,35 @@ export function useCsvImport() {
     }
   };
 
+  const withDateRejections = (
+    result: ImportResult,
+    unreadable: CsvDateRejection[],
+  ): ImportResult =>
+    unreadable.length
+      ? {
+          ...result,
+          rejectedRows: [...result.rejectedRows, ...unreadable].sort(
+            (a, b) => a.rowNumber - b.rowNumber,
+          ),
+        }
+      : result;
+
   const buildPreview = async () => {
     const defaultAccount =
       state.accounts.find((item) => item.id === defaultAccountId)?.name ?? "";
     const defaultCategory = state.categories.find(
       (item) => item.id === defaultCategoryId,
     );
-    const value = (record: Record<string, string | number>, field: CsvField) =>
-      mapping[field] ? String(record[mapping[field]] ?? "") : "";
-    const parsed = sourceRows.map((record) => {
-      const type = (
-        value(record, "type") || "expense"
-      ).toLowerCase() as TransactionKind;
-      return {
-        rowNumber: Number(record.rowNumber),
-        date: value(record, "date"),
-        type,
-        status: (
-          value(record, "status") || "posted"
-        ).toLowerCase() as TransactionStatus,
-        title: value(record, "title"),
-        amount: value(record, "amount"),
-        currency: (
-          value(record, "currency") || state.settings.baseCurrency
-        ).toUpperCase(),
-        account: value(record, "account") || defaultAccount,
-        category: csvCategoryForRow(
-          value(record, "category"),
-          type,
-          defaultCategory,
-        ),
-        tags: value(record, "tags"),
-        note: value(record, "note"),
-        exchangeRate: value(record, "exchangeRate"),
-        destinationAccount: value(record, "destinationAccount"),
-        destinationAmount: value(record, "destinationAmount"),
-        destinationBaseAmountMinor: value(record, "destinationBaseAmountMinor"),
-        foreignAmount: value(record, "foreignAmount"),
-        foreignCurrency: value(record, "foreignCurrency"),
-        foreignExchangeRate: value(record, "foreignExchangeRate"),
-        feeKind: value(record, "feeKind"),
-        feeValue: value(record, "feeValue"),
-      };
-    });
+    const { rows: parsed, dateRejections: unreadable } = buildCsvRows(
+      sourceRows,
+      mapping,
+      dateFormat,
+      {
+        accountName: defaultAccount,
+        baseCurrency: state.settings.baseCurrency,
+        category: defaultCategory,
+      },
+    );
     // The request this preview answers. Read before the awaits below; any change to the file,
     // mapping, or defaults in the meantime bumps `previewRequest`, and this result is then dropped.
     const request = previewRequest.current;
@@ -199,8 +214,8 @@ export function useCsvImport() {
         .filter((row) => row.foreignAmount && row.foreignCurrency)
         .map((row) => ({
           date: row.date,
-          currency: row.foreignCurrency,
-          exchangeRate: row.foreignExchangeRate,
+          currency: row.foreignCurrency ?? "",
+          exchangeRate: row.foreignExchangeRate ?? "",
         })),
       state.settings.baseCurrency,
     );
@@ -216,9 +231,13 @@ export function useCsvImport() {
     });
     if (ratePairs.length) await exchangeRateService.ensureRatesFor(ratePairs);
     if (request !== previewRequest.current) return;
-    const result = await repository.importCsv(parsed, false);
+    const result = withDateRejections(
+      await repository.importCsv(parsed, false),
+      unreadable,
+    );
     if (request !== previewRequest.current) return;
     // Rows and preview are written together, so the armed rows are always the ones previewed.
+    dateRejections.current = unreadable;
     setRows(parsed);
     setPreview(result);
   };
@@ -227,7 +246,10 @@ export function useCsvImport() {
     if (busyRef.current) return;
     setBusyFlag(true);
     try {
-      const result = await repository.importCsv(rows, true);
+      const result = withDateRejections(
+        await repository.importCsv(rows, true),
+        dateRejections.current,
+      );
       hapticSuccess();
       setPreview(result);
       showError(
@@ -273,8 +295,13 @@ export function useCsvImport() {
     t,
     sourceRows,
     headers,
+    headerLabels,
     mapping,
     setMapping,
+    dateChoice,
+    setDateChoice,
+    detectedDateFormat,
+    signDecidesType,
     defaultAccountId,
     setDefaultAccountId,
     defaultCategoryId,

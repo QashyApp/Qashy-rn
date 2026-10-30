@@ -10,6 +10,7 @@ import { FormScreen } from "@/components/ui/form-screen";
 import { useQashyTheme } from "@/theme/theme";
 import { ExternalImportLauncher } from "@/features/more/external-import-launcher";
 import { CSV_FIELDS } from "@/features/more/csv/csv-model";
+import { CSV_DATE_FORMAT_LABELS } from "@/utils/csv-import-values";
 import { CsvStepper, PreviewTile } from "@/features/more/csv/csv-parts";
 import { useCsvImport } from "@/features/more/csv/use-csv-import";
 
@@ -21,8 +22,13 @@ export function CsvScreen() {
     t,
     sourceRows,
     headers,
+    headerLabels,
     mapping,
     setMapping,
+    dateChoice,
+    setDateChoice,
+    detectedDateFormat,
+    signDecidesType,
     defaultAccountId,
     setDefaultAccountId,
     defaultCategoryId,
@@ -74,8 +80,9 @@ export function CsvScreen() {
           }
         />
         <AppText muted>
-          Headers are matched automatically. Required columns are date, type,
-          title, amount, currency, and account. Nothing is committed until after
+          Headers are matched automatically. Required columns are date, title,
+          amount, and account. Type and currency are optional and default to
+          expense and your base currency. Nothing is committed until after
           preview.
         </AppText>
         <ActionButton
@@ -141,13 +148,75 @@ export function CsvScreen() {
                     testID={`mapping-${field.key}`}
                   >
                     <Picker.Item label={t("Not mapped")} value="" />
-                    {headers.map((header) => (
-                      <Picker.Item key={header} label={header} value={header} />
+                    {headers.map((header, index) => (
+                      <Picker.Item
+                        key={header}
+                        label={headerLabels[index] || header}
+                        value={header}
+                      />
                     ))}
                   </Picker>
                 </View>
               </View>
             ))}
+            {mapping.date ? (
+              <View
+                accessibilityLabel={t("Date format")}
+                role="group"
+                style={{
+                  minHeight: 52,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: space.md,
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.border,
+                }}
+              >
+                <AppText variant="label" style={{ flex: 1 }}>
+                  Date format
+                </AppText>
+                <View
+                  style={{
+                    minWidth: 180,
+                    minHeight: 44,
+                    justifyContent: "center",
+                  }}
+                >
+                  <Picker
+                    selectedValue={dateChoice}
+                    onValueChange={(value) => {
+                      setDateChoice(String(value) as typeof dateChoice);
+                      invalidatePreview();
+                    }}
+                    enabled={!busy}
+                    testID="date-format"
+                  >
+                    <Picker.Item
+                      label={`${t("Auto")} (${CSV_DATE_FORMAT_LABELS[detectedDateFormat]})`}
+                      value="auto"
+                    />
+                    <Picker.Item
+                      label={CSV_DATE_FORMAT_LABELS.ymd}
+                      value="ymd"
+                    />
+                    <Picker.Item
+                      label={CSV_DATE_FORMAT_LABELS.dmy}
+                      value="dmy"
+                    />
+                    <Picker.Item
+                      label={CSV_DATE_FORMAT_LABELS.mdy}
+                      value="mdy"
+                    />
+                  </Picker>
+                </View>
+              </View>
+            ) : null}
+            {signDecidesType ? (
+              <AppText variant="caption" muted>
+                Negative amounts import as expenses, positive as income.
+              </AppText>
+            ) : null}
             <AppText variant="label">Default account</AppText>
             <View
               accessibilityLabel={t("Default account")}

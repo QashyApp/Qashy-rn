@@ -101,3 +101,28 @@ describe("MonthSwitcher picker", () => {
     expect(await openedModalAnimation("off")).toBe("none");
   });
 });
+
+describe("MonthSwitcher label", () => {
+  it("shows the label in place of the month and cannot be used to jump", async () => {
+    const onChange = jest.fn();
+    await render(
+      <MonthSwitcher
+        value="2026-05-01"
+        onChange={onChange}
+        disabled
+        label="All upcoming"
+      />,
+    );
+    expect(screen.getByLabelText("All upcoming")).toBeTruthy();
+    expect(screen.queryByLabelText(/Choose month$/)).toBeNull();
+    expect(screen.queryByText(/May/)).toBeNull();
+    await fireEvent(
+      screen.getByLabelText("All upcoming"),
+      "accessibilityAction",
+      {
+        nativeEvent: { actionName: "increment" },
+      },
+    );
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});

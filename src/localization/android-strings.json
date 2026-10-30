@@ -12,6 +12,11 @@
       "he": "הערות"
     },
     {
+      "name": "q_007dfd9865733e55",
+      "en": "Totals are for the whole month",
+      "he": "הסכומים הם לכל החודש"
+    },
+    {
       "name": "q_007f467bb606856f",
       "en": "That vault key",
       "he": "מפתח הכספת ההוא"
@@ -1242,11 +1247,6 @@
       "he": "מאפס…"
     },
     {
-      "name": "q_247f523abf16ce65",
-      "en": "Off by default. Upcoming items wait for your review.",
-      "he": "כבוי כברירת מחדל. תנועות עתידיות ממתינות לבדיקה שלכם."
-    },
-    {
       "name": "q_248c9562a8921c60",
       "en": "Setting up…",
       "he": "מגדיר…"
@@ -1320,6 +1320,11 @@
       "name": "q_25e9354649777c55",
       "en": "Select an option",
       "he": "בחרו אפשרות"
+    },
+    {
+      "name": "q_25fc5e06beac62e0",
+      "en": "over target",
+      "he": "חריגה של"
     },
     {
       "name": "q_25fcab7e4563067a",
@@ -1662,11 +1667,6 @@
       "he": "הימנעו מרצפים כמו 1234 או qwer מהמקלדת."
     },
     {
-      "name": "q_3162ede1e055f9a2",
-      "en": "Headers are matched automatically. Required columns are date, type, title, amount, currency, and account. Nothing is committed until after preview.",
-      "he": "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, סוג, כותרת, סכום, מטבע וחשבון. דבר לא נשמר לפני התצוגה המקדימה."
-    },
-    {
       "name": "q_31665e7ba24abccc",
       "en": "This device can’t read its stored key, so nothing can be sealed or opened.",
       "he": "המכשיר הזה אינו יכול לקרוא את המפתח השמור שלו, ולכן שום דבר אינו ניתן לחתימה או לפתיחה."
@@ -1730,6 +1730,11 @@
       "name": "q_3329afa7447596ec",
       "en": "Target date",
       "he": "תאריך יעד"
+    },
+    {
+      "name": "q_3335848d4b82a01e",
+      "en": "All upcoming",
+      "he": "כל מה שבקרוב"
     },
     {
       "name": "q_33459a6eab4c7371",
@@ -1935,6 +1940,11 @@
       "name": "q_380ea13a119d7d0e",
       "en": "Can’t scan? Enter the code",
       "he": "לא מצליחים לסרוק? הזינו את הקוד"
+    },
+    {
+      "name": "q_382af23c8ec3ee5b",
+      "en": "Transactions already posted stay in your ledger.",
+      "he": "תנועות שכבר נרשמו יישארו ביומן."
     },
     {
       "name": "q_3837b8d3b4d7e8f5",
@@ -2362,6 +2372,11 @@
       "he": "בגיבוי הזה יש יותר מ־500,000 שורות, והוא גדול מדי לייבוא."
     },
     {
+      "name": "q_45816b09f7c7377f",
+      "en": "Fix these and try again.",
+      "he": "תקנו אותם ונסו שוב."
+    },
+    {
       "name": "q_45cae14f72e26efb",
       "en": "Create category",
       "he": "יצירת קטגוריה"
@@ -2540,6 +2555,11 @@
       "name": "q_4b776c82446a7d97",
       "en": "Choose a valid theme mode.",
       "he": "בחרו מצב ערכת נושא תקין."
+    },
+    {
+      "name": "q_4ba375c4ca1a0353",
+      "en": "1 upcoming payment that hasn’t been posted yet is removed.",
+      "he": "תשלום קרוב אחד שטרם נרשם יוסר."
     },
     {
       "name": "q_4bc8fc89bef1b4c4",
@@ -4222,6 +4242,11 @@
       "he": "חיפוש סמלים"
     },
     {
+      "name": "q_7c8200c13ad08840",
+      "en": "Over target",
+      "he": "מעל היעד"
+    },
+    {
       "name": "q_7c9e152314edc4eb",
       "en": "The code works once and expires after a minute and a half.",
       "he": "הקוד עובד פעם אחת ופג לאחר דקה וחצי."
@@ -4360,6 +4385,11 @@
       "name": "q_7f9e9cf1637bff46",
       "en": "After a number of times",
       "he": "אחרי מספר פעמים"
+    },
+    {
+      "name": "q_7fa771f57a865644",
+      "en": "Date format",
+      "he": "פורמט תאריך"
     },
     {
       "name": "q_7ff5a3822cfa06cc",
@@ -4620,6 +4650,11 @@
       "name": "q_885b4fa353b238d4",
       "en": "This device is already part of a vault.",
       "he": "המכשיר הזה כבר חלק מכספת."
+    },
+    {
+      "name": "q_8870b0c42c1938a3",
+      "en": "Post them",
+      "he": "לרשום אותם"
     },
     {
       "name": "q_887c495d344d8d96",
@@ -5782,6 +5817,11 @@
       "he": "תקציבים עם מגבלה, תקופה או בחירת קטגוריות לא תקינות לא יובאו."
     },
     {
+      "name": "q_af2fbd066c57a0d4",
+      "en": "1 overdue payment will be posted now.",
+      "he": "תשלום אחד שעבר מועדו יירשם עכשיו."
+    },
+    {
       "name": "q_afaf60caa2a06c66",
       "en": "Backup file size could not be checked safely. Choose another file.",
       "he": "לא ניתן היה לבדוק בבטחה את גודל קובץ הגיבוי. בחרו קובץ אחר."
@@ -5875,6 +5915,11 @@
       "name": "q_b399151da3fbda6f",
       "en": "That is not a Qashy pairing code.",
       "he": "זה אינו קוד חיבור של Qashy."
+    },
+    {
+      "name": "q_b39e59ad5cc90e2d",
+      "en": "Negative amounts import as expenses, positive as income.",
+      "he": "סכומים שליליים מיובאים כהוצאות, וסכומים חיוביים כהכנסות."
     },
     {
       "name": "q_b3aaf08444498823",
@@ -6205,6 +6250,11 @@
       "name": "q_bbb97b1c63507dc0",
       "en": "Number",
       "he": "מספר"
+    },
+    {
+      "name": "q_bbcb986134f77bea",
+      "en": "Off: due items wait for your review. On: they post by themselves when due, including any already overdue.",
+      "he": "כבוי: פריטים שהגיע מועדם ממתינים לבדיקה שלכם. פעיל: הם נרשמים מעצמם במועדם, כולל כאלה שמועדם כבר עבר."
     },
     {
       "name": "q_bbd38915a56b1918",
@@ -6655,6 +6705,11 @@
       "name": "q_cb771f3427a221c4",
       "en": "Recurring schedule is gone.",
       "he": "התזמון החוזר אינו קיים עוד."
+    },
+    {
+      "name": "q_cb8a95d5d5bea584",
+      "en": "Headers are matched automatically. Required columns are date, title, amount, and account. Type and currency are optional and default to expense and your base currency. Nothing is committed until after preview.",
+      "he": "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, כותרת, סכום וחשבון. סוג ומטבע הם אופציונליים וברירת המחדל שלהם היא הוצאה ומטבע הבסיס שלכם. דבר לא נשמר לפני התצוגה המקדימה."
     },
     {
       "name": "q_cb962a931f8cc5bf",
@@ -7252,6 +7307,11 @@
       "he": "מטבע החוץ בתנועה המחזורית"
     },
     {
+      "name": "q_db73788b3c975f16",
+      "en": "Auto",
+      "he": "אוטומטי"
+    },
+    {
       "name": "q_db840eeac242d409",
       "en": "Uncategorized",
       "he": "ללא קטגוריה"
@@ -7612,14 +7672,14 @@
       "he": "הסתרת הקוד להקלדה"
     },
     {
-      "name": "q_e56045d182e9e762",
-      "en": "Enter a real calendar date.",
-      "he": "הזינו תאריך אמיתי בלוח השנה."
-    },
-    {
       "name": "q_e5815bdef1cbe24e",
       "en": "Unknown account",
       "he": "חשבון לא מוכר"
+    },
+    {
+      "name": "q_e5a997a84ba2e32f",
+      "en": "As of today",
+      "he": "נכון להיום"
     },
     {
       "name": "q_e5ab1f5ee7bf9e50",
@@ -7685,11 +7745,6 @@
       "name": "q_e7c8d7276253bd01",
       "en": "This applies to every paired device straight away. Removing a device is forward-only, so this only decides who may stop one from writing to this vault.",
       "he": "השינוי חל על כל המכשירים המשויכים מיד. הסרת מכשיר פועלת רק קדימה, ולכן השינוי קובע רק מי רשאי לעצור מכשיר מלכתוב לכספת הזו."
-    },
-    {
-      "name": "q_e7f7188343b7a2a7",
-      "en": "Already generated transactions stay in your ledger.",
-      "he": "תנועות שכבר נוצרו יישארו ביומן."
     },
     {
       "name": "q_e81e3ba149d6720a",
@@ -7810,6 +7865,11 @@
       "name": "q_ea536ecac29bb481",
       "en": "Opening…",
       "he": "פותח…"
+    },
+    {
+      "name": "q_ea8dc390a7cd89e7",
+      "en": "Post overdue payments?",
+      "he": "לרשום תשלומים שעבר מועדם?"
     },
     {
       "name": "q_ea99fa5b66e4097f",
@@ -9819,6 +9879,12 @@
       "he": "אין תנועות ב%1$s"
     },
     {
+      "name": "q_5f07a48e3a478a03",
+      "source": "^Totals for (.+)$",
+      "en": "Totals for %1$s",
+      "he": "סכומים עבור %1$s"
+    },
+    {
       "name": "q_3047e16e8b851a5d",
       "source": "^Nothing in (.+) matches\\. Try another filter, or search all months\\.$",
       "en": "Nothing in %1$s matches. Try another filter, or search all months.",
@@ -9907,6 +9973,12 @@
       "source": "^Currency (.+) does not match (.+) \\((.+)\\)\\.$",
       "en": "Currency %1$s does not match %2$s (%3$s).",
       "he": "המטבע %1$s אינו תואם לחשבון %2$s (%3$s)."
+    },
+    {
+      "name": "q_40612fb91cee5e51",
+      "source": "^Enter a real calendar date in the (.+) format\\.$",
+      "en": "Enter a real calendar date in the %1$s format.",
+      "he": "הזינו תאריך אמיתי בלוח השנה בפורמט %1$s."
     },
     {
       "name": "q_23330291146a2e42",
@@ -10471,6 +10543,18 @@
       "source": "^Deletes (\\d+) transactions\\.$",
       "en": "Deletes %1$s transactions.",
       "he": "מוחק %1$s תנועות."
+    },
+    {
+      "name": "q_bdbdef8e85336780",
+      "source": "^(\\d+) overdue payments will be posted now\\.$",
+      "en": "%1$s overdue payments will be posted now.",
+      "he": "%1$s תשלומים שעבר מועדם יירשמו עכשיו."
+    },
+    {
+      "name": "q_8b564387697a467d",
+      "source": "^(\\d+) upcoming payments that haven’t been posted yet are removed\\.$",
+      "en": "%1$s upcoming payments that haven’t been posted yet are removed.",
+      "he": "%1$s תשלומים קרובים שטרם נרשמו יוסרו."
     },
     {
       "name": "q_d86652d9031308bc",
