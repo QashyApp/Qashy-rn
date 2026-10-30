@@ -73,6 +73,8 @@ import {
   readRelayHealth,
   type RelayHealth,
 } from "@/sync/transport/relay-health";
+import { withSyncPassLock } from "@/sync/pass-lock";
+import { readStoredEpoch, rotationInterrupted } from "@/sync/rotation";
 import { makeId, nowIso as defaultNowIso } from "@/utils/entity";
 
 /**
@@ -789,9 +791,7 @@ export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
       storedEpoch &&
       storedEpoch !== String(vault.epoch)
     ) {
-      throw new Error(
-        "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.",
-      );
+      throw rotationInterrupted();
     }
 
     // A reset from an older build (or a partial database restore) may leave the key while
@@ -827,7 +827,15 @@ export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
  * peer is revoked, and re-pairing is a deliberate, in-person act — the same one that made them
  * peers in the first place.
  */
-export async function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
+export function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
+  // Through the same queue every sync pass runs in. A rotation replaces the key and epoch a pass
+  // seals under; one that overlapped a pass could leave a batch sealed under the old key but
+  // labelled with the new epoch, or the reverse. Passes arriving meanwhile wait behind it and
+  // then see the new state.
+  return withSyncPassLock(() => rotateVaultKeyNow(deps));
+}
+
+async function rotateVaultKeyNow(deps: SyncSetupDeps): Promise<number> {
   const vault = await deps.keystore.read();
   if (!vault)
     throw new KeystoreError(
@@ -870,17 +878,43 @@ export async function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
       await writeMeta(tx, { [SYNC_META.relayCursor]: "0" });
     });
   } catch (failure) {
+    // A rejected transaction does not prove a rolled-back one: the commit can land and the
+    // promise still reject afterwards. Which key belongs in the keystore depends on what the
+    // database actually holds, so ask it, in a fresh transaction, before touching anything.
+    let stored: string | null;
+    try {
+      stored = await readStoredEpoch(deps.storage);
+    } catch (readFailure) {
+      // Neither state can be confirmed, and either key could be the wrong one to leave behind.
+      // Do not guess: the keystore is left as it is, and the state is the interrupted one that
+      // `resumeSync` and every sync pass refuse to proceed from.
+      throw rotationInterrupted(
+        // [the rotation failure, the failed read], for whoever debugs it. No message: the
+        // outer error is the one a person reads.
+        new AggregateError([failure, readFailure]),
+      );
+    }
+
+    // The commit landed. The database already names the new epoch, so the new key is the
+    // matching one, and putting the old key back would create the very mismatch this guards.
+    if (stored === String(epoch)) return epoch;
+
+    // Neither epoch: something else rewrote it. Leave the keystore alone.
+    if (stored !== String(vault.epoch)) throw rotationInterrupted(failure);
+
     // The transaction rolled back, so `sync_meta` still names the old epoch while the keystore
     // already holds the new key. Unlike a first pairing, that key is not inert: it replaced the
     // one the vault is actually using. Put back exactly what was read above (nothing is derived
     // or regenerated here) so a failed rotation leaves the device as it was, and rethrow the
     // original failure. If the restore itself fails, the device is in the interrupted state
-    // `resumeSync` already recognises, and the error says so rather than "nothing changed".
+    // `resumeSync` already recognises, and the error says so rather than "nothing changed". Both
+    // failures travel as the cause; neither carries key material.
     try {
       await deps.keystore.write(vault);
-    } catch {
-      throw new Error(
-        "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.",
+    } catch (restoreFailure) {
+      throw rotationInterrupted(
+        // [the rotation failure, the failed restore].
+        new AggregateError([failure, restoreFailure]),
       );
     }
     throw failure;

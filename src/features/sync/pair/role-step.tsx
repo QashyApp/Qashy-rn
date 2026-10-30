@@ -163,7 +163,7 @@ function RoleOption({
           color={
             selected && !disabled ? theme.onAccentContainer : theme.textMuted
           }
-          size={theme.iconSize.md - 2}
+          size={theme.iconSize.md}
         />
         <AppText variant="label">{title}</AppText>
       </View>

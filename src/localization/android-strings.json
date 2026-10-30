@@ -22,11 +22,6 @@
       "he": "עדיין ממתינים לנתונים שלכם"
     },
     {
-      "name": "q_007dfd9865733e55",
-      "en": "Totals are for the whole month",
-      "he": "הסכומים הם לכל החודש"
-    },
-    {
       "name": "q_007f467bb606856f",
       "en": "That vault key",
       "he": "מפתח הכספת ההוא"
@@ -5062,6 +5057,11 @@
       "he": "רטט קצר בעת הקשה, החלפת אפשרות, שמירה או שגיאה."
     },
     {
+      "name": "q_94a1b1c02c82cb3d",
+      "en": "Sharing isn’t available on this device, so the file couldn’t be saved.",
+      "he": "השיתוף אינו זמין במכשיר הזה, ולכן לא ניתן היה לשמור את הקובץ."
+    },
+    {
       "name": "q_94d07fca2c5fb5c9",
       "en": "Category kind",
       "he": "סוג הקטגוריה"
@@ -8935,6 +8935,12 @@
       "source": "^Approve removing (.+)$",
       "en": "Approve removing %1$s",
       "he": "אישור הסרת %1$s"
+    },
+    {
+      "name": "q_65b75422243c3860",
+      "source": "^Your approval counts toward removing (.+)\\. It’s removed once (\\d+) of (\\d+) devices approve\\.$",
+      "en": "Your approval counts toward removing %1$s. It’s removed once %2$s of %3$s devices approve.",
+      "he": "האישור שלכם נספר לטובת הסרת %1$s. המכשיר יוסר לאחר ש־%2$s מתוך %3$s מכשירים יאשרו."
     },
     {
       "name": "q_4a449fc6afe55beb",

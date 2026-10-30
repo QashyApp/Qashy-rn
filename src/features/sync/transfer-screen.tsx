@@ -40,7 +40,7 @@ import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { StatusPill } from "@/components/ui/status-pill";
 import { livePeers } from "@/features/sync/sync-summary";
-import { saveFile } from "@/features/shared/save-file";
+import { requireHandedOff, saveFile } from "@/features/shared/save-file";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceRepository } from "@/providers/finance-provider";
 import { useSync } from "@/providers/sync-provider";
@@ -80,6 +80,7 @@ import { Preview, Tally } from "@/features/sync/transfer/transfer-previews";
 import { Busy, PickedBackup } from "@/features/sync/transfer/transfer-types";
 import { pickBytes, pickText } from "@/features/sync/transfer/pick-files";
 import {
+  clearsPassphrase,
   nextBackupPhase,
   type BackupPhase,
 } from "@/features/sync/transfer/backup-phase";
@@ -207,11 +208,15 @@ export function TransferScreen() {
             ? { kind: "passphrase", passphrase }
             : { kind: "recoveryPhrase" },
         );
-        await saveFile(
-          backupFileName(todayLocal()),
-          BACKUP_MIME,
-          file,
-          t("Save Qashy vault backup"),
+        // Throws when the platform has nowhere to hand the file, so "Backup ready" is never shown
+        // for a backup that went nowhere.
+        requireHandedOff(
+          await saveFile(
+            backupFileName(todayLocal()),
+            BACKUP_MIME,
+            file,
+            t("Save Qashy vault backup"),
+          ),
         );
         // Handing the file to the platform is not the same as it being saved: a dismissed share
         // sheet resolves identically. So the passphrase stays until the person confirms they
@@ -222,13 +227,27 @@ export function TransferScreen() {
     );
 
   /**
+   * Switching how the backup is protected drops the confirm card with it, so the typed passphrase
+   * goes too: it must never outlive the card whose "I saved it" button is what clears it.
+   */
+  const chooseLock = (next: BackupKeySource["kind"]) => {
+    if (next === lock) return;
+    setLock(next);
+    setPassphrase("");
+    setRepeated("");
+    setPhase("idle");
+  };
+
+  /**
    * The person says the file is where they want it. Cleared now rather than kept for a second
    * export: a passphrase sitting in a form field is one screenshot, one shoulder, or one
    * handed-over phone away from being the thing that opens the file it protects.
    */
   const confirmSaved = () => {
-    setPassphrase("");
-    setRepeated("");
+    if (clearsPassphrase("confirm", phase)) {
+      setPassphrase("");
+      setRepeated("");
+    }
     setPhase((current) => nextBackupPhase(current, "confirm"));
     hapticSuccess();
   };
@@ -330,14 +349,17 @@ export function TransferScreen() {
           reportBundleReason("Nothing to send", bundle.reason);
           return;
         }
+        if (bundle.frames)
+          requireHandedOff(
+            await saveFile(
+              bundleFileName(todayLocal()),
+              BUNDLE_MIME,
+              bundle.text,
+              t("Send Qashy changes"),
+            ),
+          );
+        // After the hand-off, so a file that went nowhere is never reported as sent.
         setSent(bundle);
-        if (!bundle.frames) return;
-        await saveFile(
-          bundleFileName(todayLocal()),
-          BUNDLE_MIME,
-          bundle.text,
-          t("Send Qashy changes"),
-        );
       },
       "Couldn’t create the sync file",
     );
@@ -409,19 +431,13 @@ export function TransferScreen() {
                 label="A passphrase"
                 icon="textformat"
                 selected={lock === "passphrase"}
-                onPress={() => {
-                  setLock("passphrase");
-                  setPhase("idle");
-                }}
+                onPress={() => chooseLock("passphrase")}
               />
               <ChoiceChip
                 label="My recovery phrase"
                 icon="key"
                 selected={lock === "recoveryPhrase"}
-                onPress={() => {
-                  setLock("recoveryPhrase");
-                  setPhase("idle");
-                }}
+                onPress={() => chooseLock("recoveryPhrase")}
               />
             </View>
 

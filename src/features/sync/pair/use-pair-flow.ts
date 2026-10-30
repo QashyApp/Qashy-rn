@@ -436,7 +436,10 @@ export function usePairFlow() {
   /** One explicit pull for a device that has just joined; also what "Try again" runs. */
   const pullFirstRun = () => {
     setReceiveSettled(false);
-    void reconcile()
+    // Queued, so a pass that was already running (a foreground event during pairing) is waited
+    // for and a pass that began after the join runs. Only a pass that ran settles this: the
+    // "still waiting for your data" state must not show while a pass is still in flight.
+    void reconcile({ queue: true })
       .catch(() => undefined)
       .finally(() => setReceiveSettled(true));
   };

@@ -80,6 +80,7 @@ export function DeviceCard({
   // State is stale inside a double tap; the ref is what the in-flight check reads.
   const savingRef = useRef(false);
   const approvingRef = useRef(false);
+  const removingRef = useRef(false);
   const [approving, setApproving] = useState<string | null>(null);
   const isOwner = status.revocation.ownerDeviceId === status.deviceId;
 
@@ -125,13 +126,17 @@ export function DeviceCard({
   });
 
   const remove = async (peerId: string, peerName: string) => {
-    const confirmed = await confirmDestructive({
-      title: "Remove this device?",
-      message: REMOVAL_MESSAGE,
-      confirmLabel: "Remove",
-    });
-    if (!confirmed) return;
+    // Held across the confirm dialog too: a second tap on the row while it is open (or while the
+    // signed removal is being appended) must not start a second removal.
+    if (removingRef.current) return;
+    removingRef.current = true;
     try {
+      const confirmed = await confirmDestructive({
+        title: "Remove this device?",
+        message: REMOVAL_MESSAGE,
+        confirmLabel: "Remove",
+      });
+      if (!confirmed) return;
       await revokePeer(setup, peerId);
       await onChanged();
     } catch (reason) {
@@ -139,17 +144,28 @@ export function DeviceCard({
         "Couldn’t remove that device",
         errorMessage(reason, `${peerName} is still paired.`),
       );
+    } finally {
+      removingRef.current = false;
     }
   };
 
   /** Adds this device's approval to a removal somebody else proposed: the existing signed path. */
-  const approve = async (peerId: string, peerName: string) => {
+  const approve = async (
+    peerId: string,
+    peerName: string,
+    proposal: SyncStatus["proposals"][number],
+  ) => {
     if (approvingRef.current) return;
     approvingRef.current = true;
     try {
       const confirmed = await confirmDestructive({
         title: "Approve this removal?",
-        message: REMOVAL_MESSAGE,
+        // Only the approval that reaches the quorum removes the device. Any earlier one says what
+        // it does instead: it counts toward the removal, which is not carried out yet.
+        message:
+          proposal.approvals.length + 1 >= proposal.required
+            ? REMOVAL_MESSAGE
+            : `Your approval counts toward removing ${peerName}. It’s removed once ${proposal.required} of ${proposal.voters.length} devices approve.`,
         confirmLabel: "Approve",
       });
       if (!confirmed) return;
@@ -273,7 +289,9 @@ export function DeviceCard({
                       busy={approving === peer.deviceId}
                       disabled={Boolean(approving)}
                       accessibilityLabel={t(`Approve removing ${peer.name}`)}
-                      onPress={() => void approve(peer.deviceId, peer.name)}
+                      onPress={() =>
+                        void approve(peer.deviceId, peer.name, proposal)
+                      }
                       style={{ alignSelf: "flex-start" }}
                     />
                   ) : (

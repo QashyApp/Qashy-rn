@@ -240,8 +240,8 @@ export function PairScreen() {
 
 const containerStyle = (space: SpaceScale) =>
   ({
-    padding: 18,
-    paddingBottom: 40,
+    padding: space.lg,
+    paddingBottom: space.xxxl + space.sm,
     gap: space.lg,
     width: "100%",
     maxWidth: 720,

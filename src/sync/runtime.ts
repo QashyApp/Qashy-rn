@@ -54,6 +54,7 @@ import {
 import { activePeers, readRoster } from "@/sync/engine/roster";
 import { SyncSession, type ReconcileOutcome } from "@/sync/engine/session";
 import type { SyncTransport } from "@/sync/engine/transport";
+import { assertVaultEpochCurrent } from "@/sync/rotation";
 import { readEndpoints, type SyncEndpoints } from "@/sync/transport/endpoints";
 import {
   FileTransport,
@@ -299,6 +300,11 @@ export class SyncRuntime {
       return { reason: vault, outcome: null, health: await this.health() };
     }
 
+    // Before anything is wired, sealed or applied: a keystore epoch the database does not record
+    // is an interrupted rotation, and a pass under it would label ops with the wrong epoch. Fails
+    // closed (the throw reaches the caller, and the sync screen shows it) rather than skipping.
+    await this.assertEpochCurrent(vault);
+
     const wiring = this.wire(vault, endpoints);
     const outcome = await wiring.session.reconcile(signal);
 
@@ -524,6 +530,19 @@ export class SyncRuntime {
     return "";
   }
 
+  /**
+   * Throws the interrupted-rotation error unless the keystore's epoch is the stored one. Closes
+   * any cached wiring first: it was built from a vault this device is no longer consistent with.
+   */
+  private async assertEpochCurrent(vault: StoredVault): Promise<void> {
+    try {
+      await assertVaultEpochCurrent(this.deps.storage, vault.epoch);
+    } catch (error) {
+      await this.dropWiring();
+      throw error;
+    }
+  }
+
   /** The vault, or the reason there isn't one. */
   private async readVault(): Promise<
     StoredVault | Exclude<SyncPassReason, "ok" | "disabled">
@@ -639,6 +658,7 @@ export class SyncRuntime {
 
     const vault = await this.readVault();
     if (typeof vault === "string") return vault;
+    await this.assertEpochCurrent(vault);
 
     const today = this.today();
     const recipients = this.fileRecipientTags(vault);

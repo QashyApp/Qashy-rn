@@ -60,6 +60,7 @@ import {
 import {
   EndMode,
   MAX_REPEAT_INTERVAL,
+  mayTurnOnWhenEndExtended,
   projectedNextDueDate,
 } from "@/features/more/recurring/recurring-model";
 import { canPostNow } from "@/data/finance/rates";
@@ -133,9 +134,11 @@ export function useRecurringForm() {
   const [occurrenceCount, setOccurrenceCount] = useState("");
   const [autoPost, setAutoPost] = useState(existing?.autoPost ?? false);
   const [active, setActiveState] = useState(existing?.active ?? true);
-  // Whether the user switched the schedule off themselves. Extending an ended schedule's end date
-  // turns it back on, but never over a choice the user made.
-  const [turnedOffByUser, setTurnedOffByUser] = useState(false);
+  // Whether the user switched the schedule off themselves, now or in an earlier save. Extending an
+  // ended schedule's end date turns it back on, but never over a choice the user made.
+  const [turnedOffByUser, setTurnedOffByUser] = useState(
+    () => !mayTurnOnWhenEndExtended(existing),
+  );
   const setActive = (next: boolean) => {
     setTurnedOffByUser(!next);
     setActiveState(next);
@@ -372,8 +375,12 @@ export function useRecurringForm() {
   const nextAfterEnd = scheduleEnded ? projectedNext : null;
   // Extending the end date past the next payment lifts the lock, and turns the schedule on with
   // it unless the user had switched it off. Adjusted during render, from the previous value.
+  // While the end condition is unfinished (a blank count or date) nothing resolves, so the schedule
+  // only looks not ended for lack of an answer: wait rather than treat that as an extension.
+  const endIncomplete =
+    (endMode === "count" || endMode === "date") && resolvedEndDate === null;
   const [wasEnded, setWasEnded] = useState(scheduleEnded);
-  if (wasEnded !== scheduleEnded) {
+  if (!endIncomplete && wasEnded !== scheduleEnded) {
     setWasEnded(scheduleEnded);
     if (wasEnded && !turnedOffByUser) setActiveState(true);
   }

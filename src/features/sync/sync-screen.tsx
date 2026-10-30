@@ -140,6 +140,10 @@ export function SyncScreen() {
 
   /** The provider reports a failed pass on its own banner, so only a finished one buzzes here. */
   const syncNow = async () => {
+    // A rotation replaces the key and epoch a pass seals under (and runs in the same queue as the
+    // passes), so nothing here starts one while it owns the screen. The ref covers a tap that
+    // lands before the next render; pull-to-refresh arrives here too.
+    if (busyRef.current) return;
     if (await reconcile()) hapticSuccess();
   };
 
@@ -155,6 +159,7 @@ export function SyncScreen() {
     if (!confirmed) return;
     await run(
       "rotate",
+      // Serialized with sync passes inside `rotateVaultKey` itself (the pass lock).
       () => rotateVaultKey(setup),
       "Couldn’t replace the vault key",
       true,
@@ -240,7 +245,7 @@ export function SyncScreen() {
                 title={syncing ? "Syncing…" : "Sync now"}
                 icon="arrow.triangle.2.circlepath"
                 busy={syncing}
-                disabled={syncing}
+                disabled={syncing || Boolean(busy)}
                 onPress={() => void syncNow()}
               />
             ) : (
@@ -416,8 +421,8 @@ export function SyncScreen() {
 
 const containerStyle = (space: SpaceScale) =>
   ({
-    padding: 18,
-    paddingBottom: 40,
+    padding: space.lg,
+    paddingBottom: space.xxxl + space.sm,
     gap: space.lg,
     width: "100%",
     maxWidth: 720,

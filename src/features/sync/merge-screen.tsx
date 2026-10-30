@@ -320,8 +320,8 @@ export function MergeScreen() {
 
 const containerStyle = (space: SpaceScale) =>
   ({
-    padding: 18,
-    paddingBottom: 40,
+    padding: space.lg,
+    paddingBottom: space.xxxl + space.sm,
     gap: space.lg,
     width: "100%",
     maxWidth: 720,
@@ -380,7 +380,7 @@ function GroupRow({
       pressedScale={0.985}
       stateLayerShape="container"
       style={({ pressed }) => ({
-        minHeight: 58,
+        minHeight: theme.tile.size + space.lg,
         flexDirection: "row",
         alignItems: "center",
         gap: space.md,
@@ -406,7 +406,7 @@ function GroupRow({
           <AppIcon
             name="exclamationmark.triangle"
             color={theme.warning}
-            size={theme.iconSize.md - 2}
+            size={theme.iconSize.md}
           />
         </View>
       ) : (

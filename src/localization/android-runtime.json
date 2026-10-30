@@ -681,6 +681,7 @@
     "q_91213563e4e090e4",
     "q_32ae68296c770dcd",
     "q_f3141e18664fcf50",
+    "q_94a1b1c02c82cb3d",
     "q_d444036c4056e040",
     "q_cffdd43874ccf2e7",
     "q_70f55429a3f3c4cc",
@@ -939,7 +940,6 @@
     "q_5cdb53fa5a02311b",
     "q_d452da249c1ed7ad",
     "q_3335848d4b82a01e",
-    "q_007dfd9865733e55",
     "q_f161aa669f5cab88",
     "q_511c0f93eacea72d",
     "q_51b27151a5137f45",
@@ -1814,6 +1814,10 @@
     {
       "name": "q_445500a98faa833b",
       "source": "^Approve removing (.+)$"
+    },
+    {
+      "name": "q_65b75422243c3860",
+      "source": "^Your approval counts toward removing (.+)\\. It’s removed once (\\d+) of (\\d+) devices approve\\.$"
     },
     {
       "name": "q_4a449fc6afe55beb",

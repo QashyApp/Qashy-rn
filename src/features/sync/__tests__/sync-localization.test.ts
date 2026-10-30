@@ -192,6 +192,9 @@ function generatedCopy(): Set<string> {
  * `translateDynamic` pattern exists and that the singular has its own entry.
  */
 const assembled: readonly string[] = [
+  // /sync — a below-quorum approval, and a save that had nowhere to go.
+  "Your approval counts toward removing Laptop. It’s removed once 2 of 3 devices approve.",
+  "Sharing isn’t available on this device, so the file couldn’t be saved.",
   // /sync-pair — the pairing-code countdown.
   "1 second left",
   "89 seconds left",

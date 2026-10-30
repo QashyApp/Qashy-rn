@@ -52,7 +52,11 @@ export function HostCodeStep({
               paddingVertical: space.xl,
             }}
           >
-            <AppIcon name="clock" color={theme.textMuted} size={28} />
+            <AppIcon
+              name="clock"
+              color={theme.textMuted}
+              size={theme.iconSize.xl}
+            />
             <AppText muted style={{ textAlign: "center" }}>
               {code.unusable
                 ? "This pairing attempt has ended. Its code cannot be used again, even before the countdown ends."

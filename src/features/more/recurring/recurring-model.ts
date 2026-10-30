@@ -44,7 +44,8 @@ function resumedNextDueDate(
  * unchanged schedule keeps its date; a new or changed one restarts at its first occurrence on or
  * after where regeneration begins (the earliest pending occurrence, else today at the earliest;
  * moving the start earlier backfills from the new start). A paused schedule is projected as if it
- * were switched back on, which skips the dates it was paused through.
+ * were switched back on, which skips the dates it was paused through: it resumes at its first
+ * occurrence on or after today, with no backfill, even when the same save changes the schedule.
  */
 export function projectedNextDueDate({
   existing,
@@ -75,11 +76,13 @@ export function projectedNextDueDate({
     existing.endDate === endDate
   )
     return resumedNextDueDate(existing, today);
-  const base =
-    earliestPendingDate ??
-    later(existing ? resumedNextDueDate(existing, today) : startDate, today);
+  const resuming = existing?.active === false;
+  const base = resuming
+    ? later(earliestPendingDate ?? resumedNextDueDate(existing, today), today)
+    : (earliestPendingDate ??
+      later(existing ? resumedNextDueDate(existing, today) : startDate, today));
   const from =
-    existing && startDate < existing.startDate && startDate < base
+    existing && !resuming && startDate < existing.startDate && startDate < base
       ? startDate
       : base;
   return firstRecurrenceOnOrAfter(
@@ -91,11 +94,14 @@ export function projectedNextDueDate({
 }
 
 /**
- * Whether the schedule, as the form describes it, has no occurrence left: its next due date is
- * already past its end date. Saving it switches the schedule off, so the form says so instead.
+ * Whether extending a schedule's end date may switch it back on by itself. A new schedule, an
+ * active one, and one that generation ended (off, with its next date already past its end date)
+ * may; one the user paused (off, with its next date still within its end date) stays off, since
+ * switching it on would post what the pause skipped.
  */
-export function scheduleHasEnded(
-  input: Parameters<typeof projectedNextDueDate>[0],
+export function mayTurnOnWhenEndExtended(
+  existing?: Pick<RecurringRule, "active" | "endDate" | "nextDueDate">,
 ) {
-  return Boolean(input.endDate && projectedNextDueDate(input) > input.endDate);
+  if (!existing || existing.active) return true;
+  return existing.endDate !== null && existing.nextDueDate > existing.endDate;
 }

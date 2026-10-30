@@ -445,6 +445,8 @@ describe("reuse between passes", () => {
       identity: held!.identity,
       epoch: 2,
     });
+    // The rotation's other half: the database records the same epoch.
+    await target.set({ [SYNC_META.epoch]: "2" });
     await target.runtime.reconcile();
 
     expect(target.runtime.transports[0]).not.toBe(first[0]);
@@ -453,6 +455,34 @@ describe("reuse between passes", () => {
         url.includes(deriveBucketId(rotated)),
       ),
     ).toBe(true);
+  });
+
+  it("fails closed when the keystore epoch is not the stored one", async () => {
+    const target = await rig({ replies: [...PASS, ...PASS] });
+    await target.runtime.reconcile();
+    const callsBefore = target.http.calls.length;
+
+    // An interrupted rotation: the new key reached the keystore, the database never learned it.
+    const held = await target.keystore.read();
+    await target.keystore.write({
+      vaultKey: createVaultRootKey(),
+      identity: held!.identity,
+      epoch: 2,
+    });
+
+    await expect(target.runtime.reconcile()).rejects.toThrow(
+      /rotation was interrupted/i,
+    );
+    // Nothing sealed, nothing sent, and no transport left wired under the stale state.
+    expect(target.http.calls).toHaveLength(callsBefore);
+    expect(target.runtime.transports).toHaveLength(0);
+    await expect(target.runtime.exportBundle()).rejects.toThrow(
+      /rotation was interrupted/i,
+    );
+
+    // Restoring the matching epoch lets the next pass proceed.
+    await target.keystore.write(held!);
+    expect((await target.runtime.reconcile()).reason).toBe("ok");
   });
 
   it("drops everything when sync is switched off mid-life", async () => {

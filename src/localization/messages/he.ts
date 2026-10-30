@@ -837,6 +837,8 @@ export const HEBREW: Record<string, string> = {
     "רק המכשירים המחוברים שלכם רואים אותו. הוא נשלח מוצפן, והממסר לעולם אינו לומד אותו.",
   "It stops sending and receiving changes here. It keeps the copy of your data it already has — to make that copy useless, rotate the vault key afterwards.":
     "הוא יפסיק לשלוח ולקבל שינויים כאן. העותק של הנתונים שכבר יש לו יישאר אצלו — כדי להפוך אותו לחסר תועלת, החליפו לאחר מכן את מפתח הכספת.",
+  "Sharing isn’t available on this device, so the file couldn’t be saved.":
+    "השיתוף אינו זמין במכשיר הזה, ולכן לא ניתן היה לשמור את הקובץ.",
   "Pair a second device and Qashy keeps them in step. You compare a six-word code on both screens first, so nothing is sent to a device you didn’t confirm.":
     "חברו מכשיר שני ו־Qashy ישמור עליהם מסונכרנים. תחילה תשוו קוד של שש מילים בשני המסכים, כך שדבר אינו נשלח למכשיר שלא אישרתם.",
   "Removed devices stay listed so your history keeps its author. They can no longer send or receive changes.":
@@ -1203,7 +1205,6 @@ export const HEBREW: Record<string, string> = {
   "A filter is on": "מסנן פעיל",
   "Search all months": "חיפוש בכל החודשים",
   "All upcoming": "כל מה שבקרוב",
-  "Totals are for the whole month": "הסכומים הם לכל החודש",
   // Audit round 2.
   "Nothing upcoming": "אין תנועות עתידיות",
   "Scheduled and recurring transactions show up here until they are due.":
@@ -2587,6 +2588,11 @@ export function createDynamicPatterns(
       (p1, p2) => `${p1} מתוך ${p2} אישורים עד כה`,
     ],
     [/^Approve removing (.+)$/, (p1) => `אישור הסרת ${p1}`],
+    [
+      /^Your approval counts toward removing (.+)\. It’s removed once (\d+) of (\d+) devices approve\.$/,
+      (p1, p2, p3) =>
+        `האישור שלכם נספר לטובת הסרת ${p1}. המכשיר יוסר לאחר ש־${p2} מתוך ${p3} מכשירים יאשרו.`,
+    ],
     [/^Choose a date on or after (.+)$/, (p1) => `בחרו תאריך ב־${p1} או אחריו`],
     [
       /^Choose a date on or before (.+)$/,

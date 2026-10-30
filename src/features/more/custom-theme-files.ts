@@ -8,7 +8,7 @@
 import { File as ExpoFile } from "expo-file-system";
 
 import { fileExtension, pickAsset } from "@/features/shared/pick-file";
-import { saveFile } from "@/features/shared/save-file";
+import { requireHandedOff, saveFile } from "@/features/shared/save-file";
 import { MAX_THEME_FILE_BYTES } from "@/theme/custom/theme-import";
 
 /**
@@ -42,5 +42,12 @@ export async function saveThemeFile(
   json: string,
   dialogTitle: string,
 ): Promise<void> {
-  await saveFile(filename, "application/json;charset=utf-8", json, dialogTitle);
+  requireHandedOff(
+    await saveFile(
+      filename,
+      "application/json;charset=utf-8",
+      json,
+      dialogTitle,
+    ),
+  );
 }

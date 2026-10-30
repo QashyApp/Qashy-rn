@@ -423,12 +423,21 @@ export function planRecurringRuleSave(
   // every overdue occurrence for good (their keys are released, nothing regenerates them). With
   // nothing pending it restarts from the rule's next due date, never earlier than today, so an
   // edit still cannot backfill history.
-  const baseRegenerateFrom =
-    earliestUpcomingDate ??
-    [existing?.nextDueDate ?? input.startDate, todayLocal()].sort().at(-1)!;
+  const today = todayLocal();
+  // Switching a paused schedule back on skips the dates it was paused through, so its regeneration
+  // never reaches back past today, even when the same save edits the schedule: pending items left
+  // over from before the pause are discarded and the dates between them and today are not
+  // recreated.
+  const resuming = !!existing && !existing.active && input.active;
+  const baseRegenerateFrom = resuming
+    ? [earliestUpcomingDate ?? existing.nextDueDate, today].sort().at(-1)!
+    : (earliestUpcomingDate ??
+      [existing?.nextDueDate ?? input.startDate, today].sort().at(-1)!);
   // Moving the start date earlier is an explicit request to include the missed occurrences, so
-  // regeneration begins at the new start; occurrence keys keep already-generated ones from duplicating.
-  const movedEarlier = !!existing && input.startDate < existing.startDate;
+  // regeneration begins at the new start; occurrence keys keep already-generated ones from
+  // duplicating. A resumed schedule is the exception: the pause is skipped, not backfilled.
+  const movedEarlier =
+    !resuming && !!existing && input.startDate < existing.startDate;
   const regenerateFrom =
     movedEarlier && input.startDate < baseRegenerateFrom
       ? input.startDate
@@ -521,7 +530,10 @@ export function planRecurringRuleSave(
           }
         })
       : [];
-  const rewindTo = unpriced.sort()[0];
+  // A resumed schedule is not wound back into the dates it was paused through.
+  const rewindTo = unpriced
+    .filter((date) => !resuming || date >= today)
+    .sort()[0];
   const rewound =
     rewindTo && rewindTo < resumed.nextDueDate
       ? { ...resumed, nextDueDate: rewindTo }

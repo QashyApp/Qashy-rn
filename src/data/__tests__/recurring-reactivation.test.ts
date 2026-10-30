@@ -190,3 +190,121 @@ describe("reactivating a paused schedule", () => {
     expect(occurrencesOf(repository, rule.id)).toEqual([]);
   });
 });
+
+describe("resuming a paused schedule in the same save as other edits", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    at("2026-06-08");
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  const liveDates = (repository: LocalFinanceRepository, ruleId: string) =>
+    repository
+      .getSnapshot()
+      .transactions.filter(
+        (item) => item.recurringRuleId === ruleId && !item.deletedAt,
+      )
+      .map((item) => item.localDate)
+      .sort();
+
+  /** A weekly review-first schedule with three upcoming occurrences, then paused. */
+  async function pausedWithPending(repository: LocalFinanceRepository) {
+    const created = await repository.saveRecurringRule(
+      ruleInput(repository, { autoPost: false }),
+    );
+    at("2026-06-24");
+    await repository.generateRecurring("2026-06-24");
+    expect(liveDates(repository, created.id)).toEqual([
+      "2026-06-10",
+      "2026-06-17",
+      "2026-06-24",
+    ]);
+    const current = repository
+      .getSnapshot()
+      .recurringRules.find((item) => item.id === created.id)!;
+    return repository.saveRecurringRule(
+      ruleInput(repository, {
+        autoPost: false,
+        nextDueDate: current.nextDueDate,
+        active: false,
+      }),
+      current.id,
+      current.revision,
+    );
+  }
+
+  it("does not recreate the dates between the old pending items and today", async () => {
+    const repository = await createRepository();
+    const paused = await pausedWithPending(repository);
+    at("2026-07-20");
+    const resumed = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        autoPost: false,
+        // The schedule changes in the same save.
+        endDate: "2026-12-30",
+        nextDueDate: paused.nextDueDate,
+        active: true,
+      }),
+      paused.id,
+      paused.revision,
+    );
+    // Jul 20 is a Monday: the Wednesday series resumes on Jul 22, not back at Jun 10.
+    expect(resumed.nextDueDate).toBe("2026-07-22");
+    // The pending items from before the pause are discarded, not regenerated.
+    expect(liveDates(repository, paused.id)).toEqual([]);
+    at("2026-07-22");
+    await repository.generateRecurring("2026-07-22");
+    expect(liveDates(repository, paused.id)).toEqual(["2026-07-22"]);
+  });
+
+  it("does not backfill when the start date moves earlier as it resumes", async () => {
+    const repository = await createRepository();
+    const paused = await pausedWithPending(repository);
+    at("2026-07-20");
+    const resumed = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        autoPost: false,
+        startDate: "2026-05-06",
+        nextDueDate: paused.nextDueDate,
+        active: true,
+      }),
+      paused.id,
+      paused.revision,
+    );
+    expect(resumed.nextDueDate).toBe("2026-07-22");
+    expect(liveDates(repository, paused.id)).toEqual([]);
+  });
+
+  it("does not rewind into the pause for a pending item that cannot be priced", async () => {
+    const repository = await createRepository();
+    const paused = await pausedWithPending(repository);
+    at("2026-07-20");
+    const accountId = repository.getSnapshot().accounts[0].id;
+    // A template change to a foreign amount with no stored rate leaves the old pending items
+    // unpriced: they are discarded, and the rule is not wound back to them.
+    const resumed = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        autoPost: false,
+        template: {
+          kind: "expense",
+          title: "Gym",
+          note: "",
+          accountId,
+          categoryId: null,
+          tagIds: [],
+          amountMinor: 2_500,
+          currency: "USD",
+          foreign: { amountMinor: 2_500, currency: "EUR" },
+        },
+        nextDueDate: paused.nextDueDate,
+        active: true,
+      }),
+      paused.id,
+      paused.revision,
+    );
+    expect(resumed.nextDueDate).toBe("2026-07-22");
+    expect(liveDates(repository, paused.id)).toEqual([]);
+  });
+});

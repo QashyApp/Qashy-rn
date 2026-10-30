@@ -10,7 +10,7 @@ import {
   pickAsset,
   readAssetText,
 } from "@/features/shared/pick-file";
-import { saveFile } from "@/features/shared/save-file";
+import { requireHandedOff, saveFile } from "@/features/shared/save-file";
 import { useLocalization } from "@/localization/localization";
 import { errorMessage, showError } from "@/utils/confirm";
 import { extractCsvRatePairs, parseCsvTable } from "@/utils/csv";
@@ -276,11 +276,13 @@ export function useCsvImport() {
     try {
       const csv = repository.exportCsv();
       const filename = `qashy-transactions-${todayLocal()}.csv`;
-      await saveFile(
-        filename,
-        "text/csv;charset=utf-8",
-        csv,
-        t("Export Qashy transactions"),
+      requireHandedOff(
+        await saveFile(
+          filename,
+          "text/csv;charset=utf-8",
+          csv,
+          t("Export Qashy transactions"),
+        ),
       );
     } catch (reason) {
       showError("Couldn’t export CSV", errorMessage(reason, "Try again."));

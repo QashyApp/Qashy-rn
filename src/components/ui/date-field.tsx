@@ -51,12 +51,22 @@ export function DateField({
   const { space } = theme;
   const { locale, t } = useLocalization();
   const [open, setOpen] = useState(false);
-  const [rangeError, setRangeError] = useState<string | null>(null);
+  // The date an out-of-range pick was rejected for, and the value the field held then. The
+  // message is derived from them rather than stored: it follows the bounds and the locale, and it
+  // stops applying as soon as the value or the bounds make the rejected pick irrelevant.
+  const [rejected, setRejected] = useState<{
+    readonly date: string;
+    readonly heldValue: string;
+  } | null>(null);
   // A stored value that is not a calendar date (a bad import, an old draft) must not take the
   // form down: it reads as empty here, and the picker starts from today instead.
   const usable = isLocalDate(value) ? value : "";
   const display = usable ? formatFieldDate(usable, locale) : "";
   const translatedLabel = t(label);
+  const rangeError =
+    rejected && rejected.heldValue === value
+      ? dateRangeHint(rejected.date, locale, minimumDate, maximumDate)
+      : null;
   const shownError = error ?? rangeError ?? undefined;
 
   const pick = (date: Date) => {
@@ -65,10 +75,10 @@ export function DateField({
     // The dialog keeps to the bounds itself; this covers an engine that does not.
     const outside = dateRangeHint(next, locale, minimumDate, maximumDate);
     if (outside) {
-      setRangeError(outside);
+      setRejected({ date: next, heldValue: value });
       return;
     }
-    setRangeError(null);
+    setRejected(null);
     if (next !== value) {
       hapticSelection();
       onChange(next);
@@ -119,7 +129,7 @@ export function DateField({
             icon="xmark"
             onPress={() => {
               setOpen(false);
-              setRangeError(null);
+              setRejected(null);
               onChange("");
             }}
           />

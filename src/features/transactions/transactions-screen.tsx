@@ -682,11 +682,13 @@ export function TransactionsScreen() {
       </View>
       {/* Said only when it adds something: the month bar already names the month, so a plain
           month needs no caption. The line keeps its height while empty, so typing a search or
-          picking a type never moves the list. */}
+          picking a type never moves the list; one line, ellipsized, so a long caption at a large
+          font size cannot grow the slot either. */}
       <AppText
         literal
         variant="caption"
         muted
+        numberOfLines={1}
         accessibilityElementsHidden={!totalsCaption}
         importantForAccessibility={
           totalsCaption ? "auto" : "no-hide-descendants"
