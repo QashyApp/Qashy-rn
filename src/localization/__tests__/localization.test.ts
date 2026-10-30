@@ -707,3 +707,36 @@ describe("localization", () => {
     );
   });
 });
+
+describe("ChoiceListField chrome", () => {
+  const he = (message: string) => translateMessage(message, "he");
+  // Every label a ChoiceListField is given in the app, bar "Base currency" and "Language", whose
+  // definite-form headings are written out in the dictionary. The frame is built at runtime from the
+  // lowercased label, so each one must reach Hebrew through the label's own translation.
+  const labels: [label: string, hebrew: string][] = [
+    ["Currency", "מטבע"],
+    ["Foreign currency", "מטבע זר"],
+    ["Budget", "תקציב"],
+    ["Goal", "יעד"],
+  ];
+
+  it.each(labels)(
+    "translates the heading, close and search for %s",
+    (label, hebrew) => {
+      const lower = label.toLocaleLowerCase();
+      expect(he(`Choose ${lower}`)).toBe(`בחירת ${hebrew}`);
+      expect(he(`Close ${lower} choices`)).toBe(`סגירת אפשרויות ${hebrew}`);
+      expect(he(`Search ${lower}`)).toBe(`חיפוש ${hebrew}`);
+    },
+  );
+
+  it("leaves a message in English when the label has no Hebrew", () => {
+    expect(he("Choose zzz widget")).toBe("Choose zzz widget");
+    expect(he("Close zzz widget choices")).toBe("Close zzz widget choices");
+  });
+
+  it("does not disturb the other Choose messages", () => {
+    expect(he("Choose file")).toBe("בחירת קובץ");
+    expect(he("Choose a valid goal.")).toBe("בחרו יעד תקין.");
+  });
+});

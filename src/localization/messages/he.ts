@@ -906,6 +906,8 @@ export const HEBREW: Record<string, string> = {
     "המכשיר הזה קיבל את מפתח הכספת אך לא הצליח לשמור אותו, ולכן לא הצטרף.",
   "The other device may have added it. If it lists this device, remove it there, then pair again.":
     "ייתכן שהמכשיר האחר הוסיף אותו. אם הוא מציג את המכשיר הזה, הסירו אותו שם ואז חברו שוב.",
+  "This device may still hold the vault key, so it cannot pair again yet. Use “Leave this vault” in the Danger zone of the sync screen on this device first. Then, if the other device lists this device, remove it there, and pair again.":
+    "ייתכן שהמכשיר הזה עדיין מחזיק במפתח הכספת, ולכן אי אפשר לחבר אותו שוב כרגע. קודם כול השתמשו ב״יציאה מהכספת״ באזור המסוכן במסך הסנכרון במכשיר הזה. לאחר מכן, אם המכשיר האחר מציג את המכשיר הזה, הסירו אותו שם וחברו שוב.",
   "Leave before finishing?": "לצאת לפני הסיום?",
   "The other device already has your vault key, but this device has not saved it as a member yet.":
     "למכשיר האחר כבר יש את מפתח הכספת שלכם, אך המכשיר הזה עדיין לא שמר אותו כחבר בכספת.",
@@ -2605,6 +2607,19 @@ export function createDynamicPatterns(
   const agree = (field: string, masculine: string, feminine: string) =>
     FEMININE_FIELDS.has(fieldKey(field)) ? feminine : masculine;
 
+  /** English when the label has no Hebrew, so a missing translation shows rather than half-translates. */
+  const choiceChrome = (
+    label: string,
+    lead: string,
+    tail: string,
+    frame: (hebrew: string) => string,
+  ) => {
+    const hebrew = translateField(label);
+    return hebrew === fieldKey(label)
+      ? `${lead} ${label}${tail}`
+      : frame(hebrew);
+  };
+
   // Built once by the caller: the table is static, and every non-dictionary string in Hebrew walks it.
   return [
     [
@@ -3822,6 +3837,29 @@ export function createDynamicPatterns(
     [
       /^These budgets (.+) would then cover all your spending\.$/,
       (names) => `התקציבים ${names} יכסו אז את כל ההוצאות שלכם.`,
+    ],
+    // The chrome of a ChoiceListField, built from its lowercased label ("Choose foreign
+    // currency"). Last, so no other "Choose ..." message is caught. The label goes through the
+    // dictionary; one with no Hebrew leaves the whole message in English.
+    [
+      /^Choose (.+)$/,
+      (label) =>
+        choiceChrome(label, "Choose", "", (hebrew) => `בחירת ${hebrew}`),
+    ],
+    [
+      /^Close (.+) choices$/,
+      (label) =>
+        choiceChrome(
+          label,
+          "Close",
+          " choices",
+          (hebrew) => `סגירת אפשרויות ${hebrew}`,
+        ),
+    ],
+    [
+      /^Search (.+)$/,
+      (label) =>
+        choiceChrome(label, "Search", "", (hebrew) => `חיפוש ${hebrew}`),
     ],
   ];
 }

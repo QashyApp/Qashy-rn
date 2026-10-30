@@ -3,6 +3,7 @@ import { Modal, Pressable, View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
 import { AppText } from "@/components/ui/app-text";
+import { useMotionPreference } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
 import { webDialogStore } from "@/services/web-dialog-store";
@@ -12,6 +13,7 @@ export function WebDialogHost() {
   const theme = useQashyTheme();
   const { space, radius } = theme;
   const { t } = useLocalization();
+  const { instant } = useMotionPreference();
   const dialog = useSyncExternalStore(
     webDialogStore.subscribe,
     webDialogStore.getSnapshot,
@@ -24,7 +26,12 @@ export function WebDialogHost() {
   const dismiss = () => webDialogStore.close(dialog.id, false);
 
   return (
-    <Modal transparent visible animationType="fade" onRequestClose={dismiss}>
+    <Modal
+      transparent
+      visible
+      animationType={instant ? "none" : "fade"}
+      onRequestClose={dismiss}
+    >
       <Pressable
         accessible={false}
         onPress={dismiss}

@@ -109,8 +109,11 @@ export function MaterialSwitch({
       },
     ],
   }));
+  // The halo rides the handle: it shares the thumb's progress, so it slides with it and stays
+  // centered while its press fade-out outlasts the slide.
   const haloStyle = useAnimatedStyle(() => ({
     opacity: Math.max(hover.value * 0.08, press.value * 0.1),
+    transform: [{ translateX: direction * progress.value * THUMB_TRAVEL }],
   }));
 
   // The check fades in over the second half of the slide.
@@ -169,9 +172,6 @@ export function MaterialSwitch({
               height: 40,
               borderRadius: 20,
               backgroundColor: value ? theme.accent : theme.text,
-              transform: [
-                { translateX: direction * (value ? THUMB_TRAVEL : 0) },
-              ],
             },
             haloStyle,
           ]}

@@ -7247,6 +7247,11 @@
       "he": "הוסיפו תנועה לחודש הזה, או קפצו לפעילות האחרונה."
     },
     {
+      "name": "q_d402bb4da64dade5",
+      "en": "This device may still hold the vault key, so it cannot pair again yet. Use “Leave this vault” in the Danger zone of the sync screen on this device first. Then, if the other device lists this device, remove it there, and pair again.",
+      "he": "ייתכן שהמכשיר הזה עדיין מחזיק במפתח הכספת, ולכן אי אפשר לחבר אותו שוב כרגע. קודם כול השתמשו ב״יציאה מהכספת״ באזור המסוכן במסך הסנכרון במכשיר הזה. לאחר מכן, אם המכשיר האחר מציג את המכשיר הזה, הסירו אותו שם וחברו שוב."
+    },
+    {
       "name": "q_d40d71a667349f70",
       "en": "Good to know",
       "he": "דברים לדעת"

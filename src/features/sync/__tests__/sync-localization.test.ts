@@ -202,6 +202,7 @@ const assembled: readonly string[] = [
   "Press “They match” again to finish. The key is not sent a second time.",
   "This device received the vault key but could not save it, so it did not join.",
   "The other device may have added it. If it lists this device, remove it there, then pair again.",
+  "This device may still hold the vault key, so it cannot pair again yet. Use “Leave this vault” in the Danger zone of the sync screen on this device first. Then, if the other device lists this device, remove it there, and pair again.",
   "Leave before finishing?",
   "The other device already has your vault key, but this device has not saved it as a member yet.",
   "To finish, choose Cancel and press “They match” again. The key is not sent a second time.",

@@ -148,7 +148,13 @@ export function usePairFlow() {
   // intercepts (the pairing screen is a full-screen push, not a sheet). The dialog has two ways
   // out: Cancel keeps the screen, where "They match" finishes the local save without re-sending
   // the key; the confirm button leaves and says what that costs.
+  //
+  // One prompt at a time: on web a second back press while the dialog is open would queue another
+  // confirmation, and Cancel would then be asked again. The flag clears when the prompt resolves.
+  const asking = useRef(false);
   usePreventRemove(handoffUnsaved, ({ repeat }) => {
+    if (asking.current) return;
+    asking.current = true;
     void confirmDestructive({
       title: "Leave before finishing?",
       message: [
@@ -157,12 +163,16 @@ export function usePairFlow() {
         "If you leave anyway, this device will reject the other device’s changes until that device leaves the vault and you pair again.",
       ],
       confirmLabel: "Leave anyway",
-    }).then((confirmed) => {
-      if (!confirmed) return;
-      // Prevention off first, then the blocked navigation repeats and the unmount closes the session.
-      setHandoffUnsaved(false);
-      repeat();
-    });
+    })
+      .then((confirmed) => {
+        if (!confirmed) return;
+        // Prevention off first, then the blocked navigation repeats and the unmount closes the session.
+        setHandoffUnsaved(false);
+        repeat();
+      })
+      .finally(() => {
+        asking.current = false;
+      });
   });
 
   // First run ends when the vault's own settings arrive: they carry `onboardingComplete`, which
@@ -537,10 +547,14 @@ export function usePairFlow() {
       move("role");
       // `adoptVault` erases what it stored when the join does not land, so the first sentence is
       // true and nothing is left here. Only its own AggregateError says the key may still be
-      // present or the outcome unknown, and its message already says so.
+      // present or the outcome unknown, and its message already says so. In that case the key stays
+      // in the keystore, which refuses a new join (and disables the join role) until this device
+      // leaves the vault, so removing it from the other device is not enough to pair again.
       setError(
         sentKey
-          ? `${reason instanceof AggregateError ? why : t("This device received the vault key but could not save it, so it did not join.")} ${t("The other device may have added it. If it lists this device, remove it there, then pair again.")}`
+          ? reason instanceof AggregateError
+            ? `${why} ${t("This device may still hold the vault key, so it cannot pair again yet. Use “Leave this vault” in the Danger zone of the sync screen on this device first. Then, if the other device lists this device, remove it there, and pair again.")}`
+            : `${t("This device received the vault key but could not save it, so it did not join.")} ${t("The other device may have added it. If it lists this device, remove it there, then pair again.")}`
           : `${why} ${t(role === "host" ? "The vault key was not sent." : "This device did not join the vault.")}`,
       );
     } finally {

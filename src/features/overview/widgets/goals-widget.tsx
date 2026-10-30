@@ -148,6 +148,7 @@ export function GoalsConfigSheet({
   card,
   onConfigure,
 }: WidgetConfigSheetProps) {
+  const { t } = useLocalization();
   const goals = useActiveGoals();
   const goalId =
     typeof card.config.goalId === "string" ? card.config.goalId : "";
@@ -159,7 +160,7 @@ export function GoalsConfigSheet({
       literalOptions
       onChange={(value) => onConfigure({ goalId: value || null })}
       options={[
-        { value: "", label: "All goals" },
+        { value: "", label: t("All goals") },
         ...goals.map((goal) => ({ value: goal.id, label: goal.name })),
       ]}
     />

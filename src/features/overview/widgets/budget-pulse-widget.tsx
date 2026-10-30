@@ -225,6 +225,7 @@ export function BudgetPulseConfigSheet({
   card,
   onConfigure,
 }: WidgetConfigSheetProps) {
+  const { t } = useLocalization();
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const today = toLocalDate(new Date(useNow()));
@@ -255,7 +256,7 @@ export function BudgetPulseConfigSheet({
       literalOptions
       onChange={(value) => onConfigure({ budgetId: value || null })}
       options={[
-        { value: "", label: "All budgets" },
+        { value: "", label: t("All budgets") },
         ...budgetStatuses.map((status) => ({
           value: status.budget.id,
           label: status.budget.name,

@@ -728,6 +728,7 @@
     "q_f0b8ad1c695bcbc3",
     "q_f3eb03b9208ef736",
     "q_e743fbe60e979fc9",
+    "q_d402bb4da64dade5",
     "q_1a14ef356e27c027",
     "q_eff8973ca4c8cf1d",
     "q_3fcac4acaf627509",
@@ -3260,6 +3261,18 @@
     {
       "name": "q_0f76c2aa7d9d0f0d",
       "source": "^These budgets (.+) would then cover all your spending\\.$"
+    },
+    {
+      "name": null,
+      "source": "^Choose (.+)$"
+    },
+    {
+      "name": null,
+      "source": "^Close (.+) choices$"
+    },
+    {
+      "name": null,
+      "source": "^Search (.+)$"
     }
   ]
 }
