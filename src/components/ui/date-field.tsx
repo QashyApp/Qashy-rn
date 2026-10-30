@@ -51,22 +51,24 @@ export function DateField({
   const { space } = theme;
   const { locale, t } = useLocalization();
   const [open, setOpen] = useState(false);
-  // The date an out-of-range pick was rejected for, and the value the field held then. The
-  // message is derived from them rather than stored: it follows the bounds and the locale, and it
-  // stops applying as soon as the value or the bounds make the rejected pick irrelevant.
-  const [rejected, setRejected] = useState<{
-    readonly date: string;
-    readonly heldValue: string;
-  } | null>(null);
+  // The date an out-of-range pick was rejected for. The message is derived from it rather than
+  // stored: it follows the bounds and the locale, and it stops applying as soon as the bounds make
+  // the rejected pick valid. A change of the value drops it too (adjusted during render, from the
+  // previous value), so it cannot return if the value later goes back to what it was.
+  const [rejected, setRejected] = useState<string | null>(null);
+  const [seenValue, setSeenValue] = useState(value);
+  if (seenValue !== value) {
+    setSeenValue(value);
+    setRejected(null);
+  }
   // A stored value that is not a calendar date (a bad import, an old draft) must not take the
   // form down: it reads as empty here, and the picker starts from today instead.
   const usable = isLocalDate(value) ? value : "";
   const display = usable ? formatFieldDate(usable, locale) : "";
   const translatedLabel = t(label);
-  const rangeError =
-    rejected && rejected.heldValue === value
-      ? dateRangeHint(rejected.date, locale, minimumDate, maximumDate)
-      : null;
+  const rangeError = rejected
+    ? dateRangeHint(rejected, locale, minimumDate, maximumDate)
+    : null;
   const shownError = error ?? rangeError ?? undefined;
 
   const pick = (date: Date) => {
@@ -75,7 +77,7 @@ export function DateField({
     // The dialog keeps to the bounds itself; this covers an engine that does not.
     const outside = dateRangeHint(next, locale, minimumDate, maximumDate);
     if (outside) {
-      setRejected({ date: next, heldValue: value });
+      setRejected(next);
       return;
     }
     setRejected(null);

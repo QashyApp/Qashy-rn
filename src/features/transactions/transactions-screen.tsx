@@ -16,6 +16,7 @@ import {
   SectionList,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -155,6 +156,7 @@ export function TransactionsScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { fontScale } = useWindowDimensions();
   const { radius, space } = theme;
   const { isRtl, locale, t } = useLocalization();
   const metrics = useScreenMetrics();
@@ -681,14 +683,18 @@ export function TransactionsScreen() {
         />
       </View>
       {/* Said only when it adds something: the month bar already names the month, so a plain
-          month needs no caption. The line keeps its height while empty, so typing a search or
-          picking a type never moves the list; one line, ellipsized, so a long caption at a large
-          font size cannot grow the slot either. */}
+          month needs no caption. The slot keeps two lines of height while empty, so typing a
+          search or picking a type never moves the list; two lines, because the qualifier that
+          says what the totals cover is the part an ellipsis would cut at a large font size or in
+          Hebrew. The height follows the theme's caption line height and the system font scale. */}
       <AppText
         literal
         variant="caption"
         muted
-        numberOfLines={1}
+        numberOfLines={2}
+        style={{
+          minHeight: 2 * theme.type.scale.caption.lineHeight * fontScale,
+        }}
         accessibilityElementsHidden={!totalsCaption}
         importantForAccessibility={
           totalsCaption ? "auto" : "no-hide-descendants"

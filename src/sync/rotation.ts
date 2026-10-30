@@ -16,7 +16,7 @@ import type { StorageAdapter } from "@/data/storage-adapter";
 import { SYNC_META, readMeta } from "@/data/sync-store";
 
 export const ROTATION_INTERRUPTED_MESSAGE =
-  "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.";
+  "Sync key rotation was interrupted before this device finished updating. Your data and local history are untouched. To get sync working again, use “Replace the vault key” or “Leave this vault” under Danger zone on the sync screen, then pair your devices again.";
 
 /** The error every path throws for an interrupted rotation, with the underlying cause attached. */
 export function rotationInterrupted(cause?: unknown): Error {

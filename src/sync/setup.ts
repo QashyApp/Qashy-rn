@@ -755,7 +755,13 @@ export const setEndpoints = (deps: SyncSetupDeps, patch: EndpointPatch) =>
  * the function for that case and it refuses in the opposite direction, so between the two
  * there is no state where both would work and no state where neither does.
  */
-export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
+export function resumeSync(deps: SyncSetupDeps): Promise<void> {
+  // Through the pass queue: it may rebuild the roster, chain and genesis, which a pass in flight
+  // is reading and extending.
+  return withSyncPassLock(() => resumeSyncNow(deps));
+}
+
+async function resumeSyncNow(deps: SyncSetupDeps): Promise<void> {
   const vault = await deps.keystore.read();
   if (!vault) {
     throw new KeystoreError(
@@ -950,9 +956,20 @@ export interface DisableOptions {
  * a device still marked as a vault member with no key to act as one, which reads as `unpaired`
  * on a screen offering to revoke peers it can no longer talk to.
  */
-export async function disableSync(
+export function disableSync(
   deps: SyncSetupDeps,
   options: DisableOptions = {},
+): Promise<void> {
+  // Pausing is one flag that a pass reads once, at its start. Leaving erases the key and the sync
+  // state a pass is using, so that goes through the same queue as the pass itself.
+  return options.forget
+    ? withSyncPassLock(() => disableSyncNow(deps, options))
+    : disableSyncNow(deps, options);
+}
+
+async function disableSyncNow(
+  deps: SyncSetupDeps,
+  options: DisableOptions,
 ): Promise<void> {
   await deps.storage.transact(async (tx) => {
     await writeMeta(tx, { [SYNC_META.enabled]: "0" });

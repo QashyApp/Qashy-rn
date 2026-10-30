@@ -54,12 +54,14 @@ import {
 import { activePeers, readRoster } from "@/sync/engine/roster";
 import { SyncSession, type ReconcileOutcome } from "@/sync/engine/session";
 import type { SyncTransport } from "@/sync/engine/transport";
+import { withSyncPassLock } from "@/sync/pass-lock";
 import { assertVaultEpochCurrent } from "@/sync/rotation";
 import { readEndpoints, type SyncEndpoints } from "@/sync/transport/endpoints";
 import {
   FileTransport,
   decodeBundle,
   encodeBundle,
+  type SyncBundle,
 } from "@/sync/transport/file";
 import { RelayTransport } from "@/sync/transport/relay";
 import {
@@ -359,7 +361,13 @@ export class SyncRuntime {
    * the act of sending, so ops stay queued until a peer confirms them and a file that is
    * never opened costs nothing but a second export.
    */
-  async exportBundle(signal?: AbortSignal): Promise<BundleExport> {
+  exportBundle(signal?: AbortSignal): Promise<BundleExport> {
+    // A full pass like any other, so it goes through the pass queue: a key rotation that
+    // committed in between would otherwise have this seal a bundle under the old key and epoch.
+    return withSyncPassLock(() => this.exportBundleNow(signal));
+  }
+
+  private async exportBundleNow(signal?: AbortSignal): Promise<BundleExport> {
     const wired = await this.fileWiring();
     if (typeof wired === "string")
       return { reason: wired, text: "", frames: 0, peers: 0 };
@@ -399,7 +407,11 @@ export class SyncRuntime {
     // Decoded before anything reaches for a key, so a file that is not a bundle at all is
     // refused instantly rather than after a keystore or passphrase prompt.
     const bundle = decodeBundle(text);
+    // Applying frames extends the chain and the roster, so it is serialized with every pass.
+    return withSyncPassLock(() => this.importBundleNow(bundle));
+  }
 
+  private async importBundleNow(bundle: SyncBundle): Promise<BundleImport> {
     const wired = await this.fileWiring();
     if (typeof wired === "string") {
       return {

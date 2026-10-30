@@ -425,14 +425,22 @@ export function planRecurringRuleSave(
   // edit still cannot backfill history.
   const today = todayLocal();
   // Switching a paused schedule back on skips the dates it was paused through, so its regeneration
-  // never reaches back past today, even when the same save edits the schedule: pending items left
-  // over from before the pause are discarded and the dates between them and today are not
+  // never reaches back past today, even when the same save edits the schedule. A plain resume
+  // keeps whatever was pending before the pause (an auto-post rule posts it, which the form's
+  // confirm dialog announces). A resume that edits the schedule discards those items, because
+  // their dates belong to the old schedule, and the dates between them and today are not
   // recreated.
   const resuming = !!existing && !existing.active && input.active;
+  // A schedule saved switched off gets no today floor: an edit made while paused must not move
+  // its next due date past the end date, or a schedule the user paused would look like one
+  // generation ended. The floor applies once it is switched on.
+  const staysPaused = !!existing && !input.active;
   const baseRegenerateFrom = resuming
     ? [earliestUpcomingDate ?? existing.nextDueDate, today].sort().at(-1)!
-    : (earliestUpcomingDate ??
-      [existing?.nextDueDate ?? input.startDate, today].sort().at(-1)!);
+    : staysPaused
+      ? (earliestUpcomingDate ?? existing.nextDueDate)
+      : (earliestUpcomingDate ??
+        [existing?.nextDueDate ?? input.startDate, today].sort().at(-1)!);
   // Moving the start date earlier is an explicit request to include the missed occurrences, so
   // regeneration begins at the new start; occurrence keys keep already-generated ones from
   // duplicating. A resumed schedule is the exception: the pause is skipped, not backfilled.

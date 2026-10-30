@@ -35,8 +35,19 @@ export function DateField({
   const { isRtl, locale, t } = useLocalization();
   const [focused, setFocused] = useState(false);
   // A whole date typed outside the allowed range: the browser's `min`/`max` only mark the
-  // input invalid, they do not stop the value from being reported.
-  const [rangeError, setRangeError] = useState<string | null>(null);
+  // input invalid, they do not stop the value from being reported. Only the rejected date is
+  // stored; the message is derived from it, so it follows the bounds and the locale and goes as
+  // soon as they make that date valid. A change of the value drops it too (adjusted during
+  // render, from the previous value).
+  const [rejected, setRejected] = useState<string | null>(null);
+  const [seenValue, setSeenValue] = useState(value);
+  if (seenValue !== value) {
+    setSeenValue(value);
+    setRejected(null);
+  }
+  const rangeError = rejected
+    ? dateRangeHint(rejected, locale, minimumDate, maximumDate)
+    : null;
   const descriptionId = useId();
   const shownError = error ?? rangeError ?? undefined;
   const description = shownError ?? hint;
@@ -84,10 +95,10 @@ export function DateField({
                 minimumDate,
                 maximumDate,
               );
-              setRangeError(outside);
+              setRejected(outside ? next : null);
               if (!outside) onChange(next);
             } else if (next === "" && !input.validity.badInput) {
-              setRangeError(null);
+              setRejected(null);
               onChange(next);
             }
           }}
@@ -142,7 +153,7 @@ export function DateField({
             label="Clear date"
             icon="xmark"
             onPress={() => {
-              setRangeError(null);
+              setRejected(null);
               onChange("");
             }}
           />

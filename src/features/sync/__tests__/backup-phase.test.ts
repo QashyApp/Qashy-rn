@@ -17,6 +17,13 @@ describe("backup phase", () => {
     expect(clearsPassphrase("confirm", "idle")).toBe(false);
   });
 
+  it("wipes the passphrase on a lock switch only once a backup used it", () => {
+    expect(clearsPassphrase("switchLock", "ready")).toBe(true);
+    expect(clearsPassphrase("switchLock", "idle")).toBe(false);
+    expect(clearsPassphrase("switchLock", "confirmed")).toBe(false);
+    expect(nextBackupPhase("ready", "switchLock")).toBe("idle");
+  });
+
   it("goes back to idle when the inputs change, and a second export is ready again", () => {
     expect(nextBackupPhase("confirmed", "edit")).toBe("idle");
     expect(nextBackupPhase("confirmed", "handedOff")).toBe("ready");

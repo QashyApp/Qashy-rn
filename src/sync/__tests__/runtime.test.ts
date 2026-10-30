@@ -44,6 +44,7 @@ import {
   type VaultRootKey,
 } from "@/sync/crypto";
 import { MemoryKeystore } from "@/sync/keystore";
+import { withSyncPassLock } from "@/sync/pass-lock";
 import { toPeerRow, type Peer } from "@/sync/engine/roster";
 import type { SyncOpBody } from "@/sync/oplog";
 import { account, settings, transaction } from "@/sync/oplog/__tests__/helpers";
@@ -961,6 +962,31 @@ describe("sync runtime hardening", () => {
     // Each pass reads the vault exactly once when sync is on: the first pass, then the single
     // follow-up. Three triggers, two passes.
     expect(reads).toHaveBeenCalledTimes(2);
+  });
+
+  it("holds the pass lock for a bundle export and import, so neither overlaps a rotation", async () => {
+    const { a, b } = await carriers();
+    const exported = await a.runtime.exportBundle();
+    const aReads = jest.spyOn(a.keystore, "read");
+    const bReads = jest.spyOn(b.keystore, "read");
+
+    let release: () => void = () => undefined;
+    const pass = withSyncPassLock(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+    const exporting = a.runtime.exportBundle();
+    const importing = b.runtime.importBundle(exported.text);
+    for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+    // Neither has so much as read the vault while a pass owns the queue.
+    expect(aReads).not.toHaveBeenCalled();
+    expect(bReads).not.toHaveBeenCalled();
+
+    release();
+    await pass;
+    await expect(exporting).resolves.toMatchObject({ reason: "ok" });
+    await expect(importing).resolves.toMatchObject({ reason: "ok" });
+    expect(aReads).toHaveBeenCalled();
+    expect(bReads).toHaveBeenCalled();
   });
 
   it("lets a pass that arrives after the last one start a fresh pass", async () => {

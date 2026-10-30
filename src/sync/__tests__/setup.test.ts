@@ -751,6 +751,52 @@ describe("rotating the vault key", () => {
   });
 });
 
+describe("setup steps that share the pass queue", () => {
+  const settle = async () => {
+    for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+  };
+
+  it("makes resuming sync wait for a pass in flight", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    await disableSync(target.deps);
+    let release: () => void = () => undefined;
+    const pass = withSyncPassLock(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+
+    const resuming = resumeSync(target.deps);
+    await settle();
+    expect((await readSyncStatus(target.deps)).enabled).toBe(false);
+
+    release();
+    await pass;
+    await resuming;
+    expect((await readSyncStatus(target.deps)).enabled).toBe(true);
+  });
+
+  it("makes leaving the vault wait for a pass in flight, but not merely pausing", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    let release: () => void = () => undefined;
+    const pass = withSyncPassLock(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+
+    await disableSync(target.deps);
+    expect((await readSyncStatus(target.deps)).enabled).toBe(false);
+
+    const leaving = disableSync(target.deps, { forget: true });
+    await settle();
+    expect(await target.keystore.read()).not.toBeNull();
+
+    release();
+    await pass;
+    await leaving;
+    expect((await readSyncStatus(target.deps)).keystore).toBe("empty");
+  });
+});
+
 describe("turning it off", () => {
   it("pauses without losing anything needed to resume", async () => {
     const target = await rig({ records: populated() });

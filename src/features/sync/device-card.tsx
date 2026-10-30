@@ -131,11 +131,26 @@ export function DeviceCard({
     if (removingRef.current) return;
     removingRef.current = true;
     try {
-      const confirmed = await confirmDestructive({
-        title: "Remove this device?",
-        message: REMOVAL_MESSAGE,
-        confirmLabel: "Remove",
-      });
+      // Under majority vote the tap that starts a removal counts as the proposer's own approval,
+      // and the device goes only if that alone is enough (`revokePeer` builds the same quorum).
+      // With three or more devices it is not, so the dialog says it only proposes.
+      const voters = livePeers(status.peers).length + 1;
+      const required = Math.ceil(voters / 2);
+      const proposesOnly =
+        status.revocation.mode === "quorum" && required > 1;
+      const confirmed = await confirmDestructive(
+        proposesOnly
+          ? {
+              title: "Propose removing this device?",
+              message: `This starts a vote to remove ${peerName}. It’s removed once ${required} of ${voters} devices approve.`,
+              confirmLabel: "Propose removal",
+            }
+          : {
+              title: "Remove this device?",
+              message: REMOVAL_MESSAGE,
+              confirmLabel: "Remove",
+            },
+      );
       if (!confirmed) return;
       await revokePeer(setup, peerId);
       await onChanged();

@@ -1,6 +1,7 @@
 import { LocalFinanceRepository } from "@/data/local-finance-repository";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import type { RecurringInput } from "@/data/repository";
+import { mayTurnOnWhenEndExtended } from "@/features/more/recurring/recurring-model";
 import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
 
 /**
@@ -187,7 +188,71 @@ describe("reactivating a paused schedule", () => {
     );
     // Past its end date, so generation ends it again without creating anything.
     expect(resumed.nextDueDate > "2026-06-20").toBe(true);
+    await repository.generateRecurring("2026-09-01");
+    expect(
+      repository.getSnapshot().recurringRules.find((r) => r.id === rule.id)!
+        .active,
+    ).toBe(false);
     expect(occurrencesOf(repository, rule.id)).toEqual([]);
+  });
+
+  it("keeps a schedule edited while paused recognisable as paused, not ended", async () => {
+    // Monthly on the 10th, ending Mar 31, paused with Mar 10 still ahead of its end.
+    at("2026-01-12");
+    const repository = await createRepository();
+    const rule = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        unit: "month",
+        startDate: "2026-01-10",
+        nextDueDate: "2026-01-10",
+        endDate: "2026-03-31",
+        autoPost: false,
+      }),
+    );
+    expect(rule.nextDueDate).toBe("2026-02-10");
+    const paused = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        unit: "month",
+        startDate: "2026-01-10",
+        endDate: "2026-03-31",
+        autoPost: false,
+        nextDueDate: rule.nextDueDate,
+        active: false,
+      }),
+      rule.id,
+      rule.revision,
+    );
+    expect(mayTurnOnWhenEndExtended(paused)).toBe(false);
+
+    // Months later, the interval changes while it stays paused.
+    at("2026-10-30");
+    const edited = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        unit: "month",
+        interval: 2,
+        startDate: "2026-01-10",
+        endDate: "2026-03-31",
+        autoPost: false,
+        nextDueDate: paused.nextDueDate,
+        active: false,
+      }),
+      paused.id,
+      paused.revision,
+    );
+    // The paused rule's next date did not jump to the first occurrence after today.
+    expect(edited.active).toBe(false);
+    expect(edited.nextDueDate <= "2026-03-31").toBe(true);
+    expect(mayTurnOnWhenEndExtended(edited)).toBe(false);
+    expect(occurrencesOf(repository, rule.id)).toEqual([]);
+
+    // A schedule generation ended (off, next date past its end) still may be turned back on.
+    expect(
+      mayTurnOnWhenEndExtended({
+        active: false,
+        endDate: "2026-03-31",
+        nextDueDate: "2026-04-10",
+      }),
+    ).toBe(true);
   });
 });
 

@@ -85,3 +85,31 @@ describe("DateField (native) range error", () => {
     expect(screen.queryByText(RANGE_ERROR, HIDDEN)).toBeNull();
   });
 });
+
+describe("DateField (native) rejected pick and value history", () => {
+  beforeEach(() => {
+    mockPicker = null;
+  });
+
+  const field = (value: string) => (
+    <DateField
+      label="Due date"
+      value={value}
+      onChange={() => undefined}
+      minimumDate="2026-06-01"
+    />
+  );
+
+  it("does not bring the error back when the value returns to what it was", async () => {
+    const view = await render(field("2026-06-10"));
+    await open();
+    await act(async () => mockPicker!.onValueChange(null, utc("2026-05-01")));
+    await open();
+    expect(screen.getByText(RANGE_ERROR, HIDDEN)).toBeTruthy();
+
+    await view.rerender(field("2026-06-12"));
+    await view.rerender(field("2026-06-10"));
+
+    expect(screen.queryByText(RANGE_ERROR, HIDDEN)).toBeNull();
+  });
+});

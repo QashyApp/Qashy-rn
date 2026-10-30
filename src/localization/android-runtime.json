@@ -679,6 +679,8 @@
     "q_33f85f24c0f5f008",
     "q_ea4f08110bb8f15d",
     "q_91213563e4e090e4",
+    "q_fd03652947a730c7",
+    "q_a0f1c599ac3b4f69",
     "q_32ae68296c770dcd",
     "q_f3141e18664fcf50",
     "q_94a1b1c02c82cb3d",
@@ -1667,7 +1669,8 @@
     "q_885b4fa353b238d4",
     "q_2a1125da5ef4cf2e",
     "q_05503136cf6c20bd",
-    "q_3eb53762958ecc3b",
+    "q_d07fd42d02a41836",
+    "q_b482ee47918b24fc",
     "q_9abe9decf2557291",
     "q_f100b1d779c71040",
     "q_5d05b4dbcd20e553",
@@ -1818,6 +1821,10 @@
     {
       "name": "q_65b75422243c3860",
       "source": "^Your approval counts toward removing (.+)\\. It’s removed once (\\d+) of (\\d+) devices approve\\.$"
+    },
+    {
+      "name": "q_27b9c8769b8513c7",
+      "source": "^This starts a vote to remove (.+)\\. It’s removed once (\\d+) of (\\d+) devices approve\\.$"
     },
     {
       "name": "q_4a449fc6afe55beb",

@@ -368,22 +368,24 @@ export function useRecurringForm() {
           today: todayLocal(),
         })
       : null;
-  const scheduleEnded = Boolean(
+  const endedByResolvedDate = Boolean(
     resolvedEndDate && projectedNext && projectedNext > resolvedEndDate,
   );
-  // The projected date only explains an ended schedule; it is null otherwise.
-  const nextAfterEnd = scheduleEnded ? projectedNext : null;
   // Extending the end date past the next payment lifts the lock, and turns the schedule on with
   // it unless the user had switched it off. Adjusted during render, from the previous value.
   // While the end condition is unfinished (a blank count or date) nothing resolves, so the schedule
-  // only looks not ended for lack of an answer: wait rather than treat that as an extension.
+  // only looks not ended for lack of an answer: wait rather than treat that as an extension, and
+  // keep the ended state (and the toggle's lock) of the last complete end until it is finished.
   const endIncomplete =
     (endMode === "count" || endMode === "date") && resolvedEndDate === null;
-  const [wasEnded, setWasEnded] = useState(scheduleEnded);
-  if (!endIncomplete && wasEnded !== scheduleEnded) {
-    setWasEnded(scheduleEnded);
+  const [wasEnded, setWasEnded] = useState(endedByResolvedDate);
+  if (!endIncomplete && wasEnded !== endedByResolvedDate) {
+    setWasEnded(endedByResolvedDate);
     if (wasEnded && !turnedOffByUser) setActiveState(true);
   }
+  const scheduleEnded = endIncomplete ? wasEnded : endedByResolvedDate;
+  // The projected date only explains an ended schedule; it is null otherwise.
+  const nextAfterEnd = scheduleEnded ? projectedNext : null;
   const effectiveActive = active && !scheduleEnded;
   const canSave =
     Boolean(account) &&

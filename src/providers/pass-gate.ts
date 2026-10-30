@@ -39,13 +39,12 @@ export function createPassGate(run: () => Promise<boolean>): PassGate {
     requestQueued: () => {
       if (!current) return start();
       followUp ??= (async () => {
-        try {
-          // Looped: a foreground event may start a pass in the gap after the one waited on.
-          while (current) await current.catch(() => undefined);
-          return await start();
-        } finally {
-          followUp = null;
-        }
+        // Looped: a foreground event may start a pass in the gap after the one waited on.
+        while (current) await current.catch(() => undefined);
+        // Released the moment the follow-up starts, not when it ends: a caller arriving during it
+        // needs a pass that begins after that call, which this one no longer is.
+        followUp = null;
+        return start();
       })();
       return followUp;
     },

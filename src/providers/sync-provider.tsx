@@ -194,8 +194,13 @@ export function SyncProvider({
    * Not the `syncing` state, because a foreground event and a button press can both arrive
    * before React has re-rendered — and two concurrent passes would have both sessions
    * allocating from the same op chain. See `pass-gate.ts`.
+   *
+   * `useState`'s initializer rather than `useMemo`, for the same reason as `engine`: the gate
+   * holds the in-flight pass, and a discarded one would forget it and let a second pass start.
+   * `runPass` only depends on `engine` and `deps`, which are themselves state, so it never
+   * changes after the first render.
    */
-  const gate = useMemo(() => createPassGate(runPass), [runPass]);
+  const [gate] = useState(() => createPassGate(runPass));
 
   const reconcile = useCallback(
     (options?: ReconcileOptions) =>

@@ -10,7 +10,7 @@
 
 export type BackupPhase = "idle" | "ready" | "confirmed";
 
-export type BackupEvent = "handedOff" | "confirm" | "edit";
+export type BackupEvent = "handedOff" | "confirm" | "edit" | "switchLock";
 
 export function nextBackupPhase(
   phase: BackupPhase,
@@ -23,10 +23,15 @@ export function nextBackupPhase(
       // Only meaningful once there is something to confirm.
       return phase === "ready" ? "confirmed" : phase;
     case "edit":
+    case "switchLock":
       return "idle";
   }
 }
 
-/** The passphrase is wiped only by the user's own confirmation, never by the hand-off. */
+/**
+ * The passphrase is wiped by the user's own confirmation, or by switching the lock while the
+ * confirm card is showing (the card goes, and it must not outlive it). Never by the hand-off, and
+ * never when no backup was made with it: a passphrase typed but not yet used is not lost.
+ */
 export const clearsPassphrase = (event: BackupEvent, phase: BackupPhase) =>
-  event === "confirm" && phase === "ready";
+  (event === "confirm" || event === "switchLock") && phase === "ready";

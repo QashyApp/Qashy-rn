@@ -2177,11 +2177,6 @@
       "he": "לרשומת הכספת השמורה אין תקופה."
     },
     {
-      "name": "q_3eb53762958ecc3b",
-      "en": "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.",
-      "he": "החלפת מפתח הסנכרון הופסקה לפני שהמצב המקומי הושלם. ההיסטוריה המקומית שלכם נשמרה; שחזרו את מפתח הכספת התואם לפני שתמשיכו בסנכרון."
-    },
-    {
       "name": "q_3eb6a7a778733bdc",
       "en": "Account type",
       "he": "סוג חשבון"
@@ -5442,6 +5437,11 @@
       "he": "המכשיר נוסף"
     },
     {
+      "name": "q_a0f1c599ac3b4f69",
+      "en": "Propose removal",
+      "he": "הצעת הסרה"
+    },
+    {
       "name": "q_a12c41e472a0f043",
       "en": "SPENT",
       "he": "הוצא"
@@ -6090,6 +6090,11 @@
       "name": "q_b47daaf9e1c4a905",
       "en": "Month",
       "he": "חודש"
+    },
+    {
+      "name": "q_b482ee47918b24fc",
+      "en": "Syncing stays stopped on this device until you use “Replace the vault key” or “Leave this vault” in the Danger zone below.",
+      "he": "הסנכרון נשאר מושבת במכשיר הזה עד שתשתמשו ב״החלפת מפתח הכספת״ או ב״יציאה מהכספת״ באזור המסוכן למטה."
     },
     {
       "name": "q_b4c4471afab3bd2a",
@@ -7055,6 +7060,11 @@
       "name": "q_d0610d1df9124c14",
       "en": "A membership control has an invalid revocation cutoff.",
       "he": "לבקרת חברות יש נקודת חיתוך להסרה לא תקינה."
+    },
+    {
+      "name": "q_d07fd42d02a41836",
+      "en": "Sync key rotation was interrupted before this device finished updating. Your data and local history are untouched. To get sync working again, use “Replace the vault key” or “Leave this vault” under Danger zone on the sync screen, then pair your devices again.",
+      "he": "החלפת מפתח הסנכרון הופסקה לפני שהמכשיר הזה סיים להתעדכן. הנתונים וההיסטוריה המקומית שלכם לא נפגעו. כדי להחזיר את הסנכרון לפעולה, השתמשו ב״החלפת מפתח הכספת״ או ב״יציאה מהכספת״ תחת ״אזור מסוכן״ במסך הסנכרון, ואז חברו מחדש את המכשירים שלכם."
     },
     {
       "name": "q_d09410a37c9cc0e2",
@@ -8787,6 +8797,11 @@
       "he": "מוצע לפי תנועות קודמות עם אותה כותרת."
     },
     {
+      "name": "q_fd03652947a730c7",
+      "en": "Propose removing this device?",
+      "he": "להציע להסיר את המכשיר הזה?"
+    },
+    {
       "name": "q_fd544018ada92448",
       "en": "Recurring transactions due soon will show up here.",
       "he": "תנועות מחזוריות שיגיעו בקרוב יופיעו כאן."
@@ -8941,6 +8956,12 @@
       "source": "^Your approval counts toward removing (.+)\\. It’s removed once (\\d+) of (\\d+) devices approve\\.$",
       "en": "Your approval counts toward removing %1$s. It’s removed once %2$s of %3$s devices approve.",
       "he": "האישור שלכם נספר לטובת הסרת %1$s. המכשיר יוסר לאחר ש־%2$s מתוך %3$s מכשירים יאשרו."
+    },
+    {
+      "name": "q_27b9c8769b8513c7",
+      "source": "^This starts a vote to remove (.+)\\. It’s removed once (\\d+) of (\\d+) devices approve\\.$",
+      "en": "This starts a vote to remove %1$s. It’s removed once %2$s of %3$s devices approve.",
+      "he": "זה פותח הצבעה על הסרת %1$s. המכשיר יוסר לאחר ש־%2$s מתוך %3$s מכשירים יאשרו."
     },
     {
       "name": "q_4a449fc6afe55beb",

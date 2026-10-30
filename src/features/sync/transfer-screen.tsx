@@ -227,15 +227,18 @@ export function TransferScreen() {
     );
 
   /**
-   * Switching how the backup is protected drops the confirm card with it, so the typed passphrase
-   * goes too: it must never outlive the card whose "I saved it" button is what clears it.
+   * Switching how the backup is protected drops the confirm card with it, so a passphrase a backup
+   * was made with goes too: it must never outlive the card whose "I saved it" button is what clears
+   * it. One that no backup used yet stays, so flipping to the recovery phrase and back loses nothing.
    */
   const chooseLock = (next: BackupKeySource["kind"]) => {
     if (next === lock) return;
     setLock(next);
-    setPassphrase("");
-    setRepeated("");
-    setPhase("idle");
+    if (clearsPassphrase("switchLock", phase)) {
+      setPassphrase("");
+      setRepeated("");
+    }
+    setPhase((current) => nextBackupPhase(current, "switchLock"));
   };
 
   /**
@@ -452,6 +455,9 @@ export function TransferScreen() {
                   label="Passphrase"
                   value={passphrase}
                   onChangeText={(value) => {
+                    // Editing hides the confirm card, so the copy typed again to confirm the
+                    // passphrase it protected goes with it; what is typed now is a new, unused one.
+                    if (phase === "ready") setRepeated("");
                     setPassphrase(value);
                     setPhase((current) => nextBackupPhase(current, "edit"));
                   }}

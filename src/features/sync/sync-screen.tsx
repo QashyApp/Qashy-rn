@@ -42,6 +42,7 @@ import { RelayCard } from "@/features/sync/relay-card";
 import { describeActivity, summarizeSync } from "@/features/sync/sync-summary";
 import { useLocalization } from "@/localization/localization";
 import { useSync } from "@/providers/sync-provider";
+import { ROTATION_INTERRUPTED_MESSAGE } from "@/sync/rotation";
 import { disableSync, resumeSync, rotateVaultKey } from "@/sync/setup";
 import type { RelayHealth } from "@/sync/transport/relay-health";
 import { materialStyle } from "@/theme/materials";
@@ -303,8 +304,12 @@ export function SyncScreen() {
             <AppText literal selectable variant="caption" muted>
               {t(error)}
             </AppText>
+            {/* An interrupted rotation does not retry: every pass refuses until the person picks
+                one of the two Danger zone exits, so say that instead of promising a retry. */}
             <AppText variant="caption" muted>
-              Your data is untouched, and the next sync retries on its own.
+              {error === ROTATION_INTERRUPTED_MESSAGE
+                ? "Syncing stays stopped on this device until you use “Replace the vault key” or “Leave this vault” in the Danger zone below."
+                : "Your data is untouched, and the next sync retries on its own."}
             </AppText>
           </Card>
         </MotionView>

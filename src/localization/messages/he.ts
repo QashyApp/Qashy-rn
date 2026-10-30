@@ -833,6 +833,8 @@ export const HEBREW: Record<string, string> = {
   Save: "שמירה",
   Remove: "הסרה",
   "Remove this device?": "להסיר את המכשיר הזה?",
+  "Propose removing this device?": "להציע להסיר את המכשיר הזה?",
+  "Propose removal": "הצעת הסרה",
   "Only your paired devices ever see this. It is sent encrypted, and the relay never learns it.":
     "רק המכשירים המחוברים שלכם רואים אותו. הוא נשלח מוצפן, והממסר לעולם אינו לומד אותו.",
   "It stops sending and receiving changes here. It keeps the copy of your data it already has — to make that copy useless, rotate the vault key afterwards.":
@@ -2316,8 +2318,10 @@ export const HEBREW: Record<string, string> = {
     "זהות המכשיר הזה אינה תואמת לכספת שלו.",
   "There is no vault on this device to resume.":
     "אין במכשיר הזה כספת להמשיך בה.",
-  "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.":
-    "החלפת מפתח הסנכרון הופסקה לפני שהמצב המקומי הושלם. ההיסטוריה המקומית שלכם נשמרה; שחזרו את מפתח הכספת התואם לפני שתמשיכו בסנכרון.",
+  "Sync key rotation was interrupted before this device finished updating. Your data and local history are untouched. To get sync working again, use “Replace the vault key” or “Leave this vault” under Danger zone on the sync screen, then pair your devices again.":
+    "החלפת מפתח הסנכרון הופסקה לפני שהמכשיר הזה סיים להתעדכן. הנתונים וההיסטוריה המקומית שלכם לא נפגעו. כדי להחזיר את הסנכרון לפעולה, השתמשו ב״החלפת מפתח הכספת״ או ב״יציאה מהכספת״ תחת ״אזור מסוכן״ במסך הסנכרון, ואז חברו מחדש את המכשירים שלכם.",
+  "Syncing stays stopped on this device until you use “Replace the vault key” or “Leave this vault” in the Danger zone below.":
+    "הסנכרון נשאר מושבת במכשיר הזה עד שתשתמשו ב״החלפת מפתח הכספת״ או ב״יציאה מהכספת״ באזור המסוכן למטה.",
   "There is no vault on this device to rotate.":
     "אין במכשיר הזה כספת שאפשר להחליף לה מפתח.",
   "That is not a complete address. It should start with https://.":
@@ -2592,6 +2596,11 @@ export function createDynamicPatterns(
       /^Your approval counts toward removing (.+)\. It’s removed once (\d+) of (\d+) devices approve\.$/,
       (p1, p2, p3) =>
         `האישור שלכם נספר לטובת הסרת ${p1}. המכשיר יוסר לאחר ש־${p2} מתוך ${p3} מכשירים יאשרו.`,
+    ],
+    [
+      /^This starts a vote to remove (.+)\. It’s removed once (\d+) of (\d+) devices approve\.$/,
+      (p1, p2, p3) =>
+        `זה פותח הצבעה על הסרת ${p1}. המכשיר יוסר לאחר ש־${p2} מתוך ${p3} מכשירים יאשרו.`,
     ],
     [/^Choose a date on or after (.+)$/, (p1) => `בחרו תאריך ב־${p1} או אחריו`],
     [
