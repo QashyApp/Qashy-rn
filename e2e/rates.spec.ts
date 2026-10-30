@@ -12,7 +12,10 @@ import { fillAmount, dismissKeypad, todayKey } from "./helpers";
 async function completeOnboardingWithCurrency(page: Page, currency: string) {
   await page.goto("/");
   await page.getByRole("button", { name: "Get started" }).click();
-  await page.getByRole("radio", { name: currency, exact: true }).click();
+  // The quick-pick tiles are named "Euro, EUR": the currency's name, then its code.
+  await page
+    .getByRole("radio", { name: new RegExp(`(^|, )${currency}$`) })
+    .click();
   await page.getByRole("button", { name: "Continue" }).click();
   await fillAmount(page.getByLabel(`Opening balance (${currency})`), "1000");
   await page.getByRole("button", { name: "Continue" }).click();

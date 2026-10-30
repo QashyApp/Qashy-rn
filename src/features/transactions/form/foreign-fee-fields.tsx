@@ -125,7 +125,7 @@ export function ForeignFeeFields({
           flexDirection: "row",
           alignItems: "center",
           justifyContent: "space-between",
-          gap: 14,
+          gap: space.md,
         }}
       >
         <View style={{ flex: 1, gap: space.xxs }}>
@@ -176,7 +176,7 @@ export function ForeignFeeFields({
               Fetching rate…
             </AppText>
           ) : (
-            <View style={{ gap: 6 }}>
+            <View style={{ gap: space.xs }}>
               <AppText variant="caption" muted>
                 No rate for this date.
               </AppText>

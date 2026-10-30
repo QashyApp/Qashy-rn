@@ -235,7 +235,9 @@ export function AmountHero({
             {...input.inputProps}
             autoFocus={autoFocus}
             accessibilityLabel={accessibilityLabel}
-            accessibilityHint={hint !== undefined ? t(hint) : undefined}
+            accessibilityHint={
+              hint !== undefined ? t(error ? error : hint) : undefined
+            }
             aria-required={required || undefined}
             {...validityProps}
             returnKeyType={returnKeyType}

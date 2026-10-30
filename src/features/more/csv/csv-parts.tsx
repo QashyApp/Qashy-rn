@@ -101,7 +101,7 @@ export function CsvStepper({ current }: { current: number }) {
             <AppText
               variant="caption"
               muted={!active}
-              numberOfLines={1}
+              numberOfLines={2}
               style={{
                 marginTop: space.xxs,
                 textAlign: "center",

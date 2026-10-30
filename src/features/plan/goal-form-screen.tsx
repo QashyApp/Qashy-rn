@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { CloseTo } from "@/components/navigation/close-to";
@@ -20,9 +20,11 @@ import {
   useFinanceRepository,
   useFinanceState,
 } from "@/providers/finance-provider";
+import { pendingContributionDraft } from "@/features/plan/goal-contribution-draft";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { mediumDate, todayLocal } from "@/utils/date";
+import { accountTypeIcon } from "@/utils/labels";
 import { validateDateInput, validateMoneyInput } from "@/utils/form-validation";
 import { hapticSuccess } from "@/services/haptics";
 import {
@@ -71,6 +73,34 @@ export function GoalFormScreen() {
   const [editingContributionRevision, setEditingContributionRevision] =
     useState<number | undefined>();
   const [saving, setSaving] = useState(false);
+  const editedContribution = editingContributionId
+    ? state.contributions.find((item) => item.id === editingContributionId)
+    : undefined;
+  // The contribution card is part of this form (a typed amount is saved with the goal), but only
+  // a real pending change counts as unsaved: opening a contribution to edit it, or changing just
+  // the date of an empty one, must not ask to discard anything.
+  const pendingContribution = useMemo(
+    () =>
+      pendingContributionDraft(
+        { contribution, contributionDate, contributionNote },
+        editedContribution ?? null,
+        editedContribution
+          ? minorToLocalizedDecimalString(
+              editedContribution.amountMinor,
+              state.settings.baseCurrency,
+              locale,
+            )
+          : null,
+      ),
+    [
+      contribution,
+      contributionDate,
+      contributionNote,
+      editedContribution,
+      state.settings.baseCurrency,
+      locale,
+    ],
+  );
   const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute: "/plan",
     values: {
@@ -81,6 +111,7 @@ export function GoalFormScreen() {
       targetDate,
       linkedAccountId,
       linkedCategoryId,
+      pendingContribution,
     },
   });
   const targetError = validateMoneyInput(
@@ -126,7 +157,13 @@ export function GoalFormScreen() {
   const contributionDateError = validateDateInput(contributionDate, {
     label: "Contribution date",
   });
-  const canSave = !targetError && !initialError && !targetDateError;
+  const hasTypedContribution = Boolean(existing && contribution.trim());
+  // A typed contribution is saved with the goal, so an invalid one blocks Save (its fields show
+  // the error) rather than saving the goal alone and silently dropping the amount.
+  const contributionInvalid =
+    hasTypedContribution && Boolean(contributionError || contributionDateError);
+  const canSave =
+    !targetError && !initialError && !targetDateError && !contributionInvalid;
   const canSaveContribution =
     Boolean(contribution.trim()) &&
     !contributionError &&
@@ -155,7 +192,9 @@ export function GoalFormScreen() {
     if (saving || !canSave) return;
     setSaving(true);
     try {
-      await repository.saveGoal(
+      // One atomic write: the goal and a typed contribution (a new one, or the one being edited)
+      // are validated together and persisted together, or nothing is.
+      await repository.saveGoalAndContribution(
         {
           name: name.trim() || defaultGoalName,
           kind,
@@ -172,8 +211,26 @@ export function GoalFormScreen() {
           linkedCategoryId: linkedCategoryId || null,
           archived: false,
         },
+        hasTypedContribution
+          ? {
+              amountMinor: parseMoney(
+                contribution,
+                state.settings.baseCurrency,
+                locale,
+              ),
+              localDate: contributionDate,
+              transactionId: null,
+              note: contributionNote,
+            }
+          : undefined,
         existing?.id,
         expectedRevision,
+        hasTypedContribution && editingContributionId
+          ? {
+              id: editingContributionId,
+              expectedRevision: editingContributionRevision,
+            }
+          : undefined,
       );
       hapticSuccess();
       closeToOwner();
@@ -347,7 +404,7 @@ export function GoalFormScreen() {
         />
       </Card>
 
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="headline">Automatic progress</AppText>
         <AppText muted>
           Optionally count matching posted transactions. You can still add
@@ -369,7 +426,7 @@ export function GoalFormScreen() {
             <ChoiceChip
               key={item.id}
               literal
-              icon={item.icon}
+              icon={accountTypeIcon(item.type)}
               label={`${item.name}${item.archived ? ` ${t("(archived)")}` : ""}`}
               disabled={item.archived}
               selected={linkedAccountId === item.id}
@@ -404,7 +461,7 @@ export function GoalFormScreen() {
       </Card>
 
       {existing ? (
-        <Card style={{ gap: 14 }}>
+        <Card style={{ gap: space.md }}>
           <AppText variant="headline">Manual contributions</AppText>
           {manualContributions.map((item) => {
             const amountLabel = formatMoney(

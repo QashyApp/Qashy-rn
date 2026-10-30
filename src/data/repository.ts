@@ -164,6 +164,12 @@ export interface ApplyResult {
   readonly repairs: readonly RepairNote[];
 }
 
+/** The budget figures of a dashboard range: what it allows and what the budgets count as spent. */
+export interface BudgetTotals {
+  budgetLimitMinor: number;
+  budgetSpentMinor: number;
+}
+
 export interface NetWorthSeries {
   baseCurrency: string;
   /** Oldest first: each of the last `months` month-ends, then today. */
@@ -265,6 +271,8 @@ export interface FinanceRepository {
     contribution?: GoalContributionInput,
     id?: string,
     expectedRevision?: number,
+    /** Saves `contribution` over this existing one (an edit) instead of adding a new one. */
+    editContribution?: { id: string; expectedRevision?: number },
   ): Promise<Goal>;
   saveContribution(
     input: ContributionInput,
@@ -298,15 +306,26 @@ export interface FinanceRepository {
     snapshot?: TransactionRecord[],
   ): TransactionRecord[];
   /**
-   * `includePendingAutoPosts` reads the figures as if generation had already run for `toDate`: it
-   * adds the auto-post recurring occurrences that are due but not yet created (see
-   * `getPendingAutoPosts`). Display only; nothing is stored.
+   * `includePendingAutoPosts` reads the figures as if generation had already run up to today (or
+   * `toDate`, when that is earlier): it adds the auto-post recurring occurrences that are due but
+   * not yet created (see `getPendingAutoPosts`), and never an occurrence dated after today.
+   * Display only; nothing is stored.
    */
   getDashboard(
     fromDate: string,
     toDate: string,
     options?: { includePendingAutoPosts?: boolean },
   ): DashboardSummary;
+  /**
+   * The `getDashboard` budget figures alone (limit and spent), without the rest of the dashboard.
+   * `includePendingAutoPosts` counts the auto-post occurrences that are due today but not created
+   * yet; the preview never reaches past today, whatever `toDate` is. Display only.
+   */
+  getBudgetTotals(
+    fromDate: string,
+    toDate: string,
+    options?: { includePendingAutoPosts?: boolean },
+  ): BudgetTotals;
   /**
    * Net worth at each of the last `months` (1..24) month-ends, then `today`, in the base
    * currency. The last point equals the dashboard headline.
@@ -321,8 +340,9 @@ export interface FinanceRepository {
     },
   ): BudgetStatus[];
   /**
-   * The auto-post recurring transactions that are due on or before `onDate` and that generation
-   * has not posted yet, as the posted transactions a generation run would write: the same
+   * The auto-post recurring transactions that are due on or before `onDate` (capped at today:
+   * generation never runs ahead, so a later date prices nothing that is not due yet) and that
+   * generation has not posted yet, as the posted transactions a generation run would write: the same
    * amounts, currency, rate snapshot, accounts and occurrence keys. Read-only: nothing is stored,
    * emitted or marked, occurrences that exist or were deleted are skipped, and the ids are
    * virtual. For display (the home-screen widgets run without generating).

@@ -26,6 +26,7 @@ import {
   todayLocal,
 } from "@/utils/date";
 import { createEntity, makeId, nowIso, updateEntity } from "@/utils/entity";
+import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
 import { convertMinor } from "@/utils/money";
 import { normalizeFeePercent } from "@/utils/transaction-amounts";
 
@@ -203,26 +204,32 @@ export function assertRecurringRuleGenerationSafe(
         postedWithSnapshot(ctx, transaction, today)) ||
       transaction,
   );
-  walkRecurrence(rule, horizonDate, (occurrenceDate) => {
-    const occurrenceKey = `${rule.id}:${occurrenceDate}`;
-    if (
-      deps.deletedOccurrenceKeys.has(occurrenceKey) ||
-      transactions.some(
-        (transaction) => transaction.occurrenceKey === occurrenceKey,
+  try {
+    walkRecurrence(rule, horizonDate, (occurrenceDate) => {
+      const occurrenceKey = `${rule.id}:${occurrenceDate}`;
+      if (
+        deps.deletedOccurrenceKeys.has(occurrenceKey) ||
+        transactions.some(
+          (transaction) => transaction.occurrenceKey === occurrenceKey,
+        )
       )
-    )
-      return;
-    transactions.push(
-      deps.buildTransaction({
-        ...rule.template,
-        localDate: occurrenceDate,
-        status:
-          rule.autoPost && occurrenceDate <= today ? "posted" : "upcoming",
-        recurringRuleId: rule.id,
-        occurrenceKey,
-      }),
-    );
-  });
+        return;
+      transactions.push(
+        deps.buildTransaction({
+          ...rule.template,
+          localDate: occurrenceDate,
+          status:
+            rule.autoPost && occurrenceDate <= today ? "posted" : "upcoming",
+          recurringRuleId: rule.id,
+          occurrenceKey,
+        }),
+      );
+    });
+  } catch (reason) {
+    // Generation leaves a rule untouched while a rate it needs is missing (see `planRecurring`),
+    // so nothing past this occurrence would be written either: check what was built before it.
+    if (!(reason instanceof MissingExchangeRateError)) throw reason;
+  }
   assertTransactionSetSafe(ctx, transactions);
 }
 
@@ -287,22 +294,43 @@ export function validateRecurring(
       );
     }
     assertPositiveMinor(input.template.foreign.amountMinor, "Amount");
-    const foreignRate = input.template.foreign.exchangeRate
-      ? normalizeRate(input.template.foreign.exchangeRate)
-      : resolveRate(ctx, foreignCurrency, account.currency, input.nextDueDate);
-    estimatedAmountMinor = convertMinor(
-      input.template.foreign.amountMinor,
-      foreignCurrency,
-      account.currency,
-      foreignRate,
-      ctx.formatLocale,
-    );
+    // No rate is required to save: with none typed and none stored, the rule is saved with the
+    // typed amount as its display estimate, and each occurrence waits until a rate exists.
+    let foreignRate: string | null = null;
+    if (input.template.foreign.exchangeRate) {
+      foreignRate = normalizeRate(input.template.foreign.exchangeRate);
+    } else {
+      try {
+        foreignRate = resolveRate(
+          ctx,
+          foreignCurrency,
+          account.currency,
+          input.nextDueDate,
+        );
+      } catch (reason) {
+        if (!(reason instanceof MissingExchangeRateError)) throw reason;
+      }
+    }
+    if (foreignRate) {
+      estimatedAmountMinor = convertMinor(
+        input.template.foreign.amountMinor,
+        foreignCurrency,
+        account.currency,
+        foreignRate,
+        ctx.formatLocale,
+      );
+    } else if (
+      !Number.isSafeInteger(estimatedAmountMinor) ||
+      estimatedAmountMinor <= 0
+    ) {
+      estimatedAmountMinor = input.template.foreign.amountMinor;
+    }
     normalizedForeign = {
       amountMinor: input.template.foreign.amountMinor,
       currency: foreignCurrency,
       // Keep an explicit rate only if the caller supplied one. A template
       // with none resolves its own rate at each occurrence's date.
-      ...(input.template.foreign.exchangeRate
+      ...(input.template.foreign.exchangeRate && foreignRate
         ? { exchangeRate: foreignRate }
         : {}),
     };
@@ -395,12 +423,29 @@ export function planRecurringRuleSave(
   // every overdue occurrence for good (their keys are released, nothing regenerates them). With
   // nothing pending it restarts from the rule's next due date, never earlier than today, so an
   // edit still cannot backfill history.
-  const baseRegenerateFrom =
-    earliestUpcomingDate ??
-    [existing?.nextDueDate ?? input.startDate, todayLocal()].sort().at(-1)!;
+  const today = todayLocal();
+  // Switching a paused schedule back on skips the dates it was paused through, so its regeneration
+  // never reaches back past today, even when the same save edits the schedule. A plain resume
+  // keeps whatever was pending before the pause (an auto-post rule posts it, which the form's
+  // confirm dialog announces). A resume that edits the schedule discards those items, because
+  // their dates belong to the old schedule, and the dates between them and today are not
+  // recreated.
+  const resuming = !!existing && !existing.active && input.active;
+  // A schedule saved switched off gets no today floor: an edit made while paused must not move
+  // its next due date past the end date, or a schedule the user paused would look like one
+  // generation ended. The floor applies once it is switched on.
+  const staysPaused = !!existing && !input.active;
+  const baseRegenerateFrom = resuming
+    ? [earliestUpcomingDate ?? existing.nextDueDate, today].sort().at(-1)!
+    : staysPaused
+      ? (earliestUpcomingDate ?? existing.nextDueDate)
+      : (earliestUpcomingDate ??
+        [existing?.nextDueDate ?? input.startDate, today].sort().at(-1)!);
   // Moving the start date earlier is an explicit request to include the missed occurrences, so
-  // regeneration begins at the new start; occurrence keys keep already-generated ones from duplicating.
-  const movedEarlier = !!existing && input.startDate < existing.startDate;
+  // regeneration begins at the new start; occurrence keys keep already-generated ones from
+  // duplicating. A resumed schedule is the exception: the pause is skipped, not backfilled.
+  const movedEarlier =
+    !resuming && !!existing && input.startDate < existing.startDate;
   const regenerateFrom =
     movedEarlier && input.startDate < baseRegenerateFrom
       ? input.startDate
@@ -430,6 +475,17 @@ export function planRecurringRuleSave(
           [validated.startDate, todayLocal()].sort().at(-1)!,
         ),
       };
+  // Switching a paused schedule back on skips the dates it was paused through: generation only
+  // walks active rules, so its next due date stood still. Moving it to the first occurrence on or
+  // after today keeps the switch-on from backfilling (and auto-posting) every missed date. A
+  // changed schedule already restarts at or after today unless it has pending occurrences.
+  const resumed =
+    existing && !existing.active && normalized.active && !scheduleChanged
+      ? {
+          ...normalized,
+          nextDueDate: nextDueDateOnReactivation(normalized, todayLocal()),
+        }
+      : normalized;
   // The flag means "off because a dependency is archived", and it is what lets unarchiving bring
   // the rule back. The form reopens a paused rule with `active: false`, so the input cannot say
   // whether the user switched it off: keep the flag while its account or category is still
@@ -449,38 +505,54 @@ export function planRecurringRuleSave(
   const pausedByDependency = Boolean(
     existing?.pausedByDependency && dependencyArchived,
   );
+  const ruleId = existing?.id ?? makeId();
+  // A pending occurrence that cannot be priced for the new template (a foreign amount with no rate
+  // stored yet) is discarded and its key released, like a schedule change does; the rule is wound
+  // back to the earliest one so it is generated again once a rate exists.
+  const unpriced: string[] = [];
+  const discardPending = (transaction: TransactionRecord) =>
+    updateEntity(transaction, { deletedAt: nowIso(), occurrenceKey: null });
+  const transactionChanges = scheduleChanged
+    ? currentUpcoming.map(discardPending)
+    : templateChanged
+      ? currentUpcoming.map((transaction) => {
+          try {
+            return deps.buildTransaction(
+              {
+                ...normalized.template,
+                localDate: transaction.localDate,
+                status: transaction.status,
+                exchangeRate:
+                  transaction.accountId === normalized.template.accountId
+                    ? (transaction.exchangeRate ?? undefined)
+                    : undefined,
+                recurringRuleId: ruleId,
+                occurrenceKey: transaction.occurrenceKey,
+              },
+              transaction.id,
+            );
+          } catch (reason) {
+            if (!(reason instanceof MissingExchangeRateError)) throw reason;
+            unpriced.push(transaction.localDate);
+            return discardPending(transaction);
+          }
+        })
+      : [];
+  // A resumed schedule is not wound back into the dates it was paused through.
+  const rewindTo = unpriced
+    .filter((date) => !resuming || date >= today)
+    .sort()[0];
+  const rewound =
+    rewindTo && rewindTo < resumed.nextDueDate
+      ? { ...resumed, nextDueDate: rewindTo }
+      : resumed;
   const rule = existing
-    ? updateEntity(existing, { ...normalized, pausedByDependency })
+    ? updateEntity(existing, { ...rewound, pausedByDependency })
     : (createEntity({
-        id: makeId(),
-        ...normalized,
+        id: ruleId,
+        ...rewound,
         pausedByDependency: false,
       }) as RecurringRule);
-  const transactionChanges = scheduleChanged
-    ? currentUpcoming.map((transaction) =>
-        updateEntity(transaction, {
-          deletedAt: nowIso(),
-          occurrenceKey: null,
-        }),
-      )
-    : templateChanged
-      ? currentUpcoming.map((transaction) =>
-          deps.buildTransaction(
-            {
-              ...normalized.template,
-              localDate: transaction.localDate,
-              status: transaction.status,
-              exchangeRate:
-                transaction.accountId === normalized.template.accountId
-                  ? (transaction.exchangeRate ?? undefined)
-                  : undefined,
-              recurringRuleId: rule.id,
-              occurrenceKey: transaction.occurrenceKey,
-            },
-            transaction.id,
-          ),
-        )
-      : [];
   assertRecurringRuleGenerationSafe(
     ctx,
     deps,

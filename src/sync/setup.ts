@@ -73,6 +73,8 @@ import {
   readRelayHealth,
   type RelayHealth,
 } from "@/sync/transport/relay-health";
+import { withSyncPassLock } from "@/sync/pass-lock";
+import { readStoredEpoch, rotationInterrupted } from "@/sync/rotation";
 import { makeId, nowIso as defaultNowIso } from "@/utils/entity";
 
 /**
@@ -461,34 +463,74 @@ export async function adoptVault(
   });
 
   const at = (deps.nowIso ?? defaultNowIso)();
-  const opCount = await deps.storage.transact(async (tx) => {
-    await enrol(tx, {
-      deviceId: input.identity.deviceId,
-      profile: input.profile,
-      epoch: input.epoch,
-      // The vault's value wins over this device's own. A joiner that had not been onboarded
-      // has nothing to re-base and adopts it outright; one that had, only got this far because
-      // `PairingJoiner` already checked the two agree.
-      baseCurrency: input.baseCurrency || (await readLocalBaseCurrency(tx)),
-      ownerDeviceId: input.ownerDeviceId,
-      revocationMode: input.revocationMode,
+  let opCount: number;
+  try {
+    opCount = await deps.storage.transact(async (tx) => {
+      await enrol(tx, {
+        deviceId: input.identity.deviceId,
+        profile: input.profile,
+        epoch: input.epoch,
+        // The vault's value wins over this device's own. A joiner that had not been onboarded
+        // has nothing to re-base and adopts it outright; one that had, only got this far because
+        // `PairingJoiner` already checked the two agree.
+        baseCurrency: input.baseCurrency || (await readLocalBaseCurrency(tx)),
+        ownerDeviceId: input.ownerDeviceId,
+        revocationMode: input.revocationMode,
+      });
+      await writePeers(tx, input.peers);
+      // This device's own rows become ops too. Skipping it here is the mistake that makes a
+      // two-populated-vault pairing look like it worked and then quietly sync in one direction.
+      const genesis = await runGenesisMigration(
+        tx,
+        input.identity.deviceId,
+        at,
+      );
+      await appendActivity(
+        tx,
+        input.peers.map((peer) =>
+          activityEntry({
+            kind: "paired",
+            recordedAt: at,
+            peerId: peer.deviceId,
+          }),
+        ),
+      );
+      return genesis.opCount;
     });
-    await writePeers(tx, input.peers);
-    // This device's own rows become ops too. Skipping it here is the mistake that makes a
-    // two-populated-vault pairing look like it worked and then quietly sync in one direction.
-    const genesis = await runGenesisMigration(tx, input.identity.deviceId, at);
-    await appendActivity(
-      tx,
-      input.peers.map((peer) =>
-        activityEntry({
-          kind: "paired",
-          recordedAt: at,
-          peerId: peer.deviceId,
-        }),
-      ),
-    );
-    return genesis.opCount;
-  });
+  } catch (failure) {
+    // The key was written first and is only inert while nothing references it. If the join did
+    // not land, leaving it would make the next attempt fail with "already part of a vault" and
+    // make "this device did not join" untrue. But a rejected transaction does not prove a
+    // rolled-back one, so ask the database whether it names this device before erasing.
+    let enrolled: boolean;
+    try {
+      enrolled = await deps.storage.transact(async (tx) => {
+        const meta = await readMeta(tx, [SYNC_META.deviceId]);
+        return meta.get(SYNC_META.deviceId) === input.identity.deviceId;
+      });
+    } catch (readFailure) {
+      // Neither state can be confirmed, and erasing a key the database relies on is the worse
+      // guess. Leave the keystore as it is and report both failures.
+      throw new AggregateError(
+        [failure, readFailure],
+        "Joining the vault failed and its outcome could not be confirmed.",
+      );
+    }
+    // The commit landed and only its promise failed: the device is enrolled, so the key stays.
+    if (enrolled) return { deviceId: input.identity.deviceId, opCount: 0 };
+    try {
+      await deps.keystore.erase();
+    } catch (eraseFailure) {
+      // The join did not land and the key could not be removed. Surface both; the original
+      // failure is the first error and the cause a person is told about.
+      throw new AggregateError(
+        [failure, eraseFailure],
+        "Joining the vault failed, and the vault key it stored could not be removed.",
+        { cause: failure },
+      );
+    }
+    throw failure;
+  }
 
   return { deviceId: input.identity.deviceId, opCount };
 }
@@ -498,6 +540,11 @@ export async function adoptVault(
  *
  * Only a roster row: the host's key, epoch, and history all already exist, and this is the one
  * pairing outcome that changes nothing about the vault itself.
+ *
+ * Safe to run again for the same peer. The vault key has already gone to that device by the time
+ * this runs, so a failure part-way is retried rather than re-paired: a roster row that is
+ * already there is not rewritten (nor its "paired" activity repeated); only the membership
+ * announcement is attempted again.
  */
 export async function recordPairedPeer(
   deps: SyncSetupDeps,
@@ -505,6 +552,8 @@ export async function recordPairedPeer(
 ): Promise<void> {
   const at = (deps.nowIso ?? defaultNowIso)();
   await deps.storage.transact(async (tx) => {
+    const existing = (await readRoster(tx)).get(peer.deviceId);
+    if (existing && !existing.revokedAt) return;
     await writePeers(tx, [peer]);
     await appendActivity(tx, [
       activityEntry({ kind: "paired", recordedAt: at, peerId: peer.deviceId }),
@@ -753,7 +802,13 @@ export const setEndpoints = (deps: SyncSetupDeps, patch: EndpointPatch) =>
  * the function for that case and it refuses in the opposite direction, so between the two
  * there is no state where both would work and no state where neither does.
  */
-export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
+export function resumeSync(deps: SyncSetupDeps): Promise<void> {
+  // Through the pass queue: it may rebuild the roster, chain and genesis, which a pass in flight
+  // is reading and extending.
+  return withSyncPassLock(() => resumeSyncNow(deps));
+}
+
+async function resumeSyncNow(deps: SyncSetupDeps): Promise<void> {
   const vault = await deps.keystore.read();
   if (!vault) {
     throw new KeystoreError(
@@ -789,9 +844,7 @@ export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
       storedEpoch &&
       storedEpoch !== String(vault.epoch)
     ) {
-      throw new Error(
-        "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.",
-      );
+      throw rotationInterrupted();
     }
 
     // A reset from an older build (or a partial database restore) may leave the key while
@@ -827,7 +880,15 @@ export async function resumeSync(deps: SyncSetupDeps): Promise<void> {
  * peer is revoked, and re-pairing is a deliberate, in-person act — the same one that made them
  * peers in the first place.
  */
-export async function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
+export function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
+  // Through the same queue every sync pass runs in. A rotation replaces the key and epoch a pass
+  // seals under; one that overlapped a pass could leave a batch sealed under the old key but
+  // labelled with the new epoch, or the reverse. Passes arriving meanwhile wait behind it and
+  // then see the new state.
+  return withSyncPassLock(() => rotateVaultKeyNow(deps));
+}
+
+async function rotateVaultKeyNow(deps: SyncSetupDeps): Promise<number> {
   const vault = await deps.keystore.read();
   if (!vault)
     throw new KeystoreError(
@@ -843,31 +904,74 @@ export async function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
   });
 
   const at = (deps.nowIso ?? defaultNowIso)();
-  await deps.storage.transact(async (tx) => {
-    await writeMeta(tx, { [SYNC_META.epoch]: String(epoch) });
-    const roster = await readRoster(tx);
-    const held = await readHeldChains(tx);
-    const live = [...roster.values()].filter((peer) => !peer.revokedAt);
-    await writePeers(
-      tx,
-      live.map((peer) => ({
-        ...peer,
-        revokedAt: at,
-        revokedSeq: held.heads.get(peer.deviceId)?.seq ?? 0,
-      })),
-    );
-    await appendActivity(tx, [
-      // The cursor counts slots in a bucket this vault no longer uses.
-      ...live.map((peer) =>
-        activityEntry({
-          kind: "revoked",
-          recordedAt: at,
-          peerId: peer.deviceId,
-        }),
-      ),
-    ]);
-    await writeMeta(tx, { [SYNC_META.relayCursor]: "0" });
-  });
+  try {
+    await deps.storage.transact(async (tx) => {
+      await writeMeta(tx, { [SYNC_META.epoch]: String(epoch) });
+      const roster = await readRoster(tx);
+      const held = await readHeldChains(tx);
+      const live = [...roster.values()].filter((peer) => !peer.revokedAt);
+      await writePeers(
+        tx,
+        live.map((peer) => ({
+          ...peer,
+          revokedAt: at,
+          revokedSeq: held.heads.get(peer.deviceId)?.seq ?? 0,
+        })),
+      );
+      await appendActivity(tx, [
+        // The cursor counts slots in a bucket this vault no longer uses.
+        ...live.map((peer) =>
+          activityEntry({
+            kind: "revoked",
+            recordedAt: at,
+            peerId: peer.deviceId,
+          }),
+        ),
+      ]);
+      await writeMeta(tx, { [SYNC_META.relayCursor]: "0" });
+    });
+  } catch (failure) {
+    // A rejected transaction does not prove a rolled-back one: the commit can land and the
+    // promise still reject afterwards. Which key belongs in the keystore depends on what the
+    // database actually holds, so ask it, in a fresh transaction, before touching anything.
+    let stored: string | null;
+    try {
+      stored = await readStoredEpoch(deps.storage);
+    } catch (readFailure) {
+      // Neither state can be confirmed, and either key could be the wrong one to leave behind.
+      // Do not guess: the keystore is left as it is, and the state is the interrupted one that
+      // `resumeSync` and every sync pass refuse to proceed from.
+      throw rotationInterrupted(
+        // [the rotation failure, the failed read], for whoever debugs it. No message: the
+        // outer error is the one a person reads.
+        new AggregateError([failure, readFailure]),
+      );
+    }
+
+    // The commit landed. The database already names the new epoch, so the new key is the
+    // matching one, and putting the old key back would create the very mismatch this guards.
+    if (stored === String(epoch)) return epoch;
+
+    // Neither epoch: something else rewrote it. Leave the keystore alone.
+    if (stored !== String(vault.epoch)) throw rotationInterrupted(failure);
+
+    // The transaction rolled back, so `sync_meta` still names the old epoch while the keystore
+    // already holds the new key. Unlike a first pairing, that key is not inert: it replaced the
+    // one the vault is actually using. Put back exactly what was read above (nothing is derived
+    // or regenerated here) so a failed rotation leaves the device as it was, and rethrow the
+    // original failure. If the restore itself fails, the device is in the interrupted state
+    // `resumeSync` already recognises, and the error says so rather than "nothing changed". Both
+    // failures travel as the cause; neither carries key material.
+    try {
+      await deps.keystore.write(vault);
+    } catch (restoreFailure) {
+      throw rotationInterrupted(
+        // [the rotation failure, the failed restore].
+        new AggregateError([failure, restoreFailure]),
+      );
+    }
+    throw failure;
+  }
 
   return epoch;
 }
@@ -899,9 +1003,20 @@ export interface DisableOptions {
  * a device still marked as a vault member with no key to act as one, which reads as `unpaired`
  * on a screen offering to revoke peers it can no longer talk to.
  */
-export async function disableSync(
+export function disableSync(
   deps: SyncSetupDeps,
   options: DisableOptions = {},
+): Promise<void> {
+  // Pausing is one flag that a pass reads once, at its start. Leaving erases the key and the sync
+  // state a pass is using, so that goes through the same queue as the pass itself.
+  return options.forget
+    ? withSyncPassLock(() => disableSyncNow(deps, options))
+    : disableSyncNow(deps, options);
+}
+
+async function disableSyncNow(
+  deps: SyncSetupDeps,
+  options: DisableOptions,
 ): Promise<void> {
   await deps.storage.transact(async (tx) => {
     await writeMeta(tx, { [SYNC_META.enabled]: "0" });

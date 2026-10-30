@@ -32,7 +32,7 @@ import {
 import { useQashyTheme } from "@/theme/theme";
 import { ACCENT_PRESETS } from "@/theme/tokens";
 import { accountDeletionMessage } from "@/utils/account-impact";
-import { accountTypeLabel } from "@/utils/labels";
+import { accountTypeIcon, accountTypeLabel } from "@/utils/labels";
 import { useTurnOnAutomaticRates } from "@/features/shared/use-automatic-rates";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import {
@@ -47,14 +47,6 @@ import {
 } from "@/utils/money";
 
 const COLORS = ACCENT_PRESETS.slice(0, 7);
-const ACCOUNT_TYPE_ICONS: Record<AccountType, string> = {
-  checking: "building.columns",
-  cash: "banknote",
-  savings: "leaf",
-  credit: "creditcard",
-  wallet: "wallet",
-};
-
 export function AccountFormScreen() {
   const { id, returnTo } = useLocalSearchParams<{
     id?: string;
@@ -70,6 +62,7 @@ export function AccountFormScreen() {
     : undefined;
   const [expectedRevision] = useState(existing?.revision);
   const [name, setName] = useState(existing?.name ?? "");
+  const [nameTouched, setNameTouched] = useState(false);
   const [type, setType] = useState<AccountType>(existing?.type ?? "checking");
   const [currency, setCurrency] = useState(
     existing?.currency ?? state.settings.baseCurrency,
@@ -119,7 +112,10 @@ export function AccountFormScreen() {
     : validateMoneyInput(opening, currency, locale, {
         label: "Opening balance",
       });
-  const canSave = !currencyError && !openingError;
+  // No silent fallback name: an account saved as "Account" is rarely what was meant. The error
+  // waits for the first blur on a new account, so the autofocused field is not scolded while typing.
+  const nameError = name.trim() ? undefined : "Account name is required.";
+  const canSave = !nameError && !currencyError && !openingError;
   const currencyCode = currency.trim().toUpperCase();
   const showRatesCard =
     !currencyError &&
@@ -156,11 +152,13 @@ export function AccountFormScreen() {
     try {
       await repository.saveAccount(
         {
-          name: name.trim() || t("Account"),
+          name: name.trim(),
           type,
           currency: currency.toUpperCase(),
           openingBalanceMinor: parseMoney(opening, currency, locale),
-          icon: "wallet.bifold",
+          // The icon every list draws for the type. There is no icon picker, so this also
+          // replaces the generic wallet icon an account created earlier may still carry.
+          icon: accountTypeIcon(type),
           color,
           archived: false,
         },
@@ -227,7 +225,7 @@ export function AccountFormScreen() {
         }}
       >
         <IconBadge
-          icon={ACCOUNT_TYPE_ICONS[type]}
+          icon={accountTypeIcon(type)}
           color={color}
           fallback={{
             container: theme.accentContainer,
@@ -247,7 +245,10 @@ export function AccountFormScreen() {
           label="Account name"
           value={name}
           onChangeText={setName}
+          onBlur={() => setNameTouched(true)}
+          error={nameTouched || existing ? nameError : undefined}
           placeholder="Everyday"
+          required
           autoFocus={!existing}
         />
         <AppText variant="label">Type</AppText>
@@ -261,7 +262,7 @@ export function AccountFormScreen() {
           ).map((item) => (
             <ChoiceChip
               key={item}
-              icon={ACCOUNT_TYPE_ICONS[item]}
+              icon={accountTypeIcon(item)}
               label={accountTypeLabel(item)}
               selected={type === item}
               onPress={() => setType(item)}
@@ -275,13 +276,8 @@ export function AccountFormScreen() {
             onChangeText={changeCurrency}
             maxLength={3}
             autoCapitalize="characters"
-            editable={!currencyLocked}
-            error={currencyLocked ? undefined : currencyError}
-            hint={
-              currencyLocked
-                ? "Currency is locked because this account has transaction or schedule history."
-                : undefined
-            }
+            editable={false}
+            hint="Currency is locked because this account has transaction or schedule history."
             required
           />
         ) : (
@@ -315,14 +311,13 @@ export function AccountFormScreen() {
         <View
           accessibilityLabel={t("Account color")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.md, flexWrap: "wrap" }}
         >
           {COLORS.map((item) => (
             <ColorSwatch
               key={item}
               color={item}
               selected={color === item}
-              label={`Use ${item} account color`}
               onPress={() => setColor(item)}
             />
           ))}

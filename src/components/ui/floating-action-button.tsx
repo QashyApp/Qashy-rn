@@ -12,6 +12,7 @@ import { IconButton } from "@/components/ui/icon-button";
 import { flattenViewStyle, useMotionPreference } from "@/components/ui/motion";
 import { TRAVEL } from "@/components/ui/motion/durations";
 import { useHiddenFlag } from "@/components/ui/use-hidden-flag";
+import { FAB_SIZE, FAB_SIZE_MATERIAL } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { hapticImpactLight } from "@/services/haptics";
 
@@ -77,7 +78,7 @@ export function FloatingActionButton({
         icon={icon}
         variant="accent"
         // Material's FAB is 56px, in the primary container, and keeps its elevation when pressed.
-        size={theme.materialControls ? 56 : 58}
+        size={theme.materialControls ? FAB_SIZE_MATERIAL : FAB_SIZE}
         iconSize={theme.materialControls ? 24 : 25}
         iconColor={theme.materialControls ? theme.onAccentContainer : undefined}
         // No entrance: the button is positioned outside the screen's transition

@@ -104,7 +104,8 @@ export function ActionButton({
       hitSlop={m3 && size !== "large" ? { top: 4, bottom: 4 } : undefined}
       stateLayerColor={enabledForeground}
       onPress={(event) => {
-        if (isDisabled) return;
+        // A busy button is mid-action (a save, an import); another press would run it again.
+        if (isDisabled || busy) return;
         // A primary button is a direct, physical action (the FAB's own
         // haptic), a danger button is confirming something destructive (the
         // same cautionary buzz as any other destructive confirmation), and

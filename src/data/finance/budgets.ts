@@ -7,6 +7,7 @@ import type {
   BudgetFilters,
   BudgetPeriodSnapshot,
   BudgetStatus,
+  TransactionRecord,
 } from "@/domain/models";
 import { addRecurrence, todayLocal } from "@/utils/date";
 import { budgetPeriodId } from "@/utils/deterministic-id";
@@ -152,31 +153,17 @@ export function buildBudgetSnapshots(
   updateCurrent: boolean,
   onDate = todayLocal(),
   transient = false,
+  /**
+   * Saving a budget with rollover newly on: the current period, if it carries nothing yet, takes
+   * the carry the previous period would have handed it. Earlier periods are never rewritten.
+   */
+  carryIntoCurrent = false,
 ) {
   const bounds = resolvePeriod(budget.period, onDate);
   const existing = ctx.state.budgetPeriods.find(
     (item) => item.budgetId === budget.id && item.periodStart === bounds.start,
   );
-  if (existing) {
-    if (!updateCurrent) return [];
-    // A matching start alone is not enough: changing July monthly to a
-    // July–August window finds the same snapshot, but its rollover belongs
-    // to the old definition. Carrying it forward would grant (or charge) a
-    // period that no longer exists, so only preserve it when the complete
-    // resolved window still matches.
-    const preservesDefinition = matchesPeriodDefinition(budget, existing);
-    return [
-      updateEntity(existing, {
-        periodEnd: bounds.end,
-        limitMinor: budget.limitMinor,
-        // Kept even while rollover is switched off: the effective limit ignores it then, so
-        // switching it back on restores the same carried amount instead of silently zeroing it.
-        rolloverMinor: preservesDefinition ? existing.rolloverMinor : 0,
-        filters: budget.filters,
-        categoryLimits: budget.categoryLimits,
-      }),
-    ];
-  }
+  if (existing && !updateCurrent) return [];
   const history = ctx.state.budgetPeriods
     // `periodEnd`, not `periodStart`: a snapshot that merely *started* earlier can
     // still be running. Editing a budget's unit/interval/anchor moves `bounds.start`
@@ -194,6 +181,60 @@ export function buildBudgetSnapshots(
     candidate && matchesPeriodDefinition(budget, candidate)
       ? candidate
       : undefined;
+  // A one-time adjustment is part of what the period had to spend, so an unspent bonus
+  // carries forward (and a deliberate cut is carried as a smaller remainder).
+  const carryFrom = (previous: BudgetPeriodSnapshot) =>
+    clampRollover(
+      subtractMinor(
+        addMinor(
+          addMinor(
+            previous.rolloverMinor,
+            previous.limitMinor,
+            `${budget.name} rollover`,
+          ),
+          budgetAdjustmentTotal(
+            ctx,
+            budget.id,
+            previous.periodStart,
+            previous.periodEnd,
+          ),
+          `${budget.name} rollover`,
+        ),
+        budgetSpend(
+          ctx,
+          previous.filters,
+          previous.periodStart,
+          previous.periodEnd,
+        ),
+        `${budget.name} rollover`,
+      ),
+      budget.limitMinor,
+    );
+  if (existing) {
+    // A matching start alone is not enough: changing July monthly to a
+    // July–August window finds the same snapshot, but its rollover belongs
+    // to the old definition. Carrying it forward would grant (or charge) a
+    // period that no longer exists, so only preserve it when the complete
+    // resolved window still matches.
+    const preservesDefinition = matchesPeriodDefinition(budget, existing);
+    // Kept even while rollover is switched off: the effective limit ignores it then, so
+    // switching it back on restores the same carried amount instead of silently zeroing it.
+    const kept = preservesDefinition ? existing.rolloverMinor : 0;
+    return [
+      updateEntity(existing, {
+        periodEnd: bounds.end,
+        limitMinor: budget.limitMinor,
+        // Rollover switched on partway through a period: the period began without a carry (it
+        // was off then), so it takes what the previous period leaves, as if it had been on.
+        rolloverMinor:
+          carryIntoCurrent && budget.rollover && kept === 0 && latest
+            ? carryFrom(latest)
+            : kept,
+        filters: budget.filters,
+        categoryLimits: budget.categoryLimits,
+      }),
+    ];
+  }
   const makePeriod = (
     periodStart: string,
     periodEnd: string,
@@ -204,37 +245,7 @@ export function buildBudgetSnapshots(
       periodStart,
       periodEnd,
       limitMinor: budget.limitMinor,
-      // A one-time adjustment is part of what the period had to spend, so an unspent bonus
-      // carries forward (and a deliberate cut is carried as a smaller remainder).
-      rolloverMinor:
-        budget.rollover && previous
-          ? clampRollover(
-              subtractMinor(
-                addMinor(
-                  addMinor(
-                    previous.rolloverMinor,
-                    previous.limitMinor,
-                    `${budget.name} rollover`,
-                  ),
-                  budgetAdjustmentTotal(
-                    ctx,
-                    budget.id,
-                    previous.periodStart,
-                    previous.periodEnd,
-                  ),
-                  `${budget.name} rollover`,
-                ),
-                budgetSpend(
-                  ctx,
-                  previous.filters,
-                  previous.periodStart,
-                  previous.periodEnd,
-                ),
-                `${budget.name} rollover`,
-              ),
-              budget.limitMinor,
-            )
-          : 0,
+      rolloverMinor: budget.rollover && previous ? carryFrom(previous) : 0,
       filters: budget.filters,
       categoryLimits: budget.categoryLimits,
     };
@@ -297,31 +308,87 @@ export function dueBudgetSnapshots(ctx: FinanceContext) {
 
 // ---- Spending and status ---------------------------------------------------------------------
 
+/**
+ * A `budgetMatches` that shares its work between calls on one snapshot: the expenses of a range
+ * are filtered out of the posted transactions once, a category matcher is built once per set of
+ * categories, and the same filters over the same range are answered once. For callers that read
+ * many budgets together.
+ */
+export function createBudgetMatcher(ctx: FinanceContext) {
+  const expensesByRange = new Map<string, TransactionRecord[]>();
+  const matchers = new Map<string, (categoryId: string | null) => boolean>();
+  const results = new Map<string, TransactionRecord[]>();
+  const expensesIn = (fromDate: string, toDate: string) => {
+    const key = `${fromDate}|${toDate}`;
+    let expenses = expensesByRange.get(key);
+    if (!expenses) {
+      expenses = ctx
+        .postedTransactions(fromDate, toDate)
+        .filter((item) => item.kind === "expense");
+      expensesByRange.set(key, expenses);
+    }
+    return expenses;
+  };
+  return (
+    filters: BudgetFilters,
+    fromDate: string,
+    toDate: string,
+  ): TransactionRecord[] => {
+    const resultKey = JSON.stringify([
+      filters.accountIds,
+      filters.categoryIds,
+      filters.tagIds,
+      fromDate,
+      toDate,
+    ]);
+    const cached = results.get(resultKey);
+    if (cached) return cached;
+    let matchesCategory: ((categoryId: string | null) => boolean) | null = null;
+    if (filters.categoryIds.length) {
+      const matcherKey = JSON.stringify(filters.categoryIds);
+      matchesCategory = matchers.get(matcherKey) ?? null;
+      if (!matchesCategory) {
+        matchesCategory = categoryMatcher(
+          ctx.state.categories,
+          filters.categoryIds,
+        );
+        matchers.set(matcherKey, matchesCategory);
+      }
+    }
+    const categoryTest = matchesCategory;
+    const matched = expensesIn(fromDate, toDate).filter(
+      (item) =>
+        (!filters.accountIds.length ||
+          filters.accountIds.includes(item.accountId)) &&
+        (!categoryTest || categoryTest(item.categoryId)) &&
+        (!filters.tagIds.length ||
+          filters.tagIds.some((id) => item.tagIds.includes(id))),
+    );
+    results.set(resultKey, matched);
+    return matched;
+  };
+}
+
+/** The posted expenses a budget with these filters counts in the range, as the records themselves. */
+export function budgetMatches(
+  ctx: FinanceContext,
+  filters: BudgetFilters,
+  fromDate: string,
+  toDate: string,
+): TransactionRecord[] {
+  return createBudgetMatcher(ctx)(filters, fromDate, toDate);
+}
+
 export function budgetSpend(
   ctx: FinanceContext,
   filters: BudgetFilters,
   fromDate: string,
   toDate: string,
 ) {
-  const matchesCategory = filters.categoryIds.length
-    ? categoryMatcher(ctx.state.categories, filters.categoryIds)
-    : null;
   return sumMinor(
-    ctx
-      .postedTransactions(fromDate, toDate)
-      .filter((item) => item.kind === "expense")
-      .filter(
-        (item) =>
-          !filters.accountIds.length ||
-          filters.accountIds.includes(item.accountId),
-      )
-      .filter((item) => !matchesCategory || matchesCategory(item.categoryId))
-      .filter(
-        (item) =>
-          !filters.tagIds.length ||
-          filters.tagIds.some((id) => item.tagIds.includes(id)),
-      )
-      .map((item) => postedBaseMinor(item)),
+    budgetMatches(ctx, filters, fromDate, toDate).map((item) =>
+      postedBaseMinor(item),
+    ),
     "Budget spending",
   );
 }

@@ -40,6 +40,10 @@ import { formatMoney } from "@/utils/money";
 import { budgetPace, type BudgetPaceStatus } from "@/utils/pace";
 
 const GOAL_MILESTONES = [0.25, 0.5, 0.75, 1];
+/** A spending goal is a ceiling, not an achievement: it has no milestones and no success haptic. */
+const NO_MILESTONES: number[] = [];
+/** The selection badge is 24 wide; a card's title row keeps this much clear at its end. */
+const SELECTION_BADGE_SIZE = 24;
 /** Below this content width, budget and goal cards always stack one per row;
  * a two-up card is too cramped under it to read as anything but squeezed. */
 const WIDE_GRID_BREAKPOINT = 900;
@@ -101,7 +105,11 @@ export function PlanScreen() {
   // The repository reads these state slices internally, so they must stay in
   // the deps even though the callback does not reference them directly.
   const budgets = useMemo(
-    () => repository.getBudgetStatuses(today, { includeInactiveCustom: true }),
+    () =>
+      repository.getBudgetStatuses(today, {
+        includeInactiveCustom: true,
+        includePendingAutoPosts: true,
+      }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
     [
       repository,
@@ -111,6 +119,8 @@ export function PlanScreen() {
       state.budgetAdjustments,
       state.transactions,
       state.categories,
+      state.recurringRules,
+      state.exchangeRates,
     ],
   );
   const goals = useMemo(
@@ -196,7 +206,12 @@ export function PlanScreen() {
                 label={status.budget.name}
                 onToggle={() => budgetSelection.toggle(status.budget.id)}
               >
-                <BudgetCard status={status} today={today} fill={wide} />
+                <BudgetCard
+                  status={status}
+                  today={today}
+                  fill={wide}
+                  selecting={budgetSelection.selecting}
+                />
               </SelectableCard>
             </View>
           ))}
@@ -237,6 +252,7 @@ export function PlanScreen() {
                   goal={goal}
                   progress={goalProgress.get(goal.id) ?? 0}
                   fill={wide}
+                  selecting={goalSelection.selecting}
                 />
               </SelectableCard>
             </View>
@@ -265,8 +281,9 @@ function PlanSection({
   empty: ReactNode;
   children: ReactNode;
 }) {
+  const { space } = useQashyTheme();
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: space.sm }}>
       <SectionHeader
         title={title}
         action={hasItems && !selection.selecting ? addLabel : undefined}
@@ -282,7 +299,7 @@ function PlanSection({
         onSecondaryAction={selection.toggleMode}
       />
       {hasItems ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.md }}>
           {children}
         </View>
       ) : (
@@ -343,9 +360,9 @@ function SelectableCard({
           position: "absolute",
           top: 12,
           end: 12,
-          width: 24,
-          height: 24,
-          borderRadius: 12,
+          width: SELECTION_BADGE_SIZE,
+          height: SELECTION_BADGE_SIZE,
+          borderRadius: SELECTION_BADGE_SIZE / 2,
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 2,
@@ -365,10 +382,12 @@ function BudgetCard({
   status,
   today,
   fill,
+  selecting,
 }: {
   status: BudgetStatus;
   today: string;
   fill: boolean;
+  selecting: boolean;
 }) {
   const state = useFinanceState();
   const theme = useQashyTheme();
@@ -392,20 +411,21 @@ function BudgetCard({
   const presentation = PACE_PRESENTATION[pace.status];
   const barColor =
     pace.status === "over" ? (theme.negative as string) : budget.color;
+  // A custom budget outside its window has no pace to report: it is upcoming or ended.
   const customState =
     budget.period.unit === "custom"
       ? today > snapshot.periodEnd
-        ? `${t("Ended")} · `
+        ? ("ended" as const)
         : today < snapshot.periodStart
-          ? `${t("Upcoming")} · `
-          : ""
-      : "";
+          ? ("upcoming" as const)
+          : null
+      : null;
   // Dates and the rollover amount are data, so the caption is assembled with
   // its translatable words already resolved and then rendered verbatim.
   const money = (minor: number, options?: { sign: boolean }) =>
     formatMoney(minor, state.settings.baseCurrency, locale, options);
   const signed = (minor: number) => money(minor, { sign: true });
-  const periodSummary = `${customState}${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, locale)} ${t("to")} ${mediumDate(snapshot.periodEnd, locale)}${budget.rollover ? ` · ${t("rollover")} ${signed(snapshot.rolloverMinor)}` : ""}${adjustmentMinor ? ` · ${t("adjusted")} ${signed(adjustmentMinor)}` : ""}`;
+  const periodSummary = `${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, locale)} ${t("to")} ${mediumDate(snapshot.periodEnd, locale)}${budget.rollover ? ` · ${t("rollover")} ${signed(snapshot.rolloverMinor)}` : ""}${adjustmentMinor ? ` · ${t("adjusted")} ${signed(adjustmentMinor)}` : ""}`;
   // A custom budget outside its window has no current period to adjust.
   const canAdjust = !customState;
 
@@ -416,8 +436,15 @@ function BudgetCard({
       exit
       style={fill ? { height: "100%" } : undefined}
     >
-      <Card style={fill ? { gap: 14, height: "100%" } : { gap: 14 }}>
-        <View style={{ gap: space.xxs }}>
+      <Card
+        style={fill ? { gap: space.md, height: "100%" } : { gap: space.md }}
+      >
+        <View
+          style={{
+            gap: space.xxs,
+            paddingEnd: selecting ? SELECTION_BADGE_SIZE + space.md : 0,
+          }}
+        >
           <AppText literal variant="headline">
             {budget.name}
           </AppText>
@@ -464,12 +491,37 @@ function BudgetCard({
             flexWrap: "wrap",
           }}
         >
-          <StatusPill
-            label={presentation.label}
-            icon={presentation.icon}
-            tone={presentation.tone}
-          />
-          {pace.projectionReliable ? (
+          {customState ? (
+            // An ended budget keeps its verdict: "Ended" alone would hide that it went over.
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: space.sm,
+                flexWrap: "wrap",
+              }}
+            >
+              <StatusPill
+                label={customState === "ended" ? "Ended" : "Upcoming"}
+                icon={customState === "ended" ? "checkmark" : "calendar"}
+                tone="neutral"
+              />
+              {customState === "ended" && pace.status === "over" ? (
+                <StatusPill
+                  label={presentation.label}
+                  icon={presentation.icon}
+                  tone={presentation.tone}
+                />
+              ) : null}
+            </View>
+          ) : (
+            <StatusPill
+              label={presentation.label}
+              icon={presentation.icon}
+              tone={presentation.tone}
+            />
+          )}
+          {!customState && pace.projectionReliable ? (
             <AppText literal variant="caption" muted numeric>
               {`${t("Projected")}: ${money(pace.projectedMinor)} ${t("by")} ${mediumDate(snapshot.periodEnd, locale)}`}
             </AppText>
@@ -477,7 +529,7 @@ function BudgetCard({
         </View>
 
         {categorySpend.length ? (
-          <Card variant="inset" style={{ gap: 10 }}>
+          <Card variant="inset" style={{ gap: space.sm }}>
             {categorySpend.map((limit) => {
               const category = state.categories.find(
                 (item) => item.id === limit.categoryId,
@@ -530,6 +582,7 @@ function BudgetCard({
             <ActionButton
               title="Edit"
               variant="secondary"
+              accessibilityLabel={`${t("Edit")} ${budget.name}`}
               onPress={() =>
                 router.push({ pathname: "/budget", params: { id: budget.id } })
               }
@@ -561,19 +614,32 @@ function GoalCard({
   goal,
   progress,
   fill,
+  selecting,
 }: {
   goal: Goal;
   progress: number;
   fill: boolean;
+  selecting: boolean;
 }) {
-  const { space } = useQashyTheme();
+  const theme = useQashyTheme();
+  const { space } = theme;
   const state = useFinanceState();
   const { locale, t, isRtl } = useLocalization();
   const displayProgress = Math.max(0, progress);
   const ratio = goal.targetMinor > 0 ? displayProgress / goal.targetMinor : 0;
-  const percent = Math.max(0, Math.min(100, Math.round(ratio * 100)));
+  // A spending goal is a ceiling: past it the card says by how much, and shows the real percent.
+  const over = goal.kind === "spending" && displayProgress > goal.targetMinor;
+  const percent = Math.max(
+    0,
+    Math.min(over ? 999 : 100, Math.round(ratio * 100)),
+  );
   const remainingMinor = Math.max(0, goal.targetMinor - displayProgress);
-  useMilestoneHaptics(ratio, GOAL_MILESTONES, hapticSuccess);
+  const overMinor = Math.max(0, displayProgress - goal.targetMinor);
+  useMilestoneHaptics(
+    ratio,
+    goal.kind === "spending" ? NO_MILESTONES : GOAL_MILESTONES,
+    hapticSuccess,
+  );
   const money = (minor: number) =>
     formatMoney(minor, state.settings.baseCurrency, locale);
   const byDate = goal.targetDate
@@ -587,17 +653,27 @@ function GoalCard({
       exit
       style={fill ? { height: "100%" } : undefined}
     >
-      <Card style={fill ? { gap: 14, height: "100%" } : { gap: 14 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+      <Card
+        style={fill ? { gap: space.md, height: "100%" } : { gap: space.md }}
+      >
+        <View
+          style={{ flexDirection: "row", alignItems: "center", gap: space.md }}
+        >
           <ProgressRing
             value={ratio}
             size={72}
-            color={goal.color}
-            label={`${goal.name}: ${t("Goal progress")}`}
+            color={over ? (theme.negative as string) : goal.color}
+            label={`${goal.name}: ${t("Goal progress")}${over ? ` · ${t("Over target")}` : ""}`}
           >
             <AppText literal numeric variant="label">{`${percent}%`}</AppText>
           </ProgressRing>
-          <View style={{ flex: 1, gap: space.xxs }}>
+          <View
+            style={{
+              flex: 1,
+              gap: space.xxs,
+              paddingEnd: selecting ? SELECTION_BADGE_SIZE + space.md : 0,
+            }}
+          >
             <AppText literal variant="headline">
               {goal.name}
             </AppText>
@@ -630,18 +706,31 @@ function GoalCard({
             muted
           >{`${t("of")} ${money(goal.targetMinor)}`}</AppText>
         </View>
-        <AppText literal variant="caption" muted numeric>
+        <AppText
+          literal
+          variant="caption"
+          muted={!over}
+          numeric
+          style={over ? { color: theme.negativeText } : undefined}
+        >
           {/* Hebrew puts the "remaining" verb before the amount ("נותרו $X"), the reverse
               of the English "$X remaining" order, so the fragments are composed per
-              direction rather than concatenated in a single fixed order. */}
-          {isRtl
-            ? `${t("remaining")} ${money(remainingMinor)}${byDate}`
-            : `${money(remainingMinor)} ${t("remaining")}${byDate}`}
+              direction rather than concatenated in a single fixed order. "over target" follows
+              the same rule ("חריגה של $X"). A spending goal past its target says so in
+              words, in the danger text color. */}
+          {over
+            ? isRtl
+              ? `${t("over target")} ${money(overMinor)}${byDate}`
+              : `${money(overMinor)} ${t("over target")}${byDate}`
+            : isRtl
+              ? `${t("remaining")} ${money(remainingMinor)}${byDate}`
+              : `${money(remainingMinor)} ${t("remaining")}${byDate}`}
         </AppText>
 
         <ActionButton
           title="Open"
           variant="secondary"
+          accessibilityLabel={`${t("Open")} ${goal.name}`}
           onPress={() =>
             router.push({ pathname: "/goal", params: { id: goal.id } })
           }

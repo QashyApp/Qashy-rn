@@ -20,6 +20,7 @@ import { ForeignFeeFields } from "@/features/transactions/form/foreign-fee-field
 import { MoreDetails } from "@/features/transactions/form/more-details";
 import { useQashyTheme } from "@/theme/theme";
 import { mediumDate } from "@/utils/date";
+import { accountTypeIcon } from "@/utils/labels";
 import { stashRecurringDraft } from "@/features/more/recurring-draft";
 import { localizeDecimalString } from "@/utils/money";
 import { useTransactionForm } from "@/features/transactions/form/use-transaction-form";
@@ -240,7 +241,7 @@ export function TransactionFormScreen() {
             <ChoiceChip
               key={item.id}
               literal
-              icon={item.icon}
+              icon={accountTypeIcon(item.type)}
               label={accountChipLabel(item, t)}
               disabled={item.archived}
               selected={accountId === item.id}
@@ -276,7 +277,7 @@ export function TransactionFormScreen() {
                   <ChoiceChip
                     key={item.id}
                     literal
-                    icon={item.icon}
+                    icon={accountTypeIcon(item.type)}
                     label={accountChipLabel(item, t)}
                     disabled={item.archived}
                     selected={destinationAccountId === item.id}
@@ -502,13 +503,15 @@ export function TransactionFormScreen() {
         </MoreDetails>
       </Card>
 
-      {rateMissingMessage || saveError ? (
+      {rateMissingMessage || saveError || amountPending ? (
         <AppText
           accessibilityRole="alert"
           variant="caption"
           style={{ color: theme.negativeText }}
         >
-          {rateMissingMessage ?? saveError}
+          {/* A calculation left half-typed disables Save, and the amount field shows no error for
+              it on purpose (it is still being typed), so say why Save is off. */}
+          {rateMissingMessage ?? saveError ?? "Finish the calculation to save."}
         </AppText>
       ) : null}
       <ActionButton

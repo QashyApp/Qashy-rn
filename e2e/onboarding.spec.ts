@@ -47,7 +47,11 @@ test("chooses readable locale and currency options during onboarding", async ({
   const currencyField = page.getByLabel("מטבע בסיס", { exact: true });
   await currencyField.click();
   await page.getByLabel("חיפוש מטבע בסיס").fill("ILS");
-  await page.getByRole("radio", { name: /שקל/ }).click();
+  // The quick-pick tile behind the dialog is a "שקלים חדשים, ILS" radio too; scope to the list.
+  await page
+    .getByRole("radiogroup", { name: "בחירת מטבע בסיס" })
+    .getByRole("radio", { name: /שקל/ })
+    .click();
   await expect(currencyField.getByText(/שקל/)).toBeVisible();
 
   await page.getByRole("button", { name: "המשך" }).click();
@@ -103,7 +107,9 @@ test("chooses readable locale and currency options during onboarding", async ({
   await page.getByRole("button", { name: "מחזורית חדשה" }).click();
   await expect(page.getByText("רישום אוטומטי")).toBeVisible();
   await expect(
-    page.getByText("כבוי כברירת מחדל. תנועות עתידיות ממתינות לבדיקה שלכם."),
+    page.getByText(
+      "כבוי: פריטים שהגיע מועדם ממתינים לבדיקה שלכם. פעיל: הם נרשמים מעצמם במועדם, כולל כאלה שמועדם כבר עבר.",
+    ),
   ).toBeVisible();
   await expect(page.getByText("כל חודש", { exact: true })).toBeVisible();
 });

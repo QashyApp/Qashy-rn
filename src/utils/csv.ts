@@ -267,6 +267,7 @@ export function parseCsvTable(source: string) {
   const scanned = scanRows(input, detectDelimiter(input));
   const empty = {
     headers: [] as string[],
+    headerLabels: [] as string[],
     rows: [] as Record<string, string | number>[],
     rowErrors: [] as CsvRowError[],
   };
@@ -274,12 +275,19 @@ export function parseCsvTable(source: string) {
   // Without a usable header row there is nothing to map columns onto, so this
   // one failure is still fatal for the file.
   if (scanned[0].error) throw new Error(scanned[0].error);
-  const headers = scanned[0].cells.map((header) =>
-    header
-      .trim()
-      .toLowerCase()
-      .replace(/[\s-]+/g, "_"),
-  );
+  // `headers` are normalized keys (matching and inference); `headerLabels` keep the text the file
+  // wrote, for showing the user. Same order, same length.
+  const headerLabels = scanned[0].cells.map((header) => header.trim());
+  // A repeated header gets a numeric suffix so each column keeps its own key: otherwise the later
+  // column silently overwrites the earlier one in every record and both picker options collide.
+  const usedHeaders = new Set<string>();
+  const headers = headerLabels.map((header) => {
+    const base = header.toLowerCase().replace(/[\s-]+/g, "_");
+    let key = base;
+    for (let n = 2; usedHeaders.has(key); n += 1) key = `${base}_${n}`;
+    usedHeaders.add(key);
+    return key;
+  });
 
   const body = scanned.slice(1);
   const rowErrors = body
@@ -307,7 +315,7 @@ export function parseCsvTable(source: string) {
       });
       return record;
     });
-  return { headers, rows: records, rowErrors };
+  return { headers, headerLabels, rows: records, rowErrors };
 }
 
 /** The fields `extractCsvRatePairs` needs, out of a mapped-but-not-yet-validated CSV row. */

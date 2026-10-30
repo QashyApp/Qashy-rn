@@ -119,15 +119,31 @@ export function ExchangeRatesScreen() {
     if (toggling) return;
     setToggling(true);
     try {
-      await service.setEnabled(next);
+      try {
+        await service.setEnabled(next);
+      } catch (reason) {
+        showError(
+          "Couldn’t update automatic rates",
+          errorMessage(reason, "Try again."),
+        );
+        return;
+      }
       // Idempotent via occurrence keys: retries whatever rule generation skipped for lack of a
-      // rate, now that turning this on may have just supplied one. Never blocks the toggle.
-      if (next) await repository.generateRecurring();
-    } catch (reason) {
-      showError(
-        "Couldn’t update automatic rates",
-        errorMessage(reason, "Try again."),
-      );
+      // rate, now that turning this on may have just supplied one. The switch has already saved,
+      // so a failure here is reported as its own problem, not as a failed toggle.
+      if (next) {
+        try {
+          await repository.generateRecurring();
+        } catch (reason) {
+          showError(
+            "Automatic rates are on, but recurring transactions weren’t updated",
+            errorMessage(
+              reason,
+              "Qashy will try again the next time it opens.",
+            ),
+          );
+        }
+      }
     } finally {
       setToggling(false);
     }
@@ -153,7 +169,7 @@ export function ExchangeRatesScreen() {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 14,
+            gap: space.md,
           }}
         >
           <View style={{ flex: 1, gap: space.xxs }}>
@@ -164,16 +180,31 @@ export function ExchangeRatesScreen() {
               can see your IP address.
             </AppText>
           </View>
-          {toggling ? (
-            <ActivityIndicator color={theme.accent} />
-          ) : (
+          {/* The switch stays put while it saves; the spinner has a slot of its own beside it, so
+              nothing shifts when it appears. */}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: space.sm,
+            }}
+          >
+            <View
+              style={{ width: theme.iconSize.md, height: theme.iconSize.md }}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            >
+              {toggling ? (
+                <ActivityIndicator size="small" color={theme.accent} />
+              ) : null}
+            </View>
             <QashySwitch
               accessibilityLabel={t("Fetch rates automatically")}
               value={status.enabled}
               onValueChange={toggle}
               disabled={toggling}
             />
-          )}
+          </View>
         </View>
         {status.fetching ? (
           <View
@@ -209,7 +240,7 @@ export function ExchangeRatesScreen() {
                 key={row.key}
                 literal
                 title={row.currency}
-                subtitle={row.subtitle}
+                subtitle={t(row.subtitle)}
                 icon="exclamationmark.triangle"
                 onPress={() =>
                   router.push({
@@ -309,13 +340,13 @@ export function ExchangeRatesScreen() {
               );
             })}
           </Card>
-          {automaticCount ? (
-            <AppText
-              variant="caption"
-              muted
-            >{`${automaticCount} automatic rate${automaticCount === 1 ? "" : "s"} stored.`}</AppText>
-          ) : null}
         </>
+      ) : null}
+      {automaticCount ? (
+        <AppText
+          variant="caption"
+          muted
+        >{`${automaticCount} automatic rate${automaticCount === 1 ? "" : "s"} stored.`}</AppText>
       ) : null}
     </ScrollView>
   );

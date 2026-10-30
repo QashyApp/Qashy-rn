@@ -30,7 +30,7 @@
  */
 
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import ts from "typescript";
 
 import { IMPORT_SOURCES } from "@/data/import/sources";
@@ -38,6 +38,12 @@ import { translateMessage } from "@/localization/localization";
 import { createDynamicPatterns, HEBREW } from "@/localization/messages/he";
 
 const SRC = join(__dirname, "..", "..");
+/** A path under `src/` with forward slashes, as the allowlists and reports write it (also on Windows). */
+const relative = (path: string) =>
+  path
+    .slice(SRC.length + 1)
+    .split(sep)
+    .join("/");
 const SCANNED = [
   "app",
   "components",
@@ -78,6 +84,12 @@ const ALLOWED: Record<string, string> = {
     "Search keywords of the `body` icon, matched against typed text and never displayed; the key only looks like the `body` text prop.",
   disabled: "A relay health status code compared in code, never shown.",
   ok: "A relay health status code compared in code, never shown.",
+  "YYYY-MM-DD":
+    "A CSV date-format notation, shown as written in every language (the date format picker and its error).",
+  "DD/MM/YYYY":
+    "A CSV date-format notation, shown as written in every language (the date format picker and its error).",
+  "MM/DD/YYYY":
+    "A CSV date-format notation, shown as written in every language (the date format picker and its error).",
   "Unsupported import source: ${…}":
     "The exhaustiveness guard of a `never` switch over the import source ids.",
 };
@@ -451,9 +463,7 @@ function scan(path: string, text = readFileSync(path, "utf8")): Found[] {
   const found: Found[] = [];
   // Messages built in the data layer and the utilities are sampled whatever they interpolate.
   const sampleAll = true;
-  const dataLayer = /^(?:data|utils|sync|theme)[\\/]/.test(
-    path.slice(SRC.length + 1),
-  );
+  const dataLayer = /^(?:data|utils|sync|theme)\//.test(relative(path));
   const lit = (node: ts.Node | undefined) => literals(node, sampleAll);
   const add = (
     texts: string[],
@@ -465,7 +475,7 @@ function scan(path: string, text = readFileSync(path, "utf8")): Found[] {
     for (const text of texts) {
       found.push({
         text,
-        where: `${path.slice(SRC.length + 1)}:${line} (${how}${literal ? ", literal" : ""})`,
+        where: `${relative(path)}:${line} (${how}${literal ? ", literal" : ""})`,
         ...(literal ? { literal: true as const } : null),
       });
     }
@@ -614,7 +624,7 @@ function scan(path: string, text = readFileSync(path, "utf8")): Found[] {
 const everything: Found[] = [
   ...SCANNED.flatMap((directory) => sourceFiles(join(SRC, directory))),
 ]
-  .filter((path) => !(path.slice(SRC.length + 1) in EXCLUDED_FILES))
+  .filter((path) => !(relative(path) in EXCLUDED_FILES))
   .flatMap((path) => scan(path));
 
 describe("literal UI strings", () => {

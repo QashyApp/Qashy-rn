@@ -370,8 +370,15 @@ export const HEBREW: Record<string, string> = {
   "Schedule active": "תזמון פעיל",
   "Pause without deleting this schedule.": "השהו מבלי למחוק את התזמון.",
   "Post automatically": "רישום אוטומטי",
-  "Off by default. Upcoming items wait for your review.":
-    "כבוי כברירת מחדל. תנועות עתידיות ממתינות לבדיקה שלכם.",
+  "Off: due items wait for your review. On: they post by themselves when due, including any already overdue.":
+    "כבוי: פריטים שהגיע מועדם ממתינים לבדיקה שלכם. פעיל: הם נרשמים מעצמם במועדם, כולל כאלה שמועדם כבר עבר.",
+  "Post overdue payments?": "לרשום תשלומים שעבר מועדם?",
+  "1 overdue payment will be posted now.": "תשלום אחד שעבר מועדו יירשם עכשיו.",
+  "Post them": "לרשום אותם",
+  "This schedule has ended. Extend the end date, then turn it on.":
+    "התזמון הסתיים. יש להאריך את תאריך הסיום ואז להפעיל אותו.",
+  Under: "תחת",
+  "1 to review": "1 לבדיקה",
   Active: "פעיל",
   Paused: "מושהה",
   Ended: "הסתיים",
@@ -399,8 +406,13 @@ export const HEBREW: Record<string, string> = {
   "Import transactions": "ייבוא תנועות",
   "Creates a UTF-8 CSV of your transactions with accounts, categories, tags, notes and exchange rates. Not a full backup: budgets, goals and schedules are not included.":
     "יוצר קובץ CSV בקידוד UTF-8 של התנועות, כולל חשבונות, קטגוריות, תגיות, הערות ושערי חליפין. זהו לא גיבוי מלא: תקציבים, יעדים ותזמונים אינם נכללים.",
-  "Headers are matched automatically. Required columns are date, type, title, amount, currency, and account. Nothing is committed until after preview.":
-    "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, סוג, כותרת, סכום, מטבע וחשבון. דבר לא נשמר לפני התצוגה המקדימה.",
+  "Headers are matched automatically. Required columns are date, title, amount, and account. Type and currency are optional and default to expense and the account’s currency. Nothing is committed until after preview.":
+    "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, כותרת, סכום וחשבון. סוג ומטבע הם אופציונליים וברירת המחדל שלהם היא הוצאה ומטבע החשבון. דבר לא נשמר לפני התצוגה המקדימה.",
+  "Date format": "פורמט תאריך",
+  Auto: "אוטומטי",
+  "Negative amounts import as expenses, positive as income.":
+    "סכומים שליליים מיובאים כהוצאות, וסכומים חיוביים כהכנסות.",
+  "Fix these and try again.": "תקנו אותם ונסו שוב.",
   "Choose CSV": "בחירת CSV",
   "Column mapping": "מיפוי עמודות",
   Required: "חובה",
@@ -554,8 +566,10 @@ export const HEBREW: Record<string, string> = {
   "Delete this contribution?": "למחוק את ההפקדה הזו?",
   "Delete 1 transaction?": "למחוק תנועה אחת?",
   "Delete 1 recurring transaction?": "למחוק תנועה מחזורית אחת?",
-  "Already generated transactions stay in your ledger.":
-    "תנועות שכבר נוצרו יישארו ביומן.",
+  "Transactions already posted stay in your ledger.":
+    "תנועות שכבר נרשמו יישארו ביומן.",
+  "1 upcoming payment that hasn’t been posted yet is removed.":
+    "תשלום קרוב אחד שטרם נרשם יוסר.",
   "They will be removed from your ledger.": "הן יוסרו מהיומן.",
   "Manual contributions are removed with it.":
     "ההפקדות הידניות יימחקו יחד איתו.",
@@ -618,8 +632,9 @@ export const HEBREW: Record<string, string> = {
   "A fresh version is ready": "גרסה חדשה מוכנה",
   Later: "אחר כך",
   Reload: "טעינה מחדש",
-  "Reload when you’re ready. Your finance data stays in IndexedDB.":
-    "טענו מחדש כשתהיו מוכנים. המידע הפיננסי נשאר ב־IndexedDB.",
+  "Reloading…": "טוענים מחדש…",
+  "Reload when you’re ready. Your data stays on this device.":
+    "טענו מחדש כשתהיו מוכנים. הנתונים שלכם נשארים במכשיר הזה.",
   "LOCAL-FIRST FINANCE": "כספים מקומיים תחילה",
   "Only your devices can read your data.":
     "רק המכשירים שלכם יכולים לקרוא את הנתונים שלכם.",
@@ -720,8 +735,9 @@ export const HEBREW: Record<string, string> = {
     "חברו מכשיר שני כדי להתחיל. תשוו קוד של שש מילים בשני המסכים, ושום דבר אינו נשלח עד שתאשרו שהוא זהה.",
   "This is the only device in the vault. Add another and Qashy keeps them in step.":
     "זהו המכשיר היחיד בכספת. הוסיפו עוד אחד ו־Qashy ישמור עליהם מסונכרנים.",
-  "Paired and ready. Nothing has needed to move between your devices yet.":
-    "מחובר ומוכן. עדיין לא היה צורך להעביר דבר בין המכשירים שלכם.",
+  "Not synced yet": "עדיין לא סונכרן",
+  "Paired and ready. Sync now to exchange changes with your other devices.":
+    "מחובר ומוכן. סנכרנו עכשיו כדי להחליף שינויים עם המכשירים האחרים שלכם.",
   "Your changes are kept here and go out once it answers. A transfer file still works in the meantime.":
     "השינויים שלכם שמורים כאן ויישלחו ברגע שהוא יענה. בינתיים קובץ העברה עדיין עובד.",
   "It answered but refused this vault. Check the relay address in Sync settings — a relay that was replaced or redeployed is the usual cause.":
@@ -748,6 +764,7 @@ export const HEBREW: Record<string, string> = {
   "The last sync didn’t finish": "הסנכרון האחרון לא הושלם",
   "Your data is untouched, and the next sync retries on its own.":
     "הנתונים שלכם לא נפגעו, והסנכרון הבא ינסה שוב מעצמו.",
+  "Your data is untouched.": "הנתונים שלכם לא נפגעו.",
   "Some changes on this device are still being signed. They go out on the next sync.":
     "חלק מהשינויים במכשיר הזה עדיין נחתמים. הם יישלחו בסנכרון הבא.",
   "Sends, receives, and anything refused will appear here.":
@@ -762,8 +779,8 @@ export const HEBREW: Record<string, string> = {
   "Replacing…": "מחליף…",
   "For a lost device. Every device must be paired again.":
     "למכשיר שאבד. כל מכשיר יצטרך להתחבר מחדש.",
-  "Every device is removed and must be paired again, including this one’s partners. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.":
-    "כל המכשירים מוסרים ויצטרכו להתחבר מחדש, כולל אלה שמחוברים למכשיר הזה. עשו זאת כשמכשיר אובד: הפעולה הופכת את עותק תיבת ההפקדה שאותו מכשיר מכיר לבלתי קריא עבורו.",
+  "Every other device is removed from the vault and has to be paired with this one again. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.":
+    "כל מכשיר אחר מוסר מהכספת ויצטרך להתחבר שוב אל המכשיר הזה. עשו זאת כשמכשיר אובד: הפעולה הופכת את עותק תיבת ההפקדה שאותו מכשיר מכיר לבלתי קריא עבורו.",
   "Leave this vault": "יציאה מהכספת",
   "Leave this vault?": "לצאת מהכספת הזו?",
   "Leave vault": "יציאה מהכספת",
@@ -795,17 +812,17 @@ export const HEBREW: Record<string, string> = {
   "Change addresses": "שינוי הכתובות",
   "Hide addresses": "הסתרת הכתובות",
   "Relay address": "כתובת הממסר",
-  "Save addresses": "שמירת הכתובות",
+  "Save address": "שמירת הכתובת",
   "Leave this blank to contact nothing and sync only through transfer files.":
     "השאירו ריק כדי לא לפנות לשום דבר ולסנכרן רק דרך קובצי העברה.",
   "What the server said": "מה השרת אמר",
   "No relay address is set, so this device only syncs through transfer files you carry yourself.":
     "לא הוגדרה כתובת ממסר, ולכן המכשיר הזה מסתנכרן רק דרך קובצי העברה שאתם מעבירים בעצמכם.",
-  "Couldn’t save these addresses": "לא ניתן לשמור את הכתובות",
+  "Couldn’t save this address": "לא ניתן לשמור את הכתובת",
   "Couldn’t save that": "לא ניתן לשמור את זה",
   "Couldn’t reach the relay": "לא ניתן להגיע לממסר",
   "Check the address and try again.": "בדקו את הכתובת ונסו שוב.",
-  "Check them and try again.": "בדקו אותן ונסו שוב.",
+  "Check it and try again.": "בדקו אותה ונסו שוב.",
   "That address is not valid.": "הכתובת הזו אינה תקינה.",
   "Try again in a moment.": "נסו שוב בעוד רגע.",
 
@@ -818,10 +835,14 @@ export const HEBREW: Record<string, string> = {
   Save: "שמירה",
   Remove: "הסרה",
   "Remove this device?": "להסיר את המכשיר הזה?",
+  "Propose removing this device?": "להציע להסיר את המכשיר הזה?",
+  "Propose removal": "הצעת הסרה",
   "Only your paired devices ever see this. It is sent encrypted, and the relay never learns it.":
     "רק המכשירים המחוברים שלכם רואים אותו. הוא נשלח מוצפן, והממסר לעולם אינו לומד אותו.",
   "It stops sending and receiving changes here. It keeps the copy of your data it already has — to make that copy useless, rotate the vault key afterwards.":
     "הוא יפסיק לשלוח ולקבל שינויים כאן. העותק של הנתונים שכבר יש לו יישאר אצלו — כדי להפוך אותו לחסר תועלת, החליפו לאחר מכן את מפתח הכספת.",
+  "Sharing isn’t available on this device, so the file couldn’t be saved.":
+    "השיתוף אינו זמין במכשיר הזה, ולכן לא ניתן היה לשמור את הקובץ.",
   "Pair a second device and Qashy keeps them in step. You compare a six-word code on both screens first, so nothing is sent to a device you didn’t confirm.":
     "חברו מכשיר שני ו־Qashy ישמור עליהם מסונכרנים. תחילה תשוו קוד של שש מילים בשני המסכים, כך שדבר אינו נשלח למכשיר שלא אישרתם.",
   "Removed devices stay listed so your history keeps its author. They can no longer send or receive changes.":
@@ -859,8 +880,8 @@ export const HEBREW: Record<string, string> = {
   "Show a new code": "הצגת קוד חדש",
   "Can’t scan?": "לא מצליחים לסרוק?",
   "Hide the typed code": "הסתרת הקוד להקלדה",
-  "Type or paste this into the other device instead of scanning. Treat it like the code itself — it works once, and only for the next minute or so.":
-    "הקלידו או הדביקו את זה במכשיר האחר במקום לסרוק. התייחסו לזה כמו לקוד עצמו — הוא עובד פעם אחת, ורק בדקה הקרובה בערך.",
+  "Type or paste this into the other device instead of scanning. Treat it like the code itself — it works once and expires after a minute and a half.":
+    "הקלידו או הדביקו את זה במכשיר האחר במקום לסרוק. התייחסו לזה כמו לקוד עצמו — הוא עובד פעם אחת ופג תוקפו אחרי דקה וחצי.",
   "Pairing code for the other device to scan": "קוד חיבור שהמכשיר האחר יסרוק",
   "Scan the other device": "סרקו את המכשיר האחר",
   "Open Sync → Add device on the device that already has your data, and point this one at the code it shows.":
@@ -875,6 +896,42 @@ export const HEBREW: Record<string, string> = {
   "Nothing has been sent yet. Your vault key only leaves this device after you confirm.":
     "שום דבר לא נשלח עדיין. מפתח הכספת עוזב את המכשיר הזה רק לאחר שתאשרו.",
   "Pairing stopped": "החיבור הופסק",
+  "The vault key was not sent.": "מפתח הכספת לא נשלח.",
+  "This device did not join the vault.": "המכשיר הזה לא הצטרף לכספת.",
+  "The other device already received the vault key, but this device could not save it.":
+    "המכשיר האחר כבר קיבל את מפתח הכספת, אך המכשיר הזה לא הצליח לשמור זאת.",
+  "Press “They match” again to finish. The key is not sent a second time.":
+    "לחצו שוב על ״הן זהות״ כדי לסיים. המפתח לא נשלח פעם נוספת.",
+  "This device received the vault key but could not save it, so it did not join.":
+    "המכשיר הזה קיבל את מפתח הכספת אך לא הצליח לשמור אותו, ולכן לא הצטרף.",
+  "The other device may have added it. If it lists this device, remove it there, then pair again.":
+    "ייתכן שהמכשיר האחר הוסיף אותו. אם הוא מציג את המכשיר הזה, הסירו אותו שם ואז חברו שוב.",
+  "This device may still hold the vault key, so it cannot pair again yet. Use “Leave this vault” in the Danger zone of the sync screen on this device first. Then, if the other device lists this device, remove it there, and pair again.":
+    "ייתכן שהמכשיר הזה עדיין מחזיק במפתח הכספת, ולכן אי אפשר לחבר אותו שוב כרגע. קודם כול השתמשו ב״יציאה מהכספת״ באזור המסוכן במסך הסנכרון במכשיר הזה. לאחר מכן, אם המכשיר האחר מציג את המכשיר הזה, הסירו אותו שם וחברו שוב.",
+  "Leave before finishing?": "לצאת לפני הסיום?",
+  "The other device already has your vault key, but this device has not saved it as a member yet.":
+    "למכשיר האחר כבר יש את מפתח הכספת שלכם, אך המכשיר הזה עדיין לא שמר אותו כחבר בכספת.",
+  "To finish, choose Cancel and press “They match” again. The key is not sent a second time.":
+    "כדי לסיים, בחרו ״ביטול״ ולחצו שוב על ״הן זהות״. המפתח לא נשלח פעם נוספת.",
+  "If you leave anyway, this device will reject the other device’s changes until that device leaves the vault and you pair again.":
+    "אם תצאו בכל זאת, המכשיר הזה ידחה את השינויים של המכשיר האחר עד שהוא יצא מהכספת ואתם תחברו שוב.",
+  "Leave anyway": "לצאת בכל זאת",
+  "Joining the vault failed and its outcome could not be confirmed.":
+    "ההצטרפות לכספת נכשלה ולא ניתן היה לאשר מה קרה בסופו של דבר.",
+  "Joining the vault failed, and the vault key it stored could not be removed.":
+    "ההצטרפות לכספת נכשלה, ולא ניתן היה להסיר את מפתח הכספת ששמרה.",
+  "The other device already has your vault key. It is not sent again.":
+    "למכשיר האחר כבר יש את מפתח הכספת שלכם. הוא לא נשלח שוב.",
+  "Only the vault owner can remove a device under the current rule.":
+    "לפי הכלל הנוכחי, רק בעל הכספת יכול להסיר מכשיר.",
+  "Pause stops this device sending and receiving changes until you resume. Your data stays here.":
+    "ההשהיה עוצרת את שליחת השינויים וקבלתם במכשיר הזה עד שתמשיכו. הנתונים שלכם נשארים כאן.",
+  "Sync is paused on this device, so nothing was sent or received. Resume sync to continue.":
+    "הסנכרון מושהה במכשיר הזה, ולכן דבר לא נשלח ולא התקבל. המשיכו את הסנכרון כדי להמשיך.",
+  "This device isn’t paired with another device yet, so there was nothing to sync.":
+    "המכשיר הזה עדיין לא מחובר למכשיר אחר, ולכן לא היה מה לסנכרן.",
+  "Sync didn’t run on this device. The status above says why.":
+    "הסנכרון לא רץ במכשיר הזה. המצב שלמעלה מסביר מדוע.",
   "Start over": "התחלה מחדש",
   "Pairing was stopped and nothing was sent. Different words on the two screens can mean someone else tried to join — start again, and keep the code on screen only while the other device is scanning it.":
     "החיבור הופסק ושום דבר לא נשלח. מילים שונות בשני המסכים יכולות להעיד שמישהו אחר ניסה להתחבר — התחילו מחדש, והשאירו את הקוד על המסך רק בזמן שהמכשיר האחר סורק אותו.",
@@ -1102,6 +1159,7 @@ export const HEBREW: Record<string, string> = {
     "אין קובץ גיבוי? מכשיר שהנתונים שלכם עדיין נמצאים בו יכול להוסיף את המכשיר הזה דרך סנכרון ← הוספת מכשיר, מה שמעתיק את הכספת ללא קובץ כלל.",
   // UI refresh: month pager, onboarding, existing-user paths.
   "Net worth": "שווי נקי",
+  "As of today": "נכון להיום",
   Insight: "תובנה",
   Trend: "מגמה",
   "Choose month": "בחירת חודש",
@@ -1157,6 +1215,10 @@ export const HEBREW: Record<string, string> = {
   "A small widget has room for one figure.": "בווידג׳ט קטן יש מקום למספר אחד.",
   "Budget to show": "התקציב להצגה",
   "First active budget": "התקציב הפעיל הראשון",
+  "The budget you chose has ended or was removed, so the widget shows this one instead:":
+    "התקציב שבחרתם הסתיים או הוסר, ולכן הווידג׳ט מציג במקומו את התקציב הזה:",
+  "The budget you chose has ended or was removed, and no other budget is active, so the widget asks you to create one.":
+    "התקציב שבחרתם הסתיים או הוסר, ואין תקציב פעיל אחר, ולכן הווידג׳ט מבקש מכם ליצור תקציב.",
   over: "מעל",
   "3 months": "3 חודשים",
   "6 months": "6 חודשים",
@@ -1186,6 +1248,25 @@ export const HEBREW: Record<string, string> = {
   "Hide filters": "הסתרת מסננים",
   "A filter is on": "מסנן פעיל",
   "Search all months": "חיפוש בכל החודשים",
+  "All upcoming": "כל מה שבקרוב",
+  // Audit round 2.
+  "Nothing upcoming": "אין תנועות עתידיות",
+  "Scheduled and recurring transactions show up here until they are due.":
+    "תנועות מתוזמנות וחוזרות מופיעות כאן עד שמגיע מועדן.",
+  "Can’t calculate this amount. Fix it, or clear it.":
+    "לא ניתן לחשב את הסכום הזה. תקנו אותו או נקו אותו.",
+  "Finish the calculation to save.": "סיימו את החישוב כדי לשמור.",
+  Plus: "פלוס",
+  "Automatic rates are on, but recurring transactions weren’t updated":
+    "השערים האוטומטיים פועלים, אך התנועות המחזוריות לא עודכנו",
+  "Qashy will try again the next time it opens.":
+    "Qashy ינסה שוב בפעם הבאה שייפתח.",
+  "Account name is required.": "שם החשבון נדרש.",
+  // Audit round 3: appearance, widgets.
+  "Classic will be applied.": "ערכת Classic תוחל.",
+  "Couldn’t load widget settings": "לא ניתן לטעון את הגדרות הווידג׳טים",
+  "Your widget settings couldn’t be read, so they aren’t shown here. Nothing was changed.":
+    "לא ניתן היה לקרוא את הגדרות הווידג׳טים, ולכן הן לא מוצגות כאן. דבר לא שונה.",
   "Go to latest": "מעבר לאחרונות",
   "Add one for this month, or jump to your latest activity.":
     "הוסיפו תנועה לחודש הזה, או קפצו לפעילות האחרונה.",
@@ -1332,6 +1413,8 @@ export const HEBREW: Record<string, string> = {
   "On track": "בקצב",
   "Over pace": "מעל הקצב",
   "Over budget": "חריגה מהתקציב",
+  "Over target": "מעל היעד",
+  "over target": "חריגה של",
   Projected: "צפי",
   remaining: "נותרו",
 
@@ -1488,8 +1571,29 @@ export const HEBREW: Record<string, string> = {
   "Only the vault owner can change this policy.":
     "רק בעל הכספת יכול לשנות את המדיניות הזו.",
   "Transfer vault ownership": "העברת בעלות על הכספת",
-  "A removal proposal is waiting for more device approvals. Tap that device in the list to add this device’s approval.":
-    "הצעה להסרה ממתינה לאישורים נוספים מהמכשירים. הקישו על המכשיר ברשימה כדי להוסיף את אישור המכשיר הזה.",
+  "A removal is waiting for more approvals. Approve it under Pending removals above.":
+    'הסרה ממתינה לאישורים נוספים. אשרו אותה למעלה, תחת "הסרות ממתינות".',
+  "Pending removals": "הסרות ממתינות",
+  "Approve this removal?": "לאשר את ההסרה הזו?",
+  Approve: "אישור",
+  "Approve removal": "אישור ההסרה",
+  "Couldn’t approve that removal": "לא ניתן לאשר את ההסרה",
+  "This device already approved. It waits for the others.":
+    "המכשיר הזה כבר אישר. ממתינים לאחרים.",
+  "Only devices that were in the vault when this was proposed can approve it.":
+    "רק מכשירים שהיו בכספת כשההסרה הוצעה יכולים לאשר אותה.",
+  "Backup ready — make sure you saved it": "הגיבוי מוכן — ודאו שהוא נשמר",
+  "Qashy can’t tell whether the file was saved or the save dialog was closed. If it wasn’t saved, create the backup again. Your passphrase stays here until you confirm.":
+    "Qashy לא יכול לדעת אם הקובץ נשמר או שחלון השמירה נסגר. אם הוא לא נשמר, צרו את הגיבוי שוב. ביטוי הסיסמה נשאר כאן עד שתאשרו.",
+  "I’ve saved it": "שמרתי אותו",
+  "Camera access is blocked for this site. Allow it in your browser’s site settings, or enter the code instead.":
+    "הגישה למצלמה חסומה באתר הזה. אפשרו אותה בהגדרות האתר בדפדפן, או הזינו את הקוד במקום.",
+  "Enter the code": "הזינו את הקוד",
+  "Still waiting for your data": "עדיין ממתינים לנתונים שלכם",
+  "This device joined your vault, but nothing has arrived yet. Keep the other device open and online, then try again — or check the connection in sync settings.":
+    "המכשיר הזה הצטרף לכספת, אבל עדיין לא הגיע דבר. השאירו את המכשיר האחר פתוח ומחובר לרשת, ואז נסו שוב — או בדקו את החיבור בהגדרות הסנכרון.",
+  "Qashy could not reach secure storage, so there is no key it can show here. Your finance data is untouched.":
+    "Qashy לא הצליח להגיע לאחסון המאובטח, ולכן אין מפתח שאפשר להציג כאן. נתוני הכספים שלכם לא נפגעו.",
   "Couldn’t protect the phrase": "לא ניתן להגן על הביטוי",
   "The phrase was hidden because screenshots could not be blocked. Try again.":
     "הביטוי הוסתר כי לא ניתן היה לחסום צילומי מסך. נסו שוב.",
@@ -1917,7 +2021,6 @@ export const HEBREW: Record<string, string> = {
     "הרשומה הזו השתנתה בחלון אחר. פתחו אותה מחדש ונסו שוב.",
   // CSV row checks.
   "Row number is missing.": "מספר השורה חסר.",
-  "Enter a real calendar date.": "הזינו תאריך אמיתי בלוח השנה.",
   "Currency must be a three-letter code.":
     "המטבע חייב להיות קוד בן שלוש אותיות.",
   "Foreign currency must be a three-letter code.":
@@ -2257,8 +2360,10 @@ export const HEBREW: Record<string, string> = {
     "זהות המכשיר הזה אינה תואמת לכספת שלו.",
   "There is no vault on this device to resume.":
     "אין במכשיר הזה כספת להמשיך בה.",
-  "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.":
-    "החלפת מפתח הסנכרון הופסקה לפני שהמצב המקומי הושלם. ההיסטוריה המקומית שלכם נשמרה; שחזרו את מפתח הכספת התואם לפני שתמשיכו בסנכרון.",
+  "Sync key rotation was interrupted before this device finished updating. Your data and local history are untouched. To get sync working again, use “Replace the vault key” or “Leave this vault” under Danger zone on the sync screen, then pair your devices again.":
+    "החלפת מפתח הסנכרון הופסקה לפני שהמכשיר הזה סיים להתעדכן. הנתונים וההיסטוריה המקומית שלכם לא נפגעו. כדי להחזיר את הסנכרון לפעולה, השתמשו ב״החלפת מפתח הכספת״ או ב״יציאה מהכספת״ תחת ״אזור מסוכן״ במסך הסנכרון, ואז חברו מחדש את המכשירים שלכם.",
+  "Syncing stays stopped on this device until you use “Replace the vault key” or “Leave this vault” in the Danger zone below.":
+    "הסנכרון נשאר מושבת במכשיר הזה עד שתשתמשו ב״החלפת מפתח הכספת״ או ב״יציאה מהכספת״ באזור המסוכן למטה.",
   "There is no vault on this device to rotate.":
     "אין במכשיר הזה כספת שאפשר להחליף לה מפתח.",
   "That is not a complete address. It should start with https://.":
@@ -2502,6 +2607,19 @@ export function createDynamicPatterns(
   const agree = (field: string, masculine: string, feminine: string) =>
     FEMININE_FIELDS.has(fieldKey(field)) ? feminine : masculine;
 
+  /** English when the label has no Hebrew, so a missing translation shows rather than half-translates. */
+  const choiceChrome = (
+    label: string,
+    lead: string,
+    tail: string,
+    frame: (hebrew: string) => string,
+  ) => {
+    const hebrew = translateField(label);
+    return hebrew === fieldKey(label)
+      ? `${lead} ${label}${tail}`
+      : frame(hebrew);
+  };
+
   // Built once by the caller: the table is static, and every non-dictionary string in Hebrew walks it.
   return [
     [
@@ -2520,6 +2638,34 @@ export function createDynamicPatterns(
     [/^2 seconds left$/, () => "נותרו שתי שניות"],
     // Sync, backup, file transfer and custom theme messages. First, so the broader patterns
     // below (`(.+) (value)`, `Remove (.+)`) never claim a message that has its own.
+    [
+      /^Removal proposed · (\d+) of (\d+) approvals$/,
+      (p1, p2) => `הוצעה הסרה · ${p1} מתוך ${p2} אישורים`,
+    ],
+    [
+      /^(\d+) of (\d+) approvals so far$/,
+      (p1, p2) => `${p1} מתוך ${p2} אישורים עד כה`,
+    ],
+    [/^Approve removing (.+)$/, (p1) => `אישור הסרת ${p1}`],
+    [
+      /^Your approval counts toward removing (.+)\. It’s removed once (\d+) of (\d+) devices approve\.$/,
+      (p1, p2, p3) =>
+        `האישור שלכם נספר לטובת הסרת ${p1}. המכשיר יוסר לאחר ש־${p2} מתוך ${p3} מכשירים יאשרו.`,
+    ],
+    [
+      /^This starts a vote to remove (.+)\. It’s removed once (\d+) of (\d+) devices approve\.$/,
+      (p1, p2, p3) =>
+        `זה פותח הצבעה על הסרת ${p1}. המכשיר יוסר לאחר ש־${p2} מתוך ${p3} מכשירים יאשרו.`,
+    ],
+    [/^Choose a date on or after (.+)$/, (p1) => `בחרו תאריך ב־${p1} או אחריו`],
+    [
+      /^Choose a date on or before (.+)$/,
+      (p1) => `בחרו תאריך ב־${p1} או לפניו`,
+    ],
+    [
+      /^Choose a date between (.+) and (.+)$/,
+      (p1, p2) => `בחרו תאריך בין ${p1} ל־${p2}`,
+    ],
     [
       /^(.+) is not an Ed25519 signature\.$/,
       (p1) => `ערך שאינו חתימת Ed25519: ${translateMessage(p1, "he")}.`,
@@ -3135,6 +3281,11 @@ export function createDynamicPatterns(
     [/^Move (\d+) transactions$/, (count) => `העברת ${count} תנועות`],
     [/^The last one is on (.+)\.$/, (date) => `האחרון ב־${date}.`],
     [
+      /^The next payment would be on (.+), after the end date\. Extend the end date, then turn it on\.$/,
+      (date) =>
+        `התשלום הבא יהיה ב־${date}, אחרי תאריך הסיום. יש להאריך את תאריך הסיום ואז להפעיל אותו.`,
+    ],
+    [
       /^Number of times must be (\d+) or less\.$/,
       (count) => `מספר הפעמים חייב להיות ${count} או פחות.`,
     ],
@@ -3202,6 +3353,11 @@ export function createDynamicPatterns(
     [/^Next (.+)$/, (date) => `הבא: ${date}`],
     [/^Effective (.+)$/, (date) => `בתוקף מ־${date}`],
     [/^No transactions in (.+)$/, (month) => `אין תנועות ב${month}`],
+    [
+      /^Totals include all transactions in (.+)$/,
+      (month) => `הסכומים כוללים את כל התנועות ב${month}`,
+    ],
+    [/^Totals are for (.+) only$/, (month) => `הסכומים הם עבור ${month} בלבד`],
     [
       /^Nothing in (.+) matches\. Try another filter, or search all months\.$/,
       (month) => `אין התאמות ב${month}. נסו מסנן אחר, או חפשו בכל החודשים.`,
@@ -3340,6 +3496,10 @@ export function createDynamicPatterns(
       /^Currency (.+) does not match (.+) \((.+)\)\.$/,
       (currency, account, expected) =>
         `המטבע ${currency} אינו תואם לחשבון ${account} (${expected}).`,
+    ],
+    [
+      /^Enter a real calendar date in the (.+) format\.$/,
+      (format) => `הזינו תאריך אמיתי בלוח השנה בפורמט ${format}.`,
     ],
     [/^Unknown account: (.+)$/, (account) => `חשבון לא מוכר: ${account}`],
     [
@@ -3653,6 +3813,15 @@ export function createDynamicPatterns(
     // Account and category deletion confirmations. Each sentence is its own message, so a name
     // or a count never multiplies the combinations.
     [/^Deletes (\d+) transactions\.$/, (count) => `מוחק ${count} תנועות.`],
+    [/^(\d+) to review$/, (count) => `${count} לבדיקה`],
+    [
+      /^(\d+) overdue payments will be posted now\.$/,
+      (count) => `${count} תשלומים שעבר מועדם יירשמו עכשיו.`,
+    ],
+    [
+      /^(\d+) upcoming payments that haven’t been posted yet are removed\.$/,
+      (count) => `${count} תשלומים קרובים שטרם נרשמו יוסרו.`,
+    ],
     [
       /^Deletes (\d+) recurring schedules\.$/,
       (count) => `מוחק ${count} תזמונים חוזרים.`,
@@ -3668,6 +3837,29 @@ export function createDynamicPatterns(
     [
       /^These budgets (.+) would then cover all your spending\.$/,
       (names) => `התקציבים ${names} יכסו אז את כל ההוצאות שלכם.`,
+    ],
+    // The chrome of a ChoiceListField, built from its lowercased label ("Choose foreign
+    // currency"). Last, so no other "Choose ..." message is caught. The label goes through the
+    // dictionary; one with no Hebrew leaves the whole message in English.
+    [
+      /^Choose (.+)$/,
+      (label) =>
+        choiceChrome(label, "Choose", "", (hebrew) => `בחירת ${hebrew}`),
+    ],
+    [
+      /^Close (.+) choices$/,
+      (label) =>
+        choiceChrome(
+          label,
+          "Close",
+          " choices",
+          (hebrew) => `סגירת אפשרויות ${hebrew}`,
+        ),
+    ],
+    [
+      /^Search (.+)$/,
+      (label) =>
+        choiceChrome(label, "Search", "", (hebrew) => `חיפוש ${hebrew}`),
     ],
   ];
 }

@@ -32,8 +32,10 @@ import { PageHero } from "@/components/ui/page-hero";
 import { ScreenContainer } from "@/components/ui/screen-container";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FRANKFURTER_UNSUPPORTED } from "@/data/exchange-rates/frankfurter";
+import { useNow } from "@/hooks/use-now";
 import { AddCardWell } from "@/features/overview/card-gallery-screen";
 import { HoldToCustomize } from "@/features/overview/card-stack-motion";
+import { cumulativeSpend as runningSpend } from "@/features/overview/cumulative-spend";
 import { DropIndicator } from "@/features/overview/edit/drop-indicator";
 import { EditableCardFrame } from "@/features/overview/edit/editable-card-frame";
 import { useCardReorder } from "@/features/overview/edit/use-card-reorder";
@@ -54,6 +56,7 @@ import { useFinanceState } from "@/providers/finance-provider";
 import { useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { useTurnOnAutomaticRates } from "@/features/shared/use-automatic-rates";
+import { startOfMonth, toLocalDate } from "@/utils/date";
 import { amountTone } from "@/utils/labels";
 import { formatMoney } from "@/utils/money";
 
@@ -210,15 +213,16 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
         )
       : 1;
 
+  // Only the days that have happened: the current month stops at today, a past month keeps all
+  // of its days, and a month still ahead has none (so no footer), as the spending chart does.
+  const today = toLocalDate(new Date(useNow()));
   const cumulativeSpend = useMemo(
-    () =>
-      summary.dailySpend.reduce<number[]>((running, day) => {
-        const previous = running.length ? running[running.length - 1] : 0;
-        running.push(previous + day.amountMinor);
-        return running;
-      }, []),
-    [summary.dailySpend],
+    () => runningSpend(summary.dailySpend, today),
+    [summary.dailySpend, today],
   );
+  // The headline is net worth today whichever month is browsed. On any other month than the
+  // current one it could be read as that month's figure, so only there does it say it is today's.
+  const netWorthIsToday = startOfMonth(month) === startOfMonth(today);
 
   // The column-count decision is `contentWidth`'s (the original design's breakpoint), kept
   // separate from the pixel budget cards are packed into (the measured container). A row's
@@ -302,6 +306,11 @@ export const OverviewMonthPage = memo(function OverviewMonthPage({
                       : null),
                   }}
                 />
+                {!netWorthIsToday ? (
+                  <AppText variant="caption" muted>
+                    As of today
+                  </AppText>
+                ) : null}
                 {missingCurrencies.length ? (
                   <View style={{ gap: space.xs }}>
                     <AppText

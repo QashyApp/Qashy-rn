@@ -27,7 +27,7 @@
  */
 
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -39,7 +39,8 @@ import { FormScreen } from "@/components/ui/form-screen";
 import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { StatusPill } from "@/components/ui/status-pill";
-import { saveFile } from "@/features/shared/save-file";
+import { livePeers } from "@/features/sync/sync-summary";
+import { requireHandedOff, saveFile } from "@/features/shared/save-file";
 import { useLocalization } from "@/localization/localization";
 import { useFinanceRepository } from "@/providers/finance-provider";
 import { useSync } from "@/providers/sync-provider";
@@ -67,12 +68,22 @@ import type {
 } from "@/sync/runtime";
 import { BUNDLE_MIME, bundleFileName } from "@/sync/transport/file";
 import { useQashyTheme } from "@/theme/theme";
-import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import {
+  confirmDestructive,
+  errorMessage,
+  showError,
+  showNotice,
+} from "@/utils/confirm";
 import { todayLocal } from "@/utils/date";
 import { hapticSuccess } from "@/services/haptics";
 import { Preview, Tally } from "@/features/sync/transfer/transfer-previews";
 import { Busy, PickedBackup } from "@/features/sync/transfer/transfer-types";
 import { pickBytes, pickText } from "@/features/sync/transfer/pick-files";
+import {
+  clearsPassphrase,
+  nextBackupPhase,
+  type BackupPhase,
+} from "@/features/sync/transfer/backup-phase";
 
 /**
  * Why a `.qashysync` pass did nothing, in the user's terms.
@@ -95,8 +106,16 @@ const BUNDLE_REASONS: Record<Exclude<SyncPassReason, "ok">, string> = {
 const isPrecondition = (reason: keyof typeof BUNDLE_REASONS) =>
   reason === "disabled" || reason === "unpaired";
 
+function reportBundleReason(
+  title: string,
+  reason: keyof typeof BUNDLE_REASONS,
+) {
+  if (isPrecondition(reason)) showNotice(title, BUNDLE_REASONS[reason]);
+  else showError(title, BUNDLE_REASONS[reason]);
+}
+
 export function TransferScreen() {
-  const { radius, space } = useQashyTheme();
+  const { radius, space, tile } = useQashyTheme();
   const { status, refresh, setup, runtime } = useSync();
   const onboardingParam = useLocalSearchParams<{ onboarding?: string }>()
     .onboarding;
@@ -106,12 +125,15 @@ export function TransferScreen() {
   const { t } = useLocalization();
 
   const [busy, setBusy] = useState<Busy>(null);
+  const busyRef = useRef(false);
 
   // Export
   const [lock, setLock] = useState<BackupKeySource["kind"]>("passphrase");
   const [passphrase, setPassphrase] = useState("");
   const [repeated, setRepeated] = useState("");
-  const [saved, setSaved] = useState(false);
+  // The save sheet cannot report whether the file landed anywhere, so this is "ready", not
+  // "saved", until the person says they have it (see `backup-phase.ts`).
+  const [phase, setPhase] = useState<BackupPhase>("idle");
 
   // Restore
   const [picked, setPicked] = useState<PickedBackup | null>(null);
@@ -161,13 +183,17 @@ export function TransferScreen() {
     work: () => Promise<unknown>,
     failure: string,
   ) => {
-    if (busy) return;
+    // A ref, not `busy`: a second tap inside the same render would still see the old state and
+    // start a second save sheet.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(kind);
     try {
       await work();
     } catch (reason) {
       showError(failure, errorMessage(reason, "Nothing was changed."));
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   };
@@ -180,28 +206,61 @@ export function TransferScreen() {
     run(
       "backup",
       async () => {
-        setSaved(false);
+        setPhase((current) => nextBackupPhase(current, "edit"));
         const file = await exportVaultBackup(
           setup,
           lock === "passphrase"
             ? { kind: "passphrase", passphrase }
             : { kind: "recoveryPhrase" },
         );
-        await saveFile(
-          backupFileName(todayLocal()),
-          BACKUP_MIME,
-          file,
-          t("Save Qashy vault backup"),
+        // Throws when the platform has nowhere to hand the file, so "Backup ready" is never shown
+        // for a backup that went nowhere.
+        requireHandedOff(
+          await saveFile(
+            backupFileName(todayLocal()),
+            BACKUP_MIME,
+            file,
+            t("Save Qashy vault backup"),
+          ),
         );
-        // Cleared on success rather than kept for a second export: a passphrase sitting in a
-        // form field is one screenshot, one shoulder, or one handed-over phone away from being
-        // the thing that opens the file it protects.
-        setPassphrase("");
-        setRepeated("");
-        setSaved(true);
+        // Handing the file to the platform is not the same as it being saved: a dismissed share
+        // sheet resolves identically. So the passphrase stays until the person confirms they
+        // have the file (`confirmSaved`), in case they have to export again.
+        setPhase((current) => nextBackupPhase(current, "handedOff"));
       },
       "Couldn’t create the backup",
     );
+
+  /**
+   * Switching how the backup is protected drops the confirm card with it, so a passphrase a backup
+   * was made with goes too: it must never outlive the card whose "I saved it" button is what clears
+   * it. One that no backup used yet stays, so flipping to the recovery phrase and back loses nothing.
+   */
+  const chooseLock = (next: BackupKeySource["kind"]) => {
+    // `backup` sealed the file with the lock and passphrase at the press; changing either before
+    // the hand-off would leave the card describing a file nothing visible opens.
+    if (busy === "backup" || next === lock) return;
+    setLock(next);
+    if (clearsPassphrase("switchLock", phase)) {
+      setPassphrase("");
+      setRepeated("");
+    }
+    setPhase((current) => nextBackupPhase(current, "switchLock"));
+  };
+
+  /**
+   * The person says the file is where they want it. Cleared now rather than kept for a second
+   * export: a passphrase sitting in a form field is one screenshot, one shoulder, or one
+   * handed-over phone away from being the thing that opens the file it protects.
+   */
+  const confirmSaved = () => {
+    if (clearsPassphrase("confirm", phase)) {
+      setPassphrase("");
+      setRepeated("");
+    }
+    setPhase((current) => nextBackupPhase(current, "confirm"));
+    hapticSuccess();
+  };
 
   // -------------------------------------------------------------------------
   // Restore
@@ -273,13 +332,11 @@ export function TransferScreen() {
         await repository.refresh();
         await refresh();
         hapticSuccess();
-        // `showError` is the app's only cross-platform alert, and this is the one moment worth
-        // interrupting for — the screen the user lands on next looks the same whether the
-        // restore worked or silently did nothing.
-        showError(
+        // This is the one moment worth interrupting for — the screen the user lands on next
+        // looks the same whether the restore worked or silently did nothing.
+        showNotice(
           "Backup restored",
           "Your data is back on this device. Your other devices already know it, so sync continues from where the backup left off.",
-          { quiet: true },
         );
         // From onboarding the restored settings have just completed setup, so go straight in.
         router.replace(firstRun ? "/overview" : "/sync");
@@ -299,19 +356,20 @@ export function TransferScreen() {
         setSent(null);
         const bundle = await runtime.exportBundle();
         if (bundle.reason !== "ok") {
-          showError("Nothing to send", BUNDLE_REASONS[bundle.reason], {
-            quiet: isPrecondition(bundle.reason),
-          });
+          reportBundleReason("Nothing to send", bundle.reason);
           return;
         }
+        if (bundle.frames)
+          requireHandedOff(
+            await saveFile(
+              bundleFileName(todayLocal()),
+              BUNDLE_MIME,
+              bundle.text,
+              t("Send Qashy changes"),
+            ),
+          );
+        // After the hand-off, so a file that went nowhere is never reported as sent.
         setSent(bundle);
-        if (!bundle.frames) return;
-        await saveFile(
-          bundleFileName(todayLocal()),
-          BUNDLE_MIME,
-          bundle.text,
-          t("Send Qashy changes"),
-        );
       },
       "Couldn’t create the sync file",
     );
@@ -325,9 +383,7 @@ export function TransferScreen() {
         if (!file) return;
         const outcome = await runtime.importBundle(file);
         if (outcome.reason !== "ok") {
-          showError("Nothing was applied", BUNDLE_REASONS[outcome.reason], {
-            quiet: isPrecondition(outcome.reason),
-          });
+          reportBundleReason("Nothing was applied", outcome.reason);
           return;
         }
         setReceived(outcome);
@@ -342,7 +398,10 @@ export function TransferScreen() {
   return (
     <FormScreen
       maxWidth={720}
-      contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}
+      contentContainerStyle={{
+        gap: space.lg,
+        paddingBottom: space.xxxl + space.sm,
+      }}
     >
       <Card style={{ gap: space.md }}>
         <AppText variant="title">
@@ -382,19 +441,15 @@ export function TransferScreen() {
                 label="A passphrase"
                 icon="textformat"
                 selected={lock === "passphrase"}
-                onPress={() => {
-                  setLock("passphrase");
-                  setSaved(false);
-                }}
+                disabled={busy === "backup"}
+                onPress={() => chooseLock("passphrase")}
               />
               <ChoiceChip
                 label="My recovery phrase"
                 icon="key"
                 selected={lock === "recoveryPhrase"}
-                onPress={() => {
-                  setLock("recoveryPhrase");
-                  setSaved(false);
-                }}
+                disabled={busy === "backup"}
+                onPress={() => chooseLock("recoveryPhrase")}
               />
             </View>
 
@@ -408,9 +463,14 @@ export function TransferScreen() {
                 <FormField
                   label="Passphrase"
                   value={passphrase}
+                  editable={busy !== "backup"}
                   onChangeText={(value) => {
+                    if (busy === "backup") return;
+                    // Editing hides the confirm card, so the copy typed again to confirm the
+                    // passphrase it protected goes with it; what is typed now is a new, unused one.
+                    if (phase === "ready") setRepeated("");
                     setPassphrase(value);
-                    setSaved(false);
+                    setPhase((current) => nextBackupPhase(current, "edit"));
                   }}
                   secureTextEntry
                   autoCapitalize="none"
@@ -424,7 +484,10 @@ export function TransferScreen() {
                 <FormField
                   label="Passphrase again"
                   value={repeated}
-                  onChangeText={setRepeated}
+                  editable={busy !== "backup"}
+                  onChangeText={(value) => {
+                    if (busy !== "backup") setRepeated(value);
+                  }}
                   secureTextEntry
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -459,7 +522,33 @@ export function TransferScreen() {
               }
               onPress={() => void backup()}
             />
-            {saved ? (
+            {phase === "ready" ? (
+              <MotionView
+                variant="up"
+                exit
+                animateLayout
+                style={{ gap: space.sm }}
+              >
+                <StatusPill
+                  label="Backup ready — make sure you saved it"
+                  icon="tray"
+                  tone="warning"
+                  style={{ borderRadius: radius.control }}
+                />
+                <AppText variant="caption" muted>
+                  Qashy can’t tell whether the file was saved or the save dialog
+                  was closed. If it wasn’t saved, create the backup again. Your
+                  passphrase stays here until you confirm.
+                </AppText>
+                <ActionButton
+                  title="I’ve saved it"
+                  icon="checkmark"
+                  variant="secondary"
+                  onPress={confirmSaved}
+                />
+              </MotionView>
+            ) : null}
+            {phase === "confirmed" ? (
               <MotionView variant="up" exit animateLayout>
                 <StatusPill
                   label="Backup saved"
@@ -526,11 +615,18 @@ export function TransferScreen() {
                     />
                     <Tally value={sent.peers} label="Devices covered" />
                   </View>
-                ) : (
+                ) : livePeers(status.peers).length ? (
                   <StatusPill
                     label="Every device is already up to date"
                     icon="checkmark.circle"
                     tone="positive"
+                    style={{ borderRadius: radius.control }}
+                  />
+                ) : (
+                  <StatusPill
+                    label="No other devices yet"
+                    icon="person.2"
+                    tone="neutral"
                     style={{ borderRadius: radius.control }}
                   />
                 )}
@@ -620,7 +716,10 @@ export function TransferScreen() {
                   <FormField
                     label="Passphrase"
                     value={secret}
-                    onChangeText={setSecret}
+                    editable={busy !== "open"}
+                    onChangeText={(value) => {
+                      if (busy !== "open") setSecret(value);
+                    }}
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -631,14 +730,17 @@ export function TransferScreen() {
                   <FormField
                     label="Recovery phrase"
                     value={secret}
-                    onChangeText={setSecret}
+                    editable={busy !== "open"}
+                    onChangeText={(value) => {
+                      if (busy !== "open") setSecret(value);
+                    }}
                     multiline
                     autoCapitalize="none"
                     autoCorrect={false}
                     autoComplete="off"
                     spellCheck={false}
                     numberOfLines={4}
-                    style={{ minHeight: 96 }}
+                    style={{ minHeight: tile.size * 2 + space.lg }}
                     hint={`All ${RECOVERY_WORD_COUNT} words, separated by spaces.`}
                   />
                 )}

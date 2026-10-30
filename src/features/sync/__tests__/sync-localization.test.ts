@@ -192,6 +192,31 @@ function generatedCopy(): Set<string> {
  * `translateDynamic` pattern exists and that the singular has its own entry.
  */
 const assembled: readonly string[] = [
+  // /sync — a below-quorum approval, and a save that had nowhere to go.
+  "Your approval counts toward removing Laptop. It’s removed once 2 of 3 devices approve.",
+  "Sharing isn’t available on this device, so the file couldn’t be saved.",
+  // /sync-pair — the failure and retry sentences after the vault key has (or has not) gone out.
+  "The vault key was not sent.",
+  "This device did not join the vault.",
+  "The other device already received the vault key, but this device could not save it.",
+  "Press “They match” again to finish. The key is not sent a second time.",
+  "This device received the vault key but could not save it, so it did not join.",
+  "The other device may have added it. If it lists this device, remove it there, then pair again.",
+  "This device may still hold the vault key, so it cannot pair again yet. Use “Leave this vault” in the Danger zone of the sync screen on this device first. Then, if the other device lists this device, remove it there, and pair again.",
+  "Leave before finishing?",
+  "The other device already has your vault key, but this device has not saved it as a member yet.",
+  "To finish, choose Cancel and press “They match” again. The key is not sent a second time.",
+  "If you leave anyway, this device will reject the other device’s changes until that device leaves the vault and you pair again.",
+  "Leave anyway",
+  "Joining the vault failed and its outcome could not be confirmed.",
+  "Joining the vault failed, and the vault key it stored could not be removed.",
+  "The other device already has your vault key. It is not sent again.",
+  // /sync — owner-only removal, the Pause explanation, and a manual sync that did nothing.
+  "Only the vault owner can remove a device under the current rule.",
+  "Pause stops this device sending and receiving changes until you resume. Your data stays here.",
+  "Sync is paused on this device, so nothing was sent or received. Resume sync to continue.",
+  "This device isn’t paired with another device yet, so there was nothing to sync.",
+  "Sync didn’t run on this device. The status above says why.",
   // /sync-pair — the pairing-code countdown.
   "1 second left",
   "89 seconds left",

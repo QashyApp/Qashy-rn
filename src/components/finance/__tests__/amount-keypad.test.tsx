@@ -101,7 +101,7 @@ describe("AmountKeypad", () => {
       "12",
       "123",
     ]);
-    await tap("plus");
+    await tap("Plus");
 
     await act(async () => {
       flush();
@@ -140,7 +140,7 @@ describe("AmountKeypad", () => {
     it("ticks for a key that changes the amount, and stays silent for one that does nothing", async () => {
       await renderKeypad("");
       await tap("Delete last character");
-      await tap("plus");
+      await tap("Plus");
       expect(hapticSelection).not.toHaveBeenCalled();
       await tap("1");
       expect(hapticSelection).toHaveBeenCalledTimes(1);

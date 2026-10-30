@@ -215,7 +215,6 @@ export function KitchenSinkScreen() {
                     accentSource === "preset" &&
                     accentHex.toUpperCase() === color
                   }
-                  label={`Use ${color} accent`}
                   onPress={() => {
                     setAccentSource("preset");
                     setAccentHex(color);

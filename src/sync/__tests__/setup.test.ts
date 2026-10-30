@@ -61,6 +61,7 @@ import {
   setEndpoints,
   type SyncSetupDeps,
 } from "@/sync/setup";
+import { withSyncPassLock } from "@/sync/pass-lock";
 import { account, settings, transaction } from "@/sync/oplog/__tests__/helpers";
 
 const NOW_ISO = "2026-06-01T12:00:00.000Z";
@@ -385,6 +386,147 @@ describe("joining a vault someone else holds", () => {
     expect(after?.vaultKey).toEqual(before?.vaultKey);
   });
 
+  /** A storage whose first transaction (the join's own) fails; later ones are real. */
+  const failingJoinTransaction = (
+    storage: MemoryStorageAdapter,
+    { commit }: { commit: boolean },
+  ) => {
+    let calls = 0;
+    return new Proxy(storage, {
+      get: (object, property, receiver) => {
+        if (property !== "transact")
+          return Reflect.get(object, property, receiver);
+        return (...args: Parameters<MemoryStorageAdapter["transact"]>) => {
+          calls += 1;
+          if (calls > 1) return object.transact(...args);
+          return commit
+            ? object
+                .transact(...args)
+                .then(() => Promise.reject(new Error("connection lost")))
+            : Promise.reject(new Error("disk full"));
+        };
+      },
+    });
+  };
+
+  it("takes the stored key back out when the join does not land, so the next attempt can run", async () => {
+    const target = await rig({ records: populated() });
+    const input = joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+      peerNamed("Phone"),
+    ]);
+
+    await expect(
+      adoptVault(
+        {
+          ...target.deps,
+          storage: failingJoinTransaction(target.storage, { commit: false }),
+        },
+        input,
+      ),
+    ).rejects.toThrow("disk full");
+
+    // "This device did not join" has to be true: no key, and no enrolment.
+    expect(await target.keystore.status()).toBe("empty");
+    expect((await readSyncStatus(target.deps)).deviceId).toBe("");
+
+    await adoptVault(target.deps, input);
+    expect(await target.keystore.status()).toBe("unlocked");
+  });
+
+  it("keeps the key when the commit landed and the promise rejected afterwards", async () => {
+    const target = await rig();
+    const input = joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+      peerNamed("Phone"),
+    ]);
+
+    const result = await adoptVault(
+      {
+        ...target.deps,
+        storage: failingJoinTransaction(target.storage, { commit: true }),
+      },
+      input,
+    );
+
+    // Erasing here would leave `sync_meta` naming a device whose key is gone.
+    expect(result.deviceId).toBe(input.identity.deviceId);
+    expect(await target.keystore.status()).toBe("unlocked");
+    expect((await readSyncStatus(target.deps)).deviceId).toBe(
+      input.identity.deviceId,
+    );
+  });
+
+  it("reports both failures when the stored key cannot be removed either", async () => {
+    const target = await rig();
+    const unreliable = new Proxy(target.keystore, {
+      get: (object, property) => {
+        if (property === "erase")
+          return () => Promise.reject(new Error("keystore unavailable"));
+        const value = Reflect.get(object, property, object);
+        return typeof value === "function" ? value.bind(object) : value;
+      },
+    });
+
+    const failure: unknown = await adoptVault(
+      {
+        ...target.deps,
+        keystore: unreliable,
+        storage: failingJoinTransaction(target.storage, { commit: false }),
+      },
+      joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+        peerNamed("Phone"),
+      ]),
+    ).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(
+      (failure as AggregateError).errors.map((error: Error) => error.message),
+    ).toEqual(["disk full", "keystore unavailable"]);
+  });
+
+  it("leaves a stray key the status reports and leaving the vault erases", async () => {
+    const target = await rig();
+    const unreliable = new Proxy(target.keystore, {
+      get: (object, property) => {
+        if (property === "erase")
+          return () => Promise.reject(new Error("keystore unavailable"));
+        const value = Reflect.get(object, property, object);
+        return typeof value === "function" ? value.bind(object) : value;
+      },
+    });
+    const input = joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+      peerNamed("Phone"),
+    ]);
+
+    await adoptVault(
+      {
+        ...target.deps,
+        keystore: unreliable,
+        storage: failingJoinTransaction(target.storage, { commit: false }),
+      },
+      input,
+    ).catch(() => undefined);
+
+    // The sync screen shows "Leave this vault" and the pair screen disables joining only
+    // because the status takes the device id from the key, with no enrolment behind it.
+    const stray = await readSyncStatus(target.deps);
+    expect(stray.keystore).toBe("unlocked");
+    expect(stray.deviceId).toBe(input.identity.deviceId);
+    expect(stray.enabled).toBe(false);
+    await expect(adoptVault(target.deps, input)).rejects.toThrow(
+      /already part of a vault/,
+    );
+
+    await disableSync(target.deps, { forget: true });
+
+    expect(await target.keystore.status()).toBe("empty");
+    expect((await readSyncStatus(target.deps)).deviceId).toBe("");
+    await adoptVault(target.deps, input);
+    expect(await target.keystore.status()).toBe("unlocked");
+  });
+
   it("records one pairing line per peer it was handed", async () => {
     const target = await rig();
     const peers = [peerNamed("Phone"), peerNamed("Tablet")];
@@ -417,6 +559,26 @@ describe("joining a vault someone else holds", () => {
     const after = await target.keystore.read();
     expect(after?.vaultKey).toEqual(before?.vaultKey);
     expect(after?.epoch).toBe(before?.epoch);
+  });
+
+  it("can be run again for the same device without duplicating it", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const joiner = peerNamed("Laptop");
+
+    // The pairing screen retries this when saving failed after the vault key had already been
+    // sent, so a second run has to leave one roster row and one "paired" entry.
+    await recordPairedPeer(target.deps, joiner);
+    await recordPairedPeer(target.deps, joiner);
+
+    expect((await target.roster()).map((peer) => peer.deviceId)).toEqual([
+      joiner.deviceId,
+    ]);
+    expect(
+      (await target.activity()).filter(
+        (entry) => entry.kind === "paired" && entry.peerId === joiner.deviceId,
+      ),
+    ).toHaveLength(1);
   });
 });
 
@@ -582,6 +744,217 @@ describe("rotating the vault key", () => {
 
     // Re-stamping it would rewrite the record of when the device was actually let go.
     expect((await target.roster())[0]?.revokedAt).toBe(NOW_ISO);
+  });
+
+  /**
+   * A storage whose first transaction (the rotation's own) misbehaves and whose later ones —
+   * the epoch check made afterwards — are real. `commit` lets the first one land before it
+   * rejects, which is a commit whose promise failed after the fact.
+   */
+  const failingFirstTransaction = (
+    storage: MemoryStorageAdapter,
+    { commit }: { commit: boolean },
+  ) => {
+    let calls = 0;
+    return new Proxy(storage, {
+      get: (object, property, receiver) => {
+        if (property !== "transact")
+          return Reflect.get(object, property, receiver);
+        return (...args: Parameters<MemoryStorageAdapter["transact"]>) => {
+          calls += 1;
+          if (calls > 1) return object.transact(...args);
+          return commit
+            ? object
+                .transact(...args)
+                .then(() => Promise.reject(new Error("connection lost")))
+            : Promise.reject(new Error("disk full"));
+        };
+      },
+    });
+  };
+
+  it("puts the old key back when the storage transaction fails", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const before = await target.keystore.read();
+    await target.addPeers(peerNamed("Laptop"));
+    const failing = failingFirstTransaction(target.storage, { commit: false });
+
+    await expect(
+      rotateVaultKey({ ...target.deps, storage: failing }),
+    ).rejects.toThrow("disk full");
+
+    // "Nothing was changed" has to be true: the key, the epoch, and the roster are all as before.
+    const after = await target.keystore.read();
+    expect(after?.vaultKey).toEqual(before?.vaultKey);
+    expect(after?.epoch).toBe(INITIAL_EPOCH);
+    const status = await readSyncStatus(target.deps);
+    expect(status.epoch).toBe(INITIAL_EPOCH);
+    expect(status.peers.every((peer) => peer.revokedAt === null)).toBe(true);
+  });
+
+  it("keeps the new key when the commit landed and the promise rejected afterwards", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const before = await target.keystore.read();
+    await target.addPeers(peerNamed("Laptop"));
+    const failing = failingFirstTransaction(target.storage, { commit: true });
+
+    // The rotation did happen, so it is reported as done rather than as a failure.
+    const epoch = await rotateVaultKey({ ...target.deps, storage: failing });
+
+    expect(epoch).toBe(INITIAL_EPOCH + 1);
+    const after = await target.keystore.read();
+    expect(after?.epoch).toBe(INITIAL_EPOCH + 1);
+    expect(after?.vaultKey).not.toEqual(before?.vaultKey);
+    // Keystore and database agree, so a pass is allowed to proceed.
+    const status = await readSyncStatus(target.deps);
+    expect(status.epoch).toBe(INITIAL_EPOCH + 1);
+    expect(status.peers.every((peer) => peer.revokedAt === NOW_ISO)).toBe(true);
+  });
+
+  it("leaves the keystore alone when the stored epoch cannot be read to decide", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const failing = new Proxy(target.storage, {
+      get: (object, property, receiver) =>
+        property === "transact"
+          ? () => Promise.reject(new Error("disk gone"))
+          : Reflect.get(object, property, receiver),
+    });
+    let writes = 0;
+    const counting = new Proxy(target.keystore, {
+      get: (object, property) => {
+        const value = Reflect.get(object, property, object);
+        if (property !== "write") {
+          return typeof value === "function" ? value.bind(object) : value;
+        }
+        return (vault: Parameters<MemoryKeystore["write"]>[0]) => {
+          writes += 1;
+          return object.write(vault);
+        };
+      },
+    });
+
+    const failure: unknown = await rotateVaultKey({
+      ...target.deps,
+      storage: failing,
+      keystore: counting,
+    }).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).message).toMatch(/rotation was interrupted/i);
+    // Only the rotation's own write: no restore on a guess.
+    expect(writes).toBe(1);
+    expect((failure as Error).cause).toBeInstanceOf(AggregateError);
+  });
+
+  it("reports an interrupted rotation, with both causes, when the old key cannot be put back", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const failing = failingFirstTransaction(target.storage, { commit: false });
+    let writes = 0;
+    const unreliable = new Proxy(target.keystore, {
+      get: (object, property) => {
+        if (property !== "write") {
+          const value = Reflect.get(object, property, object);
+          return typeof value === "function" ? value.bind(object) : value;
+        }
+        return (vault: Parameters<MemoryKeystore["write"]>[0]) => {
+          writes += 1;
+          return writes === 1
+            ? object.write(vault)
+            : Promise.reject(new Error("keystore unavailable"));
+        };
+      },
+    });
+
+    const failure: unknown = await rotateVaultKey({
+      ...target.deps,
+      storage: failing,
+      keystore: unreliable,
+    }).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect((failure as Error).message).toMatch(/rotation was interrupted/i);
+    // The recovery path for that state is the one `resumeSync` already refuses to guess past.
+    expect(writes).toBe(2);
+    const cause = (failure as Error).cause as AggregateError;
+    expect(cause).toBeInstanceOf(AggregateError);
+    expect(cause.errors.map((error: Error) => error.message)).toEqual([
+      "disk full",
+      "keystore unavailable",
+    ]);
+  });
+
+  it("waits for a sync pass in flight before touching the key", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    let release: () => void = () => undefined;
+    const pass = withSyncPassLock(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+
+    const rotating = rotateVaultKey(target.deps);
+    // Let everything that is allowed to run, run.
+    for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+    expect((await target.keystore.read())?.epoch).toBe(INITIAL_EPOCH);
+
+    release();
+    await pass;
+    expect(await rotating).toBe(INITIAL_EPOCH + 1);
+    expect((await target.keystore.read())?.epoch).toBe(INITIAL_EPOCH + 1);
+  });
+});
+
+describe("setup steps that share the pass queue", () => {
+  const settle = async () => {
+    for (let tick = 0; tick < 20; tick += 1) await Promise.resolve();
+  };
+
+  it("makes resuming sync wait for a pass in flight", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    await disableSync(target.deps);
+    let release: () => void = () => undefined;
+    const pass = withSyncPassLock(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+
+    const resuming = resumeSync(target.deps);
+    await settle();
+    expect((await readSyncStatus(target.deps)).enabled).toBe(false);
+
+    release();
+    await pass;
+    await resuming;
+    expect((await readSyncStatus(target.deps)).enabled).toBe(true);
+  });
+
+  it("makes leaving the vault wait for a pass in flight, but not merely pausing", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    let release: () => void = () => undefined;
+    const pass = withSyncPassLock(
+      () => new Promise<void>((resolve) => (release = resolve)),
+    );
+
+    await disableSync(target.deps);
+    expect((await readSyncStatus(target.deps)).enabled).toBe(false);
+
+    const leaving = disableSync(target.deps, { forget: true });
+    await settle();
+    expect(await target.keystore.read()).not.toBeNull();
+
+    release();
+    await pass;
+    await leaving;
+    expect((await readSyncStatus(target.deps)).keystore).toBe("empty");
   });
 });
 

@@ -9,6 +9,16 @@ import { AppearanceScreen } from "@/features/more/appearance-screen";
 import type { ThemeDefinition } from "@/theme/themes/types";
 
 const mockUpdateSettings = jest.fn();
+const baseSettings = {
+  revision: 1,
+  locale: "en-US",
+  baseCurrency: "USD",
+  themeId: "classic",
+  themeMode: "light",
+  accentSource: "preset",
+  accentHex: "#5966E9",
+};
+let mockSettings: Record<string, unknown> = baseSettings;
 
 jest.mock("@/theme/theme", () => {
   const actual = jest.requireActual("@/theme/theme");
@@ -47,17 +57,7 @@ jest.mock("@/localization/localization", () => ({
 }));
 
 jest.mock("@/providers/finance-provider", () => {
-  const settingsState = () => ({
-    settings: {
-      revision: 1,
-      locale: "en-US",
-      baseCurrency: "USD",
-      themeId: "classic",
-      themeMode: "light",
-      accentSource: "preset",
-      accentHex: "#5966E9",
-    },
-  });
+  const settingsState = () => ({ settings: mockSettings });
   return {
     useFinanceRepository: () => ({ updateSettings: mockUpdateSettings }),
     useFinanceState: () => settingsState(),
@@ -67,6 +67,7 @@ jest.mock("@/providers/finance-provider", () => {
 
 describe("AppearanceScreen theme selection", () => {
   beforeEach(() => {
+    mockSettings = baseSettings;
     mockUpdateSettings.mockReset();
     mockUpdateSettings.mockResolvedValue({ revision: 2 });
   });
@@ -113,5 +114,57 @@ describe("AppearanceScreen theme selection", () => {
       ),
     );
     expect(mockUpdateSettings).toHaveBeenCalledTimes(1);
+  });
+
+  it("follows the settings revision when only other settings changed, so Save still works", async () => {
+    const view = await render(<AppearanceScreen />);
+    // A font override (not a field of this form) bumps the settings revision.
+    mockSettings = { ...baseSettings, revision: 2, fontTextOverride: "rubik" };
+    await view.rerender(<AppearanceScreen />);
+    await fireEvent.press(screen.getByRole("radio", { name: "Dark" }));
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Save appearance$/ }),
+    );
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ themeMode: "dark" }),
+        2,
+      ),
+    );
+  });
+
+  it("keeps the stale revision when the form's own fields changed under unsaved edits", async () => {
+    const view = await render(<AppearanceScreen />);
+    await fireEvent.press(screen.getByRole("radio", { name: "Dark" }));
+    // Another window saved a different mode while this form had an unsaved edit.
+    mockSettings = { ...baseSettings, revision: 2, themeMode: "system" };
+    await view.rerender(<AppearanceScreen />);
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Save appearance$/ }),
+    );
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ themeMode: "dark" }),
+        1,
+      ),
+    );
+  });
+
+  it("adopts changed fields and the new revision when the form has no unsaved edits", async () => {
+    const view = await render(<AppearanceScreen />);
+    mockSettings = { ...baseSettings, revision: 2, themeMode: "dark" };
+    await view.rerender(<AppearanceScreen />);
+    expect(
+      screen.getByRole("radio", { name: "Dark" }).props.accessibilityState,
+    ).toMatchObject({ checked: true });
+    await fireEvent.press(
+      screen.getByRole("button", { name: /Save appearance$/ }),
+    );
+    await waitFor(() =>
+      expect(mockUpdateSettings).toHaveBeenCalledWith(
+        expect.objectContaining({ themeMode: "dark" }),
+        2,
+      ),
+    );
   });
 });

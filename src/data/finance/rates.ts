@@ -396,6 +396,24 @@ export function postedWithSnapshot(
 }
 
 /**
+ * Whether posting `transaction` on `pricingDate` would succeed right now: the same pricing check
+ * auto-post uses (`postedWithSnapshot`), so a count of "what would post" agrees with generation.
+ * An unpriced occurrence whose rate is not stored yet, or one that cannot be priced at all, stays
+ * upcoming. Pure: it reads `ctx.state` and changes nothing.
+ */
+export function canPostNow(
+  ctx: FinanceContext,
+  transaction: TransactionRecord,
+  pricingDate: string,
+): boolean {
+  try {
+    return postedWithSnapshot(ctx, transaction, pricingDate) !== null;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validates every fetched rate before any state is touched — a caller bug (a bad currency code, a
  * malformed date, a rate that is not a positive number, or a pair converting into something
  * other than the base currency) fails the whole call rather than silently dropping the row

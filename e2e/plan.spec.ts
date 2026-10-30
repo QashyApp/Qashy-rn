@@ -118,7 +118,7 @@ test("shows every category cap and the actual recurring interval", async ({
     .fill("2099-01-01");
   await page.getByRole("button", { name: "Create schedule" }).click();
   await expect(
-    page.getByText(/Every 3 months\. · Next Jan 1, 2099/),
+    page.getByText(/Every 3 months · Next Jan 1, 2099/),
   ).toBeVisible();
 });
 

@@ -50,6 +50,11 @@ export function PreviewVerdict({
   for (const item of outcome.rejected)
     reasons.set(item.reason, (reasons.get(item.reason) ?? 0) + 1);
   const reasonList = [...reasons.entries()];
+  // The exchange-rate advice and its button only help when a rate is what is missing. The text
+  // is the one `MissingExchangeRateError` writes (src/data/finance/rates.ts).
+  const missingRate = reasonList.some(([reason]) =>
+    reason.startsWith("Missing exchange rate"),
+  );
   const replacedAny =
     mode === "replace" &&
     outcome.rejected.length === 0 &&
@@ -57,7 +62,7 @@ export function PreviewVerdict({
 
   return (
     <View style={{ gap: space.md }}>
-      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+      <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
         <StatTile
           value={totalOf(outcome.created)}
           label="To add"
@@ -129,17 +134,25 @@ export function PreviewVerdict({
               {t(`+${reasonList.length - 4} more`)}
             </AppText>
           ) : null}
-          <AppText variant="caption" muted>
-            Nothing can be imported until these are fixed. For missing exchange
-            rates, turn on automatic rates or add manual rates in More →
-            Exchange rates, then preview again.
-          </AppText>
-          <ActionButton
-            title="Open exchange rates"
-            icon="arrow.left.arrow.right"
-            variant="secondary"
-            onPress={() => router.push("/exchange-rates")}
-          />
+          {missingRate ? (
+            <>
+              <AppText variant="caption" muted>
+                Nothing can be imported until these are fixed. For missing
+                exchange rates, turn on automatic rates or add manual rates in
+                More → Exchange rates, then preview again.
+              </AppText>
+              <ActionButton
+                title="Open exchange rates"
+                icon="arrow.left.arrow.right"
+                variant="secondary"
+                onPress={() => router.push("/exchange-rates")}
+              />
+            </>
+          ) : (
+            <AppText variant="caption" muted>
+              Fix these and try again.
+            </AppText>
+          )}
           <TextButton
             title="Preview again"
             icon="arrow.clockwise"

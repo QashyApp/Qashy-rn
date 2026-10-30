@@ -11,6 +11,8 @@ let mockPlaced: { id: number; kind: "quickAdd" | "budget" }[] = [];
 let mockParams: { widgetId?: string } = {};
 let mockSettings: WidgetSettings = { hideAmounts: false, widgets: {} };
 let mockReadGate: Promise<void> | null = null;
+// The budgets the widget can show today; the repository only reports these (ended ones are left out).
+let mockActiveBudgets: { id: string; name: string }[] = [];
 const mockListeners = new Set<() => void>();
 
 jest.mock("expo-router", () => ({
@@ -51,6 +53,9 @@ jest.mock("@/features/more/widget-transparency-slider", () => {
   };
 });
 jest.mock("@/providers/finance-provider", () => ({
+  useFinanceRepository: () => ({
+    getBudgetStatuses: () => mockActiveBudgets.map((budget) => ({ budget })),
+  }),
   useFinanceState: () => ({
     budgets: [
       { id: "b1", name: "Groceries", archived: false },
@@ -84,6 +89,7 @@ describe("WidgetsScreen", () => {
     mockParams = {};
     mockSettings = { hideAmounts: false, widgets: {} };
     mockReadGate = null;
+    mockActiveBudgets = [{ id: "b1", name: "Groceries" }];
     mockListeners.clear();
   });
 
@@ -142,6 +148,47 @@ describe("WidgetsScreen", () => {
       budgetId: "b1",
     });
     expect(mockSettings.widgets["7"]).toBeUndefined();
+  });
+
+  it("offers only budgets the widget can show and says when the chosen one has ended", async () => {
+    mockPlaced = [{ id: 7, kind: "budget" }];
+    mockSettings = {
+      hideAmounts: false,
+      widgets: {
+        "7": { ...defaultWidgetConfig("budget"), budgetId: "b-ended" },
+      },
+    };
+    await render(<WidgetsScreen />);
+    await settle();
+    expect(screen.getByRole("radio", { name: "Groceries" })).toBeTruthy();
+    // The saved choice is not active: nothing is marked selected and the note says what is shown.
+    expect(
+      screen.getByRole("radio", { name: "First active budget" }).props
+        .accessibilityState,
+    ).toMatchObject({ checked: false });
+    expect(
+      screen.getByText(
+        "The budget you chose has ended or was removed, so the widget shows this one instead:",
+      ),
+    ).toBeTruthy();
+  });
+
+  it("explains when the chosen budget has ended and no other is active", async () => {
+    mockActiveBudgets = [];
+    mockPlaced = [{ id: 7, kind: "budget" }];
+    mockSettings = {
+      hideAmounts: false,
+      widgets: {
+        "7": { ...defaultWidgetConfig("budget"), budgetId: "b-ended" },
+      },
+    };
+    await render(<WidgetsScreen />);
+    await settle();
+    expect(
+      screen.getByText(
+        "The budget you chose has ended or was removed, and no other budget is active, so the widget asks you to create one.",
+      ),
+    ).toBeTruthy();
   });
 
   it("toggles hide amounts through the atomic update", async () => {

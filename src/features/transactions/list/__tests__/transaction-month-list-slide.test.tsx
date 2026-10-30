@@ -85,9 +85,18 @@ const mockTransactions = [
   tx("c2", "2026-10-01"),
 ];
 
+// What the repository answers, and the queries it was asked.
+let mockRows: TransactionRecord[] = mockTransactions;
+const mockQuery = jest.fn((..._args: unknown[]) => mockRows);
+
 jest.mock("@/providers/finance-provider", () => ({
-  useFinanceRepository: () => ({ queryTransactions: () => mockTransactions }),
-  useFinanceState: () => ({ transactions: mockTransactions, categories: [] }),
+  useFinanceRepository: () => ({ queryTransactions: mockQuery }),
+  useFinanceState: () => ({
+    transactions: mockTransactions,
+    categories: [],
+    accounts: [],
+    tags: [],
+  }),
 }));
 
 const noop = jest.fn();
@@ -131,5 +140,68 @@ describe("TransactionMonthList month slide", () => {
     await render(<TransactionMonthList {...props} kind="expense" />);
     // Oct 30 (header + 1), Oct 20 (header + 2), Oct 10 (header + 1).
     expect(orders()).toEqual([0, 0, 1, 1, 1, 2, 2]);
+  });
+});
+
+describe("TransactionMonthList scope", () => {
+  beforeEach(() => {
+    mockRows = mockTransactions;
+    mockQuery.mockClear();
+  });
+
+  it("asks for the month's range, but not for Upcoming or a search across months", async () => {
+    await render(<TransactionMonthList {...props} />);
+    expect(mockQuery.mock.calls.at(-1)?.[0]).toMatchObject({
+      fromDate: "2026-10-01",
+      toDate: "2026-10-31",
+    });
+
+    await render(<TransactionMonthList {...props} kind="upcoming" />);
+    const upcoming = mockQuery.mock.calls.at(-1)?.[0] as Record<
+      string,
+      unknown
+    >;
+    expect(upcoming.fromDate).toBeUndefined();
+    expect(upcoming.toDate).toBeUndefined();
+    expect(upcoming.statuses).toEqual(["upcoming"]);
+
+    await render(<TransactionMonthList {...props} allMonths />);
+    expect(
+      (mockQuery.mock.calls.at(-1)?.[0] as Record<string, unknown>).fromDate,
+    ).toBeUndefined();
+  });
+
+  it("gives an empty Upcoming its own message, with nothing to clear", async () => {
+    mockRows = [];
+    await render(<TransactionMonthList {...props} kind="upcoming" />);
+    expect(screen.getByText("Nothing upcoming")).toBeTruthy();
+    expect(screen.queryByText("Nothing matches")).toBeNull();
+    expect(screen.queryByText("Clear filters")).toBeNull();
+    expect(screen.queryByText(/Nothing in/)).toBeNull();
+  });
+
+  it("says nothing about a month when a search over Upcoming finds nothing", async () => {
+    mockRows = [];
+    await render(
+      <TransactionMonthList {...props} kind="upcoming" search="rent" />,
+    );
+    expect(screen.getByText("Nothing matches")).toBeTruthy();
+    expect(screen.getByText("Try another search or filter.")).toBeTruthy();
+    expect(screen.getByText("Clear filters")).toBeTruthy();
+    expect(screen.queryByText(/Nothing in/)).toBeNull();
+  });
+
+  it("puts the year on a day that is not in the current year, and only on that day", async () => {
+    const thisYear = new Date().getFullYear();
+    mockRows = [tx("now", `${thisYear}-01-15`), tx("old", "2019-03-05")];
+    await render(<TransactionMonthList {...props} />);
+    const headers = screen
+      .getAllByText(/Jan 15|Mar 5/)
+      .map((node) => String(node.props.children));
+    expect(headers).toHaveLength(2);
+    const old = headers.find((text) => text.includes("Mar 5"));
+    const current = headers.find((text) => text.includes("Jan 15"));
+    expect(old).toContain("2019");
+    expect(current).not.toContain(String(thisYear));
   });
 });

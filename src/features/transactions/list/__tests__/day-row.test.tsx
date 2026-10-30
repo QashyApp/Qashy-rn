@@ -34,7 +34,14 @@ jest.mock("@/services/haptics", () => ({
 // The row's own content needs the finance snapshot; here it only has to be there.
 jest.mock("@/components/finance/transaction-row", () => {
   const { View: Host } = jest.requireActual("react-native");
-  return { TransactionRow: () => <Host testID="row-content" /> };
+  return {
+    TransactionRow: ({ showDate }: { showDate?: boolean }) => (
+      <Host
+        testID="row-content"
+        accessibilityHint={showDate ? "dated" : "undated"}
+      />
+    ),
+  };
 });
 
 // The flash is hidden from assistive technology, which is also what the default queries skip.
@@ -46,7 +53,7 @@ const item = {
   status: "posted",
 } as unknown as TransactionRecord;
 
-function renderRow(flashes: number) {
+function renderRow(flashes: number, showDate?: boolean) {
   return render(
     <DayRow
       item={item}
@@ -56,6 +63,7 @@ function renderRow(flashes: number) {
       selected={false}
       paying={false}
       selectionMode={false}
+      showDate={showDate}
       flashes={flashes}
       flashToken={1}
       onFlashDone={jest.fn()}
@@ -101,6 +109,20 @@ describe("DayRow", () => {
     expect(siblings[flashAt]).toMatchObject({
       props: { testID: "row-flash", pointerEvents: "none" },
     });
+  });
+
+  it("leaves the date to its day header by default", async () => {
+    await renderRow(0);
+    expect(screen.getByTestId("row-content").props.accessibilityHint).toBe(
+      "undated",
+    );
+  });
+
+  it("shows the row's date when asked to, as in the upcoming group", async () => {
+    await renderRow(0, true);
+    expect(screen.getByTestId("row-content").props.accessibilityHint).toBe(
+      "dated",
+    );
   });
 
   it("draws no flash for a row that was not just saved", async () => {

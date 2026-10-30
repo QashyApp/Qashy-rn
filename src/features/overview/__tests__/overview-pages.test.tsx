@@ -141,6 +141,23 @@ jest.mock("@/providers/exchange-rate-provider", () => ({
   useExchangeRateStatus: () => ({ enabled: true, lastError: null }),
 }));
 
+// The Coming up card's deferred actions need the finance providers; the screen only hosts them.
+jest.mock("@/features/overview/widgets/upcoming-actions", () => {
+  const { createContext } = jest.requireActual("react");
+  return {
+    UpcomingActionsContext: createContext(null),
+    useUpcomingRowActions: () => ({
+      actions: {
+        hiddenIds: new Set(),
+        paidIds: new Set(),
+        resolve: jest.fn(),
+      },
+      pending: [],
+      undo: jest.fn(),
+    }),
+  };
+});
+
 jest.mock("@/features/shared/use-automatic-rates", () => ({
   useTurnOnAutomaticRates: () => ({ turningOn: false, turnOn: jest.fn() }),
 }));

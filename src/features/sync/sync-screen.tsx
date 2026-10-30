@@ -42,6 +42,7 @@ import { RelayCard } from "@/features/sync/relay-card";
 import { describeActivity, summarizeSync } from "@/features/sync/sync-summary";
 import { useLocalization } from "@/localization/localization";
 import { useSync } from "@/providers/sync-provider";
+import { ROTATION_INTERRUPTED_MESSAGE } from "@/sync/rotation";
 import { disableSync, resumeSync, rotateVaultKey } from "@/sync/setup";
 import type { RelayHealth } from "@/sync/transport/relay-health";
 import { materialStyle } from "@/theme/materials";
@@ -56,11 +57,20 @@ import { useNow } from "@/hooks/use-now";
 type Busy = "pause" | "resume" | "rotate" | "leave" | null;
 
 export function SyncScreen() {
-  const { status, syncing, error, refresh, reconcile, checkRelay, setup } =
-    useSync();
+  const {
+    status,
+    syncing,
+    error,
+    pass,
+    clearError,
+    refresh,
+    reconcile,
+    checkRelay,
+    setup,
+  } = useSync();
   const theme = useQashyTheme();
-  const { radius, space } = theme;
-  const rowDividerInset = 38 + space.md;
+  const { radius, space, tile, iconSize } = theme;
+  const rowDividerInset = tile.size + space.md;
   const { t } = useLocalization();
 
   /**
@@ -74,6 +84,9 @@ export function SyncScreen() {
   const [probed, setProbed] = useState<RelayHealth | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const busyRef = useRef(false);
+  // A manual sync that did nothing, so the person who asked is told why instead of watching the
+  // spinner stop. Set from that attempt's own result; nothing schedules it.
+  const [skipped, setSkipped] = useState(false);
 
   // Read once per render, and passed down. Every relative time on the screen then agrees with
   // every other one, which a per-component clock read cannot promise. Above the early return
@@ -114,6 +127,7 @@ export function SyncScreen() {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(kind);
+    setSkipped(false);
     let acted = false;
     try {
       await work();
@@ -140,7 +154,13 @@ export function SyncScreen() {
 
   /** The provider reports a failed pass on its own banner, so only a finished one buzzes here. */
   const syncNow = async () => {
+    // A rotation replaces the key and epoch a pass seals under (and runs in the same queue as the
+    // passes), so nothing here starts one while it owns the screen. The ref covers a tap that
+    // lands before the next render; pull-to-refresh arrives here too.
+    if (busyRef.current) return;
+    setSkipped(false);
     if (await reconcile()) hapticSuccess();
+    else setSkipped(true);
   };
 
   const rotate = async () => {
@@ -149,13 +169,18 @@ export function SyncScreen() {
       // The cost is the headline, not a footnote. Someone doing this after losing a phone needs
       // to know before they start that they will be re-pairing everything they still own.
       message:
-        "Every device is removed and must be paired again, including this one’s partners. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.",
+        "Every other device is removed from the vault and has to be paired with this one again. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.",
       confirmLabel: "Replace key",
     });
     if (!confirmed) return;
     await run(
       "rotate",
-      () => rotateVaultKey(setup),
+      // Serialized with sync passes inside `rotateVaultKey` itself (the pass lock). The new key
+      // resolves an interrupted rotation, and no pass follows that could clear its banner.
+      async () => {
+        await rotateVaultKey(setup);
+        clearError();
+      },
       "Couldn’t replace the vault key",
       true,
     );
@@ -171,7 +196,11 @@ export function SyncScreen() {
     if (!confirmed) return;
     await run(
       "leave",
-      () => disableSync(setup, { forget: true }),
+      async () => {
+        await disableSync(setup, { forget: true });
+        // Whatever the last pass reported belongs to a vault this device is no longer in.
+        clearError();
+      },
       "Couldn’t leave the vault",
       true,
     );
@@ -206,8 +235,8 @@ export function SyncScreen() {
             <View
               style={[
                 {
-                  width: 64,
-                  height: 64,
+                  width: tile.size + space.xxl,
+                  height: tile.size + space.xxl,
                   borderRadius: radius.pill,
                   alignItems: "center",
                   justifyContent: "center",
@@ -218,7 +247,7 @@ export function SyncScreen() {
               <AppIcon
                 name={summary.icon}
                 color={toneColor(theme, summary.tone)}
-                size={28}
+                size={iconSize.xl}
               />
             </View>
             <View style={{ flex: 1, gap: space.xxs, minWidth: 0 }}>
@@ -240,7 +269,7 @@ export function SyncScreen() {
                 title={syncing ? "Syncing…" : "Sync now"}
                 icon="arrow.triangle.2.circlepath"
                 busy={syncing}
-                disabled={syncing}
+                disabled={syncing || Boolean(busy)}
                 onPress={() => void syncNow()}
               />
             ) : (
@@ -277,6 +306,23 @@ export function SyncScreen() {
               />
             ) : null}
           </View>
+          {paired && status.enabled ? (
+            <AppText variant="caption" muted>
+              Pause stops this device sending and receiving changes until you
+              resume. Your data stays here.
+            </AppText>
+          ) : null}
+          {skipped && !error && !syncing && pass && pass.reason !== "ok" ? (
+            <AppText variant="caption" muted accessibilityLiveRegion="polite">
+              {/* Chosen from this device's own state: a pass on a device that was never set up
+                  reports "disabled" before it checks for a vault. */}
+              {pass.reason === "disabled" && paired
+                ? "Sync is paused on this device, so nothing was sent or received. Resume sync to continue."
+                : pass.reason === "disabled" || pass.reason === "unpaired"
+                  ? "This device isn’t paired with another device yet, so there was nothing to sync."
+                  : "Sync didn’t run on this device. The status above says why."}
+            </AppText>
+          ) : null}
           {status.pending ? (
             <AppText variant="caption" muted>
               Some changes on this device are still being signed. They go out on
@@ -298,8 +344,15 @@ export function SyncScreen() {
             <AppText literal selectable variant="caption" muted>
               {t(error)}
             </AppText>
+            {/* An interrupted rotation does not retry: every pass refuses until the person picks
+                one of the two Danger zone exits, so say that instead of promising a retry. Those
+                exits exist only while paired. */}
             <AppText variant="caption" muted>
-              Your data is untouched, and the next sync retries on its own.
+              {paired && error === ROTATION_INTERRUPTED_MESSAGE
+                ? "Syncing stays stopped on this device until you use “Replace the vault key” or “Leave this vault” in the Danger zone below."
+                : paired
+                  ? "Your data is untouched, and the next sync retries on its own."
+                  : "Your data is untouched."}
             </AppText>
           </Card>
         </MotionView>
@@ -416,8 +469,8 @@ export function SyncScreen() {
 
 const containerStyle = (space: SpaceScale) =>
   ({
-    padding: 18,
-    paddingBottom: 40,
+    padding: space.lg,
+    paddingBottom: space.xxxl + space.sm,
     gap: space.lg,
     width: "100%",
     maxWidth: 720,

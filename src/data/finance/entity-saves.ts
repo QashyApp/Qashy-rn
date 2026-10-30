@@ -169,6 +169,8 @@ export function planGoalSave(
   contribution?: GoalContributionInput,
   id?: string,
   expectedRevision?: number,
+  /** Saves `contribution` over this existing one (an edit) instead of adding a new one. */
+  editContribution?: { id: string; expectedRevision?: number },
 ) {
   const normalized = validateGoal(ctx, input, id);
   const existing = findExisting(ctx.state.goals, id, "goal");
@@ -189,16 +191,30 @@ export function planGoalSave(
     ) {
       throw new Error("Choose a valid transaction.");
     }
-    contributionEntity = createEntity({
-      id: makeId(),
+    const editing = findExisting(
+      ctx.state.contributions,
+      editContribution?.id,
+      "contribution",
+    );
+    if (editing && editing.goalId !== goal.id)
+      throw new Error("Could not find the contribution to update.");
+    assertExpectedRevision(
+      editing,
+      contribution,
+      editContribution?.expectedRevision,
+    );
+    const values = {
       ...contribution,
       goalId: goal.id,
       note: contribution.note.trim(),
-    }) as GoalContribution;
+    };
+    contributionEntity = editing
+      ? updateEntity(editing, values)
+      : (createEntity({ id: makeId(), ...values }) as GoalContribution);
   }
   const goals = withEntity(ctx.state.goals, goal);
   const contributions = contributionEntity
-    ? [...ctx.state.contributions, contributionEntity]
+    ? withEntity(ctx.state.contributions, contributionEntity)
     : ctx.state.contributions;
   assertGoalProgressSafe(ctx, goal.id, goals, contributions);
   return { goal, contributionEntity };

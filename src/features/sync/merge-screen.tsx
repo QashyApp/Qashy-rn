@@ -252,7 +252,7 @@ export function MergeScreen() {
                 setMerged(null);
               }}
             />
-            <Card variant="list" dividerInset={38 + space.md}>
+            <Card variant="list" dividerInset={theme.tile.size + space.md}>
               {rows.map((group) => (
                 <GroupRow
                   key={keyOf(group)}
@@ -320,8 +320,8 @@ export function MergeScreen() {
 
 const containerStyle = (space: SpaceScale) =>
   ({
-    padding: 18,
-    paddingBottom: 40,
+    padding: space.lg,
+    paddingBottom: space.xxxl + space.sm,
     gap: space.lg,
     width: "100%",
     maxWidth: 720,
@@ -380,7 +380,7 @@ function GroupRow({
       pressedScale={0.985}
       stateLayerShape="container"
       style={({ pressed }) => ({
-        minHeight: 58,
+        minHeight: theme.tile.size + space.lg,
         flexDirection: "row",
         alignItems: "center",
         gap: space.md,
@@ -393,8 +393,8 @@ function GroupRow({
         <View
           style={[
             {
-              width: 38,
-              height: 38,
+              width: theme.tile.size,
+              height: theme.tile.size,
               borderRadius: radius.control,
               borderCurve: "continuous",
               alignItems: "center",
@@ -406,15 +406,15 @@ function GroupRow({
           <AppIcon
             name="exclamationmark.triangle"
             color={theme.warning}
-            size={18}
+            size={theme.iconSize.md}
           />
         </View>
       ) : (
-        <View style={{ width: 38, alignItems: "center" }}>
+        <View style={{ width: theme.tile.size, alignItems: "center" }}>
           <View
             style={{
-              width: 24,
-              height: 24,
+              width: theme.iconSize.lg,
+              height: theme.iconSize.lg,
               borderRadius: radius.sm,
               borderWidth: 2,
               borderColor: checked ? theme.accent : theme.border,
@@ -425,7 +425,11 @@ function GroupRow({
           >
             {checked ? (
               <MotionView variant="zoom" exit>
-                <AppIcon name="checkmark" color={theme.onAccent} size={16} />
+                <AppIcon
+                  name="checkmark"
+                  color={theme.onAccent}
+                  size={theme.iconSize.sm}
+                />
               </MotionView>
             ) : null}
           </View>
@@ -439,7 +443,11 @@ function GroupRow({
         <View
           style={{ flexDirection: "row", alignItems: "center", gap: space.sm }}
         >
-          <AppIcon name={icon} color={theme.textMuted} size={14} />
+          <AppIcon
+            name={icon}
+            color={theme.textMuted}
+            size={theme.iconSize.sm - 2}
+          />
           <AppText
             literal
             variant="label"

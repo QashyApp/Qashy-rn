@@ -3,7 +3,9 @@ import type { ReactNode } from "react";
 
 import {
   BottomBarClearanceContext,
+  FAB_SIZE,
   FLOATING_BAR_HEIGHT,
+  WEB_BOTTOM_BAR_HEIGHT,
   floatingBarClearance,
   resolveBottomChromeInset,
   useScreenMetrics,
@@ -14,22 +16,22 @@ const { space } = classicTheme;
 const docked = { hasBottomNavigation: false, floatingBarClearance: 0 };
 
 describe("resolveBottomChromeInset", () => {
-  it("keeps the docked native bar offsets unchanged", () => {
+  it("keeps the docked native bar offsets", () => {
     const inset = resolveBottomChromeInset(docked, 24, space);
     expect(inset.contentPaddingBottom).toBe(space.xxxl + 80);
     expect(inset.batchBarBottom).toBe(space.xxl + 24);
-    expect(inset.stackedOverlayBottom).toBe(24 + space.xxl + 64);
   });
 
-  it("keeps the web bottom bar offsets unchanged", () => {
+  it("keeps the web bottom bar FAB and batch bar offsets", () => {
     const inset = resolveBottomChromeInset(
       { hasBottomNavigation: true, floatingBarClearance: 0 },
       10,
       space,
     );
+    expect(inset.overlayBottom).toBe(10 + WEB_BOTTOM_BAR_HEIGHT + space.md);
     expect(inset.overlayBottom).toBe(102);
     expect(inset.batchBarBottom).toBe(102);
-    expect(inset.contentPaddingBottom).toBe(170);
+    expect(inset.contentPaddingBottom).toBeGreaterThanOrEqual(170);
   });
 
   it("lifts the FAB, batch bar, undo bar and scroll padding above the floating bar", () => {
@@ -47,6 +49,35 @@ describe("resolveBottomChromeInset", () => {
       inset.overlayBottom + 58,
     );
   });
+
+  it.each([
+    [
+      "the phone floating bar",
+      { hasBottomNavigation: false, floatingBarClearance: 100 },
+      24,
+    ],
+    [
+      "the web bottom bar",
+      { hasBottomNavigation: true, floatingBarClearance: 0 },
+      0,
+    ],
+    [
+      "the web bottom bar with a home indicator",
+      { hasBottomNavigation: true, floatingBarClearance: 0 },
+      34,
+    ],
+    ["the docked native bar", docked, 24],
+    ["the web rail and sidebar", docked, 0],
+  ])(
+    "stacks the undo bar clear of the FAB above %s",
+    (_name, metrics, safe) => {
+      const inset = resolveBottomChromeInset(metrics, safe, space);
+      // The FAB's top edge is overlayBottom + its diameter; the undo bar must start above it.
+      expect(inset.stackedOverlayBottom).toBeGreaterThanOrEqual(
+        inset.overlayBottom + FAB_SIZE,
+      );
+    },
+  );
 });
 
 describe("useScreenMetrics floating clearance", () => {

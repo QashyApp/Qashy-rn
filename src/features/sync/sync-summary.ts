@@ -197,14 +197,23 @@ export function summarizeSync(
   }
 
   const synced = relativeTime(status.lastSyncedAt ?? "", options.now);
+  // Paired, but no pass has ever finished: "Up to date" would claim a comparison that never
+  // happened, so say what is true and leave the green check for a device that has synced.
+  if (!synced) {
+    return {
+      tone: "neutral",
+      icon: "arrow.triangle.2.circlepath",
+      subtitle: devices,
+      headline: "Not synced yet",
+      body: "Paired and ready. Sync now to exchange changes with your other devices.",
+    };
+  }
   return {
     tone: "positive",
     icon: "checkmark.circle",
-    subtitle: synced ? `${devices} · ${synced}` : devices,
+    subtitle: `${devices} · ${synced}`,
     headline: "Up to date",
-    body: synced
-      ? `Last exchanged changes ${synced}.`
-      : "Paired and ready. Nothing has needed to move between your devices yet.",
+    body: `Last exchanged changes ${synced}.`,
   };
 }
 
@@ -223,17 +232,15 @@ export function summarizeSync(
  */
 export function deviceIcon(platform: string): string {
   const value = platform.toLowerCase();
-  if (
-    value.includes("ios") ||
-    value.includes("android") ||
-    value.includes("phone")
-  ) {
-    return "iphone";
-  }
-  if (value.includes("web") || value.includes("browser")) return "globe";
+  // `ion:` ids rather than the legacy SF-style names: they draw the same glyphs but do not name
+  // an Apple product for a platform this app does not run natively on.
+  if (value.includes("android") || value.includes("phone"))
+    return "ion:phone-portrait-outline";
+  if (value.includes("web") || value.includes("browser"))
+    return "ion:globe-outline";
   if (value.includes("mac") || value.includes("laptop"))
-    return "laptopcomputer";
-  return "desktopcomputer";
+    return "ion:laptop-outline";
+  return "ion:desktop-outline";
 }
 
 export interface PeerDescription {

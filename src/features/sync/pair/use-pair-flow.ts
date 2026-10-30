@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
+import { usePreventRemove } from "expo-router/react-navigation";
 import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
@@ -10,6 +11,7 @@ import {
   decodePairingCode,
   normalizeTypedPairingCode,
 } from "@/sync/crypto";
+import type { Peer } from "@/sync/engine";
 import { PairingHost, PairingJoiner } from "@/sync/pairing";
 import {
   adoptVault,
@@ -21,7 +23,7 @@ import {
   type DeviceProfile,
 } from "@/sync/setup";
 import { usePreventScreenCaptureWhile } from "@/features/sync/use-screen-capture-guard";
-import { errorMessage } from "@/utils/confirm";
+import { confirmDestructive, errorMessage } from "@/utils/confirm";
 import { nowIso } from "@/utils/entity";
 import { hapticError, hapticSuccess, hapticWarning } from "@/services/haptics";
 import {
@@ -48,7 +50,13 @@ export function usePairFlow() {
   const [role, setRole] = useState<Role>(firstRun ? "join" : "host");
   const [deviceName, setDeviceName] = useState(defaultDeviceName);
   const [busy, setBusy] = useState(false);
+  // State is stale inside a double tap or a scan that fires twice in one frame; this is what the
+  // in-flight check reads. `busy` only drives the rendering.
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  // A pairing code that was rejected on this device before anything was sent. Shown under the
+  // code field, where the typo is, instead of in the banner at the top of the screen.
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const [code, setCode] = useState<DisplayedPairingCode | null>(null);
   const [remaining, setRemaining] = useState(0);
@@ -57,6 +65,9 @@ export function usePairFlow() {
     headline: string;
     body: string;
   } | null>(null);
+  // First run only: the pull that follows joining has finished (or failed) and the vault's
+  // settings still have not arrived. Set from that pull's own completion, not from a timer.
+  const [receiveSettled, setReceiveSettled] = useState(false);
   const [scannerRearm, setScannerRearm] = useState({
     token: 0,
     keepManual: false,
@@ -70,6 +81,20 @@ export function usePairFlow() {
   // the user has already left (Back, Start over, unmount), so it must not open a session, show
   // words, or navigate.
   const generation = useRef(0);
+  // True once this attempt's vault key has crossed to the other device (the host's `confirm`
+  // resolved, or the joiner received it). The pairing channel is closed by then, so "They match"
+  // can never run `confirm` again: what a failure may claim, and whether pressing it again is
+  // safe, both hang on this.
+  const [keySent, setKeySent] = useState(false);
+  const keySentRef = useRef(false);
+  const markKeySent = () => {
+    keySentRef.current = true;
+    setKeySent(true);
+  };
+  // Host only: the key has gone to the other device and this device has not yet saved it as a
+  // member. The retry lives in `accept`, so leaving the screen now would strand the other device
+  // holding a key that this roster does not list. Leaving is confirmed while this is true.
+  const [handoffUnsaved, setHandoffUnsaved] = useState(false);
 
   /** Ends whatever is in flight. Safe to call repeatedly; that is the point of clearing it. */
   const closeSession = () => {
@@ -78,6 +103,9 @@ export function usePairFlow() {
     session.current?.close();
     session.current = null;
     accept.current = null;
+    keySentRef.current = false;
+    setKeySent(false);
+    setHandoffUnsaved(false);
   };
 
   // Hosting turns sync on (or back on) before any peer exists. If the attempt ends without a
@@ -116,6 +144,37 @@ export function usePairFlow() {
     [],
   );
 
+  // Header back, Android hardware back and the browser's back all end in a removal this
+  // intercepts (the pairing screen is a full-screen push, not a sheet). The dialog has two ways
+  // out: Cancel keeps the screen, where "They match" finishes the local save without re-sending
+  // the key; the confirm button leaves and says what that costs.
+  //
+  // One prompt at a time: on web a second back press while the dialog is open would queue another
+  // confirmation, and Cancel would then be asked again. The flag clears when the prompt resolves.
+  const asking = useRef(false);
+  usePreventRemove(handoffUnsaved, ({ repeat }) => {
+    if (asking.current) return;
+    asking.current = true;
+    void confirmDestructive({
+      title: "Leave before finishing?",
+      message: [
+        "The other device already has your vault key, but this device has not saved it as a member yet.",
+        "To finish, choose Cancel and press “They match” again. The key is not sent a second time.",
+        "If you leave anyway, this device will reject the other device’s changes until that device leaves the vault and you pair again.",
+      ],
+      confirmLabel: "Leave anyway",
+    })
+      .then((confirmed) => {
+        if (!confirmed) return;
+        // Prevention off first, then the blocked navigation repeats and the unmount closes the session.
+        setHandoffUnsaved(false);
+        repeat();
+      })
+      .finally(() => {
+        asking.current = false;
+      });
+  });
+
   // First run ends when the vault's own settings arrive: they carry `onboardingComplete`, which
   // is what opens the rest of the app. Until then the done step says it is still receiving.
   const received = firstRun && stage === "done" && settings.onboardingComplete;
@@ -134,12 +193,25 @@ export function usePairFlow() {
     return () => clearInterval(timer);
   }, [stage, code]);
 
+  /** Claims the single in-flight slot. False means another press already owns it. */
+  const begin = () => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setBusy(true);
+    return true;
+  };
+  const finish = () => {
+    busyRef.current = false;
+    setBusy(false);
+  };
+
   const move = (next: Stage) => {
     setDirection(
       STAGES.indexOf(next) >= STAGES.indexOf(stage) ? "forward" : "back",
     );
     setStage(next);
     setError(null);
+    setCodeError(null);
   };
 
   const profile = (): DeviceProfile => ({
@@ -158,12 +230,13 @@ export function usePairFlow() {
     rollbackAbandonedSetup();
     setSas(null);
     setCode(null);
+    // After the move: `move` clears the error, so a message set before it is never shown.
+    move("role");
     setError(
       t(
         "Pairing was stopped because screenshots could not be blocked on this device. Nothing was sent.",
       ),
     );
-    move("role");
   });
 
   // -------------------------------------------------------------------------
@@ -171,8 +244,7 @@ export function usePairFlow() {
   // -------------------------------------------------------------------------
 
   const startHosting = async () => {
-    if (busy) return;
-    setBusy(true);
+    if (!begin()) return;
     setError(null);
     const began = generation.current;
     try {
@@ -239,13 +311,26 @@ export function usePairFlow() {
         .then((confirmation) => {
           // Cancelled while the peer was still answering: the attempt is gone, so no words.
           if (abort.signal.aborted) return;
+          // Kept across presses. `confirm` runs once (it closes the channel), but recording the
+          // device and refreshing can be repeated, so a failure there retries only those steps and
+          // never sends the key again.
+          let handedTo: Peer | null = null;
+          let recorded = false;
           accept.current = async () => {
-            const { peer } = await confirmation.confirm();
-            // Set as soon as the confirm has sent the vault key to the peer. From here the peer
-            // holds the key on the other side, so a failure recording it locally must not trigger
-            // the rollback that would disable sync here.
-            pairedPeer.current = true;
-            await recordPairedPeer(setup, peer);
+            if (!handedTo) {
+              ({ peer: handedTo } = await confirmation.confirm());
+              // Set as soon as the confirm has sent the vault key to the peer. From here the peer
+              // holds the key on the other side, so a failure recording it locally must not
+              // trigger the rollback that would disable sync here.
+              pairedPeer.current = true;
+              markKeySent();
+              setHandoffUnsaved(true);
+            }
+            if (!recorded) {
+              await recordPairedPeer(setup, handedTo);
+              recorded = true;
+            }
+            setHandoffUnsaved(false);
             await refresh();
             setOutcome({
               headline: "Device added",
@@ -280,7 +365,7 @@ export function usePairFlow() {
         errorMessage(reason, "Sync could not be set up on this device."),
       );
     } finally {
-      setBusy(false);
+      finish();
     }
   };
 
@@ -306,9 +391,9 @@ export function usePairFlow() {
   // -------------------------------------------------------------------------
 
   const startJoining = async (scanned: string) => {
-    if (busy) return;
-    setBusy(true);
+    if (!begin()) return;
     setError(null);
+    setCodeError(null);
     const began = generation.current;
     // The generation this attempt runs under once it owns a session. Stays null until then, so a
     // failure before the handshake is reported as before.
@@ -324,13 +409,14 @@ export function usePairFlow() {
           unixSeconds(),
         );
       } catch (reason) {
-        // Rejected on this device before anything was sent, so what was typed is only a typo.
+        // Rejected on this device before anything was sent, so what was typed is only a typo:
+        // keep the draft for correction and say what is wrong next to it.
         setScannerRearm((value) => ({
           token: value.token + 1,
-          keepManual: false,
+          keepManual: true,
         }));
         hapticError();
-        setError(
+        setCodeError(
           errorMessage(
             reason,
             "That code could not be used. Show a fresh one and try again.",
@@ -364,6 +450,7 @@ export function usePairFlow() {
       if (abort.signal.aborted) return;
       accept.current = async () => {
         const joined = await confirmation.confirm();
+        markKeySent();
         // The identity handed to `adoptVault` must be the one that earned the handshake — the
         // host has already written these exact public keys into its roster, and a fresh
         // identity here would be a device neither side can verify.
@@ -403,7 +490,7 @@ export function usePairFlow() {
         ),
       );
     } finally {
-      setBusy(false);
+      finish();
     }
   };
 
@@ -411,10 +498,21 @@ export function usePairFlow() {
   // The confirmation itself
   // -------------------------------------------------------------------------
 
+  /** One explicit pull for a device that has just joined; also what "Try again" runs. */
+  const pullFirstRun = () => {
+    setReceiveSettled(false);
+    // Queued, so a pass that was already running (a foreground event during pairing) is waited
+    // for and a pass that began after the join runs. Only a pass that ran settles this: the
+    // "still waiting for your data" state must not show while a pass is still in flight.
+    void reconcile({ queue: true })
+      .catch(() => undefined)
+      .finally(() => setReceiveSettled(true));
+  };
+
   const confirmMatch = async () => {
-    if (busy || !accept.current) return;
-    setBusy(true);
+    if (!accept.current || !begin()) return;
     setError(null);
+    const began = generation.current;
     try {
       await accept.current();
       session.current = null;
@@ -424,27 +522,64 @@ export function usePairFlow() {
       // Pull the vault now rather than on the next scheduled pass, so a first-run device is not
       // left on "receiving" for a timer's length. A failure here is advisory; the provider
       // retries and reports it on its own.
-      if (firstRun) void reconcile().catch(() => undefined);
+      if (firstRun) pullFirstRun();
     } catch (reason) {
+      // Back or unmount during the confirmation: the attempt is already closed and reported.
+      if (generation.current !== began) return;
       hapticError();
-      setError(errorMessage(reason, "Pairing could not be completed."));
+      const why = t(errorMessage(reason, "Pairing could not be completed."));
+      if (keySentRef.current && role === "host") {
+        // The other device holds the vault key and this one has not saved it as a member yet.
+        // The key is never re-sent: pressing the button again only repeats the local save.
+        setError(
+          `${t("The other device already received the vault key, but this device could not save it.")} ${t("Press “They match” again to finish. The key is not sent a second time.")}`,
+        );
+        return;
+      }
+      // Either nothing secret left this device, or (a joiner that received the key and could not
+      // store it) the channel is closed and cannot be resumed. Both end the attempt rather than
+      // leave a button that can only fail again.
+      const sentKey = keySentRef.current;
+      closeSession();
+      rollbackAbandonedSetup();
+      setSas(null);
+      setCode(null);
+      move("role");
+      // `adoptVault` erases what it stored when the join does not land, so the first sentence is
+      // true and nothing is left here. Only its own AggregateError says the key may still be
+      // present or the outcome unknown, and its message already says so. In that case the key stays
+      // in the keystore, which refuses a new join until it is erased. `readSyncStatus` takes the
+      // device id from that key, so the sync screen counts the device as paired: it shows the
+      // Danger zone's "Leave this vault" (`disableSync` with `forget`, which erases the key) and
+      // the pair screen disables the join role. Removing the device from the other device is not
+      // enough to pair again; leaving here is.
+      setError(
+        sentKey
+          ? reason instanceof AggregateError
+            ? `${why} ${t("This device may still hold the vault key, so it cannot pair again yet. Use “Leave this vault” in the Danger zone of the sync screen on this device first. Then, if the other device lists this device, remove it there, and pair again.")}`
+            : `${t("This device received the vault key but could not save it, so it did not join.")} ${t("The other device may have added it. If it lists this device, remove it there, then pair again.")}`
+          : `${why} ${t(role === "host" ? "The vault key was not sent." : "This device did not join the vault.")}`,
+      );
     } finally {
-      setBusy(false);
+      finish();
     }
   };
 
   const rejectMatch = () => {
+    // Unreachable once the key is out (the button is disabled); the guard keeps the claim below
+    // from ever being made after it.
+    if (keySentRef.current) return;
     closeSession();
     rollbackAbandonedSetup();
     setSas(null);
     setCode(null);
     hapticWarning();
+    move("role");
     setError(
       t(
         "Pairing was stopped and nothing was sent. Different words on the two screens can mean someone else tried to join — start again, and keep the code on screen only while the other device is scanning it.",
       ),
     );
-    move("role");
   };
 
   // -------------------------------------------------------------------------
@@ -463,9 +598,15 @@ export function usePairFlow() {
     setDeviceName,
     busy,
     error,
+    codeError,
+    clearCodeError: () => setCodeError(null),
+    receiveStalled: firstRun && stage === "done" && receiveSettled && !received,
+    retryReceive: pullFirstRun,
     code,
     remaining,
     sas,
+    // Host only: a joiner that received the key has nothing left to retry.
+    keySent: keySent && role === "host",
     outcome,
     scannerRearm,
     closeSession,

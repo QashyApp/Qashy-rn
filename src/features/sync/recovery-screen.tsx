@@ -53,7 +53,7 @@ const normalize = (phrase: string) =>
 export function RecoveryScreen() {
   const { status, setup } = useSync();
   const theme = useQashyTheme();
-  const { radius, space } = theme;
+  const { radius, space, tile } = theme;
 
   const [phrase, setPhrase] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -144,8 +144,10 @@ export function RecoveryScreen() {
   }
 
   const locked = status.keystore === "locked";
-  const missing =
-    status.keystore === "empty" || status.keystore === "unavailable";
+  // Not the same thing as "no vault": the key may well exist, but this device cannot reach the
+  // storage it lives in, and "set up sync first" would send someone to create a second vault.
+  const unavailable = status.keystore === "unavailable";
+  const missing = status.keystore === "empty";
   const matches = phrase !== null && normalize(typed) === phrase;
   // The words render only once the capture block is confirmed in place, never before.
   const visiblePhrase = protectedNow ? phrase : null;
@@ -164,7 +166,17 @@ export function RecoveryScreen() {
         </AppText>
       </Card>
 
-      {missing ? (
+      {unavailable ? (
+        <Card style={{ gap: space.xs, borderColor: theme.negative }}>
+          <AppText variant="label" style={{ color: theme.negativeText }}>
+            This device can’t store a key safely
+          </AppText>
+          <AppText variant="caption" muted>
+            Qashy could not reach secure storage, so there is no key it can show
+            here. Your finance data is untouched.
+          </AppText>
+        </Card>
+      ) : missing ? (
         <EmptyState
           icon="key"
           title="No vault on this device"
@@ -257,7 +269,7 @@ export function RecoveryScreen() {
                   autoComplete="off"
                   spellCheck={false}
                   numberOfLines={4}
-                  style={{ minHeight: 96 }}
+                  style={{ minHeight: tile.size * 2 + space.lg }}
                   hint={`All ${RECOVERY_WORD_COUNT} words, separated by spaces.`}
                 />
                 {typed.trim() ? (
@@ -305,8 +317,8 @@ export function RecoveryScreen() {
 
 const containerStyle = (space: SpaceScale) =>
   ({
-    padding: 18,
-    paddingBottom: 40,
+    padding: space.lg,
+    paddingBottom: space.xxxl + space.sm,
     gap: space.lg,
     width: "100%",
     maxWidth: 720,

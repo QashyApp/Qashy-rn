@@ -18,7 +18,11 @@ import {
   type FinanceEntity,
 } from "@/domain/models";
 import type { OnboardingInput, SettingsInput } from "@/data/repository";
-import { createDefaultCategories, defaultAccountName } from "@/domain/defaults";
+import {
+  ACCOUNT_TYPE_ICON,
+  createDefaultCategories,
+  defaultAccountName,
+} from "@/domain/defaults";
 import { isValidThemeId } from "@/theme/themes/types";
 import { createEntity, makeId, updateEntity } from "@/utils/entity";
 
@@ -130,7 +134,7 @@ export function planOnboarding(ctx: FinanceContext, input: OnboardingInput) {
     type: input.accountType,
     currency: baseCurrency,
     openingBalanceMinor: input.openingBalanceMinor,
-    icon: "wallet.bifold",
+    icon: ACCOUNT_TYPE_ICON[input.accountType],
     color: input.accentHex.toUpperCase(),
     archived: false,
   });

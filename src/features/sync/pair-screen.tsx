@@ -50,7 +50,7 @@ import { TextButton } from "@/components/ui/text-button";
 import { type SyncStatus } from "@/sync/setup";
 import { useQashyTheme } from "@/theme/theme";
 import type { SpaceScale } from "@/theme/themes/types";
-import { STAGES } from "@/features/sync/pair/pair-model";
+import { SCAN_CODE_HINT, STAGES } from "@/features/sync/pair/pair-model";
 import { RoleStep } from "@/features/sync/pair/role-step";
 import { HostCodeStep } from "@/features/sync/pair/host-code-step";
 import { ConfirmStep } from "@/features/sync/pair/confirm-step";
@@ -72,9 +72,14 @@ export function PairScreen() {
     setDeviceName,
     busy,
     error,
+    codeError,
+    clearCodeError,
+    receiveStalled,
+    retryReceive,
     code,
     remaining,
     sas,
+    keySent,
     outcome,
     scannerRearm,
     closeSession,
@@ -194,7 +199,9 @@ export function PairScreen() {
               <QrScanner
                 rearm={scannerRearm}
                 onCode={(value) => void startJoining(value)}
-                hint="The code works once and expires after a minute and a half."
+                error={codeError}
+                onEdit={clearCodeError}
+                hint={SCAN_CODE_HINT}
               />
               <TextButton
                 title="Back"
@@ -213,13 +220,19 @@ export function PairScreen() {
             <ConfirmStep
               sas={sas}
               busy={busy}
+              keySent={keySent}
               onMatch={() => void confirmMatch()}
               onReject={rejectMatch}
             />
           ) : null}
 
           {stage === "done" ? (
-            <DoneStep outcome={outcome} firstRun={firstRun} />
+            <DoneStep
+              outcome={outcome}
+              firstRun={firstRun}
+              stalled={receiveStalled}
+              onRetry={retryReceive}
+            />
           ) : null}
         </MotionView>
       )}
@@ -229,8 +242,8 @@ export function PairScreen() {
 
 const containerStyle = (space: SpaceScale) =>
   ({
-    padding: 18,
-    paddingBottom: 40,
+    padding: space.lg,
+    paddingBottom: space.xxxl + space.sm,
     gap: space.lg,
     width: "100%",
     maxWidth: 720,

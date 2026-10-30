@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, View, useColorScheme } from "react-native";
 
 import { AnimatedMoney } from "@/components/finance/animated-money";
@@ -22,7 +22,7 @@ import {
   saveThemeFile,
   pickThemeFileText,
 } from "@/features/more/custom-theme-files";
-import type { AccentSource, ThemeMode } from "@/domain/models";
+import type { AccentSource, AppSettings, ThemeMode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import {
   useFinanceRepository,
@@ -54,6 +54,23 @@ const THEME_MODE_OPTIONS: SegmentOption<ThemeMode>[] = [
 /** A representative amount for the live preview hero — never a real balance. */
 const PREVIEW_NET_WORTH_MINOR = 1284350;
 
+/** The settings this form owns; a write to any other setting must not disturb the form or its save. */
+type OwnedFields = Pick<
+  AppSettings,
+  "themeId" | "themeMode" | "accentSource" | "accentHex"
+>;
+const ownedFields = (settings: OwnedFields): OwnedFields => ({
+  themeId: settings.themeId,
+  themeMode: settings.themeMode,
+  accentSource: settings.accentSource,
+  accentHex: settings.accentHex,
+});
+const sameOwnedFields = (a: OwnedFields, b: OwnedFields) =>
+  a.themeId === b.themeId &&
+  a.themeMode === b.themeMode &&
+  a.accentSource === b.accentSource &&
+  a.accentHex.toUpperCase() === b.accentHex.toUpperCase();
+
 export function AppearanceScreen() {
   const repository = useFinanceRepository();
   const settings = useFinanceSettings();
@@ -67,6 +84,8 @@ export function AppearanceScreen() {
   const [mode, setMode] = useState<ThemeMode>(settings.themeMode);
   const [source, setSource] = useState<AccentSource>(settings.accentSource);
   const [hex, setHex] = useState(settings.accentHex);
+  // The stored values the form and `expectedRevision` were last in step with.
+  const inStep = useRef(ownedFields(settings));
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -78,6 +97,31 @@ export function AppearanceScreen() {
     remove: removeCustomTheme,
   } = useCustomThemes();
   const validHex = /^#[0-9A-Fa-f]{6}$/.test(hex);
+  // Other writes to the settings row (a font or icon override, a sync pass) bump its revision, which
+  // would make every later save fail as "changed in another window". Only a change to the fields this
+  // form owns can conflict with its edits, so: if they did not move, follow the revision; if they moved
+  // and the form has no unsaved edits, adopt them; if they moved under unsaved edits, keep the stale
+  // revision so the save is refused instead of overwriting them.
+  useEffect(() => {
+    const live = ownedFields(settings);
+    if (sameOwnedFields(live, inStep.current)) {
+      setExpectedRevision(settings.revision);
+      return;
+    }
+    const form = {
+      themeId,
+      themeMode: mode,
+      accentSource: source,
+      accentHex: hex,
+    };
+    if (!sameOwnedFields(form, inStep.current)) return;
+    inStep.current = live;
+    setThemeId(live.themeId);
+    setMode(live.themeMode);
+    setSource(live.accentSource);
+    setHex(live.accentHex);
+    setExpectedRevision(settings.revision);
+  }, [settings, themeId, mode, source, hex]);
   const previewMode =
     mode === "system" ? (systemScheme === "dark" ? "dark" : "light") : mode;
   const selectedTheme = getTheme(themeId, customThemes);
@@ -179,10 +223,16 @@ export function AppearanceScreen() {
     }
   };
   const deleteTheme = async (id: string) => {
+    // Deleting the applied theme drops back to Classic; say so before it happens.
+    const deletingApplied = settings.themeId === id;
     const confirmed = await confirmDestructive({
       title: "Delete this theme?",
-      message:
-        "The theme is removed from this device. Export it first to keep a copy.",
+      message: deletingApplied
+        ? [
+            "The theme is removed from this device. Export it first to keep a copy.",
+            "Classic will be applied.",
+          ]
+        : "The theme is removed from this device. Export it first to keep a copy.",
     });
     if (!confirmed) return;
     try {
@@ -191,6 +241,7 @@ export function AppearanceScreen() {
       if (settings.themeId === id) {
         const updated = await repository.updateSettings({ themeId: "classic" });
         setExpectedRevision(updated.revision);
+        inStep.current = { ...inStep.current, themeId: "classic" };
         if (themeId === id) setThemeId("classic");
       } else if (themeId === id) {
         setThemeId(settings.themeId);
@@ -206,16 +257,18 @@ export function AppearanceScreen() {
     setSaving(true);
     setSaved(false);
     try {
+      const written = {
+        themeId,
+        themeMode: mode,
+        accentSource: source,
+        accentHex: validHex ? hex.toUpperCase() : settings.accentHex,
+      };
       const updated = await repository.updateSettings(
-        {
-          themeId,
-          themeMode: mode,
-          accentSource: source,
-          accentHex: validHex ? hex.toUpperCase() : settings.accentHex,
-        },
+        written,
         expectedRevision,
       );
       setExpectedRevision(updated.revision);
+      inStep.current = written;
       setSaved(true);
       hapticSuccess();
     } catch (reason) {
@@ -229,8 +282,8 @@ export function AppearanceScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{
-        padding: 18,
-        paddingBottom: 40,
+        padding: space.lg,
+        paddingBottom: space.xxxl + space.sm,
         gap: space.lg,
         width: "100%",
         maxWidth: 720,
@@ -301,6 +354,20 @@ export function AppearanceScreen() {
             </AppText>
           </View>
         </View>
+      </MotionView>
+      <MotionView>
+        <Card style={{ gap: space.lg }}>
+          <AppText variant="headline">Appearance</AppText>
+          <SegmentedControl
+            label="Appearance"
+            options={THEME_MODE_OPTIONS}
+            value={mode}
+            onChange={(value) => {
+              setMode(value);
+              setSaved(false);
+            }}
+          />
+        </Card>
       </MotionView>
       <MotionView>
         <Card style={{ gap: space.lg }}>
@@ -397,20 +464,6 @@ export function AppearanceScreen() {
           </Card>
         </MotionView>
       ) : null}
-      <MotionView>
-        <Card style={{ gap: space.lg }}>
-          <AppText variant="headline">Appearance</AppText>
-          <SegmentedControl
-            label="Appearance"
-            options={THEME_MODE_OPTIONS}
-            value={mode}
-            onChange={(value) => {
-              setMode(value);
-              setSaved(false);
-            }}
-          />
-        </Card>
-      </MotionView>
       {!userAccent ? (
         <MotionView>
           <Card style={{ gap: space.sm }}>
@@ -468,7 +521,6 @@ export function AppearanceScreen() {
                       selected={
                         source === "preset" && hex.toUpperCase() === color
                       }
-                      label={`Use ${color} accent`}
                       onPress={() => {
                         setSource("preset");
                         setHex(color);

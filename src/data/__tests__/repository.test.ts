@@ -57,11 +57,15 @@ describe("FinanceRepository CSV row validation", () => {
   });
 
   it.each([
-    ["a malformed date", { date: "15/07/2026" }, "Enter a real calendar date."],
+    [
+      "a malformed date",
+      { date: "15/07/2026" },
+      "Enter a real calendar date in the YYYY-MM-DD format.",
+    ],
     [
       "an impossible date",
       { date: "2026-02-31" },
-      "Enter a real calendar date.",
+      "Enter a real calendar date in the YYYY-MM-DD format.",
     ],
     ["an unknown type", { type: "refund" }, "Type must be one of"],
     ["an unknown status", { status: "later" }, "Status must be one of"],
@@ -83,6 +87,37 @@ describe("FinanceRepository CSV row validation", () => {
     expect(preview.validRows).toEqual([]);
     expect(preview.rejectedRows).toHaveLength(1);
     expect(preview.rejectedRows[0].reason).toContain(reason);
+  });
+
+  it("keeps identical rows inside one file and still skips them on a re-import", async () => {
+    const { repository } = await createRepository();
+    const twins = [row({ rowNumber: 2 }), row({ rowNumber: 3 })];
+    const preview = await repository.importCsv(twins as never, false);
+    expect(preview.validRows.map((item) => item.rowNumber)).toEqual([2, 3]);
+    expect(preview.duplicateRows).toEqual([]);
+
+    const committed = await repository.importCsv(twins as never, true);
+    expect(committed.committedIds).toHaveLength(2);
+    expect(repository.getSnapshot().transactions).toHaveLength(2);
+
+    const again = await repository.importCsv(twins as never, false);
+    expect(again.validRows).toEqual([]);
+    expect(again.duplicateRows).toEqual([2, 3]);
+  });
+
+  it("imports only the occurrences beyond what the ledger already holds", async () => {
+    const { repository } = await createRepository();
+    await repository.importCsv([row({ rowNumber: 2 })] as never, true);
+    const preview = await repository.importCsv(
+      [
+        row({ rowNumber: 2 }),
+        row({ rowNumber: 3 }),
+        row({ rowNumber: 4 }),
+      ] as never,
+      false,
+    );
+    expect(preview.duplicateRows).toEqual([2]);
+    expect(preview.validRows.map((item) => item.rowNumber)).toEqual([3, 4]);
   });
 
   it("validates a file larger than one yield batch without losing or reordering rows", async () => {

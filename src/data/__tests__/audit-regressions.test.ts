@@ -404,6 +404,80 @@ describe("search", () => {
     expect(repository.queryTransactions({ search: "CAFÉ" })).toHaveLength(1);
     expect(repository.queryTransactions({ search: "tea" })).toHaveLength(0);
   });
+
+  it("also finds a transaction by its category, parent category, account and tag names", async () => {
+    const repository = await createRepository();
+    const everyday = repository.getSnapshot().accounts[0];
+    const savings = await repository.saveAccount({
+      name: "Rainy Day Fund",
+      type: "savings",
+      currency: "USD",
+      openingBalanceMinor: 0,
+      icon: "bank",
+      color: "#5966E9",
+      archived: false,
+    });
+    const parent = await repository.saveCategory({
+      name: "Pantry Goods",
+      kind: "expense",
+      icon: "cart",
+      color: "#5966E9",
+      parentId: null,
+      archived: false,
+    });
+    const child = await repository.saveCategory({
+      name: "Café Snacks",
+      kind: "expense",
+      icon: "cart",
+      color: "#5966E9",
+      parentId: parent.id,
+      archived: false,
+    });
+    const tag = await repository.saveTag({ name: "Holiday", color: "#6D7885" });
+    const bought = await repository.saveTransaction({
+      kind: "expense",
+      title: "Weekly shop",
+      localDate: "2026-06-10",
+      accountId: everyday.id,
+      categoryId: child.id,
+      tagIds: [tag.id],
+      amountMinor: 450,
+    });
+    const moved = await repository.saveTransaction({
+      kind: "transfer",
+      title: "Top up",
+      localDate: "2026-06-11",
+      accountId: everyday.id,
+      destinationAccountId: savings.id,
+      amountMinor: 1000,
+    });
+    const ids = (search: string) =>
+      repository.queryTransactions({ search }).map((row) => row.id);
+
+    // Category, accent- and case-insensitively, and through its parent.
+    expect(ids("CAFE snacks")).toEqual([bought.id]);
+    expect(ids("pantry")).toEqual([bought.id]);
+    expect(ids("holiday")).toEqual([bought.id]);
+    // Both sides of a transfer.
+    expect(ids("rainy")).toEqual([moved.id]);
+    expect(ids("everyday").sort()).toEqual([bought.id, moved.id].sort());
+    expect(ids("nothing like this")).toEqual([]);
+
+    // A rename takes effect on the next query: no stale per-record cache.
+    await repository.saveCategory(
+      {
+        name: "Biscuits",
+        kind: "expense",
+        icon: "cart",
+        color: "#5966E9",
+        parentId: parent.id,
+        archived: false,
+      },
+      child.id,
+    );
+    expect(ids("snacks")).toEqual([]);
+    expect(ids("biscuits")).toEqual([bought.id]);
+  });
 });
 
 describe("category deletion impact", () => {

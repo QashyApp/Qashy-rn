@@ -1,4 +1,5 @@
 import {
+  budgetTotals,
   computeDashboard,
   computeNetWorthSeries,
   assertDashboardRange,
@@ -110,6 +111,7 @@ import type {
   AccountInput,
   BudgetAdjustmentInput,
   BudgetInput,
+  BudgetTotals,
   CategoryInput,
   ContributionInput,
   FetchedRateResult,
@@ -954,7 +956,15 @@ export class LocalFinanceRepository implements FinanceRepository {
       ? updateEntity(existing, normalized)
       : (createEntity({ id: makeId(), ...normalized }) as Budget);
     assertBudgetSetSafe(withEntity(this.state.budgets, budget));
-    const periods = buildBudgetSnapshots(this.ctx, budget, true);
+    const periods = buildBudgetSnapshots(
+      this.ctx,
+      budget,
+      true,
+      todayLocal(),
+      false,
+      // Turning rollover on partway through a period brings the previous period's carry in.
+      Boolean(existing && !existing.rollover && budget.rollover),
+    );
     // Throws if any period's effective limit would leave the safe-integer range.
     periods.forEach((period) => effectiveLimitFor(this.ctx, budget, period));
     await this.storage.putMany(
@@ -1104,6 +1114,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     contribution?: GoalContributionInput,
     id?: string,
     expectedRevision?: number,
+    editContribution?: { id: string; expectedRevision?: number },
   ) {
     return this.enqueueMutation(() =>
       this.saveGoalAndContributionNow(
@@ -1111,6 +1122,7 @@ export class LocalFinanceRepository implements FinanceRepository {
         contribution,
         id,
         expectedRevision,
+        editContribution,
       ),
     );
   }
@@ -1120,6 +1132,7 @@ export class LocalFinanceRepository implements FinanceRepository {
     contribution?: GoalContributionInput,
     id?: string,
     expectedRevision?: number,
+    editContribution?: { id: string; expectedRevision?: number },
   ) {
     const { goal, contributionEntity } = planGoalSave(
       this.ctx,
@@ -1127,6 +1140,7 @@ export class LocalFinanceRepository implements FinanceRepository {
       contribution,
       id,
       expectedRevision,
+      editContribution,
     );
 
     await this.storage.putMany(
@@ -1313,6 +1327,30 @@ export class LocalFinanceRepository implements FinanceRepository {
     return summary;
   }
 
+  getBudgetTotals(
+    fromDate: string,
+    toDate: string,
+    options: { includePendingAutoPosts?: boolean } = {},
+  ): BudgetTotals {
+    if (options.includePendingAutoPosts) {
+      assertDate(toDate);
+      return this.withPendingRecurring(true, toDate, () =>
+        this.getBudgetTotals(fromDate, toDate),
+      );
+    }
+    assertDashboardRange(fromDate, toDate);
+    const cached = this.derived().dashboards.get(`${fromDate}|${toDate}`);
+    if (cached) {
+      return {
+        budgetLimitMinor: cached.budgetLimitMinor,
+        budgetSpentMinor: cached.budgetSpentMinor,
+      };
+    }
+    return budgetTotals(this.ctx, fromDate, toDate, (onDate, budgetOptions) =>
+      this.getBudgetStatuses(onDate, budgetOptions),
+    );
+  }
+
   getNetWorthSeries(
     months: number,
     today: string = todayLocal(),
@@ -1370,7 +1408,10 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   getPendingAutoPosts(onDate: string): TransactionRecord[] {
     assertDate(onDate);
-    return this.pendingRecurring(onDate).filter(
+    // Generation never runs ahead of today, so neither does the preview: a later `onDate` must not
+    // price or mark occurrences that are not due yet (the same cap as `withPendingRecurring`).
+    const today = todayLocal();
+    return this.pendingRecurring(onDate < today ? onDate : today).filter(
       (transaction) => transaction.status === "posted",
     );
   }
@@ -1393,9 +1434,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     work: () => T,
   ): T {
     if (!include) return work();
+    // Generation only ever runs up to today, so a read dated later (a future month's end) still
+    // previews what is due today, never occurrences that are not due yet.
+    const today = todayLocal();
+    const horizon = onDate < today ? onDate : today;
     let pending: TransactionRecord[];
     try {
-      pending = this.pendingRecurring(onDate);
+      pending = this.pendingRecurring(horizon);
     } catch {
       return work();
     }

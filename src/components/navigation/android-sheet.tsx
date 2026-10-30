@@ -47,6 +47,7 @@ import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
 import { useQashyTheme } from "@/theme/theme";
 import { hapticImpactLight, hapticSelection } from "@/services/haptics";
+import { moveAccessibilityFocus } from "@/utils/move-accessibility-focus";
 
 /**
  * Route options for a creation/editing sheet on Android.
@@ -146,6 +147,7 @@ export function AndroidSheet({
   // frame the keyboard covers. Subtracting the raw height would count that space twice in the
   // resized case.
   const frameRef = useRef<HostInstance>(null);
+  const titleRef = useRef<HostInstance>(null);
   const [frameBottom, setFrameBottom] = useState(0);
   const [keyboardTop, setKeyboardTop] = useState<number | null>(null);
   const measureFrame = useCallback(() => {
@@ -312,9 +314,13 @@ export function AndroidSheet({
   useEffect(() => {
     if (area > 0 && !shownFlag.get()) {
       shownFlag.set(true);
-      animate(true);
+      // `accessibilityViewIsModal` is iOS-only, so on Android the screen reader stays on whatever
+      // was under the sheet. Once the sheet is up, TalkBack is taken to its title.
+      animate(true, () => {
+        if (title) moveAccessibilityFocus(titleRef.current);
+      });
     }
-  }, [area, animate, shownFlag]);
+  }, [area, animate, shownFlag, title]);
 
   // Set on the JS thread the moment the sheet starts leaving by any path. `closingFlag` is written
   // on the UI thread by a throw, and a JS-side read of it can lag a frame, so a back press, a scrim
@@ -751,15 +757,17 @@ export function AndroidSheet({
                     minHeight: 48,
                   }}
                 >
-                  <AppText
-                    literal
-                    variant="title"
+                  {/* Focusable as one header, so opening the sheet can move the screen reader here. */}
+                  <View
+                    ref={titleRef}
+                    accessible
                     accessibilityRole="header"
-                    numberOfLines={1}
                     style={{ flexShrink: 1 }}
                   >
-                    {title ?? ""}
-                  </AppText>
+                    <AppText literal variant="title" numberOfLines={1}>
+                      {title ?? ""}
+                    </AppText>
+                  </View>
                   <IconButton
                     label="Close"
                     icon="xmark"

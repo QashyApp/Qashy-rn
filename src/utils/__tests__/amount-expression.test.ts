@@ -1,5 +1,6 @@
 import {
   evaluateAmountExpression,
+  settleAmountExpression,
   type AmountExpressionResult,
 } from "@/utils/amount-expression";
 import { applyKeypadKey, type KeypadKey } from "@/utils/amount-keypad";
@@ -9,6 +10,33 @@ const evaluate = (input: string, currency = "USD", locale = "en-US") =>
 
 const value = (result: AmountExpressionResult) =>
   result.kind === "value" ? result.minor : result.kind;
+
+describe("settleAmountExpression", () => {
+  const settle = (input: string) =>
+    settleAmountExpression(input, "USD", "en-US");
+
+  it("drops a dangling operator, and whitespace around it", () => {
+    expect(settle("12+")).toEqual({ kind: "settled", text: "12" });
+    expect(settle("12 + ")).toEqual({ kind: "settled", text: "12" });
+    expect(settle("12×÷")).toEqual({ kind: "settled", text: "12" });
+  });
+
+  it("evaluates what is left once the dangling operator is gone", () => {
+    expect(settle("1+2+")).toEqual({ kind: "settled", text: "3.00" });
+    expect(settle("2*3")).toEqual({ kind: "settled", text: "6.00" });
+  });
+
+  it("leaves a plain amount alone", () => {
+    expect(settle("12.50")).toEqual({ kind: "unchanged" });
+    expect(settle("")).toEqual({ kind: "unchanged" });
+  });
+
+  it("reports what cannot be evaluated even without its dangling operator", () => {
+    expect(settle("5÷0")).toEqual({ kind: "invalid" });
+    expect(settle("5÷0+")).toEqual({ kind: "invalid" });
+    expect(settle("1.234+1")).toEqual({ kind: "invalid" });
+  });
+});
 
 describe("evaluateAmountExpression", () => {
   it("leaves text without an operator to the ordinary money validation", () => {

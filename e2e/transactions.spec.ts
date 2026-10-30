@@ -75,7 +75,14 @@ test("preserves a selected transaction type and lets an edit clear its category"
   await page.getByRole("button", { name: "Add transaction" }).click();
 
   await page.getByRole("link", { name: /Transactions/ }).click();
-  await page.getByRole("button", { name: /Category edit/ }).click();
+  // The list mounts twice while the Add sheet closes: a first copy slides in off-screen, then is
+  // hidden with display:none (still in the DOM, still matched by role) as the real one settles.
+  // A click captured on that first copy waits forever, so wait for the copy that is on screen.
+  const savedRow = page
+    .getByRole("button", { name: /Category edit/ })
+    .filter({ visible: true });
+  await expect(savedRow).toBeInViewport();
+  await savedRow.click();
   // The form sheet mounts a parked placeholder copy of itself in the screen stack before the
   // presented sheet paints. That copy's kind pills are momentarily the first role match, and a
   // click captured there waits forever on an element that is never shown again. It freezes

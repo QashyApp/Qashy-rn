@@ -15,6 +15,7 @@ import { AmountHero } from "@/components/finance/amount-hero";
 import { ForeignFeeFields } from "@/features/transactions/form/foreign-fee-fields";
 import { useQashyTheme } from "@/theme/theme";
 import { isLocalDate, mediumDate } from "@/utils/date";
+import { accountTypeIcon } from "@/utils/labels";
 import {
   END_MODES,
   intervalHint,
@@ -55,7 +56,9 @@ export function RecurringFormScreen() {
     setOccurrenceCount,
     autoPost,
     setAutoPost,
-    active,
+    scheduleEnded,
+    nextAfterEnd,
+    effectiveActive,
     setActive,
     foreignEnabled,
     setForeignEnabled,
@@ -154,7 +157,7 @@ export function RecurringFormScreen() {
             <ChoiceChip
               key={item.id}
               literal
-              icon={item.icon}
+              icon={accountTypeIcon(item.type)}
               label={item.name}
               selected={accountId === item.id}
               onPress={() => {
@@ -204,7 +207,7 @@ export function RecurringFormScreen() {
       </Card>
 
       {account ? (
-        <Card style={{ gap: 14 }}>
+        <Card style={{ gap: space.md }}>
           <ForeignFeeFields
             accountCurrency={account.currency}
             locale={locale}
@@ -326,7 +329,8 @@ export function RecurringFormScreen() {
           <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Post automatically</AppText>
             <AppText variant="caption" muted>
-              Off by default. Upcoming items wait for your review.
+              Off: due items wait for your review. On: they post by themselves
+              when due, including any already overdue.
             </AppText>
           </View>
           <QashySwitch
@@ -341,18 +345,23 @@ export function RecurringFormScreen() {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 14,
+            gap: space.md,
           }}
         >
           <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Schedule active</AppText>
             <AppText variant="caption" muted>
-              Pause without deleting this schedule.
+              {scheduleEnded
+                ? nextAfterEnd
+                  ? `The next payment would be on ${mediumDate(nextAfterEnd, locale)}, after the end date. Extend the end date, then turn it on.`
+                  : "This schedule has ended. Extend the end date, then turn it on."
+                : "Pause without deleting this schedule."}
             </AppText>
           </View>
           <QashySwitch
             accessibilityLabel={t("Schedule active")}
-            value={active}
+            value={effectiveActive}
+            disabled={scheduleEnded}
             onValueChange={setActive}
           />
         </View>

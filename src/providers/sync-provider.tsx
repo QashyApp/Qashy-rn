@@ -37,7 +37,6 @@ import {
   useCallback,
   useEffect,
   useMemo,
-  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -51,6 +50,7 @@ import { syncBackgroundSchedule } from "@/features/background-sync";
 import { createPlatformKeystore } from "@/sync/keystore/platform";
 import { withSyncPassLock } from "@/sync/pass-lock";
 import type { SyncKeystore } from "@/sync/keystore";
+import { createPassGate } from "@/providers/pass-gate";
 import { SyncRuntime, type SyncPass } from "@/sync/runtime";
 import {
   readSyncStatus,
@@ -58,6 +58,15 @@ import {
   type SyncStatus,
 } from "@/sync/setup";
 import type { RelayHealth } from "@/sync/transport/relay-health";
+
+export interface ReconcileOptions {
+  /**
+   * When a pass is already running, wait for it and run one more afterwards instead of resolving
+   * `false` straight away. For a caller that needs a pass that began after now, such as a device
+   * that has just joined a vault. Promise-chained; nothing polls or is scheduled.
+   */
+  readonly queue?: boolean;
+}
 
 export interface SyncContextValue {
   /** Null until the first read completes. Screens render a spinner rather than empty state. */
@@ -70,16 +79,21 @@ export interface SyncContextValue {
    * The last failure, in plain language. Advisory — nothing is blocked by it.
    *
    * Cleared by the next successful pass, so a transient failure heals itself rather than
-   * leaving a banner that has to be dismissed by hand.
+   * leaving a banner that has to be dismissed by hand. Also cleared by `clearError`.
    */
   readonly error: string | null;
+  /**
+   * Drops the banner. For an action that resolves what it reported, such as replacing the key
+   * after an interrupted rotation or leaving the vault: no pass follows those that could clear it.
+   */
+  readonly clearError: () => void;
   /** Re-reads everything from storage. Call after any mutation the setup layer performed. */
   readonly refresh: () => Promise<void>;
   /**
    * Runs a pass now. Backs the pull-to-refresh and the "Sync now" button. Resolves true only
    * when a pass actually ran to completion, so a screen can confirm it without reading state.
    */
-  readonly reconcile: () => Promise<boolean>;
+  readonly reconcile: (options?: ReconcileOptions) => Promise<boolean>;
   /** Measures the relay now, without a full pass. Backs "Check now". */
   readonly checkRelay: () => Promise<RelayHealth>;
   /** For flows that need to mutate vault state — pairing, revoking, endpoints. */
@@ -128,15 +142,6 @@ export function SyncProvider({
       }),
   );
 
-  /**
-   * Guards against two passes overlapping.
-   *
-   * A ref rather than the `syncing` state, because a foreground event and a button press can
-   * both arrive before React has re-rendered — and two concurrent passes would have both
-   * sessions allocating from the same op chain.
-   */
-  const running = useRef(false);
-
   const apply = useCallback((next: SyncStatus) => {
     setStatus(next);
     // Arming is driven by what is actually readable, not by what the last flow intended. A
@@ -162,9 +167,7 @@ export function SyncProvider({
     [deps, apply],
   );
 
-  const reconcile = useCallback(async () => {
-    if (running.current) return false;
-    running.current = true;
+  const runPass = useCallback(async () => {
     setSyncing(true);
     let ran = false;
     try {
@@ -181,7 +184,6 @@ export function SyncProvider({
     } catch (reason: unknown) {
       setError(describe(reason));
     } finally {
-      running.current = false;
       setSyncing(false);
       // Always, including after a failure: a partial pass still moves peers, activity, and
       // the relay verdict, and leaving the screen showing pre-failure state would misreport
@@ -190,6 +192,28 @@ export function SyncProvider({
     }
     return ran;
   }, [engine, refresh]);
+
+  /**
+   * Guards against two passes overlapping.
+   *
+   * Not the `syncing` state, because a foreground event and a button press can both arrive
+   * before React has re-rendered — and two concurrent passes would have both sessions
+   * allocating from the same op chain. See `pass-gate.ts`.
+   *
+   * `useState`'s initializer rather than `useMemo`, for the same reason as `engine`: the gate
+   * holds the in-flight pass, and a discarded one would forget it and let a second pass start.
+   * `runPass` only depends on `engine` and `deps`, which are themselves state, so it never
+   * changes after the first render.
+   */
+  const [gate] = useState(() => createPassGate(runPass));
+
+  const reconcile = useCallback(
+    (options?: ReconcileOptions) =>
+      options?.queue ? gate.requestQueued() : gate.request(),
+    [gate],
+  );
+
+  const clearError = useCallback(() => setError(null), []);
 
   const checkRelay = useCallback(async () => {
     const health = await engine.checkRelay();
@@ -259,6 +283,7 @@ export function SyncProvider({
       pass,
       syncing,
       error,
+      clearError,
       refresh,
       reconcile,
       checkRelay,
@@ -270,6 +295,7 @@ export function SyncProvider({
       pass,
       syncing,
       error,
+      clearError,
       refresh,
       reconcile,
       checkRelay,

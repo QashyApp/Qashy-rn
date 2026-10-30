@@ -51,7 +51,7 @@ export function RoleStep({
 
       <View style={{ gap: space.sm, display: joinOnly ? "none" : "flex" }}>
         <RoleOption
-          icon="iphone"
+          icon="ion:phone-portrait-outline"
           title="This device has my data"
           body={
             canHost
@@ -163,7 +163,7 @@ function RoleOption({
           color={
             selected && !disabled ? theme.onAccentContainer : theme.textMuted
           }
-          size={18}
+          size={theme.iconSize.md}
         />
         <AppText variant="label">{title}</AppText>
       </View>

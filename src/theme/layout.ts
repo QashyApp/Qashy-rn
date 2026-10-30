@@ -50,6 +50,19 @@ export function floatingBarClearance(safeBottom: number, margin: number) {
   return safeBottom + margin + FLOATING_BAR_HEIGHT;
 }
 
+/** The floating action button's diameter: Material's 56px control, or the 58px default. */
+export const FAB_SIZE_MATERIAL = 56;
+export const FAB_SIZE = 58;
+
+/**
+ * Height of the web bottom navigation bar, safe-area inset excluded: the Material bar's 80px, the
+ * taller of the two styles (the inset floating bar is 64px plus its own margin, which is smaller).
+ */
+export const WEB_BOTTOM_BAR_HEIGHT = 80;
+
+/** Bottom padding that scrolls the last row clear of the FAB resting above its bar. */
+const FAB_SCROLL_CLEARANCE = 80;
+
 export interface BottomChromeInset {
   /** Distance from the screen bottom to the resting floating action button. */
   overlayBottom: number;
@@ -70,29 +83,34 @@ export function resolveBottomChromeInset(
   safeBottom: number,
   space: SpaceScale,
 ): BottomChromeInset {
+  // The undo bar sits on top of the FAB, whichever bar the FAB rests above, so it is always derived
+  // from the FAB's own offset: it can never be left underneath the button it must not cover.
+  const stackedAbove = (overlayBottom: number) =>
+    overlayBottom + FAB_SIZE + space.sm;
   if (metrics.floatingBarClearance > 0) {
     const overlayBottom = metrics.floatingBarClearance + space.lg;
     return {
       overlayBottom,
       batchBarBottom: overlayBottom,
-      stackedOverlayBottom: overlayBottom + 64,
-      contentPaddingBottom: overlayBottom + 80 + space.lg,
+      stackedOverlayBottom: stackedAbove(overlayBottom),
+      contentPaddingBottom: overlayBottom + FAB_SCROLL_CLEARANCE + space.lg,
     };
   }
-  const stackedOverlayBottom = safeBottom + space.xxl + 64;
   if (metrics.hasBottomNavigation) {
+    const overlayBottom = safeBottom + WEB_BOTTOM_BAR_HEIGHT + space.md;
     return {
-      overlayBottom: 92 + safeBottom,
-      batchBarBottom: 92 + safeBottom,
-      stackedOverlayBottom,
-      contentPaddingBottom: 160 + safeBottom,
+      overlayBottom,
+      batchBarBottom: overlayBottom,
+      stackedOverlayBottom: stackedAbove(overlayBottom),
+      contentPaddingBottom: overlayBottom + FAB_SCROLL_CLEARANCE,
     };
   }
+  const overlayBottom = space.xxl + (IS_WEB ? safeBottom : 0);
   return {
-    overlayBottom: space.xxl + (IS_WEB ? safeBottom : 0),
+    overlayBottom,
     batchBarBottom: space.xxl + safeBottom,
-    stackedOverlayBottom,
-    contentPaddingBottom: space.xxxl + 80,
+    stackedOverlayBottom: stackedAbove(overlayBottom),
+    contentPaddingBottom: space.xxxl + FAB_SCROLL_CLEARANCE,
   };
 }
 

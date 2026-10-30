@@ -38,6 +38,7 @@ export function SegmentedControl<T extends string>({
   options: readonly SegmentOption<T>[];
   value: T;
   onChange: (value: T) => void;
+  /** Honored by the sliding-thumb fallback; the Compose row keeps the M3 segmented button height. */
   size?: "regular" | "compact";
   /** Keep the control left-to-right whatever the UI language (the language selector). */
   lockLtr?: boolean;

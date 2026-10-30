@@ -18,20 +18,39 @@ export function confirmDestructive({
   message,
   confirmLabel = "Delete",
 }: ConfirmOptions) {
+  return confirmWith({ title, message, confirmLabel }, true);
+}
+
+/**
+ * A confirmation for an action that changes things but destroys nothing (posting overdue
+ * payments, say): the default button style, no warning haptic, and the primary web button.
+ */
+export function confirmAction({
+  title,
+  message,
+  confirmLabel = "Continue",
+}: ConfirmOptions) {
+  return confirmWith({ title, message, confirmLabel }, false);
+}
+
+function confirmWith(
+  { title, message, confirmLabel }: ConfirmOptions,
+  destructive: boolean,
+) {
   const translatedTitle = translateCurrent(title);
   const translatedMessage = message
     ? typeof message === "string"
       ? translateCurrent(message)
       : message.map((line) => translateCurrent(line)).join("\n")
     : undefined;
-  const translatedConfirmLabel = translateCurrent(confirmLabel);
+  const translatedConfirmLabel = translateCurrent(confirmLabel ?? "Continue");
   if (process.env.EXPO_OS === "web") {
     if (webDialogStore.hasHost()) {
       return webDialogStore.open({
         title: translatedTitle,
         message: translatedMessage,
         confirmLabel: translatedConfirmLabel,
-        destructive: true,
+        destructive,
       });
     }
     const text = translatedMessage
@@ -53,9 +72,9 @@ export function confirmDestructive({
         },
         {
           text: translatedConfirmLabel,
-          style: "destructive",
+          style: destructive ? "destructive" : "default",
           onPress: () => {
-            hapticWarning();
+            if (destructive) hapticWarning();
             resolve(true);
           },
         },
@@ -96,6 +115,11 @@ export function showError(
     return;
   }
   Alert.alert(translatedTitle, translatedMessage);
+}
+
+/** A dialog that reports something other than a failure: a success, or "nothing to do". */
+export function showNotice(title: string, message?: string) {
+  showError(title, message, { quiet: true });
 }
 
 export function errorMessage(reason: unknown, fallback: string) {

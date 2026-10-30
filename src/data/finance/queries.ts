@@ -18,6 +18,51 @@ function searchTextOf(transaction: { title: string; note: string }) {
   return folded;
 }
 
+/**
+ * The folded names a search also looks in: the transaction's category and its parents, its
+ * account (both sides of a transfer) and its tags. Built once per query from the snapshot's own
+ * lists, so a rename is picked up at once and nothing is cached across snapshots to go stale.
+ */
+function nameIndex(ctx: FinanceContext) {
+  const fold = (items: { id: string; name: string }[]) =>
+    new Map(items.map((item) => [item.id, foldForSearch(item.name)]));
+  const categories = new Map(
+    ctx.state.categories.map((category) => [category.id, category]),
+  );
+  const categoryNames = fold(ctx.state.categories);
+  // The answer per category id for the one needle a query searches: most rows share a few
+  // categories, so the walk up the tree runs once per category, not once per row per keystroke.
+  const chainResults = new Map<string, boolean>();
+  let chainNeedle: string | undefined;
+  return {
+    accountNames: fold(ctx.state.accounts),
+    tagNames: fold(ctx.state.tags),
+    /** The category's name or any ancestor's, so a parent's name finds its children's rows. */
+    categoryChainMatches(categoryId: string | null, needle: string) {
+      if (!categoryId) return false;
+      if (needle !== chainNeedle) {
+        chainNeedle = needle;
+        chainResults.clear();
+      }
+      const known = chainResults.get(categoryId);
+      if (known !== undefined) return known;
+      // A parent cycle in bad data ends after as many steps as there are categories.
+      let steps = categories.size;
+      let currentId: string | null = categoryId;
+      let matched = false;
+      while (currentId && steps-- > 0) {
+        if (categoryNames.get(currentId)?.includes(needle)) {
+          matched = true;
+          break;
+        }
+        currentId = categories.get(currentId)?.parentId ?? null;
+      }
+      chainResults.set(categoryId, matched);
+      return matched;
+    },
+  };
+}
+
 // Pre-indexes the selected ids and the category tree once so hierarchy
 // matching is O(depth) per transaction instead of O(categories) per transaction.
 export function categoryMatcher(categories: Category[], selectedIds: string[]) {
@@ -47,13 +92,25 @@ export function queryTransactions(
   const matchesCategory = query.categoryIds?.length
     ? categoryMatcher(ctx.state.categories, query.categoryIds)
     : null;
+  // Own text (title and note) is cached per record; the names are looked up per query, because a
+  // rename changes what a record matches without changing the record.
+  const names = normalizedSearch ? nameIndex(ctx) : null;
+  const matchesSearch = (transaction: (typeof snapshot)[number]) => {
+    if (!normalizedSearch || !names) return true;
+    const includes = (name: string | undefined) =>
+      name !== undefined && name.includes(normalizedSearch);
+    return (
+      searchTextOf(transaction).includes(normalizedSearch) ||
+      names.categoryChainMatches(transaction.categoryId, normalizedSearch) ||
+      includes(names.accountNames.get(transaction.accountId)) ||
+      (transaction.destinationAccountId !== null &&
+        includes(names.accountNames.get(transaction.destinationAccountId))) ||
+      transaction.tagIds.some((id) => includes(names.tagNames.get(id)))
+    );
+  };
   let result = snapshot.filter((transaction) => {
     if (transaction.deletedAt) return false;
-    if (
-      normalizedSearch &&
-      !searchTextOf(transaction).includes(normalizedSearch)
-    )
-      return false;
+    if (!matchesSearch(transaction)) return false;
     if (
       query.accountIds?.length &&
       !query.accountIds.includes(transaction.accountId) &&

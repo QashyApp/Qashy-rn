@@ -9,13 +9,19 @@ import { MotionView } from "@/components/ui/motion";
 import { SectionHeader } from "@/components/ui/section-header";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
+import { startOfMonth, toLocalDate } from "@/utils/date";
+import { useNow } from "@/hooks/use-now";
 import { accountTypeIcon, accountTypeLabel } from "@/utils/labels";
 import type { WidgetProps } from "@/features/overview/widgets/types";
 
-export function AccountsWidget({ summary }: WidgetProps) {
+export function AccountsWidget({ month, summary }: WidgetProps) {
   const theme = useQashyTheme();
   const { space } = theme;
   const { locale, t } = useLocalization();
+  // Balances are what the accounts hold today whichever month is browsed (like net worth), so on
+  // any other month the card says so rather than letting them read as that month's closing balances.
+  const isCurrentMonth =
+    startOfMonth(month) === startOfMonth(toLocalDate(new Date(useNow())));
 
   return (
     <View style={{ gap: space.sm }}>
@@ -24,6 +30,11 @@ export function AccountsWidget({ summary }: WidgetProps) {
         action="Manage"
         onAction={() => router.push("/more")}
       />
+      {summary.accountBalances.length && !isCurrentMonth ? (
+        <AppText variant="caption" muted>
+          As of today
+        </AppText>
+      ) : null}
       {summary.accountBalances.length ? (
         <Card variant="list" dividerInset={theme.tile.size + space.md}>
           {summary.accountBalances.map(({ account, balanceMinor }) => {

@@ -1,5 +1,5 @@
 import { router } from "expo-router";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { ScrollView, View, type ScrollViewInstance } from "react-native";
 
 import { StatTile } from "@/components/finance/stat-tile";
@@ -29,7 +29,16 @@ import { useQashyTheme } from "@/theme/theme";
 import { accountDeletionMessage } from "@/utils/account-impact";
 import { categoryDeletionMessage } from "@/utils/category-impact";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
-import { endOfMonth, mediumDate, startOfMonth } from "@/utils/date";
+import { orderCategoriesByParent } from "@/utils/category-order";
+import {
+  endOfMonth,
+  mediumDate,
+  startOfMonth,
+  toLocalDate,
+} from "@/utils/date";
+import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
+import { recurrenceLabel } from "@/features/more/recurring/recurring-model";
+import { recurringDisplayAmount } from "@/utils/recurring-amount";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
 import {
   accountTypeIcon,
@@ -62,7 +71,34 @@ export function MoreScreen() {
   const recurring = state.recurringRules;
   const [resetting, setResetting] = useState(false);
   const resettingRef = useRef(false);
-  const activeCategories = state.categories.filter((item) => !item.archived);
+  const activeCategories = useMemo(
+    () =>
+      orderCategoriesByParent(
+        state.categories.filter((item) => !item.archived),
+      ),
+    [state.categories],
+  );
+  // Overdue pending occurrences per schedule, counted in one pass over the ledger.
+  // The day is part of the key: an occurrence that falls due at midnight joins the count without
+  // any change to the ledger. `useNow` ticks per minute, so a new day is noticed within one.
+  const now = useNow();
+  const today = toLocalDate(new Date(now));
+  const toReviewByRule = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const transaction of state.transactions) {
+      if (
+        transaction.recurringRuleId &&
+        transaction.status === "upcoming" &&
+        !transaction.deletedAt &&
+        transaction.localDate <= today
+      )
+        counts.set(
+          transaction.recurringRuleId,
+          (counts.get(transaction.recurringRuleId) ?? 0) + 1,
+        );
+    }
+    return counts;
+  }, [state.transactions, today]);
   const accountSelection = useBatchDelete({
     type: "accounts",
     liveIds: activeAccounts.map((item) => item.id),
@@ -99,7 +135,6 @@ export function MoreScreen() {
   // `useSyncState` returns null outside the provider by design, so this stays safe in any test
   // or story that renders MoreScreen on its own.
   const sync = useSyncState();
-  const now = useNow();
   const syncSummary = sync?.status ? summarizeSync(sync.status, { now }) : null;
   const rateStatus = useExchangeRateStatus();
 
@@ -283,30 +318,41 @@ export function MoreScreen() {
               onSecondaryAction={categorySelection.toggleMode}
             />
             <Card variant="list" dividerInset={rowDividerInset}>
-              {activeCategories.map((category) => (
-                <SettingsRow
-                  key={category.id}
-                  literal
-                  title={category.name}
-                  subtitle={t(categoryKindLabel(category.kind))}
-                  icon={category.icon}
-                  color={category.color}
-                  selected={
-                    categorySelection.selecting
-                      ? categorySelection.selectedIds.includes(category.id)
-                      : undefined
-                  }
-                  disabled={categorySelection.deleting}
-                  onPress={() =>
-                    categorySelection.selecting
-                      ? categorySelection.toggle(category.id)
-                      : router.push({
-                          pathname: "/category",
-                          params: { id: category.id },
-                        })
-                  }
-                />
-              ))}
+              {activeCategories.map((category) => {
+                const parent = category.parentId
+                  ? activeCategories.find(
+                      (item) => item.id === category.parentId,
+                    )
+                  : undefined;
+                return (
+                  <SettingsRow
+                    key={category.id}
+                    literal
+                    title={category.name}
+                    subtitle={
+                      parent
+                        ? `${t(categoryKindLabel(category.kind))} · ${t("Under")} ${parent.name}`
+                        : t(categoryKindLabel(category.kind))
+                    }
+                    icon={category.icon}
+                    color={category.color}
+                    selected={
+                      categorySelection.selecting
+                        ? categorySelection.selectedIds.includes(category.id)
+                        : undefined
+                    }
+                    disabled={categorySelection.deleting}
+                    onPress={() =>
+                      categorySelection.selecting
+                        ? categorySelection.toggle(category.id)
+                        : router.push({
+                            pathname: "/category",
+                            params: { id: category.id },
+                          })
+                    }
+                  />
+                );
+              })}
             </Card>
             {categorySelection.selecting ? (
               <BatchDeleteBar
@@ -336,34 +382,43 @@ export function MoreScreen() {
             <Card variant="list" dividerInset={rowDividerInset}>
               {recurring.length ? (
                 recurring.map((rule) => {
+                  // A paused schedule is judged by the date it would resume at: its own stands still
+                  // while paused, so a long-expired one still has to show as ended.
+                  const resumesAt = rule.active
+                    ? rule.nextDueDate
+                    : nextDueDateOnReactivation(rule, today);
                   const ended = Boolean(
-                    rule.endDate && rule.nextDueDate > rule.endDate,
+                    rule.endDate && resumesAt > rule.endDate,
                   );
                   const status = ended
                     ? "Ended"
                     : rule.active
                       ? `Next ${mediumDate(rule.nextDueDate, locale)}`
                       : "Paused";
-                  const frequency =
-                    rule.interval === 1
-                      ? rule.unit === "month"
-                        ? t("Monthly")
-                        : t(
-                            `${rule.unit[0].toUpperCase()}${rule.unit.slice(1)}`,
-                          )
-                      : t(`Every ${rule.interval} ${rule.unit}s.`);
-                  const foreignSuffix = rule.template.foreign
-                    ? ` · ${formatMoney(rule.template.foreign.amountMinor, rule.template.foreign.currency, locale)}`
+                  // The same wording as the schedule form's hint, without its closing period.
+                  const frequency = t(
+                    recurrenceLabel(rule.interval, rule.unit),
+                  ).replace(/\.$/, "");
+                  const amount = recurringDisplayAmount(rule, state, locale);
+                  // An unpriced foreign schedule already shows its foreign amount as the value.
+                  const foreignSuffix =
+                    rule.template.foreign && !amount.unpriced
+                      ? ` · ${formatMoney(rule.template.foreign.amountMinor, rule.template.foreign.currency, locale)}`
+                      : "";
+                  const toReview = toReviewByRule.get(rule.id) ?? 0;
+                  // First, so the two-line subtitle never cuts the count off.
+                  const reviewPrefix = toReview
+                    ? `${t(`${toReview} to review`)} · `
                     : "";
                   return (
                     <SettingsRow
                       key={rule.id}
                       literal
                       title={rule.template.title}
-                      subtitle={`${frequency} · ${t(status)}${foreignSuffix}`}
+                      subtitle={`${reviewPrefix}${t(categoryKindLabel(rule.template.kind))} · ${frequency} · ${t(status)}${foreignSuffix}`}
                       value={formatMoney(
-                        rule.template.amountMinor,
-                        rule.template.currency,
+                        amount.amountMinor,
+                        amount.currency,
                         locale,
                       )}
                       icon="repeat"

@@ -152,8 +152,8 @@ export function RelayCard({
       hapticSuccess();
     } catch (reason) {
       showError(
-        "Couldn’t save these addresses",
-        errorMessage(reason, "Check them and try again."),
+        "Couldn’t save this address",
+        errorMessage(reason, "Check it and try again."),
       );
     } finally {
       savingRef.current = false;
@@ -251,7 +251,11 @@ export function RelayCard({
             <FormField
               label="Relay address"
               value={relayUrl}
-              onChangeText={(value) => setDraftRelay(value)}
+              onChangeText={(value) => {
+                setDraftRelay(value);
+                // The message was about the text that is no longer there.
+                setError(undefined);
+              }}
               autoCapitalize="none"
               autoCorrect={false}
               inputMode="url"
@@ -260,7 +264,7 @@ export function RelayCard({
               hint="Leave this blank to contact nothing and sync only through transfer files."
             />
             <TextButton
-              title={saving ? "Saving…" : "Save addresses"}
+              title={saving ? "Saving…" : "Save address"}
               icon="checkmark"
               disabled={saving}
               style={{ alignSelf: "flex-start" }}

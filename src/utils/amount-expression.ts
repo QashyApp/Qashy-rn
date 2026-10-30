@@ -102,6 +102,44 @@ export function evaluateAmountExpression(
   }
 }
 
+export type SettledAmount =
+  /** The text the field should hold now: the calculation's result, or the amount without its dangling operator. */
+  | { kind: "settled"; text: string }
+  /** Nothing to finish: the text is already a plain amount (or empty). */
+  | { kind: "unchanged" }
+  /** What was typed cannot be evaluated even without a dangling operator (`÷ 0`, too many decimals). */
+  | { kind: "invalid" };
+
+/**
+ * Finishes an amount a person stops typing: a complete calculation becomes its result, and a
+ * dangling operator ("12 +") is dropped so what is left ("12") is what the form will save.
+ */
+export function settleAmountExpression(
+  input: string,
+  currency: CurrencyCode,
+  locale: string,
+): SettledAmount {
+  const characters = Array.from(input.trimEnd());
+  while (
+    characters.length > 0 &&
+    isAmountOperator(characters[characters.length - 1])
+  ) {
+    characters.pop();
+    while (
+      characters.length > 0 &&
+      characters[characters.length - 1].trim() === ""
+    )
+      characters.pop();
+  }
+  const trimmed = characters.join("");
+  const result = evaluateAmountExpression(trimmed, currency, locale);
+  if (result.kind === "value") return { kind: "settled", text: result.text };
+  if (result.kind === "invalid") return { kind: "invalid" };
+  return trimmed === input
+    ? { kind: "unchanged" }
+    : { kind: "settled", text: trimmed };
+}
+
 function tokenize(text: string) {
   const numbers: string[] = [];
   const operators: AmountOperator[] = [];

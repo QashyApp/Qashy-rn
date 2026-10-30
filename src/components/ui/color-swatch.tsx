@@ -44,18 +44,22 @@ export function describeColor(hex: string) {
 export function ColorSwatch({
   color,
   selected,
+  label,
   onPress,
 }: {
   color: string;
   selected: boolean;
-  /** Ignored: the announced name is derived from the color itself. Kept so existing callers still type-check. */
+  /**
+   * What a screen reader announces. Without one, the color's coarse name is announced. A label
+   * should be a name too, never raw hex digits.
+   */
   label?: string;
   onPress: () => void;
 }) {
   const { t } = useLocalization();
   return (
     <MotionPressable
-      accessibilityLabel={t(describeColor(color))}
+      accessibilityLabel={t(label ?? describeColor(color))}
       accessibilityRole="radio"
       accessibilityState={{ checked: selected }}
       aria-checked={selected}

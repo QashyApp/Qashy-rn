@@ -1,6 +1,6 @@
 import { router, useNavigation } from "expo-router";
 import { usePreventRemove } from "expo-router/react-navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useSheetShell } from "@/components/navigation/sheet-shell-context";
 import { confirmDestructive } from "@/utils/confirm";
@@ -72,17 +72,32 @@ export function useFormSheet({
   // the sheet is `AndroidSheet`: a swipe, the scrim, the close button and hardware back all ask to
   // close it, and while this sheet is dirty it tells the shell not to animate away first, so they
   // reach the confirmation below. On web the same guard intercepts navigation away from the sheet.
+  //
+  // A confirmed discard re-issues the blocked action with `repeat`, not a hand-made `dispatch`. The
+  // block lives in navigation state that only lets go once React commits `leaving`; `repeat` lifts
+  // it in the same batch as the dispatch, while a bare `dispatch` right after `setLeaving` can still
+  // meet the old block (on web there is no exit animation to wait out) and ask a second time.
+  //
+  // One prompt at a time: a second scrim tap or back press while the first is open would stack
+  // another. The flag clears when the prompt resolves either way, so a cancel can be asked again.
+  const asking = useRef(false);
   usePreventRemove(dirty && !leaving, (event) => {
+    if (asking.current) return;
+    asking.current = true;
     void confirmDestructive({
       title: "Discard changes?",
       message: "This form has unsaved changes.",
       confirmLabel: "Discard",
-    }).then(async (confirmed) => {
-      if (!confirmed) return;
-      setLeaving(true);
-      await shell?.exit();
-      navigation.dispatch(event.data.action);
-    });
+    })
+      .then(async (confirmed) => {
+        if (!confirmed) return;
+        setLeaving(true);
+        await shell?.exit();
+        event.repeat();
+      })
+      .finally(() => {
+        asking.current = false;
+      });
   });
 
   const guarded = dirty && !leaving;

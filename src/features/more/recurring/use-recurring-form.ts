@@ -28,7 +28,12 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { useLocalization } from "@/localization/localization";
-import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import {
+  confirmAction,
+  confirmDestructive,
+  errorMessage,
+  showError,
+} from "@/utils/confirm";
 import { isLocalDate, todayLocal } from "@/utils/date";
 import {
   validateDateInput,
@@ -44,6 +49,10 @@ import {
 } from "@/utils/money";
 import { appliedCrossRateFor } from "@/utils/rates";
 import {
+  overduePostedBySave,
+  pendingOccurrences,
+} from "@/utils/recurring-impact";
+import {
   MAX_OCCURRENCE_COUNT,
   nthOccurrenceDate,
   occurrenceCountUntil,
@@ -51,7 +60,9 @@ import {
 import {
   EndMode,
   MAX_REPEAT_INTERVAL,
+  projectedNextDueDate,
 } from "@/features/more/recurring/recurring-model";
+import { canPostNow } from "@/data/finance/rates";
 
 export function useRecurringForm() {
   const params = useLocalSearchParams<{
@@ -121,7 +132,29 @@ export function useRecurringForm() {
   );
   const [occurrenceCount, setOccurrenceCount] = useState("");
   const [autoPost, setAutoPost] = useState(existing?.autoPost ?? false);
-  const [active, setActive] = useState(existing?.active ?? true);
+  const earliestPendingDate = existing
+    ? pendingOccurrences(state.transactions, existing.id)
+        .map((item) => item.localDate)
+        .sort()[0]
+    : undefined;
+  // A stored-active rule that is already past its end opens switched off, so the form's first
+  // render matches its baseline: merely opening it never counts as an unsaved change.
+  const [active, setActive] = useState(() => {
+    if (!existing?.active) return existing?.active ?? true;
+    if (!existing.endDate) return true;
+    return !(
+      projectedNextDueDate({
+        existing,
+        active: true,
+        unit: existing.unit,
+        interval: existing.interval,
+        startDate: existing.startDate,
+        endDate: existing.endDate,
+        earliestPendingDate,
+        today: todayLocal(),
+      }) > existing.endDate
+    );
+  });
   const [foreignEnabled, setForeignEnabled] = useState(() =>
     Boolean(existing?.template.foreign ?? draft?.foreignCurrency),
   );
@@ -320,6 +353,56 @@ export function useRecurringForm() {
     if (next === "date" && countedEndDate) setEndDate(countedEndDate);
     setEndMode(next);
   };
+  // The end date this form would save, and whether it leaves no occurrence to come. Such a
+  // schedule is saved switched off (generation ends it), so the form shows it as ended with the
+  // toggle locked rather than letting "active" silently turn itself off on save.
+  const resolvedEndDate =
+    endMode === "count"
+      ? countedEndDate
+      : endMode === "date" && isLocalDate(endDate)
+        ? endDate
+        : null;
+  // The next payment the schedule would have once it runs, judged as if switched on: a paused
+  // schedule is judged by the date resuming would give (its stored date stands still while paused,
+  // so a long-expired one is still ended), the same date the schedule list uses. Judging apart
+  // from the switch also keeps this stable when the form turns the switch off by itself. Past the
+  // end date, there is none left.
+  const projectedNext =
+    scheduleReady && isLocalDate(startDate)
+      ? projectedNextDueDate({
+          existing,
+          active: true,
+          unit,
+          interval: Math.floor(Number(interval)),
+          startDate,
+          endDate: resolvedEndDate,
+          earliestPendingDate,
+          today: todayLocal(),
+        })
+      : null;
+  const endedByResolvedDate = Boolean(
+    resolvedEndDate && projectedNext && projectedNext > resolvedEndDate,
+  );
+  // Extending the end date past the next payment lifts the lock and leaves the switch off:
+  // the user turns the schedule on themselves, which resumes it from today. While the schedule is
+  // unfinished (a blank count or date, or an interval or start date that does not parse) nothing
+  // resolves, so it only looks not ended for lack of an answer: keep the ended state (and the
+  // toggle's lock) of the last complete schedule until it is finished. Adjusted during render.
+  const endIncomplete =
+    !scheduleReady ||
+    ((endMode === "count" || endMode === "date") && resolvedEndDate === null);
+  const [wasEnded, setWasEnded] = useState(endedByResolvedDate);
+  if (!endIncomplete && wasEnded !== endedByResolvedDate) {
+    setWasEnded(endedByResolvedDate);
+  }
+  const scheduleEnded = endIncomplete ? wasEnded : endedByResolvedDate;
+  // An ended schedule is off for real, not just shown off: otherwise extending the end date would
+  // unlock the switch already on. Covers the transition into ended; it only ever sets false, so it
+  // cannot loop.
+  if (scheduleEnded && active) setActive(false);
+  // The projected date only explains an ended schedule; it is null otherwise.
+  const nextAfterEnd = scheduleEnded ? projectedNext : null;
+  const effectiveActive = active && !scheduleEnded;
   const canSave =
     Boolean(account) &&
     !amountError &&
@@ -340,6 +423,35 @@ export function useRecurringForm() {
 
   const save = async () => {
     if (!account || busy || !canSave) return;
+    // Saving an active rule runs generation at once, and generation posts every due occurrence of
+    // an auto-post rule, including ones that were waiting for review. Say so before it happens.
+    const today = todayLocal();
+    // Only occurrences that can be priced today post; one waiting for a rate stays upcoming.
+    const pricingContext = {
+      state,
+      formatLocale: locale,
+      postedTransactions: () => [],
+      transactionById: () => new Map(),
+    };
+    const overdue = overduePostedBySave(
+      existing,
+      { autoPost, active: effectiveActive },
+      state.transactions,
+      today,
+      (transaction) => canPostNow(pricingContext, transaction, today),
+    );
+    if (
+      overdue > 0 &&
+      !(await confirmAction({
+        title: "Post overdue payments?",
+        message:
+          overdue === 1
+            ? "1 overdue payment will be posted now."
+            : `${overdue} overdue payments will be posted now.`,
+        confirmLabel: "Post them",
+      }))
+    )
+      return;
     setBusy(true);
     try {
       const normalizedInterval = Math.max(1, Math.floor(Number(interval) || 1));
@@ -390,7 +502,7 @@ export function useRecurringForm() {
           endDate: normalizedEndDate,
           nextDueDate: existing?.nextDueDate ?? startDate,
           autoPost,
-          active,
+          active: effectiveActive,
         },
         existing?.id,
         expectedRevision,
@@ -411,10 +523,20 @@ export function useRecurringForm() {
 
   const remove = async () => {
     if (!existing || busy) return;
+    const pending = pendingOccurrences(state.transactions, existing.id).length;
     if (
       !(await confirmDestructive({
         title: "Delete this schedule?",
-        message: "Already generated transactions stay in your ledger.",
+        message: [
+          "Transactions already posted stay in your ledger.",
+          ...(pending === 0
+            ? []
+            : [
+                pending === 1
+                  ? "1 upcoming payment that hasn’t been posted yet is removed."
+                  : `${pending} upcoming payments that haven’t been posted yet are removed.`,
+              ]),
+        ],
       }))
     )
       return;
@@ -467,6 +589,9 @@ export function useRecurringForm() {
     setAutoPost,
     active,
     setActive,
+    scheduleEnded,
+    nextAfterEnd,
+    effectiveActive,
     foreignEnabled,
     setForeignEnabled,
     foreignCurrency,

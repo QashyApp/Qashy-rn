@@ -240,6 +240,33 @@ describe("pending auto-posts", () => {
     ).toEqual(["2026-06-24"]);
   });
 
+  it("never previews occurrences dated after today", async () => {
+    const repository = await createRepository();
+    await addRule(repository, { startDate: "2026-06-03", autoPost: true });
+    at("2026-06-18");
+    const today = repository
+      .getPendingAutoPosts("2026-06-18")
+      .map((item) => item.localDate);
+    expect(today).toEqual(["2026-06-03", "2026-06-10", "2026-06-17"]);
+    // A date past today is read as today: nothing priced or marked due ahead of its time.
+    expect(
+      repository
+        .getPendingAutoPosts("2026-07-31")
+        .map((item) => item.localDate),
+    ).toEqual(today);
+    expect(
+      repository
+        .getPendingAutoPosts("9999-12-31")
+        .map((item) => item.localDate),
+    ).toEqual(today);
+    // An earlier date still previews only what was due by then.
+    expect(
+      repository
+        .getPendingAutoPosts("2026-06-11")
+        .map((item) => item.localDate),
+    ).toEqual(["2026-06-03", "2026-06-10"]);
+  });
+
   it("changes nothing: no state, no events, no stored rows", async () => {
     const storage = new MemoryStorageAdapter();
     const repository = await createRepository(storage);

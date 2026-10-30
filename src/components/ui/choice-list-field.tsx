@@ -12,7 +12,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AppIcon } from "@/components/ui/app-icon";
 import { AppText } from "@/components/ui/app-text";
 import { IconButton } from "@/components/ui/icon-button";
-import { MotionPressable, MotionView } from "@/components/ui/motion";
+import {
+  MotionPressable,
+  MotionView,
+  useMotionPreference,
+} from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
@@ -54,6 +58,7 @@ export function ChoiceListField({
   const m3 = theme.materialControls;
   const { isRtl, t } = useLocalization();
   const { height } = useWindowDimensions();
+  const { instant } = useMotionPreference();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   // No fallback to options[0]: an unmatched value shows the placeholder. Why: showing the first
@@ -142,7 +147,7 @@ export function ChoiceListField({
       ) : null}
 
       <Modal
-        animationType="fade"
+        animationType={instant ? "none" : "fade"}
         transparent
         visible={open}
         onRequestClose={close}
@@ -151,9 +156,11 @@ export function ChoiceListField({
           edges={["top", "right", "bottom", "left"]}
           style={{ flex: 1, justifyContent: "center", padding: 18 }}
         >
+          {/* Decorative: the header's close button is the one named, focusable control,
+              so a screen reader does not meet the same "Close ... choices" twice. */}
           <Pressable
-            accessibilityLabel={t(`Close ${label.toLocaleLowerCase()} choices`)}
-            accessibilityRole="button"
+            accessible={false}
+            importantForAccessibility="no"
             onPress={close}
             style={{
               position: "absolute",
@@ -270,7 +277,8 @@ export function ChoiceListField({
                   return (
                     <MotionPressable
                       accessibilityRole="radio"
-                      accessibilityState={{ selected: isSelected }}
+                      accessibilityState={{ checked: isSelected }}
+                      aria-checked={isSelected}
                       onPress={() => {
                         hapticSelection();
                         onChange(item.value);

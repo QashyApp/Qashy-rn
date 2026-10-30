@@ -16,6 +16,7 @@ import {
   SectionList,
   StyleSheet,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -37,6 +38,7 @@ import {
 } from "@/components/ui/month-pager";
 import { MotionView, ScreenTransition } from "@/components/ui/motion";
 import { UndoBar } from "@/components/ui/undo-bar";
+import { AppText } from "@/components/ui/app-text";
 import { PageHeading } from "@/components/ui/page-heading";
 import {
   floatingActionMetrics,
@@ -105,6 +107,8 @@ function ignoreDismiss() {}
 
 /** The selection a page that is not the current one gets: neighbours never hold a selection. */
 const NO_SELECTION: ReadonlySet<string> = new Set();
+// Keeps the caption line its height while it says nothing.
+const NO_CAPTION = String.fromCharCode(0xa0);
 const NO_TRANSACTIONS: readonly TransactionRecord[] = [];
 
 /** How long the month has to hold still before the URL is updated to it. */
@@ -152,6 +156,7 @@ export function TransactionsScreen() {
   const repository = useFinanceRepository();
   const state = useFinanceState();
   const theme = useQashyTheme();
+  const { fontScale } = useWindowDimensions();
   const { radius, space } = theme;
   const { isRtl, locale, t } = useLocalization();
   const metrics = useScreenMetrics();
@@ -248,6 +253,10 @@ export function TransactionsScreen() {
   }, [paramDue, month]);
 
   const allMonths = searchAllMonths && search.trim().length > 0;
+  // Upcoming is everything ahead, so like a search across all months it does not follow the month
+  // bar: the bar is dimmed and out of reach while it is on.
+  const upcomingOnly = kind === "upcoming";
+  const spansMonths = allMonths || upcomingOnly;
   const fromDate = startOfMonth(month);
   const toDate = endOfMonth(month);
 
@@ -604,8 +613,15 @@ export function TransactionsScreen() {
   const toolbarGap = toolbarStyle.gap;
   // A filter that is on but may be out of sight: a kind other than All, or a search across months.
   const filterActive = kind !== "all" || allMonths;
+  // "Search all months" survives an emptied field (backspacing to retype keeps it, and its chip
+  // comes back with the next character); only the clear button resets it, or leaving the screen.
   const resetSearch = () => {
     setSearch("");
+    setSearchAllMonths(false);
+    clearSelection();
+  };
+  const changeSearch = (value: string) => {
+    setSearch(value);
     clearSelection();
   };
 
@@ -615,66 +631,102 @@ export function TransactionsScreen() {
       onChange={(next, direction) =>
         navigateMonth(pagerRef.current, month, next, direction, changeMonth)
       }
-      disabled={allMonths}
+      disabled={spansMonths}
+      label={upcomingOnly ? "All upcoming" : undefined}
       dragProgress={dragProgress}
       fill={phoneWidth}
     />
   );
+  // The tiles are always the calendar month's totals and ignore the type and the search; they are
+  // dimmed when the list spans months. Either way the list and the tiles differ, so say so.
+  const totalsCaption = spansMonths
+    ? t(`Totals are for ${monthLabel(month, locale)} only`)
+    : kind !== "all" || search.trim().length > 0
+      ? t(`Totals include all transactions in ${monthLabel(month, locale)}`)
+      : "";
   const summaryTiles = (
-    <View
-      accessibilityLabel={
-        allMonths ? undefined : `${monthLabel(month, locale)} ${t("summary")}`
-      }
-      style={{ opacity: allMonths ? 0.45 : 1 }}
-    >
-      <SummaryTiles
-        currency={currency}
-        locale={locale}
-        compact={phoneWidth}
-        tiles={[
-          {
-            label: "Income",
-            amountMinor: summary.incomeMinor,
-            color: theme.positiveText,
-          },
-          {
-            label: "Spent",
-            amountMinor: summary.expenseMinor,
-            color: theme.text,
-          },
-          {
-            label: "Net",
-            amountMinor: summary.netFlowMinor,
-            color:
-              summary.netFlowMinor > 0
-                ? theme.positiveText
-                : summary.netFlowMinor < 0
-                  ? theme.negativeText
-                  : theme.text,
-          },
-        ]}
-      />
+    <View style={{ gap: space.xs }}>
+      <View
+        accessibilityLabel={
+          spansMonths
+            ? undefined
+            : `${monthLabel(month, locale)} ${t("summary")}`
+        }
+        style={{ opacity: spansMonths ? 0.45 : 1 }}
+      >
+        <SummaryTiles
+          currency={currency}
+          locale={locale}
+          compact={phoneWidth}
+          tiles={[
+            {
+              label: "Income",
+              amountMinor: summary.incomeMinor,
+              color: theme.positiveText,
+            },
+            {
+              label: "Spent",
+              amountMinor: summary.expenseMinor,
+              color: theme.text,
+            },
+            {
+              label: "Net",
+              amountMinor: summary.netFlowMinor,
+              color:
+                summary.netFlowMinor > 0
+                  ? theme.positiveText
+                  : summary.netFlowMinor < 0
+                    ? theme.negativeText
+                    : theme.text,
+            },
+          ]}
+        />
+      </View>
+      {/* Said only when it adds something: the month bar already names the month, so a plain
+          month needs no caption. The slot reserves one line, so a caption that fits on one line
+          appears without moving the list. The trade-off: it may wrap to a second line (the
+          qualifier that says what the totals cover is the part an ellipsis would cut at a large
+          font size or in Hebrew), and that rare wrap does move the list, because wrapping is
+          better than hiding the qualifier. The height follows the theme's caption line height and
+          the system font scale. */}
+      <AppText
+        literal
+        variant="caption"
+        muted
+        numberOfLines={2}
+        style={{
+          minHeight: theme.type.scale.caption.lineHeight * fontScale,
+        }}
+        accessibilityElementsHidden={!totalsCaption}
+        importantForAccessibility={
+          totalsCaption ? "auto" : "no-hide-descendants"
+        }
+      >
+        {totalsCaption || NO_CAPTION}
+      </AppText>
     </View>
   );
-  const searchAllMonthsChip = search ? (
-    <MotionView
-      variant="down"
-      exit
-      animateLayout
-      style={{ flexDirection: "row" }}
-    >
-      <ChoiceChip
-        mode="checkbox"
-        icon="calendar"
-        label="Search all months"
-        selected={searchAllMonths}
-        onPress={() => {
-          setSearchAllMonths((current) => !current);
-          clearSelection();
-        }}
-      />
-    </MotionView>
-  ) : null;
+  // Upcoming already lists every month, so there is nothing for the chip to widen.
+  const searchAllMonthsChip =
+    search && !upcomingOnly ? (
+      <MotionView
+        variant="down"
+        exit
+        animateLayout
+        style={{ flexDirection: "row" }}
+      >
+        <ChoiceChip
+          mode="checkbox"
+          icon="calendar"
+          label="Search all months"
+          selected={searchAllMonths}
+          onPress={() => {
+            setSearchAllMonths((current) => !current);
+            clearSelection();
+          }}
+        />
+      </MotionView>
+    ) : null;
   // Five options do not fit a segmented control on a phone without truncating, so they scroll
   // sideways as one row instead of wrapping.
   // `bleed` draws the row out to the screen edges with its own negative margin; a caller that
@@ -741,11 +793,8 @@ export function TransactionsScreen() {
                       <SearchPillRow
                         switcher={monthSwitcher}
                         value={search}
-                        allMonths={searchAllMonths}
-                        onChangeText={(value) => {
-                          setSearch(value);
-                          clearSelection();
-                        }}
+                        allMonths={spansMonths}
+                        onChangeText={changeSearch}
                         onClear={resetSearch}
                       />
                       {summaryTiles}
@@ -806,7 +855,7 @@ export function TransactionsScreen() {
                           <TextInput
                             accessibilityLabel={t("Search transactions")}
                             placeholder={t(
-                              searchAllMonths
+                              spansMonths
                                 ? "Search all months"
                                 : "Search this month",
                             )}
@@ -814,10 +863,7 @@ export function TransactionsScreen() {
                             value={search}
                             onFocus={() => setSearchFocused(true)}
                             onBlur={() => setSearchFocused(false)}
-                            onChangeText={(value) => {
-                              setSearch(value);
-                              clearSelection();
-                            }}
+                            onChangeText={changeSearch}
                             style={{
                               flex: 1,
                               minHeight: 44,
@@ -858,7 +904,7 @@ export function TransactionsScreen() {
               ref={pagerRef}
               dragProgress={dragProgress}
               month={month}
-              disabled={allMonths || selectionMode}
+              disabled={spansMonths || selectionMode}
               blockedBy={pagerBlockedBy}
               onChange={changeMonth}
               style={{ flex: 1 }}

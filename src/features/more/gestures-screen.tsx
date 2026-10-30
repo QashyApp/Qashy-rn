@@ -122,7 +122,7 @@ export function GesturesScreen() {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 14,
+            gap: space.md,
           }}
         >
           <View style={{ flex: 1, gap: space.xxs }}>
@@ -171,7 +171,7 @@ export function GesturesScreen() {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 14,
+            gap: space.md,
           }}
         >
           <View style={{ flex: 1, gap: space.xxs }}>
@@ -196,7 +196,7 @@ export function GesturesScreen() {
               flexDirection: "row",
               alignItems: "center",
               justifyContent: "space-between",
-              gap: 14,
+              gap: space.md,
             }}
           >
             <View style={{ flex: 1, gap: space.xxs }}>
