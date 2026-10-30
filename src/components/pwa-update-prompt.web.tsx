@@ -14,6 +14,8 @@ const SKIP_WAITING_FALLBACK_MS = 3000;
 
 export function PwaUpdatePrompt() {
   const [visible, setVisible] = useState(false);
+  // Set once Reload is tapped: the page is about to reload, so a second tap would only queue another.
+  const [reloading, setReloading] = useState(false);
   const registrationRef = useRef<ServiceWorkerRegistration | null>(null);
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
@@ -110,7 +112,7 @@ export function PwaUpdatePrompt() {
         <View style={{ gap: 10 }}>
           <AppText variant="label">A fresh version is ready</AppText>
           <AppText variant="caption" muted>
-            Reload when you’re ready. Your finance data stays in IndexedDB.
+            Reload when you’re ready. Your data stays on this device.
           </AppText>
           <View
             style={{ flexDirection: "row", justifyContent: "flex-end", gap: 8 }}
@@ -118,11 +120,15 @@ export function PwaUpdatePrompt() {
             <TextButton
               title="Later"
               tone="muted"
+              disabled={reloading}
               onPress={() => setVisible(false)}
             />
             <TextButton
-              title="Reload"
+              title={reloading ? "Reloading…" : "Reload"}
+              disabled={reloading}
               onPress={() => {
+                if (reloading) return;
+                setReloading(true);
                 // Read the registration at press time. If a worker is still waiting, it
                 // must be promoted before a reload can pick it up. If none is waiting (it
                 // was already promoted, by this tab or another), the page is on the live

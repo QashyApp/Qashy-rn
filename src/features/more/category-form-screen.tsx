@@ -263,7 +263,6 @@ export function CategoryFormScreen() {
               key={item}
               color={item}
               selected={color === item}
-              label={`Use ${item} category color`}
               onPress={() => setColor(item)}
             />
           ))}

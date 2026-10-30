@@ -195,6 +195,20 @@ const assembled: readonly string[] = [
   // /sync — a below-quorum approval, and a save that had nowhere to go.
   "Your approval counts toward removing Laptop. It’s removed once 2 of 3 devices approve.",
   "Sharing isn’t available on this device, so the file couldn’t be saved.",
+  // /sync-pair — the failure and retry sentences after the vault key has (or has not) gone out.
+  "The vault key was not sent.",
+  "This device did not join the vault.",
+  "The other device already received the vault key, but this device could not save it.",
+  "Press “They match” again to finish. The key is not sent a second time.",
+  "This device received the vault key but could not save it, so it did not join.",
+  "The other device has already added it: remove this device in the other device’s sync settings, then pair again.",
+  "The other device already has your vault key. It is not sent again.",
+  // /sync — owner-only removal, the Pause explanation, and a manual sync that did nothing.
+  "Only the vault owner can remove a device under the current rule.",
+  "Pause stops this device sending and receiving changes until you resume. Your data stays here.",
+  "Sync is paused on this device, so nothing was sent or received. Resume sync to continue.",
+  "This device isn’t paired with another device yet, so there was nothing to sync.",
+  "Sync didn’t run on this device. The status above says why.",
   // /sync-pair — the pairing-code countdown.
   "1 second left",
   "89 seconds left",

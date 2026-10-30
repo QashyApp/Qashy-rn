@@ -9,11 +9,14 @@ import { SunkenWell } from "@/features/sync/pair/pair-primitives";
 export function ConfirmStep({
   sas,
   busy,
+  keySent,
   onMatch,
   onReject,
 }: {
   readonly sas: readonly string[];
   readonly busy: boolean;
+  /** The vault key has already left this device; only saving the other device is left to retry. */
+  readonly keySent: boolean;
   readonly onMatch: () => void;
   readonly onReject: () => void;
 }) {
@@ -51,15 +54,16 @@ export function ConfirmStep({
           icon="xmark"
           variant="danger"
           size="large"
-          disabled={busy}
+          disabled={busy || keySent}
           onPress={onReject}
           style={{ flex: 1, minWidth: 160 }}
         />
       </View>
 
       <AppText variant="caption" muted>
-        Nothing has been sent yet. Your vault key only leaves this device after
-        you confirm.
+        {keySent
+          ? "The other device already has your vault key. It is not sent again."
+          : "Nothing has been sent yet. Your vault key only leaves this device after you confirm."}
       </AppText>
     </>
   );

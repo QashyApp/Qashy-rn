@@ -242,11 +242,6 @@
       "he": "יתקבל"
     },
     {
-      "name": "q_05e8ba1a3a05f0c3",
-      "en": "Reload when you’re ready. Your finance data stays in IndexedDB.",
-      "he": "טענו מחדש כשתהיו מוכנים. המידע הפיננסי נשאר ב־IndexedDB."
-    },
-    {
       "name": "q_05f6e2fd9831623f",
       "en": "Purple",
       "he": "סגול"
@@ -1127,6 +1122,11 @@
       "he": "מטבע הבסיס של האצווה הזו"
     },
     {
+      "name": "q_20eceb4c67a30298",
+      "en": "The other device has already added it: remove this device in the other device’s sync settings, then pair again.",
+      "he": "המכשיר האחר כבר הוסיף אותו: הסירו את המכשיר הזה בהגדרות הסנכרון של המכשיר האחר, ואז חברו שוב."
+    },
+    {
       "name": "q_211b94c9273ef888",
       "en": "Choose the end date.",
       "he": "בחרו את תאריך הסיום."
@@ -1482,6 +1482,11 @@
       "he": "החלפה"
     },
     {
+      "name": "q_2ab3d85ec2608d90",
+      "en": "Sync didn’t run on this device. The status above says why.",
+      "he": "הסנכרון לא רץ במכשיר הזה. המצב שלמעלה מסביר מדוע."
+    },
+    {
       "name": "q_2abca9c6f8091e1d",
       "en": "Choose a valid transaction.",
       "he": "בחרו תנועה תקינה."
@@ -1675,6 +1680,11 @@
       "name": "q_31665e7ba24abccc",
       "en": "This device can’t read its stored key, so nothing can be sealed or opened.",
       "he": "המכשיר הזה אינו יכול לקרוא את המפתח השמור שלו, ולכן שום דבר אינו ניתן לחתימה או לפתיחה."
+    },
+    {
+      "name": "q_3188ee38f9d5e971",
+      "en": "Sync is paused on this device, so nothing was sent or received. Resume sync to continue.",
+      "he": "הסנכרון מושהה במכשיר הזה, ולכן דבר לא נשלח ולא התקבל. המשיכו את הסנכרון כדי להמשיך."
     },
     {
       "name": "q_31a20eb37645e1a9",
@@ -3037,6 +3047,11 @@
       "he": "מנויים ותנועות חוזרות ש־Cashew עדיין לא שילם (הוא משלם אותם כשהוא נפתח) יובאו כתזמונים, ולכן התשלומים שהוחמצו מאז יופיעו לסקירתכם."
     },
     {
+      "name": "q_597467263b7058c8",
+      "en": "Reloading…",
+      "he": "טוענים מחדש…"
+    },
+    {
       "name": "q_598ccda13c81314b",
       "en": "That code could not be used. Show a fresh one and try again.",
       "he": "לא ניתן היה להשתמש בקוד הזה. הציגו קוד חדש ונסו שוב."
@@ -4042,6 +4057,11 @@
       "he": "מעבר לאחרונות"
     },
     {
+      "name": "q_75982540160178c4",
+      "en": "The other device already received the vault key, but this device could not save it.",
+      "he": "המכשיר האחר כבר קיבל את מפתח הכספת, אך המכשיר הזה לא הצליח לשמור זאת."
+    },
+    {
       "name": "q_75a44fb9d15f7dbb",
       "en": "Account color",
       "he": "צבע החשבון"
@@ -4120,6 +4140,11 @@
       "name": "q_77dde5ef6c52def6",
       "en": "Currency",
       "he": "מטבע"
+    },
+    {
+      "name": "q_77ee865649dd30b1",
+      "en": "Pause stops this device sending and receiving changes until you resume. Your data stays here.",
+      "he": "ההשהיה עוצרת את שליחת השינויים וקבלתם במכשיר הזה עד שתמשיכו. הנתונים שלכם נשארים כאן."
     },
     {
       "name": "q_7817e773b898683f",
@@ -4747,6 +4772,11 @@
       "he": "מתי התזמון מסתיים"
     },
     {
+      "name": "q_8ab877afb9982b3e",
+      "en": "The budget you chose has ended or was removed, and no other budget is active, so the widget asks you to create one.",
+      "he": "התקציב שבחרתם הסתיים או הוסר, ואין תקציב פעיל אחר, ולכן הווידג׳ט מבקש מכם ליצור תקציב."
+    },
+    {
       "name": "q_8abb18cfdf66b830",
       "en": "savings",
       "he": "חיסכון"
@@ -5040,6 +5070,11 @@
       "name": "q_93f71db0b4102deb",
       "en": "Choose another backup file.",
       "he": "בחרו קובץ גיבוי אחר."
+    },
+    {
+      "name": "q_940297bb5d446178",
+      "en": "The other device already has your vault key. It is not sent again.",
+      "he": "למכשיר האחר כבר יש את מפתח הכספת שלכם. הוא לא נשלח שוב."
     },
     {
       "name": "q_9456ba55396e1ca0",
@@ -5760,6 +5795,11 @@
       "name": "q_a9dfff96ffbbc658",
       "en": "Will be added",
       "he": "יתווספו"
+    },
+    {
+      "name": "q_aa2a3d1e3fc067ee",
+      "en": "This device did not join the vault.",
+      "he": "המכשיר הזה לא הצטרף לכספת."
     },
     {
       "name": "q_aa30ab2ea4b6a2c9",
@@ -8202,6 +8242,11 @@
       "he": "ערכת עיצוב מותאמת עם אותו מזהה כבר קיימת במכשיר הזה. הייבוא יחליף אותה."
     },
     {
+      "name": "q_ed4bb03c4a2bfcd7",
+      "en": "The vault key was not sent.",
+      "he": "מפתח הכספת לא נשלח."
+    },
+    {
       "name": "q_ed506337646338e6",
       "en": "Transactions that need this rate will report it as missing.",
       "he": "תנועות שזקוקות לשער הזה ידווחו שהוא חסר."
@@ -8265,6 +8310,11 @@
       "name": "q_eef528e68e94643c",
       "en": "Hello has trailing bytes.",
       "he": "בהודעת הפתיחה יש בתים עודפים בסופה."
+    },
+    {
+      "name": "q_ef186fb841cbdb86",
+      "en": "This device isn’t paired with another device yet, so there was nothing to sync.",
+      "he": "המכשיר הזה עדיין לא מחובר למכשיר אחר, ולכן לא היה מה לסנכרן."
     },
     {
       "name": "q_ef5005edac8b82e7",
@@ -8337,6 +8387,11 @@
       "he": "אוכל בחוץ"
     },
     {
+      "name": "q_f0b8ad1c695bcbc3",
+      "en": "Press “They match” again to finish. The key is not sent a second time.",
+      "he": "לחצו שוב על ״הן זהות״ כדי לסיים. המפתח לא נשלח פעם נוספת."
+    },
+    {
       "name": "q_f0c3557eba05a4b9",
       "en": "This SQLite file looks damaged or incomplete (a page is referenced twice).",
       "he": "קובץ ה־SQLite הזה נראה פגום או חלקי (עמוד מופיע בהפניה פעמיים)."
@@ -8402,6 +8457,11 @@
       "he": "סכום הבסיס ביעד אינו תואם לסכום היעד ולשער החליפין."
     },
     {
+      "name": "q_f2800f76d0f131f3",
+      "en": "The budget you chose has ended or was removed, so the widget shows this one instead:",
+      "he": "התקציב שבחרתם הסתיים או הוסר, ולכן הווידג׳ט מציג במקומו את התקציב הזה:"
+    },
+    {
       "name": "q_f28087680a081b91",
       "en": "Everything currently on this device is replaced by what the file holds. The restored device carries on as the one that made the backup, so restore onto a replacement — never alongside a device that is still in use.",
       "he": "כל מה שנמצא כעת במכשיר הזה יוחלף במה שהקובץ מכיל. המכשיר המשוחזר ממשיך בתור זה שיצר את הגיבוי, ולכן שחזרו למכשיר חלופי — לעולם לא לצד מכשיר שעדיין בשימוש."
@@ -8455,6 +8515,11 @@
       "name": "q_f3b1630889f2977c",
       "en": "Top categories removed",
       "he": "הקטגוריות המובילות הוסרו"
+    },
+    {
+      "name": "q_f3eb03b9208ef736",
+      "en": "This device received the vault key but could not save it, so it did not join.",
+      "he": "המכשיר הזה קיבל את מפתח הכספת אך לא הצליח לשמור אותו, ולכן לא הצטרף."
     },
     {
       "name": "q_f410687a2889dff7",
@@ -8560,6 +8625,11 @@
       "name": "q_f63afd9e6692dc59",
       "en": "Transaction foreign amount",
       "he": "הסכום במטבע חוץ בתנועה"
+    },
+    {
+      "name": "q_f643b17faf2f910c",
+      "en": "Reload when you’re ready. Your data stays on this device.",
+      "he": "טענו מחדש כשתהיו מוכנים. הנתונים שלכם נשארים במכשיר הזה."
     },
     {
       "name": "q_f64aca02f23f2231",
@@ -8800,6 +8870,11 @@
       "name": "q_fcd0b03c963b2593",
       "en": "Suggested from earlier transactions with this title.",
       "he": "מוצע לפי תנועות קודמות עם אותה כותרת."
+    },
+    {
+      "name": "q_fce39068804f2516",
+      "en": "Only the vault owner can remove a device under the current rule.",
+      "he": "לפי הכלל הנוכחי, רק בעל הכספת יכול להסיר מכשיר."
     },
     {
       "name": "q_fd03652947a730c7",

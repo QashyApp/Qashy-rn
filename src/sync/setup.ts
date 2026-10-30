@@ -500,6 +500,11 @@ export async function adoptVault(
  *
  * Only a roster row: the host's key, epoch, and history all already exist, and this is the one
  * pairing outcome that changes nothing about the vault itself.
+ *
+ * Safe to run again for the same peer. The vault key has already gone to that device by the time
+ * this runs, so a failure part-way is retried rather than re-paired: a roster row that is
+ * already there is not rewritten (nor its "paired" activity repeated); only the membership
+ * announcement is attempted again.
  */
 export async function recordPairedPeer(
   deps: SyncSetupDeps,
@@ -507,6 +512,8 @@ export async function recordPairedPeer(
 ): Promise<void> {
   const at = (deps.nowIso ?? defaultNowIso)();
   await deps.storage.transact(async (tx) => {
+    const existing = (await readRoster(tx)).get(peer.deviceId);
+    if (existing && !existing.revokedAt) return;
     await writePeers(tx, [peer]);
     await appendActivity(tx, [
       activityEntry({ kind: "paired", recordedAt: at, peerId: peer.deviceId }),

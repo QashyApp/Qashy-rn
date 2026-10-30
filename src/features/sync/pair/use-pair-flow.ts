@@ -10,6 +10,7 @@ import {
   decodePairingCode,
   normalizeTypedPairingCode,
 } from "@/sync/crypto";
+import type { Peer } from "@/sync/engine";
 import { PairingHost, PairingJoiner } from "@/sync/pairing";
 import {
   adoptVault,
@@ -79,6 +80,16 @@ export function usePairFlow() {
   // the user has already left (Back, Start over, unmount), so it must not open a session, show
   // words, or navigate.
   const generation = useRef(0);
+  // True once this attempt's vault key has crossed to the other device (the host's `confirm`
+  // resolved, or the joiner received it). The pairing channel is closed by then, so "They match"
+  // can never run `confirm` again: what a failure may claim, and whether pressing it again is
+  // safe, both hang on this.
+  const [keySent, setKeySent] = useState(false);
+  const keySentRef = useRef(false);
+  const markKeySent = () => {
+    keySentRef.current = true;
+    setKeySent(true);
+  };
 
   /** Ends whatever is in flight. Safe to call repeatedly; that is the point of clearing it. */
   const closeSession = () => {
@@ -87,6 +98,8 @@ export function usePairFlow() {
     session.current?.close();
     session.current = null;
     accept.current = null;
+    keySentRef.current = false;
+    setKeySent(false);
   };
 
   // Hosting turns sync on (or back on) before any peer exists. If the attempt ends without a
@@ -180,12 +193,13 @@ export function usePairFlow() {
     rollbackAbandonedSetup();
     setSas(null);
     setCode(null);
+    // After the move: `move` clears the error, so a message set before it is never shown.
+    move("role");
     setError(
       t(
         "Pairing was stopped because screenshots could not be blocked on this device. Nothing was sent.",
       ),
     );
-    move("role");
   });
 
   // -------------------------------------------------------------------------
@@ -260,13 +274,24 @@ export function usePairFlow() {
         .then((confirmation) => {
           // Cancelled while the peer was still answering: the attempt is gone, so no words.
           if (abort.signal.aborted) return;
+          // Kept across presses. `confirm` runs once (it closes the channel), but recording the
+          // device and refreshing can be repeated, so a failure there retries only those steps and
+          // never sends the key again.
+          let handedTo: Peer | null = null;
+          let recorded = false;
           accept.current = async () => {
-            const { peer } = await confirmation.confirm();
-            // Set as soon as the confirm has sent the vault key to the peer. From here the peer
-            // holds the key on the other side, so a failure recording it locally must not trigger
-            // the rollback that would disable sync here.
-            pairedPeer.current = true;
-            await recordPairedPeer(setup, peer);
+            if (!handedTo) {
+              ({ peer: handedTo } = await confirmation.confirm());
+              // Set as soon as the confirm has sent the vault key to the peer. From here the peer
+              // holds the key on the other side, so a failure recording it locally must not
+              // trigger the rollback that would disable sync here.
+              pairedPeer.current = true;
+              markKeySent();
+            }
+            if (!recorded) {
+              await recordPairedPeer(setup, handedTo);
+              recorded = true;
+            }
             await refresh();
             setOutcome({
               headline: "Device added",
@@ -386,6 +411,7 @@ export function usePairFlow() {
       if (abort.signal.aborted) return;
       accept.current = async () => {
         const joined = await confirmation.confirm();
+        markKeySent();
         // The identity handed to `adoptVault` must be the one that earned the handshake — the
         // host has already written these exact public keys into its roster, and a fresh
         // identity here would be a device neither side can verify.
@@ -447,6 +473,7 @@ export function usePairFlow() {
   const confirmMatch = async () => {
     if (!accept.current || !begin()) return;
     setError(null);
+    const began = generation.current;
     try {
       await accept.current();
       session.current = null;
@@ -458,25 +485,52 @@ export function usePairFlow() {
       // retries and reports it on its own.
       if (firstRun) pullFirstRun();
     } catch (reason) {
+      // Back or unmount during the confirmation: the attempt is already closed and reported.
+      if (generation.current !== began) return;
       hapticError();
-      setError(errorMessage(reason, "Pairing could not be completed."));
+      const why = t(errorMessage(reason, "Pairing could not be completed."));
+      if (keySentRef.current && role === "host") {
+        // The other device holds the vault key and this one has not saved it as a member yet.
+        // The key is never re-sent: pressing the button again only repeats the local save.
+        setError(
+          `${t("The other device already received the vault key, but this device could not save it.")} ${t("Press “They match” again to finish. The key is not sent a second time.")}`,
+        );
+        return;
+      }
+      // Either nothing secret left this device, or (a joiner that received the key and could not
+      // store it) the channel is closed and cannot be resumed. Both end the attempt rather than
+      // leave a button that can only fail again.
+      const sentKey = keySentRef.current;
+      closeSession();
+      rollbackAbandonedSetup();
+      setSas(null);
+      setCode(null);
+      move("role");
+      setError(
+        sentKey
+          ? `${t("This device received the vault key but could not save it, so it did not join.")} ${t("The other device has already added it: remove this device in the other device’s sync settings, then pair again.")}`
+          : `${why} ${t(role === "host" ? "The vault key was not sent." : "This device did not join the vault.")}`,
+      );
     } finally {
       finish();
     }
   };
 
   const rejectMatch = () => {
+    // Unreachable once the key is out (the button is disabled); the guard keeps the claim below
+    // from ever being made after it.
+    if (keySentRef.current) return;
     closeSession();
     rollbackAbandonedSetup();
     setSas(null);
     setCode(null);
     hapticWarning();
+    move("role");
     setError(
       t(
         "Pairing was stopped and nothing was sent. Different words on the two screens can mean someone else tried to join — start again, and keep the code on screen only while the other device is scanning it.",
       ),
     );
-    move("role");
   };
 
   // -------------------------------------------------------------------------
@@ -502,6 +556,8 @@ export function usePairFlow() {
     code,
     remaining,
     sas,
+    // Host only: a joiner that received the key has nothing left to retry.
+    keySent: keySent && role === "host",
     outcome,
     scannerRearm,
     closeSession,

@@ -419,6 +419,26 @@ describe("joining a vault someone else holds", () => {
     expect(after?.vaultKey).toEqual(before?.vaultKey);
     expect(after?.epoch).toBe(before?.epoch);
   });
+
+  it("can be run again for the same device without duplicating it", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const joiner = peerNamed("Laptop");
+
+    // The pairing screen retries this when saving failed after the vault key had already been
+    // sent, so a second run has to leave one roster row and one "paired" entry.
+    await recordPairedPeer(target.deps, joiner);
+    await recordPairedPeer(target.deps, joiner);
+
+    expect((await target.roster()).map((peer) => peer.deviceId)).toEqual([
+      joiner.deviceId,
+    ]);
+    expect(
+      (await target.activity()).filter(
+        (entry) => entry.kind === "paired" && entry.peerId === joiner.deviceId,
+      ),
+    ).toHaveLength(1);
+  });
 });
 
 describe("changing the arrangement", () => {

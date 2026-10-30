@@ -79,6 +79,7 @@ export function PairScreen() {
     code,
     remaining,
     sas,
+    keySent,
     outcome,
     scannerRearm,
     closeSession,
@@ -219,6 +220,7 @@ export function PairScreen() {
             <ConfirmStep
               sas={sas}
               busy={busy}
+              keySent={keySent}
               onMatch={() => void confirmMatch()}
               onReject={rejectMatch}
             />

@@ -83,6 +83,9 @@ export function DeviceCard({
   const removingRef = useRef(false);
   const [approving, setApproving] = useState<string | null>(null);
   const isOwner = status.revocation.ownerDeviceId === status.deviceId;
+  // Under the owner rule `revokePeer` refuses every other device, so offering Remove there would
+  // only end in a failed confirmation.
+  const canRemove = status.revocation.mode !== "owner" || isOwner;
 
   // Newest first among the live ones, then the removed ones. Someone opening this screen after
   // pairing wants the device they just added at the top, and someone auditing it wants the
@@ -130,7 +133,7 @@ export function DeviceCard({
     // handler and is approved from the Pending removals card instead.
     // Held across the confirm dialog too: a second tap on the row while it is open (or while the
     // signed removal is being appended) must not start a second removal.
-    if (removingRef.current) return;
+    if (!canRemove || removingRef.current) return;
     removingRef.current = true;
     try {
       // Under majority vote the tap that starts a removal counts as the proposer's own approval,
@@ -138,8 +141,7 @@ export function DeviceCard({
       // With three or more devices it is not, so the dialog says it only proposes.
       const voters = livePeers(status.peers).length + 1;
       const required = Math.ceil(voters / 2);
-      const proposesOnly =
-        status.revocation.mode === "quorum" && required > 1;
+      const proposesOnly = status.revocation.mode === "quorum" && required > 1;
       const confirmed = await confirmDestructive(
         proposesOnly
           ? {
@@ -273,7 +275,7 @@ export function DeviceCard({
               // A tap starts a removal. One that is already proposed is approved from its own
               // button below, so a second tap cannot be mistaken for starting over.
               onPress={
-                peer.revokedAt || proposal
+                peer.revokedAt || proposal || !canRemove
                   ? undefined
                   : () => void remove(peer.deviceId, peer.name)
               }
@@ -281,6 +283,11 @@ export function DeviceCard({
           );
         })}
       </Card>
+      {!canRemove && peers.some((peer) => !peer.revokedAt) ? (
+        <AppText variant="caption" muted>
+          Only the vault owner can remove a device under the current rule.
+        </AppText>
+      ) : null}
 
       {pendingRows.length ? (
         <>

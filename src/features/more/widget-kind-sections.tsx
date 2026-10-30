@@ -4,6 +4,7 @@ import { View } from "react-native";
 import { AppText } from "@/components/ui/app-text";
 import { OptionRow } from "@/components/ui/option-row";
 import { QashySwitch } from "@/components/ui/qashy-switch";
+import { pickBudgetStatus } from "@/features/widgets/kinds/budget";
 import {
   resolvePrimaryMetric,
   type QuickAddMetric,
@@ -16,8 +17,12 @@ import type {
   WidgetKind,
 } from "@/features/widgets/kinds";
 import { useLocalization } from "@/localization/localization";
-import { useFinanceState } from "@/providers/finance-provider";
+import {
+  useFinanceRepository,
+  useFinanceState,
+} from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
+import { todayLocal } from "@/utils/date";
 
 export interface KindSectionProps<C extends WidgetConfig> {
   config: C;
@@ -124,14 +129,21 @@ function BudgetSection({
 }: KindSectionProps<BudgetWidgetConfig>) {
   const { space } = useQashyTheme();
   const { t } = useLocalization();
-  const { budgets } = useFinanceState();
-  // The Plan screen's order; archived (an older peer may still send one) and deleted are not offered.
-  const liveBudgets = budgets.filter(
-    (budget) => !budget.archived && !budget.deletedAt,
-  );
-  const selectedId = liveBudgets.some((budget) => budget.id === config.budgetId)
-    ? config.budgetId
-    : null;
+  const repository = useFinanceRepository();
+  // Subscribes to the finance state, so the statuses below are re-read when a budget changes.
+  useFinanceState();
+  // Only what the widget can show today, in the Plan screen's order: deleted, archived and ended custom
+  // budgets are not offered (the widget would show another budget in their place).
+  const statuses = repository.getBudgetStatuses(todayLocal());
+  const chosenId = config.budgetId;
+  const chosenActive =
+    chosenId !== null &&
+    statuses.some((status) => status.budget.id === chosenId);
+  // A saved choice that is no longer active stays saved, but the widget is showing something else.
+  const shown =
+    chosenId !== null && !chosenActive
+      ? pickBudgetStatus(statuses, chosenId)?.budget
+      : undefined;
   return (
     <View style={{ gap: space.sm }}>
       <AppText variant="label">Budget to show</AppText>
@@ -142,19 +154,33 @@ function BudgetSection({
       >
         <OptionRow
           title="First active budget"
-          selected={selectedId === null}
+          selected={chosenId === null}
           onPress={() => change({ budgetId: null })}
         />
-        {liveBudgets.map((budget) => (
+        {statuses.map(({ budget }) => (
           <OptionRow
             key={budget.id}
             literal
             title={budget.name}
-            selected={selectedId === budget.id}
+            selected={chosenActive && chosenId === budget.id}
             onPress={() => change({ budgetId: budget.id })}
           />
         ))}
       </View>
+      {chosenId !== null && !chosenActive ? (
+        <View accessibilityRole="alert" style={{ gap: space.xxs }}>
+          <AppText variant="caption" muted>
+            {shown
+              ? "The budget you chose has ended or was removed, so the widget shows this one instead:"
+              : "The budget you chose has ended or was removed, and no other budget is active, so the widget asks you to create one."}
+          </AppText>
+          {shown ? (
+            <AppText variant="label" literal>
+              {shown.name}
+            </AppText>
+          ) : null}
+        </View>
+      ) : null}
     </View>
   );
 }

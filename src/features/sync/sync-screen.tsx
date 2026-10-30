@@ -61,6 +61,7 @@ export function SyncScreen() {
     status,
     syncing,
     error,
+    pass,
     clearError,
     refresh,
     reconcile,
@@ -83,6 +84,9 @@ export function SyncScreen() {
   const [probed, setProbed] = useState<RelayHealth | null>(null);
   const [busy, setBusy] = useState<Busy>(null);
   const busyRef = useRef(false);
+  // A manual sync that did nothing, so the person who asked is told why instead of watching the
+  // spinner stop. Set from that attempt's own result; nothing schedules it.
+  const [skipped, setSkipped] = useState(false);
 
   // Read once per render, and passed down. Every relative time on the screen then agrees with
   // every other one, which a per-component clock read cannot promise. Above the early return
@@ -123,6 +127,7 @@ export function SyncScreen() {
     if (busyRef.current) return;
     busyRef.current = true;
     setBusy(kind);
+    setSkipped(false);
     let acted = false;
     try {
       await work();
@@ -153,7 +158,9 @@ export function SyncScreen() {
     // passes), so nothing here starts one while it owns the screen. The ref covers a tap that
     // lands before the next render; pull-to-refresh arrives here too.
     if (busyRef.current) return;
+    setSkipped(false);
     if (await reconcile()) hapticSuccess();
+    else setSkipped(true);
   };
 
   const rotate = async () => {
@@ -299,6 +306,21 @@ export function SyncScreen() {
               />
             ) : null}
           </View>
+          {paired && status.enabled ? (
+            <AppText variant="caption" muted>
+              Pause stops this device sending and receiving changes until you
+              resume. Your data stays here.
+            </AppText>
+          ) : null}
+          {skipped && !error && !syncing && pass && pass.reason !== "ok" ? (
+            <AppText variant="caption" muted accessibilityLiveRegion="polite">
+              {pass.reason === "disabled"
+                ? "Sync is paused on this device, so nothing was sent or received. Resume sync to continue."
+                : pass.reason === "unpaired"
+                  ? "This device isn’t paired with another device yet, so there was nothing to sync."
+                  : "Sync didn’t run on this device. The status above says why."}
+            </AppText>
+          ) : null}
           {status.pending ? (
             <AppText variant="caption" muted>
               Some changes on this device are still being signed. They go out on

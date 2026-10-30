@@ -27,7 +27,7 @@
  */
 
 import { router, useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { View } from "react-native";
 
 import { ActionButton } from "@/components/ui/action-button";
@@ -125,6 +125,7 @@ export function TransferScreen() {
   const { t } = useLocalization();
 
   const [busy, setBusy] = useState<Busy>(null);
+  const busyRef = useRef(false);
 
   // Export
   const [lock, setLock] = useState<BackupKeySource["kind"]>("passphrase");
@@ -182,13 +183,17 @@ export function TransferScreen() {
     work: () => Promise<unknown>,
     failure: string,
   ) => {
-    if (busy) return;
+    // A ref, not `busy`: a second tap inside the same render would still see the old state and
+    // start a second save sheet.
+    if (busyRef.current) return;
+    busyRef.current = true;
     setBusy(kind);
     try {
       await work();
     } catch (reason) {
       showError(failure, errorMessage(reason, "Nothing was changed."));
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   };

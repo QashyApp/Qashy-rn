@@ -632,8 +632,9 @@ export const HEBREW: Record<string, string> = {
   "A fresh version is ready": "גרסה חדשה מוכנה",
   Later: "אחר כך",
   Reload: "טעינה מחדש",
-  "Reload when you’re ready. Your finance data stays in IndexedDB.":
-    "טענו מחדש כשתהיו מוכנים. המידע הפיננסי נשאר ב־IndexedDB.",
+  "Reloading…": "טוענים מחדש…",
+  "Reload when you’re ready. Your data stays on this device.":
+    "טענו מחדש כשתהיו מוכנים. הנתונים שלכם נשארים במכשיר הזה.",
   "LOCAL-FIRST FINANCE": "כספים מקומיים תחילה",
   "Only your devices can read your data.":
     "רק המכשירים שלכם יכולים לקרוא את הנתונים שלכם.",
@@ -895,6 +896,28 @@ export const HEBREW: Record<string, string> = {
   "Nothing has been sent yet. Your vault key only leaves this device after you confirm.":
     "שום דבר לא נשלח עדיין. מפתח הכספת עוזב את המכשיר הזה רק לאחר שתאשרו.",
   "Pairing stopped": "החיבור הופסק",
+  "The vault key was not sent.": "מפתח הכספת לא נשלח.",
+  "This device did not join the vault.": "המכשיר הזה לא הצטרף לכספת.",
+  "The other device already received the vault key, but this device could not save it.":
+    "המכשיר האחר כבר קיבל את מפתח הכספת, אך המכשיר הזה לא הצליח לשמור זאת.",
+  "Press “They match” again to finish. The key is not sent a second time.":
+    "לחצו שוב על ״הן זהות״ כדי לסיים. המפתח לא נשלח פעם נוספת.",
+  "This device received the vault key but could not save it, so it did not join.":
+    "המכשיר הזה קיבל את מפתח הכספת אך לא הצליח לשמור אותו, ולכן לא הצטרף.",
+  "The other device has already added it: remove this device in the other device’s sync settings, then pair again.":
+    "המכשיר האחר כבר הוסיף אותו: הסירו את המכשיר הזה בהגדרות הסנכרון של המכשיר האחר, ואז חברו שוב.",
+  "The other device already has your vault key. It is not sent again.":
+    "למכשיר האחר כבר יש את מפתח הכספת שלכם. הוא לא נשלח שוב.",
+  "Only the vault owner can remove a device under the current rule.":
+    "לפי הכלל הנוכחי, רק בעל הכספת יכול להסיר מכשיר.",
+  "Pause stops this device sending and receiving changes until you resume. Your data stays here.":
+    "ההשהיה עוצרת את שליחת השינויים וקבלתם במכשיר הזה עד שתמשיכו. הנתונים שלכם נשארים כאן.",
+  "Sync is paused on this device, so nothing was sent or received. Resume sync to continue.":
+    "הסנכרון מושהה במכשיר הזה, ולכן דבר לא נשלח ולא התקבל. המשיכו את הסנכרון כדי להמשיך.",
+  "This device isn’t paired with another device yet, so there was nothing to sync.":
+    "המכשיר הזה עדיין לא מחובר למכשיר אחר, ולכן לא היה מה לסנכרן.",
+  "Sync didn’t run on this device. The status above says why.":
+    "הסנכרון לא רץ במכשיר הזה. המצב שלמעלה מסביר מדוע.",
   "Start over": "התחלה מחדש",
   "Pairing was stopped and nothing was sent. Different words on the two screens can mean someone else tried to join — start again, and keep the code on screen only while the other device is scanning it.":
     "החיבור הופסק ושום דבר לא נשלח. מילים שונות בשני המסכים יכולות להעיד שמישהו אחר ניסה להתחבר — התחילו מחדש, והשאירו את הקוד על המסך רק בזמן שהמכשיר האחר סורק אותו.",
@@ -1178,6 +1201,10 @@ export const HEBREW: Record<string, string> = {
   "A small widget has room for one figure.": "בווידג׳ט קטן יש מקום למספר אחד.",
   "Budget to show": "התקציב להצגה",
   "First active budget": "התקציב הפעיל הראשון",
+  "The budget you chose has ended or was removed, so the widget shows this one instead:":
+    "התקציב שבחרתם הסתיים או הוסר, ולכן הווידג׳ט מציג במקומו את התקציב הזה:",
+  "The budget you chose has ended or was removed, and no other budget is active, so the widget asks you to create one.":
+    "התקציב שבחרתם הסתיים או הוסר, ואין תקציב פעיל אחר, ולכן הווידג׳ט מבקש מכם ליצור תקציב.",
   over: "מעל",
   "3 months": "3 חודשים",
   "6 months": "6 חודשים",
