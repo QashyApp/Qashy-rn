@@ -321,7 +321,7 @@
     "q_ea8dc390a7cd89e7",
     "q_af2fbd066c57a0d4",
     "q_8870b0c42c1938a3",
-    "q_0e8e6f1cfbbbf556",
+    "q_a7a58c5a2fee1010",
     "q_697400b541fbc3cd",
     "q_c55bdfc27dcabe3f",
     "q_a45a194b58837e4f",
@@ -2467,8 +2467,8 @@
       "source": "^The last one is on (.+)\\.$"
     },
     {
-      "name": "q_83769cfe31339b6a",
-      "source": "^The next payment would be on (.+), after the end date\\. Extend the end date to turn it on\\.$"
+      "name": "q_972f99516eb7f834",
+      "source": "^The next payment would be on (.+), after the end date\\. Extend the end date, then turn it on\\.$"
     },
     {
       "name": "q_517ec611a568ff63",

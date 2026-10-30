@@ -375,8 +375,8 @@ export const HEBREW: Record<string, string> = {
   "Post overdue payments?": "לרשום תשלומים שעבר מועדם?",
   "1 overdue payment will be posted now.": "תשלום אחד שעבר מועדו יירשם עכשיו.",
   "Post them": "לרשום אותם",
-  "This schedule has ended. Extend the end date to turn it on.":
-    "התזמון הסתיים. יש להאריך את תאריך הסיום כדי להפעיל אותו.",
+  "This schedule has ended. Extend the end date, then turn it on.":
+    "התזמון הסתיים. יש להאריך את תאריך הסיום ואז להפעיל אותו.",
   Under: "תחת",
   "1 to review": "1 לבדיקה",
   Active: "פעיל",
@@ -3226,9 +3226,9 @@ export function createDynamicPatterns(
     [/^Move (\d+) transactions$/, (count) => `העברת ${count} תנועות`],
     [/^The last one is on (.+)\.$/, (date) => `האחרון ב־${date}.`],
     [
-      /^The next payment would be on (.+), after the end date\. Extend the end date to turn it on\.$/,
+      /^The next payment would be on (.+), after the end date\. Extend the end date, then turn it on\.$/,
       (date) =>
-        `התשלום הבא יהיה ב־${date}, אחרי תאריך הסיום. יש להאריך את תאריך הסיום כדי להפעיל אותו.`,
+        `התשלום הבא יהיה ב־${date}, אחרי תאריך הסיום. יש להאריך את תאריך הסיום ואז להפעיל אותו.`,
     ],
     [
       /^Number of times must be (\d+) or less\.$/,

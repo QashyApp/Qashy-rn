@@ -67,6 +67,27 @@ describe("DateField (web) range error", () => {
     expect(screen.queryByText(RANGE_ERROR, HIDDEN)).toBeNull();
   });
 
+  it("shows the form's value again when the rejected date becomes valid, instead of the uncommitted one", async () => {
+    // An end date bounded below by a start date that then moves earlier.
+    const view = await render(field("2026-06-10", "2026-06-01"));
+    const input = screen.getByLabelText("Due date", HIDDEN) as unknown as {
+      value: string;
+    };
+    input.value = "2026-05-01";
+    await type("2026-05-01");
+    expect(screen.getByText(RANGE_ERROR, HIDDEN)).toBeTruthy();
+
+    await view.rerender(field("2026-06-10", "2026-04-01"));
+
+    expect(screen.queryByText(RANGE_ERROR, HIDDEN)).toBeNull();
+    // The form still holds Jun 10, and that is what the field shows.
+    expect(input.value).toBe("2026-06-10");
+    // Moving the bound back does not resurrect the dropped rejection.
+    await view.rerender(field("2026-06-10", "2026-06-01"));
+    expect(screen.queryByText(RANGE_ERROR, HIDDEN)).toBeNull();
+    expect(input.value).toBe("2026-06-10");
+  });
+
   it("clears the error when the value changes, and does not bring it back", async () => {
     const view = await render(field("2026-06-10", "2026-06-01"));
     await type("2026-05-01");

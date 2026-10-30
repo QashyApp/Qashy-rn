@@ -48,6 +48,14 @@ export function DateField({
   const rangeError = rejected
     ? dateRangeHint(rejected, locale, minimumDate, maximumDate)
     : null;
+  // The bounds moved so the rejected date would now be valid. It was never committed, so the
+  // input must show the form's value again rather than a date the form does not hold: drop the
+  // rejection and have the effect below write the value back.
+  const [restores, setRestores] = useState(0);
+  if (rejected && !rangeError) {
+    setRejected(null);
+    setRestores(restores + 1);
+  }
   const descriptionId = useId();
   const shownError = error ?? rangeError ?? undefined;
   const description = shownError ?? hint;
@@ -55,12 +63,13 @@ export function DateField({
   const font = fontStyle("regular", theme.type);
   // Uncontrolled: mid-entry a date input reports "" while it still shows the typed parts, and
   // React restoring a controlled value would wipe them. The prop is pushed in only when it
-  // really changes (a clear, a reset, another field moving it).
+  // really changes (a clear, a reset, another field moving it) or a rejected date stops being
+  // one, so the input never shows a date the value does not hold without an error beside it.
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     const input = inputRef.current;
     if (input && input.value !== value) input.value = value;
-  }, [value]);
+  }, [value, restores]);
 
   return (
     <View style={{ gap: space.sm - 1 }}>

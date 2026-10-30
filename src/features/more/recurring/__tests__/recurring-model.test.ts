@@ -1,6 +1,5 @@
 import {
   intervalHint,
-  mayTurnOnWhenEndExtended,
   projectedNextDueDate,
   recurrenceLabel,
 } from "@/features/more/recurring/recurring-model";
@@ -18,6 +17,7 @@ describe("recurrenceLabel", () => {
 
 describe("projectedNextDueDate", () => {
   const base = {
+    active: true,
     unit: "month" as const,
     interval: 1,
     startDate: "2026-01-10",
@@ -78,6 +78,7 @@ describe("a paused schedule", () => {
   };
   const args = {
     existing: paused,
+    active: true,
     unit: paused.unit,
     interval: paused.interval,
     startDate: paused.startDate,
@@ -104,6 +105,32 @@ describe("a paused schedule", () => {
     ).toBe("2026-03-10");
   });
 
+  it("does not floor a schedule that stays paused at today", () => {
+    // Saved switched off, an edit keeps the date within the stored schedule, never past the end.
+    const stays = { ...args, active: false };
+    expect(projectedNextDueDate(stays)).toBe("2026-03-10");
+    expect(projectedNextDueDate({ ...stays, interval: 2 })).toBe("2026-03-10");
+    // Pausing an active schedule in the same save as a change is no resume either.
+    expect(
+      projectedNextDueDate({
+        ...stays,
+        existing: { ...paused, active: true },
+        interval: 2,
+      }),
+    ).toBe("2026-03-10");
+  });
+
+  it("unlocks an ended schedule when its end is extended, and leaves it off", () => {
+    // Generation ended it: off, with its next date already past the end.
+    const ended = { ...paused, nextDueDate: "2026-04-10" };
+    const projected = (endDate: string | null) =>
+      projectedNextDueDate({ ...args, existing: ended, active: false, endDate });
+    expect(projected("2026-03-31")! > "2026-03-31").toBe(true);
+    // Extended past the next payment: no longer ended, and nothing in the projection switches it on.
+    expect(projected("2026-06-30")! <= "2026-06-30").toBe(true);
+    expect(projected(null)).toBe("2026-04-10");
+  });
+
   it("does not backfill when resumed with a schedule change", () => {
     // An old pending item (Feb 10) would restart regeneration there for an active schedule.
     const change = {
@@ -122,45 +149,5 @@ describe("a paused schedule", () => {
     expect(projectedNextDueDate({ ...change, startDate: "2025-12-10" })).toBe(
       "2026-07-10",
     );
-  });
-});
-
-describe("mayTurnOnWhenEndExtended", () => {
-  it("allows a new or active schedule", () => {
-    expect(mayTurnOnWhenEndExtended(undefined)).toBe(true);
-    expect(
-      mayTurnOnWhenEndExtended({
-        active: true,
-        endDate: "2026-03-31",
-        nextDueDate: "2026-03-10",
-      }),
-    ).toBe(true);
-  });
-
-  it("allows a schedule that generation ended past its end date", () => {
-    expect(
-      mayTurnOnWhenEndExtended({
-        active: false,
-        endDate: "2026-03-31",
-        nextDueDate: "2026-04-10",
-      }),
-    ).toBe(true);
-  });
-
-  it("refuses a schedule the user paused, even one whose end date has passed", () => {
-    expect(
-      mayTurnOnWhenEndExtended({
-        active: false,
-        endDate: "2026-03-31",
-        nextDueDate: "2026-03-10",
-      }),
-    ).toBe(false);
-    expect(
-      mayTurnOnWhenEndExtended({
-        active: false,
-        endDate: null,
-        nextDueDate: "2026-03-10",
-      }),
-    ).toBe(false);
   });
 });

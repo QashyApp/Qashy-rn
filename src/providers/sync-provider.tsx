@@ -79,9 +79,14 @@ export interface SyncContextValue {
    * The last failure, in plain language. Advisory — nothing is blocked by it.
    *
    * Cleared by the next successful pass, so a transient failure heals itself rather than
-   * leaving a banner that has to be dismissed by hand.
+   * leaving a banner that has to be dismissed by hand. Also cleared by `clearError`.
    */
   readonly error: string | null;
+  /**
+   * Drops the banner. For an action that resolves what it reported, such as replacing the key
+   * after an interrupted rotation or leaving the vault: no pass follows those that could clear it.
+   */
+  readonly clearError: () => void;
   /** Re-reads everything from storage. Call after any mutation the setup layer performed. */
   readonly refresh: () => Promise<void>;
   /**
@@ -208,6 +213,8 @@ export function SyncProvider({
     [gate],
   );
 
+  const clearError = useCallback(() => setError(null), []);
+
   const checkRelay = useCallback(async () => {
     const health = await engine.checkRelay();
     await refresh();
@@ -276,6 +283,7 @@ export function SyncProvider({
       pass,
       syncing,
       error,
+      clearError,
       refresh,
       reconcile,
       checkRelay,
@@ -287,6 +295,7 @@ export function SyncProvider({
       pass,
       syncing,
       error,
+      clearError,
       refresh,
       reconcile,
       checkRelay,

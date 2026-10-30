@@ -683,17 +683,18 @@ export function TransactionsScreen() {
         />
       </View>
       {/* Said only when it adds something: the month bar already names the month, so a plain
-          month needs no caption. The slot keeps two lines of height while empty, so typing a
-          search or picking a type never moves the list; two lines, because the qualifier that
-          says what the totals cover is the part an ellipsis would cut at a large font size or in
-          Hebrew. The height follows the theme's caption line height and the system font scale. */}
+          month needs no caption. The slot keeps one line of height while empty, so typing a
+          search or picking a type does not move the list; the caption may wrap to a second line
+          (the qualifier that says what the totals cover is the part an ellipsis would cut at a
+          large font size or in Hebrew), and only then does the list move. The height follows the
+          theme's caption line height and the system font scale. */}
       <AppText
         literal
         variant="caption"
         muted
         numberOfLines={2}
         style={{
-          minHeight: 2 * theme.type.scale.caption.lineHeight * fontScale,
+          minHeight: theme.type.scale.caption.lineHeight * fontScale,
         }}
         accessibilityElementsHidden={!totalsCaption}
         importantForAccessibility={

@@ -60,7 +60,6 @@ import {
 import {
   EndMode,
   MAX_REPEAT_INTERVAL,
-  mayTurnOnWhenEndExtended,
   projectedNextDueDate,
 } from "@/features/more/recurring/recurring-model";
 import { canPostNow } from "@/data/finance/rates";
@@ -133,16 +132,7 @@ export function useRecurringForm() {
   );
   const [occurrenceCount, setOccurrenceCount] = useState("");
   const [autoPost, setAutoPost] = useState(existing?.autoPost ?? false);
-  const [active, setActiveState] = useState(existing?.active ?? true);
-  // Whether the user switched the schedule off themselves, now or in an earlier save. Extending an
-  // ended schedule's end date turns it back on, but never over a choice the user made.
-  const [turnedOffByUser, setTurnedOffByUser] = useState(
-    () => !mayTurnOnWhenEndExtended(existing),
-  );
-  const setActive = (next: boolean) => {
-    setTurnedOffByUser(!next);
-    setActiveState(next);
-  };
+  const [active, setActive] = useState(existing?.active ?? true);
   const [foreignEnabled, setForeignEnabled] = useState(() =>
     Boolean(existing?.template.foreign ?? draft?.foreignCurrency),
   );
@@ -360,6 +350,7 @@ export function useRecurringForm() {
     scheduleReady && isLocalDate(startDate)
       ? projectedNextDueDate({
           existing,
+          active,
           unit,
           interval: Math.floor(Number(interval)),
           startDate,
@@ -371,17 +362,17 @@ export function useRecurringForm() {
   const endedByResolvedDate = Boolean(
     resolvedEndDate && projectedNext && projectedNext > resolvedEndDate,
   );
-  // Extending the end date past the next payment lifts the lock, and turns the schedule on with
-  // it unless the user had switched it off. Adjusted during render, from the previous value.
-  // While the end condition is unfinished (a blank count or date) nothing resolves, so the schedule
-  // only looks not ended for lack of an answer: wait rather than treat that as an extension, and
-  // keep the ended state (and the toggle's lock) of the last complete end until it is finished.
+  // Extending the end date past the next payment lifts the lock and leaves the switch as it is:
+  // the user turns the schedule on themselves, which resumes it from today. While the schedule is
+  // unfinished (a blank count or date, or an interval or start date that does not parse) nothing
+  // resolves, so it only looks not ended for lack of an answer: keep the ended state (and the
+  // toggle's lock) of the last complete schedule until it is finished. Adjusted during render.
   const endIncomplete =
-    (endMode === "count" || endMode === "date") && resolvedEndDate === null;
+    !scheduleReady ||
+    ((endMode === "count" || endMode === "date") && resolvedEndDate === null);
   const [wasEnded, setWasEnded] = useState(endedByResolvedDate);
   if (!endIncomplete && wasEnded !== endedByResolvedDate) {
     setWasEnded(endedByResolvedDate);
-    if (wasEnded && !turnedOffByUser) setActiveState(true);
   }
   const scheduleEnded = endIncomplete ? wasEnded : endedByResolvedDate;
   // The projected date only explains an ended schedule; it is null otherwise.

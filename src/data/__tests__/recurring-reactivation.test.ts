@@ -1,7 +1,7 @@
 import { LocalFinanceRepository } from "@/data/local-finance-repository";
 import { MemoryStorageAdapter } from "@/data/memory-storage";
 import type { RecurringInput } from "@/data/repository";
-import { mayTurnOnWhenEndExtended } from "@/features/more/recurring/recurring-model";
+import { projectedNextDueDate } from "@/features/more/recurring/recurring-model";
 import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
 
 /**
@@ -222,7 +222,6 @@ describe("reactivating a paused schedule", () => {
       rule.id,
       rule.revision,
     );
-    expect(mayTurnOnWhenEndExtended(paused)).toBe(false);
 
     // Months later, the interval changes while it stays paused.
     at("2026-10-30");
@@ -241,18 +240,90 @@ describe("reactivating a paused schedule", () => {
     );
     // The paused rule's next date did not jump to the first occurrence after today.
     expect(edited.active).toBe(false);
-    expect(edited.nextDueDate <= "2026-03-31").toBe(true);
-    expect(mayTurnOnWhenEndExtended(edited)).toBe(false);
+    expect(edited.nextDueDate).toBe("2026-03-10");
     expect(occurrencesOf(repository, rule.id)).toEqual([]);
-
-    // A schedule generation ended (off, next date past its end) still may be turned back on.
+    // The form's projection says the same, so it does not read the rule as ended.
     expect(
-      mayTurnOnWhenEndExtended({
+      projectedNextDueDate({
+        existing: paused,
         active: false,
+        unit: "month",
+        interval: 2,
+        startDate: "2026-01-10",
         endDate: "2026-03-31",
-        nextDueDate: "2026-04-10",
+        today: "2026-10-30",
       }),
-    ).toBe(true);
+    ).toBe(edited.nextDueDate);
+  });
+});
+
+describe("pausing a schedule in the same save as a change", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    at("2026-06-08");
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("drops the old pending items and leaves one sensible date", async () => {
+    const repository = await createRepository();
+    const created = await repository.saveRecurringRule(
+      ruleInput(repository, { autoPost: false }),
+    );
+    at("2026-06-24");
+    await repository.generateRecurring("2026-06-24");
+    const live = () =>
+      repository
+        .getSnapshot()
+        .transactions.filter(
+          (item) => item.recurringRuleId === created.id && !item.deletedAt,
+        );
+    expect(live().map((item) => item.localDate)).toEqual([
+      "2026-06-10",
+      "2026-06-17",
+      "2026-06-24",
+    ]);
+    const current = repository
+      .getSnapshot()
+      .recurringRules.find((item) => item.id === created.id)!;
+    const paused = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        autoPost: false,
+        interval: 2,
+        nextDueDate: current.nextDueDate,
+        active: false,
+      }),
+      current.id,
+      current.revision,
+    );
+    // Every-other-Wednesday from Jun 3, restarted where the discarded items began: Jun 17.
+    expect(paused.active).toBe(false);
+    expect(paused.nextDueDate).toBe("2026-06-17");
+    expect(live()).toEqual([]);
+    expect(
+      projectedNextDueDate({
+        existing: current,
+        active: false,
+        unit: "week",
+        interval: 2,
+        startDate: "2026-06-03",
+        endDate: null,
+        earliestPendingDate: "2026-06-10",
+        today: "2026-06-24",
+      }),
+    ).toBe(paused.nextDueDate);
+
+    // Paused rules generate nothing, so nothing stale or duplicated appears meanwhile.
+    at("2026-07-20");
+    await repository.generateRecurring("2026-07-20");
+    expect(live()).toEqual([]);
+    const keys = repository
+      .getSnapshot()
+      .transactions.filter((item) => item.recurringRuleId === created.id)
+      .map((item) => item.occurrenceKey)
+      .filter(Boolean);
+    expect(new Set(keys).size).toBe(keys.length);
   });
 });
 

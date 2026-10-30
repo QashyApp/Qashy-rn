@@ -232,7 +232,9 @@ export function TransferScreen() {
    * it. One that no backup used yet stays, so flipping to the recovery phrase and back loses nothing.
    */
   const chooseLock = (next: BackupKeySource["kind"]) => {
-    if (next === lock) return;
+    // `backup` sealed the file with the lock and passphrase at the press; changing either before
+    // the hand-off would leave the card describing a file nothing visible opens.
+    if (busy === "backup" || next === lock) return;
     setLock(next);
     if (clearsPassphrase("switchLock", phase)) {
       setPassphrase("");
@@ -434,12 +436,14 @@ export function TransferScreen() {
                 label="A passphrase"
                 icon="textformat"
                 selected={lock === "passphrase"}
+                disabled={busy === "backup"}
                 onPress={() => chooseLock("passphrase")}
               />
               <ChoiceChip
                 label="My recovery phrase"
                 icon="key"
                 selected={lock === "recoveryPhrase"}
+                disabled={busy === "backup"}
                 onPress={() => chooseLock("recoveryPhrase")}
               />
             </View>
@@ -454,7 +458,9 @@ export function TransferScreen() {
                 <FormField
                   label="Passphrase"
                   value={passphrase}
+                  editable={busy !== "backup"}
                   onChangeText={(value) => {
+                    if (busy === "backup") return;
                     // Editing hides the confirm card, so the copy typed again to confirm the
                     // passphrase it protected goes with it; what is typed now is a new, unused one.
                     if (phase === "ready") setRepeated("");
@@ -473,7 +479,10 @@ export function TransferScreen() {
                 <FormField
                   label="Passphrase again"
                   value={repeated}
-                  onChangeText={setRepeated}
+                  editable={busy !== "backup"}
+                  onChangeText={(value) => {
+                    if (busy !== "backup") setRepeated(value);
+                  }}
                   secureTextEntry
                   autoCapitalize="none"
                   autoCorrect={false}

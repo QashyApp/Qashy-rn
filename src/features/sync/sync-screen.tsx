@@ -57,8 +57,16 @@ import { useNow } from "@/hooks/use-now";
 type Busy = "pause" | "resume" | "rotate" | "leave" | null;
 
 export function SyncScreen() {
-  const { status, syncing, error, refresh, reconcile, checkRelay, setup } =
-    useSync();
+  const {
+    status,
+    syncing,
+    error,
+    clearError,
+    refresh,
+    reconcile,
+    checkRelay,
+    setup,
+  } = useSync();
   const theme = useQashyTheme();
   const { radius, space, tile, iconSize } = theme;
   const rowDividerInset = tile.size + space.md;
@@ -160,8 +168,12 @@ export function SyncScreen() {
     if (!confirmed) return;
     await run(
       "rotate",
-      // Serialized with sync passes inside `rotateVaultKey` itself (the pass lock).
-      () => rotateVaultKey(setup),
+      // Serialized with sync passes inside `rotateVaultKey` itself (the pass lock). The new key
+      // resolves an interrupted rotation, and no pass follows that could clear its banner.
+      async () => {
+        await rotateVaultKey(setup);
+        clearError();
+      },
       "Couldn’t replace the vault key",
       true,
     );
@@ -177,7 +189,11 @@ export function SyncScreen() {
     if (!confirmed) return;
     await run(
       "leave",
-      () => disableSync(setup, { forget: true }),
+      async () => {
+        await disableSync(setup, { forget: true });
+        // Whatever the last pass reported belongs to a vault this device is no longer in.
+        clearError();
+      },
       "Couldn’t leave the vault",
       true,
     );
@@ -305,9 +321,10 @@ export function SyncScreen() {
               {t(error)}
             </AppText>
             {/* An interrupted rotation does not retry: every pass refuses until the person picks
-                one of the two Danger zone exits, so say that instead of promising a retry. */}
+                one of the two Danger zone exits, so say that instead of promising a retry. Those
+                exits exist only while paired. */}
             <AppText variant="caption" muted>
-              {error === ROTATION_INTERRUPTED_MESSAGE
+              {paired && error === ROTATION_INTERRUPTED_MESSAGE
                 ? "Syncing stays stopped on this device until you use “Replace the vault key” or “Leave this vault” in the Danger zone below."
                 : "Your data is untouched, and the next sync retries on its own."}
             </AppText>

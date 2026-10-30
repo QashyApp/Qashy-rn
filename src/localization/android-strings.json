@@ -552,11 +552,6 @@
       "he": "העבירו את השינויים שלכם למכשיר אחר שלכם בעצמכם — AirDrop, החסן נייד, או מייל לעצמכם. אין ממסר, אין איתות, ואין רשת מכל סוג שהוא. זו הדרך כשהממסר מושבת, או כששני מכשירים לעולם אינם מקוונים יחד."
     },
     {
-      "name": "q_0e8e6f1cfbbbf556",
-      "en": "This schedule has ended. Extend the end date to turn it on.",
-      "he": "התזמון הסתיים. יש להאריך את תאריך הסיום כדי להפעיל אותו."
-    },
-    {
       "name": "q_0eb0212f9d6155c8",
       "en": "Manual contributions",
       "he": "הפקדות ידניות"
@@ -5677,6 +5672,11 @@
       "he": "החשבון יוצא מהשווי הנקי."
     },
     {
+      "name": "q_a7a58c5a2fee1010",
+      "en": "This schedule has ended. Extend the end date, then turn it on.",
+      "he": "התזמון הסתיים. יש להאריך את תאריך הסיום ואז להפעיל אותו."
+    },
+    {
       "name": "q_a7d421ac2dd522ae",
       "en": "Material You colors need Android 12 or later. On this device the widget uses Qashy colors.",
       "he": "צבעי Material You דורשים אנדרואיד 12 ומעלה. במכשיר הזה הווידג׳ט משתמש בצבעי Qashy."
@@ -9864,10 +9864,10 @@
       "he": "האחרון ב־%1$s."
     },
     {
-      "name": "q_83769cfe31339b6a",
-      "source": "^The next payment would be on (.+), after the end date\\. Extend the end date to turn it on\\.$",
-      "en": "The next payment would be on %1$s, after the end date. Extend the end date to turn it on.",
-      "he": "התשלום הבא יהיה ב־%1$s, אחרי תאריך הסיום. יש להאריך את תאריך הסיום כדי להפעיל אותו."
+      "name": "q_972f99516eb7f834",
+      "source": "^The next payment would be on (.+), after the end date\\. Extend the end date, then turn it on\\.$",
+      "en": "The next payment would be on %1$s, after the end date. Extend the end date, then turn it on.",
+      "he": "התשלום הבא יהיה ב־%1$s, אחרי תאריך הסיום. יש להאריך את תאריך הסיום ואז להפעיל אותו."
     },
     {
       "name": "q_517ec611a568ff63",

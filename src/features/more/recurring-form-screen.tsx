@@ -353,8 +353,8 @@ export function RecurringFormScreen() {
             <AppText variant="caption" muted>
               {scheduleEnded
                 ? nextAfterEnd
-                  ? `The next payment would be on ${mediumDate(nextAfterEnd, locale)}, after the end date. Extend the end date to turn it on.`
-                  : "This schedule has ended. Extend the end date to turn it on."
+                  ? `The next payment would be on ${mediumDate(nextAfterEnd, locale)}, after the end date. Extend the end date, then turn it on.`
+                  : "This schedule has ended. Extend the end date, then turn it on."
                 : "Pause without deleting this schedule."}
             </AppText>
           </View>

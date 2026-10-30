@@ -27,28 +27,19 @@ export const END_MODES: { value: EndMode; label: string; icon: string }[] = [
   { value: "count", label: "After a number of times", icon: "repeat" },
 ];
 
-/** A paused schedule's next due date as it would stand once switched on; an active one's own. */
-function resumedNextDueDate(
-  rule: Parameters<typeof nextDueDateOnReactivation>[0] & {
-    active?: boolean;
-  },
-  today: string,
-) {
-  return rule.active === false
-    ? nextDueDateOnReactivation(rule, today)
-    : rule.nextDueDate;
-}
-
 /**
  * The next due date saving a schedule would give it, mirroring `planRecurringRuleSave`: an
  * unchanged schedule keeps its date; a new or changed one restarts at its first occurrence on or
  * after where regeneration begins (the earliest pending occurrence, else today at the earliest;
- * moving the start earlier backfills from the new start). A paused schedule is projected as if it
- * were switched back on, which skips the dates it was paused through: it resumes at its first
- * occurrence on or after today, with no backfill, even when the same save changes the schedule.
+ * moving the start earlier backfills from the new start). `active` is the switch as it would be
+ * saved. Switching a paused schedule on skips the dates it was paused through: it resumes at its
+ * first occurrence on or after today, with no backfill, even when the same save changes the
+ * schedule. One that is saved switched off gets no today floor, so editing a paused schedule
+ * never moves its date past the end date.
  */
 export function projectedNextDueDate({
   existing,
+  active,
   unit,
   interval,
   startDate,
@@ -60,6 +51,7 @@ export function projectedNextDueDate({
     RecurringRule,
     "unit" | "interval" | "startDate" | "endDate" | "nextDueDate"
   > & { active?: boolean };
+  active: boolean;
   unit: RecurrenceUnit;
   interval: number;
   startDate: string;
@@ -68,6 +60,8 @@ export function projectedNextDueDate({
   today: string;
 }) {
   const later = (a: string, b: string) => (a > b ? a : b);
+  const resuming = !!existing && existing.active === false && active;
+  const staysPaused = !!existing && !active;
   if (
     existing &&
     existing.unit === unit &&
@@ -75,12 +69,15 @@ export function projectedNextDueDate({
     existing.startDate === startDate &&
     existing.endDate === endDate
   )
-    return resumedNextDueDate(existing, today);
-  const resuming = existing?.active === false;
+    return resuming
+      ? nextDueDateOnReactivation(existing, today)
+      : existing.nextDueDate;
   const base = resuming
-    ? later(earliestPendingDate ?? resumedNextDueDate(existing, today), today)
-    : (earliestPendingDate ??
-      later(existing ? resumedNextDueDate(existing, today) : startDate, today));
+    ? later(earliestPendingDate ?? existing.nextDueDate, today)
+    : staysPaused
+      ? (earliestPendingDate ?? existing.nextDueDate)
+      : (earliestPendingDate ??
+        later(existing ? existing.nextDueDate : startDate, today));
   const from =
     existing && !resuming && startDate < existing.startDate && startDate < base
       ? startDate
@@ -91,17 +88,4 @@ export function projectedNextDueDate({
     interval,
     later(startDate, from),
   );
-}
-
-/**
- * Whether extending a schedule's end date may switch it back on by itself. A new schedule, an
- * active one, and one that generation ended (off, with its next date already past its end date)
- * may; one the user paused (off, with its next date still within its end date) stays off, since
- * switching it on would post what the pause skipped.
- */
-export function mayTurnOnWhenEndExtended(
-  existing?: Pick<RecurringRule, "active" | "endDate" | "nextDueDate">,
-) {
-  if (!existing || existing.active) return true;
-  return existing.endDate !== null && existing.nextDueDate > existing.endDate;
 }
