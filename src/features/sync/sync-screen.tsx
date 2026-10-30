@@ -326,7 +326,9 @@ export function SyncScreen() {
             <AppText variant="caption" muted>
               {paired && error === ROTATION_INTERRUPTED_MESSAGE
                 ? "Syncing stays stopped on this device until you use “Replace the vault key” or “Leave this vault” in the Danger zone below."
-                : "Your data is untouched, and the next sync retries on its own."}
+                : paired
+                  ? "Your data is untouched, and the next sync retries on its own."
+                  : "Your data is untouched."}
             </AppText>
           </Card>
         </MotionView>

@@ -196,7 +196,7 @@ describe("reactivating a paused schedule", () => {
     expect(occurrencesOf(repository, rule.id)).toEqual([]);
   });
 
-  it("keeps a schedule edited while paused recognisable as paused, not ended", async () => {
+  it("keeps the stored date of a schedule edited while paused instead of jumping past today", async () => {
     // Monthly on the 10th, ending Mar 31, paused with Mar 10 still ahead of its end.
     at("2026-01-12");
     const repository = await createRepository();
@@ -242,7 +242,8 @@ describe("reactivating a paused schedule", () => {
     expect(edited.active).toBe(false);
     expect(edited.nextDueDate).toBe("2026-03-10");
     expect(occurrencesOf(repository, rule.id)).toEqual([]);
-    // The form's projection says the same, so it does not read the rule as ended.
+    // The form's projection of the stored date agrees with what the save stored. (The form judges
+    // "ended" by the date resuming would give, as the schedule list does: Nov 10, past Mar 31.)
     expect(
       projectedNextDueDate({
         existing: paused,

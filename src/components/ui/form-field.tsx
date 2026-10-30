@@ -37,7 +37,16 @@ type FormFieldProps = Omit<TextInputProps, "ref"> & {
    * hints and validation errors are always developer copy and stay translated.
    */
   literalLabel?: boolean;
+  /**
+   * Whether a locked field (`editable={false}`) looks disabled. On by default;
+   * a field that only displays a control that still works (the date field's
+   * picker button) turns it off so it does not read as unavailable.
+   */
+  dimWhenLocked?: boolean;
 };
+
+/** The same disabled emphasis as ChoiceChip and the switch. */
+const LOCKED_OPACITY = 0.38;
 
 export function FormField(props: FormFieldProps) {
   const { materialControls } = useQashyTheme();
@@ -59,6 +68,7 @@ function MaterialFormField({
   error,
   required = false,
   literalLabel = false,
+  dimWhenLocked = true,
   style,
   accessibilityHint,
   onFocus,
@@ -91,8 +101,14 @@ function MaterialFormField({
       .filter((part): part is string => Boolean(part))
       .join(". ") || undefined;
   const isInvalid = Boolean(error);
+  const locked = props.editable === false;
+  const fieldOpacity = locked && dimWhenLocked ? LOCKED_OPACITY : 1;
   const validityProps = {
-    accessibilityState: { ...props.accessibilityState, invalid: isInvalid },
+    accessibilityState: {
+      ...props.accessibilityState,
+      invalid: isInvalid,
+      ...(locked ? { disabled: true } : null),
+    },
     ...(process.env.EXPO_OS === "web" ? { "aria-invalid": isInvalid } : null),
   } as TextInputProps;
 
@@ -137,6 +153,7 @@ function MaterialFormField({
           borderTopEndRadius: 4,
           overflow: "hidden",
           backgroundColor: theme.surfaceSunken,
+          opacity: fieldOpacity,
         }}
       >
         {/* Visual only: the input already carries this label, so a reader must not announce it twice. */}
@@ -253,6 +270,7 @@ function ClassicFormField({
   error,
   required = false,
   literalLabel = false,
+  dimWhenLocked = true,
   style,
   accessibilityHint,
   onFocus,
@@ -285,16 +303,26 @@ function ClassicFormField({
       .filter((part): part is string => Boolean(part))
       .join(". ") || undefined;
   const isInvalid = Boolean(error);
+  const locked = props.editable === false;
+  const fieldOpacity = locked && dimWhenLocked ? LOCKED_OPACITY : 1;
   // React Native's AccessibilityState typing predates the `invalid` flag and
   // never modelled `aria-invalid`, but VoiceOver/TalkBack and the DOM both read
   // them at runtime. This assertion is the documented boundary for that gap.
   const validityProps = {
-    accessibilityState: { ...props.accessibilityState, invalid: isInvalid },
+    accessibilityState: {
+      ...props.accessibilityState,
+      invalid: isInvalid,
+      ...(locked ? { disabled: true } : null),
+    },
     ...(process.env.EXPO_OS === "web" ? { "aria-invalid": isInvalid } : null),
   } as TextInputProps;
   return (
     <View style={{ gap: space.sm - 1 }}>
-      <AppText literal={literalLabel} variant="label">
+      <AppText
+        literal={literalLabel}
+        variant="label"
+        style={{ opacity: fieldOpacity }}
+      >
         {label}
         {required ? " *" : ""}
       </AppText>
@@ -345,6 +373,7 @@ function ClassicFormField({
               // segmented-control track.
               backgroundColor: sunken.backgroundColor,
               boxShadow: sunken.boxShadow as string,
+              opacity: fieldOpacity,
             },
             style,
           ],

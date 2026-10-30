@@ -119,6 +119,7 @@ export function DateField({
               value={display}
               placeholder="Choose a date"
               editable={false}
+              dimWhenLocked={false}
               error={shownError}
               hint={hint}
               required={required}

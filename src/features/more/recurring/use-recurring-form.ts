@@ -132,7 +132,29 @@ export function useRecurringForm() {
   );
   const [occurrenceCount, setOccurrenceCount] = useState("");
   const [autoPost, setAutoPost] = useState(existing?.autoPost ?? false);
-  const [active, setActive] = useState(existing?.active ?? true);
+  const earliestPendingDate = existing
+    ? pendingOccurrences(state.transactions, existing.id)
+        .map((item) => item.localDate)
+        .sort()[0]
+    : undefined;
+  // A stored-active rule that is already past its end opens switched off, so the form's first
+  // render matches its baseline: merely opening it never counts as an unsaved change.
+  const [active, setActive] = useState(() => {
+    if (!existing?.active) return existing?.active ?? true;
+    if (!existing.endDate) return true;
+    return !(
+      projectedNextDueDate({
+        existing,
+        active: true,
+        unit: existing.unit,
+        interval: existing.interval,
+        startDate: existing.startDate,
+        endDate: existing.endDate,
+        earliestPendingDate,
+        today: todayLocal(),
+      }) > existing.endDate
+    );
+  });
   const [foreignEnabled, setForeignEnabled] = useState(() =>
     Boolean(existing?.template.foreign ?? draft?.foreignCurrency),
   );
@@ -340,17 +362,16 @@ export function useRecurringForm() {
       : endMode === "date" && isLocalDate(endDate)
         ? endDate
         : null;
-  const earliestPendingDate = existing
-    ? pendingOccurrences(state.transactions, existing.id)
-        .map((item) => item.localDate)
-        .sort()[0]
-    : undefined;
-  // The next payment the schedule would have once saved. Past the end date, there is none left.
+  // The next payment the schedule would have once it runs, judged as if switched on: a paused
+  // schedule is judged by the date resuming would give (its stored date stands still while paused,
+  // so a long-expired one is still ended), the same date the schedule list uses. Judging apart
+  // from the switch also keeps this stable when the form turns the switch off by itself. Past the
+  // end date, there is none left.
   const projectedNext =
     scheduleReady && isLocalDate(startDate)
       ? projectedNextDueDate({
           existing,
-          active,
+          active: true,
           unit,
           interval: Math.floor(Number(interval)),
           startDate,
@@ -362,7 +383,7 @@ export function useRecurringForm() {
   const endedByResolvedDate = Boolean(
     resolvedEndDate && projectedNext && projectedNext > resolvedEndDate,
   );
-  // Extending the end date past the next payment lifts the lock and leaves the switch as it is:
+  // Extending the end date past the next payment lifts the lock and leaves the switch off:
   // the user turns the schedule on themselves, which resumes it from today. While the schedule is
   // unfinished (a blank count or date, or an interval or start date that does not parse) nothing
   // resolves, so it only looks not ended for lack of an answer: keep the ended state (and the
@@ -375,6 +396,10 @@ export function useRecurringForm() {
     setWasEnded(endedByResolvedDate);
   }
   const scheduleEnded = endIncomplete ? wasEnded : endedByResolvedDate;
+  // An ended schedule is off for real, not just shown off: otherwise extending the end date would
+  // unlock the switch already on. Covers the transition into ended; it only ever sets false, so it
+  // cannot loop.
+  if (scheduleEnded && active) setActive(false);
   // The projected date only explains an ended schedule; it is null otherwise.
   const nextAfterEnd = scheduleEnded ? projectedNext : null;
   const effectiveActive = active && !scheduleEnded;

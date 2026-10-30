@@ -711,7 +711,10 @@ export function TransferScreen() {
                   <FormField
                     label="Passphrase"
                     value={secret}
-                    onChangeText={setSecret}
+                    editable={busy !== "open"}
+                    onChangeText={(value) => {
+                      if (busy !== "open") setSecret(value);
+                    }}
                     secureTextEntry
                     autoCapitalize="none"
                     autoCorrect={false}
@@ -722,7 +725,10 @@ export function TransferScreen() {
                   <FormField
                     label="Recovery phrase"
                     value={secret}
-                    onChangeText={setSecret}
+                    editable={busy !== "open"}
+                    onChangeText={(value) => {
+                      if (busy !== "open") setSecret(value);
+                    }}
                     multiline
                     autoCapitalize="none"
                     autoCorrect={false}

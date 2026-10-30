@@ -763,6 +763,7 @@ export const HEBREW: Record<string, string> = {
   "The last sync didn’t finish": "הסנכרון האחרון לא הושלם",
   "Your data is untouched, and the next sync retries on its own.":
     "הנתונים שלכם לא נפגעו, והסנכרון הבא ינסה שוב מעצמו.",
+  "Your data is untouched.": "הנתונים שלכם לא נפגעו.",
   "Some changes on this device are still being signed. They go out on the next sync.":
     "חלק מהשינויים במכשיר הזה עדיין נחתמים. הם יישלחו בסנכרון הבא.",
   "Sends, receives, and anything refused will appear here.":

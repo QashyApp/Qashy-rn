@@ -126,16 +126,8 @@ export function DeviceCard({
   });
 
   const remove = async (peerId: string, peerName: string) => {
-    // `revokePeer` approves an open proposal for this device rather than starting another, so the
-    // dialog has to describe that approval, not a vote that is already under way.
-    const open = pending.get(peerId);
-    if (open) {
-      const canApprove =
-        open.voters.includes(status.deviceId) &&
-        !open.approvals.includes(status.deviceId);
-      if (canApprove) await approve(peerId, peerName, open);
-      return;
-    }
+    // Only reached for a device with no open proposal: a proposed removal's row has no press
+    // handler and is approved from the Pending removals card instead.
     // Held across the confirm dialog too: a second tap on the row while it is open (or while the
     // signed removal is being appended) must not start a second removal.
     if (removingRef.current) return;
