@@ -93,9 +93,12 @@ export function displayOffset(
   rowWidth: number,
   isRtl: boolean,
   sides: RowSwipeSides,
-  revealWidth: number = ROW_REVEAL_WIDTH,
+  revealWidth?: number,
 ): number {
   "worklet";
+  // Defaults are resolved here, not in the signature: the worklets plugin does not capture
+  // identifiers used only in a parameter default, so they would be undefined on the UI runtime.
+  const reveal = revealWidth ?? ROW_REVEAL_WIDTH;
   const side = sideOf(raw, isRtl);
   if (side === null) return 0;
   const distance = Math.abs(raw);
@@ -108,7 +111,7 @@ export function displayOffset(
       (1 - 1 / (1 + (distance * RUBBER_PULL) / RUBBER_LIMIT))
     );
   }
-  const line = commitDistance(rowWidth, revealWidth);
+  const line = commitDistance(rowWidth, reveal);
   const held =
     distance <= line ? distance : line + (distance - line) * COMMIT_RESISTANCE;
   return sign * Math.min(held, rowWidth);
@@ -210,12 +213,14 @@ export function touchStartsAtEdge(
   windowWidth: number,
   openOffset: number,
   rowLeft = 0,
-  rowWidth: number = windowWidth,
+  rowWidth?: number,
 ): boolean {
   "worklet";
+  // Resolved here, not as a parameter default: see `displayOffset`.
+  const width = rowWidth ?? windowWidth;
   const fromEdge = Math.min(absoluteX, windowWidth - absoluteX);
   if (fromEdge >= EDGE_GUARD) return false;
-  const rowRight = rowLeft + rowWidth;
+  const rowRight = rowLeft + width;
   const onButton =
     (openOffset > 0 &&
       absoluteX >= rowLeft &&
