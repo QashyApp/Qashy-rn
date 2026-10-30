@@ -350,7 +350,7 @@ export function BudgetFormScreen() {
         ) : null}
       </Card>
 
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="headline">Categories and caps</AppText>
         <AppText muted>
           Leave every category unselected to count all expenses.

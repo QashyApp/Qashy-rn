@@ -207,7 +207,7 @@ export function RecurringFormScreen() {
       </Card>
 
       {account ? (
-        <Card style={{ gap: 14 }}>
+        <Card style={{ gap: space.md }}>
           <ForeignFeeFields
             accountCurrency={account.currency}
             locale={locale}
@@ -345,7 +345,7 @@ export function RecurringFormScreen() {
             flexDirection: "row",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: 14,
+            gap: space.md,
           }}
         >
           <View style={{ flex: 1, gap: space.xxs }}>

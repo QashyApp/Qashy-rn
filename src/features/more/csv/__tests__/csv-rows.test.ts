@@ -83,6 +83,36 @@ describe("buildCsvRows signs", () => {
     const { rows } = buildCsvRows(records, mapping, "ymd", defaults);
     expect(rows[0]).toMatchObject({ account: "Everyday", currency: "USD" });
   });
+
+  it("defaults an unmapped currency to the row's account, not the base currency", () => {
+    const accountCurrencies = new Map([
+      ["everyday", "eur"],
+      ["travel", "gbp"],
+    ]);
+    const withDefault = buildCsvRows(records, mapping, "ymd", {
+      ...defaults,
+      accountCurrencies,
+    });
+    expect(withDefault.rows[0].currency).toBe("EUR");
+
+    const withAccountColumn = buildCsvRows(
+      [
+        record(2, {
+          date: "2026-07-01",
+          title: "Taxi",
+          amount: "5",
+          account: "Travel",
+        }),
+      ],
+      inferMapping(["date", "title", "amount", "account"]),
+      "ymd",
+      { ...defaults, accountCurrencies },
+    );
+    expect(withAccountColumn.rows[0]).toMatchObject({
+      account: "Travel",
+      currency: "GBP",
+    });
+  });
 });
 
 describe("buildCsvRows dates", () => {

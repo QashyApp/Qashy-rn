@@ -156,10 +156,11 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
     );
   }
 
+  // From the same figures the card shows (which count due auto-posts), not the summary's.
   const budgetProgress =
-    summary.budgetLimitMinor > 0
-      ? summary.budgetSpentMinor / summary.budgetLimitMinor
-      : summary.budgetSpentMinor > 0
+    budgetLimitMinor > 0
+      ? budgetSpentMinor / budgetLimitMinor
+      : budgetSpentMinor > 0
         ? 1
         : 0;
   return (

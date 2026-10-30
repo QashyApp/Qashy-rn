@@ -48,9 +48,17 @@ export function useCsvImport() {
   const [mapping, setMapping] = useState<Record<CsvField, string>>(() =>
     inferMapping([]),
   );
-  const [defaultAccountId, setDefaultAccountId] = useState(
+  const [chosenAccountId, setDefaultAccountId] = useState(
     state.accounts.find((item) => !item.archived)?.id ?? "",
   );
+  // The chosen account can be deleted while this screen is open (for example by a sync). Read
+  // through the live list so a stale id falls back to the first available account, or none,
+  // instead of keeping the account column optional for an account that no longer exists.
+  const defaultAccountId =
+    state.accounts.find((item) => item.id === chosenAccountId && !item.archived)
+      ?.id ??
+    state.accounts.find((item) => !item.archived)?.id ??
+    "";
   const [defaultCategoryId, setDefaultCategoryId] = useState("");
   const [rows, setRows] = useState<CsvImportRow[]>([]);
   // Rows whose date the chosen format could not read. They are refused here, before the
@@ -75,8 +83,8 @@ export function useCsvImport() {
   };
   const exportingRef = useRef(false);
   const [exporting, setExporting] = useState(false);
-  // Type and currency fall back to expense and the base currency, and a chosen default account
-  // covers an unmapped account column, so none of those block the preview.
+  // Type and currency fall back to expense and the row's account currency, and a chosen default
+  // account covers an unmapped account column, so none of those block the preview.
   const isOptionalField = (field: (typeof CSV_FIELDS)[number]) =>
     field.optional || (field.key === "account" && Boolean(defaultAccountId));
   // What "Auto" resolves to for this file's date column. Shown in the picker and used to read it.
@@ -198,6 +206,12 @@ export function useCsvImport() {
       {
         accountName: defaultAccount,
         baseCurrency: state.settings.baseCurrency,
+        accountCurrencies: new Map(
+          state.accounts.map((item) => [
+            item.name.toLowerCase(),
+            item.currency,
+          ]),
+        ),
         category: defaultCategory,
       },
     );

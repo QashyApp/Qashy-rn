@@ -352,6 +352,11 @@
       "he": "חיפוש בכותרת או בהערה"
     },
     {
+      "name": "q_0915a964ec20674e",
+      "en": "Headers are matched automatically. Required columns are date, title, amount, and account. Type and currency are optional and default to expense and the account’s currency. Nothing is committed until after preview.",
+      "he": "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, כותרת, סכום וחשבון. סוג ומטבע הם אופציונליים וברירת המחדל שלהם היא הוצאה ומטבע החשבון. דבר לא נשמר לפני התצוגה המקדימה."
+    },
+    {
       "name": "q_091c7cd35c09c136",
       "en": "Give spending a gentle boundary",
       "he": "תנו להוצאות גבול נעים"
@@ -6825,11 +6830,6 @@
       "name": "q_cb771f3427a221c4",
       "en": "Recurring schedule is gone.",
       "he": "התזמון החוזר אינו קיים עוד."
-    },
-    {
-      "name": "q_cb8a95d5d5bea584",
-      "en": "Headers are matched automatically. Required columns are date, title, amount, and account. Type and currency are optional and default to expense and your base currency. Nothing is committed until after preview.",
-      "he": "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, כותרת, סכום וחשבון. סוג ומטבע הם אופציונליים וברירת המחדל שלהם היא הוצאה ומטבע הבסיס שלכם. דבר לא נשמר לפני התצוגה המקדימה."
     },
     {
       "name": "q_cb962a931f8cc5bf",

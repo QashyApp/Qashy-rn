@@ -62,7 +62,7 @@ export function PreviewVerdict({
 
   return (
     <View style={{ gap: space.md }}>
-      <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+      <View style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}>
         <StatTile
           value={totalOf(outcome.created)}
           label="To add"

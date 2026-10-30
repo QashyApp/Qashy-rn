@@ -281,8 +281,9 @@ function PlanSection({
   empty: ReactNode;
   children: ReactNode;
 }) {
+  const { space } = useQashyTheme();
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: space.sm }}>
       <SectionHeader
         title={title}
         action={hasItems && !selection.selecting ? addLabel : undefined}
@@ -298,7 +299,7 @@ function PlanSection({
         onSecondaryAction={selection.toggleMode}
       />
       {hasItems ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 14 }}>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.md }}>
           {children}
         </View>
       ) : (
@@ -435,7 +436,9 @@ function BudgetCard({
       exit
       style={fill ? { height: "100%" } : undefined}
     >
-      <Card style={fill ? { gap: 14, height: "100%" } : { gap: 14 }}>
+      <Card
+        style={fill ? { gap: space.md, height: "100%" } : { gap: space.md }}
+      >
         <View
           style={{
             gap: space.xxs,
@@ -526,7 +529,7 @@ function BudgetCard({
         </View>
 
         {categorySpend.length ? (
-          <Card variant="inset" style={{ gap: 10 }}>
+          <Card variant="inset" style={{ gap: space.sm }}>
             {categorySpend.map((limit) => {
               const category = state.categories.find(
                 (item) => item.id === limit.categoryId,
@@ -650,8 +653,12 @@ function GoalCard({
       exit
       style={fill ? { height: "100%" } : undefined}
     >
-      <Card style={fill ? { gap: 14, height: "100%" } : { gap: 14 }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+      <Card
+        style={fill ? { gap: space.md, height: "100%" } : { gap: space.md }}
+      >
+        <View
+          style={{ flexDirection: "row", alignItems: "center", gap: space.md }}
+        >
           <ProgressRing
             value={ratio}
             size={72}

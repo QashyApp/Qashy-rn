@@ -340,13 +340,13 @@ export function ExchangeRatesScreen() {
               );
             })}
           </Card>
-          {automaticCount ? (
-            <AppText
-              variant="caption"
-              muted
-            >{`${automaticCount} automatic rate${automaticCount === 1 ? "" : "s"} stored.`}</AppText>
-          ) : null}
         </>
+      ) : null}
+      {automaticCount ? (
+        <AppText
+          variant="caption"
+          muted
+        >{`${automaticCount} automatic rate${automaticCount === 1 ? "" : "s"} stored.`}</AppText>
       ) : null}
     </ScrollView>
   );

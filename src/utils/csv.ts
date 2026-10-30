@@ -278,9 +278,16 @@ export function parseCsvTable(source: string) {
   // `headers` are normalized keys (matching and inference); `headerLabels` keep the text the file
   // wrote, for showing the user. Same order, same length.
   const headerLabels = scanned[0].cells.map((header) => header.trim());
-  const headers = headerLabels.map((header) =>
-    header.toLowerCase().replace(/[\s-]+/g, "_"),
-  );
+  // A repeated header gets a numeric suffix so each column keeps its own key: otherwise the later
+  // column silently overwrites the earlier one in every record and both picker options collide.
+  const usedHeaders = new Set<string>();
+  const headers = headerLabels.map((header) => {
+    const base = header.toLowerCase().replace(/[\s-]+/g, "_");
+    let key = base;
+    for (let n = 2; usedHeaders.has(key); n += 1) key = `${base}_${n}`;
+    usedHeaders.add(key);
+    return key;
+  });
 
   const body = scanned.slice(1);
   const rowErrors = body

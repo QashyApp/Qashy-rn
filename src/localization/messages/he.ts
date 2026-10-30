@@ -406,8 +406,8 @@ export const HEBREW: Record<string, string> = {
   "Import transactions": "ייבוא תנועות",
   "Creates a UTF-8 CSV of your transactions with accounts, categories, tags, notes and exchange rates. Not a full backup: budgets, goals and schedules are not included.":
     "יוצר קובץ CSV בקידוד UTF-8 של התנועות, כולל חשבונות, קטגוריות, תגיות, הערות ושערי חליפין. זהו לא גיבוי מלא: תקציבים, יעדים ותזמונים אינם נכללים.",
-  "Headers are matched automatically. Required columns are date, title, amount, and account. Type and currency are optional and default to expense and your base currency. Nothing is committed until after preview.":
-    "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, כותרת, סכום וחשבון. סוג ומטבע הם אופציונליים וברירת המחדל שלהם היא הוצאה ומטבע הבסיס שלכם. דבר לא נשמר לפני התצוגה המקדימה.",
+  "Headers are matched automatically. Required columns are date, title, amount, and account. Type and currency are optional and default to expense and the account’s currency. Nothing is committed until after preview.":
+    "הכותרות מותאמות אוטומטית. העמודות הנדרשות הן תאריך, כותרת, סכום וחשבון. סוג ומטבע הם אופציונליים וברירת המחדל שלהם היא הוצאה ומטבע החשבון. דבר לא נשמר לפני התצוגה המקדימה.",
   "Date format": "פורמט תאריך",
   Auto: "אוטומטי",
   "Negative amounts import as expenses, positive as income.":

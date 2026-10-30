@@ -212,7 +212,7 @@ export function BudgetAdjustmentScreen() {
         busy={busy}
       />
 
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="headline">Adjustments this period</AppText>
         {adjustments.map((item) => {
           const amountLabel = money(item.amountMinor, true);

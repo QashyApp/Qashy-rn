@@ -51,7 +51,7 @@ export function CsvScreen() {
       maxWidth={760}
       contentContainerStyle={{ gap: space.lg, paddingBottom: 40 }}
     >
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="headline">Export transactions</AppText>
         <AppText muted>
           Creates a UTF-8 CSV of your transactions with accounts, categories,
@@ -67,7 +67,7 @@ export function CsvScreen() {
         />
       </Card>
       <ExternalImportLauncher />
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="headline">Import transactions</AppText>
         <CsvStepper
           current={
@@ -83,7 +83,7 @@ export function CsvScreen() {
         <AppText muted>
           Headers are matched automatically. Required columns are date, title,
           amount, and account. Type and currency are optional and default to
-          expense and your base currency. Nothing is committed until after
+          expense and the account’s currency. Nothing is committed until after
           preview.
         </AppText>
         <ActionButton
@@ -151,7 +151,7 @@ export function CsvScreen() {
                     <Picker.Item label={t("Not mapped")} value="" />
                     {headers.map((header, index) => (
                       <Picker.Item
-                        key={header}
+                        key={`${index}:${header}`}
                         label={headerLabels[index] || header}
                         value={header}
                       />
@@ -293,8 +293,10 @@ export function CsvScreen() {
           </View>
         ) : null}
         {preview ? (
-          <View style={{ gap: 10, paddingTop: 6 }}>
-            <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+          <View style={{ gap: space.sm, paddingTop: 6 }}>
+            <View
+              style={{ flexDirection: "row", gap: space.sm, flexWrap: "wrap" }}
+            >
               <PreviewTile
                 value={preview.validRows.length}
                 label="Ready"

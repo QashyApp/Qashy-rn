@@ -25,6 +25,17 @@ describe("CSV utilities", () => {
     expect(table.rows[0].transaction_date).toBe("2026-07-01");
   });
 
+  it("gives repeated headers their own keys so no column overwrites another", () => {
+    const table = parseCsvTable("Amount,amount,Amount_2\n1,2,3");
+    expect(table.headers).toEqual(["amount", "amount_2", "amount_2_2"]);
+    expect(new Set(table.headers).size).toBe(3);
+    expect(table.rows[0]).toMatchObject({
+      amount: "1",
+      amount_2: "2",
+      amount_2_2: "3",
+    });
+  });
+
   it("applies a default category only to compatible CSV row types", () => {
     const expenseDefault = { name: "Dining", kind: "expense" as const };
     expect(csvCategoryForRow("", "expense", expenseDefault)).toBe("Dining");

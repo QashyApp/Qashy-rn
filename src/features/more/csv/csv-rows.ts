@@ -17,6 +17,11 @@ export type CsvSourceRecord = Record<string, string | number>;
 export interface CsvRowDefaults {
   accountName: string;
   baseCurrency: string;
+  /**
+   * Each account's currency by lowercase name. A row with no currency value takes its own
+   * account's, because the repository rejects a row whose currency differs from its account's.
+   */
+  accountCurrencies?: ReadonlyMap<string, string>;
   category?: { name: string; kind: "expense" | "income" };
 }
 
@@ -81,6 +86,7 @@ export function buildCsvRows(
     const type = (
       mappedType || (signDecidesType && !signed.negative ? "income" : "expense")
     ).toLowerCase() as TransactionKind;
+    const account = value(record, "account") || defaults.accountName;
     rows.push({
       rowNumber,
       date,
@@ -91,9 +97,11 @@ export function buildCsvRows(
       title: value(record, "title"),
       amount: type === "transfer" ? value(record, "amount") : signed.amount,
       currency: (
-        value(record, "currency") || defaults.baseCurrency
+        value(record, "currency") ||
+        defaults.accountCurrencies?.get(account.toLowerCase()) ||
+        defaults.baseCurrency
       ).toUpperCase(),
-      account: value(record, "account") || defaults.accountName,
+      account,
       category: csvCategoryForRow(
         value(record, "category"),
         type,

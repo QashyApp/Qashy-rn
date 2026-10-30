@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { View } from "react-native";
 
 import { TransactionRow } from "@/components/finance/transaction-row";
@@ -8,20 +9,44 @@ import { SectionHeader } from "@/components/ui/section-header";
 import { TextButton } from "@/components/ui/text-button";
 import { useUpcomingActions } from "@/features/overview/widgets/upcoming-actions";
 import { useLocalization } from "@/localization/localization";
+import {
+  useFinanceRepository,
+  useFinanceState,
+} from "@/providers/finance-provider";
 import { useQashyTheme } from "@/theme/theme";
 import type { WidgetProps } from "@/features/overview/widgets/types";
+
+/** How many scheduled payments the card lists (the summary carries this many). */
+const UPCOMING_LIMIT = 5;
 
 export function UpcomingWidget({ editing, summary }: WidgetProps) {
   const { space } = useQashyTheme();
   const { t } = useLocalization();
+  const repository = useFinanceRepository();
+  const { transactions } = useFinanceState();
   const { hiddenIds, paidIds, resolve } = useUpcomingActions();
 
   // Skip and Mark paid take effect after the Undo bar runs out (see `useUpcomingRowActions`). The
-  // row leaves the card at once, and Undo brings it back.
-  const upcoming = summary.upcomingTransactions.filter(
-    (transaction) =>
-      !hiddenIds.has(transaction.id) && !paidIds.has(transaction.id),
+  // row leaves the card at once, and Undo brings it back. The summary holds only the first few
+  // payments, so while some are leaving the card reads the next ones itself and the limit applies
+  // after they are filtered out: the card does not shrink while more payments are due.
+  const leaving = hiddenIds.size + paidIds.size > 0;
+  const due = useMemo(
+    () =>
+      leaving
+        ? repository.queryTransactions(
+            { statuses: ["upcoming"], sort: "oldest" },
+            transactions,
+          )
+        : summary.upcomingTransactions,
+    [leaving, repository, transactions, summary.upcomingTransactions],
   );
+  const upcoming = due
+    .filter(
+      (transaction) =>
+        !hiddenIds.has(transaction.id) && !paidIds.has(transaction.id),
+    )
+    .slice(0, UPCOMING_LIMIT);
 
   if (!upcoming.length) {
     return (

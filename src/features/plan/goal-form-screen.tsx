@@ -404,7 +404,7 @@ export function GoalFormScreen() {
         />
       </Card>
 
-      <Card style={{ gap: 14 }}>
+      <Card style={{ gap: space.md }}>
         <AppText variant="headline">Automatic progress</AppText>
         <AppText muted>
           Optionally count matching posted transactions. You can still add
@@ -461,7 +461,7 @@ export function GoalFormScreen() {
       </Card>
 
       {existing ? (
-        <Card style={{ gap: 14 }}>
+        <Card style={{ gap: space.md }}>
           <AppText variant="headline">Manual contributions</AppText>
           {manualContributions.map((item) => {
             const amountLabel = formatMoney(

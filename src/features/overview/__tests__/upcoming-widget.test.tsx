@@ -39,6 +39,13 @@ jest.mock("@/components/finance/transaction-row", () => {
   };
 });
 
+// The summary holds only the first five payments; the repository holds every one that is due.
+let mockEveryUpcoming: { id: string; title: string }[] = [];
+jest.mock("@/providers/finance-provider", () => ({
+  useFinanceRepository: () => ({ queryTransactions: () => mockEveryUpcoming }),
+  useFinanceState: () => ({ transactions: [] }),
+}));
+
 jest.mock("@/components/ui/motion", () => {
   const { View } = jest.requireActual("react-native");
   return { ...jest.requireActual("@/components/ui/motion"), MotionView: View };
@@ -54,7 +61,9 @@ async function renderWidget(
   titles: string[],
   actions: Partial<UpcomingActions> = {},
   editing = false,
+  allTitles: string[] = titles,
 ) {
+  mockEveryUpcoming = allTitles.map((title) => ({ id: title, title }));
   const value: UpcomingActions = {
     hiddenIds: new Set(),
     paidIds: new Set(),
@@ -99,6 +108,21 @@ describe("UpcomingWidget", () => {
     expect(screen.queryByText("Rent")).toBeNull();
     expect(screen.queryByText("Gym")).toBeNull();
     expect(screen.getByText("Phone")).toBeTruthy();
+  });
+
+  it("fills the card back up to five while rows wait on Undo", async () => {
+    const all = ["A", "B", "C", "D", "E", "F", "G", "H"];
+    await renderWidget(
+      all.slice(0, 5),
+      { hiddenIds: new Set(["A"]), paidIds: new Set(["B"]) },
+      false,
+      all,
+    );
+    for (const title of ["C", "D", "E", "F", "G"])
+      expect(screen.getByText(title)).toBeTruthy();
+    expect(screen.queryByText("A")).toBeNull();
+    expect(screen.queryByText("B")).toBeNull();
+    expect(screen.queryByText("H")).toBeNull();
   });
 
   it("shows the empty state once every row is waiting", async () => {

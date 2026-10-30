@@ -519,6 +519,7 @@ export const TransactionMonthList = memo(function TransactionMonthList({
         selected={selection.has(item.id)}
         paying={paidIds.has(item.id)}
         selectionMode={selectionMode}
+        showDate={section.kind === "upcoming"}
         flashes={flash?.id === item.id ? flash.flashes : 0}
         flashToken={flash?.token ?? 0}
         onFlashDone={clearFlash}
@@ -799,6 +800,8 @@ interface DayRowProps {
   /** Being marked paid: no swipe, no row actions. */
   paying: boolean;
   selectionMode: boolean;
+  /** Draws the row's due date. A day's header already says it; the upcoming group has none. */
+  showDate?: boolean;
   /** Non-zero while this row is the one just saved. */
   flashes: number;
   flashToken: number;
@@ -884,6 +887,7 @@ export const DayRow = memo(function DayRow({
   selected,
   paying,
   selectionMode,
+  showDate = false,
   flashes,
   flashToken,
   onFlashDone,
@@ -985,7 +989,7 @@ export const DayRow = memo(function DayRow({
             >
               <TransactionRow
                 transaction={item}
-                showDate={false}
+                showDate={showDate}
                 selectionMode={selectionMode}
                 selected={selected}
                 onLongPress={handleLongPress}
