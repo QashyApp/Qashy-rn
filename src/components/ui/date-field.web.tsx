@@ -2,7 +2,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { View } from "react-native";
 
 import { AppText } from "@/components/ui/app-text";
-import type { DateFieldProps } from "@/components/ui/date-field-format";
+import {
+  dateRangeHint,
+  type DateFieldProps,
+} from "@/components/ui/date-field-format";
 import { IconButton } from "@/components/ui/icon-button";
 import { MotionView } from "@/components/ui/motion";
 import { useLocalization } from "@/localization/localization";
@@ -29,10 +32,14 @@ export function DateField({
 }: DateFieldProps) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
-  const { isRtl, t } = useLocalization();
+  const { isRtl, locale, t } = useLocalization();
   const [focused, setFocused] = useState(false);
+  // A whole date typed outside the allowed range: the browser's `min`/`max` only mark the
+  // input invalid, they do not stop the value from being reported.
+  const [rangeError, setRangeError] = useState<string | null>(null);
   const descriptionId = useId();
-  const description = error ?? hint;
+  const shownError = error ?? rangeError ?? undefined;
+  const description = shownError ?? hint;
   const sunken = materialStyle(theme, "sunken");
   const font = fontStyle("regular", theme.type);
   // Uncontrolled: mid-entry a date input reports "" while it still shows the typed parts, and
@@ -58,7 +65,7 @@ export function DateField({
           // Named like every other form field, which adds "required" for assistive tech.
           aria-label={required ? `${t(label)}, ${t("required")}` : t(label)}
           aria-required={required || undefined}
-          aria-invalid={Boolean(error)}
+          aria-invalid={Boolean(shownError)}
           aria-describedby={description ? descriptionId : undefined}
           ref={inputRef}
           defaultValue={value}
@@ -70,8 +77,19 @@ export function DateField({
             const next = input.value;
             // A half-typed date reads as "" (with `badInput`) until it is complete; only pass on
             // whole dates or a deliberate clear.
-            if (isLocalDate(next) || (next === "" && !input.validity.badInput))
+            if (isLocalDate(next)) {
+              const outside = dateRangeHint(
+                next,
+                locale,
+                minimumDate,
+                maximumDate,
+              );
+              setRangeError(outside);
+              if (!outside) onChange(next);
+            } else if (next === "" && !input.validity.badInput) {
+              setRangeError(null);
               onChange(next);
+            }
           }}
           onClick={(event) => {
             // Open the calendar from anywhere in the field, not only the small icon.
@@ -85,7 +103,13 @@ export function DateField({
             }
           }}
           onFocus={() => setFocused(true)}
-          onBlur={() => setFocused(false)}
+          onBlur={(event) => {
+            setFocused(false);
+            // Leaving with an out-of-range date typed in: show the real value again, with the
+            // hint left up so it is clear why the typed one was not taken.
+            const input = event.currentTarget;
+            if (rangeError && input.value !== value) input.value = value;
+          }}
           style={{
             flex: 1,
             minWidth: 0,
@@ -96,7 +120,7 @@ export function DateField({
             borderRadius: radius.tile,
             borderWidth: 2,
             borderStyle: "solid",
-            borderColor: error
+            borderColor: shownError
               ? String(theme.negative)
               : focused
                 ? String(theme.accent)
@@ -117,7 +141,10 @@ export function DateField({
           <IconButton
             label="Clear date"
             icon="xmark"
-            onPress={() => onChange("")}
+            onPress={() => {
+              setRangeError(null);
+              onChange("");
+            }}
           />
         ) : null}
       </View>
@@ -125,11 +152,11 @@ export function DateField({
         <MotionView key={description} variant="up" exit animateLayout>
           <AppText
             nativeID={descriptionId}
-            accessibilityRole={error ? "alert" : undefined}
-            accessibilityLiveRegion={error ? "polite" : undefined}
+            accessibilityRole={shownError ? "alert" : undefined}
+            accessibilityLiveRegion={shownError ? "polite" : undefined}
             variant="caption"
-            muted={!error}
-            style={error ? { color: theme.negativeText } : undefined}
+            muted={!shownError}
+            style={shownError ? { color: theme.negativeText } : undefined}
           >
             {description}
           </AppText>

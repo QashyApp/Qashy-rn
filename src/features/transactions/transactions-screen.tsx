@@ -106,6 +106,8 @@ function ignoreDismiss() {}
 
 /** The selection a page that is not the current one gets: neighbours never hold a selection. */
 const NO_SELECTION: ReadonlySet<string> = new Set();
+// Keeps the caption line its height while it says nothing.
+const NO_CAPTION = String.fromCharCode(0xa0);
 const NO_TRANSACTIONS: readonly TransactionRecord[] = [];
 
 /** How long the month has to hold still before the URL is updated to it. */
@@ -633,6 +635,13 @@ export function TransactionsScreen() {
       fill={phoneWidth}
     />
   );
+  // The tiles are always the calendar month's totals and ignore the type and the search; they are
+  // dimmed when the list spans months. Either way the list and the tiles differ, so say so.
+  const totalsCaption = spansMonths
+    ? t(`Totals are for ${monthLabel(month, locale)} only`)
+    : kind !== "all" || search.trim().length > 0
+      ? t(`Totals include all transactions in ${monthLabel(month, locale)}`)
+      : "";
   const summaryTiles = (
     <View style={{ gap: space.xs }}>
       <View
@@ -671,33 +680,43 @@ export function TransactionsScreen() {
           ]}
         />
       </View>
-      {/* Always shown, so the header never grows a line when a filter or search is typed, and the
-          tiles' scope is stated whatever narrows the list: they ignore the kind and the search. */}
-      <AppText variant="caption" muted>
-        {`Totals for ${monthLabel(month, locale)}, all transactions`}
+      {/* Said only when it adds something: the month bar already names the month, so a plain
+          month needs no caption. The line keeps its height while empty, so typing a search or
+          picking a type never moves the list. */}
+      <AppText
+        literal
+        variant="caption"
+        muted
+        accessibilityElementsHidden={!totalsCaption}
+        importantForAccessibility={
+          totalsCaption ? "auto" : "no-hide-descendants"
+        }
+      >
+        {totalsCaption || NO_CAPTION}
       </AppText>
     </View>
   );
   // Upcoming already lists every month, so there is nothing for the chip to widen.
-  const searchAllMonthsChip = search && !upcomingOnly ? (
-    <MotionView
-      variant="down"
-      exit
-      animateLayout
-      style={{ flexDirection: "row" }}
-    >
-      <ChoiceChip
-        mode="checkbox"
-        icon="calendar"
-        label="Search all months"
-        selected={searchAllMonths}
-        onPress={() => {
-          setSearchAllMonths((current) => !current);
-          clearSelection();
-        }}
-      />
-    </MotionView>
-  ) : null;
+  const searchAllMonthsChip =
+    search && !upcomingOnly ? (
+      <MotionView
+        variant="down"
+        exit
+        animateLayout
+        style={{ flexDirection: "row" }}
+      >
+        <ChoiceChip
+          mode="checkbox"
+          icon="calendar"
+          label="Search all months"
+          selected={searchAllMonths}
+          onPress={() => {
+            setSearchAllMonths((current) => !current);
+            clearSelection();
+          }}
+        />
+      </MotionView>
+    ) : null;
   // Five options do not fit a segmented control on a phone without truncating, so they scroll
   // sideways as one row instead of wrapping.
   // `bleed` draws the row out to the screen edges with its own negative margin; a caller that

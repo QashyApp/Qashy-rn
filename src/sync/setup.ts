@@ -843,31 +843,48 @@ export async function rotateVaultKey(deps: SyncSetupDeps): Promise<number> {
   });
 
   const at = (deps.nowIso ?? defaultNowIso)();
-  await deps.storage.transact(async (tx) => {
-    await writeMeta(tx, { [SYNC_META.epoch]: String(epoch) });
-    const roster = await readRoster(tx);
-    const held = await readHeldChains(tx);
-    const live = [...roster.values()].filter((peer) => !peer.revokedAt);
-    await writePeers(
-      tx,
-      live.map((peer) => ({
-        ...peer,
-        revokedAt: at,
-        revokedSeq: held.heads.get(peer.deviceId)?.seq ?? 0,
-      })),
-    );
-    await appendActivity(tx, [
-      // The cursor counts slots in a bucket this vault no longer uses.
-      ...live.map((peer) =>
-        activityEntry({
-          kind: "revoked",
-          recordedAt: at,
-          peerId: peer.deviceId,
-        }),
-      ),
-    ]);
-    await writeMeta(tx, { [SYNC_META.relayCursor]: "0" });
-  });
+  try {
+    await deps.storage.transact(async (tx) => {
+      await writeMeta(tx, { [SYNC_META.epoch]: String(epoch) });
+      const roster = await readRoster(tx);
+      const held = await readHeldChains(tx);
+      const live = [...roster.values()].filter((peer) => !peer.revokedAt);
+      await writePeers(
+        tx,
+        live.map((peer) => ({
+          ...peer,
+          revokedAt: at,
+          revokedSeq: held.heads.get(peer.deviceId)?.seq ?? 0,
+        })),
+      );
+      await appendActivity(tx, [
+        // The cursor counts slots in a bucket this vault no longer uses.
+        ...live.map((peer) =>
+          activityEntry({
+            kind: "revoked",
+            recordedAt: at,
+            peerId: peer.deviceId,
+          }),
+        ),
+      ]);
+      await writeMeta(tx, { [SYNC_META.relayCursor]: "0" });
+    });
+  } catch (failure) {
+    // The transaction rolled back, so `sync_meta` still names the old epoch while the keystore
+    // already holds the new key. Unlike a first pairing, that key is not inert: it replaced the
+    // one the vault is actually using. Put back exactly what was read above (nothing is derived
+    // or regenerated here) so a failed rotation leaves the device as it was, and rethrow the
+    // original failure. If the restore itself fails, the device is in the interrupted state
+    // `resumeSync` already recognises, and the error says so rather than "nothing changed".
+    try {
+      await deps.keystore.write(vault);
+    } catch {
+      throw new Error(
+        "Sync key rotation was interrupted before local state could be finalized. Your local history is preserved; restore the matching vault key before resuming sync.",
+      );
+    }
+    throw failure;
+  }
 
   return epoch;
 }

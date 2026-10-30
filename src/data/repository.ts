@@ -306,9 +306,10 @@ export interface FinanceRepository {
     snapshot?: TransactionRecord[],
   ): TransactionRecord[];
   /**
-   * `includePendingAutoPosts` reads the figures as if generation had already run for `toDate`: it
-   * adds the auto-post recurring occurrences that are due but not yet created (see
-   * `getPendingAutoPosts`). Display only; nothing is stored.
+   * `includePendingAutoPosts` reads the figures as if generation had already run up to today (or
+   * `toDate`, when that is earlier): it adds the auto-post recurring occurrences that are due but
+   * not yet created (see `getPendingAutoPosts`), and never an occurrence dated after today.
+   * Display only; nothing is stored.
    */
   getDashboard(
     fromDate: string,
@@ -339,8 +340,9 @@ export interface FinanceRepository {
     },
   ): BudgetStatus[];
   /**
-   * The auto-post recurring transactions that are due on or before `onDate` and that generation
-   * has not posted yet, as the posted transactions a generation run would write: the same
+   * The auto-post recurring transactions that are due on or before `onDate` (capped at today:
+   * generation never runs ahead, so a later date prices nothing that is not due yet) and that
+   * generation has not posted yet, as the posted transactions a generation run would write: the same
    * amounts, currency, rate snapshot, accounts and occurrence keys. Read-only: nothing is stored,
    * emitted or marked, occurrences that exist or were deleted are skipped, and the ids are
    * virtual. For display (the home-screen widgets run without generating).

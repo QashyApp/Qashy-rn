@@ -117,6 +117,11 @@ export function showError(
   Alert.alert(translatedTitle, translatedMessage);
 }
 
+/** A dialog that reports something other than a failure: a success, or "nothing to do". */
+export function showNotice(title: string, message?: string) {
+  showError(title, message, { quiet: true });
+}
+
 export function errorMessage(reason: unknown, fallback: string) {
   // A storage engine's own diagnostic is English that no dictionary knows; show Qashy's sentence.
   const storage = storageFailureMessage(reason);

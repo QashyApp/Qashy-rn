@@ -1,0 +1,192 @@
+import { LocalFinanceRepository } from "@/data/local-finance-repository";
+import { MemoryStorageAdapter } from "@/data/memory-storage";
+import type { RecurringInput } from "@/data/repository";
+import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
+
+/**
+ * Pausing a schedule means the dates it was paused through are skipped: switching it back on moves
+ * its stale next due date to the first occurrence on or after today instead of backfilling (and,
+ * for auto-post, posting) every one it missed.
+ */
+
+const at = (iso: string) => jest.setSystemTime(new Date(`${iso}T09:00:00Z`));
+
+async function createRepository() {
+  const repository = new LocalFinanceRepository(new MemoryStorageAdapter());
+  await repository.initialize();
+  await repository.completeOnboarding({
+    locale: "en-US",
+    baseCurrency: "USD",
+    accountName: "Everyday",
+    accountType: "checking",
+    openingBalanceMinor: 100_000,
+    themeMode: "system",
+    accentSource: "system",
+    accentHex: "#5966E9",
+  });
+  return repository;
+}
+
+function ruleInput(
+  repository: LocalFinanceRepository,
+  overrides: Partial<RecurringInput> = {},
+): RecurringInput {
+  return {
+    template: {
+      kind: "expense",
+      title: "Gym",
+      note: "",
+      accountId: repository.getSnapshot().accounts[0].id,
+      categoryId: null,
+      tagIds: [],
+      amountMinor: 2_500,
+      currency: "USD",
+    },
+    unit: "week",
+    interval: 1,
+    startDate: "2026-06-03",
+    endDate: null,
+    nextDueDate: "2026-06-03",
+    autoPost: true,
+    active: true,
+    ...overrides,
+  };
+}
+
+const occurrencesOf = (repository: LocalFinanceRepository, ruleId: string) =>
+  repository
+    .getSnapshot()
+    .transactions.filter((item) => item.recurringRuleId === ruleId)
+    .map((item) => item.localDate)
+    .sort();
+
+describe("nextDueDateOnReactivation", () => {
+  const rule = {
+    unit: "month" as const,
+    interval: 1,
+    startDate: "2026-01-10",
+    nextDueDate: "2026-03-10",
+  };
+
+  it("moves a stale date to the first occurrence on or after today", () => {
+    expect(nextDueDateOnReactivation(rule, "2026-06-15")).toBe("2026-07-10");
+    expect(nextDueDateOnReactivation(rule, "2026-06-10")).toBe("2026-06-10");
+  });
+
+  it("keeps a date that is today or later", () => {
+    expect(nextDueDateOnReactivation(rule, "2026-03-10")).toBe("2026-03-10");
+    expect(nextDueDateOnReactivation(rule, "2026-02-01")).toBe("2026-03-10");
+  });
+});
+
+describe("reactivating a paused schedule", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    at("2026-06-08");
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  async function pausedRule(repository: LocalFinanceRepository) {
+    const rule = await repository.saveRecurringRule(ruleInput(repository));
+    // A start in the past does not backfill: the schedule begins at Jun 10.
+    expect(rule.nextDueDate).toBe("2026-06-10");
+    expect(occurrencesOf(repository, rule.id)).toEqual([]);
+    return repository.saveRecurringRule(
+      ruleInput(repository, {
+        nextDueDate: rule.nextDueDate,
+        active: false,
+      }),
+      rule.id,
+      rule.revision,
+    );
+  }
+
+  it("skips the dates missed while paused instead of backfilling them", async () => {
+    const repository = await createRepository();
+    const paused = await pausedRule(repository);
+    expect(paused.active).toBe(false);
+    expect(paused.nextDueDate).toBe("2026-06-10");
+
+    // A paused rule generates nothing, however long it sits.
+    at("2026-07-20");
+    await repository.generateRecurring("2026-07-20");
+    expect(occurrencesOf(repository, paused.id)).toEqual([]);
+
+    const resumed = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        nextDueDate: paused.nextDueDate,
+        active: true,
+      }),
+      paused.id,
+      paused.revision,
+    );
+    // Jul 20 is a Monday: the weekly series (Wednesdays) resumes on Jul 22.
+    expect(resumed.active).toBe(true);
+    expect(resumed.nextDueDate).toBe("2026-07-22");
+    // Nothing for Jun 10 ... Jul 15, and switching auto-post back on posted nothing old.
+    expect(occurrencesOf(repository, paused.id)).toEqual([]);
+
+    // The schedule carries on from there, keyed as ever.
+    at("2026-07-23");
+    await repository.generateRecurring("2026-07-23");
+    expect(occurrencesOf(repository, paused.id)).toEqual(["2026-07-22"]);
+    const keys = repository
+      .getSnapshot()
+      .transactions.filter((item) => item.recurringRuleId === paused.id)
+      .map((item) => item.occurrenceKey);
+    expect(new Set(keys).size).toBe(keys.length);
+    await repository.generateRecurring("2026-07-23");
+    expect(occurrencesOf(repository, paused.id)).toHaveLength(1);
+  });
+
+  it("keeps a next due date that is still ahead", async () => {
+    const repository = await createRepository();
+    const paused = await pausedRule(repository);
+    // Resumed the same day it was paused: Jun 10 is still ahead.
+    const resumed = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        nextDueDate: paused.nextDueDate,
+        active: true,
+      }),
+      paused.id,
+      paused.revision,
+    );
+    expect(resumed.nextDueDate).toBe("2026-06-10");
+  });
+
+  it("leaves a long-expired paused schedule with nothing left to generate", async () => {
+    const repository = await createRepository();
+    const rule = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        endDate: "2026-06-20",
+        autoPost: false,
+      }),
+    );
+    const paused = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        endDate: "2026-06-20",
+        autoPost: false,
+        nextDueDate: rule.nextDueDate,
+        active: false,
+      }),
+      rule.id,
+      rule.revision,
+    );
+    at("2026-09-01");
+    const resumed = await repository.saveRecurringRule(
+      ruleInput(repository, {
+        endDate: "2026-06-20",
+        autoPost: false,
+        nextDueDate: paused.nextDueDate,
+        active: true,
+      }),
+      paused.id,
+      paused.revision,
+    );
+    // Past its end date, so generation ends it again without creating anything.
+    expect(resumed.nextDueDate > "2026-06-20").toBe(true);
+    expect(occurrencesOf(repository, rule.id)).toEqual([]);
+  });
+});

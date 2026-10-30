@@ -29,14 +29,22 @@ export function BackgroundSyncCard({
   readonly status: SyncStatus;
 }) {
   const [on, setOn] = useState(false);
+  // Until the stored choice has been read the switch is disabled, so it never flashes "off" for
+  // a device that has it on, and a tap in that window cannot be overwritten by the late read.
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     let live = true;
     readBackgroundSync().then(
       (value) => {
-        if (live) setOn(value);
+        if (!live) return;
+        setOn(value);
+        setLoaded(true);
       },
-      () => undefined,
+      // Unreadable is treated as the default (off), and the switch becomes usable.
+      () => {
+        if (live) setLoaded(true);
+      },
     );
     return () => {
       live = false;
@@ -75,8 +83,8 @@ export function BackgroundSyncCard({
               ? "Checks for changes from your other devices about every 30 minutes when this device is connected, so widgets stay current without opening Qashy. It uses some battery and data, and the relay can see when this device checks in."
               : "Turn sync on to use this. It checks for changes about every 30 minutes when connected, uses some battery and data, and lets the relay see when this device checks in."
           }
-          value={on && status.enabled}
-          disabled={!status.enabled}
+          value={loaded && on && status.enabled}
+          disabled={!loaded || !status.enabled}
           onValueChange={(value) => void change(value)}
         />
       </Card>

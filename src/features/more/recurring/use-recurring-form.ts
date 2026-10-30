@@ -60,7 +60,7 @@ import {
 import {
   EndMode,
   MAX_REPEAT_INTERVAL,
-  scheduleHasEnded,
+  projectedNextDueDate,
 } from "@/features/more/recurring/recurring-model";
 import { canPostNow } from "@/data/finance/rates";
 
@@ -132,7 +132,14 @@ export function useRecurringForm() {
   );
   const [occurrenceCount, setOccurrenceCount] = useState("");
   const [autoPost, setAutoPost] = useState(existing?.autoPost ?? false);
-  const [active, setActive] = useState(existing?.active ?? true);
+  const [active, setActiveState] = useState(existing?.active ?? true);
+  // Whether the user switched the schedule off themselves. Extending an ended schedule's end date
+  // turns it back on, but never over a choice the user made.
+  const [turnedOffByUser, setTurnedOffByUser] = useState(false);
+  const setActive = (next: boolean) => {
+    setTurnedOffByUser(!next);
+    setActiveState(next);
+  };
   const [foreignEnabled, setForeignEnabled] = useState(() =>
     Boolean(existing?.template.foreign ?? draft?.foreignCurrency),
   );
@@ -345,18 +352,31 @@ export function useRecurringForm() {
         .map((item) => item.localDate)
         .sort()[0]
     : undefined;
-  const scheduleEnded =
-    scheduleReady &&
-    isLocalDate(startDate) &&
-    scheduleHasEnded({
-      existing,
-      unit,
-      interval: Math.floor(Number(interval)),
-      startDate,
-      endDate: resolvedEndDate,
-      earliestPendingDate,
-      today: todayLocal(),
-    });
+  // The next payment the schedule would have once saved. Past the end date, there is none left.
+  const projectedNext =
+    scheduleReady && isLocalDate(startDate)
+      ? projectedNextDueDate({
+          existing,
+          unit,
+          interval: Math.floor(Number(interval)),
+          startDate,
+          endDate: resolvedEndDate,
+          earliestPendingDate,
+          today: todayLocal(),
+        })
+      : null;
+  const scheduleEnded = Boolean(
+    resolvedEndDate && projectedNext && projectedNext > resolvedEndDate,
+  );
+  // The projected date only explains an ended schedule; it is null otherwise.
+  const nextAfterEnd = scheduleEnded ? projectedNext : null;
+  // Extending the end date past the next payment lifts the lock, and turns the schedule on with
+  // it unless the user had switched it off. Adjusted during render, from the previous value.
+  const [wasEnded, setWasEnded] = useState(scheduleEnded);
+  if (wasEnded !== scheduleEnded) {
+    setWasEnded(scheduleEnded);
+    if (wasEnded && !turnedOffByUser) setActiveState(true);
+  }
   const effectiveActive = active && !scheduleEnded;
   const canSave =
     Boolean(account) &&
@@ -545,6 +565,7 @@ export function useRecurringForm() {
     active,
     setActive,
     scheduleEnded,
+    nextAfterEnd,
     effectiveActive,
     foreignEnabled,
     setForeignEnabled,

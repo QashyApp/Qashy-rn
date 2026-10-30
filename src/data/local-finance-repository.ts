@@ -1408,7 +1408,10 @@ export class LocalFinanceRepository implements FinanceRepository {
 
   getPendingAutoPosts(onDate: string): TransactionRecord[] {
     assertDate(onDate);
-    return this.pendingRecurring(onDate).filter(
+    // Generation never runs ahead of today, so neither does the preview: a later `onDate` must not
+    // price or mark occurrences that are not due yet (the same cap as `withPendingRecurring`).
+    const today = todayLocal();
+    return this.pendingRecurring(onDate < today ? onDate : today).filter(
       (transaction) => transaction.status === "posted",
     );
   }

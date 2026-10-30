@@ -24,6 +24,7 @@ import { pendingContributionDraft } from "@/features/plan/goal-contribution-draf
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { mediumDate, todayLocal } from "@/utils/date";
+import { accountTypeIcon } from "@/utils/labels";
 import { validateDateInput, validateMoneyInput } from "@/utils/form-validation";
 import { hapticSuccess } from "@/services/haptics";
 import {
@@ -425,7 +426,7 @@ export function GoalFormScreen() {
             <ChoiceChip
               key={item.id}
               literal
-              icon={item.icon}
+              icon={accountTypeIcon(item.type)}
               label={`${item.name}${item.archived ? ` ${t("(archived)")}` : ""}`}
               disabled={item.archived}
               selected={linkedAccountId === item.id}

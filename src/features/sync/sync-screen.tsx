@@ -59,8 +59,8 @@ export function SyncScreen() {
   const { status, syncing, error, refresh, reconcile, checkRelay, setup } =
     useSync();
   const theme = useQashyTheme();
-  const { radius, space } = theme;
-  const rowDividerInset = 38 + space.md;
+  const { radius, space, tile, iconSize } = theme;
+  const rowDividerInset = tile.size + space.md;
   const { t } = useLocalization();
 
   /**
@@ -149,7 +149,7 @@ export function SyncScreen() {
       // The cost is the headline, not a footnote. Someone doing this after losing a phone needs
       // to know before they start that they will be re-pairing everything they still own.
       message:
-        "Every device is removed and must be paired again, including this one’s partners. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.",
+        "Every other device is removed from the vault and has to be paired with this one again. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.",
       confirmLabel: "Replace key",
     });
     if (!confirmed) return;
@@ -206,8 +206,8 @@ export function SyncScreen() {
             <View
               style={[
                 {
-                  width: 64,
-                  height: 64,
+                  width: tile.size + space.xxl,
+                  height: tile.size + space.xxl,
                   borderRadius: radius.pill,
                   alignItems: "center",
                   justifyContent: "center",
@@ -218,7 +218,7 @@ export function SyncScreen() {
               <AppIcon
                 name={summary.icon}
                 color={toneColor(theme, summary.tone)}
-                size={28}
+                size={iconSize.xl}
               />
             </View>
             <View style={{ flex: 1, gap: space.xxs, minWidth: 0 }}>

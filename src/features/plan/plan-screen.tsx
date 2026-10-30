@@ -489,11 +489,28 @@ function BudgetCard({
           }}
         >
           {customState ? (
-            <StatusPill
-              label={customState === "ended" ? "Ended" : "Upcoming"}
-              icon={customState === "ended" ? "checkmark" : "calendar"}
-              tone="neutral"
-            />
+            // An ended budget keeps its verdict: "Ended" alone would hide that it went over.
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: space.sm,
+                flexWrap: "wrap",
+              }}
+            >
+              <StatusPill
+                label={customState === "ended" ? "Ended" : "Upcoming"}
+                icon={customState === "ended" ? "checkmark" : "calendar"}
+                tone="neutral"
+              />
+              {customState === "ended" && pace.status === "over" ? (
+                <StatusPill
+                  label={presentation.label}
+                  icon={presentation.icon}
+                  tone={presentation.tone}
+                />
+              ) : null}
+            </View>
           ) : (
             <StatusPill
               label={presentation.label}

@@ -609,7 +609,8 @@
     "q_52501a712734de09",
     "q_b0b5171bfbcd2296",
     "q_1c42c72c36ece62c",
-    "q_052f49fa5481a8b4",
+    "q_acc9908fbb97221e",
+    "q_1443a4df8febc9c4",
     "q_025bff955d1302bd",
     "q_eb6bdc8879dc994f",
     "q_f6f1d8426d5ab786",
@@ -634,7 +635,7 @@
     "q_eb447145a818c650",
     "q_d200e8558b0ea7f0",
     "q_518eed195b514891",
-    "q_f25a261ef61f7622",
+    "q_e053498750318877",
     "q_4e45820495a39188",
     "q_a3ada4ca44f099f5",
     "q_0150f0beeeff74c4",
@@ -659,15 +660,15 @@
     "q_1ad0c242833b3919",
     "q_3c378ad36ab8fe29",
     "q_c9d6e61701141cae",
-    "q_d70c585bcada1dcc",
+    "q_ea88cf83825abb48",
     "q_25c91c98a4771b13",
     "q_0dff63f9baee3474",
     "q_0c536ff4e811c3d1",
-    "q_44a3fcc072bc0fc3",
+    "q_e268f0598612e2cc",
     "q_1c55ea2bfb5d2149",
     "q_cd8f813e1af872d6",
     "q_fc85d91eaccb112e",
-    "q_f98c4fe52450db1b",
+    "q_a6de8348fef161b2",
     "q_4fb9116e536bb327",
     "q_606dabe8276ab818",
     "q_cfe39d24bc958960",
@@ -705,7 +706,7 @@
     "q_60b091d2af0a9152",
     "q_22cd1768d4686d64",
     "q_e553da06ac991cdf",
-    "q_25d57d755e69dc04",
+    "q_c980cff5be94ba38",
     "q_5b22e2b940d73272",
     "q_7cc2ee93864ab051",
     "q_5f821717831acf8e",
@@ -1173,7 +1174,22 @@
     "q_c59519c1bffe67c4",
     "q_489eb5cceaa2e6ed",
     "q_4fcfd18ec7a2f83f",
-    "q_059fb65c696b4638",
+    "q_b05b16a02ca2e9e2",
+    "q_47ea5551f666cf3d",
+    "q_a82be3c5eb4ad25f",
+    "q_e5d01bef737e2e3a",
+    "q_e6dc650d992935b6",
+    "q_e9d764c36f400a0f",
+    "q_e507a982790b17b2",
+    "q_006c7add65f0aa25",
+    "q_a5b3b1ca1aa5bc16",
+    "q_ab5077a9a5b07f13",
+    "q_98f171b8ccd6ef58",
+    "q_35c381fec9f0975b",
+    "q_7e67cf3a71261e4b",
+    "q_007cb07a07531b58",
+    "q_84486cf03076908f",
+    "q_9aff61559a46bc84",
     "q_d0b501725d236d60",
     "q_78d4a851d5211ac9",
     "q_626d500c5a080688",
@@ -1786,6 +1802,30 @@
     {
       "name": "q_9d65d749e37c3b23",
       "source": "^2 seconds left$"
+    },
+    {
+      "name": "q_dca145784e13766d",
+      "source": "^Removal proposed · (\\d+) of (\\d+) approvals$"
+    },
+    {
+      "name": "q_dc04ffeda6a69495",
+      "source": "^(\\d+) of (\\d+) approvals so far$"
+    },
+    {
+      "name": "q_445500a98faa833b",
+      "source": "^Approve removing (.+)$"
+    },
+    {
+      "name": "q_4a449fc6afe55beb",
+      "source": "^Choose a date on or after (.+)$"
+    },
+    {
+      "name": "q_1acf76eff7eb6db0",
+      "source": "^Choose a date on or before (.+)$"
+    },
+    {
+      "name": "q_b9992085c93bf16a",
+      "source": "^Choose a date between (.+) and (.+)$"
     },
     {
       "name": null,
@@ -2416,6 +2456,10 @@
       "source": "^The last one is on (.+)\\.$"
     },
     {
+      "name": "q_83769cfe31339b6a",
+      "source": "^The next payment would be on (.+), after the end date\\. Extend the end date to turn it on\\.$"
+    },
+    {
       "name": "q_517ec611a568ff63",
       "source": "^Number of times must be (\\d+) or less\\.$"
     },
@@ -2576,8 +2620,12 @@
       "source": "^No transactions in (.+)$"
     },
     {
-      "name": "q_0b389c03aadd6987",
-      "source": "^Totals for (.+), all transactions$"
+      "name": "q_0d3bb104fceb5947",
+      "source": "^Totals include all transactions in (.+)$"
+    },
+    {
+      "name": "q_5423918ece5e482d",
+      "source": "^Totals are for (.+) only$"
     },
     {
       "name": "q_3047e16e8b851a5d",

@@ -11,9 +11,14 @@ import { IconBadge } from "@/features/sync/pair/pair-primitives";
 export function DoneStep({
   outcome,
   firstRun = false,
+  stalled = false,
+  onRetry,
 }: {
   readonly outcome: { headline: string; body: string } | null;
   readonly firstRun?: boolean;
+  /** The pull after joining finished and nothing has arrived: offer a way out. */
+  readonly stalled?: boolean;
+  readonly onRetry?: () => void;
 }) {
   const theme = useQashyTheme();
   const { space } = theme;
@@ -29,12 +34,28 @@ export function DoneStep({
       >
         <IconBadge icon="arrow.triangle.2.circlepath" />
         <AppText variant="title" style={{ textAlign: "center" }}>
-          Receiving your data…
+          {stalled ? "Still waiting for your data" : "Receiving your data…"}
         </AppText>
         <AppText muted style={{ textAlign: "center", maxWidth: 420 }}>
-          This device joined your vault. Keep the other device open nearby —
-          Qashy opens as soon as your accounts arrive.
+          {stalled
+            ? "This device joined your vault, but nothing has arrived yet. Keep the other device open and online, then try again — or check the connection in sync settings."
+            : "This device joined your vault. Keep the other device open nearby — Qashy opens as soon as your accounts arrive."}
         </AppText>
+        {stalled ? (
+          <View style={{ alignItems: "center", gap: space.sm }}>
+            <ActionButton
+              title="Try again"
+              icon="arrow.clockwise"
+              onPress={onRetry}
+            />
+            <TextButton
+              title="Open sync settings"
+              icon="gear"
+              tone="muted"
+              onPress={() => router.replace("/sync")}
+            />
+          </View>
+        ) : null}
       </View>
     );
   }

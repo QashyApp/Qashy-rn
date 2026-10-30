@@ -12,6 +12,16 @@
       "he": "הערות"
     },
     {
+      "name": "q_006c7add65f0aa25",
+      "en": "Only devices that were in the vault when this was proposed can approve it.",
+      "he": "רק מכשירים שהיו בכספת כשההסרה הוצעה יכולים לאשר אותה."
+    },
+    {
+      "name": "q_007cb07a07531b58",
+      "en": "Still waiting for your data",
+      "he": "עדיין ממתינים לנתונים שלכם"
+    },
+    {
       "name": "q_007dfd9865733e55",
       "en": "Totals are for the whole month",
       "he": "הסכומים הם לכל החודש"
@@ -192,11 +202,6 @@
       "he": "כששני מכשירים שבשניהם כבר היו נתונים מתחברים, כל דבר שיצרתם בשניהם מגיע פעמיים. Qashy שינה את שמות ההתנגשויות במקום לנחש — בחרו את אלה שהם באמת אותו דבר."
     },
     {
-      "name": "q_052f49fa5481a8b4",
-      "en": "Paired and ready. Nothing has needed to move between your devices yet.",
-      "he": "מחובר ומוכן. עדיין לא היה צורך להעביר דבר בין המכשירים שלכם."
-    },
-    {
       "name": "q_05310039cc38d91b",
       "en": "Tag name is required.",
       "he": "יש להזין שם תגית."
@@ -230,11 +235,6 @@
       "name": "q_059b148484791788",
       "en": "Recurring",
       "he": "מחזוריות"
-    },
-    {
-      "name": "q_059fb65c696b4638",
-      "en": "A removal proposal is waiting for more device approvals. Tap that device in the list to add this device’s approval.",
-      "he": "הצעה להסרה ממתינה לאישורים נוספים מהמכשירים. הקישו על המכשיר ברשימה כדי להוסיף את אישור המכשיר הזה."
     },
     {
       "name": "q_05afbfe98335a78e",
@@ -730,6 +730,11 @@
       "name": "q_142e390b955f4f74",
       "en": "Working…",
       "he": "עובד…"
+    },
+    {
+      "name": "q_1443a4df8febc9c4",
+      "en": "Paired and ready. Sync now to exchange changes with your other devices.",
+      "he": "מחובר ומוכן. סנכרנו עכשיו כדי להחליף שינויים עם המכשירים האחרים שלכם."
     },
     {
       "name": "q_1463ff5ca0a60147",
@@ -1312,11 +1317,6 @@
       "he": "Qashy לא מצא רשומות שמופיעות פעמיים. אם רק חיברתם מכשיר, סנכרנו פעם אחת ובדקו שוב."
     },
     {
-      "name": "q_25d57d755e69dc04",
-      "en": "Type or paste this into the other device instead of scanning. Treat it like the code itself — it works once, and only for the next minute or so.",
-      "he": "הקלידו או הדביקו את זה במכשיר האחר במקום לסרוק. התייחסו לזה כמו לקוד עצמו — הוא עובד פעם אחת, ורק בדקה הקרובה בערך."
-    },
-    {
       "name": "q_25dd47c6ed2eea6c",
       "en": "Search, filter, and manage your local ledger.",
       "he": "חפשו, סננו ונהלו את היומן המקומי שלכם."
@@ -1862,6 +1862,11 @@
       "he": "תזמונים חוזרים"
     },
     {
+      "name": "q_35c381fec9f0975b",
+      "en": "Camera access is blocked for this site. Allow it in your browser’s site settings, or enter the code instead.",
+      "he": "הגישה למצלמה חסומה באתר הזה. אפשרו אותה בהגדרות האתר בדפדפן, או הזינו את הקוד במקום."
+    },
+    {
       "name": "q_35cdc57f1e5233a2",
       "en": "Couldn’t update your overview",
       "he": "לא ניתן היה לעדכן את הסקירה שלכם"
@@ -2357,11 +2362,6 @@
       "he": "אנימציות"
     },
     {
-      "name": "q_44a3fcc072bc0fc3",
-      "en": "Couldn’t save these addresses",
-      "he": "לא ניתן לשמור את הכתובות"
-    },
-    {
       "name": "q_44b495de611c364d",
       "en": "Transaction type filter",
       "he": "סינון לפי סוג תנועה"
@@ -2455,6 +2455,11 @@
       "name": "q_47d74fbec3c9a1ce",
       "en": "Choose what shows up on your overview.",
       "he": "בחרו מה יופיע בסקירה שלכם."
+    },
+    {
+      "name": "q_47ea5551f666cf3d",
+      "en": "Pending removals",
+      "he": "הסרות ממתינות"
     },
     {
       "name": "q_480a8159b6231a03",
@@ -4352,6 +4357,11 @@
       "he": "קודם נמחקים לצמיתות החשבונות, התנועות, התקציבים והיעדים הנוכחיים שלכם, ואז מתווסף הגיבוי. לא זמין במכשיר שמסנכרן."
     },
     {
+      "name": "q_7e67cf3a71261e4b",
+      "en": "Enter the code",
+      "he": "הזינו את הקוד"
+    },
+    {
       "name": "q_7e7ed4725fbb82f9",
       "en": "Add a manual rate when you create an account in another currency.",
       "he": "הוסיפו שער ידני כשיוצרים חשבון במטבע אחר."
@@ -4560,6 +4570,11 @@
       "name": "q_84126fa92f00b4ef",
       "en": "just now",
       "he": "לפני רגע"
+    },
+    {
+      "name": "q_84486cf03076908f",
+      "en": "This device joined your vault, but nothing has arrived yet. Keep the other device open and online, then try again — or check the connection in sync settings.",
+      "he": "המכשיר הזה הצטרף לכספת, אבל עדיין לא הגיע דבר. השאירו את המכשיר האחר פתוח ומחובר לרשת, ואז נסו שוב — או בדקו את החיבור בהגדרות הסנכרון."
     },
     {
       "name": "q_846b3790b6e25c1c",
@@ -5197,6 +5212,11 @@
       "he": "השערים האוטומטיים פועלים, אך התנועות המחזוריות לא עודכנו"
     },
     {
+      "name": "q_98f171b8ccd6ef58",
+      "en": "I’ve saved it",
+      "he": "שמרתי אותו"
+    },
+    {
       "name": "q_990a37c295129715",
       "en": "Scan a code shown on a phone or computer that already has Qashy set up.",
       "he": "סרקו קוד שמוצג בטלפון או במחשב שבו Qashy כבר מוגדר."
@@ -5245,6 +5265,11 @@
       "name": "q_9ae6ef0237d899a0",
       "en": "Work",
       "he": "עבודה"
+    },
+    {
+      "name": "q_9aff61559a46bc84",
+      "en": "Qashy could not reach secure storage, so there is no key it can show here. Your finance data is untouched.",
+      "he": "Qashy לא הצליח להגיע לאחסון המאובטח, ולכן אין מפתח שאפשר להציג כאן. נתוני הכספים שלכם לא נפגעו."
     },
     {
       "name": "q_9b22ff063120f4e6",
@@ -5582,6 +5607,11 @@
       "he": "בעיה בממסר"
     },
     {
+      "name": "q_a5b3b1ca1aa5bc16",
+      "en": "Backup ready — make sure you saved it",
+      "he": "הגיבוי מוכן — ודאו שהוא נשמר"
+    },
+    {
       "name": "q_a5c0590db6f268b5",
       "en": "plus",
       "he": "פלוס"
@@ -5622,6 +5652,11 @@
       "he": "בעלים"
     },
     {
+      "name": "q_a6de8348fef161b2",
+      "en": "Check it and try again.",
+      "he": "בדקו אותה ונסו שוב."
+    },
+    {
       "name": "q_a6f2645578b2d2bc",
       "en": "Year",
       "he": "שנה"
@@ -5660,6 +5695,11 @@
       "name": "q_a81e2cdaf6921adc",
       "en": "System",
       "he": "מערכת"
+    },
+    {
+      "name": "q_a82be3c5eb4ad25f",
+      "en": "Approve this removal?",
+      "he": "לאשר את ההסרה הזו?"
     },
     {
       "name": "q_a84dc79f0dcb1b13",
@@ -5747,6 +5787,11 @@
       "he": "הטקסט המוצפן קצר מתג האימות שלו."
     },
     {
+      "name": "q_ab5077a9a5b07f13",
+      "en": "Qashy can’t tell whether the file was saved or the save dialog was closed. If it wasn’t saved, create the backup again. Your passphrase stays here until you confirm.",
+      "he": "Qashy לא יכול לדעת אם הקובץ נשמר או שחלון השמירה נסגר. אם הוא לא נשמר, צרו את הגיבוי שוב. ביטוי הסיסמה נשאר כאן עד שתאשרו."
+    },
+    {
       "name": "q_ab9d48b950081708",
       "en": "Create goal",
       "he": "יצירת יעד"
@@ -5785,6 +5830,11 @@
       "name": "q_ac903324017cb8b5",
       "en": "Waiting for the other device. The next screen shows six words that must be identical on both — that comparison is what makes a photographed code useless.",
       "he": "ממתין למכשיר האחר. המסך הבא מציג שש מילים שחייבות להיות זהות בשניהם — ההשוואה הזו היא מה שהופך קוד מצולם לחסר תועלת."
+    },
+    {
+      "name": "q_acc9908fbb97221e",
+      "en": "Not synced yet",
+      "he": "עדיין לא סונכרן"
     },
     {
       "name": "q_acd3b44b585cac25",
@@ -5900,6 +5950,11 @@
       "name": "q_b05b00cc1a8f5a22",
       "en": "Opens the icon browser",
       "he": "פותח את בורר הסמלים"
+    },
+    {
+      "name": "q_b05b16a02ca2e9e2",
+      "en": "A removal is waiting for more approvals. Approve it under Pending removals above.",
+      "he": "הסרה ממתינה לאישורים נוספים. אשרו אותה למעלה, תחת \"הסרות ממתינות\"."
     },
     {
       "name": "q_b0b5171bfbcd2296",
@@ -6702,6 +6757,11 @@
       "he": "למחוק יעד אחד?"
     },
     {
+      "name": "q_c980cff5be94ba38",
+      "en": "Type or paste this into the other device instead of scanning. Treat it like the code itself — it works once and expires after a minute and a half.",
+      "he": "הקלידו או הדביקו את זה במכשיר האחר במקום לסרוק. התייחסו לזה כמו לקוד עצמו — הוא עובד פעם אחת ופג תוקפו אחרי דקה וחצי."
+    },
+    {
       "name": "q_c99cff2eb9194b45",
       "en": "Spending insight removed",
       "he": "תובנת ההוצאות הוסרה"
@@ -7237,11 +7297,6 @@
       "he": "החליקו על תנועה כדי למחוק אותה או לשנות את הקטגוריה שלה. תשלומים קרובים מחליקים לסימון כשולם או לדילוג."
     },
     {
-      "name": "q_d70c585bcada1dcc",
-      "en": "Save addresses",
-      "he": "שמירת הכתובות"
-    },
-    {
       "name": "q_d732cf8c6672eb14",
       "en": "How the month moves when you swipe or tap the month arrows.",
       "he": "האופן שבו החודש נע כשמחליקים או לוחצים על חיצי החודש."
@@ -7532,6 +7587,11 @@
       "he": "לא ניתן לשמור את ההעברה הזו כהכנסה."
     },
     {
+      "name": "q_e053498750318877",
+      "en": "Every other device is removed from the vault and has to be paired with this one again. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.",
+      "he": "כל מכשיר אחר מוסר מהכספת ויצטרך להתחבר שוב אל המכשיר הזה. עשו זאת כשמכשיר אובד: הפעולה הופכת את עותק תיבת ההפקדה שאותו מכשיר מכיר לבלתי קריא עבורו."
+    },
+    {
       "name": "q_e0566702062d0ee7",
       "en": "Map required fields:",
       "he": "יש למפות שדות חובה:"
@@ -7637,6 +7697,11 @@
       "he": "האם המילים האלה זהות?"
     },
     {
+      "name": "q_e268f0598612e2cc",
+      "en": "Couldn’t save this address",
+      "he": "לא ניתן לשמור את הכתובת"
+    },
+    {
       "name": "q_e26c5c239197c01c",
       "en": "Games",
       "he": "משחקים"
@@ -7722,6 +7787,11 @@
       "he": "חשבונות"
     },
     {
+      "name": "q_e507a982790b17b2",
+      "en": "This device already approved. It waits for the others.",
+      "he": "המכשיר הזה כבר אישר. ממתינים לאחרים."
+    },
+    {
       "name": "q_e545180678ab3e53",
       "en": "Anything you created on both is now in the vault twice. Qashy renamed the collisions rather than guessing which are the same — the review screen is where you decide.",
       "he": "כל דבר שיצרתם בשניהם נמצא כעת בכספת פעמיים. Qashy שינה את שמות ההתנגשויות במקום לנחש מה זהה — מסך הסקירה הוא המקום שבו אתם מחליטים."
@@ -7752,6 +7822,11 @@
       "he": "נסו קטגוריה תואמת."
     },
     {
+      "name": "q_e5d01bef737e2e3a",
+      "en": "Approve",
+      "he": "אישור"
+    },
+    {
       "name": "q_e609af4a42aa39b6",
       "en": "Sync was cancelled.",
       "he": "הסנכרון בוטל."
@@ -7770,6 +7845,11 @@
       "name": "q_e68d2d75f9a85154",
       "en": "Couldn’t load widget settings",
       "he": "לא ניתן לטעון את הגדרות הווידג׳טים"
+    },
+    {
+      "name": "q_e6dc650d992935b6",
+      "en": "Approve removal",
+      "he": "אישור ההסרה"
     },
     {
       "name": "q_e6e26fe9cf061953",
@@ -7892,6 +7972,11 @@
       "he": "מרווח החזרה חורג מטווח התאריכים הנתמך."
     },
     {
+      "name": "q_e9d764c36f400a0f",
+      "en": "Couldn’t approve that removal",
+      "he": "לא ניתן לאשר את ההסרה"
+    },
+    {
       "name": "q_e9eb6976f93dfb18",
       "en": "Customize",
       "he": "התאמה אישית"
@@ -7930,6 +8015,11 @@
       "name": "q_ea536ecac29bb481",
       "en": "Opening…",
       "he": "פותח…"
+    },
+    {
+      "name": "q_ea88cf83825abb48",
+      "en": "Save address",
+      "he": "שמירת הכתובת"
     },
     {
       "name": "q_ea8dc390a7cd89e7",
@@ -8292,11 +8382,6 @@
       "he": "הפעולה תמחק לצמיתות את הנתונים הנוכחיים, ואז תייבא את הגיבוי. אי אפשר לבטל את זה."
     },
     {
-      "name": "q_f25a261ef61f7622",
-      "en": "Every device is removed and must be paired again, including this one’s partners. Do this when a device is lost: it makes the copy of the drop-box that device knows about unreadable to it.",
-      "he": "כל המכשירים מוסרים ויצטרכו להתחבר מחדש, כולל אלה שמחוברים למכשיר הזה. עשו זאת כשמכשיר אובד: הפעולה הופכת את עותק תיבת ההפקדה שאותו מכשיר מכיר לבלתי קריא עבורו."
-    },
-    {
       "name": "q_f2771960f7294344",
       "en": "Destination base amount does not match the destination amount and exchange rate.",
       "he": "סכום הבסיס ביעד אינו תואם לסכום היעד ולשער החליפין."
@@ -8582,11 +8667,6 @@
       "he": "לא ניתן היה לייבא את החשבון המשויך."
     },
     {
-      "name": "q_f98c4fe52450db1b",
-      "en": "Check them and try again.",
-      "he": "בדקו אותן ונסו שוב."
-    },
-    {
       "name": "q_f9929e2d356260c5",
       "en": "Multiply",
       "he": "כפל"
@@ -8837,6 +8917,42 @@
       "source": "^2 seconds left$",
       "en": "2 seconds left",
       "he": "נותרו שתי שניות"
+    },
+    {
+      "name": "q_dca145784e13766d",
+      "source": "^Removal proposed · (\\d+) of (\\d+) approvals$",
+      "en": "Removal proposed · %1$s of %2$s approvals",
+      "he": "הוצעה הסרה · %1$s מתוך %2$s אישורים"
+    },
+    {
+      "name": "q_dc04ffeda6a69495",
+      "source": "^(\\d+) of (\\d+) approvals so far$",
+      "en": "%1$s of %2$s approvals so far",
+      "he": "%1$s מתוך %2$s אישורים עד כה"
+    },
+    {
+      "name": "q_445500a98faa833b",
+      "source": "^Approve removing (.+)$",
+      "en": "Approve removing %1$s",
+      "he": "אישור הסרת %1$s"
+    },
+    {
+      "name": "q_4a449fc6afe55beb",
+      "source": "^Choose a date on or after (.+)$",
+      "en": "Choose a date on or after %1$s",
+      "he": "בחרו תאריך ב־%1$s או אחריו"
+    },
+    {
+      "name": "q_1acf76eff7eb6db0",
+      "source": "^Choose a date on or before (.+)$",
+      "en": "Choose a date on or before %1$s",
+      "he": "בחרו תאריך ב־%1$s או לפניו"
+    },
+    {
+      "name": "q_b9992085c93bf16a",
+      "source": "^Choose a date between (.+) and (.+)$",
+      "en": "Choose a date between %1$s and %2$s",
+      "he": "בחרו תאריך בין %1$s ל־%2$s"
     },
     {
       "name": "q_c8515c8fa77697e1",
@@ -9721,6 +9837,12 @@
       "he": "האחרון ב־%1$s."
     },
     {
+      "name": "q_83769cfe31339b6a",
+      "source": "^The next payment would be on (.+), after the end date\\. Extend the end date to turn it on\\.$",
+      "en": "The next payment would be on %1$s, after the end date. Extend the end date to turn it on.",
+      "he": "התשלום הבא יהיה ב־%1$s, אחרי תאריך הסיום. יש להאריך את תאריך הסיום כדי להפעיל אותו."
+    },
+    {
       "name": "q_517ec611a568ff63",
       "source": "^Number of times must be (\\d+) or less\\.$",
       "en": "Number of times must be %1$s or less.",
@@ -9949,10 +10071,16 @@
       "he": "אין תנועות ב%1$s"
     },
     {
-      "name": "q_0b389c03aadd6987",
-      "source": "^Totals for (.+), all transactions$",
-      "en": "Totals for %1$s, all transactions",
-      "he": "סכומים עבור %1$s, כל התנועות"
+      "name": "q_0d3bb104fceb5947",
+      "source": "^Totals include all transactions in (.+)$",
+      "en": "Totals include all transactions in %1$s",
+      "he": "הסכומים כוללים את כל התנועות ב%1$s"
+    },
+    {
+      "name": "q_5423918ece5e482d",
+      "source": "^Totals are for (.+) only$",
+      "en": "Totals are for %1$s only",
+      "he": "הסכומים הם עבור %1$s בלבד"
     },
     {
       "name": "q_3047e16e8b851a5d",

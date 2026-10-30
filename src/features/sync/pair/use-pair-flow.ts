@@ -48,7 +48,13 @@ export function usePairFlow() {
   const [role, setRole] = useState<Role>(firstRun ? "join" : "host");
   const [deviceName, setDeviceName] = useState(defaultDeviceName);
   const [busy, setBusy] = useState(false);
+  // State is stale inside a double tap or a scan that fires twice in one frame; this is what the
+  // in-flight check reads. `busy` only drives the rendering.
+  const busyRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
+  // A pairing code that was rejected on this device before anything was sent. Shown under the
+  // code field, where the typo is, instead of in the banner at the top of the screen.
+  const [codeError, setCodeError] = useState<string | null>(null);
 
   const [code, setCode] = useState<DisplayedPairingCode | null>(null);
   const [remaining, setRemaining] = useState(0);
@@ -57,6 +63,9 @@ export function usePairFlow() {
     headline: string;
     body: string;
   } | null>(null);
+  // First run only: the pull that follows joining has finished (or failed) and the vault's
+  // settings still have not arrived. Set from that pull's own completion, not from a timer.
+  const [receiveSettled, setReceiveSettled] = useState(false);
   const [scannerRearm, setScannerRearm] = useState({
     token: 0,
     keepManual: false,
@@ -134,12 +143,25 @@ export function usePairFlow() {
     return () => clearInterval(timer);
   }, [stage, code]);
 
+  /** Claims the single in-flight slot. False means another press already owns it. */
+  const begin = () => {
+    if (busyRef.current) return false;
+    busyRef.current = true;
+    setBusy(true);
+    return true;
+  };
+  const finish = () => {
+    busyRef.current = false;
+    setBusy(false);
+  };
+
   const move = (next: Stage) => {
     setDirection(
       STAGES.indexOf(next) >= STAGES.indexOf(stage) ? "forward" : "back",
     );
     setStage(next);
     setError(null);
+    setCodeError(null);
   };
 
   const profile = (): DeviceProfile => ({
@@ -171,8 +193,7 @@ export function usePairFlow() {
   // -------------------------------------------------------------------------
 
   const startHosting = async () => {
-    if (busy) return;
-    setBusy(true);
+    if (!begin()) return;
     setError(null);
     const began = generation.current;
     try {
@@ -280,7 +301,7 @@ export function usePairFlow() {
         errorMessage(reason, "Sync could not be set up on this device."),
       );
     } finally {
-      setBusy(false);
+      finish();
     }
   };
 
@@ -306,9 +327,9 @@ export function usePairFlow() {
   // -------------------------------------------------------------------------
 
   const startJoining = async (scanned: string) => {
-    if (busy) return;
-    setBusy(true);
+    if (!begin()) return;
     setError(null);
+    setCodeError(null);
     const began = generation.current;
     // The generation this attempt runs under once it owns a session. Stays null until then, so a
     // failure before the handshake is reported as before.
@@ -324,13 +345,14 @@ export function usePairFlow() {
           unixSeconds(),
         );
       } catch (reason) {
-        // Rejected on this device before anything was sent, so what was typed is only a typo.
+        // Rejected on this device before anything was sent, so what was typed is only a typo:
+        // keep the draft for correction and say what is wrong next to it.
         setScannerRearm((value) => ({
           token: value.token + 1,
-          keepManual: false,
+          keepManual: true,
         }));
         hapticError();
-        setError(
+        setCodeError(
           errorMessage(
             reason,
             "That code could not be used. Show a fresh one and try again.",
@@ -403,7 +425,7 @@ export function usePairFlow() {
         ),
       );
     } finally {
-      setBusy(false);
+      finish();
     }
   };
 
@@ -411,9 +433,16 @@ export function usePairFlow() {
   // The confirmation itself
   // -------------------------------------------------------------------------
 
+  /** One explicit pull for a device that has just joined; also what "Try again" runs. */
+  const pullFirstRun = () => {
+    setReceiveSettled(false);
+    void reconcile()
+      .catch(() => undefined)
+      .finally(() => setReceiveSettled(true));
+  };
+
   const confirmMatch = async () => {
-    if (busy || !accept.current) return;
-    setBusy(true);
+    if (!accept.current || !begin()) return;
     setError(null);
     try {
       await accept.current();
@@ -424,12 +453,12 @@ export function usePairFlow() {
       // Pull the vault now rather than on the next scheduled pass, so a first-run device is not
       // left on "receiving" for a timer's length. A failure here is advisory; the provider
       // retries and reports it on its own.
-      if (firstRun) void reconcile().catch(() => undefined);
+      if (firstRun) pullFirstRun();
     } catch (reason) {
       hapticError();
       setError(errorMessage(reason, "Pairing could not be completed."));
     } finally {
-      setBusy(false);
+      finish();
     }
   };
 
@@ -463,6 +492,10 @@ export function usePairFlow() {
     setDeviceName,
     busy,
     error,
+    codeError,
+    clearCodeError: () => setCodeError(null),
+    receiveStalled: firstRun && stage === "done" && receiveSettled && !received,
+    retryReceive: pullFirstRun,
     code,
     remaining,
     sas,

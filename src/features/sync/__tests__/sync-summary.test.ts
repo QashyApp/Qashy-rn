@@ -174,7 +174,9 @@ describe("summarizeSync", () => {
   it("omits a last-synced time it does not have", () => {
     const summary = summarize({ lastSyncedAt: null });
     expect(summary.subtitle).toBe("2 devices");
-    expect(summary.headline).toBe("Up to date");
+    // Never compared with anyone, so it must not claim to be current.
+    expect(summary.headline).toBe("Not synced yet");
+    expect(summary.tone).toBe("neutral");
   });
 
   it("offers to pair when sync is on but no vault was ever created", () => {
@@ -232,9 +234,9 @@ describe("describePeer", () => {
   it("gives an unrecognised platform a device glyph rather than a question mark", () => {
     // The row identifies a device the user personally paired. Admitting ignorance about its
     // shape tells them nothing they can act on.
-    expect(deviceIcon("ios")).toBe("iphone");
-    expect(deviceIcon("web")).toBe("globe");
-    expect(deviceIcon("freebsd")).toBe("desktopcomputer");
+    expect(deviceIcon("android")).toBe("ion:phone-portrait-outline");
+    expect(deviceIcon("web")).toBe("ion:globe-outline");
+    expect(deviceIcon("freebsd")).toBe("ion:desktop-outline");
     expect(deviceIcon("")).not.toBe("questionmark.circle");
   });
 });

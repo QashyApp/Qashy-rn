@@ -15,6 +15,15 @@ export interface DisplayedPairingCode {
   readonly unusable?: boolean;
 }
 
+/**
+ * How long a pairing code lives, said once. `PAIRING_TTL_SECONDS` is 90, and a test pins that, so
+ * these two sentences cannot drift from the real deadline or from each other.
+ */
+export const SCAN_CODE_HINT =
+  "The code works once and expires after a minute and a half.";
+export const TYPED_CODE_HINT =
+  "Type or paste this into the other device instead of scanning. Treat it like the code itself — it works once and expires after a minute and a half.";
+
 export const STAGES: readonly Stage[] = ["role", "code", "confirm", "done"];
 
 /** `HostPairingDeps.now` is unix **seconds**, unlike everything else in the app. */

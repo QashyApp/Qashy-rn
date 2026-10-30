@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Pressable, View } from "react-native";
 
 import {
+  dateRangeHint,
   formatFieldDate,
   type DateFieldProps,
 } from "@/components/ui/date-field-format";
@@ -10,7 +11,7 @@ import { FormField } from "@/components/ui/form-field";
 import { IconButton } from "@/components/ui/icon-button";
 import { useLocalization } from "@/localization/localization";
 import { useQashyTheme } from "@/theme/theme";
-import { parseLocalDate, todayLocal } from "@/utils/date";
+import { isLocalDate, parseLocalDate, todayLocal } from "@/utils/date";
 import { hapticSelection } from "@/services/haptics";
 
 const pad = (value: number) => String(value).padStart(2, "0");
@@ -50,12 +51,24 @@ export function DateField({
   const { space } = theme;
   const { locale, t } = useLocalization();
   const [open, setOpen] = useState(false);
-  const display = value ? formatFieldDate(value, locale) : "";
+  const [rangeError, setRangeError] = useState<string | null>(null);
+  // A stored value that is not a calendar date (a bad import, an old draft) must not take the
+  // form down: it reads as empty here, and the picker starts from today instead.
+  const usable = isLocalDate(value) ? value : "";
+  const display = usable ? formatFieldDate(usable, locale) : "";
   const translatedLabel = t(label);
+  const shownError = error ?? rangeError ?? undefined;
 
   const pick = (date: Date) => {
     setOpen(false);
     const next = fromPickerDate(date);
+    // The dialog keeps to the bounds itself; this covers an engine that does not.
+    const outside = dateRangeHint(next, locale, minimumDate, maximumDate);
+    if (outside) {
+      setRangeError(outside);
+      return;
+    }
+    setRangeError(null);
     if (next !== value) {
       hapticSelection();
       onChange(next);
@@ -74,7 +87,11 @@ export function DateField({
           }
           accessibilityValue={{ text: display || t("Not set") }}
           accessibilityHint={
-            error ? t(error) : hint ? t(hint) : t("Opens a date picker.")
+            shownError
+              ? t(shownError)
+              : hint
+                ? t(hint)
+                : t("Opens a date picker.")
           }
           onPress={() => setOpen(true)}
           style={{ flex: 1 }}
@@ -90,7 +107,7 @@ export function DateField({
               value={display}
               placeholder="Choose a date"
               editable={false}
-              error={error}
+              error={shownError}
               hint={hint}
               required={required}
             />
@@ -102,6 +119,7 @@ export function DateField({
             icon="xmark"
             onPress={() => {
               setOpen(false);
+              setRangeError(null);
               onChange("");
             }}
           />
@@ -109,7 +127,7 @@ export function DateField({
       </View>
       {open ? (
         <DateTimePicker
-          value={toPickerDate(value || todayLocal())}
+          value={toPickerDate(usable || todayLocal())}
           mode="date"
           display="default"
           presentation="dialog"

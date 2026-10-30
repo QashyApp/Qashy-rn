@@ -51,7 +51,13 @@ import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { hapticSuccess } from "@/services/haptics";
 
-/** The rows are inset past a 38pt tile plus its gap, matching every other list in the app. */
+/**
+ * Said before a removal is started and again before it is approved, because both end in the same
+ * place. The first half is what people expect; the second is the part they do not, and finding
+ * it out afterwards is much worse than reading it here.
+ */
+const REMOVAL_MESSAGE =
+  "It stops sending and receiving changes here. It keeps the copy of your data it already has — to make that copy useless, rotate the vault key afterwards.";
 
 export function DeviceCard({
   status,
@@ -62,8 +68,9 @@ export function DeviceCard({
   readonly now: number;
   readonly onChanged: () => Promise<void>;
 }) {
-  const { space } = useQashyTheme();
-  const rowDividerInset = 38 + space.md;
+  const { space, tile } = useQashyTheme();
+  // Rows are inset past the icon tile plus its gap, matching every other list in the app.
+  const rowDividerInset = tile.size + space.md;
   const { setup } = useSync();
   const { t } = useLocalization();
 
@@ -72,6 +79,8 @@ export function DeviceCard({
   const [saving, setSaving] = useState(false);
   // State is stale inside a double tap; the ref is what the in-flight check reads.
   const savingRef = useRef(false);
+  const approvingRef = useRef(false);
+  const [approving, setApproving] = useState<string | null>(null);
   const isOwner = status.revocation.ownerDeviceId === status.deviceId;
 
   // Newest first among the live ones, then the removed ones. Someone opening this screen after
@@ -105,13 +114,20 @@ export function DeviceCard({
     }
   };
 
+  // A removal that needs more approvals, by the device it would remove. Under majority vote the
+  // first "remove" only proposes; each further device then has to approve it on purpose.
+  const pending = new Map(
+    status.proposals.map((proposal) => [proposal.targetId, proposal]),
+  );
+  const pendingRows = peers.flatMap((peer) => {
+    const proposal = pending.get(peer.deviceId);
+    return proposal && !peer.revokedAt ? [{ peer, proposal }] : [];
+  });
+
   const remove = async (peerId: string, peerName: string) => {
     const confirmed = await confirmDestructive({
       title: "Remove this device?",
-      // Both halves are load-bearing. The first is what people expect; the second is the part
-      // they do not, and finding it out afterwards is much worse than reading it here.
-      message:
-        "It stops sending and receiving changes here. It keeps the copy of your data it already has — to make that copy useless, rotate the vault key afterwards.",
+      message: REMOVAL_MESSAGE,
       confirmLabel: "Remove",
     });
     if (!confirmed) return;
@@ -123,6 +139,32 @@ export function DeviceCard({
         "Couldn’t remove that device",
         errorMessage(reason, `${peerName} is still paired.`),
       );
+    }
+  };
+
+  /** Adds this device's approval to a removal somebody else proposed: the existing signed path. */
+  const approve = async (peerId: string, peerName: string) => {
+    if (approvingRef.current) return;
+    approvingRef.current = true;
+    try {
+      const confirmed = await confirmDestructive({
+        title: "Approve this removal?",
+        message: REMOVAL_MESSAGE,
+        confirmLabel: "Approve",
+      });
+      if (!confirmed) return;
+      setApproving(peerId);
+      await revokePeer(setup, peerId);
+      await onChanged();
+      hapticSuccess();
+    } catch (reason) {
+      showError(
+        "Couldn’t approve that removal",
+        errorMessage(reason, `${peerName} is still paired.`),
+      );
+    } finally {
+      approvingRef.current = false;
+      setApproving(null);
     }
   };
 
@@ -180,16 +222,25 @@ export function DeviceCard({
         />
         {peers.map((peer) => {
           const described = describePeer(peer, now);
+          const proposal = peer.revokedAt
+            ? undefined
+            : pending.get(peer.deviceId);
           return (
             <SettingsRow
               key={peer.deviceId}
               literal
               title={peer.name}
-              subtitle={t(described.subtitle)}
+              subtitle={t(
+                proposal
+                  ? `Removal proposed · ${proposal.approvals.length} of ${proposal.required} approvals`
+                  : described.subtitle,
+              )}
               icon={described.icon}
-              tone={peer.revokedAt ? "danger" : "default"}
+              tone={peer.revokedAt || proposal ? "danger" : "default"}
+              // A tap starts a removal. One that is already proposed is approved from its own
+              // button below, so a second tap cannot be mistaken for starting over.
               onPress={
-                peer.revokedAt
+                peer.revokedAt || proposal
                   ? undefined
                   : () => void remove(peer.deviceId, peer.name)
               }
@@ -198,12 +249,53 @@ export function DeviceCard({
         })}
       </Card>
 
+      {pendingRows.length ? (
+        <>
+          <SectionHeader title="Pending removals" />
+          <Card style={{ gap: space.lg }}>
+            {pendingRows.map(({ peer, proposal }) => {
+              const approved = proposal.approvals.includes(status.deviceId);
+              const canApprove =
+                !approved && proposal.voters.includes(status.deviceId);
+              return (
+                <View key={proposal.id} style={{ gap: space.sm }}>
+                  <AppText literal variant="label">
+                    {peer.name}
+                  </AppText>
+                  <AppText variant="caption" muted>
+                    {`${proposal.approvals.length} of ${proposal.required} approvals so far`}
+                  </AppText>
+                  {canApprove ? (
+                    <ActionButton
+                      title="Approve removal"
+                      icon="checkmark"
+                      variant="danger"
+                      busy={approving === peer.deviceId}
+                      disabled={Boolean(approving)}
+                      accessibilityLabel={t(`Approve removing ${peer.name}`)}
+                      onPress={() => void approve(peer.deviceId, peer.name)}
+                      style={{ alignSelf: "flex-start" }}
+                    />
+                  ) : (
+                    <AppText variant="caption" muted>
+                      {approved
+                        ? "This device already approved. It waits for the others."
+                        : "Only devices that were in the vault when this was proposed can approve it."}
+                    </AppText>
+                  )}
+                </View>
+              );
+            })}
+          </Card>
+        </>
+      ) : null}
+
       <SectionHeader title="Device removal" />
       <Card style={{ gap: space.md }}>
         <AppText variant="label">Who can remove a device</AppText>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: space.sm }}>
           <ChoiceChip
-            icon="iphone"
+            icon="ion:phone-portrait-outline"
             label="Any device"
             selected={status.revocation.mode === "any"}
             disabled={!isOwner}
@@ -257,10 +349,10 @@ export function DeviceCard({
             </View>
           </View>
         ) : null}
-        {status.proposals.length ? (
+        {pendingRows.length ? (
           <AppText variant="caption" muted>
-            A removal proposal is waiting for more device approvals. Tap that
-            device in the list to add this device’s approval.
+            A removal is waiting for more approvals. Approve it under Pending
+            removals above.
           </AppText>
         ) : null}
       </Card>

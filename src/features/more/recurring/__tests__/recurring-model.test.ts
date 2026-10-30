@@ -72,3 +72,73 @@ describe("scheduleHasEnded", () => {
     ).toBe(false);
   });
 });
+
+describe("projectedNextDueDate for a new schedule with an end date still ahead", () => {
+  it("names the next payment that falls after the end date", () => {
+    const input = {
+      unit: "month" as const,
+      interval: 1,
+      startDate: "2026-01-10",
+      // Six days ahead, but the next monthly date (Jul 10) is later than that.
+      endDate: "2026-06-21",
+      today,
+    };
+    expect(projectedNextDueDate(input)).toBe("2026-07-10");
+    expect(scheduleHasEnded(input)).toBe(true);
+    // Extending the end date past that payment lifts it.
+    expect(scheduleHasEnded({ ...input, endDate: "2026-07-10" })).toBe(false);
+  });
+});
+
+describe("a paused schedule", () => {
+  const paused = {
+    unit: "month" as const,
+    interval: 1,
+    startDate: "2026-01-10",
+    endDate: "2026-03-31" as string | null,
+    nextDueDate: "2026-03-10",
+    active: false,
+  };
+
+  it("projects the date it would resume at, skipping the dates it was paused through", () => {
+    const input = { ...paused, endDate: null, nextDueDate: "2026-03-10" };
+    expect(
+      projectedNextDueDate({
+        existing: input,
+        unit: "month",
+        interval: 1,
+        startDate: "2026-01-10",
+        endDate: null,
+        today,
+      }),
+    ).toBe("2026-07-10");
+  });
+
+  it("shows a long-expired paused schedule as ended", () => {
+    const args = {
+      existing: paused,
+      unit: paused.unit,
+      interval: paused.interval,
+      startDate: paused.startDate,
+      endDate: paused.endDate,
+      today,
+    };
+    // Its stored next date (Mar 10) is before the end, but resuming would land after it.
+    expect(scheduleHasEnded(args)).toBe(true);
+    // Still paused before the end date: not ended.
+    expect(scheduleHasEnded({ ...args, today: "2026-03-01" })).toBe(false);
+  });
+
+  it("keeps an active schedule's own next due date", () => {
+    expect(
+      scheduleHasEnded({
+        existing: { ...paused, active: true },
+        unit: paused.unit,
+        interval: paused.interval,
+        startDate: paused.startDate,
+        endDate: paused.endDate,
+        today,
+      }),
+    ).toBe(false);
+  });
+});

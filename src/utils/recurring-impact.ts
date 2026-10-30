@@ -1,4 +1,5 @@
 import type { RecurringRule, TransactionRecord } from "@/domain/models";
+import { firstRecurrenceOnOrAfter } from "@/utils/date";
 
 /**
  * The generated occurrences of a recurring rule that are still waiting for review: not posted,
@@ -45,4 +46,25 @@ export function overduePostedBySave(
   if (existing.autoPost && existing.active) return 0;
   return overdueOccurrences(transactions, existing.id, today).filter(canPost)
     .length;
+}
+
+/**
+ * The next due date a paused schedule gets when it is switched back on. Generation only walks
+ * active rules, so a paused rule's `nextDueDate` stands still; pausing means the dates in between
+ * are skipped, never backfilled. A stale date (before `today`) moves to the schedule's first
+ * occurrence on or after today, the same rule a new schedule with a past start follows. A date
+ * that is today or later is kept. Pure: the data layer applies it on save, and the form and the
+ * schedule list use it to show a long-expired paused schedule as ended.
+ */
+export function nextDueDateOnReactivation(
+  rule: Pick<RecurringRule, "unit" | "interval" | "startDate" | "nextDueDate">,
+  today: string,
+): string {
+  if (rule.nextDueDate >= today) return rule.nextDueDate;
+  return firstRecurrenceOnOrAfter(
+    rule.startDate,
+    rule.unit,
+    rule.interval,
+    rule.startDate > today ? rule.startDate : today,
+  );
 }

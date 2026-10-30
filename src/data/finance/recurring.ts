@@ -26,6 +26,7 @@ import {
   todayLocal,
 } from "@/utils/date";
 import { createEntity, makeId, nowIso, updateEntity } from "@/utils/entity";
+import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
 import { convertMinor } from "@/utils/money";
 import { normalizeFeePercent } from "@/utils/transaction-amounts";
 
@@ -457,6 +458,17 @@ export function planRecurringRuleSave(
           [validated.startDate, todayLocal()].sort().at(-1)!,
         ),
       };
+  // Switching a paused schedule back on skips the dates it was paused through: generation only
+  // walks active rules, so its next due date stood still. Moving it to the first occurrence on or
+  // after today keeps the switch-on from backfilling (and auto-posting) every missed date. A
+  // changed schedule already restarts at or after today unless it has pending occurrences.
+  const resumed =
+    existing && !existing.active && normalized.active && !scheduleChanged
+      ? {
+          ...normalized,
+          nextDueDate: nextDueDateOnReactivation(normalized, todayLocal()),
+        }
+      : normalized;
   // The flag means "off because a dependency is archived", and it is what lets unarchiving bring
   // the rule back. The form reopens a paused rule with `active: false`, so the input cannot say
   // whether the user switched it off: keep the flag while its account or category is still
@@ -511,9 +523,9 @@ export function planRecurringRuleSave(
       : [];
   const rewindTo = unpriced.sort()[0];
   const rewound =
-    rewindTo && rewindTo < normalized.nextDueDate
-      ? { ...normalized, nextDueDate: rewindTo }
-      : normalized;
+    rewindTo && rewindTo < resumed.nextDueDate
+      ? { ...resumed, nextDueDate: rewindTo }
+      : resumed;
   const rule = existing
     ? updateEntity(existing, { ...rewound, pausedByDependency })
     : (createEntity({

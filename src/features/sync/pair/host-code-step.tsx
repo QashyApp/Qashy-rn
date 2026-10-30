@@ -12,7 +12,10 @@ import { TextButton } from "@/components/ui/text-button";
 import { useLocalization } from "@/localization/localization";
 import { formatPairingCodeForTyping } from "@/sync/crypto";
 import { useQashyTheme } from "@/theme/theme";
-import { DisplayedPairingCode } from "@/features/sync/pair/pair-model";
+import {
+  DisplayedPairingCode,
+  TYPED_CODE_HINT,
+} from "@/features/sync/pair/pair-model";
 import { SunkenWell } from "@/features/sync/pair/pair-primitives";
 
 export function HostCodeStep({
@@ -86,7 +89,7 @@ export function HostCodeStep({
         <>
           <TextButton
             title={showTyped ? "Hide the typed code" : "Can’t scan?"}
-            icon={showTyped ? "eye.slash" : "keyboard"}
+            icon={showTyped ? "eye.slash" : "ion:keyboard-outline"}
             tone="muted"
             accessibilityState={{ expanded: showTyped }}
             onPress={() => setShowTyped((open) => !open)}
@@ -114,15 +117,18 @@ export function HostCodeStep({
                     fontFamily: "monospace",
                     letterSpacing: 1,
                     lineHeight: 26,
+                    // The groups are read against the other screen, in order. AppText sets the
+                    // writing direction from the app language, which would reorder them in
+                    // Hebrew, so this pins left-to-right while the text around it stays RTL.
+                    writingDirection: "ltr",
+                    textAlign: "left",
                   }}
                 >
                   {formatPairingCodeForTyping(code.value)}
                 </AppText>
               </SunkenWell>
               <AppText variant="caption" muted>
-                Type or paste this into the other device instead of scanning.
-                Treat it like the code itself — it works once, and only for the
-                next minute or so.
+                {TYPED_CODE_HINT}
               </AppText>
             </MotionView>
           ) : null}

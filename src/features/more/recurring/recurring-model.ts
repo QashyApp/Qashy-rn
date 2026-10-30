@@ -1,5 +1,6 @@
 import type { RecurrenceUnit, RecurringRule } from "@/domain/models";
 import { firstRecurrenceOnOrAfter } from "@/utils/date";
+import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
 
 export const MAX_REPEAT_INTERVAL = 999;
 
@@ -26,11 +27,24 @@ export const END_MODES: { value: EndMode; label: string; icon: string }[] = [
   { value: "count", label: "After a number of times", icon: "repeat" },
 ];
 
+/** A paused schedule's next due date as it would stand once switched on; an active one's own. */
+function resumedNextDueDate(
+  rule: Parameters<typeof nextDueDateOnReactivation>[0] & {
+    active?: boolean;
+  },
+  today: string,
+) {
+  return rule.active === false
+    ? nextDueDateOnReactivation(rule, today)
+    : rule.nextDueDate;
+}
+
 /**
  * The next due date saving a schedule would give it, mirroring `planRecurringRuleSave`: an
  * unchanged schedule keeps its date; a new or changed one restarts at its first occurrence on or
  * after where regeneration begins (the earliest pending occurrence, else today at the earliest;
- * moving the start earlier backfills from the new start).
+ * moving the start earlier backfills from the new start). A paused schedule is projected as if it
+ * were switched back on, which skips the dates it was paused through.
  */
 export function projectedNextDueDate({
   existing,
@@ -44,7 +58,7 @@ export function projectedNextDueDate({
   existing?: Pick<
     RecurringRule,
     "unit" | "interval" | "startDate" | "endDate" | "nextDueDate"
-  >;
+  > & { active?: boolean };
   unit: RecurrenceUnit;
   interval: number;
   startDate: string;
@@ -60,9 +74,10 @@ export function projectedNextDueDate({
     existing.startDate === startDate &&
     existing.endDate === endDate
   )
-    return existing.nextDueDate;
+    return resumedNextDueDate(existing, today);
   const base =
-    earliestPendingDate ?? later(existing?.nextDueDate ?? startDate, today);
+    earliestPendingDate ??
+    later(existing ? resumedNextDueDate(existing, today) : startDate, today);
   const from =
     existing && startDate < existing.startDate && startDate < base
       ? startDate

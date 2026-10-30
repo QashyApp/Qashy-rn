@@ -29,8 +29,8 @@ export function IconBadge({ icon }: { readonly icon: string }) {
   return (
     <View
       style={{
-        width: 56,
-        height: 56,
+        width: theme.tile.size + theme.space.lg,
+        height: theme.tile.size + theme.space.lg,
         borderRadius: theme.radius.card,
         borderCurve: "continuous",
         backgroundColor: theme.accentContainer,
@@ -38,7 +38,11 @@ export function IconBadge({ icon }: { readonly icon: string }) {
         justifyContent: "center",
       }}
     >
-      <AppIcon name={icon} color={theme.onAccentContainer} size={24} />
+      <AppIcon
+        name={icon}
+        color={theme.onAccentContainer}
+        size={theme.iconSize.lg}
+      />
     </View>
   );
 }

@@ -583,6 +583,67 @@ describe("rotating the vault key", () => {
     // Re-stamping it would rewrite the record of when the device was actually let go.
     expect((await target.roster())[0]?.revokedAt).toBe(NOW_ISO);
   });
+
+  it("puts the old key back when the storage transaction fails", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const before = await target.keystore.read();
+    await target.addPeers(peerNamed("Laptop"));
+    const failing = new Proxy(target.storage, {
+      get: (object, property, receiver) =>
+        property === "transact"
+          ? () => Promise.reject(new Error("disk full"))
+          : Reflect.get(object, property, receiver),
+    });
+
+    await expect(
+      rotateVaultKey({ ...target.deps, storage: failing }),
+    ).rejects.toThrow("disk full");
+
+    // "Nothing was changed" has to be true: the key, the epoch, and the roster are all as before.
+    const after = await target.keystore.read();
+    expect(after?.vaultKey).toEqual(before?.vaultKey);
+    expect(after?.epoch).toBe(INITIAL_EPOCH);
+    const status = await readSyncStatus(target.deps);
+    expect(status.epoch).toBe(INITIAL_EPOCH);
+    expect(status.peers.every((peer) => peer.revokedAt === null)).toBe(true);
+  });
+
+  it("reports an interrupted rotation when the old key cannot be put back", async () => {
+    const target = await rig();
+    await enableSync(target.deps, PROFILE);
+    const failing = new Proxy(target.storage, {
+      get: (object, property, receiver) =>
+        property === "transact"
+          ? () => Promise.reject(new Error("disk full"))
+          : Reflect.get(object, property, receiver),
+    });
+    let writes = 0;
+    const unreliable = new Proxy(target.keystore, {
+      get: (object, property) => {
+        if (property !== "write") {
+          const value = Reflect.get(object, property, object);
+          return typeof value === "function" ? value.bind(object) : value;
+        }
+        return (vault: Parameters<MemoryKeystore["write"]>[0]) => {
+          writes += 1;
+          return writes === 1
+            ? object.write(vault)
+            : Promise.reject(new Error("keystore unavailable"));
+        };
+      },
+    });
+
+    await expect(
+      rotateVaultKey({
+        ...target.deps,
+        storage: failing,
+        keystore: unreliable,
+      }),
+    ).rejects.toThrow(/rotation was interrupted/i);
+    // The recovery path for that state is the one `resumeSync` already refuses to guess past.
+    expect(writes).toBe(2);
+  });
 });
 
 describe("turning it off", () => {

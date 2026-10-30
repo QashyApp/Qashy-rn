@@ -30,7 +30,13 @@ import { accountDeletionMessage } from "@/utils/account-impact";
 import { categoryDeletionMessage } from "@/utils/category-impact";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { orderCategoriesByParent } from "@/utils/category-order";
-import { endOfMonth, mediumDate, startOfMonth, todayLocal } from "@/utils/date";
+import {
+  endOfMonth,
+  mediumDate,
+  startOfMonth,
+  toLocalDate,
+} from "@/utils/date";
+import { nextDueDateOnReactivation } from "@/utils/recurring-impact";
 import { recurrenceLabel } from "@/features/more/recurring/recurring-model";
 import { recurringDisplayAmount } from "@/utils/recurring-amount";
 import { useDashboardRange } from "@/features/overview/widgets/use-dashboard";
@@ -73,8 +79,11 @@ export function MoreScreen() {
     [state.categories],
   );
   // Overdue pending occurrences per schedule, counted in one pass over the ledger.
+  // The day is part of the key: an occurrence that falls due at midnight joins the count without
+  // any change to the ledger. `useNow` ticks per minute, so a new day is noticed within one.
+  const now = useNow();
+  const today = toLocalDate(new Date(now));
   const toReviewByRule = useMemo(() => {
-    const today = todayLocal();
     const counts = new Map<string, number>();
     for (const transaction of state.transactions) {
       if (
@@ -89,7 +98,7 @@ export function MoreScreen() {
         );
     }
     return counts;
-  }, [state.transactions]);
+  }, [state.transactions, today]);
   const accountSelection = useBatchDelete({
     type: "accounts",
     liveIds: activeAccounts.map((item) => item.id),
@@ -126,7 +135,6 @@ export function MoreScreen() {
   // `useSyncState` returns null outside the provider by design, so this stays safe in any test
   // or story that renders MoreScreen on its own.
   const sync = useSyncState();
-  const now = useNow();
   const syncSummary = sync?.status ? summarizeSync(sync.status, { now }) : null;
   const rateStatus = useExchangeRateStatus();
 
@@ -374,8 +382,13 @@ export function MoreScreen() {
             <Card variant="list" dividerInset={rowDividerInset}>
               {recurring.length ? (
                 recurring.map((rule) => {
+                  // A paused schedule is judged by the date it would resume at: its own stands still
+                  // while paused, so a long-expired one still has to show as ended.
+                  const resumesAt = rule.active
+                    ? rule.nextDueDate
+                    : nextDueDateOnReactivation(rule, today);
                   const ended = Boolean(
-                    rule.endDate && rule.nextDueDate > rule.endDate,
+                    rule.endDate && resumesAt > rule.endDate,
                   );
                   const status = ended
                     ? "Ended"
@@ -393,15 +406,16 @@ export function MoreScreen() {
                       ? ` · ${formatMoney(rule.template.foreign.amountMinor, rule.template.foreign.currency, locale)}`
                       : "";
                   const toReview = toReviewByRule.get(rule.id) ?? 0;
-                  const reviewSuffix = toReview
-                    ? ` · ${t(`${toReview} to review`)}`
+                  // First, so the two-line subtitle never cuts the count off.
+                  const reviewPrefix = toReview
+                    ? `${t(`${toReview} to review`)} · `
                     : "";
                   return (
                     <SettingsRow
                       key={rule.id}
                       literal
                       title={rule.template.title}
-                      subtitle={`${t(categoryKindLabel(rule.template.kind))} · ${frequency} · ${t(status)}${reviewSuffix}${foreignSuffix}`}
+                      subtitle={`${reviewPrefix}${t(categoryKindLabel(rule.template.kind))} · ${frequency} · ${t(status)}${foreignSuffix}`}
                       value={formatMoney(
                         amount.amountMinor,
                         amount.currency,

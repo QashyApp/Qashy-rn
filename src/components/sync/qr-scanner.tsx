@@ -1,6 +1,6 @@
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { View } from "react-native";
+import { AppState, Linking, View } from "react-native";
 
 import { cameraSupported } from "@/components/sync/camera-support";
 import { ActionButton } from "@/components/ui/action-button";
@@ -29,26 +29,36 @@ export function QrScanner({
   onCode,
   hint,
   rearm,
+  error,
+  onEdit,
 }: {
   /** Called once per accepted code. The caller owns validation and any error message. */
   onCode: (code: string) => void;
   hint?: string;
   /**
-   * Claims one more code without remounting. Bump `token` after a failed attempt. The scanner never
-   * holds a pairing secret past its attempt, so the typed code is cleared (`keepManual` exists only
-   * for callers that knowingly keep it).
+   * Claims one more code without remounting. Bump `token` after a failed attempt. A code that was
+   * spent on a handshake is cleared from the field, because the pairing secret is single use.
+   * `keepManual` is for a code rejected before anything was sent (a typo): the draft stays so it
+   * can be corrected, alongside `error`.
    */
   rearm?: { token: number; keepManual: boolean };
+  /** Why the last code was refused, shown under the field (or under the camera) it came from. */
+  error?: string | null;
+  /** The typed code changed, so a refusal about the previous text no longer applies. */
+  onEdit?: () => void;
 }) {
   const theme = useQashyTheme();
   const { radius, space } = theme;
-  const [permission, requestPermission] = useCameraPermissions();
+  const [permission, requestPermission, getPermission] = useCameraPermissions();
   // The typed text remembers which re-arm it was typed under, so a spent code is dropped from the
   // field (derived, not an effect) while a mistyped one can be kept for correction.
   const [typed, setTyped] = useState({ text: "", token: rearm?.token });
   const manual =
     typed.token === rearm?.token || rearm?.keepManual ? typed.text : "";
-  const setManual = (text: string) => setTyped({ text, token: rearm?.token });
+  const setManual = (text: string) => {
+    setTyped({ text, token: rearm?.token });
+    onEdit?.();
+  };
   const [showManual, setShowManual] = useState(!cameraSupported());
 
   /**
@@ -62,6 +72,7 @@ export function QrScanner({
    * A ref, not state: the frames arrive faster than a re-render.
    */
   const claimed = useRef(false);
+  const web = process.env.EXPO_OS === "web";
   const rearmToken = rearm?.token;
   useEffect(() => {
     if (rearmToken !== undefined) claimed.current = false;
@@ -75,6 +86,19 @@ export function QrScanner({
     },
     [onCode],
   );
+
+  // Coming back from the system settings page does not remount this, so the permission would
+  // otherwise keep reading "denied" after it was granted there.
+  const refreshPermission = useCallback(() => {
+    void getPermission();
+  }, [getPermission]);
+  useEffect(() => {
+    if (web) return;
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (next === "active") refreshPermission();
+    });
+    return () => subscription.remove();
+  }, [web, refreshPermission]);
 
   const canScan = cameraSupported() && permission?.granted === true;
 
@@ -121,21 +145,43 @@ export function QrScanner({
             The camera is used only to read the pairing code on your other
             device. No photo is taken and nothing is uploaded.
           </AppText>
-          <ActionButton
-            title={
-              permission?.canAskAgain === false
-                ? "Open settings"
-                : "Allow camera"
-            }
-            icon="magnifyingglass"
-            // `canAskAgain: false` means the OS will not show a prompt again, so calling
-            // `requestPermission` resolves instantly as denied and looks like a dead button.
-            // Sending them to the manual code is the path that actually works from here.
-            onPress={() => {
-              if (permission?.canAskAgain === false) setShowManual(true);
-              else void requestPermission();
-            }}
-          />
+          {permission?.canAskAgain === false && web ? (
+            // A browser has no settings screen to send anyone to, and it will not prompt again.
+            // The site's permission lives in the address bar, so say that and offer the code.
+            <>
+              <AppText variant="caption" muted>
+                Camera access is blocked for this site. Allow it in your
+                browser’s site settings, or enter the code instead.
+              </AppText>
+              <ActionButton
+                title="Enter the code"
+                icon="ion:keyboard-outline"
+                onPress={() => setShowManual(true)}
+              />
+            </>
+          ) : (
+            <ActionButton
+              title={
+                permission?.canAskAgain === false
+                  ? "Open settings"
+                  : "Allow camera"
+              }
+              icon={
+                permission?.canAskAgain === false
+                  ? "gear"
+                  : "ion:camera-outline"
+              }
+              // `canAskAgain: false` means the OS will not show a prompt again, so calling
+              // `requestPermission` resolves instantly as denied and looks like a dead button.
+              // The app's own settings page is where the permission can be turned back on; the
+              // manual code stays one tap away below.
+              onPress={() => {
+                if (permission?.canAskAgain === false)
+                  void Linking.openSettings().catch(() => setShowManual(true));
+                else void requestPermission();
+              }}
+            />
+          )}
         </View>
       ) : null}
 
@@ -153,6 +199,7 @@ export function QrScanner({
             // comparison that follows, not hiding the characters from the person entering
             // them. Autofill is off so a password manager never records it.
             autoComplete="off"
+            error={error ?? undefined}
             multiline
           />
           <ActionButton
@@ -162,6 +209,16 @@ export function QrScanner({
             onPress={() => claim(manual)}
           />
         </View>
+      ) : null}
+
+      {error && !showManual ? (
+        <AppText
+          accessibilityRole="alert"
+          variant="caption"
+          style={{ color: theme.negativeText }}
+        >
+          {error}
+        </AppText>
       ) : null}
 
       {hint ? (
