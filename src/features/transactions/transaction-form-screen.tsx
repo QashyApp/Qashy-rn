@@ -511,9 +511,7 @@ export function TransactionFormScreen() {
         >
           {/* A calculation left half-typed disables Save, and the amount field shows no error for
               it on purpose (it is still being typed), so say why Save is off. */}
-          {rateMissingMessage ??
-            saveError ??
-            "Finish the calculation to save."}
+          {rateMissingMessage ?? saveError ?? "Finish the calculation to save."}
         </AppText>
       ) : null}
       <ActionButton

@@ -124,7 +124,12 @@ describe("a paused schedule", () => {
     // Generation ended it: off, with its next date already past the end.
     const ended = { ...paused, nextDueDate: "2026-04-10" };
     const projected = (endDate: string | null) =>
-      projectedNextDueDate({ ...args, existing: ended, active: false, endDate });
+      projectedNextDueDate({
+        ...args,
+        existing: ended,
+        active: false,
+        endDate,
+      });
     expect(projected("2026-03-31")! > "2026-03-31").toBe(true);
     // Extended past the next payment: no longer ended, and nothing in the projection switches it on.
     expect(projected("2026-06-30")! <= "2026-06-30").toBe(true);
