@@ -175,22 +175,25 @@ export function autoScrollStep(
   fingerY: number,
   viewportTop: number,
   viewportHeight: number,
-  edge: number = AUTO_SCROLL_EDGE,
-  maxStep: number = AUTO_SCROLL_MAX_STEP,
+  edge?: number,
+  maxStep?: number,
 ): number {
   "worklet";
   if (viewportHeight <= 0) return 0;
+  // Defaults are resolved here, not in the signature: the worklets plugin does not capture
+  // identifiers used only in a parameter default, so they would be undefined on the UI runtime.
+  const step = maxStep ?? AUTO_SCROLL_MAX_STEP;
   // On a very short viewport the two zones must not overlap.
-  const zone = Math.min(edge, viewportHeight / 3);
+  const zone = Math.min(edge ?? AUTO_SCROLL_EDGE, viewportHeight / 3);
   const intoTop = viewportTop + zone - fingerY;
   if (intoTop > 0) {
     const depth = Math.min(intoTop / zone, 1);
-    return -maxStep * depth * depth;
+    return -step * depth * depth;
   }
   const intoBottom = fingerY - (viewportTop + viewportHeight - zone);
   if (intoBottom > 0) {
     const depth = Math.min(intoBottom / zone, 1);
-    return maxStep * depth * depth;
+    return step * depth * depth;
   }
   return 0;
 }
