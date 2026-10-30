@@ -228,6 +228,15 @@ test("clears batch selection when the transaction search changes", async ({
   ).not.toBeChecked();
 });
 
+/**
+ * On a phone the filters (the kind chips and "Search all months") sit behind a toggle under the
+ * summary, shut at launch; a wider layout always shows them, so there is nothing to open.
+ */
+async function openFilters(page: Page) {
+  const show = page.getByRole("button", { name: "Show filters" });
+  if (await show.isVisible()) await show.click();
+}
+
 test("pages the ledger by month and deep-links to one", async ({ page }) => {
   await completeOnboarding(page);
   const now = new Date();
@@ -256,8 +265,57 @@ test("pages the ledger by month and deep-links to one", async ({ page }) => {
   // Search stays in the month until it is widened explicitly.
   await page.getByLabel("Search transactions").fill("rent");
   await expect(page.getByText("Nothing matches")).toBeVisible();
+  await openFilters(page);
   await page.getByRole("checkbox", { name: "Search all months" }).click();
   await expect(page.getByText("Last month rent")).toBeVisible();
+});
+
+test("keeps the filters behind a toggle and grows the search over the month bar on a phone", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "mobile", "The phone layout only.");
+  await completeOnboarding(page);
+  await addExpense(page, "Coffee");
+  await page.getByRole("link", { name: /Transactions/ }).click();
+  await expect(page.getByText("Coffee")).toBeVisible();
+  // A fresh load, so no other tab is still mounted with a month bar of its own.
+  await page.goto("/transactions");
+
+  // The filters start shut, and a shut row is out of reach, not just out of sight.
+  const kinds = page.getByRole("radiogroup", {
+    name: "Transaction type filter",
+  });
+  const toggle = page.getByRole("button", { name: "Show filters" });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await expect(kinds).toBeHidden();
+  await toggle.click();
+  const hide = page.getByRole("button", { name: "Hide filters" });
+  await expect(hide).toHaveAttribute("aria-expanded", "true");
+  await expect(kinds).toBeVisible();
+  await page.getByRole("radio", { name: "Expense" }).click();
+  await expect(page.getByTestId("filter-active-dot")).toHaveCount(0);
+
+  // Shut again with a filter on: the toggle says so.
+  await hide.click();
+  await expect(kinds).toBeHidden();
+  await expect(page.getByTestId("filter-active-dot")).toBeVisible();
+
+  // Focusing the search takes the whole row from the month bar; blurred and empty, it gives it back.
+  const month = page.getByLabel("Previous month").first();
+  const search = page.getByLabel("Search transactions");
+  await expect(month).toBeVisible();
+  await search.click();
+  await expect(month).toBeHidden();
+  await search.blur();
+  await expect(month).toBeVisible();
+
+  // With text in it, it stays out, so an active search is plain to see.
+  await search.fill("zzz");
+  await search.blur();
+  await expect(month).toBeHidden();
+  await page.getByRole("button", { name: "Clear search" }).click();
+  await search.blur();
+  await expect(month).toBeVisible();
 });
 
 /** Seeds one expense this month and one last month, then opens this month's ledger (swipe is on by default). */
@@ -419,7 +477,7 @@ test("selects the rows between a held row and the finger while dragging", async 
   await expect(page.getByText("1 selected")).toBeVisible();
   // A browser has committed the held touch to scrolling by now, so lift and start a new touch.
   await touch("touchEnd", null);
-  // Lifting the finger folds the top section away for selection mode, which moves the rows up.
+  // Selection mode re-lays the rows out (checkboxes appear); let that settle before measuring.
   await page.waitForTimeout(600);
   const firstBefore = await box("Row E");
   const grabY = await centre("Row D");

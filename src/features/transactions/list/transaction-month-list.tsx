@@ -113,8 +113,6 @@ export interface TransactionMonthListProps {
   onSetSelection: (ids: string[]) => void;
   /** Long-press on a row: enters selection mode and selects it. */
   onLongPressItem: (id: string) => void;
-  /** A held row is being dragged across others; true from the hold until the finger lifts. */
-  onDragActiveChange?: (active: boolean) => void;
   /** A row action, from a swipe, a revealed button, an inline button or an accessibility action. */
   onRowAction: (id: string, kind: RowSwipeActionKind) => void;
   onClearFilters: () => void;
@@ -147,7 +145,6 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   onToggleItem,
   onSetSelection,
   onLongPressItem,
-  onDragActiveChange,
   onRowAction,
   onClearFilters,
   onGoToMonth,
@@ -411,12 +408,8 @@ export const TransactionMonthList = memo(function TransactionMonthList({
   const setDragArmed = useCallback(
     (armed: boolean) => {
       rowSwipe?.suspend("drag", armed);
-      // Told here, with the press that arms it, and not only from the effect below: a hold that
-      // enters selection mode and arms the drag has to reach the screen as one change, or the
-      // screen sees the selection a render before the drag and moves the layout under the finger.
-      if (isCurrent) onDragActiveChange?.(armed);
     },
-    [rowSwipe, isCurrent, onDragActiveChange],
+    [rowSwipe],
   );
   const { gesture, arm, dragging } = useDragSelect({
     enabled: isCurrent,
@@ -430,9 +423,6 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     geometry,
     onArmedChange: setDragArmed,
   });
-  useEffect(() => {
-    if (isCurrent) onDragActiveChange?.(dragging);
-  }, [isCurrent, dragging, onDragActiveChange]);
   // The row swipe runs alongside the drag-select pan: they never claim the same touch, because a
   // drag stands the swipe down (`suspend`) and the swipe only starts on a sideways move.
   const listGesture = useMemo(

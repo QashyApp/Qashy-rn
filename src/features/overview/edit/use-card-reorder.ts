@@ -32,6 +32,7 @@ import {
   useFrameCallback,
   useSharedValue,
   type AnimatedRef,
+  type FrameInfo,
   type SharedValue,
 } from "react-native-reanimated";
 
@@ -118,24 +119,31 @@ export function useCardReorder({
     [publish],
   );
 
-  const frame = useFrameCallback((info) => {
-    "worklet";
-    // A step queued as the finger lifts must not scroll the page after the release.
-    if (source.get() < 0) return;
-    const step = autoScroll.get();
-    if (step === 0) return;
-    // Steps are per 16ms; a faster display frame scrolls proportionally less.
-    const elapsed = Math.min(info.timeSincePreviousFrame ?? 16, 48);
-    const current = scrollY.get();
-    const next = clampScroll(
-      current + (step * elapsed) / 16,
-      Math.max(0, contentHeight.get() - layoutHeight.get()),
-    );
-    if (next === current) return;
-    // The held card reads `scrollY` in the same frame, so it keeps pace with the content.
-    scrollY.set(next);
-    scrollTo(scrollRef, 0, next, false);
-  }, false);
+  // Memoised on purpose: `useFrameCallback` unregisters and re-registers its callback (restarting
+  // the UI thread's frame loop) whenever the function's identity changes, and a fresh worklet every
+  // render would do that at the very render a drag starts in, while the loop is being switched on.
+  const onFrame = useCallback(
+    (info: FrameInfo) => {
+      "worklet";
+      // A step queued as the finger lifts must not scroll the page after the release.
+      if (source.get() < 0) return;
+      const step = autoScroll.get();
+      if (step === 0) return;
+      // Steps are per 16ms; a faster display frame scrolls proportionally less.
+      const elapsed = Math.min(info.timeSincePreviousFrame ?? 16, 48);
+      const current = scrollY.get();
+      const next = clampScroll(
+        current + (step * elapsed) / 16,
+        Math.max(0, contentHeight.get() - layoutHeight.get()),
+      );
+      if (next === current) return;
+      // The held card reads `scrollY` in the same frame, so it keeps pace with the content.
+      scrollY.set(next);
+      scrollTo(scrollRef, 0, next, false);
+    },
+    [source, autoScroll, scrollY, contentHeight, layoutHeight, scrollRef],
+  );
+  const frame = useFrameCallback(onFrame, false);
 
   useEffect(() => {
     frame.setActive(dragging);
