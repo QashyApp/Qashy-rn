@@ -463,34 +463,74 @@ export async function adoptVault(
   });
 
   const at = (deps.nowIso ?? defaultNowIso)();
-  const opCount = await deps.storage.transact(async (tx) => {
-    await enrol(tx, {
-      deviceId: input.identity.deviceId,
-      profile: input.profile,
-      epoch: input.epoch,
-      // The vault's value wins over this device's own. A joiner that had not been onboarded
-      // has nothing to re-base and adopts it outright; one that had, only got this far because
-      // `PairingJoiner` already checked the two agree.
-      baseCurrency: input.baseCurrency || (await readLocalBaseCurrency(tx)),
-      ownerDeviceId: input.ownerDeviceId,
-      revocationMode: input.revocationMode,
+  let opCount: number;
+  try {
+    opCount = await deps.storage.transact(async (tx) => {
+      await enrol(tx, {
+        deviceId: input.identity.deviceId,
+        profile: input.profile,
+        epoch: input.epoch,
+        // The vault's value wins over this device's own. A joiner that had not been onboarded
+        // has nothing to re-base and adopts it outright; one that had, only got this far because
+        // `PairingJoiner` already checked the two agree.
+        baseCurrency: input.baseCurrency || (await readLocalBaseCurrency(tx)),
+        ownerDeviceId: input.ownerDeviceId,
+        revocationMode: input.revocationMode,
+      });
+      await writePeers(tx, input.peers);
+      // This device's own rows become ops too. Skipping it here is the mistake that makes a
+      // two-populated-vault pairing look like it worked and then quietly sync in one direction.
+      const genesis = await runGenesisMigration(
+        tx,
+        input.identity.deviceId,
+        at,
+      );
+      await appendActivity(
+        tx,
+        input.peers.map((peer) =>
+          activityEntry({
+            kind: "paired",
+            recordedAt: at,
+            peerId: peer.deviceId,
+          }),
+        ),
+      );
+      return genesis.opCount;
     });
-    await writePeers(tx, input.peers);
-    // This device's own rows become ops too. Skipping it here is the mistake that makes a
-    // two-populated-vault pairing look like it worked and then quietly sync in one direction.
-    const genesis = await runGenesisMigration(tx, input.identity.deviceId, at);
-    await appendActivity(
-      tx,
-      input.peers.map((peer) =>
-        activityEntry({
-          kind: "paired",
-          recordedAt: at,
-          peerId: peer.deviceId,
-        }),
-      ),
-    );
-    return genesis.opCount;
-  });
+  } catch (failure) {
+    // The key was written first and is only inert while nothing references it. If the join did
+    // not land, leaving it would make the next attempt fail with "already part of a vault" and
+    // make "this device did not join" untrue. But a rejected transaction does not prove a
+    // rolled-back one, so ask the database whether it names this device before erasing.
+    let enrolled: boolean;
+    try {
+      enrolled = await deps.storage.transact(async (tx) => {
+        const meta = await readMeta(tx, [SYNC_META.deviceId]);
+        return meta.get(SYNC_META.deviceId) === input.identity.deviceId;
+      });
+    } catch (readFailure) {
+      // Neither state can be confirmed, and erasing a key the database relies on is the worse
+      // guess. Leave the keystore as it is and report both failures.
+      throw new AggregateError(
+        [failure, readFailure],
+        "Joining the vault failed and its outcome could not be confirmed.",
+      );
+    }
+    // The commit landed and only its promise failed: the device is enrolled, so the key stays.
+    if (enrolled) return { deviceId: input.identity.deviceId, opCount: 0 };
+    try {
+      await deps.keystore.erase();
+    } catch (eraseFailure) {
+      // The join did not land and the key could not be removed. Surface both; the original
+      // failure is the first error and the cause a person is told about.
+      throw new AggregateError(
+        [failure, eraseFailure],
+        "Joining the vault failed, and the vault key it stored could not be removed.",
+        { cause: failure },
+      );
+    }
+    throw failure;
+  }
 
   return { deviceId: input.identity.deviceId, opCount };
 }

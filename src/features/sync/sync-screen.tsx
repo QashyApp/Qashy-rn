@@ -314,9 +314,11 @@ export function SyncScreen() {
           ) : null}
           {skipped && !error && !syncing && pass && pass.reason !== "ok" ? (
             <AppText variant="caption" muted accessibilityLiveRegion="polite">
-              {pass.reason === "disabled"
+              {/* Chosen from this device's own state: a pass on a device that was never set up
+                  reports "disabled" before it checks for a vault. */}
+              {pass.reason === "disabled" && paired
                 ? "Sync is paused on this device, so nothing was sent or received. Resume sync to continue."
-                : pass.reason === "unpaired"
+                : pass.reason === "disabled" || pass.reason === "unpaired"
                   ? "This device isn’t paired with another device yet, so there was nothing to sync."
                   : "Sync didn’t run on this device. The status above says why."}
             </AppText>

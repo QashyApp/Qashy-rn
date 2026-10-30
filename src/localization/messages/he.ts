@@ -904,8 +904,20 @@ export const HEBREW: Record<string, string> = {
     "לחצו שוב על ״הן זהות״ כדי לסיים. המפתח לא נשלח פעם נוספת.",
   "This device received the vault key but could not save it, so it did not join.":
     "המכשיר הזה קיבל את מפתח הכספת אך לא הצליח לשמור אותו, ולכן לא הצטרף.",
-  "The other device has already added it: remove this device in the other device’s sync settings, then pair again.":
-    "המכשיר האחר כבר הוסיף אותו: הסירו את המכשיר הזה בהגדרות הסנכרון של המכשיר האחר, ואז חברו שוב.",
+  "The other device may have added it. If it lists this device, remove it there, then pair again.":
+    "ייתכן שהמכשיר האחר הוסיף אותו. אם הוא מציג את המכשיר הזה, הסירו אותו שם ואז חברו שוב.",
+  "Leave before finishing?": "לצאת לפני הסיום?",
+  "The other device already has your vault key, but this device has not saved it as a member yet.":
+    "למכשיר האחר כבר יש את מפתח הכספת שלכם, אך המכשיר הזה עדיין לא שמר אותו כחבר בכספת.",
+  "To finish, choose Cancel and press “They match” again. The key is not sent a second time.":
+    "כדי לסיים, בחרו ״ביטול״ ולחצו שוב על ״הן זהות״. המפתח לא נשלח פעם נוספת.",
+  "If you leave anyway, this device will reject the other device’s changes until that device leaves the vault and you pair again.":
+    "אם תצאו בכל זאת, המכשיר הזה ידחה את השינויים של המכשיר האחר עד שהוא יצא מהכספת ואתם תחברו שוב.",
+  "Leave anyway": "לצאת בכל זאת",
+  "Joining the vault failed and its outcome could not be confirmed.":
+    "ההצטרפות לכספת נכשלה ולא ניתן היה לאשר מה קרה בסופו של דבר.",
+  "Joining the vault failed, and the vault key it stored could not be removed.":
+    "ההצטרפות לכספת נכשלה, ולא ניתן היה להסיר את מפתח הכספת ששמרה.",
   "The other device already has your vault key. It is not sent again.":
     "למכשיר האחר כבר יש את מפתח הכספת שלכם. הוא לא נשלח שוב.",
   "Only the vault owner can remove a device under the current rule.":

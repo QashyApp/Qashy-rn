@@ -897,6 +897,11 @@
       "he": "יש לציין סכום במטבע חוץ ומטבע חוץ יחד."
     },
     {
+      "name": "q_1a14ef356e27c027",
+      "en": "Leave before finishing?",
+      "he": "לצאת לפני הסיום?"
+    },
+    {
       "name": "q_1a25a5924c7a2b3d",
       "en": "No adjustments this period yet.",
       "he": "אין עדיין התאמות בתקופה הזו."
@@ -1120,11 +1125,6 @@
       "name": "q_20e13081377e874e",
       "en": "That batch's base currency",
       "he": "מטבע הבסיס של האצווה הזו"
-    },
-    {
-      "name": "q_20eceb4c67a30298",
-      "en": "The other device has already added it: remove this device in the other device’s sync settings, then pair again.",
-      "he": "המכשיר האחר כבר הוסיף אותו: הסירו את המכשיר הזה בהגדרות הסנכרון של המכשיר האחר, ואז חברו שוב."
     },
     {
       "name": "q_211b94c9273ef888",
@@ -1437,6 +1437,11 @@
       "he": "$: חייב להיות נתוני JSON פשוטים"
     },
     {
+      "name": "q_294b7eb7548495f6",
+      "en": "If you leave anyway, this device will reject the other device’s changes until that device leaves the vault and you pair again.",
+      "he": "אם תצאו בכל זאת, המכשיר הזה ידחה את השינויים של המכשיר האחר עד שהוא יצא מהכספת ואתם תחברו שוב."
+    },
+    {
       "name": "q_2954ef627c8e8ad7",
       "en": "Nothing can be imported until these are fixed. For missing exchange rates, turn on automatic rates or add manual rates in More → Exchange rates, then preview again.",
       "he": "לא ניתן לייבא עד שאלה יתוקנו. לשערי חליפין חסרים, הפעילו שערים אוטומטיים או הוסיפו שערים ידניים ב״עוד ← שערי חליפין״, ואז הציגו שוב תצוגה מקדימה."
@@ -1475,6 +1480,11 @@
       "name": "q_2a5ba5b4bcaeb376",
       "en": "Choose a .json theme file.",
       "he": "בחרו קובץ ערכת עיצוב בפורמט .json."
+    },
+    {
+      "name": "q_2a8068ae239a0441",
+      "en": "Leave anyway",
+      "he": "לצאת בכל זאת"
     },
     {
       "name": "q_2a8434b16dc214a3",
@@ -2210,6 +2220,11 @@
       "name": "q_3fa9fc3142b20b32",
       "en": "Delete everything and return to first-time setup",
       "he": "מחיקת הכול וחזרה להגדרה הראשונית"
+    },
+    {
+      "name": "q_3fcac4acaf627509",
+      "en": "To finish, choose Cancel and press “They match” again. The key is not sent a second time.",
+      "he": "כדי לסיים, בחרו ״ביטול״ ולחצו שוב על ״הן זהות״. המפתח לא נשלח פעם נוספת."
     },
     {
       "name": "q_400df6483e640e03",
@@ -4610,6 +4625,11 @@
       "name": "q_84a89aa5da625be7",
       "en": "not selected",
       "he": "לא נבחר"
+    },
+    {
+      "name": "q_84d56222f94ef033",
+      "en": "Joining the vault failed, and the vault key it stored could not be removed.",
+      "he": "ההצטרפות לכספת נכשלה, ולא ניתן היה להסיר את מפתח הכספת ששמרה."
     },
     {
       "name": "q_84d6ffdba02984e2",
@@ -7927,6 +7947,11 @@
       "he": "הנתונים שלכם נשמרים רק במכשירים שלכם, אז מעבירים אותם מאחד מהם."
     },
     {
+      "name": "q_e743fbe60e979fc9",
+      "en": "The other device may have added it. If it lists this device, remove it there, then pair again.",
+      "he": "ייתכן שהמכשיר האחר הוסיף אותו. אם הוא מציג את המכשיר הזה, הסירו אותו שם ואז חברו שוב."
+    },
+    {
       "name": "q_e74842d6683869d2",
       "en": "Widgets are an Android feature",
       "he": "ווידג׳טים זמינים באנדרואיד"
@@ -8372,6 +8397,11 @@
       "he": "מתחת לקצב"
     },
     {
+      "name": "q_eff8973ca4c8cf1d",
+      "en": "The other device already has your vault key, but this device has not saved it as a member yet.",
+      "he": "למכשיר האחר כבר יש את מפתח הכספת שלכם, אך המכשיר הזה עדיין לא שמר אותו כחבר בכספת."
+    },
+    {
       "name": "q_f047ad0abadf5369",
       "en": "Create a goal",
       "he": "יצירת יעד"
@@ -8800,6 +8830,11 @@
       "name": "q_fabb269732de0d01",
       "en": "Categories and caps",
       "he": "קטגוריות ומגבלות"
+    },
+    {
+      "name": "q_fb28f788b0fa5a4c",
+      "en": "Joining the vault failed and its outcome could not be confirmed.",
+      "he": "ההצטרפות לכספת נכשלה ולא ניתן היה לאשר מה קרה בסופו של דבר."
     },
     {
       "name": "q_fb33ca0543b39787",

@@ -386,6 +386,106 @@ describe("joining a vault someone else holds", () => {
     expect(after?.vaultKey).toEqual(before?.vaultKey);
   });
 
+  /** A storage whose first transaction (the join's own) fails; later ones are real. */
+  const failingJoinTransaction = (
+    storage: MemoryStorageAdapter,
+    { commit }: { commit: boolean },
+  ) => {
+    let calls = 0;
+    return new Proxy(storage, {
+      get: (object, property, receiver) => {
+        if (property !== "transact")
+          return Reflect.get(object, property, receiver);
+        return (...args: Parameters<MemoryStorageAdapter["transact"]>) => {
+          calls += 1;
+          if (calls > 1) return object.transact(...args);
+          return commit
+            ? object
+                .transact(...args)
+                .then(() => Promise.reject(new Error("connection lost")))
+            : Promise.reject(new Error("disk full"));
+        };
+      },
+    });
+  };
+
+  it("takes the stored key back out when the join does not land, so the next attempt can run", async () => {
+    const target = await rig({ records: populated() });
+    const input = joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+      peerNamed("Phone"),
+    ]);
+
+    await expect(
+      adoptVault(
+        {
+          ...target.deps,
+          storage: failingJoinTransaction(target.storage, { commit: false }),
+        },
+        input,
+      ),
+    ).rejects.toThrow("disk full");
+
+    // "This device did not join" has to be true: no key, and no enrolment.
+    expect(await target.keystore.status()).toBe("empty");
+    expect((await readSyncStatus(target.deps)).deviceId).toBe("");
+
+    await adoptVault(target.deps, input);
+    expect(await target.keystore.status()).toBe("unlocked");
+  });
+
+  it("keeps the key when the commit landed and the promise rejected afterwards", async () => {
+    const target = await rig();
+    const input = joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+      peerNamed("Phone"),
+    ]);
+
+    const result = await adoptVault(
+      {
+        ...target.deps,
+        storage: failingJoinTransaction(target.storage, { commit: true }),
+      },
+      input,
+    );
+
+    // Erasing here would leave `sync_meta` naming a device whose key is gone.
+    expect(result.deviceId).toBe(input.identity.deviceId);
+    expect(await target.keystore.status()).toBe("unlocked");
+    expect((await readSyncStatus(target.deps)).deviceId).toBe(
+      input.identity.deviceId,
+    );
+  });
+
+  it("reports both failures when the stored key cannot be removed either", async () => {
+    const target = await rig();
+    const unreliable = new Proxy(target.keystore, {
+      get: (object, property) => {
+        if (property === "erase")
+          return () => Promise.reject(new Error("keystore unavailable"));
+        const value = Reflect.get(object, property, object);
+        return typeof value === "function" ? value.bind(object) : value;
+      },
+    });
+
+    const failure: unknown = await adoptVault(
+      {
+        ...target.deps,
+        keystore: unreliable,
+        storage: failingJoinTransaction(target.storage, { commit: false }),
+      },
+      joinerInput(createDeviceIdentity(), createVaultRootKey(), [
+        peerNamed("Phone"),
+      ]),
+    ).then(
+      () => null,
+      (reason: unknown) => reason,
+    );
+
+    expect(failure).toBeInstanceOf(AggregateError);
+    expect(
+      (failure as AggregateError).errors.map((error: Error) => error.message),
+    ).toEqual(["disk full", "keystore unavailable"]);
+  });
+
   it("records one pairing line per peer it was handed", async () => {
     const target = await rig();
     const peers = [peerNamed("Phone"), peerNamed("Tablet")];

@@ -112,8 +112,10 @@ function MaterialSegmentedControl<T extends string>({
   const { space } = theme;
   const { t, isRtl } = useLocalization();
   const rtl = lockLtr ? false : isRtl;
-  // Material's segmented button is 40dp; the hit slop brings the target to the 44px minimum.
-  const height = size === "compact" ? 36 : 40;
+  // Material's segmented button is 40dp, but hit slop cannot lift a segment past its container (a
+  // touch outside the container never reaches it), so the segments are themselves 44px, the minimum
+  // touch target. The outline is drawn over them rather than as a border, which would eat 2px.
+  const height = 44;
   return (
     <DirectionScope direction={rtl ? "rtl" : "ltr"}>
       <View
@@ -123,8 +125,6 @@ function MaterialSegmentedControl<T extends string>({
           flexDirection: "row",
           height,
           borderRadius: height / 2,
-          borderWidth: 1,
-          borderColor: theme.outline,
           overflow: "hidden",
         }}
       >
@@ -143,7 +143,6 @@ function MaterialSegmentedControl<T extends string>({
               }
               accessibilityState={{ checked: selected }}
               aria-checked={selected}
-              hitSlop={{ top: 4, bottom: 4 }}
               onPress={() => {
                 if (selected) return;
                 hapticSelection();
@@ -153,8 +152,8 @@ function MaterialSegmentedControl<T extends string>({
               style={{
                 flex: 1,
                 // MotionPressable's inner views don't stretch with the wrapper, so the segment
-                // states its own height (the container's, less its 1px border on each side).
-                height: height - 2,
+                // states its own height.
+                height,
                 minWidth: 44,
                 flexDirection: "row",
                 alignItems: "center",
@@ -188,6 +187,19 @@ function MaterialSegmentedControl<T extends string>({
             </MotionPressable>
           );
         })}
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            start: 0,
+            end: 0,
+            borderRadius: height / 2,
+            borderWidth: 1,
+            borderColor: theme.outline,
+          }}
+        />
       </View>
     </DirectionScope>
   );

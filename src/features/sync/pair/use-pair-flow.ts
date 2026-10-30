@@ -1,4 +1,5 @@
 import { router, useLocalSearchParams } from "expo-router";
+import { usePreventRemove } from "expo-router/react-navigation";
 import { useEffect, useRef, useState } from "react";
 import { Platform } from "react-native";
 
@@ -22,7 +23,7 @@ import {
   type DeviceProfile,
 } from "@/sync/setup";
 import { usePreventScreenCaptureWhile } from "@/features/sync/use-screen-capture-guard";
-import { errorMessage } from "@/utils/confirm";
+import { confirmDestructive, errorMessage } from "@/utils/confirm";
 import { nowIso } from "@/utils/entity";
 import { hapticError, hapticSuccess, hapticWarning } from "@/services/haptics";
 import {
@@ -90,6 +91,10 @@ export function usePairFlow() {
     keySentRef.current = true;
     setKeySent(true);
   };
+  // Host only: the key has gone to the other device and this device has not yet saved it as a
+  // member. The retry lives in `accept`, so leaving the screen now would strand the other device
+  // holding a key that this roster does not list. Leaving is confirmed while this is true.
+  const [handoffUnsaved, setHandoffUnsaved] = useState(false);
 
   /** Ends whatever is in flight. Safe to call repeatedly; that is the point of clearing it. */
   const closeSession = () => {
@@ -100,6 +105,7 @@ export function usePairFlow() {
     accept.current = null;
     keySentRef.current = false;
     setKeySent(false);
+    setHandoffUnsaved(false);
   };
 
   // Hosting turns sync on (or back on) before any peer exists. If the attempt ends without a
@@ -137,6 +143,27 @@ export function usePairFlow() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reads refs only; must run once, on unmount
     [],
   );
+
+  // Header back, Android hardware back and the browser's back all end in a removal this
+  // intercepts (the pairing screen is a full-screen push, not a sheet). The dialog has two ways
+  // out: Cancel keeps the screen, where "They match" finishes the local save without re-sending
+  // the key; the confirm button leaves and says what that costs.
+  usePreventRemove(handoffUnsaved, ({ repeat }) => {
+    void confirmDestructive({
+      title: "Leave before finishing?",
+      message: [
+        "The other device already has your vault key, but this device has not saved it as a member yet.",
+        "To finish, choose Cancel and press “They match” again. The key is not sent a second time.",
+        "If you leave anyway, this device will reject the other device’s changes until that device leaves the vault and you pair again.",
+      ],
+      confirmLabel: "Leave anyway",
+    }).then((confirmed) => {
+      if (!confirmed) return;
+      // Prevention off first, then the blocked navigation repeats and the unmount closes the session.
+      setHandoffUnsaved(false);
+      repeat();
+    });
+  });
 
   // First run ends when the vault's own settings arrive: they carry `onboardingComplete`, which
   // is what opens the rest of the app. Until then the done step says it is still receiving.
@@ -287,11 +314,13 @@ export function usePairFlow() {
               // trigger the rollback that would disable sync here.
               pairedPeer.current = true;
               markKeySent();
+              setHandoffUnsaved(true);
             }
             if (!recorded) {
               await recordPairedPeer(setup, handedTo);
               recorded = true;
             }
+            setHandoffUnsaved(false);
             await refresh();
             setOutcome({
               headline: "Device added",
@@ -506,9 +535,12 @@ export function usePairFlow() {
       setSas(null);
       setCode(null);
       move("role");
+      // `adoptVault` erases what it stored when the join does not land, so the first sentence is
+      // true and nothing is left here. Only its own AggregateError says the key may still be
+      // present or the outcome unknown, and its message already says so.
       setError(
         sentKey
-          ? `${t("This device received the vault key but could not save it, so it did not join.")} ${t("The other device has already added it: remove this device in the other device’s sync settings, then pair again.")}`
+          ? `${reason instanceof AggregateError ? why : t("This device received the vault key but could not save it, so it did not join.")} ${t("The other device may have added it. If it lists this device, remove it there, then pair again.")}`
           : `${why} ${t(role === "host" ? "The vault key was not sent." : "This device did not join the vault.")}`,
       );
     } finally {
