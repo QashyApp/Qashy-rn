@@ -38,13 +38,21 @@ import { UndoBar } from "@/components/ui/undo-bar";
 import { useScrollHide } from "@/components/ui/use-scroll-hide";
 import { useSectionScrollToTop } from "@/components/ui/use-section-scroll-to-top";
 import { WIDGET_RULES, type OverviewCard } from "@/domain/overview-layout";
-import { moveAccessibilityFocus } from "@/features/overview/edit/move-accessibility-focus";
+import { moveAccessibilityFocus } from "@/utils/move-accessibility-focus";
 import { useExitEditOnBack } from "@/features/overview/edit/use-exit-edit-on-back";
 import { createCardDropper } from "@/features/overview/layout/card-dropper";
 import type { LayoutStoreAction } from "@/features/overview/layout/layout-actions";
 import { useOverviewLayout } from "@/features/overview/layout/use-overview-layout";
 import { OverviewMonthPage } from "@/features/overview/overview-month-page";
 import { WIDGET_REGISTRY } from "@/features/overview/widgets/registry";
+import {
+  UpcomingActionsContext,
+  useUpcomingRowActions,
+} from "@/features/overview/widgets/upcoming-actions";
+import {
+  ROW_ACTION_UNDO_MS,
+  rowActionsMessage,
+} from "@/features/transactions/row-actions";
 import { resolveBottomChromeInset, useScreenMetrics } from "@/theme/layout";
 import { useQashyTheme } from "@/theme/theme";
 import { errorMessage, showError } from "@/utils/confirm";
@@ -55,6 +63,8 @@ interface UndoState {
   readonly card: OverviewCard;
   readonly index: number;
 }
+
+function ignoreDismiss() {}
 
 function nextSizeFor(card: OverviewCard) {
   const sizes = WIDGET_RULES[card.type].sizes;
@@ -68,7 +78,7 @@ export function OverviewScreen() {
   const { space } = theme;
   const metrics = useScreenMetrics();
   const insets = useSafeAreaInsets();
-  const { isRtl } = useLocalization();
+  const { isRtl, t } = useLocalization();
   const [month, setMonth] = useState(startOfMonth());
   const {
     visibility: fabVisibility,
@@ -87,6 +97,12 @@ export function OverviewScreen() {
   const [editing, setEditing] = useState(false);
   const [configOpenId, setConfigOpenId] = useState<string | null>(null);
   const [undo, setUndo] = useState<UndoState | null>(null);
+  // Skip and Mark paid on the Coming up card wait on an Undo bar like the Transactions list does.
+  const {
+    actions: upcomingActions,
+    pending: pendingUpcoming,
+    undo: undoUpcoming,
+  } = useUpcomingRowActions();
 
   // The latest values, for handlers that must keep one identity (the month page is memoised and
   // its props are the whole point) yet need to read current state when they run.
@@ -266,6 +282,14 @@ export function OverviewScreen() {
     gap: space.md,
   } as const;
 
+  const undoBarStyle = {
+    position: "absolute",
+    left: space.lg,
+    right: space.lg,
+    bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
+      .stackedOverlayBottom,
+  } as const;
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
       {/* The heading, Customize and the month switcher stay put while the month pages slide
@@ -330,45 +354,54 @@ export function OverviewScreen() {
           </View>
         </View>
       </View>
-      <MonthPager
-        ref={pagerRef}
-        dragProgress={dragProgress}
-        month={month}
-        disabled={editing}
-        onChange={changeMonth}
-        style={{ flex: 1 }}
-        renderPage={(pageMonth, { isCurrent }) => (
-          <OverviewMonthPage
-            month={pageMonth}
-            isCurrent={isCurrent}
-            editing={editing}
-            layoutStatus={status}
-            cards={cards}
-            configOpenId={configOpenId}
-            onToggleConfig={toggleConfig}
-            onEnterEdit={enterEditMode}
-            onScroll={onScroll}
-            scrollRef={scrollRef}
-            onMoveCard={moveCard}
-            onResizeCard={resizeCard}
-            onConfigureCard={configureCard}
-            onRemoveCard={removeCard}
-            onDropCard={dropCard}
-          />
-        )}
-      />
-      {undo ? (
+      <UpcomingActionsContext value={upcomingActions}>
+        <MonthPager
+          ref={pagerRef}
+          dragProgress={dragProgress}
+          month={month}
+          disabled={editing}
+          onChange={changeMonth}
+          style={{ flex: 1 }}
+          renderPage={(pageMonth, { isCurrent }) => (
+            <OverviewMonthPage
+              month={pageMonth}
+              isCurrent={isCurrent}
+              editing={editing}
+              layoutStatus={status}
+              cards={cards}
+              configOpenId={configOpenId}
+              onToggleConfig={toggleConfig}
+              onEnterEdit={enterEditMode}
+              onScroll={onScroll}
+              scrollRef={scrollRef}
+              onMoveCard={moveCard}
+              onResizeCard={resizeCard}
+              onConfigureCard={configureCard}
+              onRemoveCard={removeCard}
+              onDropCard={dropCard}
+            />
+          )}
+        />
+      </UpcomingActionsContext>
+      {/* One bar at a time in the one spot above the button: a payment waiting on Undo speaks
+          first, and a removed card's bar returns once that is settled. */}
+      {pendingUpcoming.length ? (
+        <UndoBar
+          literal
+          message={t(rowActionsMessage(pendingUpcoming))}
+          actionLabel={t("Undo")}
+          // Each action commits on its own timer and the bar goes when the last has.
+          onAction={undoUpcoming}
+          onDismiss={ignoreDismiss}
+          duration={ROW_ACTION_UNDO_MS}
+          style={undoBarStyle}
+        />
+      ) : undo ? (
         <UndoBar
           message={`${WIDGET_REGISTRY[undo.card.type]?.title ?? ""} removed`}
           onAction={undoRemove}
           onDismiss={() => setUndo(null)}
-          style={{
-            position: "absolute",
-            left: space.lg,
-            right: space.lg,
-            bottom: resolveBottomChromeInset(metrics, insets.bottom, space)
-              .stackedOverlayBottom,
-          }}
+          style={undoBarStyle}
         />
       ) : null}
       <FloatingActionButton

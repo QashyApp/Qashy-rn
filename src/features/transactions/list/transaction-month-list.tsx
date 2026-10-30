@@ -343,7 +343,10 @@ export const TransactionMonthList = memo(function TransactionMonthList({
     [allMonths, dayFormats],
   );
 
-  const filtered = search.trim().length > 0 || kind !== "all";
+  const searching = search.trim().length > 0;
+  // Upcoming on its own is a view, not a narrowing: empty, it has nothing to clear.
+  const upcomingEmpty = kind === "upcoming" && !searching;
+  const filtered = !upcomingEmpty && (searching || kind !== "all");
   // What the list compares to know a selection changed (`extraData` is shallow-compared).
   const selectionKey = useMemo(() => [...selectedIds].join(","), [selectedIds]);
   // The same members are the same selection: a screen that hands over a fresh Set on every render
@@ -686,8 +689,17 @@ export const TransactionMonthList = memo(function TransactionMonthList({
           // slab per day rather than as N separate rows happening to touch.
           renderItem={renderItem}
           ListEmptyComponent={
-            <MotionView key={String(filtered)} variant="fade">
-              {filtered ? (
+            <MotionView
+              key={upcomingEmpty ? "upcoming" : String(filtered)}
+              variant="fade"
+            >
+              {upcomingEmpty ? (
+                <EmptyState
+                  icon="calendar"
+                  title="Nothing upcoming"
+                  body="Scheduled and recurring transactions show up here until they are due."
+                />
+              ) : filtered ? (
                 <EmptyState
                   icon="magnifyingglass"
                   title="Nothing matches"

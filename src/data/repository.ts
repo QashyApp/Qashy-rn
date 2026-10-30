@@ -164,6 +164,12 @@ export interface ApplyResult {
   readonly repairs: readonly RepairNote[];
 }
 
+/** The budget figures of a dashboard range: what it allows and what the budgets count as spent. */
+export interface BudgetTotals {
+  budgetLimitMinor: number;
+  budgetSpentMinor: number;
+}
+
 export interface NetWorthSeries {
   baseCurrency: string;
   /** Oldest first: each of the last `months` month-ends, then today. */
@@ -309,6 +315,16 @@ export interface FinanceRepository {
     toDate: string,
     options?: { includePendingAutoPosts?: boolean },
   ): DashboardSummary;
+  /**
+   * The `getDashboard` budget figures alone (limit and spent), without the rest of the dashboard.
+   * `includePendingAutoPosts` counts the auto-post occurrences that are due today but not created
+   * yet; the preview never reaches past today, whatever `toDate` is. Display only.
+   */
+  getBudgetTotals(
+    fromDate: string,
+    toDate: string,
+    options?: { includePendingAutoPosts?: boolean },
+  ): BudgetTotals;
   /**
    * Net worth at each of the last `months` (1..24) month-ends, then `today`, in the base
    * currency. The last point equals the dashboard headline.

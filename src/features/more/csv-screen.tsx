@@ -11,6 +11,7 @@ import { useQashyTheme } from "@/theme/theme";
 import { ExternalImportLauncher } from "@/features/more/external-import-launcher";
 import { CSV_FIELDS } from "@/features/more/csv/csv-model";
 import { CSV_DATE_FORMAT_LABELS } from "@/utils/csv-import-values";
+import { accountTypeIcon } from "@/utils/labels";
 import { CsvStepper, PreviewTile } from "@/features/more/csv/csv-parts";
 import { useCsvImport } from "@/features/more/csv/use-csv-import";
 
@@ -229,7 +230,7 @@ export function CsvScreen() {
                   <ChoiceChip
                     key={account.id}
                     literal
-                    icon={account.icon}
+                    icon={accountTypeIcon(account.type)}
                     label={account.name}
                     selected={defaultAccountId === account.id}
                     onPress={() => {

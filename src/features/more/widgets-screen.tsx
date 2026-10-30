@@ -79,6 +79,12 @@ type WidgetPatch = Partial<WidgetAppearance> & Record<string, unknown>;
 function useWidgetsState() {
   const [placed, setPlaced] = useState<PlacedWidgetRef[] | null>(null);
   const [settings, setSettings] = useState<WidgetSettings | null>(null);
+  // True while the stored settings could not be read and nothing is on screen from an earlier read.
+  // Showing defaults then would draw "Hide amounts" as off whatever is stored, and the next edit
+  // would be built from them.
+  const [settingsFailed, setSettingsFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  const retry = useCallback(() => setAttempt((count) => count + 1), []);
 
   useEffect(() => {
     let live = true;
@@ -100,13 +106,12 @@ function useWidgetsState() {
     const loadSettings = () => {
       readWidgetSettings().then(
         (next) => {
-          if (live) setSettings(next);
+          if (!live) return;
+          setSettings(next);
+          setSettingsFailed(false);
         },
         () => {
-          if (live)
-            setSettings(
-              (current) => current ?? { hideAmounts: false, widgets: {} },
-            );
+          if (live) setSettingsFailed(true);
         },
       );
     };
@@ -123,9 +128,15 @@ function useWidgetsState() {
       unsubscribe();
       appState.remove();
     };
-  }, []);
+  }, [attempt]);
 
-  return { placed, settings, setSettings };
+  return {
+    placed,
+    settings,
+    setSettings,
+    settingsUnavailable: settingsFailed && settings === null,
+    retry,
+  };
 }
 
 export function WidgetsScreen() {
@@ -143,7 +154,8 @@ export function WidgetsScreen() {
   const [showAllFor, setShowAllFor] = useState<string | null>(null);
   const showAll = showAllFor === requestKey;
   const available = QashyWidgets.isAvailable();
-  const { placed, settings, setSettings } = useWidgetsState();
+  const { placed, settings, setSettings, settingsUnavailable, retry } =
+    useWidgetsState();
 
   const apply = useCallback(
     async (
@@ -200,6 +212,22 @@ export function WidgetsScreen() {
         </Card>
       ) : (
         <>
+          {settingsUnavailable ? (
+            <Card style={{ gap: space.sm }}>
+              <AppText variant="headline" accessibilityRole="alert">
+                Couldn’t load widget settings
+              </AppText>
+              <AppText muted>
+                Your widget settings couldn’t be read, so they aren’t shown
+                here. Nothing was changed.
+              </AppText>
+              <TextButton
+                title="Try again"
+                icon="arrow.clockwise"
+                onPress={retry}
+              />
+            </Card>
+          ) : null}
           {/* Not drawn until the stored value is read, so it never flashes the wrong state. */}
           {settings !== null ? (
             <Card style={{ gap: space.lg }}>

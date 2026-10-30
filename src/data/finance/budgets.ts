@@ -308,6 +308,67 @@ export function dueBudgetSnapshots(ctx: FinanceContext) {
 
 // ---- Spending and status ---------------------------------------------------------------------
 
+/**
+ * A `budgetMatches` that shares its work between calls on one snapshot: the expenses of a range
+ * are filtered out of the posted transactions once, a category matcher is built once per set of
+ * categories, and the same filters over the same range are answered once. For callers that read
+ * many budgets together.
+ */
+export function createBudgetMatcher(ctx: FinanceContext) {
+  const expensesByRange = new Map<string, TransactionRecord[]>();
+  const matchers = new Map<string, (categoryId: string | null) => boolean>();
+  const results = new Map<string, TransactionRecord[]>();
+  const expensesIn = (fromDate: string, toDate: string) => {
+    const key = `${fromDate}|${toDate}`;
+    let expenses = expensesByRange.get(key);
+    if (!expenses) {
+      expenses = ctx
+        .postedTransactions(fromDate, toDate)
+        .filter((item) => item.kind === "expense");
+      expensesByRange.set(key, expenses);
+    }
+    return expenses;
+  };
+  return (
+    filters: BudgetFilters,
+    fromDate: string,
+    toDate: string,
+  ): TransactionRecord[] => {
+    const resultKey = JSON.stringify([
+      filters.accountIds,
+      filters.categoryIds,
+      filters.tagIds,
+      fromDate,
+      toDate,
+    ]);
+    const cached = results.get(resultKey);
+    if (cached) return cached;
+    let matchesCategory: ((categoryId: string | null) => boolean) | null = null;
+    if (filters.categoryIds.length) {
+      const matcherKey = JSON.stringify(filters.categoryIds);
+      matchesCategory = matchers.get(matcherKey) ?? null;
+      if (!matchesCategory) {
+        matchesCategory = categoryMatcher(
+          ctx.state.categories,
+          filters.categoryIds,
+        );
+        matchers.set(matcherKey, matchesCategory);
+      }
+    }
+    const categoryTest = matchesCategory;
+    const matched = expensesIn(fromDate, toDate).filter(
+      (item) =>
+        (!filters.accountIds.length ||
+          filters.accountIds.includes(item.accountId)) &&
+        (!categoryTest || categoryTest(item.categoryId)) &&
+        (!filters.tagIds.length ||
+          filters.tagIds.some((id) => item.tagIds.includes(id))),
+    );
+    results.set(resultKey, matched);
+    return matched;
+  };
+}
+
 /** The posted expenses a budget with these filters counts in the range, as the records themselves. */
 export function budgetMatches(
   ctx: FinanceContext,
@@ -315,23 +376,7 @@ export function budgetMatches(
   fromDate: string,
   toDate: string,
 ): TransactionRecord[] {
-  const matchesCategory = filters.categoryIds.length
-    ? categoryMatcher(ctx.state.categories, filters.categoryIds)
-    : null;
-  return ctx
-    .postedTransactions(fromDate, toDate)
-    .filter((item) => item.kind === "expense")
-    .filter(
-      (item) =>
-        !filters.accountIds.length ||
-        filters.accountIds.includes(item.accountId),
-    )
-    .filter((item) => !matchesCategory || matchesCategory(item.categoryId))
-    .filter(
-      (item) =>
-        !filters.tagIds.length ||
-        filters.tagIds.some((id) => item.tagIds.includes(id)),
-    );
+  return createBudgetMatcher(ctx)(filters, fromDate, toDate);
 }
 
 export function budgetSpend(

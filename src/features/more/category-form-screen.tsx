@@ -53,6 +53,9 @@ export function CategoryFormScreen() {
   );
   const [parentId, setParentId] = useState(existing?.parentId ?? "");
   const [busy, setBusy] = useState(false);
+  // The name's error waits until the field was used, so a fresh form is not shouted at; once the user
+  // has typed in it or left it, an empty name says why Save is off.
+  const [nameTouched, setNameTouched] = useState(false);
   const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute: "/more",
     values: { name, kind, color, icon, parentId },
@@ -198,9 +201,13 @@ export function CategoryFormScreen() {
         <FormField
           label="Category name"
           value={name}
-          onChangeText={setName}
+          onChangeText={(value) => {
+            setName(value);
+            setNameTouched(true);
+          }}
+          onBlur={() => setNameTouched(true)}
           autoFocus={!existing}
-          error={name.length > 0 ? nameError : undefined}
+          error={nameTouched || name.length > 0 ? nameError : undefined}
         />
         <View
           accessibilityLabel={t("Category kind")}
@@ -249,7 +256,7 @@ export function CategoryFormScreen() {
         <View
           accessibilityLabel={t("Category color")}
           accessibilityRole="radiogroup"
-          style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}
+          style={{ flexDirection: "row", gap: space.md, flexWrap: "wrap" }}
         >
           {COLORS.map((item) => (
             <ColorSwatch

@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useFormSheet } from "@/components/navigation/use-form-sheet";
 import type { TransactionKind, ForeignAmountInput } from "@/domain/models";
@@ -191,6 +191,9 @@ export function useTransactionForm() {
     );
   });
   const [busy, setBusy] = useState(false);
+  // `busy` is state, so a second tap landing before the re-render still sees it false. This ref
+  // flips synchronously and closes that gap for save and delete alike.
+  const inFlight = useRef(false);
   const exchangeRateService = useExchangeRateService();
   const rateStatus = useExchangeRateStatus();
   // Collapsed for a brand-new transaction; a saved one always carries a snapshotted rate (every
@@ -529,7 +532,8 @@ export function useTransactionForm() {
   };
 
   const save = async () => {
-    if (!account || busy || !canSave) return;
+    if (!account || busy || inFlight.current || !canSave) return;
+    inFlight.current = true;
     setBusy(true);
     setSaveError(undefined);
     try {
@@ -636,6 +640,7 @@ export function useTransactionForm() {
       hapticError();
       setSaveError(errorMessage(reason, "Check the form and try again."));
     } finally {
+      inFlight.current = false;
       setBusy(false);
     }
   };
@@ -646,14 +651,17 @@ export function useTransactionForm() {
   const [deleting, setDeleting] = useState(false);
 
   const remove = async () => {
-    if (!existing || busy) return;
+    if (!existing || busy || inFlight.current) return;
+    inFlight.current = true;
     if (
       !(await confirmDestructive({
         title: "Delete this transaction?",
         message: `“${existing.title}” will be removed from your ledger.`,
       }))
-    )
+    ) {
+      inFlight.current = false;
       return;
+    }
     setBusy(true);
     setDeleting(true);
     try {
@@ -664,6 +672,7 @@ export function useTransactionForm() {
     } catch (reason) {
       // Only a failed delete frees the form again; after a success it stays locked while the sheet exits.
       setDeleting(false);
+      inFlight.current = false;
       setBusy(false);
       showError(
         "Couldn’t delete transaction",

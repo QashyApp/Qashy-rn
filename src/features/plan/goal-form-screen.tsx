@@ -1,5 +1,5 @@
 import { useLocalSearchParams } from "expo-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { View } from "react-native";
 
 import { CloseTo } from "@/components/navigation/close-to";
@@ -20,6 +20,7 @@ import {
   useFinanceRepository,
   useFinanceState,
 } from "@/providers/finance-provider";
+import { pendingContributionDraft } from "@/features/plan/goal-contribution-draft";
 import { useQashyTheme } from "@/theme/theme";
 import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
 import { mediumDate, todayLocal } from "@/utils/date";
@@ -71,6 +72,34 @@ export function GoalFormScreen() {
   const [editingContributionRevision, setEditingContributionRevision] =
     useState<number | undefined>();
   const [saving, setSaving] = useState(false);
+  const editedContribution = editingContributionId
+    ? state.contributions.find((item) => item.id === editingContributionId)
+    : undefined;
+  // The contribution card is part of this form (a typed amount is saved with the goal), but only
+  // a real pending change counts as unsaved: opening a contribution to edit it, or changing just
+  // the date of an empty one, must not ask to discard anything.
+  const pendingContribution = useMemo(
+    () =>
+      pendingContributionDraft(
+        { contribution, contributionDate, contributionNote },
+        editedContribution ?? null,
+        editedContribution
+          ? minorToLocalizedDecimalString(
+              editedContribution.amountMinor,
+              state.settings.baseCurrency,
+              locale,
+            )
+          : null,
+      ),
+    [
+      contribution,
+      contributionDate,
+      contributionNote,
+      editedContribution,
+      state.settings.baseCurrency,
+      locale,
+    ],
+  );
   const { closeToOwner, allowLeave } = useFormSheet({
     ownerRoute: "/plan",
     values: {
@@ -81,11 +110,7 @@ export function GoalFormScreen() {
       targetDate,
       linkedAccountId,
       linkedCategoryId,
-      // The contribution card is part of this form: a typed amount is saved with the goal, so
-      // leaving with one typed must ask before discarding it.
-      contribution,
-      contributionDate,
-      contributionNote,
+      pendingContribution,
     },
   });
   const targetError = validateMoneyInput(

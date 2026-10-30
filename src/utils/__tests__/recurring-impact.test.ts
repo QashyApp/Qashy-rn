@@ -70,6 +70,28 @@ describe("recurring impact", () => {
       ).toBe(2);
     });
 
+    it("counts only the occurrences that can be priced today", () => {
+      // "a" has no rate yet and stays upcoming; only "b" would post.
+      expect(
+        overduePostedBySave(
+          off,
+          { autoPost: true, active: true },
+          transactions,
+          today,
+          (transaction) => transaction.id !== "a",
+        ),
+      ).toBe(1);
+      expect(
+        overduePostedBySave(
+          off,
+          { autoPost: true, active: true },
+          transactions,
+          today,
+          () => false,
+        ),
+      ).toBe(0);
+    });
+
     it("is zero when nothing newly starts posting", () => {
       // Already auto-posting and active: nothing was waiting.
       expect(

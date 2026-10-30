@@ -30,15 +30,19 @@ export function overdueOccurrences(
 /**
  * How many overdue occurrences saving `next` would post at once. Auto-post takes effect when it is
  * switched on, or when a paused rule that has it on is switched back on; a new rule has no
- * occurrences yet, and a rule that stays inactive posts nothing.
+ * occurrences yet, and a rule that stays inactive posts nothing. `canPost` is the pricing check
+ * generation uses: an occurrence it rejects (no exchange rate stored yet) stays upcoming, so it is
+ * not counted. Without it every overdue occurrence counts.
  */
 export function overduePostedBySave(
   existing: Pick<RecurringRule, "id" | "autoPost" | "active"> | undefined,
   next: { autoPost: boolean; active: boolean },
   transactions: readonly TransactionRecord[],
   today: string,
+  canPost: (transaction: TransactionRecord) => boolean = () => true,
 ): number {
   if (!existing || !next.autoPost || !next.active) return 0;
   if (existing.autoPost && existing.active) return 0;
-  return overdueOccurrences(transactions, existing.id, today).length;
+  return overdueOccurrences(transactions, existing.id, today).filter(canPost)
+    .length;
 }

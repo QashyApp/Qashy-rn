@@ -609,11 +609,8 @@ export function TransactionsScreen() {
   const toolbarGap = toolbarStyle.gap;
   // A filter that is on but may be out of sight: a kind other than All, or a search across months.
   const filterActive = kind !== "all" || allMonths;
-  // The tiles ignore the kind and the search on purpose (they are the month's totals, as on
-  // Overview), so say so whenever something narrows the list.
-  const tilesScoped = kind !== "all" || search.trim().length > 0;
-  // Clearing the search closes "Search all months" with it: its chip goes, and a widening that
-  // outlived it would apply silently to the next search.
+  // "Search all months" survives an emptied field (backspacing to retype keeps it, and its chip
+  // comes back with the next character); only the clear button resets it, or leaving the screen.
   const resetSearch = () => {
     setSearch("");
     setSearchAllMonths(false);
@@ -621,7 +618,6 @@ export function TransactionsScreen() {
   };
   const changeSearch = (value: string) => {
     setSearch(value);
-    if (!value) setSearchAllMonths(false);
     clearSelection();
   };
 
@@ -675,16 +671,15 @@ export function TransactionsScreen() {
           ]}
         />
       </View>
-      {tilesScoped ? (
-        <AppText variant="caption" muted>
-          {spansMonths
-            ? `Totals for ${monthLabel(month, locale)}`
-            : "Totals are for the whole month"}
-        </AppText>
-      ) : null}
+      {/* Always shown, so the header never grows a line when a filter or search is typed, and the
+          tiles' scope is stated whatever narrows the list: they ignore the kind and the search. */}
+      <AppText variant="caption" muted>
+        {`Totals for ${monthLabel(month, locale)}, all transactions`}
+      </AppText>
     </View>
   );
-  const searchAllMonthsChip = search ? (
+  // Upcoming already lists every month, so there is nothing for the chip to widen.
+  const searchAllMonthsChip = search && !upcomingOnly ? (
     <MotionView
       variant="down"
       exit

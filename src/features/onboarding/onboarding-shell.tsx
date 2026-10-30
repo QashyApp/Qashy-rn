@@ -94,9 +94,13 @@ export function OnboardingShell({
           <View style={{ width: 44 }} />
         </View>
         {progress > 0 ? (
+          // The progress bar already announces the step; the caption is the same words for the eye.
           <AppText
             variant="caption"
             muted
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            aria-hidden
             style={{ textAlign: "center" }}
           >{`Step ${progress} of ${SETUP_STEPS.length}`}</AppText>
         ) : null}

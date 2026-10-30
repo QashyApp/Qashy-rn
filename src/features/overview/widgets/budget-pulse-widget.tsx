@@ -39,29 +39,57 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
     today >= startOfMonth(month) && today <= endOfMonth(month)
       ? today
       : endOfMonth(month);
-  const budgetStatuses = useMemo(
+  // Both reads count the auto-post occurrences that are due but not generated yet, so the figures
+  // do not lag after midnight until the app next generates them. Only the one the card shows runs.
+  const selectedStatus = useMemo(
     () =>
-      repository.getBudgetStatuses(budgetDate, {
-        includeInactiveCustom: true,
-        // Count the auto-post occurrences that are due but not generated yet, so the figures do
-        // not lag after midnight until the app next generates them.
-        includePendingAutoPosts: true,
-      }),
+      budgetId
+        ? repository
+            .getBudgetStatuses(budgetDate, {
+              includeInactiveCustom: true,
+              includePendingAutoPosts: true,
+            })
+            .find((status) => status.budget.id === budgetId)
+        : undefined,
     // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
     [
       repository,
+      budgetId,
       budgetDate,
       state.budgets,
       state.budgetPeriods,
       state.budgetAdjustments,
       state.transactions,
       state.categories,
+      state.recurringRules,
     ],
   );
-  const selected = budgetId
-    ? budgetStatuses.find((status) => status.budget.id === budgetId)
-    : undefined;
-
+  const aggregate = useMemo(
+    () =>
+      budgetId
+        ? undefined
+        : repository.getBudgetTotals(startOfMonth(month), endOfMonth(month), {
+            includePendingAutoPosts: true,
+          }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- repository reads these slices internally
+    [
+      repository,
+      budgetId,
+      month,
+      today,
+      state.budgets,
+      state.budgetPeriods,
+      state.budgetAdjustments,
+      state.transactions,
+      state.categories,
+      state.recurringRules,
+    ],
+  );
+  const budgetLimitMinor =
+    aggregate?.budgetLimitMinor ?? summary.budgetLimitMinor;
+  const budgetSpentMinor =
+    aggregate?.budgetSpentMinor ?? summary.budgetSpentMinor;
+  const selected = selectedStatus;
   if (budgetId && selected) {
     const ratio =
       selected.effectiveLimitMinor > 0
@@ -141,7 +169,7 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
         action="Open plan"
         onAction={() => router.push("/plan")}
       />
-      {summary.budgetLimitMinor > 0 || summary.budgetSpentMinor > 0 ? (
+      {budgetLimitMinor > 0 || budgetSpentMinor > 0 ? (
         <>
           <View
             style={{
@@ -152,7 +180,7 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
             }}
           >
             <AnimatedMoney
-              minor={summary.budgetSpentMinor}
+              minor={budgetSpentMinor}
               currency={currency}
               locale={locale}
               variant="money"
@@ -162,7 +190,7 @@ export function BudgetPulseWidget({ card, month, summary }: WidgetProps) {
               literal
               muted
               variant="caption"
-            >{`${t("of")} ${formatMoney(summary.budgetLimitMinor, currency, locale)}`}</AppText>
+            >{`${t("of")} ${formatMoney(budgetLimitMinor, currency, locale)}`}</AppText>
           </View>
           <ProgressBar
             label={t("Budget progress")}

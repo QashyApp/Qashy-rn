@@ -40,8 +40,10 @@ import { formatMoney } from "@/utils/money";
 import { budgetPace, type BudgetPaceStatus } from "@/utils/pace";
 
 const GOAL_MILESTONES = [0.25, 0.5, 0.75, 1];
-/** Reaching a spending goal's target is not a celebration, so it has no pulse at 100%. */
-const SPENDING_GOAL_MILESTONES = [0.25, 0.5, 0.75];
+/** A spending goal is a ceiling, not an achievement: it has no milestones and no success haptic. */
+const NO_MILESTONES: number[] = [];
+/** The selection badge is 24 wide; a card's title row keeps this much clear at its end. */
+const SELECTION_BADGE_SIZE = 24;
 /** Below this content width, budget and goal cards always stack one per row;
  * a two-up card is too cramped under it to read as anything but squeezed. */
 const WIDE_GRID_BREAKPOINT = 900;
@@ -204,7 +206,12 @@ export function PlanScreen() {
                 label={status.budget.name}
                 onToggle={() => budgetSelection.toggle(status.budget.id)}
               >
-                <BudgetCard status={status} today={today} fill={wide} />
+                <BudgetCard
+                  status={status}
+                  today={today}
+                  fill={wide}
+                  selecting={budgetSelection.selecting}
+                />
               </SelectableCard>
             </View>
           ))}
@@ -245,6 +252,7 @@ export function PlanScreen() {
                   goal={goal}
                   progress={goalProgress.get(goal.id) ?? 0}
                   fill={wide}
+                  selecting={goalSelection.selecting}
                 />
               </SelectableCard>
             </View>
@@ -351,9 +359,9 @@ function SelectableCard({
           position: "absolute",
           top: 12,
           end: 12,
-          width: 24,
-          height: 24,
-          borderRadius: 12,
+          width: SELECTION_BADGE_SIZE,
+          height: SELECTION_BADGE_SIZE,
+          borderRadius: SELECTION_BADGE_SIZE / 2,
           alignItems: "center",
           justifyContent: "center",
           borderWidth: 2,
@@ -373,10 +381,12 @@ function BudgetCard({
   status,
   today,
   fill,
+  selecting,
 }: {
   status: BudgetStatus;
   today: string;
   fill: boolean;
+  selecting: boolean;
 }) {
   const state = useFinanceState();
   const theme = useQashyTheme();
@@ -400,20 +410,21 @@ function BudgetCard({
   const presentation = PACE_PRESENTATION[pace.status];
   const barColor =
     pace.status === "over" ? (theme.negative as string) : budget.color;
+  // A custom budget outside its window has no pace to report: it is upcoming or ended.
   const customState =
     budget.period.unit === "custom"
       ? today > snapshot.periodEnd
-        ? `${t("Ended")} · `
+        ? ("ended" as const)
         : today < snapshot.periodStart
-          ? `${t("Upcoming")} · `
-          : ""
-      : "";
+          ? ("upcoming" as const)
+          : null
+      : null;
   // Dates and the rollover amount are data, so the caption is assembled with
   // its translatable words already resolved and then rendered verbatim.
   const money = (minor: number, options?: { sign: boolean }) =>
     formatMoney(minor, state.settings.baseCurrency, locale, options);
   const signed = (minor: number) => money(minor, { sign: true });
-  const periodSummary = `${customState}${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, locale)} ${t("to")} ${mediumDate(snapshot.periodEnd, locale)}${budget.rollover ? ` · ${t("rollover")} ${signed(snapshot.rolloverMinor)}` : ""}${adjustmentMinor ? ` · ${t("adjusted")} ${signed(adjustmentMinor)}` : ""}`;
+  const periodSummary = `${t(budget.period.unit)} · ${mediumDate(snapshot.periodStart, locale)} ${t("to")} ${mediumDate(snapshot.periodEnd, locale)}${budget.rollover ? ` · ${t("rollover")} ${signed(snapshot.rolloverMinor)}` : ""}${adjustmentMinor ? ` · ${t("adjusted")} ${signed(adjustmentMinor)}` : ""}`;
   // A custom budget outside its window has no current period to adjust.
   const canAdjust = !customState;
 
@@ -425,7 +436,12 @@ function BudgetCard({
       style={fill ? { height: "100%" } : undefined}
     >
       <Card style={fill ? { gap: 14, height: "100%" } : { gap: 14 }}>
-        <View style={{ gap: space.xxs }}>
+        <View
+          style={{
+            gap: space.xxs,
+            paddingEnd: selecting ? SELECTION_BADGE_SIZE + space.md : 0,
+          }}
+        >
           <AppText literal variant="headline">
             {budget.name}
           </AppText>
@@ -472,12 +488,20 @@ function BudgetCard({
             flexWrap: "wrap",
           }}
         >
-          <StatusPill
-            label={presentation.label}
-            icon={presentation.icon}
-            tone={presentation.tone}
-          />
-          {pace.projectionReliable ? (
+          {customState ? (
+            <StatusPill
+              label={customState === "ended" ? "Ended" : "Upcoming"}
+              icon={customState === "ended" ? "checkmark" : "calendar"}
+              tone="neutral"
+            />
+          ) : (
+            <StatusPill
+              label={presentation.label}
+              icon={presentation.icon}
+              tone={presentation.tone}
+            />
+          )}
+          {!customState && pace.projectionReliable ? (
             <AppText literal variant="caption" muted numeric>
               {`${t("Projected")}: ${money(pace.projectedMinor)} ${t("by")} ${mediumDate(snapshot.periodEnd, locale)}`}
             </AppText>
@@ -538,6 +562,7 @@ function BudgetCard({
             <ActionButton
               title="Edit"
               variant="secondary"
+              accessibilityLabel={`${t("Edit")} ${budget.name}`}
               onPress={() =>
                 router.push({ pathname: "/budget", params: { id: budget.id } })
               }
@@ -569,10 +594,12 @@ function GoalCard({
   goal,
   progress,
   fill,
+  selecting,
 }: {
   goal: Goal;
   progress: number;
   fill: boolean;
+  selecting: boolean;
 }) {
   const theme = useQashyTheme();
   const { space } = theme;
@@ -590,7 +617,7 @@ function GoalCard({
   const overMinor = Math.max(0, displayProgress - goal.targetMinor);
   useMilestoneHaptics(
     ratio,
-    goal.kind === "spending" ? SPENDING_GOAL_MILESTONES : GOAL_MILESTONES,
+    goal.kind === "spending" ? NO_MILESTONES : GOAL_MILESTONES,
     hapticSuccess,
   );
   const money = (minor: number) =>
@@ -616,7 +643,13 @@ function GoalCard({
           >
             <AppText literal numeric variant="label">{`${percent}%`}</AppText>
           </ProgressRing>
-          <View style={{ flex: 1, gap: space.xxs }}>
+          <View
+            style={{
+              flex: 1,
+              gap: space.xxs,
+              paddingEnd: selecting ? SELECTION_BADGE_SIZE + space.md : 0,
+            }}
+          >
             <AppText literal variant="headline">
               {goal.name}
             </AppText>
@@ -673,6 +706,7 @@ function GoalCard({
         <ActionButton
           title="Open"
           variant="secondary"
+          accessibilityLabel={`${t("Open")} ${goal.name}`}
           onPress={() =>
             router.push({ pathname: "/goal", params: { id: goal.id } })
           }

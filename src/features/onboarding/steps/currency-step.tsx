@@ -177,7 +177,8 @@ function CurrencyTile({
   return (
     <MotionPressable
       accessibilityRole="radio"
-      accessibilityLabel={code}
+      // The name as well as the code: "ILS" alone says nothing to a screen reader user.
+      accessibilityLabel={name && name !== code ? `${name}, ${code}` : code}
       accessibilityState={{ checked: selected }}
       aria-checked={selected}
       active={selected}

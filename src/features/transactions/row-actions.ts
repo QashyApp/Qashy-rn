@@ -50,6 +50,18 @@ export function rowActionMessage(kind: RowActionKind): string {
   }
 }
 
+/** English title for the error dialog when committing one action fails; pass it through `t()`. */
+export function rowActionErrorTitle(kind: RowActionKind): string {
+  switch (kind) {
+    case "delete":
+      return "Couldn’t delete transactions";
+    case "skip":
+      return "Couldn’t skip this item";
+    case "markPaid":
+      return "Couldn’t mark this item paid";
+  }
+}
+
 /**
  * English message key for the Undo bar over every action that waits: the single-action message for
  * one, a count of the shared kind for several, and a count of changes when the kinds differ. Pass

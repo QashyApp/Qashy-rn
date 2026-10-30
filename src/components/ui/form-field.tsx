@@ -139,9 +139,13 @@ function MaterialFormField({
           backgroundColor: theme.surfaceSunken,
         }}
       >
+        {/* Visual only: the input already carries this label, so a reader must not announce it twice. */}
         <Animated.Text
           pointerEvents="none"
           selectable={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          aria-hidden
           style={[
             withAppFont(
               {

@@ -37,6 +37,17 @@ describe("normalizeCsvDate", () => {
   it("still reads an ISO date under a day or month first choice", () => {
     expect(normalizeCsvDate("2026-07-15", "dmy")).toBe("2026-07-15");
   });
+
+  it("reads a four-digit lead with / or . as year-month-day under every choice", () => {
+    for (const format of ["ymd", "dmy", "mdy"] as const) {
+      expect(normalizeCsvDate("2026/03/04", format)).toBe("2026-03-04");
+      expect(normalizeCsvDate("2026.03.04", format)).toBe("2026-03-04");
+      expect(normalizeCsvDate("2026.3.4", format)).toBe("2026-03-04");
+      expect(normalizeCsvDate("2026-3-4", format)).toBe("2026-03-04");
+    }
+    expect(normalizeCsvDate("2026/02/31", "ymd")).toBeNull();
+    expect(normalizeCsvDate("2026/13/01", "dmy")).toBeNull();
+  });
 });
 
 describe("detectCsvDateFormat", () => {

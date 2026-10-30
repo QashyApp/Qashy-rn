@@ -18,6 +18,9 @@ const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 // Day and month may be written with one digit; `/`, `.` and `-` separate the parts. Two-digit
 // years are not accepted: "03/04/05" has no unambiguous reading, so the year must have four digits.
 const PART_DATE = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/;
+// A four-digit lead is a year however the parts are separated: "2026/03/04" and "2026.3.4" read as
+// year-month-day under every choice, like an ISO date.
+const YEAR_FIRST_DATE = /^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})$/;
 
 function pad(value: number, width: number) {
   return String(value).padStart(width, "0");
@@ -34,6 +37,11 @@ export function normalizeCsvDate(
 ): string | null {
   const text = value.trim();
   if (ISO_DATE.test(text)) return isLocalDate(text) ? text : null;
+  const yearFirst = YEAR_FIRST_DATE.exec(text);
+  if (yearFirst) {
+    const iso = `${yearFirst[1]}-${pad(Number(yearFirst[2]), 2)}-${pad(Number(yearFirst[3]), 2)}`;
+    return isLocalDate(iso) ? iso : null;
+  }
   if (format === "ymd") return null;
   const match = PART_DATE.exec(text);
   if (!match) return null;

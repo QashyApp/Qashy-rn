@@ -179,10 +179,16 @@ export function AppearanceScreen() {
     }
   };
   const deleteTheme = async (id: string) => {
+    // Deleting the applied theme drops back to Classic; say so before it happens.
+    const deletingApplied = settings.themeId === id;
     const confirmed = await confirmDestructive({
       title: "Delete this theme?",
-      message:
-        "The theme is removed from this device. Export it first to keep a copy.",
+      message: deletingApplied
+        ? [
+            "The theme is removed from this device. Export it first to keep a copy.",
+            "Classic will be applied.",
+          ]
+        : "The theme is removed from this device. Export it first to keep a copy.",
     });
     if (!confirmed) return;
     try {
@@ -229,8 +235,8 @@ export function AppearanceScreen() {
     <ScrollView
       style={{ flex: 1, backgroundColor: theme.background }}
       contentContainerStyle={{
-        padding: 18,
-        paddingBottom: 40,
+        padding: space.lg,
+        paddingBottom: space.xxxl + space.sm,
         gap: space.lg,
         width: "100%",
         maxWidth: 720,
@@ -301,6 +307,20 @@ export function AppearanceScreen() {
             </AppText>
           </View>
         </View>
+      </MotionView>
+      <MotionView>
+        <Card style={{ gap: space.lg }}>
+          <AppText variant="headline">Appearance</AppText>
+          <SegmentedControl
+            label="Appearance"
+            options={THEME_MODE_OPTIONS}
+            value={mode}
+            onChange={(value) => {
+              setMode(value);
+              setSaved(false);
+            }}
+          />
+        </Card>
       </MotionView>
       <MotionView>
         <Card style={{ gap: space.lg }}>
@@ -397,20 +417,6 @@ export function AppearanceScreen() {
           </Card>
         </MotionView>
       ) : null}
-      <MotionView>
-        <Card style={{ gap: space.lg }}>
-          <AppText variant="headline">Appearance</AppText>
-          <SegmentedControl
-            label="Appearance"
-            options={THEME_MODE_OPTIONS}
-            value={mode}
-            onChange={(value) => {
-              setMode(value);
-              setSaved(false);
-            }}
-          />
-        </Card>
-      </MotionView>
       {!userAccent ? (
         <MotionView>
           <Card style={{ gap: space.sm }}>

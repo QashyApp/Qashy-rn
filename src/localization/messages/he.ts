@@ -375,6 +375,10 @@ export const HEBREW: Record<string, string> = {
   "Post overdue payments?": "לרשום תשלומים שעבר מועדם?",
   "1 overdue payment will be posted now.": "תשלום אחד שעבר מועדו יירשם עכשיו.",
   "Post them": "לרשום אותם",
+  "This schedule has ended. Extend the end date to turn it on.":
+    "התזמון הסתיים. יש להאריך את תאריך הסיום כדי להפעיל אותו.",
+  Under: "תחת",
+  "1 to review": "1 לבדיקה",
   Active: "פעיל",
   Paused: "מושהה",
   Ended: "הסתיים",
@@ -1199,6 +1203,24 @@ export const HEBREW: Record<string, string> = {
   "Search all months": "חיפוש בכל החודשים",
   "All upcoming": "כל מה שבקרוב",
   "Totals are for the whole month": "הסכומים הם לכל החודש",
+  // Audit round 2.
+  "Nothing upcoming": "אין תנועות עתידיות",
+  "Scheduled and recurring transactions show up here until they are due.":
+    "תנועות מתוזמנות וחוזרות מופיעות כאן עד שמגיע מועדן.",
+  "Can’t calculate this amount. Fix it, or clear it.":
+    "לא ניתן לחשב את הסכום הזה. תקנו אותו או נקו אותו.",
+  "Finish the calculation to save.": "סיימו את החישוב כדי לשמור.",
+  Plus: "פלוס",
+  "Automatic rates are on, but recurring transactions weren’t updated":
+    "השערים האוטומטיים פועלים, אך התנועות המחזוריות לא עודכנו",
+  "Qashy will try again the next time it opens.":
+    "Qashy ינסה שוב בפעם הבאה שייפתח.",
+  "Account name is required.": "שם החשבון נדרש.",
+  // Audit round 3: appearance, widgets.
+  "Classic will be applied.": "ערכת Classic תוחל.",
+  "Couldn’t load widget settings": "לא ניתן לטעון את הגדרות הווידג׳טים",
+  "Your widget settings couldn’t be read, so they aren’t shown here. Nothing was changed.":
+    "לא ניתן היה לקרוא את הגדרות הווידג׳טים, ולכן הן לא מוצגות כאן. דבר לא שונה.",
   "Go to latest": "מעבר לאחרונות",
   "Add one for this month, or jump to your latest activity.":
     "הוסיפו תנועה לחודש הזה, או קפצו לפעילות האחרונה.",
@@ -3216,7 +3238,10 @@ export function createDynamicPatterns(
     [/^Next (.+)$/, (date) => `הבא: ${date}`],
     [/^Effective (.+)$/, (date) => `בתוקף מ־${date}`],
     [/^No transactions in (.+)$/, (month) => `אין תנועות ב${month}`],
-    [/^Totals for (.+)$/, (month) => `סכומים עבור ${month}`],
+    [
+      /^Totals for (.+), all transactions$/,
+      (month) => `סכומים עבור ${month}, כל התנועות`,
+    ],
     [
       /^Nothing in (.+) matches\. Try another filter, or search all months\.$/,
       (month) => `אין התאמות ב${month}. נסו מסנן אחר, או חפשו בכל החודשים.`,
@@ -3672,6 +3697,7 @@ export function createDynamicPatterns(
     // Account and category deletion confirmations. Each sentence is its own message, so a name
     // or a count never multiplies the combinations.
     [/^Deletes (\d+) transactions\.$/, (count) => `מוחק ${count} תנועות.`],
+    [/^(\d+) to review$/, (count) => `${count} לבדיקה`],
     [
       /^(\d+) overdue payments will be posted now\.$/,
       (count) => `${count} תשלומים שעבר מועדם יירשמו עכשיו.`,

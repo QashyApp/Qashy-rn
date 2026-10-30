@@ -1,4 +1,5 @@
 import {
+  budgetTotals,
   computeDashboard,
   computeNetWorthSeries,
   assertDashboardRange,
@@ -110,6 +111,7 @@ import type {
   AccountInput,
   BudgetAdjustmentInput,
   BudgetInput,
+  BudgetTotals,
   CategoryInput,
   ContributionInput,
   FetchedRateResult,
@@ -1325,6 +1327,30 @@ export class LocalFinanceRepository implements FinanceRepository {
     return summary;
   }
 
+  getBudgetTotals(
+    fromDate: string,
+    toDate: string,
+    options: { includePendingAutoPosts?: boolean } = {},
+  ): BudgetTotals {
+    if (options.includePendingAutoPosts) {
+      assertDate(toDate);
+      return this.withPendingRecurring(true, toDate, () =>
+        this.getBudgetTotals(fromDate, toDate),
+      );
+    }
+    assertDashboardRange(fromDate, toDate);
+    const cached = this.derived().dashboards.get(`${fromDate}|${toDate}`);
+    if (cached) {
+      return {
+        budgetLimitMinor: cached.budgetLimitMinor,
+        budgetSpentMinor: cached.budgetSpentMinor,
+      };
+    }
+    return budgetTotals(this.ctx, fromDate, toDate, (onDate, budgetOptions) =>
+      this.getBudgetStatuses(onDate, budgetOptions),
+    );
+  }
+
   getNetWorthSeries(
     months: number,
     today: string = todayLocal(),
@@ -1405,9 +1431,13 @@ export class LocalFinanceRepository implements FinanceRepository {
     work: () => T,
   ): T {
     if (!include) return work();
+    // Generation only ever runs up to today, so a read dated later (a future month's end) still
+    // previews what is due today, never occurrences that are not due yet.
+    const today = todayLocal();
+    const horizon = onDate < today ? onDate : today;
     let pending: TransactionRecord[];
     try {
-      pending = this.pendingRecurring(onDate);
+      pending = this.pendingRecurring(horizon);
     } catch {
       return work();
     }

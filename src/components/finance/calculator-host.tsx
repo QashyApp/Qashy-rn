@@ -32,7 +32,10 @@ import type { CurrencyCode } from "@/domain/models";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";
 import { useQashyTheme } from "@/theme/theme";
-import { evaluateAmountExpression } from "@/utils/amount-expression";
+import {
+  evaluateAmountExpression,
+  settleAmountExpression,
+} from "@/utils/amount-expression";
 import { ExpressionBuffer } from "@/utils/amount-keypad";
 
 /** What the keypad needs from the field it is typing into. */
@@ -257,12 +260,26 @@ function CalculatorLayer({
   };
   const result = held ? resolve(held.value) : null;
 
+  // The expression "Set amount" refused, so the keypad can say why it stayed open.
+  const [rejected, setRejected] = useState<string | null>(null);
+
   const done = () => {
     if (!config) return;
-    // A calculation still showing is finished, so the form is left holding a plain amount. It is read
+    // A calculation still showing is finished, so the form is left holding a plain amount, and a
+    // dangling operator ("12 +") is dropped so the field shows what the form will save. It is read
     // from the buffer: "Set amount" tapped right after a key would otherwise finish the text before it.
-    const finished = resolve(buffer.value);
-    if (finished !== null) config.onChange(finished);
+    // What cannot be evaluated at all keeps the keypad open, rather than leaving the field on a
+    // value that is not the one shown.
+    const settled = settleAmountExpression(
+      buffer.value,
+      config.currency,
+      locale,
+    );
+    if (settled.kind === "invalid") {
+      setRejected(buffer.value);
+      return;
+    }
+    if (settled.kind === "settled") config.onChange(settled.text);
     config.blur();
     onClose();
   };
@@ -375,6 +392,15 @@ function CalculatorLayer({
           >
             {held.value.length > 0 ? held.value : "0"}
           </AppText>
+          {rejected !== null && rejected === held.value ? (
+            <AppText
+              variant="caption"
+              accessibilityRole="alert"
+              style={{ color: theme.negativeText, textAlign: "center" }}
+            >
+              Can’t calculate this amount. Fix it, or clear it.
+            </AppText>
+          ) : null}
           <AmountKeypad
             value={held.value}
             onChange={held.onChange}

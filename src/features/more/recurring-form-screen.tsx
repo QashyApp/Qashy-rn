@@ -55,7 +55,8 @@ export function RecurringFormScreen() {
     setOccurrenceCount,
     autoPost,
     setAutoPost,
-    active,
+    scheduleEnded,
+    effectiveActive,
     setActive,
     foreignEnabled,
     setForeignEnabled,
@@ -348,12 +349,15 @@ export function RecurringFormScreen() {
           <View style={{ flex: 1, gap: space.xxs }}>
             <AppText variant="label">Schedule active</AppText>
             <AppText variant="caption" muted>
-              Pause without deleting this schedule.
+              {scheduleEnded
+                ? "This schedule has ended. Extend the end date to turn it on."
+                : "Pause without deleting this schedule."}
             </AppText>
           </View>
           <QashySwitch
             accessibilityLabel={t("Schedule active")}
-            value={active}
+            value={effectiveActive}
+            disabled={scheduleEnded}
             onValueChange={setActive}
           />
         </View>

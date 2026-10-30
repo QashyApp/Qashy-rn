@@ -1,3 +1,4 @@
+import { ACCOUNT_TYPE_ICON } from "@/domain/defaults";
 import type { AccountType, CategoryKind } from "@/domain/models";
 
 /**
@@ -9,11 +10,11 @@ export const ACCOUNT_TYPE_INFO: Record<
   AccountType,
   { label: string; icon: string }
 > = {
-  checking: { label: "Bank", icon: "building.columns" },
-  cash: { label: "Cash", icon: "banknote" },
-  savings: { label: "Savings", icon: "leaf" },
-  credit: { label: "Credit card", icon: "creditcard" },
-  wallet: { label: "Wallet", icon: "wallet" },
+  checking: { label: "Bank", icon: ACCOUNT_TYPE_ICON.checking },
+  cash: { label: "Cash", icon: ACCOUNT_TYPE_ICON.cash },
+  savings: { label: "Savings", icon: ACCOUNT_TYPE_ICON.savings },
+  credit: { label: "Credit card", icon: ACCOUNT_TYPE_ICON.credit },
+  wallet: { label: "Wallet", icon: ACCOUNT_TYPE_ICON.wallet },
 };
 
 export const CATEGORY_KIND_LABEL: Record<CategoryKind, string> = {

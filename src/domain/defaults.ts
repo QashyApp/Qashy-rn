@@ -1,6 +1,11 @@
 import { getLocales } from "expo-localization";
 
-import type { AppSettings, Category, FinanceState } from "@/domain/models";
+import type {
+  AccountType,
+  AppSettings,
+  Category,
+  FinanceState,
+} from "@/domain/models";
 import { createEntity, makeId } from "@/utils/entity";
 import { validateLocale } from "@/utils/form-validation";
 import { isSupportedCurrencyCode } from "@/utils/money";
@@ -8,6 +13,18 @@ import { DEFAULT_THEME_ID } from "@/theme/themes/types";
 import { QASHY_INDIGO } from "@/theme/tokens";
 
 export const QASHY_ACCENT: string = QASHY_INDIGO;
+
+/**
+ * The icon every list draws for an account type. An account saves the icon of its type (there is
+ * no icon picker), so the onboarding account, the account form and the lists agree.
+ */
+export const ACCOUNT_TYPE_ICON: Record<AccountType, string> = {
+  checking: "building.columns",
+  cash: "banknote",
+  savings: "leaf",
+  credit: "creditcard",
+  wallet: "wallet",
+};
 
 export function initialLocalePreferences(
   saved?: Pick<AppSettings, "locale" | "baseCurrency">,

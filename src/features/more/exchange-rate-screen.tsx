@@ -195,12 +195,12 @@ export function ExchangeRateScreen() {
         />
       </Card>
       <ActionButton
-        title={saving ? "Saving…" : "Save rate"}
+        title={saving && !deleting ? "Saving…" : "Save rate"}
         icon="checkmark"
         size="large"
         onPress={save}
         disabled={saving || !canSave}
-        busy={saving}
+        busy={saving && !deleting}
       />
       {existing ? (
         <ActionButton
@@ -209,6 +209,7 @@ export function ExchangeRateScreen() {
           variant="danger"
           onPress={remove}
           disabled={saving}
+          busy={deleting}
         />
       ) : null}
     </FormScreen>

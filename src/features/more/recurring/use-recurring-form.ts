@@ -28,7 +28,12 @@ import {
   useFinanceState,
 } from "@/providers/finance-provider";
 import { useLocalization } from "@/localization/localization";
-import { confirmDestructive, errorMessage, showError } from "@/utils/confirm";
+import {
+  confirmAction,
+  confirmDestructive,
+  errorMessage,
+  showError,
+} from "@/utils/confirm";
 import { isLocalDate, todayLocal } from "@/utils/date";
 import {
   validateDateInput,
@@ -55,7 +60,9 @@ import {
 import {
   EndMode,
   MAX_REPEAT_INTERVAL,
+  scheduleHasEnded,
 } from "@/features/more/recurring/recurring-model";
+import { canPostNow } from "@/data/finance/rates";
 
 export function useRecurringForm() {
   const params = useLocalSearchParams<{
@@ -324,6 +331,33 @@ export function useRecurringForm() {
     if (next === "date" && countedEndDate) setEndDate(countedEndDate);
     setEndMode(next);
   };
+  // The end date this form would save, and whether it leaves no occurrence to come. Such a
+  // schedule is saved switched off (generation ends it), so the form shows it as ended with the
+  // toggle locked rather than letting "active" silently turn itself off on save.
+  const resolvedEndDate =
+    endMode === "count"
+      ? countedEndDate
+      : endMode === "date" && isLocalDate(endDate)
+        ? endDate
+        : null;
+  const earliestPendingDate = existing
+    ? pendingOccurrences(state.transactions, existing.id)
+        .map((item) => item.localDate)
+        .sort()[0]
+    : undefined;
+  const scheduleEnded =
+    scheduleReady &&
+    isLocalDate(startDate) &&
+    scheduleHasEnded({
+      existing,
+      unit,
+      interval: Math.floor(Number(interval)),
+      startDate,
+      endDate: resolvedEndDate,
+      earliestPendingDate,
+      today: todayLocal(),
+    });
+  const effectiveActive = active && !scheduleEnded;
   const canSave =
     Boolean(account) &&
     !amountError &&
@@ -346,15 +380,24 @@ export function useRecurringForm() {
     if (!account || busy || !canSave) return;
     // Saving an active rule runs generation at once, and generation posts every due occurrence of
     // an auto-post rule, including ones that were waiting for review. Say so before it happens.
+    const today = todayLocal();
+    // Only occurrences that can be priced today post; one waiting for a rate stays upcoming.
+    const pricingContext = {
+      state,
+      formatLocale: locale,
+      postedTransactions: () => [],
+      transactionById: () => new Map(),
+    };
     const overdue = overduePostedBySave(
       existing,
-      { autoPost, active },
+      { autoPost, active: effectiveActive },
       state.transactions,
-      todayLocal(),
+      today,
+      (transaction) => canPostNow(pricingContext, transaction, today),
     );
     if (
       overdue > 0 &&
-      !(await confirmDestructive({
+      !(await confirmAction({
         title: "Post overdue payments?",
         message:
           overdue === 1
@@ -414,7 +457,7 @@ export function useRecurringForm() {
           endDate: normalizedEndDate,
           nextDueDate: existing?.nextDueDate ?? startDate,
           autoPost,
-          active,
+          active: effectiveActive,
         },
         existing?.id,
         expectedRevision,
@@ -501,6 +544,8 @@ export function useRecurringForm() {
     setAutoPost,
     active,
     setActive,
+    scheduleEnded,
+    effectiveActive,
     foreignEnabled,
     setForeignEnabled,
     foreignCurrency,

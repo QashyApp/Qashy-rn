@@ -36,7 +36,7 @@ import {
   autoScrollStep,
   resolveDropTarget,
 } from "@/features/overview/edit/drag-math";
-import { moveAccessibilityFocus } from "@/features/overview/edit/move-accessibility-focus";
+import { moveAccessibilityFocus } from "@/utils/move-accessibility-focus";
 import type { CardReorder } from "@/features/overview/edit/use-card-reorder";
 import { useLocalization } from "@/localization/localization";
 import { materialStyle } from "@/theme/materials";

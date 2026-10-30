@@ -321,6 +321,9 @@
     "q_ea8dc390a7cd89e7",
     "q_af2fbd066c57a0d4",
     "q_8870b0c42c1938a3",
+    "q_0e8e6f1cfbbbf556",
+    "q_697400b541fbc3cd",
+    "q_c55bdfc27dcabe3f",
     "q_a45a194b58837e4f",
     "q_95bc8722b2708f8b",
     "q_f113fa256db9617b",
@@ -936,6 +939,17 @@
     "q_d452da249c1ed7ad",
     "q_3335848d4b82a01e",
     "q_007dfd9865733e55",
+    "q_f161aa669f5cab88",
+    "q_511c0f93eacea72d",
+    "q_51b27151a5137f45",
+    "q_d81d27a94abe3cac",
+    "q_cce75a19b57e0095",
+    "q_98bc4fba7bc6cbe2",
+    "q_28a493438083fe27",
+    "q_7cb563d026b8b0e4",
+    "q_9138f1f8bdac1e5b",
+    "q_e68d2d75f9a85154",
+    "q_90560aac4cc7d7fc",
     "q_759468057c6108bb",
     "q_d3fd34d3c95d54c0",
     "q_93d85c9969bc1e8e",
@@ -2562,8 +2576,8 @@
       "source": "^No transactions in (.+)$"
     },
     {
-      "name": "q_5f07a48e3a478a03",
-      "source": "^Totals for (.+)$"
+      "name": "q_0b389c03aadd6987",
+      "source": "^Totals for (.+), all transactions$"
     },
     {
       "name": "q_3047e16e8b851a5d",
@@ -3136,6 +3150,10 @@
     {
       "name": "q_207fd8673528475a",
       "source": "^Deletes (\\d+) transactions\\.$"
+    },
+    {
+      "name": "q_7cdc189af5214974",
+      "source": "^(\\d+) to review$"
     },
     {
       "name": "q_bdbdef8e85336780",

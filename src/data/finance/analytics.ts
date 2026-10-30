@@ -1,5 +1,5 @@
 import type { FinanceContext } from "@/data/finance/context";
-import { budgetMatches } from "@/data/finance/budgets";
+import { createBudgetMatcher } from "@/data/finance/budgets";
 import { queryTransactions, categoryMatcher } from "@/data/finance/queries";
 import {
   MissingExchangeRateError,
@@ -271,7 +271,7 @@ function tallyRange(ctx: FinanceContext, posted: TransactionRecord[]) {
  * allowed on top of money that is already allowed. Partially overlapping budgets (two category
  * budgets sharing a tag, say) are still summed; that is the plain total of what the user allowed.
  */
-function budgetTotals(
+export function budgetTotals(
   ctx: FinanceContext,
   fromDate: string,
   toDate: string,
@@ -293,29 +293,35 @@ function budgetTotals(
     !snapshot.filters.accountIds.length &&
     !snapshot.filters.categoryIds.length &&
     !snapshot.filters.tagIds.length;
+  // Only an all-spending budget can swallow another, so those are the sole candidates to test.
+  const swallowers = budgetEntries
+    .map((entry, index) => ({ entry, index }))
+    .filter(({ entry }) => isAllSpending(entry));
   // `outer` swallows `inner` when it counts all spending over a period that contains inner's.
   // Two identical all-spending budgets would swallow each other, so the earlier one wins.
-  const swallows = (outer: BudgetStatus, inner: BudgetStatus) =>
-    outer !== inner &&
-    isAllSpending(outer) &&
-    outer.snapshot.periodStart <= inner.snapshot.periodStart &&
-    outer.snapshot.periodEnd >= inner.snapshot.periodEnd &&
-    (!isAllSpending(inner) ||
-      outer.snapshot.periodStart !== inner.snapshot.periodStart ||
-      outer.snapshot.periodEnd !== inner.snapshot.periodEnd ||
-      budgetEntries.indexOf(outer) < budgetEntries.indexOf(inner));
+  const isSwallowed = (inner: BudgetStatus, innerIndex: number) => {
+    const innerAll = isAllSpending(inner);
+    return swallowers.some(
+      ({ entry: outer, index: outerIndex }) =>
+        outerIndex !== innerIndex &&
+        outer.snapshot.periodStart <= inner.snapshot.periodStart &&
+        outer.snapshot.periodEnd >= inner.snapshot.periodEnd &&
+        (!innerAll ||
+          outer.snapshot.periodStart !== inner.snapshot.periodStart ||
+          outer.snapshot.periodEnd !== inner.snapshot.periodEnd ||
+          outerIndex < innerIndex),
+    );
+  };
   const budgetLimitMinor = sumMinor(
     budgetEntries
-      .filter(
-        (entry) => !budgetEntries.some((other) => swallows(other, entry)),
-      )
+      .filter((entry, index) => !isSwallowed(entry, index))
       .map((entry) => entry.effectiveLimitMinor),
     "Budget limit total",
   );
   const counted = new Map<string, number>();
+  const matchesOf = createBudgetMatcher(ctx);
   for (const { snapshot } of budgetEntries) {
-    for (const item of budgetMatches(
-      ctx,
+    for (const item of matchesOf(
       snapshot.filters,
       snapshot.periodStart,
       snapshot.periodEnd,

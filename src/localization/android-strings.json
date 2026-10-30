@@ -557,6 +557,11 @@
       "he": "העבירו את השינויים שלכם למכשיר אחר שלכם בעצמכם — AirDrop, החסן נייד, או מייל לעצמכם. אין ממסר, אין איתות, ואין רשת מכל סוג שהוא. זו הדרך כשהממסר מושבת, או כששני מכשירים לעולם אינם מקוונים יחד."
     },
     {
+      "name": "q_0e8e6f1cfbbbf556",
+      "en": "This schedule has ended. Extend the end date to turn it on.",
+      "he": "התזמון הסתיים. יש להאריך את תאריך הסיום כדי להפעיל אותו."
+    },
+    {
       "name": "q_0eb0212f9d6155c8",
       "en": "Manual contributions",
       "he": "הפקדות ידניות"
@@ -1420,6 +1425,11 @@
       "name": "q_284f9dd909eae147",
       "en": "These two do not match.",
       "he": "השניים אינם תואמים."
+    },
+    {
+      "name": "q_28a493438083fe27",
+      "en": "Qashy will try again the next time it opens.",
+      "he": "Qashy ינסה שוב בפעם הבאה שייפתח."
     },
     {
       "name": "q_28a7adbb075623b9",
@@ -2707,6 +2717,11 @@
       "he": "בחרו טווח תאריכים שאינו ארוך ממאה שנה."
     },
     {
+      "name": "q_511c0f93eacea72d",
+      "en": "Scheduled and recurring transactions show up here until they are due.",
+      "he": "תנועות מתוזמנות וחוזרות מופיעות כאן עד שמגיע מועדן."
+    },
+    {
       "name": "q_512577f0cfa06cba",
       "en": "Clock cannot advance beyond its maximum wall time.",
       "he": "השעון אינו יכול להתקדם מעבר לזמן המרבי שלו."
@@ -2720,6 +2735,11 @@
       "name": "q_518eed195b514891",
       "en": "For a lost device. Every device must be paired again.",
       "he": "למכשיר שאבד. כל מכשיר יצטרך להתחבר מחדש."
+    },
+    {
+      "name": "q_51b27151a5137f45",
+      "en": "Can’t calculate this amount. Fix it, or clear it.",
+      "he": "לא ניתן לחשב את הסכום הזה. תקנו אותו או נקו אותו."
     },
     {
       "name": "q_51beeb6c50517e81",
@@ -3627,6 +3647,11 @@
       "he": "ייבוא גיבוי מלא שיוצא מאפליקציית התקציב Cashew."
     },
     {
+      "name": "q_697400b541fbc3cd",
+      "en": "Under",
+      "he": "תחת"
+    },
+    {
       "name": "q_699d7ad03cbd1532",
       "en": "Default category",
       "he": "קטגוריית ברירת מחדל"
@@ -4257,6 +4282,11 @@
       "he": "קובץ הגיבוי גדול ממגבלת הבטיחות של 64 MiB."
     },
     {
+      "name": "q_7cb563d026b8b0e4",
+      "en": "Account name is required.",
+      "he": "שם החשבון נדרש."
+    },
+    {
       "name": "q_7cc2ee93864ab051",
       "en": "Scan the other device",
       "he": "סרקו את המכשיר האחר"
@@ -4877,6 +4907,11 @@
       "he": "המטען המרופד קטוע."
     },
     {
+      "name": "q_90560aac4cc7d7fc",
+      "en": "Your widget settings couldn’t be read, so they aren’t shown here. Nothing was changed.",
+      "he": "לא ניתן היה לקרוא את הגדרות הווידג׳טים, ולכן הן לא מוצגות כאן. דבר לא שונה."
+    },
+    {
       "name": "q_907da6da00191e82",
       "en": "Recurring transaction kind",
       "he": "סוג התנועה המחזורית"
@@ -4905,6 +4940,11 @@
       "name": "q_91213563e4e090e4",
       "en": "Remove this device?",
       "he": "להסיר את המכשיר הזה?"
+    },
+    {
+      "name": "q_9138f1f8bdac1e5b",
+      "en": "Classic will be applied.",
+      "he": "ערכת Classic תוחל."
     },
     {
       "name": "q_92100b71a079875e",
@@ -5150,6 +5190,11 @@
       "name": "q_98aa8b9481114f33",
       "en": "Classic",
       "he": "קלאסי"
+    },
+    {
+      "name": "q_98bc4fba7bc6cbe2",
+      "en": "Automatic rates are on, but recurring transactions weren’t updated",
+      "he": "השערים האוטומטיים פועלים, אך התנועות המחזוריות לא עודכנו"
     },
     {
       "name": "q_990a37c295129715",
@@ -6517,6 +6562,11 @@
       "he": "Qashy זקוק למצלמה כדי לסרוק את הקוד"
     },
     {
+      "name": "q_c55bdfc27dcabe3f",
+      "en": "1 to review",
+      "he": "1 לבדיקה"
+    },
+    {
       "name": "q_c59519c1bffe67c4",
       "en": "Only the vault owner can remove a device.",
       "he": "רק בעל הכספת יכול להסיר מכשיר."
@@ -6780,6 +6830,11 @@
       "name": "q_ccde02073c4131ad",
       "en": "Choose a valid top-level parent category of the same kind.",
       "he": "בחרו קטגוריית אב תקינה מאותו סוג וברמה העליונה."
+    },
+    {
+      "name": "q_cce75a19b57e0095",
+      "en": "Plus",
+      "he": "פלוס"
     },
     {
       "name": "q_cd104d19b5a0ef92",
@@ -7215,6 +7270,11 @@
       "name": "q_d80edfe76ed98eda",
       "en": "This file does not look like a Cashew backup. Choose a Cashew backup file.",
       "he": "הקובץ הזה אינו נראה כגיבוי של Cashew. בחרו קובץ גיבוי Cashew."
+    },
+    {
+      "name": "q_d81d27a94abe3cac",
+      "en": "Finish the calculation to save.",
+      "he": "סיימו את החישוב כדי לשמור."
     },
     {
       "name": "q_d830d89a4d85793e",
@@ -7705,6 +7765,11 @@
       "name": "q_e65104750e80d7c3",
       "en": "Sync is off",
       "he": "הסנכרון כבוי"
+    },
+    {
+      "name": "q_e68d2d75f9a85154",
+      "en": "Couldn’t load widget settings",
+      "he": "לא ניתן לטעון את הגדרות הווידג׳טים"
     },
     {
       "name": "q_e6e26fe9cf061953",
@@ -8205,6 +8270,11 @@
       "name": "q_f14bbe0a54eac4dd",
       "en": "Every card is already on your overview",
       "he": "כל הכרטיסים כבר נמצאים בסקירה שלכם"
+    },
+    {
+      "name": "q_f161aa669f5cab88",
+      "en": "Nothing upcoming",
+      "he": "אין תנועות עתידיות"
     },
     {
       "name": "q_f17bc6a3820498ac",
@@ -9879,10 +9949,10 @@
       "he": "אין תנועות ב%1$s"
     },
     {
-      "name": "q_5f07a48e3a478a03",
-      "source": "^Totals for (.+)$",
-      "en": "Totals for %1$s",
-      "he": "סכומים עבור %1$s"
+      "name": "q_0b389c03aadd6987",
+      "source": "^Totals for (.+), all transactions$",
+      "en": "Totals for %1$s, all transactions",
+      "he": "סכומים עבור %1$s, כל התנועות"
     },
     {
       "name": "q_3047e16e8b851a5d",
@@ -10543,6 +10613,12 @@
       "source": "^Deletes (\\d+) transactions\\.$",
       "en": "Deletes %1$s transactions.",
       "he": "מוחק %1$s תנועות."
+    },
+    {
+      "name": "q_7cdc189af5214974",
+      "source": "^(\\d+) to review$",
+      "en": "%1$s to review",
+      "he": "%1$s לבדיקה"
     },
     {
       "name": "q_bdbdef8e85336780",

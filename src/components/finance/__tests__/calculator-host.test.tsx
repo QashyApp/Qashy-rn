@@ -134,6 +134,43 @@ describe("CalculatorHost in the overlay host", () => {
     expect(node?.props.pointerEvents).toBe("auto");
   });
 
+  it("drops a dangling operator on Done, so the form holds what the keypad showed", async () => {
+    const add = jest.spyOn(BackHandler, "addEventListener");
+    await setup();
+    const field = config({ value: "12+" });
+    await open(field);
+    const handler = add.mock.calls[0][1] as () => boolean;
+    await act(async () => {
+      handler();
+    });
+    expect(field.onChange).toHaveBeenCalledWith("12");
+    expect(field.blur).toHaveBeenCalled();
+    let node = layer();
+    while (node && node.props.pointerEvents === undefined) node = node.parent;
+    expect(node?.props.pointerEvents).toBe("none");
+    add.mockRestore();
+  });
+
+  it("stays open with an error when the amount cannot be calculated", async () => {
+    const add = jest.spyOn(BackHandler, "addEventListener");
+    await setup();
+    const field = config({ value: "5÷0" });
+    await open(field);
+    // Opening takes the field's focus off it; only what Done does is under test.
+    (field.blur as jest.Mock).mockClear();
+    const handler = add.mock.calls[0][1] as () => boolean;
+    await act(async () => {
+      handler();
+    });
+    expect(field.onChange).not.toHaveBeenCalled();
+    expect(field.blur).not.toHaveBeenCalled();
+    expect(screen.getByText(/Can’t calculate this amount/)).toBeTruthy();
+    let node = layer();
+    while (node && node.props.pointerEvents === undefined) node = node.parent;
+    expect(node?.props.pointerEvents).toBe("auto");
+    add.mockRestore();
+  });
+
   it("finishes the calculation and closes on Android back, only while visible", async () => {
     const add = jest.spyOn(BackHandler, "addEventListener");
     await setup();

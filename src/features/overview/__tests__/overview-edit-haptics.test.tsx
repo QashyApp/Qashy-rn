@@ -59,6 +59,23 @@ jest.mock("@/services/haptics", () => ({
   hapticSelection: jest.fn(),
 }));
 
+// The Coming up card's deferred actions need the finance providers; the screen only hosts them.
+jest.mock("@/features/overview/widgets/upcoming-actions", () => {
+  const { createContext } = jest.requireActual("react");
+  return {
+    UpcomingActionsContext: createContext(null),
+    useUpcomingRowActions: () => ({
+      actions: {
+        hiddenIds: new Set(),
+        paidIds: new Set(),
+        resolve: jest.fn(),
+      },
+      pending: [],
+      undo: jest.fn(),
+    }),
+  };
+});
+
 jest.mock("@/features/overview/layout/use-overview-layout", () => {
   const { DEFAULT_OVERVIEW_LAYOUT: layout } = jest.requireActual(
     "@/domain/overview-layout",

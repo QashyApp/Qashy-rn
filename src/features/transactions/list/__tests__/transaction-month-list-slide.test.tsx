@@ -171,10 +171,23 @@ describe("TransactionMonthList scope", () => {
     ).toBeUndefined();
   });
 
-  it("says nothing about a month when Upcoming is empty", async () => {
+  it("gives an empty Upcoming its own message, with nothing to clear", async () => {
     mockRows = [];
     await render(<TransactionMonthList {...props} kind="upcoming" />);
+    expect(screen.getByText("Nothing upcoming")).toBeTruthy();
+    expect(screen.queryByText("Nothing matches")).toBeNull();
+    expect(screen.queryByText("Clear filters")).toBeNull();
+    expect(screen.queryByText(/Nothing in/)).toBeNull();
+  });
+
+  it("says nothing about a month when a search over Upcoming finds nothing", async () => {
+    mockRows = [];
+    await render(
+      <TransactionMonthList {...props} kind="upcoming" search="rent" />,
+    );
+    expect(screen.getByText("Nothing matches")).toBeTruthy();
     expect(screen.getByText("Try another search or filter.")).toBeTruthy();
+    expect(screen.getByText("Clear filters")).toBeTruthy();
     expect(screen.queryByText(/Nothing in/)).toBeNull();
   });
 
