@@ -268,7 +268,7 @@ export function OverviewScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.background }}>
-      {/* The heading, Customize and the month switcher stay put while the month pages slide
+      {/* The heading and the month switcher with Customize stay put while the month pages slide
           beneath them. On web the heading is the document's h1; native shows the section
           stack's own navigation header instead. */}
       <View
@@ -279,17 +279,25 @@ export function OverviewScreen() {
         }}
       >
         <View style={headerStyle}>
+          {/* Web only: native shows the stack's own header instead, so no empty row remains. */}
+          <PageHeading title="Overview" />
+          {/* The month switcher with Customize (or Done) right after it. The row wraps rather
+              than clipping when a large font or a longer label leaves no room for both. */}
           <View
             style={{
               flexDirection: "row",
-              alignItems: "flex-start",
-              justifyContent: "space-between",
-              gap: space.md,
+              flexWrap: "wrap",
+              alignItems: "center",
+              alignSelf: "flex-start",
+              columnGap: space.sm,
+              rowGap: space.xs,
             }}
           >
-            <View style={{ flex: 1 }}>
-              <PageHeading title="Overview" />
-            </View>
+            <MonthSwitcher
+              value={month}
+              onChange={switchMonth}
+              dragProgress={dragProgress}
+            />
             {editing ? (
               <TextButton
                 title="Done"
@@ -301,7 +309,7 @@ export function OverviewScreen() {
               />
             ) : (
               // While the saved layout loads the button keeps its place, invisible and inert, so
-              // the heading does not reflow when it appears. If the layout is unavailable it
+              // the switcher does not shift when it appears. If the layout is unavailable it
               // stays visible but disabled: the placeholder cards cannot be edited.
               <View
                 style={{ opacity: status === "loading" ? 0 : 1 }}
@@ -320,13 +328,6 @@ export function OverviewScreen() {
                 />
               </View>
             )}
-          </View>
-          <View style={{ alignSelf: "flex-start" }}>
-            <MonthSwitcher
-              value={month}
-              onChange={switchMonth}
-              dragProgress={dragProgress}
-            />
           </View>
         </View>
       </View>
